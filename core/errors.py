@@ -218,12 +218,59 @@ def describe(exc: BaseException) -> ErrorAdvice:
             action="Bạn thử lại giúp mình.",
         )
 
+    # ── Đứt mạng ở tầng dưới SDK ─────────────────────────────────────────────
+    #
+    # `RemoteDisconnected`, `ConnectionResetError`, `URLError`… nổ ra từ
+    # `http.client`/`urllib`, không phải từ SDK, nên chúng rơi thẳng xuống nhánh
+    # "ngoài dự kiến" và khách nhận nguyên câu *"chụp màn hình gửi hỗ trợ"*.
+    #
+    # Đo thật trên máy khách 12/08/2026 (ảnh chủ dự án gửi)::
+    #
+    #     RemoteDisconnected: Remote end closed connection without response
+    #
+    # Đó là mạng chập, hoặc máy chủ đóng kết nối giữa chừng — chuyện xảy ra hằng
+    # ngày và tự khỏi. Bắt khách chụp màn hình gửi hỗ trợ cho một sự cố 5 giây
+    # là vừa làm phiền họ, vừa chôn vùi những lỗi thật sự cần người xem.
+    if isinstance(exc, (OSError, EOFError)) or _la_loi_mang(exc):
+        return ErrorAdvice(
+            title="Mạng bị gián đoạn",
+            message="Kết nối tới máy chủ bị đứt giữa chừng. Bạn KHÔNG bị trừ "
+                    "tiền cho việc chưa xong.",
+            action="Thử lại giúp mình. Nếu lặp lại nhiều lần thì kiểm tra mạng, "
+                   "hoặc tắt VPN/tường lửa rồi thử lại.",
+            retryable=True,
+        )
+
     # ── Không phải lỗi của SDK (ghi file, thư mục không tồn tại…) ─────────────
     return ErrorAdvice(
         title="Lỗi ngoài dự kiến",
         message=redact("{0}: {1}".format(type(exc).__name__, exc)),
         action="Bạn chụp màn hình gửi hỗ trợ giúp mình.",
     )
+
+
+#: Tên lớp ngoại lệ mạng ở tầng thư viện chuẩn. Bắt theo TÊN chứ không import:
+#: `http.client.RemoteDisconnected` là con của `ConnectionResetError` trên vài
+#: bản Python nhưng không phải mọi bản, và `urllib.error.URLError` bọc đủ thứ
+#: bên trong. Danh sách tên bao được cả những chỗ cây thừa kế không giúp gì.
+_TEN_LOI_MANG = frozenset({
+    "RemoteDisconnected", "IncompleteRead", "URLError", "ConnectionResetError",
+    "ConnectionAbortedError", "ConnectionRefusedError", "BadStatusLine",
+    "ProtocolError", "ReadTimeout", "ConnectTimeout", "ReadError",
+    "ConnectError", "RemoteProtocolError", "SSLError", "SSLEOFError",
+})
+
+
+def _la_loi_mang(exc: BaseException) -> bool:
+    """Ngoại lệ này có phải chuyện mạng không — kể cả khi nó bọc trong lỗi khác."""
+    thay = exc
+    for _ in range(5):  # trần vòng: chuỗi `__cause__` có thể tự trỏ vòng lại
+        if type(thay).__name__ in _TEN_LOI_MANG:
+            return True
+        thay = getattr(thay, "__cause__", None) or getattr(thay, "__context__", None)
+        if thay is None:
+            return False
+    return False
 
 
 def is_retryable(exc: BaseException) -> bool:
