@@ -525,13 +525,32 @@ def lenh_cua_so_cmd(chuong_trinh: str, tham_so: Optional[Sequence[str]] = None,
     `cmd.exe`. Không có cách nào viết danh sách cho ra chuỗi đúng; lối ra là bỏ
     danh sách, tự dựng chuỗi, và để `shell=True` giao thẳng cho cmd.
 
+    **Bẫy thứ hai, cùng ngày**: bấm “Mở Codex” ra::
+
+        The filename, directory name, or volume label syntax is incorrect.
+
+    Vì lệnh của Codex có thêm `--cd "D:\\New folder\\…"`, thành **bốn** dấu
+    nháy. Luật của `cmd /?` nói rõ: chỉ giữ nguyên dấu nháy khi có *đúng hai*
+    dấu và giữa chúng có dấu cách; ngoài ra thì nó **bỏ dấu nháy đầu và dấu
+    nháy cuối cùng của cả dòng**. Với bốn dấu nháy, tên chương trình còn dính
+    một dấu nháy lẻ ở đuôi::
+
+        C:\\…\\codex.CMD" --dangerously-… --cd "D:\\New folder\\…
+        ^^^^^^^^^^^^^^^^^^ tên tệp có dấu nháy → sai cú pháp tên tệp
+
+    Nên bọc **cả cụm** trong một cặp nháy nữa: cmd bóc đúng cặp ngoài, phần
+    trong còn nguyên và đúng. Đo thật, hai kiểu chạy cạnh nhau::
+
+        cmd /c  "bat" --co --cd "thu muc"     → HỎNG
+        cmd /c ""bat" --co --cd "thu muc""    → CHẠY ĐƯỢC
+
     >>> lenh_cua_so_cmd(r"C:\\co dau cach\\claude.EXE", ["--x", "co cach"])
-    'start "Claude Code" cmd /k "C:\\\\co dau cach\\\\claude.EXE" --x "co cach"'
+    'start "Claude Code" cmd /k ""C:\\\\co dau cach\\\\claude.EXE" --x "co cach""'
     """
-    phan = ['start "{0}" cmd {1} "{2}"'.format(tieu_de, co_cmd, chuong_trinh)]
+    ben_trong = '"{0}"'.format(chuong_trinh)
     for t in tham_so or ():
-        phan.append('"{0}"'.format(t) if " " in t else t)
-    return " ".join(phan)
+        ben_trong += ' "{0}"'.format(t) if " " in t else " " + t
+    return 'start "{0}" cmd {1} "{2}"'.format(tieu_de, co_cmd, ben_trong)
 
 
 #: Cờ cho Claude Code **toàn quyền**. Quyết định của chủ dự án, nhắc lại
