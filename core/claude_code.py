@@ -466,18 +466,51 @@ def moi_truong_max(nen: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     return moi
 
 
-def _mo_kem_moi_truong(lenh: Sequence[str], thu_muc: str, api_key: str,
+def _mo_kem_moi_truong(lenh, thu_muc: str, api_key: str,
                        base_url: str, dung_shopapi: bool = True,
                        mo_tien_trinh: Optional[Callable[..., object]] = None,
                        ) -> object:
     """Chạy một lệnh trong thư mục tool, môi trường theo nguồn khách chọn.
+
+    `lenh` là **chuỗi** thì chạy qua shell (cần cho `start` của Windows), là
+    danh sách thì chạy thẳng.
 
     Vẫn truyền biến môi trường dù đã ghi `settings.json`: khách có thể chưa bấm
     cài cấu hình, hoặc đã bấm trả về như cũ, và khi ấy cửa này vẫn phải chạy.
     """
     mo = mo_tien_trinh or subprocess.Popen
     mt = moi_truong(api_key, base_url) if dung_shopapi else moi_truong_max()
+    if isinstance(lenh, str):
+        return mo(lenh, cwd=thu_muc, env=mt, shell=True)
     return mo(list(lenh), cwd=thu_muc, env=mt, close_fds=True)
+
+
+def lenh_cua_so_cmd(chuong_trinh: str, tieu_de: str = "Claude Code",
+                    co_cmd: str = "/k") -> str:
+    """Dòng lệnh mở một cửa sổ dòng lệnh mới chạy `chuong_trinh`. **Windows.**
+
+    Trả về **chuỗi**, và nơi gọi phải chạy nó với `shell=True`. Đó là cả nội
+    dung của hàm này, và nó là một lỗi đã trả giá (12/08/2026, chủ dự án bấm
+    “Mở Claude Code”)::
+
+        '"C:\\Users\\trant\\.local\\bin\\claude.EXE"' is not recognized as an
+        internal or external command
+
+    Nhìn kỹ: cmd đi tìm một chương trình mà **tên có cả dấu nháy**. Bản hỏng
+    đưa cho `Popen` một danh sách có sẵn phần tử `'"C:\\…\\claude.EXE"'`, và
+    `subprocess.list2cmdline` thoát cặp nháy ấy thành `\\"` trước khi giao cho
+    Windows::
+
+        cmd /c start "Claude Code" cmd /k \\"C:\\…\\claude.EXE\\"
+
+    Tức là hai bộ luật đóng ngoặc chồng lên nhau — của `subprocess` và của
+    `cmd.exe`. Không có cách nào viết danh sách cho ra chuỗi đúng; lối ra là bỏ
+    danh sách, tự dựng chuỗi, và để `shell=True` giao thẳng cho cmd.
+
+    >>> lenh_cua_so_cmd(r"C:\\co dau cach\\claude.EXE")
+    'start "Claude Code" cmd /k "C:\\\\co dau cach\\\\claude.EXE"'
+    """
+    return 'start "{0}" cmd {1} "{2}"'.format(tieu_de, co_cmd, chuong_trinh)
 
 
 def mo_terminal(thu_muc: str, api_key: str = "", base_url: str = "", *,
@@ -492,11 +525,7 @@ def mo_terminal(thu_muc: str, api_key: str = "", base_url: str = "", *,
     khách không kịp đọc thông báo lỗi — và lỗi ở đây là lúc cần đọc nhất.
     """
     claude = duong_claude or "claude"
-    if os.name == "nt":
-        lenh = ["cmd", "/c", "start", "Claude Code", "cmd", "/k",
-                f'"{claude}"']
-    else:
-        lenh = [claude]
+    lenh = lenh_cua_so_cmd(claude) if os.name == "nt" else [claude]
     return _mo_kem_moi_truong(lenh, thu_muc, api_key, base_url, dung_shopapi,
                               mo_tien_trinh)
 
