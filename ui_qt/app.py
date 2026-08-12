@@ -378,12 +378,27 @@ class CuaSoChinh(QWidget):
             try:
                 ket = viec()
             except BaseException as loi:  # noqa: BLE001 — chuyển nguyên vẹn về luồng vẽ
-                self._xong_nen.emit(on_err or self.show_error, loi)
+                self._bao_ve(on_err or self.show_error, loi)
             else:
                 if on_ok is not None:
-                    self._xong_nen.emit(on_ok, ket)
+                    self._bao_ve(on_ok, ket)
 
         threading.Thread(target=chay, daemon=True, name="shopapi-bg").start()
+
+    def _bao_ve(self, ham, gia_tri) -> None:
+        """Chỉ phát tín hiệu khi cửa sổ còn sống.
+
+        Khách đóng tool đúng lúc một lượt gọi mạng đang bay là chuyện bình
+        thường. Phát tín hiệu vào cửa sổ đã bị Qt xoá thì `RuntimeError: wrapped
+        C/C++ object has been deleted` — lỗi ném ra từ luồng nền, không ai bắt,
+        và trên bản chạy bằng `pythonw` thì nó chết lặng lẽ không để lại dấu vết.
+        """
+        if self._dang_dong:
+            return
+        try:
+            self._xong_nen.emit(ham, gia_tri)
+        except RuntimeError:
+            pass
 
     def goi_tren_luong_ve(self, ham: Callable[[], None]) -> None:
         """Xin chạy `ham()` trên LUỒNG GIAO DIỆN, gọi được từ luồng nền.
@@ -419,6 +434,24 @@ class CuaSoChinh(QWidget):
         # KHÔNG nhảy trang. Danh sách việc nằm ngay trong tab vừa bấm, nên ném
         # khách sang chỗ khác chỉ làm họ mất vị trí đang làm.
         self.jobs.submit(specs)
+
+    def dat_khoa(self, khoa: str) -> None:
+        """Lưu khoá API rồi **dựng lại đường ra máy chủ ngay**, không bắt mở lại tool.
+
+        Client và bộ chạy việc chỉ được dựng một lần lúc khởi động, khi ấy chưa
+        có khoá nên cả hai là `None` — và mọi trang chỉ biết nói "chưa đăng
+        nhập". Không dựng lại ở đây thì khách dán khoá xong vẫn thấy y nguyên
+        câu đó, và cách duy nhất để thoát là tắt tool mở lại. Không ai đoán ra
+        điều đó.
+        """
+        self.config.api_key = khoa.strip()
+        save_config(self.config_path, self.config)
+        self.client = build_client(self.config)
+        if self.jobs is None:
+            self.jobs = JobManager(lambda: self.client, self.events,
+                                   max_workers=self.config.max_concurrent_jobs,
+                                   session_path=self.session_path)
+        self.refresh_prices()
 
     def refresh_prices(self) -> None:
         if self.client is None:

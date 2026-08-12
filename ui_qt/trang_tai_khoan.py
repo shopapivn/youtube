@@ -30,7 +30,11 @@ from core.api import fetch_balance, wallet_micro
 from core.money import format_vnd
 
 from . import theme
-from .widgets import DaiUocTinh, NhomChon, nhan, nut_chinh, nut_phu, the, tieu_de_trang
+from core.config import looks_like_api_key
+
+from .widgets import (
+    DaiUocTinh, NhomChon, nhan, nut_chinh, nut_phu, the, tieu_de_trang,
+)
 
 __all__ = ["TrangTaiKhoan"]
 
@@ -42,6 +46,86 @@ _SO_NHIP_TOI_DA = 100
 
 
 class TrangTaiKhoan(QWidget):
+
+    # ── Khoá API ─────────────────────────────────────────────────────────────
+
+    def _the_khoa(self):
+        """Ô dán khoá API — **cửa vào duy nhất của cả tool**.
+
+        Bản Qt trước đây không có ô này. Hậu quả chỉ lộ ra khi tool bắt đầu được
+        phát hành qua GitHub: bản tải về không kèm `config.json`, nên `client` là
+        `None`, nên mọi trang đều bảo *"vào trang Ví & Tài khoản để đăng nhập"* —
+        và trang Ví thì không có chỗ nào để đăng nhập. Ngõ cụt kín.
+
+        (Bản ZIP cũ do máy chủ gói có sẵn khoá trong `config.json`, nên lỗi này
+        nằm im suốt: đúng loại lỗi chỉ hiện ra khi đổi cách phát hành.)
+        """
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 14, 20, 16)
+        v.setSpacing(8)
+        hang = QHBoxLayout()
+        hang.setSpacing(8)
+        hang.addWidget(nhan("Khoá API", "h2"))
+        self._nhan_khoa = nhan("", "muted")
+        hang.addWidget(self._nhan_khoa, 1)
+        v.addLayout(hang)
+
+        d = QHBoxLayout()
+        d.setSpacing(8)
+        self._o_khoa = QLineEdit()
+        self._o_khoa.setObjectName("mono")
+        self._o_khoa.setPlaceholderText("dán khoá API của bạn vào đây")
+        self._o_khoa.setEchoMode(QLineEdit.Password)
+        self._o_khoa.returnPressed.connect(self._luu_khoa)
+        d.addWidget(self._o_khoa, 1)
+        self._nut_hien = nut_phu("👁", self._doi_hien_khoa, rong=44)
+        self._nut_hien.setToolTip("Hiện khoá để soát lại")
+        d.addWidget(self._nut_hien)
+        d.addWidget(nut_chinh("Lưu khoá", self._luu_khoa, rong=120))
+        v.addLayout(d)
+        v.addWidget(nhan("Lấy khoá ở shopapi.vn → Khoá API. Khoá được cất mã hoá "
+                         "theo máy này, không nằm trong mã nguồn.", "muted"))
+        self._ve_trang_thai_khoa()
+        return khung
+
+    def _doi_hien_khoa(self) -> None:
+        an = self._o_khoa.echoMode() == QLineEdit.Password
+        self._o_khoa.setEchoMode(QLineEdit.Normal if an else QLineEdit.Password)
+
+    def _ve_trang_thai_khoa(self) -> None:
+        cau_hinh = self._app.config
+        if cau_hinh.is_ready:
+            self._nhan_khoa.setText("đang dùng {0}".format(cau_hinh.masked_key))
+        else:
+            self._nhan_khoa.setText("chưa có khoá — tool chưa gọi được máy chủ")
+
+    def _luu_khoa(self) -> None:
+        khoa = self._o_khoa.text().strip()
+        if not khoa:
+            self._app.show_message("Chưa dán khoá", "Dán khoá API vào ô rồi bấm Lưu.")
+            return
+        if not looks_like_api_key(khoa):
+            # Chặn sớm ở đây thay vì để máy chủ trả 401: khách dán nhầm email,
+            # dán nhầm mật khẩu, hoặc copy thiếu mất mấy ký tự đầu là chuyện thường.
+            self._app.show_message(
+                "Khoá trông không đúng",
+                "Khoá API bắt đầu bằng “sk_” và dài vài chục ký tự. "
+                "Kiểm lại xem có copy thiếu không.")
+            return
+        try:
+            self._app.dat_khoa(khoa)
+        except Exception as loi:  # noqa: BLE001
+            self._app.show_error(loi)
+            return
+        self._o_khoa.clear()
+        self._ve_trang_thai_khoa()
+        self._app.show_message(
+            "Đã lưu khoá",
+            "Tool đã nối được với máy chủ. Bạn dùng được mọi tab ngay bây giờ.")
+        self.lam_moi()
+
+
     def __init__(self, app):
         super().__init__()
         self._app = app
@@ -54,6 +138,7 @@ class TrangTaiKhoan(QWidget):
         doc.addWidget(tieu_de_trang(
             "💳  Ví & Tài khoản",
             "Số dư, nạp tiền và sổ cái — làm hết ở đây, không phải mở trình duyệt."))
+        doc.addWidget(self._the_khoa())
 
         # ── Số dư ────────────────────────────────────────────────────────────
         the_so_du = the()

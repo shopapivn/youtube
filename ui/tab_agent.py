@@ -23,7 +23,7 @@ from core.personal_tools import PersonalToolStore
 from core.config import save_config
 from core.tool_contract import ToolContractError, load_catalog, load_manifest
 from core.tool_proposals import ToolProposalStore, activate_declarative
-from core.update_client import fetch_and_stage
+from core.cap_nhat_github import kiem_ban_moi, tai_ve_va_dung_san
 from core.workflow import WorkflowError, parse_workflow, validate_workflow
 from core.workflow_runner import CancellationToken
 
@@ -341,12 +341,30 @@ class AgentTab(ctk.CTkFrame):
             messagebox.showinfo("Đang có việc chạy", "Hãy chờ công việc hiện tại xong rồi kiểm tra cập nhật.")
             return
         self._update_button.configure(state="disabled")
-        self._run_status.configure(text="Đang kiểm tra bản cập nhật có chữ ký…", text_color=theme.ACCENT)
+        self._run_status.configure(text="Đang hỏi GitHub xem có bản mới…", text_color=theme.ACCENT)
 
         def worker() -> None:
+            # Lấy từ kho công khai, cùng một đường với bản Qt (`ui_qt/cap_nhat.py`).
+            # Đường cũ đi qua máy chủ và đòi `update-public-key.txt` để xác minh
+            # chữ ký — file đó chưa bao giờ được phát hành, nên bản tải từ GitHub
+            # bấm nút này là chết ngay ở khâu đọc khoá.
+            import os
+
+            from ui_qt.cap_nhat import doc_phien_ban, tai_https
+
             try:
-                result = fetch_and_stage(
-                    self._app.config.api_key, self._app.config.base_url, self._app.base_dir)
+                dang_dung = doc_phien_ban(self._app.base_dir) or "0.0.0"
+                ban_moi = kiem_ban_moi(dang_dung, tai_https)
+                if not ban_moi:
+                    self._run_events.put(
+                        ("update_staged", {"up_to_date": True,
+                                           "manifest": {"version": dang_dung}}))
+                    return
+                cho_dung = os.path.join(
+                    os.path.dirname(os.path.abspath(self._app.base_dir)),
+                    "ShopAPI-Studio-cap-nhat")
+                staged = tai_ve_va_dung_san(ban_moi, cho_dung, tai_https)
+                result = {"staged": staged, "manifest": {"version": ban_moi}}
                 self._run_events.put(("update_staged", result))
             except BaseException as exc:  # noqa: BLE001
                 self._run_events.put(("update_error", exc))
