@@ -20,6 +20,23 @@ Ba chỗ tab này cố ý làm khác các tab khác, và đều vì tiền của
 2. **Hàng chờ tuần tự, hiện rõ vị trí.** Mỗi khách chạy một việc một lúc.
 3. **Đóng tool giữa chừng không mất gì.** Mọi thay đổi được ghi xuống
    `du-an.json` ngay lúc nó xảy ra.
+
+## Tab này mở cả khi CHƯA có API key
+
+Nửa trên — chia cảnh, nạp file .txt, sửa lời đọc / mô tả hình, mở lại dự án cũ —
+chỉ đọc-ghi `du-an.json` trên máy khách, không gọi `api.shopapi.vn` lần nào. Theo
+luật của chủ dự án (*"chỉ những phần cần gọi API mới tính tiền"*) nó phải dùng
+được khi chưa có khoá, nên `project` nằm trong `ui/app._FREE_TABS`.
+
+Chỗ tiêu tiền chỉ có ba nút, và cả ba đều đi qua `app.require_key()`:
+`▶ Chạy cả dự án`, `↻ Chạy lại cảnh hỏng`, và nút `↻` của từng dòng cảnh. Chưa có
+khoá thì `app.client is None`, và `ProjectRunner` nhận `None` sẽ chết trong luồng
+nền — nơi khách không đọc được lỗi. Nên chốt chặn phải nằm ở nút, trước khi bất
+cứ thứ gì bị ghi xuống đĩa.
+
+Ước tính chi phí thì KHÔNG chặn: `core.estimate.estimate_project(client=None)` tự
+rơi về bảng giá niêm yết. Khách chưa mua khoá vẫn xem được một tập của mình tốn
+bao nhiêu — đó đúng là câu hỏi họ cần trả lời trước khi quyết định mua.
 """
 
 from __future__ import annotations
@@ -678,6 +695,11 @@ class ProjectTab(ctk.CTkFrame):
         project = self._project
         if project is None:
             return
+        # Hỏi khoá TRƯỚC `reset_for_retry`: hàm đó ghi đè trạng thái các cảnh
+        # xuống đĩa. Để `_start` chặn ở dưới thì khách chưa có khoá vẫn bị xoá
+        # mất dấu "cảnh này đã hỏng vì lý do gì" mà chẳng chạy được gì.
+        if not self._app.require_key("Chạy lại cảnh hỏng"):
+            return
         failed = project.failed_scene_numbers()
         if not failed:
             self._app.show_message(
@@ -705,15 +727,28 @@ class ProjectTab(ctk.CTkFrame):
                 "Đang chạy", "Bạn chờ lượt chạy hiện tại xong, hoặc bấm “■ Dừng” trước."
             )
             return
+        # Cùng lý do như `_retry_failed`: `reset_for_retry` ghi đĩa ngay.
+        if not self._app.require_key("Chạy lại một cảnh"):
+            return
         self._runner.reset_for_retry(project, [scene.index])
         self.on_change()
         self._start([scene.index])
 
     def _start(self, only_scenes: Optional[List[int]]) -> None:
-        """Xác nhận chi phí rồi thả dây chuyền chạy."""
+        """Xác nhận chi phí rồi thả dây chuyền chạy.
+
+        **Đây là ranh giới miễn phí / tính tiền của cả tab.** Mọi thứ phía trên —
+        chia cảnh, sửa lời đọc, sửa mô tả hình, mở lại dự án cũ — chỉ đọc-ghi
+        ``du-an.json`` trên máy khách nên không đòi khoá. Từ dòng này trở xuống là
+        gửi việc lên ``api.shopapi.vn``, nên chỗ hỏi khoá phải nằm ĐÚNG ở đây:
+        sớm hơn thì khoá nhầm phần chạy tại chỗ, muộn hơn thì `ProjectRunner` cầm
+        `client=None` và chết trong luồng nền — nơi khách không đọc được lỗi.
+        """
         project = self._project
         if project is None:
             self._app.show_message("Chưa có dự án", "Bạn tạo dự án trước đã.")
+            return
+        if not self._app.require_key("Chạy dự án — giọng đọc · ảnh · video"):
             return
         if self._runner.is_running:
             self._app.show_message("Đang chạy rồi", "Dây chuyền đang chạy, bạn chờ chút nhé.")

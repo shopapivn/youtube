@@ -30,10 +30,12 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QVBoxLayout, QWidget,
 )
 
+from core.agent_lam_viec import lam_viec
 from core.agent_planner import HANH_DONG_GIAO_DIEN, plan_message
 from core.agent_service import respond, shopapi_completer
 from core.agent_session import load_agent_session, save_agent_session
 from core.noi_tool import noi_them_tool
+from core.skill_rieng import SkillRiengError, luu_skill
 from core.tool_contract import ToolContractError, load_catalog, load_manifest
 from core.tool_proposals import ToolProposalStore, activate_declarative
 from core.ui_profile import load_hidden_tabs, load_tab_labels, save_hidden_tab, save_tab_label
@@ -111,6 +113,70 @@ class BongBong(QFrame):
         chu = nhan(noi_dung)
         chu.setTextInteractionFlags(Qt.TextSelectableByMouse)
         doc.addWidget(chu)
+
+
+class _TayGiaoDien:
+    """Tay của agent trên thanh bên — **chỉ ghi hồ sơ, không chạm widget**.
+
+    Công cụ được gọi từ luồng nền của vòng lặp. Chạm widget từ luồng nền là Qt
+    cho chạy một lúc rồi sập không đoán trước — lỗi này đã trả giá một lần ở bản
+    tkinter. Nên ở đây chỉ ghi ra `ui-profile.json` (thuần đọc/ghi file, an toàn
+    từ mọi luồng); trang tự vẽ lại **sau khi** vòng lặp xong, trên luồng vẽ.
+    """
+
+    def __init__(self, trang: "TrangAgent"):
+        self._ho_so = trang._ho_so_ui
+        # Chụp danh sách tab NGAY BÂY GIỜ, trên luồng vẽ. Đọc muộn hơn là đọc
+        # widget từ luồng nền.
+        self._tab = {khoa: ten for khoa, _bt, ten in trang._nav()}
+        self._nhan = dict(self._tab)
+        self._nhan.update(trang._nhan_da_luu())
+        self.da_doi = False
+
+    def danh_sach_tab(self) -> Dict[str, str]:
+        return dict(self._nhan)
+
+    def _khoa_cua(self, ten: str) -> Optional[str]:
+        """Tìm tab theo tên khách/agent gọi. So không phân biệt hoa thường.
+
+        Không bỏ dấu, không dò từ khoá: mô hình đã hiểu tiếng Việt rồi, nó gọi
+        tên tab đúng như đang hiện. Thêm một lớp đoán ở đây chỉ tạo thêm chỗ đoán sai.
+        """
+        can = (ten or "").strip().lower()
+        for khoa, nhan in self._nhan.items():
+            if can in (khoa.lower(), str(nhan).strip().lower()):
+                return khoa
+        return None
+
+    def doi_ten_tab(self, ten_cu: str, ten_moi: str) -> Tuple[bool, str]:
+        khoa = self._khoa_cua(ten_cu)
+        if khoa is None:
+            return False, "Không có tab nào tên “{0}”. Các tab đang có: {1}.".format(
+                ten_cu, ", ".join(self._nhan.values()))
+        try:
+            ten = save_tab_label(self._ho_so, khoa, ten_moi)
+        except (OSError, ValueError) as loi:
+            return False, "Không đổi được: {0}".format(loi)
+        self._nhan[khoa] = ten
+        self.da_doi = True
+        return True, "Đã đổi tên tab thành “{0}”.".format(ten)
+
+    def _dat_an(self, ten: str, an: bool) -> Tuple[bool, str]:
+        khoa = self._khoa_cua(ten)
+        if khoa is None:
+            return False, "Không có tab nào tên “{0}”.".format(ten)
+        try:
+            save_hidden_tab(self._ho_so, khoa, an)
+        except (OSError, ValueError) as loi:
+            return False, "Không đổi được: {0}".format(loi)
+        self.da_doi = True
+        return True, ("Đã ẩn tab “{0}”." if an else "Đã hiện lại tab “{0}”.").format(ten)
+
+    def an_tab(self, ten: str) -> Tuple[bool, str]:
+        return self._dat_an(ten, True)
+
+    def hien_tab(self, ten: str) -> Tuple[bool, str]:
+        return self._dat_an(ten, False)
 
 
 class TrangAgent(QWidget):
@@ -289,6 +355,45 @@ class TrangAgent(QWidget):
                 hong.append("Chưa đổi được giao diện: {0}".format(loi))
         return hong
 
+    # ── Đẻ tool cho khách ────────────────────────────────────────────────────
+
+    def _de_ra_skill(self, hanh_dong) -> Tuple[List[str], List[str]]:
+        """Ghi các Skill agent vừa đẻ ra, trả về `(dòng báo hỏng, dòng báo xong)`.
+
+        Chạy TRƯỚC khi vẽ câu trả lời, y như việc giao diện: lời đáp viết ở thể
+        đã-xong, nên ghi không được thì phải nói ngay tại đó chứ không để câu
+        “Xong” đứng một mình.
+
+        Tab Skill được nạp lại **ngay tại đây**. Bắt khách tắt tool rồi mở lại
+        mới thấy thứ mình vừa đặt làm là đủ để họ tin agent chỉ nói suông.
+        """
+        hong: List[str] = []
+        xong: List[str] = []
+        for viec in hanh_dong or ():
+            if getattr(viec, "kind", "") != "tao_skill":
+                continue
+            du_lieu = dict(getattr(viec, "payload", {}) or {})
+            ten = str(du_lieu.get("ten") or "")
+            try:
+                duong_dan = luu_skill(
+                    self._app.base_dir, ten, str(du_lieu.get("prompt") or ""),
+                    mo_ta=str(du_lieu.get("mo_ta") or ""),
+                    nhan_dau_vao=str(du_lieu.get("nhan_dau_vao") or "Nội dung"),
+                    bieu_tuong=str(du_lieu.get("bieu_tuong") or "🧩"),
+                    goi_y=str(du_lieu.get("goi_y") or ""))
+            except (SkillRiengError, OSError) as loi:
+                hong.append("Chưa tạo được tool “{0}”: {1}".format(ten, loi))
+                continue
+            trang = self._app.trang("skill")
+            nap_lai = getattr(trang, "nap_lai", None)
+            if callable(nap_lai):
+                # Mở sẵn đúng Skill vừa đẻ: mã do `core.skill_rieng` đặt theo tên
+                # file, nên lấy lại được từ đường dẫn nó vừa trả về.
+                nap_lai("rieng:" + Path(duong_dan).stem)
+            xong.append("Tool “{0}” đã nằm trong tab Skill. File lưu tại: {1}".format(
+                ten, duong_dan))
+        return hong, xong
+
     # ── Catalog ──────────────────────────────────────────────────────────────
 
     def _nap_catalog(self):
@@ -355,16 +460,53 @@ class TrangAgent(QWidget):
         # chạm widget, kể cả chỉ để đọc một dòng chữ.
         nhan_tab = self._nhan_tab()
 
+        khoa = str(getattr(cau_hinh, "api_key", "") or "")
+        dia_chi = str(getattr(cau_hinh, "base_url", "") or "https://api.shopapi.vn")
+        goc = self._app.base_dir
+        tay = _TayGiaoDien(self)
+
         def viec():
-            hoan_thanh = None
-            khoa = str(getattr(cau_hinh, "api_key", "") or "")
             if khoa:
-                hoan_thanh = shopapi_completer(
-                    khoa, str(getattr(cau_hinh, "base_url", "") or "https://api.shopapi.vn"))
+                # Có khoá thì đi VÒNG LẶP CÔNG CỤ: mô hình tự đọc thư mục, tự
+                # quyết, tự gọi công cụ. Không nhánh từ khoá nào ở đây — chủ dự
+                # án: *"api thì có trí thông minh, không cần cứng hay từ khoá,
+                # làm như vs code"*.
+                return lam_viec(cau, goc, khoa, dia_chi, lich_su=lich_su[:-1],
+                                ke_lai=None, tay_giao_dien=tay)
+            # Không khoá thì không có trí thông minh nào để mượn. Bảng từ khoá
+            # cứng nhưng chạy được — sàn, không phải đường chính.
             return respond(cau, catalog, workflow=workflow, state=trang_thai,
-                           history=lich_su, tabs=nhan_tab, complete=hoan_thanh)
+                           history=lich_su, tabs=nhan_tab, complete=None)
 
         self._app.run_bg(viec, on_ok=self._nhan_tra_loi, on_err=self._loi_tra_loi)
+
+    def _nhan_ket_qua_vong(self, ket) -> None:
+        """Vẽ kết quả một lượt vòng lặp công cụ.
+
+        Kể lại **từng việc agent đã làm** trước câu trả lời. Khách phải nhìn thấy
+        agent chạm vào đâu trên máy mình, không phải tin — nó vừa đọc thư mục và
+        ghi file thật.
+        """
+        phan: List[str] = []
+        if ket.da_lam:
+            phan.append("\n".join("· " + dong for dong in ket.da_lam))
+        phan.append(ket.tra_loi)
+        loi_nhan = "\n\n".join(p for p in phan if p.strip())
+
+        # Vẽ lại thanh bên TRÊN LUỒNG VẼ — công cụ chỉ ghi hồ sơ, xem `_TayGiaoDien`.
+        self._ap_ho_so_giao_dien()
+        # Skill vừa đẻ phải hiện ngay, không bắt mở lại tool.
+        if ket.da_tao:
+            trang_skill = self._app.trang("skill")
+            nap_lai = getattr(trang_skill, "nap_lai", None)
+            if nap_lai is not None:
+                try:
+                    nap_lai()
+                except Exception:  # noqa: BLE001 — nạp hỏng không được giết câu trả lời
+                    pass
+        self._phien.add("assistant", loi_nhan)
+        self._them_bong("assistant", loi_nhan)
+        save_agent_session(self._phien_path, self._phien)
 
     def _loi_tra_loi(self, loi: BaseException) -> None:
         """Mạng hỏng không được làm khách bế tắc — lùi về bộ hiểu offline.
@@ -383,10 +525,21 @@ class TrangAgent(QWidget):
     def _nhan_tra_loi(self, tra_loi) -> None:
         self._nut_gui.setEnabled(True)
         self._trang_thai.setText("")
+        if hasattr(tra_loi, "tra_loi"):
+            self._nhan_ket_qua_vong(tra_loi)
+            return
         loi_nhan = getattr(tra_loi, "reply", "")
-        hong = self._lam_viec_giao_dien(getattr(tra_loi, "actions", ()))
+        hanh_dong = getattr(tra_loi, "actions", ())
+        hong = self._lam_viec_giao_dien(hanh_dong)
+        hong_skill, xong_skill = self._de_ra_skill(hanh_dong)
+        hong += hong_skill
         if hong:
             loi_nhan = "\n\n".join(["⚠ " + dong for dong in hong] + [loi_nhan])
+        # Đường dẫn file là thứ duy nhất chỉ trang này biết — câu trả lời của
+        # agent nói được tên Skill và chỗ nó nằm, nhưng không nói được nó ở đâu
+        # trên đĩa để khách còn mở ra xem hay chép đi.
+        if xong_skill:
+            loi_nhan = "\n\n".join([loi_nhan] + ["📁 " + dong for dong in xong_skill])
         self._phien.add("assistant", loi_nhan)
         self._them_bong("assistant", loi_nhan)
         de_xuat = getattr(tra_loi, "proposed_workflow", None)

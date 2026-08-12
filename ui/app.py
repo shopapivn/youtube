@@ -95,11 +95,33 @@ _NAV = (
     ("queue", "Hàng đợi", "📋"),
 )
 
-#: Tab dùng được khi CHƯA có API key. Tab Nghiên cứu đối thủ chạy hoàn toàn trên
-#: máy khách (yt-dlp đọc dữ liệu YouTube công khai) nên không cần khoá, không cần
-#: ví, không cần mạng của shopapi. Bắt khách nhập khoá mới cho xem thứ miễn phí
-#: là tự chặn đúng cánh cửa mình vừa mở.
-_FREE_TABS = ("research", "agent")
+#: Tab dùng được khi CHƯA có API key.
+#:
+#: **Luật của chủ dự án (12/08/2026):** *"Tool miễn phí hết. Chỉ những phần cần
+#: gọi API mới tính tiền — vì thứ chúng tôi bán là API."* Nên danh sách này không
+#: phải là danh sách "tính năng câu khách" do ai đó chọn, mà là câu trả lời cho
+#: đúng một câu hỏi khách quan: **tab này có phải gọi `api.shopapi.vn` mới làm
+#: được việc không?** Không thì nó vào đây.
+#:
+#: * ``research`` — `yt-dlp` đọc dữ liệu YouTube công khai ngay trên máy khách
+#:   (``core/youtube.py``). Không chạm máy chủ shopapi một lần nào.
+#: * ``agent`` — cửa trước của tool: chọn tool con, đổi tên/ẩn tab, đọc danh mục,
+#:   lưu "Tool của tôi" — tất cả là đọc-ghi trên đĩa. Riêng khung chat có hỏi máy
+#:   chủ, và lỗi thiếu khoá đã được trả về thành một dòng chat chứ không traceback
+#:   (``ui/tab_agent.py`` — nhánh ``developer_error``).
+#: * ``srt_excel`` — khâu **audio → SRT** chạy bằng faster-whisper NGAY TRÊN MÁY
+#:   (``tool-catalog/transcribe.local``, quyền ``compute.local``, ``local_files_only``).
+#:   Khâu **SRT → Excel** mới cần khoá (``tool-catalog/prompt.workbook`` gọi
+#:   ``/v1/chat/completions``) — nên nó được chặn ở đúng cái nút đó, không khoá cả tab.
+#: * ``project`` — chia cảnh, sửa lời đọc / mô tả hình, nạp file .txt, mở lại dự
+#:   án cũ đều chỉ là đọc-ghi ``du-an.json``. Chỉ nút "▶ Chạy cả dự án" mới gửi
+#:   việc lên máy chủ, và chỉ nút đó bị chặn.
+#:
+#: **Quy tắc khi thêm tab vào đây:** tab nào *vừa* có phần chạy tại chỗ *vừa* có
+#: phần gọi API thì mở CẢ tab rồi chặn ở nút bằng :meth:`StudioApp.require_key`.
+#: Khoá cả tab là bắt khách nhập khoá để dùng thứ chạy trên máy của chính họ —
+#: đúng thứ README của kho công khai đang hứa là miễn phí.
+_FREE_TABS = ("research", "agent", "srt_excel", "project")
 
 
 class StudioApp(ctk.CTk):
@@ -345,8 +367,12 @@ class StudioApp(ctk.CTk):
             ).pack(pady=(18, 2))
             ctk.CTkLabel(
                 side,
-                text="Nghiên cứu đối thủ chạy trên máy bạn nên miễn phí mãi mãi. "
-                "Nhập API key khi nào bạn cần tạo giọng nói · ảnh · video.",
+                # Kể tên ĐỦ những tab đang mở, không chỉ mỗi Nghiên cứu đối thủ:
+                # câu cũ vô tình nói với khách rằng ba tab kia là hàng phải mua,
+                # trong khi chúng chạy trên máy của chính họ.
+                text="Nghiên cứu đối thủ · SRT → Excel · Dự án đều chạy trên máy bạn "
+                "nên miễn phí mãi mãi. Nhập API key khi nào bạn cần tạo giọng nói · "
+                "ảnh · video.",
                 font=theme.FONT_SMALL,
                 text_color=theme.TEXT_MUTED,
                 wraplength=190,
@@ -371,17 +397,21 @@ class StudioApp(ctk.CTk):
         self.content = ctk.CTkFrame(self._body, fg_color=theme.BG)
         self.content.pack(side="left", fill="both", expand=True)
 
+        # Tab chạy được tại chỗ — dựng ở CẢ hai chế độ. Khoá của bảng này phải
+        # phủ đúng `_FREE_TABS`: thiếu một cái thì nút thanh bên mở ra chỗ trống
+        # (`show()` gặp factory `None` là im lặng không làm gì), mà "bấm không
+        # thấy gì" là kiểu hỏng khách đọc thành "tool lỗi".
         self._tab_factories = {
             "research": lambda: ResearchTab(self.content, self),
             "agent": lambda: AgentTab(self.content, self),
+            "srt_excel": lambda: SrtExcelTab(self.content, self),
+            "project": lambda: ProjectTab(self.content, self),
         }
         if not free:
             self._tab_factories.update({
                 "wallet": lambda: WalletTab(self.content, self),
                 "content": lambda: ContentTab(self.content, self),
-                "project": lambda: ProjectTab(self.content, self),
                 "voice": lambda: VoiceTab(self.content, self),
-                "srt_excel": lambda: SrtExcelTab(self.content, self),
                 "image": lambda: ImageTab(self.content, self),
                 "veo3": lambda: VideoTab(self.content, self, engine=ENGINE_VEO3),
                 "seedance": lambda: VideoTab(self.content, self, engine=ENGINE_SEEDANCE),
@@ -443,17 +473,53 @@ class StudioApp(ctk.CTk):
         except OSError:
             pass
 
+    #: Câu nói lại — dùng ở CẢ hai lời mời nhập khoá bên dưới.
+    #:
+    #: Chép hai bản là sau lần sửa đầu tiên chúng lệch nhau, và bản lệch sẽ kể
+    #: thiếu một tab miễn phí — đúng cái lỗi vừa phải đi vá.
+    _CAU_MIEN_PHI = (
+        "Những phần chạy ngay trên máy bạn thì KHÔNG cần khoá và miễn phí mãi mãi: "
+        "Nghiên cứu đối thủ, SRT → Excel (khâu tạo phụ đề), và tab Dự án ở phần "
+        "chia cảnh · sửa lời đọc · sửa mô tả hình."
+    )
+
     def _need_key(self) -> None:
         """Khách bấm vào tab cần trả tiền khi chưa có khoá."""
         if not messagebox.askyesno(
             "Cần API key",
             "Tạo giọng nói · ảnh · video là phần chạy trên máy chủ shopapi nên cần API key "
             "và số dư trong ví.\n\n"
-            "Tab Nghiên cứu đối thủ thì không: nó chạy trên máy bạn và miễn phí mãi mãi.\n\n"
-            "Bạn nhập khoá bây giờ chứ?",
+            + self._CAU_MIEN_PHI
+            + "\n\nBạn nhập khoá bây giờ chứ?",
         ):
             return
         self._show_key_screen()
+
+    def require_key(self, viec: str) -> bool:
+        """Thao tác này gọi máy chủ — có khoá chưa? Chưa thì mời nhập, trả `False`.
+
+        **Vì sao chặn ở NÚT chứ không ở TAB.** Ba tab của tool vừa có phần chạy
+        tại chỗ vừa có phần gọi API (xem :data:`_FREE_TABS`). Khoá cả tab thì phần
+        chạy tại chỗ chết theo, tức là bắt khách trả tiền để dùng thứ chạy trên
+        máy của chính họ. Chặn ở nút giữ được cả hai: tab mở, và đúng cái nút tiêu
+        tiền mới hỏi khoá.
+
+        Luôn trả `False` khi chưa có khoá — kể cả sau khi khách đồng ý nhập, vì
+        :meth:`_show_key_screen` phá bỏ toàn bộ tab hiện có rồi dựng lại; thao tác
+        đang dở không còn widget nào để chạy tiếp.
+
+        :param viec: tên việc, viết như khách gọi nó ("Chạy cả dự án").
+        """
+        if self.client is not None:
+            return True
+        if messagebox.askyesno(
+            "Phần này cần API key",
+            "“{0}” chạy trên máy chủ shopapi nên cần API key và số dư trong ví.\n\n".format(viec)
+            + self._CAU_MIEN_PHI
+            + "\n\nBạn nhập khoá bây giờ chứ?",
+        ):
+            self._show_key_screen()
+        return False
 
     def _offer_recovery(self) -> None:
         """Lần trước đóng tool giữa chừng? Mời khách lấy nốt kết quả đã trả tiền.

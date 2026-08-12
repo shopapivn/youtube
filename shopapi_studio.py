@@ -160,9 +160,31 @@ def main() -> None:
         # Vì sao đáng thêm một dòng vào mã sản phẩm: đã có lần 1.097 test xanh
         # trong khi launcher chết ngay lúc khởi động vì một cái tên không còn tồn
         # tại. Không test nào từng chạy chính file này — chúng chỉ nhập `ui.app`.
+        _mo_thu_tab_mien_phi(app)
         app.destroy()
         return
     app.mainloop()
+
+
+def _mo_thu_tab_mien_phi(app) -> None:
+    """Mở lần lượt mọi tab dùng được khi CHƯA có khoá. Chỉ chạy lúc chạy thử.
+
+    Dựng được cửa sổ chưa chứng minh được gì. Tab chỉ thật sự được dựng vào lúc
+    khách bấm vào nút của nó (`StudioApp.show` gọi factory lười), nên một tab
+    hỏng vẫn để launcher thoát với mã 0 — đúng kiểu "đo dấu hiệu sống chứ không
+    đo việc" đã làm cháy bản chạy thật một lần rồi.
+
+    Đi đúng đường của khách chưa có tài khoản: chế độ miễn phí, và mọi tab trong
+    `_FREE_TABS`. Máy nào đã cấu hình khoá thì không có chế độ đó để mà đi, bỏ qua.
+    """
+    from ui.app import _FREE_TABS
+
+    if app.config.is_ready:
+        return
+    app.enter_free_mode()
+    for khoa in _FREE_TABS:
+        app.show(khoa)
+        app.update()
 
 
 if __name__ == "__main__":

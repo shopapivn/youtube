@@ -22,7 +22,7 @@ from .workflow import WorkflowError, parse_workflow, validate_workflow, workflow
 SYSTEM_PROMPT = """Ban la tro ly xay workflow YouTube cho nguoi khong biet code.
 Chi tra ve MOT JSON object, khong markdown, theo schema:
 {"reply":"cau tra loi tieng Viet de hieu", "proposed_workflow": object hoac null,
- "tool_proposal": object hoac null, "state_patch": object}.
+ "skill": object hoac null, "tool_proposal": object hoac null, "state_patch": object}.
 
 Quy tac bat buoc:
 - Chi dung tool_id va port co trong CATALOG do he thong cung cap.
@@ -34,6 +34,19 @@ Quy tac bat buoc:
   tra loi mot bang cau hoi. Chi hoi them dung mot cau neu thieu thong tin that su can.
 - Neu de xuat workflow, giu schema workflow_id/version/name/nodes/edges. Node chi co
   id/tool_id/inputs/config. Moi thay doi van phai cho nguoi dung bam Ap dung.
+- Khach xin MOT VIEC LE (dua vao mot thu, nhan ve mot thu) thi tra ve "skill",
+  KHONG dung proposed_workflow va KHONG dung tool_proposal. Vi du: "tool viet
+  tieu de video", "tool cham diem kich ban", "tool tom tat binh luan", "cong cu
+  viet mo ta SEO". Skill gom: {"ten" (toi da 48 ky tu), "mo_ta" (mot cau),
+  "nhan_dau_vao" (nhan o nhap, vi du "Kich ban"), "goi_y" (chu mo trong o nhap),
+  "prompt" (loi nhac gui cho mo hinh, toi da 4000 ky tu)}.
+  prompt BAT BUOC chua {0} — dung mot lan, la cho chen noi dung khach nhap.
+  Hay viet loi nhac cho THAT TOT: neu ro vai tro, dinh dang ket qua, va dieu can
+  tranh. Do la ly do duong nay ton tai — ban viet hay hon bo hieu ngoai tuyen.
+  reply phai noi Skill ten gi, no nam o tab Skill, va khach sua duoc loi nhac
+  ngay trong tab do.
+- Viec nhieu buoc thi van di bang proposed_workflow nhu cu: "lam content", "tao
+  giong doc", "tao anh", "lam video", "tron quy trinh YouTube".
 - Neu khach yeu cau tool moi ma catalog chua co, tool_proposal gom summary,
   manifest dung contract, files chi duoc run.py/requirements.txt/tests.py, va
   replaces_tool_id tuy chon. Day chi la source staging, khong phai tool da cai.
@@ -132,8 +145,10 @@ def respond(message: str, catalog: Mapping[str, ToolManifest], *,
         return AgentReply(fallback.reply, fallback.proposed_workflow, fallback.state,
                           "offline-fallback", None, fallback.actions)
     merged_state = _safe_state(state, parsed.get("state_patch"))
+    # `actions` ở đường model **chỉ** chứa `tao_skill`. Việc giao diện (đổi tên,
+    # ẩn/hiện tab) vẫn không bao giờ giao cho model — xem `_parse_response`.
     return AgentReply(parsed["reply"], parsed.get("proposed_workflow"), merged_state, "shopapi",
-                      parsed.get("tool_proposal"))
+                      parsed.get("tool_proposal"), tuple(parsed.get("actions") or ()))
 
 
 def shopapi_completer(api_key: str, base_url: str, *, model: str = "claude-sonnet-5",
@@ -255,7 +270,7 @@ def _parse_response(raw: str, catalog: Mapping[str, ToolManifest]) -> Dict[str, 
     data = _json_object_from_text(raw)
     if not isinstance(data, dict) or not isinstance(data.get("reply"), str) or not data["reply"].strip():
         raise AgentResponseError("Agent response thieu reply")
-    allowed = {"reply", "proposed_workflow", "tool_proposal", "state_patch"}
+    allowed = {"reply", "proposed_workflow", "skill", "tool_proposal", "state_patch"}
     if set(data) - allowed:
         raise AgentResponseError("Agent response co field ngoai contract")
     proposal = data.get("proposed_workflow")
@@ -271,8 +286,47 @@ def _parse_response(raw: str, catalog: Mapping[str, ToolManifest]) -> Dict[str, 
     tool_proposal = None
     if data.get("tool_proposal") is not None:
         tool_proposal = parse_tool_proposal(data["tool_proposal"])
+    actions: Tuple[AgentAction, ...] = ()
+    if data.get("skill") is not None:
+        actions = (_parse_skill(data["skill"]),)
     return {"reply": data["reply"].strip(), "proposed_workflow": proposal,
-            "tool_proposal": tool_proposal, "state_patch": patch}
+            "tool_proposal": tool_proposal, "state_patch": patch, "actions": actions}
+
+
+#: Trần của một Skill, giữ đúng bằng `core.skill_rieng` — vượt là `luu_skill`
+#: ném lỗi ngay lúc ghi, tức là khách nhận một câu báo hỏng thay vì nhận tool.
+_TRAN_TEN_SKILL = 48
+_TRAN_PROMPT_SKILL = 4000
+
+
+def _parse_skill(du_lieu: Any) -> AgentAction:
+    """Model đề nghị một Skill → `AgentAction("tao_skill", …)`.
+
+    Sai hợp đồng thì **ném lỗi**, không sửa hộ. `respond` cho model một lượt tự
+    sửa, và nếu vẫn hỏng thì rơi về bộ hiểu ngoại tuyến — nơi cũng đẻ được Skill.
+    Vá tạm ở đây (tự chèn `{0}`, tự cắt lời nhắc) là dựng ra một tool chạy sai mà
+    không ai biết vì sao.
+    """
+    if not isinstance(du_lieu, Mapping):
+        raise AgentResponseError("skill phai la object")
+    ten = str(du_lieu.get("ten") or "").strip()
+    prompt = str(du_lieu.get("prompt") or "").strip()
+    if not ten or len(ten) > _TRAN_TEN_SKILL:
+        raise AgentResponseError("skill.ten rong hoac dai qua")
+    if not prompt or len(prompt) > _TRAN_PROMPT_SKILL:
+        raise AgentResponseError("skill.prompt rong hoac dai qua")
+    if "{0}" not in prompt:
+        # Thiếu chỗ chèn thì Skill trả về cùng một câu bất kể khách gõ gì — hỏng
+        # im lặng, khách không tài nào đoán ra.
+        raise AgentResponseError("skill.prompt phai co {0}")
+    return AgentAction("tao_skill", {
+        "ten": ten,
+        "prompt": prompt,
+        "mo_ta": str(du_lieu.get("mo_ta") or "").strip()[:200],
+        "nhan_dau_vao": str(du_lieu.get("nhan_dau_vao") or "").strip() or "Nội dung",
+        "goi_y": str(du_lieu.get("goi_y") or "").strip(),
+        "bieu_tuong": str(du_lieu.get("bieu_tuong") or "").strip() or "🧩",
+    })
 
 
 def _safe_state(current: Optional[Mapping[str, Any]], patch: Optional[Mapping[str, Any]]) -> Dict[str, Any]:

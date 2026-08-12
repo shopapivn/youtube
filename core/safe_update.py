@@ -44,6 +44,7 @@ PRESERVE = (
     "ket-qua",        # sản phẩm khách đã tạo (mặc định lưu ngay trong thư mục cài)
     "phien-viet",     # phiên chat của tab Viết kịch bản
     "mau-kich-ban",   # template prompt khách tự lưu
+    "skill-cua-toi",  # Skill Agent đẻ ra riêng cho khách (`core.skill_rieng`)
 )
 MAX_FILES = 5000
 MAX_UNCOMPRESSED = 2 * 1024 * 1024 * 1024

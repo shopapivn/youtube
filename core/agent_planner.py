@@ -25,6 +25,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from .skill_rieng import TRAN_TEN as _TRAN_TEN_SKILL
 from .ui_customization import (
     NHAN_TAB_MAC_DINH, ThayDoiGiaoDien, parse_ui_change, ten_tab_dang_co,
 )
@@ -170,7 +171,13 @@ def plan_message(message: str, catalog: Any, workflow: Optional[Mapping[str, Any
     if tro_lui is not None:
         return tro_lui
 
-    name = _assistant_name(original, text) or (_simple_name(original) if stage == "name" else None)
+    # Tính SỚM, dùng MUỘN. Câu *“tao muốn có tool đặt tên kênh”* bỏ dấu xong cũng
+    # chứa “dat ten”, nên nhánh đặt tên trợ lý ngay dưới sẽ cướp nó và đặt tên
+    # trợ lý thành “kênh”. Biết trước đây là câu đặt làm tool thì tránh được.
+    dat_lam_tool = _ke_hoach_skill(original, new_state)
+
+    name = None if dat_lam_tool is not None else (
+        _assistant_name(original, text) or (_simple_name(original) if stage == "name" else None))
     if name:
         new_state.update({"assistant_name": name, "onboarding_stage": "goal",
                           "onboarding_complete": False})
@@ -218,6 +225,13 @@ def plan_message(message: str, catalog: Any, workflow: Optional[Mapping[str, Any
             suffix = " Chưa thể thêm: {0}.".format(", ".join(missing))
         return AgentPlan("Đã dựng bản đề xuất gồm {0} bước.{1}".format(len(available), suffix),
                          (action,), proposed, new_state)
+
+    # Khách đặt làm MỘT VIỆC LẺ (“làm cho tao tool viết tiêu đề”). Trả lời ở đây,
+    # tức là sau nhánh dây chuyền phía trên — câu xin trọn quy trình vẫn về đúng
+    # chỗ cũ — nhưng TRƯỚC `_dich_xa_nhat`, vì chính nhánh đó là thứ nuốt mọi câu
+    # có chữ “video” rồi trả về dây chuyền 7 bước.
+    if dat_lam_tool is not None:
+        return dat_lam_tool
 
     configured = _configuration_change(text, original, workflow)
     if configured is not None:
@@ -557,6 +571,215 @@ def _dung_toi_dich(dich: str, ids: set, state: Dict[str, Any]) -> AgentPlan:
                "Bấm Áp dụng rồi chạy thử.").format(ten, len(can), truoc)
     return AgentPlan(loi, (AgentAction("replace_workflow", {"workflow": proposed}),),
                      proposed, state)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ĐẺ TOOL: MỘT VIỆC LẺ THÀNH SKILL, NHIỀU BƯỚC MỚI THÀNH DÂY CHUYỀN
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# Đo ngày 12/08/2026: khách gõ *“tao muốn có tool viết tiêu đề video cho tao”*,
+# Agent trả về nguyên dây chuyền 7 bước làm video. Lỗi không nằm ở chỗ hiểu sai
+# chữ “video” — nó nằm ở chỗ **bộ lập kế hoạch chỉ biết đẻ ra workflow**. Mọi
+# câu xin tool đều bị ép về hình dạng duy nhất nó có.
+#
+# Thứ khách xin ở trên là một việc lẻ: đưa vào một thứ, nhận về một thứ. Đó là
+# hình dạng của Skill (`core.skills`), nơi đã có sẵn ô nhập, ô kết quả, nút lưu.
+#
+# ═══ LUẬT PHÂN BIỆT: ĐỘNG TỪ + SẢN PHẨM, KHÔNG PHẢI TỪ KHOÁ ĐƠN LẺ ═══
+#
+# Bắt theo từ khoá đơn lẻ là quay lại đúng cái bẫy cũ: “tool chấm điểm kịch bản”
+# có chữ “kịch bản”, “tool viết tiêu đề video” có chữ “video”. Nên xét theo cặp:
+#
+#   dây chuyền = (động từ tạo ra) + (sản phẩm của dây chuyền) đứng ngay đầu việc
+#       “tool làm video”, “tool tạo giọng đọc”, “tool viết kịch bản”
+#   Skill      = mọi thứ còn lại
+#       “tool viết tiêu đề video”  → động từ “viết”, tân ngữ “tiêu đề” ⇒ Skill
+#       “tool chấm điểm kịch bản”  → “chấm điểm” không tạo ra sản phẩm nào ⇒ Skill
+#
+# Và bắt buộc phải có chữ **tool / công cụ / skill** trong câu. Không có nó thì
+# “làm content”, “tạo giọng đọc”, “tao muốn có video kể chuyện tâm lý” không bao
+# giờ chạm tới nhánh này — đường cũ giữ nguyên, không phải sửa gì.
+
+#: Cách khách mở lời đặt làm một tool. Nhóm 1 luôn là phần **việc** họ muốn.
+#:
+#: Từ đệm giữa động từ và chữ “tool” chỉ lấy trong một danh sách kín (“cho tao”,
+#: “giúp tao một cái”…). Cho `\w+` chạy tự do ở đó thì câu *“làm video cho kênh
+#: của tao bằng tool nào đó”* cũng khớp — và khách mất luôn dây chuyền video.
+_TU_DEM_XIN_TOOL = ("cho", "giup", "gium", "dum", "ho", "tao", "toi", "minh", "em",
+                    "anh", "t", "mot", "1", "cai", "con", "the", "luon", "ngay",
+                    "nhanh", "gap", "them")
+_DEM = "(?:(?:" + "|".join(_TU_DEM_XIN_TOOL) + r")\s+){0,4}"
+_TEN_GOI_TOOL = r"(?:tool|cong cu|skill)"
+
+_MAU_XIN_TOOL = (
+    # “làm cho tao tool viết tiêu đề”, “tạo tool chấm điểm kịch bản”
+    r"(?:lam|tao|dung|viet|che)\s+" + _DEM + _TEN_GOI_TOOL + r"\s+(.+)$",
+    # “tao muốn có tool…”, “tao cần công cụ…”
+    r"(?:muon|can|thieu|thich|kiem|xin)\s+(?:(?:co|mot|1|cai|the)\s+){0,3}"
+    + _TEN_GOI_TOOL + r"\s+(.+)$",
+    # “làm giúp tao cái tóm tắt bình luận” — không có chữ “tool”, nên cổng lọc
+    # `_la_viec_day_chuyen` bên dưới gánh toàn bộ phần phân biệt.
+    r"(?:lam|tao|dung)\s+(?:\w+\s+)?(?:giup|gium|dum|ho)\s+"
+    r"(?:tao|toi|minh|em|anh|t)\s+(?:cai|mot|1)\s+(.+)$",
+)
+
+#: Chữ nối vô nghĩa ở đầu phần việc: “tool **để** viết tiêu đề”.
+_DAU_THUA_VIEC = r"^(?:dung de|de|giup|chuyen|ma|nao do|nao)\s+"
+
+#: Đuôi vô nghĩa: “viết tiêu đề **cho tao**”. Cắt đi để tên Skill còn sạch.
+_DUOI_THUA_VIEC = r"\s+(?:cho|giup|gium|dum|ho)\s+(?:tao|toi|minh|em|anh|t)\b.*$"
+
+#: Động từ **tạo ra** một sản phẩm. Chỉ những động từ này mới kéo câu về dây chuyền.
+_DONG_TU_TAO_RA = ("lam", "tao", "dung", "san xuat", "sinh", "viet", "che", "ra")
+
+#: Mọi cách khách gọi tên sản phẩm của 8 tool trong dây chuyền — lấy thẳng từ
+#: `_KET_QUA` để hai bảng không bao giờ lệch nhau.
+_SAN_PHAM_DAY_CHUYEN = tuple(sorted(
+    {tu for bo in _KET_QUA.values() for tu in bo}, key=len, reverse=True))
+
+#: Câu tự nó nói “nhiều bước” — dây chuyền, bất kể động từ nào.
+_TU_DAY_CHUYEN = ("pipeline", "quy trinh", "day chuyen", "day du", "tron bo",
+                  "tu a den z", "tu dau den cuoi", "end to end", "a-z")
+
+#: Nhãn ô nhập đoán theo việc. Đoán trật thì khách sửa một chữ trong tab Skill;
+#: để trống thì họ nhìn ô “Nội dung” và không biết phải dán gì vào.
+_NHAN_THEO_VIEC = (
+    (("kich ban", "script", "loi doc", "lời thoai", "thoai"), "Kịch bản"),
+    (("binh luan", "comment", "phan hoi", "danh gia cua nguoi xem"), "Bình luận cần xử lý"),
+    (("tieu de", "tua de", "thumbnail", "anh bia"), "Chủ đề hoặc kịch bản video"),
+    (("mo ta", "seo", "hashtag", "tu khoa"), "Kịch bản hoặc tóm tắt video"),
+    (("y tuong", "de tai", "chu de", "ngach"), "Ngách hoặc chủ đề kênh"),
+    (("email", "tin nhan", "comment tra loi"), "Nội dung cần trả lời"),
+)
+
+
+def _bo_dau_giu_do_dai(chu: str) -> str:
+    """Bỏ dấu **từng ký tự một**, giữ nguyên số ký tự.
+
+    `_plain` gộp khoảng trắng nên vị trí chữ bị xê dịch. Ở đây cần vị trí khớp
+    y hệt câu gốc: dò trên bản không dấu rồi cắt tên Skill ra từ câu CÓ DẤU, để
+    khách nhận về “Viết tiêu đề video” chứ không phải “Viet tieu de video”.
+
+    >>> _bo_dau_giu_do_dai("Viết Tiêu Đề")
+    'viet tieu de'
+    >>> len(_bo_dau_giu_do_dai("đường")) == len("đường")
+    True
+    """
+    ket = []
+    for ky_tu in chu:
+        if ky_tu in "đĐ":
+            ket.append("d")
+            continue
+        goc = "".join(c for c in unicodedata.normalize("NFD", ky_tu)
+                      if unicodedata.category(c) != "Mn")
+        # Ký tự nào tách ra không còn đúng một chữ thì giữ nguyên — thà bỏ sót
+        # một dấu còn hơn lệch vị trí và cắt tên Skill sai chỗ.
+        ket.append(goc if len(goc) == 1 else ky_tu)
+    return "".join(ket).lower()
+
+
+def _la_viec_day_chuyen(viec: str) -> bool:
+    """Việc này thuộc về 8 tool có sẵn hay là một việc lẻ?
+
+    >>> _la_viec_day_chuyen("lam video tu chu de")
+    True
+    >>> _la_viec_day_chuyen("tao giong doc")
+    True
+    >>> _la_viec_day_chuyen("viet tieu de video")
+    False
+    >>> _la_viec_day_chuyen("cham diem kich ban")
+    False
+    """
+    if _has(viec, *_TU_DAY_CHUYEN):
+        return True
+    con = re.sub(r"^(?:" + "|".join(_DONG_TU_TAO_RA) + r")\s+", "", viec).strip()
+    con = re.sub(r"^(?:mot|1|cai|nhung|cac)\s+", "", con).strip()
+    return any(re.match(re.escape(tu) + r"(?![0-9a-z])", con)
+               for tu in _SAN_PHAM_DAY_CHUYEN)
+
+
+def _tach_viec(original: str) -> Optional[Tuple[str, str]]:
+    """Câu đặt làm tool → `(việc còn dấu, việc bỏ dấu)`; không phải thì `None`."""
+    goc = " ".join((original or "").split())
+    phang = _bo_dau_giu_do_dai(goc)
+    khop = None
+    for mau in _MAU_XIN_TOOL:
+        khop = re.search(mau, phang)
+        if khop:
+            break
+    if not khop:
+        return None
+    # Hai bản cùng độ dài nên cắt bằng cùng một chỉ số — xem `_bo_dau_giu_do_dai`.
+    dau = khop.start(1)
+    viec_goc, viec_phang = goc[dau:], phang[dau:]
+    thua_dau = re.match(_DAU_THUA_VIEC, viec_phang)
+    if thua_dau:
+        viec_goc, viec_phang = viec_goc[thua_dau.end():], viec_phang[thua_dau.end():]
+    thua_duoi = re.search(_DUOI_THUA_VIEC, viec_phang)
+    if thua_duoi:
+        viec_goc, viec_phang = viec_goc[:thua_duoi.start()], viec_phang[:thua_duoi.start()]
+    viec_goc = viec_goc.strip().strip(" .,!?…\"'“”")
+    viec_phang = viec_phang.strip().strip(" .,!?…\"'“”")
+    return (viec_goc, viec_phang) if viec_goc and viec_phang else None
+
+
+def _nhan_dau_vao(viec_phang: str) -> str:
+    for tu_khoa, nhan_o in _NHAN_THEO_VIEC:
+        if any(_khop_tron_tu(viec_phang, tu) for tu in tu_khoa):
+            return nhan_o
+    return "Nội dung"
+
+
+def _ten_skill(viec_goc: str) -> str:
+    """Tên hiện trên nút bên trái tab Skill: viết hoa đầu câu, cắt gọn theo từ."""
+    ten = viec_goc[:1].upper() + viec_goc[1:]
+    if len(ten) <= _TRAN_TEN_SKILL:
+        return ten
+    cat = ten[:_TRAN_TEN_SKILL].rsplit(" ", 1)[0].rstrip(" ,;-")
+    return cat or ten[:_TRAN_TEN_SKILL]
+
+
+def _loi_nhac_nhap(viec_goc: str, nhan_o: str) -> str:
+    """Lời nhắc nháp đầu tiên. **Không cần hay, cần chạy được và bám đúng việc.**
+
+    Người viết được lời nhắc tốt cho kênh của mình là khách chứ không phải bộ
+    hiểu ngoại tuyến — nó không biết kênh nào, giọng nào, khán giả nào. Nên chỗ
+    này chỉ dựng bộ khung đúng hình dạng rồi nói thẳng cho khách biết họ sửa
+    được, còn đường mô hình (`core.agent_service`) mới là chỗ viết cho hay.
+    """
+    return ("Bạn là người làm YouTube lâu năm. Việc cần làm: {0}.\n\n"
+            "{1}:\n\n{{0}}\n\n"
+            "Bám sát nội dung vừa nhận, làm đúng việc trên. Trả lời bằng tiếng "
+            "Việt, chỉ đưa ra kết quả, không lời dẫn, không giải thích thêm.").format(
+                viec_goc, nhan_o)
+
+
+def _ke_hoach_skill(original: str, state: Dict[str, Any]) -> Optional[AgentPlan]:
+    """Khách đặt làm một việc lẻ → đẻ ra một Skill, không đẻ ra dây chuyền."""
+    tach = _tach_viec(original)
+    if tach is None:
+        return None
+    viec_goc, viec_phang = tach
+    if _la_viec_day_chuyen(viec_phang):
+        return None  # để nhánh dây chuyền cũ lo — nó làm đúng việc đó rồi
+    ten = _ten_skill(viec_goc)
+    nhan_o = _nhan_dau_vao(viec_phang)
+    hanh_dong = AgentAction("tao_skill", {
+        "ten": ten,
+        "prompt": _loi_nhac_nhap(viec_goc, nhan_o),
+        "mo_ta": "Tool bạn đặt làm: {0}.".format(viec_goc),
+        "nhan_dau_vao": nhan_o,
+        "goi_y": "Dán {0} vào đây…".format(nhan_o[:1].lower() + nhan_o[1:]),
+        "bieu_tuong": "🧩",
+    })
+    # Viết ở thể đã-xong vì `ui_qt/trang_agent.py` ghi Skill ra đĩa TRƯỚC khi vẽ
+    # câu này; ghi không được thì chính nó nối thêm dòng báo hỏng.
+    loi = ("Xong — tôi vừa làm cho bạn tool “{0}”. Nó nằm trong tab Skill: mở "
+           "tab đó, điền ô “{1}” rồi bấm Chạy Skill.\n\n"
+           "Lời nhắc bên trong mới là bản nháp đầu của tôi. Ngay trong tab Skill "
+           "bạn sửa lại lời nhắc rồi bấm Lưu, hoặc xoá hẳn nếu không cần nữa.").format(
+               ten, nhan_o)
+    return AgentPlan(loi, (hanh_dong,), None, state)
 
 
 #: Khách hỏi thẳng phạm vi của tool. Câu này thì bảng lựa chọn CHÍNH LÀ câu trả
