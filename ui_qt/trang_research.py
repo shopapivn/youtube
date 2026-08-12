@@ -45,20 +45,19 @@ from PyQt5.QtWidgets import (
     QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from core.doi_thu import COT_KENH, COT_VIDEO, KetQua, doc_file_kenh, lay_du_lieu
+from core.doi_thu import COT_VIDEO, KetQua, doc_file_kenh, lay_du_lieu
 from core.research import write_csv
 from core.youtube import parse_inputs
 
 from . import theme
 from .widgets import (
-    ChonThuMuc, NhomChon, mo_thu_muc, nhan, nut_chinh, nut_phu, the,
+    ChonThuMuc, mo_thu_muc, nhan, nut_chinh, nut_phu, the,
     tieu_de_trang,
 )
 
 __all__ = ["TrangNghienCuu"]
 
 #: Tên hai bảng — cũng là nhãn của dãy nút chuyển bảng.
-BANG_KENH = "Kênh"
 BANG_VIDEO = "Video"
 
 #: Số dòng nhật ký giữ lại trên màn hình. Một lượt chi tiết đầy đủ đẻ ra hàng
@@ -121,7 +120,9 @@ class TrangNghienCuu(QWidget):
             "@tenkenh2\n"
             "https://www.youtube.com/watch?v=...\n"
             "truyện ma có thật")
-        self._o_nhap.setFixedHeight(110)
+        # 92px = bốn dòng: đủ nhìn thấy mình vừa dán gì, mà không ăn mất chỗ
+        # của bảng kết quả — trang này từng cao hơn cửa sổ 13px vì ô này.
+        self._o_nhap.setFixedHeight(92)
         v.addWidget(self._o_nhap)
 
         d1 = QHBoxLayout()
@@ -144,14 +145,11 @@ class TrangNghienCuu(QWidget):
         d1.addStretch(1)
         v.addLayout(d1)
 
+        # KHÔNG còn ô "Dò thêm kênh". Chủ dự án, 13/08/2026: *"hiện tại hơi phức
+        # tạp, cái tao cần chỉ là lấy các content của các kênh, paste vào ô"*.
+        # Tự đi tìm kênh khác là việc khách không xin, mà nó nhân số lượt gọi
+        # mạng lên nhiều lần và làm bảng đầy những kênh họ chưa từng nghe tên.
         d2 = QHBoxLayout()
-        self._mo_rong = QCheckBox("Dò thêm kênh")
-        self._mo_rong.setToolTip(
-            "Từ các kênh bạn dán, tự tìm thêm kênh cùng ngách để so sánh.")
-        self._mo_rong.setToolTip(
-            "Lấy tiêu đề video đang ăn view rồi tìm xem còn kênh nào làm cùng format. "
-            "Tắt thì chỉ lấy đúng những kênh bạn dán vào.")
-        d2.addWidget(self._mo_rong)
         d2.addStretch(1)
         self._nut_chay = nut_chinh("▶   Lấy dữ liệu", self._chay)
         self._nut_chay.setFixedWidth(220)
@@ -175,33 +173,21 @@ class TrangNghienCuu(QWidget):
         return the_tom
 
     def _khoi_bang(self) -> QWidget:
-        """Hai bảng chồng lên nhau, đổi qua lại bằng dãy nút.
+        """MỘT bảng, đúng mười cột của tool gốc.
 
-        Dùng `NhomChon` chứ không dùng `QTabWidget`: dãy nút này đã có kiểu
-        trong `theme.py` (objectName `seg`), còn QTabWidget thì chưa — thêm nó
-        vào là phải gõ màu ở đây, đúng thứ luật của tool cấm.
+        Bản trước có hai bảng (Kênh / Video) và sáu cột tự thêm — Subs,
+        View/Subs, Win, Tuổi kênh, Tần suất đăng, Nguồn. Chúng là suy luận của
+        tool, không phải dữ liệu khách xin; và một dãy nút chuyển bảng bắt họ
+        chọn trước khi kịp nhìn thấy gì.
         """
-        hop = QWidget()
-        doc = QVBoxLayout(hop)
-        doc.setContentsMargins(0, 0, 0, 0)
-        doc.setSpacing(8)
-
-        d = QHBoxLayout()
-        self._chon_bang = NhomChon((BANG_KENH, BANG_VIDEO), BANG_KENH,
-                                   on_change=self._doi_bang)
-        d.addWidget(self._chon_bang)
-        d.addStretch(1)
-        self._dem = nhan("", "muted")
-        d.addWidget(self._dem)
-        doc.addLayout(d)
-
-        self._chong = QStackedWidget()
-        self._bang_kenh = self._bang_moi(COT_KENH)
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Nội dung lấy về", "h2"))
         self._bang_video = self._bang_moi(COT_VIDEO)
-        self._chong.addWidget(self._bang_kenh)
-        self._chong.addWidget(self._bang_video)
-        doc.addWidget(self._chong, 1)
-        return hop
+        v.addWidget(self._bang_video, 1)
+        return khung
 
     @staticmethod
     def _bang_moi(cot) -> QTableWidget:
@@ -249,9 +235,6 @@ class TrangNghienCuu(QWidget):
         self._ghi_log("Đã nạp {0} dòng từ {1}".format(
             len(parse_inputs(noi_dung)), os.path.basename(duong_dan)))
 
-    def _doi_bang(self, ten: str) -> None:
-        self._chong.setCurrentIndex(0 if ten == BANG_KENH else 1)
-
     # ── Chạy ─────────────────────────────────────────────────────────────────
 
     def _chay(self) -> None:
@@ -268,7 +251,6 @@ class TrangNghienCuu(QWidget):
         self._nut_dung.setEnabled(True)
         self._nut_xuat.setEnabled(False)
         self._log.clear()
-        self._bang_kenh.setRowCount(0)
         self._bang_video.setRowCount(0)
         self._tom_tat.setText("Đang lấy dữ liệu…")
         self._tom_tat.setStyleSheet("font-size:19px;font-weight:700;")
@@ -277,13 +259,12 @@ class TrangNghienCuu(QWidget):
 
         so_video = self._so_video.value()
         chi_tiet = self._chi_tiet.isChecked()
-        mo_rong = self._mo_rong.isChecked()
         huy = self._huy
 
         def viec() -> KetQua:
             # Chạy ở LUỒNG NỀN — không chạm widget nào ở đây. Nhật ký gom vào
             # `ket.nhat_ky`, giao diện đổ ra khi xong.
-            return lay_du_lieu(chu, so_video=so_video, mo_rong=mo_rong,
+            return lay_du_lieu(chu, so_video=so_video, mo_rong=False,
                                chi_tiet=chi_tiet, cancel=huy)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
@@ -309,7 +290,6 @@ class TrangNghienCuu(QWidget):
         for dong in ket.nhat_ky[-TRAN_NHAT_KY:]:
             self._log.appendPlainText(str(dong))
 
-        self._do_bang(self._bang_kenh, ket.bang_kenh())
         self._do_bang(self._bang_video, ket.bang_video())
         self._dem.setText("{0} kênh · {1} video".format(ket.so_kenh, ket.so_video))
 
@@ -373,16 +353,16 @@ class TrangNghienCuu(QWidget):
         thu_muc = self._thu_muc.value
         try:
             os.makedirs(thu_muc, exist_ok=True)
-            write_csv(os.path.join(thu_muc, "kenh-doi-thu.csv"),
-                      list(COT_KENH), self._ket.bang_kenh())
-            write_csv(os.path.join(thu_muc, "video-doi-thu.csv"),
+            # MỘT file, đúng bảng khách đang nhìn. Xuất kèm một file "kênh" mà
+            # họ không xin chỉ tổ làm họ phải mở hai file để tìm một thứ.
+            write_csv(os.path.join(thu_muc, "noi-dung-doi-thu.csv"),
                       list(COT_VIDEO), self._ket.bang_video())
         except Exception as loi:  # noqa: BLE001 — ổ đầy, thư mục bị khoá…
             self._app.show_error(loi)
             return
         self._thu_muc_da_xuat = thu_muc
         self._nut_mo.setEnabled(True)
-        self._ghi_log("Đã xuất kenh-doi-thu.csv và video-doi-thu.csv vào " + thu_muc)
+        self._ghi_log("Đã xuất noi-dung-doi-thu.csv vào " + thu_muc)
         self._app.show_message(
             "Đã xuất",
             "Hai file CSV nằm trong:\n{0}\n\nMở bằng Excel được ngay (đã kèm BOM "

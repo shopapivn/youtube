@@ -86,22 +86,26 @@ COT_KENH = (
     "Link kênh",
 )
 
-#: Bảng VIDEO. Mười cột cuối chính là bảng của tool gốc, thêm `Subs`,
-#: `View/Subs`, `Win` ở đầu.
+#: Bảng nội dung — **đúng mười cột của tool gốc**, đúng thứ tự ấy.
+#:
+#: Bản trước thêm `Subs`, `View/Subs`, `Win` ở đầu. Ba cột đó là suy luận của
+#: tool chứ không phải dữ liệu khách xin, và chúng đẩy `Tiêu đề video` — thứ mắt
+#: người tìm đầu tiên — xuống tận cột thứ sáu. Chủ dự án, 13/08/2026: *"hiện tại
+#: hơi phức tạp, cái tao cần chỉ là lấy các content của các kênh"*.
+#:
+#: Thứ tự vẫn xếp theo View/Subs giảm dần như cũ — video ăn view nhất nằm trên
+#: cùng. Cách xếp là thứ giúp được khách; thêm cột thì không.
 COT_VIDEO = (
     "Kênh",
-    "Subs",
-    "View/Subs",
-    "View",
-    "Win",
     "Tiêu đề video",
+    "Link video",
     "Ngày đăng",
     "Thời lượng",
+    "View",
     "Like",
     "Comment",
     "Hashtag",
     "Mô tả",
-    "Link video",
 )
 
 #: Lý do một video không lấy được — chép từ `_skip_reason` của tool gốc. Bắt
@@ -376,18 +380,15 @@ def hang_video(
             them = chi_tiet.get(video.video_id, ChiTiet())
             hang.append((ti, max(0, video.views), [
                 kenh.display_name,
-                _so(subs),
-                _ty_le_text(ti),
-                _so(video.views),
-                "WIN" if id(video) in win_ids else "",
                 _mot_dong(video.title),
+                video.url,
                 them.upload_date or video.upload_date,
                 thoi_luong(them.duration_s or video.duration_s),
+                _so(video.views),
                 _so(them.likes),
                 _so(them.comments),
                 them.hashtags,
                 _mot_dong(them.description)[:MAX_MO_TA],
-                video.url,
             ]))
     hang.sort(key=lambda muc: (muc[0], muc[1]), reverse=True)
     return [dong for _ti, _view, dong in hang]
