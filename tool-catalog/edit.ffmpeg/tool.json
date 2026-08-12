@@ -1,0 +1,19 @@
+{
+  "tool_id": "edit.ffmpeg",
+  "name": "Dung video FFmpeg",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Ghep clip, voice va phu de thanh video hoan chinh.",
+  "inputs": [
+    {"name": "clips", "kind": "video", "schema": "scene-clips.v1", "multiple": true},
+    {"name": "audio", "kind": "audio", "schema": "narration-audio.v1", "required": false},
+    {"name": "subtitles", "kind": "subtitle", "schema": "srt.v1", "required": false}
+  ],
+  "outputs": [
+    {"name": "video", "kind": "video", "schema": "final-video.v1"}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{}},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "executables": ["ffmpeg"],
+              "python_modules": ["imageio_ffmpeg"], "timeout_seconds": 14400},
+  "permissions": ["workspace.read", "workspace.write", "process.ffmpeg"]
+}

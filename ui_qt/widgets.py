@@ -1,0 +1,358 @@
+"""Những khối dựng lại nhiều lần trong giao diện Qt.
+
+Mỗi khối ở đây tương ứng một khối cùng tên ở bản tkinter (`ui/widgets.py`), nên
+chuyển từng tab sang là việc thay lời gọi chứ không phải nghĩ lại bố cục.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from typing import Callable, List, Optional, Sequence
+
+from PyQt5.QtCore import QPoint, QRect, QSize, Qt
+from PyQt5.QtWidgets import (
+    QFileDialog, QFrame, QLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QSizePolicy, QVBoxLayout, QWidget,
+)
+
+from . import theme
+
+__all__ = [
+    "the", "nhan", "tieu_de_trang", "nut_chinh", "nut_phu", "nut_nguy_hiem",
+    "DaiUocTinh", "ChonThuMuc", "AnhThamChieu", "NhomChon", "mo_thu_muc",
+    "HangXuongDong",
+]
+
+
+# ── Khối cơ bản ──────────────────────────────────────────────────────────────
+
+
+def the(cha: Optional[QWidget] = None) -> QFrame:
+    """Thẻ trắng bo góc có đổ bóng — khối nội dung cơ bản của cả tool."""
+    khung = QFrame(cha)
+    khung.setObjectName("card")
+    theme.bong(khung)
+    return khung
+
+
+def nhan(text: str, kieu: str = "", cha: Optional[QWidget] = None) -> QLabel:
+    nh = QLabel(text, cha)
+    if kieu:
+        nh.setObjectName(kieu)
+    nh.setWordWrap(True)
+    return nh
+
+
+def tieu_de_trang(tieu_de: str, ghi_chu: str = "") -> QWidget:
+    """Tiêu đề một trang — **một dòng**, ghi chú nằm bên phải.
+
+    Trước đây ghi chú nằm ở dòng riêng bên dưới. Đo ra: mỗi trang mất thêm ~24px
+    cho một câu khách đọc đúng một lần rồi thôi, nhân tám trang. Trong khi sáu
+    trên tám trang đang **cao hơn cả cửa sổ** — tức là phần chữ giới thiệu đang
+    lấn chỗ của phần khách phải gõ.
+    """
+    hop = QWidget()
+    ngang = QHBoxLayout(hop)
+    ngang.setContentsMargins(0, 0, 0, 0)
+    ngang.setSpacing(12)
+    nhan_chinh = nhan(tieu_de, "h1")
+    nhan_chinh.setWordWrap(False)
+    ngang.addWidget(nhan_chinh)
+    if ghi_chu:
+        # Ghi chú PHẢI xuống dòng được. Khoá `setWordWrap(False)` ở đây làm bề
+        # rộng tối thiểu của cả trang bằng độ dài nguyên câu — đo được: tám trang
+        # nhảy lên 973–1569px, tức tràn hết ra ngoài mép cửa sổ nhỏ.
+        ngang.addWidget(nhan(ghi_chu, "muted"), 1)
+    else:
+        ngang.addStretch(1)
+    return hop
+
+
+def _nut(text: str, lenh: Optional[Callable[[], None]], kieu: str,
+         rong: int = 0) -> QPushButton:
+    nut = QPushButton(text)
+    nut.setObjectName(kieu)
+    nut.setCursor(Qt.PointingHandCursor)
+    if rong:
+        nut.setFixedWidth(rong)
+    if lenh is not None:
+        nut.clicked.connect(lambda: lenh())
+    return nut
+
+
+def nut_chinh(text: str, lenh: Optional[Callable[[], None]] = None,
+              rong: int = 0) -> QPushButton:
+    """Nút hành động chính. **Mỗi màn hình chỉ nên có đúng một cái.**"""
+    nut = _nut(text, lenh, "primary", rong)
+    nut.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    theme.bong(nut, mo=20, alpha=55, doc=2)
+    return nut
+
+
+def nut_phu(text: str, lenh: Optional[Callable[[], None]] = None,
+            rong: int = 0) -> QPushButton:
+    return _nut(text, lenh, "ghost", rong)
+
+
+def nut_nguy_hiem(text: str, lenh: Optional[Callable[[], None]] = None,
+                  rong: int = 0) -> QPushButton:
+    return _nut(text, lenh, "danger", rong)
+
+
+class HangXuongDong(QLayout):
+    """Hàng chip biết **xuống dòng** khi cửa sổ hẹp.
+
+    `QHBoxLayout` không co được xuống dưới tổng bề rộng tối thiểu của các chip
+    (~430px ở đây). Cộng thanh bên 240 và cột phải 300 là vượt bề rộng nhỏ nhất
+    của cửa sổ, và phần vượt bị đẩy ra khỏi mép phải — đúng lỗi khách chụp màn
+    hình. Cho chip tự xuống dòng thì bề rộng tối thiểu của cả cột trái chỉ còn
+    bằng **một** chip, không còn gì để đẩy ra ngoài nữa.
+    """
+
+    def __init__(self, khoang: int = 6):
+        super().__init__()
+        self._muc: List[Any] = []
+        self._khoang = khoang
+        self.setContentsMargins(0, 0, 0, 0)
+
+    # ── Hợp đồng bắt buộc của QLayout ────────────────────────────────────────
+    def addItem(self, muc) -> None:  # noqa: N802 — tên do Qt quy định
+        self._muc.append(muc)
+
+    def count(self) -> int:
+        return len(self._muc)
+
+    def itemAt(self, chi_so):  # noqa: N802
+        return self._muc[chi_so] if 0 <= chi_so < len(self._muc) else None
+
+    def takeAt(self, chi_so):  # noqa: N802
+        return self._muc.pop(chi_so) if 0 <= chi_so < len(self._muc) else None
+
+    def expandingDirections(self):  # noqa: N802
+        return Qt.Orientations(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, rong: int) -> int:  # noqa: N802
+        return self._xep(QRect(0, 0, rong, 0), chi_do=True)
+
+    def setGeometry(self, o) -> None:  # noqa: N802
+        super().setGeometry(o)
+        self._xep(o, chi_do=False)
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:  # noqa: N802
+        cd = QSize(0, 0)
+        for muc in self._muc:
+            cd = cd.expandedTo(muc.minimumSize())
+        return cd
+
+    def _xep(self, o, chi_do: bool) -> int:
+        x, y, cao_dong = o.x(), o.y(), 0
+        for muc in self._muc:
+            cd = muc.sizeHint()
+            if x > o.x() and x + cd.width() > o.right():
+                x = o.x()
+                y += cao_dong + self._khoang
+                cao_dong = 0
+            if not chi_do:
+                muc.setGeometry(QRect(QPoint(x, y), cd))
+            x += cd.width() + self._khoang
+            cao_dong = max(cao_dong, cd.height())
+        return y + cao_dong - o.y()
+
+
+
+class NhomChon(QWidget):
+    """Dãy nút chọn một trong nhiều — thay `CTkSegmentedButton`.
+
+    Bo góc chỉ ở hai đầu dãy, để cả nhóm trông như MỘT nút bị chia ô chứ không
+    phải mấy nút rời nhau.
+    """
+
+    def __init__(self, gia_tri: Sequence[str], mac_dinh: str = "",
+                 on_change: Optional[Callable[[str], None]] = None,
+                 xuong_dong: bool = False):
+        """`xuong_dong=True` cho dãy tự xuống hàng khi cửa sổ hẹp.
+
+        Dãy nút ngang không co được xuống dưới tổng bề rộng của các nút. Sáu mức
+        nạp tiền là 768px cứng — vượt cả vùng nội dung của cửa sổ nhỏ nhất, và
+        phần thừa bị cắt ngoài mép phải. Cho xuống dòng thì bề rộng tối thiểu
+        chỉ còn bằng **một** nút.
+        """
+        super().__init__()
+        self._on_change = on_change
+        self._nut: List[QPushButton] = []
+        if xuong_dong:
+            ngang = HangXuongDong(khoang=0)
+            self.setLayout(ngang)
+        else:
+            ngang = QHBoxLayout(self)
+        ngang.setContentsMargins(0, 0, 0, 0)
+        if not xuong_dong:
+            ngang.setSpacing(0)
+        cuoi = len(gia_tri) - 1
+        for i, gia in enumerate(gia_tri):
+            nut = QPushButton(str(gia))
+            nut.setObjectName("seg")
+            nut.setCheckable(True)
+            nut.setCursor(Qt.PointingHandCursor)
+            goc = []
+            if i == 0:
+                goc += ["border-top-left-radius:10px", "border-bottom-left-radius:10px"]
+            if i == cuoi:
+                goc += ["border-top-right-radius:10px", "border-bottom-right-radius:10px"]
+            if goc:
+                nut.setStyleSheet(";".join(goc) + ";")
+            nut.clicked.connect(lambda _c, g=gia: self.set(g))
+            ngang.addWidget(nut)
+            self._nut.append(nut)
+        if not xuong_dong:
+            ngang.addStretch(1)   # `HangXuongDong` không nhận khoảng co giãn
+        # Lần đặt ĐẦU TIÊN phải im lặng: `on_change` thường đọc các widget khác
+        # của trang, mà lúc này trang mới dựng được nửa chừng — gọi ra là
+        # `AttributeError` ngay khi mở tool.
+        self.set(mac_dinh or (gia_tri[0] if gia_tri else ""), bao=False)
+
+    def set(self, gia_tri: str, *, bao: bool = True) -> None:
+        self._gia_tri = str(gia_tri)
+        for nut in self._nut:
+            nut.setChecked(nut.text() == self._gia_tri)
+        if bao and self._on_change is not None:
+            self._on_change(self._gia_tri)
+
+    def get(self) -> str:
+        return self._gia_tri
+
+
+class DaiUocTinh(QFrame):
+    """Dải hiện **ước tính chi phí TRƯỚC KHI chạy** — bắt buộc có ở mọi tab tạo nội dung.
+
+    Khách phải biết mình sắp trả bao nhiêu trước khi bấm nút. Số ở đây là tiền
+    **tạm giữ**; chi phí thật tính lại lúc job xong và phần thừa tự về ví.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("estimate")
+        ngang = QHBoxLayout(self)
+        ngang.setContentsMargins(16, 12, 16, 12)
+        ngang.setSpacing(10)
+        self._chinh = nhan("Ước tính: —", "estMain")
+        self._chinh.setWordWrap(False)
+        self._ghi_chu = nhan("", "muted")
+        ngang.addWidget(self._chinh)
+        ngang.addWidget(self._ghi_chu, 1)
+
+    def show_text(self, chinh: str, ghi_chu: str = "") -> None:
+        self._chinh.setText(chinh)
+        self._ghi_chu.setText(ghi_chu)
+
+
+class ChonThuMuc(QWidget):
+    """Ô chọn thư mục lưu kết quả: nhãn + đường dẫn + nút Chọn + nút Mở."""
+
+    def __init__(self, ban_dau: str):
+        super().__init__()
+        ngang = QHBoxLayout(self)
+        ngang.setContentsMargins(0, 0, 0, 0)
+        ngang.setSpacing(8)
+        ngang.addWidget(nhan("📁  Lưu vào:"))
+        self._o = QLineEdit(ban_dau)
+        ngang.addWidget(self._o, 1)
+        ngang.addWidget(nut_phu("Chọn…", self._chon, rong=92))
+        ngang.addWidget(nut_phu("Mở", lambda: mo_thu_muc(self.value), rong=64))
+
+    @property
+    def value(self) -> str:
+        """Đường dẫn đang chọn — đọc thẳng từ ô, khách gõ tay cũng được."""
+        return self._o.text().strip()
+
+    def _chon(self) -> None:
+        chon = QFileDialog.getExistingDirectory(self, "Chọn thư mục lưu", self.value)
+        if chon:
+            self._o.setText(chon)
+
+
+class AnhThamChieu(QWidget):
+    """Chọn ảnh tham chiếu **từ máy**, không phải dán link.
+
+    Máy chủ chỉ nhận ảnh qua URL công khai. Bắt khách tự đi tìm một cái link như
+    thế nghĩa là bắt họ upload ảnh lên đâu đó trước rồi quay lại dán — người làm
+    YouTube có ảnh nằm sẵn trong thư mục, khâu trung gian đó chặn đúng chỗ họ
+    đang đứng. Việc tải lên là của tool, làm ngay trước lúc chạy.
+    """
+
+    #: Máy chủ nhận tối đa 10 ảnh tham chiếu mỗi lượt.
+    TRAN = 10
+
+    def __init__(self, nhan_text: str = "🖼  Ảnh tham chiếu:",
+                 on_change: Optional[Callable[[], None]] = None):
+        super().__init__()
+        self._duong_dan: List[str] = []
+        self._on_change = on_change
+        ngang = QHBoxLayout(self)
+        ngang.setContentsMargins(0, 0, 0, 0)
+        ngang.setSpacing(8)
+        ngang.addWidget(nhan(nhan_text))
+        self._trang_thai = nhan("chưa chọn ảnh nào", "muted")
+        ngang.addWidget(self._trang_thai, 1)
+        ngang.addWidget(nut_phu("Chọn ảnh…", self._chon, rong=110))
+        self._nut_bo = nut_phu("Bỏ", self._bo, rong=58)
+        self._nut_bo.setEnabled(False)
+        ngang.addWidget(self._nut_bo)
+
+    @property
+    def duong_dan(self) -> List[str]:
+        return list(self._duong_dan)
+
+    def _chon(self) -> None:
+        chon, _ = QFileDialog.getOpenFileNames(
+            self, "Chọn ảnh tham chiếu", "",
+            "Ảnh (*.png *.jpg *.jpeg *.webp);;Tất cả (*.*)")
+        if not chon:
+            return
+        self._duong_dan = list(chon)[: self.TRAN]
+        self._ve_lai(len(chon))
+
+    def _bo(self) -> None:
+        self._duong_dan = []
+        self._ve_lai(0)
+
+    def _ve_lai(self, da_chon: int) -> None:
+        if not self._duong_dan:
+            self._trang_thai.setText("chưa chọn ảnh nào")
+            self._nut_bo.setEnabled(False)
+        else:
+            ten = os.path.basename(self._duong_dan[0])
+            them = "" if len(self._duong_dan) == 1 else "  +{0} ảnh nữa".format(
+                len(self._duong_dan) - 1)
+            canh = "" if da_chon <= self.TRAN else "   (chỉ lấy {0} ảnh đầu)".format(self.TRAN)
+            self._trang_thai.setText(ten + them + canh)
+            self._nut_bo.setEnabled(True)
+        if self._on_change is not None:
+            self._on_change()
+
+    def tai_len(self, client) -> List[str]:
+        """Tải ảnh lên, trả về URL. **Gọi từ luồng nền**, không phải luồng vẽ."""
+        return [client.uploads.upload_file(path) for path in self._duong_dan]
+
+
+def mo_thu_muc(duong_dan: str) -> None:
+    """Mở thư mục bằng trình quản lý file của hệ điều hành."""
+    if not duong_dan or not os.path.isdir(duong_dan):
+        return
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(duong_dan)  # noqa: S606
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", duong_dan])
+        else:
+            subprocess.Popen(["xdg-open", duong_dan])
+    except OSError:
+        pass

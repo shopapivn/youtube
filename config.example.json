@@ -1,0 +1,7 @@
+{
+  "_ghi_chu": "Khoá API KHÔNG nằm trong file này nữa. Bạn đăng nhập bằng email ngay trong tool, khoá được tạo tự động và cất mã hoá trong secrets.json cạnh đây.",
+  "base_url": "https://api.shopapi.vn",
+  "output_dir": "",
+  "max_concurrent_jobs": 3,
+  "low_balance_warning_vnd": 50000
+}

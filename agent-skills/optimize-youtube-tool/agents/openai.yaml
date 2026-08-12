@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimize YouTube Tool"
+  short_description: "Turn feedback into a safe tool revision"
+  default_prompt: "Improve my personal YouTube tool from the latest feedback."

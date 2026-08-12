@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pilot YouTube Tool"
+  short_description: "Run the first small pilot safely"
+  default_prompt: "Guide me through the first pilot of my personal YouTube tool."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build ShopAPI Tool"
+  short_description: "Design and validate a safe Studio tool"
+  default_prompt: "Use $build-shopapi-tool to design a new workflow tool safely."

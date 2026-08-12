@@ -1,0 +1,18 @@
+{
+  "tool_id": "image.shopapi",
+  "name": "Tao anh ShopAPI",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Tao bo anh theo scene manifest qua ShopAPI.",
+  "inputs": [
+    {"name": "scenes", "kind": "json", "schema": "scene-manifest.v1"}
+  ],
+  "outputs": [
+    {"name": "images", "kind": "image", "schema": "scene-images.v1", "multiple": true}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{
+    "aspect_ratio":{"type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}
+  }},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "operation": "image.generate", "timeout_seconds": 7200},
+  "permissions": ["network.shopapi", "workspace.write", "secret.shopapi"]
+}

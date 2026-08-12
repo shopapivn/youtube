@@ -1,0 +1,21 @@
+{
+  "tool_id": "video.shopapi",
+  "name": "Tao video ShopAPI",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Tao cac clip video tu bo anh va prompt tung canh.",
+  "inputs": [
+    {"name": "images", "kind": "image", "schema": "scene-images.v1", "multiple": true},
+    {"name": "scenes", "kind": "json", "schema": "scene-manifest.v1", "required": false}
+  ],
+  "outputs": [
+    {"name": "clips", "kind": "video", "schema": "scene-clips.v1", "multiple": true}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{
+    "engine":{"type":"string","enum":["veo3","seedance"],"default":"veo3"},
+    "duration":{"type":"integer","enum":[8,10]},
+    "aspect_ratio":{"type":"string","enum":["16:9","9:16","1:1"],"default":"16:9"}
+  }},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "operation": "video.generate", "timeout_seconds": 14400},
+  "permissions": ["network.shopapi", "workspace.read", "workspace.write", "secret.shopapi"]
+}

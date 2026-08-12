@@ -1,0 +1,16 @@
+# Khoá API và cấu hình riêng của MÁY KHÁCH — không bao giờ đẩy lên đây.
+config.json
+secrets.json
+secrets.json.tmp
+
+# Đồ khách tạo ra khi dùng tool.
+ket-qua/
+workspace/
+phien-viet/
+mau-kich-ban/
+user-tools/
+models/
+viec-dang-lam.json
+
+__pycache__/
+*.pyc

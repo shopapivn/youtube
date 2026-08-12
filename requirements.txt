@@ -1,0 +1,36 @@
+# ===========================================================================
+#  QUAN TRONG CHO NGUOI SUA FILE NAY:
+#  File nay PHAI thuan ASCII - khong dau tieng Viet.
+#
+#  Ly do (da lam hong that mot lan, khong phai lo xa):
+#  pip doc file requirements bang BANG MA CUA MAY, khong phai UTF-8. Tren may
+#  Windows Viet Nam bang ma la cp1258; tren may thu nghiem la cp1252. Mot chu
+#  co dau nam trong file nay se lam pip chet ngay tu dong dau:
+#
+#      UnicodeDecodeError: 'charmap' codec can't decode byte 0x8d
+#
+#  Loi do khong nhac gi den tieng Viet nen khach se khong doan ra, va no xay ra
+#  TRUOC khi pip kip vao mang - tuc la SETUP.bat hong 100% cho du mang tot.
+#  pip doi moi (>=23) mac dinh UTF-8 nen khong dinh, nhung pip di kem Python
+#  3.9-3.11 thi dinh. Giai thich day du bang tieng Viet nam trong README.md.
+# ===========================================================================
+#
+#   pillow        : hien thi anh QR nap tien va icon
+#   httpx         : SDK shopapi goi HTTP qua thu vien nay
+#   yt-dlp        : doc du lieu YouTube cong khai cho tab Nghien cuu doi thu.
+#                   Chay tren MAY KHACH, khong can khoa API cua Google.
+#                   Nen cap nhat vai thang mot lan: YouTube doi giao dien la ban
+#                   cu ngung lay duoc video (tool co san nut Cap nhat trong tab).
+#
+#  KHONG co dong "shopapi" o day. SDK shopapi CHUA phat hanh len PyPI, nen
+#  "pip install shopapi" luon that bai voi loi "No matching distribution found".
+#  Ban khach tai ve da kem san SDK trong thu muc  _sdk/  - xem dong-goi.py va
+#  core/__init__.py. Khi nao SDK len PyPI that thi them lai dong
+#  "shopapi>=0.1.0" vao day va bo _sdk/ di.
+#
+# Cai: SETUP.bat  (hoac  python -m pip install -r requirements.txt)
+
+pillow>=10.0
+httpx>=0.27
+cryptography>=42.0
+yt-dlp>=2025.1.1

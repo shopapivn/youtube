@@ -1,0 +1,20 @@
+{
+  "tool_id": "research.youtube",
+  "name": "Nghien cuu YouTube",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Thu thap va chuan hoa du lieu kenh, video va doi thu YouTube.",
+  "inputs": [
+    {"name": "query", "kind": "text", "schema": "youtube-query.v1"}
+  ],
+  "outputs": [
+    {"name": "research", "kind": "json", "schema": "research.v1"}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{
+    "max_videos":{"type":"integer","minimum":5,"maximum":100,"default":30},
+    "expand":{"type":"boolean","default":true}
+  }},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 900,
+              "python_modules": ["yt_dlp"]},
+  "permissions": ["network.youtube", "workspace.write"]
+}

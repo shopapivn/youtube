@@ -1,0 +1,23 @@
+{
+  "tool_id": "content.remake",
+  "name": "Viet lai noi dung",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Bien nghien cuu thanh goi noi dung va kich ban doc.",
+  "inputs": [
+    {"name": "research", "kind": "json", "schema": "research.v1"},
+    {"name": "source", "kind": "text", "schema": "source-text.v1", "required": false}
+  ],
+  "outputs": [
+    {"name": "script", "kind": "text", "schema": "voice-script.v1"},
+    {"name": "content_package", "kind": "json", "schema": "content-package.v1"}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{
+    "language":{"type":"string","default":"vi"},
+    "model":{"type":"string","enum":["claude-sonnet-5","claude-opus-5"],"default":"claude-sonnet-5"},
+    "brief":{"type":"string","default":""},
+    "target_minutes":{"type":"number","minimum":0,"maximum":180,"default":0}
+  }},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 1200},
+  "permissions": ["network.shopapi", "workspace.write", "secret.shopapi"]
+}

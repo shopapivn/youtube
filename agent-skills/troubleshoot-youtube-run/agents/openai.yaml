@@ -1,0 +1,4 @@
+interface:
+  display_name: "Troubleshoot YouTube Run"
+  short_description: "Recover a failed run in plain language"
+  default_prompt: "Help me recover this failed YouTube production run."

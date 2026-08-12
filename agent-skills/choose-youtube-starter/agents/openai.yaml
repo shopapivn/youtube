@@ -1,0 +1,4 @@
+interface:
+  display_name: "Choose YouTube Starter"
+  short_description: "Choose a small starter frame for a beginner"
+  default_prompt: "Help me choose the smallest useful YouTube tool to start with."

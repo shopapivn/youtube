@@ -1,0 +1,486 @@
+"""Cửa sổ chính của bản Qt: thanh bên, các trang, và vòng bơm sự kiện.
+
+**Kiến trúc luồng — y hệt bản tkinter, chỉ đổi bộ vẽ:**
+
+```
+  Luồng giao diện (Qt)                    Luồng nền (ThreadPoolExecutor)
+  ────────────────────                    ─────────────────────────────
+  bấm nút ──► JobManager.submit() ──────► gọi API, chờ job, tải file
+      ▲                                            │
+      │        queue.Queue (an toàn đa luồng)      │
+      └────────── QTimer mỗi 150ms ◄───────────────┘
+```
+
+Luồng nền **không bao giờ** chạm vào widget — Qt cũng không an toàn với đa luồng
+y như Tk. Nó chỉ bỏ sự kiện vào hàng đợi; `_bom()` chạy trong luồng giao diện
+mới vẽ. Chính vì hàng đợi đó là `queue.Queue` thuần Python nên toàn bộ `core/`
+dùng lại được nguyên vẹn, không sửa một dòng.
+"""
+
+from __future__ import annotations
+
+import os
+import queue
+import threading
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtWidgets import (
+    QFrame, QHBoxLayout, QMessageBox, QPushButton, QStackedWidget, QVBoxLayout,
+    QWidget,
+)
+
+from core.api import build_client, fetch_prices, wallet_micro
+from core.config import CONFIG_FILENAME, Config, load_config, save_config
+from core.errors import describe
+from core.jobs import JobManager, JobSpec
+from core.money import format_vnd
+from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
+from core.session import SESSION_FILENAME
+
+from . import theme
+from .widgets import nhan
+
+__all__ = ["CuaSoChinh", "TRANG"]
+
+#: Nhịp đọc hàng đợi sự kiện. 150ms đủ mượt mà không tốn CPU.
+_NHIP_MS = 150
+
+#: Thứ tự trang trên thanh bên: `(khoá, biểu tượng, nhãn)`.
+#:
+#: Xếp theo đúng thứ tự người ta làm một video: tìm hiểu → viết → đọc → hình →
+#: dựng. Ai mở tool lần đầu chỉ cần đi từ trên xuống.
+#:
+#: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
+#: xem `ui_qt/bang_viec.py` để biết vì sao.
+TRANG = (
+    ("agent", "🤖", "Agent xây tool"),
+    ("skill", "🧠", "Skill"),
+    ("content", "✍️", "Viết kịch bản"),
+    ("voice", "🎙️", "Voice"),
+    ("image", "🖼️", "Tạo ảnh"),
+    ("video", "🎬", "Tạo video"),
+    ("edit", "✂️", "Dựng video"),
+    ("wallet", "💳", "Ví & Tài khoản"),
+)
+
+
+class ThanhBen(QFrame):
+    def __init__(self, on_chon: Callable[[str], None], nav=TRANG,
+                 ten_hien: str = "ShopAPI Studio",
+                 cau_duoi: str = "Tool của bạn, do bạn tạo",
+                 duoi_ten=None):
+        super().__init__()
+        self.setObjectName("sidebar")
+        self.setFixedWidth(240)
+        self._nut: Dict[str, QPushButton] = {}
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(14, 22, 14, 18)
+        doc.setSpacing(4)
+        doc.addWidget(nhan(ten_hien, "brand"))
+        doc.addWidget(nhan(cau_duoi, "brandSub"))
+        # Chỗ lớp vỏ nội bộ gắn ô đăng nhập gọn. Bản khách không dùng: khách
+        # đăng nhập ở trang Ví, nơi có cả số dư và lịch sử — thứ người quản trị
+        # máy chủ không cần và không nên phải đi qua để làm một việc 10 giây.
+        if duoi_ten is not None:
+            doc.addSpacing(10)
+            doc.addWidget(duoi_ten)
+        doc.addSpacing(18)
+        for khoa, bieu_tuong, ten in nav:
+            nut = QPushButton("   {0}    {1}".format(bieu_tuong, ten))
+            nut.setObjectName("nav")
+            nut.setCheckable(True)
+            nut.setCursor(Qt.PointingHandCursor)
+            nut.clicked.connect(lambda _c, k=khoa: on_chon(k))
+            doc.addWidget(nut)
+            self._nut[khoa] = nut
+        doc.addStretch(1)
+        # Chỗ cho nút cập nhật. Nó tự ẩn cho tới khi thật sự có bản mới trên
+        # kho — xem `ui_qt/cap_nhat.py`.
+        self.duoi = QVBoxLayout()
+        self.duoi.setContentsMargins(0, 0, 0, 0)
+        doc.addLayout(self.duoi)
+
+    def danh_dau(self, khoa: str) -> None:
+        for ten, nut in self._nut.items():
+            nut.setChecked(ten == khoa)
+
+    def dat_so_du(self, micro: Optional[int]) -> None:
+        """Không hiện số dư ở thanh bên nữa — số liệu tiền gom hết về trang Ví.
+
+        Giữ phương thức để nơi gọi không phải biết chuyện đó.
+        """
+
+
+class CuaSoChinh(QWidget):
+    """Cửa sổ chính. Giữ nguyên tên phương thức mà các tab bản tkinter đang gọi.
+
+    Nhờ vậy phần lớn mã tab chuyển sang chỉ phải đổi cách dựng widget, không phải
+    đổi cách nói chuyện với lõi (`run_bg`, `start_batch`, `show_message`…).
+    """
+
+    #: Qt bắt buộc: chỉ luồng giao diện được chạm widget. Tín hiệu này là đường
+    #: duy nhất để luồng nền xin vẽ, và Qt tự xếp nó về đúng luồng.
+    _xong_nen = pyqtSignal(object, object)
+
+    # ── Bốn điểm nối cho vỏ khác dùng lại khung này ──────────────────────────
+    #
+    # `tools/shopapi-ops/shopapi_ops_qt.py` kế thừa lớp này để dựng bảng điều
+    # khiển máy chủ. Nó **không chép** khung mà khai lại bốn thứ dưới đây, nên
+    # sửa giao diện ở đây là cả hai bản cùng được.
+    #
+    # Quan trọng: `TRANG_SAN_PHAM` là chỗ vỏ vận hành thu hẹp danh sách trang
+    # xuống còn mỗi trang Ví. Mọi trang sản phẩm khác biến mất khỏi bảng điều
+    # khiển — mỗi trang thừa ở đó là một chỗ bấm nhầm tiêu tiền thật.
+
+    #: Trang sản phẩm hiện trên thanh bên. Bản khách lấy đủ.
+    TRANG_SAN_PHAM = TRANG
+    #: Tên hiện ở đầu thanh bên.
+    TEN_HIEN = "ShopAPI Studio"
+    CAU_DUOI_TEN = "Tool của bạn, do bạn tạo"
+    #: Trang mở ra đầu tiên. Phải là một khoá có trong thanh bên.
+    TRANG_DAU = "voice"
+
+    def widget_duoi_ten(self):
+        """Widget nhỏ gắn dưới tên ứng dụng ở thanh bên (hoặc `None`).
+
+        Lớp vỏ vận hành trả về ô đăng nhập gọn. Bản khách trả `None` — khách
+        đăng nhập ở trang Ví, nơi có cả số dư và lịch sử giao dịch.
+        """
+        return None
+
+    def nav_them(self) -> tuple:
+        """Mục thanh bên riêng của vỏ. Bản khách không có mục nào thêm."""
+        return ()
+
+    def trang_them(self) -> Dict[str, Callable[[], QWidget]]:
+        """Xưởng dựng trang riêng của vỏ, theo khoá."""
+        return {}
+
+    def __init__(self, base_dir: str):
+        super().__init__()
+        self.base_dir = base_dir
+        self.config_path = os.path.join(base_dir, CONFIG_FILENAME)
+        self.config: Config = load_config(self.config_path)
+        self.session_path = os.path.join(base_dir, SESSION_FILENAME)
+
+        self._nav = tuple(self.TRANG_SAN_PHAM) + tuple(self.nav_them())
+        self.setWindowTitle("{0} — {1}".format(self.TEN_HIEN, self.CAU_DUOI_TEN))
+        self.resize(1180, 840)
+        self.setMinimumSize(1000, 700)
+
+        self.events: "queue.Queue" = queue.Queue()
+        self.prices = DEFAULT_PRICES
+        self.last_wallet_micro: Optional[int] = None
+        self.client = None
+        self.jobs: Optional[JobManager] = None
+        self._trang: Dict[str, QWidget] = {}
+        self._dang_dong = False
+
+        if self.config.is_ready:
+            self.client = build_client(self.config)
+            self.jobs = JobManager(lambda: self.client, self.events,
+                                   max_workers=self.config.max_concurrent_jobs,
+                                   session_path=self.session_path)
+
+        ngang = QHBoxLayout(self)
+        ngang.setContentsMargins(0, 0, 0, 0)
+        ngang.setSpacing(0)
+        self._ben = ThanhBen(self.show_page, self._nav, self.TEN_HIEN, self.CAU_DUOI_TEN, self.widget_duoi_ten())
+        ngang.addWidget(self._ben)
+        self._chong = QStackedWidget()
+        ngang.addWidget(self._chong, 1)
+
+        # ═══ NỐI TÍN HIỆU TRƯỚC KHI DỰNG TRANG — SỰ CỐ 12/08/2026 ═══
+        #
+        # Trang tự gọi `nap()` ngay trong `__init__` của nó (đúng: mở ra là thấy
+        # số liệu, không phải bấm thêm). `nap()` gọi `run_bg`, luồng nền chạy
+        # xong rồi `emit` tín hiệu — mà nếu lúc ấy CHƯA AI NỐI thì Qt vứt luôn,
+        # im lặng, không một dòng lỗi.
+        #
+        # Triệu chứng đo được trên máy thật: trang Cả dàn treo mãi ở "Đang đọc
+        # trạng thái…", bảng rỗng, nút "Làm mới" xám vĩnh viễn (nó chỉ được bật
+        # lại trong hàm nhận kết quả). Bảng điều khiển máy chủ trông đủ tab mà
+        # không dùng được gì.
+        #
+        # Bài kiểm cũ không bắt được vì nó gọi `nap()` LẠI sau khi cửa sổ đã dựng
+        # xong — lúc đó tín hiệu đã nối. `test_mo_ra_la_co_so_lieu_ngay` dựng cửa
+        # sổ rồi KHÔNG gọi gì thêm, đúng như người dùng làm.
+        # Dò bản mới NGẦM, sau khi cửa sổ đã dựng xong: khách mở tool ra là làm
+        # việc được ngay, không phải chờ một lượt gọi mạng.
+        from .cap_nhat import NutCapNhat
+
+        self._cap_nhat = NutCapNhat(self)
+        self._ben.duoi.addWidget(self._cap_nhat.nut)
+
+        self._xong_nen.connect(self._chay_tren_luong_ve)
+
+        self._dung_cac_trang()
+        self.show_page(self.TRANG_DAU)
+
+        self._dong_ho = QTimer(self)
+        self._dong_ho.timeout.connect(self._bom)
+        self._dong_ho.start(_NHIP_MS)
+        self.refresh_prices()
+        self._cap_nhat.do_ngam()
+
+    # ── Dựng trang ───────────────────────────────────────────────────────────
+
+    def _dung_cac_trang(self) -> None:
+        from .trang_agent import TrangAgent
+        from .trang_content import TrangKichBan
+        from .trang_edit import TrangDungVideo
+        from .trang_media import TrangTaoAnh, TrangTaoVideo
+        from .trang_skill import TrangSkill
+        from .trang_tai_khoan import TrangTaiKhoan
+        from .trang_voice import TrangGiongNoi
+
+        xuong = {
+            "agent": lambda: TrangAgent(self),
+            "skill": lambda: TrangSkill(self),
+            "content": lambda: TrangKichBan(self),
+            "voice": lambda: TrangGiongNoi(self),
+            "image": lambda: TrangTaoAnh(self),
+            "video": lambda: TrangTaoVideo(self),
+            "edit": lambda: TrangDungVideo(self),
+            "wallet": lambda: TrangTaiKhoan(self),
+        }
+        # Xưởng của vỏ đặt SAU, để vỏ vận hành đè được lên trang cùng khoá nếu cần.
+        xuong.update(self.trang_them())
+        for khoa, _bieu_tuong, ten in self._nav:
+            tao = xuong.get(khoa)
+            trang = tao() if tao else self._trang_dang_lam(ten)
+            self._trang[khoa] = trang
+            self._chong.addWidget(trang)
+
+    def _trang_dang_lam(self, ten: str) -> QWidget:
+        """Chỗ giữ sẵn cho trang chưa chuyển xong.
+
+        Nói thẳng là chưa xong còn hơn để một khung trắng: khách mở ra thấy
+        trống thì tưởng tool hỏng.
+        """
+        hop = QWidget()
+        doc = QVBoxLayout(hop)
+        doc.setContentsMargins(28, 24, 28, 24)
+        doc.addWidget(nhan(ten, "h1"))
+        doc.addWidget(nhan("Trang này đang được chuyển sang giao diện mới. "
+                           "Bản cũ vẫn dùng được bình thường.", "muted"))
+        doc.addStretch(1)
+        return hop
+
+    def trang(self, khoa: str):
+        """Lấy một trang theo khoá — để trang này gửi kết quả sang trang kia."""
+        return self._trang.get(khoa)
+
+    def show_page(self, khoa: str) -> None:
+        trang = self._trang.get(khoa)
+        if trang is None:
+            return
+        self._chong.setCurrentWidget(trang)
+        self._ben.danh_dau(khoa)
+
+    # ── Dịch vụ cho các trang (giữ đúng tên của bản tkinter) ─────────────────
+
+    def default_output_dir(self, kind: str, engine: str = "") -> str:
+        goc = self.config.output_dir or os.path.join(self.base_dir, "ket-qua")
+        ten = {KIND_TTS: "giong-noi", KIND_IMAGE: "anh", KIND_VIDEO: engine or "video"}
+        return os.path.join(goc, ten.get(kind, kind))
+
+    def account_session(self):
+        """Phiên đăng nhập web đang có, dựng lại từ refresh token đã cất.
+
+        ═══ VÌ SAO HÀM NÀY PHẢI CÓ Ở ĐÂY ═══
+
+        Bản tkinter có nó từ lâu; bản Qt thì không, và không ai để ý — vì nơi
+        gọi duy nhất là khu quản trị, thứ bản khách không có. Hậu quả đo được
+        12/08/2026: `ShopAPIOpsQt.admin` gọi `self.account_session()`, ném
+        `AttributeError`, và `getattr(app, "admin", None)` ở mỗi trang nuốt gọn
+        nó thành `None`. Cả bốn trang cần máy chủ báo "chưa đăng nhập" vĩnh
+        viễn, kể cả khi đã đăng nhập. Nhìn thì đủ tab, bấm thì không ra gì.
+
+        Cái bẫy của phiên này: máy chủ **xoay refresh token mỗi lần làm mới và
+        giết token cũ ngay**. Dựng phiên mà quên gắn hàm cất-lại-token thì lần
+        mở tool sau phải gõ mật khẩu dù phiên còn hạn 29 ngày. Gom về một chỗ
+        thì không ai quên được.
+        """
+        from core.auth import AccountSession
+
+        # ═══ ĐỌC LẠI TOKEN TỪ ĐĨA MỖI LẦN — ĐỂ CHỈ PHẢI ĐĂNG NHẬP MỘT LẦN ═══
+        #
+        # Máy chủ xoay refresh token mỗi lần làm mới và giết token cũ NGAY. Nên
+        # bất cứ tiến trình nào khác chạm vào phiên (một bản ShopAPI thứ hai,
+        # một script quản trị, tác vụ theo lịch) đều làm token trong BỘ NHỚ của
+        # cửa sổ này chết — dù token MỚI đã được cất xuống đĩa đàng hoàng.
+        #
+        # Triệu chứng: "máy chủ từ chối phiên đăng nhập" giữa lúc đang dùng, rồi
+        # phải gõ lại mật khẩu — trong khi trên đĩa có sẵn một token còn sống.
+        #
+        # Đọc lại đĩa tốn một lần mở file. Bắt người gõ lại mật khẩu tốn nhiều
+        # hơn thế, và nó lặp lại mỗi ngày.
+        tren_dia = ""
+        try:
+            tren_dia = (load_config(self.config_path).refresh_token or "").strip()
+        except Exception:  # noqa: BLE001 — không đọc được thì dùng cái đang có
+            pass
+
+        phien = getattr(self, "account", None)
+        if isinstance(phien, AccountSession):
+            if tren_dia and tren_dia != (phien.refresh_token or "").strip():
+                phien.adopt_refresh_token(tren_dia)
+                self.config.refresh_token = tren_dia
+            phien.on_session_changed = self._nho_phien
+            return phien
+        token = tren_dia or (self.config.refresh_token or "").strip()
+        if not token:
+            return None
+        phien = AccountSession(self.config.base_url)
+        phien.adopt_refresh_token(token)
+        phien.on_session_changed = self._nho_phien
+        setattr(self, "account", phien)
+        return phien
+
+    def _nho_phien(self, phien) -> None:
+        """Cất lại refresh token mỗi lần máy chủ xoay nó.
+
+        ⚠ Chạy ở LUỒNG NỀN (gọi từ trong lời gọi mạng): chỉ ghi đĩa, tuyệt đối
+        không đụng widget.
+        """
+        token = phien.refresh_token
+        if not token or token == self.config.refresh_token:
+            return
+        self.config.refresh_token = token
+        if phien.user is not None and phien.user.email:
+            self.config.account_email = phien.user.email
+        try:
+            save_config(self.config_path, self.config)
+        except OSError:
+            pass
+
+    def show_message(self, tieu_de: str, noi_dung: str) -> None:
+        QMessageBox.information(self, tieu_de, noi_dung)
+
+    def show_error(self, loi: BaseException) -> None:
+        """Hiện lỗi bằng tiếng Việt kèm lối đi tiếp theo, không phải vết đổ Python."""
+        loi_khuyen = describe(loi)
+        QMessageBox.critical(self, loi_khuyen.title,
+                             "{0}\n\n{1}".format(loi_khuyen.message, loi_khuyen.action))
+
+    def run_bg(self, viec: Callable[[], Any], *,
+               on_ok: Optional[Callable[[Any], None]] = None,
+               on_err: Optional[Callable[[BaseException], None]] = None) -> None:
+        """Chạy `viec()` ở luồng riêng, trả kết quả về luồng giao diện.
+
+        Kết quả đi qua tín hiệu Qt chứ không gọi thẳng: gọi thẳng từ luồng nền là
+        chạm widget từ ngoài luồng vẽ, Qt cho chạy một lúc rồi sập không đoán trước.
+        """
+        def chay() -> None:
+            try:
+                ket = viec()
+            except BaseException as loi:  # noqa: BLE001 — chuyển nguyên vẹn về luồng vẽ
+                self._xong_nen.emit(on_err or self.show_error, loi)
+            else:
+                if on_ok is not None:
+                    self._xong_nen.emit(on_ok, ket)
+
+        threading.Thread(target=chay, daemon=True, name="shopapi-bg").start()
+
+    def goi_tren_luong_ve(self, ham: Callable[[], None]) -> None:
+        """Xin chạy `ham()` trên LUỒNG GIAO DIỆN, gọi được từ luồng nền.
+
+        `run_bg` chỉ trả kết quả về khi việc đã xong. Việc chạy nhiều phút (bật
+        cả dàn worker) thì phải bắn TIẾN ĐỘ ra giữa chừng — và bắn thẳng vào
+        widget từ luồng nền là thứ Qt cho chạy một lúc rồi sập không đoán trước.
+        """
+        self._xong_nen.emit(lambda _bo_qua: ham(), None)
+
+    def _chay_tren_luong_ve(self, ham, gia_tri) -> None:
+        try:
+            ham(gia_tri)
+        except Exception:  # noqa: BLE001 — một lời gọi hỏng không được giết cửa sổ
+            pass
+
+    def start_batch(self, specs: List[JobSpec], *, folder: str) -> None:
+        """Một lần bấm là chạy; giá đã hiện ngay trên trang trước nút Tạo."""
+        if not specs or self.jobs is None:
+            return
+        tong = sum(spec.estimate_micro for spec in specs)
+        if self.last_wallet_micro is not None and tong > self.last_wallet_micro:
+            self.show_message(
+                "Chưa đủ số dư",
+                "Cần khoảng {0}, ví hiện có {1}. Hãy nạp thêm rồi bấm Tạo lại.".format(
+                    format_vnd(tong), format_vnd(self.last_wallet_micro)))
+            return
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except OSError as loi:
+            self.show_message("Không tạo được thư mục", str(loi))
+            return
+        # KHÔNG nhảy trang. Danh sách việc nằm ngay trong tab vừa bấm, nên ném
+        # khách sang chỗ khác chỉ làm họ mất vị trí đang làm.
+        self.jobs.submit(specs)
+
+    def refresh_prices(self) -> None:
+        if self.client is None:
+            return
+        self.run_bg(lambda: fetch_prices(self.client), on_ok=self._ap_gia)
+
+    def _ap_gia(self, gia) -> None:
+        self.prices = gia
+
+    def note_balance(self, so_du: Dict[str, Any]) -> None:
+        self.last_wallet_micro = wallet_micro(so_du)
+        self._ben.dat_so_du(self.last_wallet_micro)
+
+    # ── Vòng bơm sự kiện ─────────────────────────────────────────────────────
+
+    def _bom(self) -> None:
+        """Đọc hàng đợi và vẽ. Xử lý theo lô có trần để cửa sổ không khựng.
+
+        Một lô 500 job đẩy hàng nghìn sự kiện dồn dập; mỗi nhịp chỉ vẽ tối đa 60.
+        """
+        if self._dang_dong:
+            return
+        da_lam = 0
+        while da_lam < 60:
+            try:
+                loai, du_lieu = self.events.get_nowait()
+            except queue.Empty:
+                break
+            da_lam += 1
+            try:
+                self._nhan_su_kien(loai, du_lieu)
+            except Exception:  # noqa: BLE001 — một sự kiện hỏng không dừng vòng bơm
+                pass
+        for trang in self._trang.values():
+            cuoi_nhip = getattr(trang, "cuoi_nhip", None)
+            if cuoi_nhip is not None:
+                try:
+                    cuoi_nhip()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def _nhan_su_kien(self, loai: str, du_lieu: Any) -> None:
+        """Phát cho MỌI trang; trang tự lọc việc của mình.
+
+        Không còn một tab hàng đợi duy nhất để gửi tới. Trang nào có bảng việc
+        thì cài `nhan_su_kien` (hoặc có thuộc tính `bang`) và tự bỏ qua việc
+        không thuộc loại của mình — xem `ui_qt/bang_viec.py`.
+        """
+        for trang in self._trang.values():
+            for nhan_su_kien in (getattr(trang, "nhan_su_kien", None),
+                                 getattr(getattr(trang, "bang", None),
+                                         "nhan_su_kien", None)):
+                if nhan_su_kien is not None:
+                    nhan_su_kien(loai, du_lieu)
+                    break
+
+    def closeEvent(self, event) -> None:  # noqa: N802 — tên do Qt quy định
+        self._dang_dong = True
+        self._dong_ho.stop()
+        if self.jobs is not None:
+            try:
+                self.jobs.shutdown()
+            except Exception:  # noqa: BLE001
+                pass
+        event.accept()

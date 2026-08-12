@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discover YouTube Workflow"
+  short_description: "Interview a beginner and remember their process"
+  default_prompt: "Help me map my current YouTube workflow one question at a time."

@@ -1,0 +1,19 @@
+{
+  "tool_id": "voice.shopapi",
+  "name": "Tao giong doc ShopAPI",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Tao va ghep audio tu kich ban qua ShopAPI.",
+  "inputs": [
+    {"name": "script", "kind": "text", "schema": "voice-script.v1"}
+  ],
+  "outputs": [
+    {"name": "audio", "kind": "audio", "schema": "narration-audio.v1"}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{
+    "voice_id":{"type":"string","default":"vi_female_01"},
+    "format":{"type":"string","enum":["mp3","wav"],"default":"mp3"}
+  }},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 3600},
+  "permissions": ["network.shopapi", "workspace.write", "secret.shopapi"]
+}

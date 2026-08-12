@@ -1,0 +1,23 @@
+{
+  "tool_id": "transcribe.local",
+  "name": "Tao phu de local",
+  "version": "0.1.0",
+  "contract_version": "1",
+  "description": "Chuyen audio thanh phu de co moc thoi gian tren may khach.",
+  "inputs": [
+    {"name": "audio", "kind": "audio", "schema": "narration-audio.v1"}
+  ],
+  "outputs": [
+    {"name": "subtitles", "kind": "subtitle", "schema": "srt.v1"}
+  ],
+  "config_schema": {"type":"object","additionalProperties":false,"properties":{
+    "model":{"type":"string","enum":["small"],"default":"small"},
+    "language":{"type":"string","default":"vi"},
+    "device":{"type":"string","enum":["cpu","cuda"],"default":"cpu"},
+    "compute_type":{"type":"string","enum":["int8","float16","float32"],"default":"int8"}
+  }},
+  "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 3600,
+              "python_modules": ["faster_whisper"],
+              "models": [{"id":"faster-whisper-small","repo":"Systran/faster-whisper-small"}]},
+  "permissions": ["workspace.read", "workspace.write", "compute.local"]
+}
