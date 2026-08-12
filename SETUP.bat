@@ -89,7 +89,7 @@ if not errorlevel 1 (
 REM May Windows moi thuong co winget. Neu co, Studio tu cai Python chinh thuc
 REM cho current user va tiep tuc ngay, khach khong phai mo web hay sua PATH.
 where winget >nul 2>&1
-if errorlevel 1 goto :python_manual
+if errorlevel 1 goto :python_tai_thang
 echo.
 echo   - May chua co Python. Studio se tu cai Python 3.12 chinh thuc...
 winget install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements
@@ -97,6 +97,35 @@ if errorlevel 1 goto :python_manual
 
 REM Process cmd dang chay khong tu nhan PATH moi. Tim thang vi tri mac dinh cua
 REM goi winget; py launcher la duong lui neu installer da dang ky no.
+if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
+  set "PYEXE=%LocalAppData%\Programs\Python\Python312\python.exe"
+  goto :found
+)
+py -3.12 --version >nul 2>&1
+if not errorlevel 1 (
+  set "PYEXE=py -3.12"
+  goto :found
+)
+
+REM -- Khong co winget: tai thang bo cai chinh thuc tu python.org ----------
+REM
+REM  Day la mat xich DAU TIEN cua ca chuoi. Hong o day thi khach chua kip nhin
+REM  thay tool lan nao. Phan lon may khach la may Windows sach, va nhieu may
+REM  chua co winget - dung nhung may can giup nhat.
+REM
+REM  Ban /quiet InstallAllUsers=0 cai vao thu muc nguoi dung: KHONG hoi quyen
+REM  quan tri, khong dung Program Files. PrependPath=1 de lan sau go "python"
+REM  la chay.
+:python_tai_thang
+echo.
+echo   Khong co winget. Dang tai Python 3.12 tu python.org (~27 MB)...
+set "PYSETUP=%TEMP%\shopapi-python-3.12.8.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$ProgressPreference='SilentlyContinue';Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe' -OutFile '%PYSETUP%' -UseBasicParsing}catch{exit 1}"
+if errorlevel 1 goto :python_manual
+if not exist "%PYSETUP%" goto :python_manual
+echo   Dang cai Python (khong hoi gi them)...
+"%PYSETUP%" /quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_pip=1
+del /q "%PYSETUP%" >nul 2>&1
 if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
   set "PYEXE=%LocalAppData%\Programs\Python\Python312\python.exe"
   goto :found

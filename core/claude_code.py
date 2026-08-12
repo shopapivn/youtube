@@ -311,15 +311,12 @@ def lenh_cai_dat(tt: TinhTrang, *, them_vscode: bool = False,
     lenh: List[Sequence[str]] = []
     if not tt.claude:
         lenh.append(list(LENH_CAI_CLAUDE))
-    if them_vscode:
-        if not tt.vscode:
-            lenh.append(["winget", "install", "-e", "--id", WINGET_VSCODE,
-                         "--accept-source-agreements",
-                         "--accept-package-agreements"])
-        if not tt.ext_vscode:
-            # Sau lệnh trên thì `code` mới có, nên để tên trần ở đây là đúng.
-            lenh.append([tt.duong_code or "code", "--install-extension",
-                         EXT_VSCODE, "--force"])
+    if them_vscode and not tt.ext_vscode:
+        # KHÔNG có bước winget cho VS Code: nơi gọi tự tải bản User Setup
+        # (`core/vscode_goi_san.py`) rồi mới chạy lệnh này với đường dẫn thật.
+        # Máy khách điển hình không có winget, mà đó đúng là máy cần giúp nhất.
+        lenh.append([tt.duong_code or "code", "--install-extension",
+                     EXT_VSCODE, "--force"])
     return lenh
 
 

@@ -215,14 +215,10 @@ def lenh_cai_dat(tt: TinhTrangCodex, *, them_vscode: bool = False,
         # và cấu hình có `service_tier = "default"` mà bản cũ không biết.
         lenh.append([tt.duong_npm or "npm", "install", "-g",
                      GOI_NPM + "@latest"])
-    if them_vscode:
-        if not tt.vscode:
-            lenh.append(["winget", "install", "-e", "--id", WINGET_VSCODE,
-                         "--accept-source-agreements",
-                         "--accept-package-agreements"])
-        if not tt.ext_vscode:
-            lenh.append([tt.duong_code or "code", "--install-extension",
-                         EXT_VSCODE, "--force"])
+    if them_vscode and not tt.ext_vscode:
+        # Xem `claude_code.lenh_cai_dat`: VS Code tải thẳng, không qua winget.
+        lenh.append([tt.duong_code or "code", "--install-extension",
+                     EXT_VSCODE, "--force"])
     return lenh
 
 
