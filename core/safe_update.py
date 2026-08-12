@@ -1,11 +1,21 @@
-"""Cap nhat Studio theo signed manifest, staging, atomic swap va rollback.
+"""Cap nhat Studio: staging, atomic swap va rollback.
 
-Module khong tu goi mang. Host tai manifest/archive qua ket noi da xac thuc, sau
-do truyen bytes vao day. Viec apply nen do launcher rieng goi sau khi GUI thoat.
+Module khong tu goi mang. Ben goi tai ZIP ve roi truyen bytes vao day. Viec
+apply nen do launcher rieng goi sau khi GUI thoat.
+
+═══ PHẦN CHỮ KÝ ED25519 ĐÃ ĐƯỢC GỠ ═══
+
+`verify_manifest`/`canonical_manifest`/`_ed25519_verify` từng kiểm chữ ký của
+manifest do máy chủ ShopAPI ký. Chúng chết cùng `GET /v1/tools/studio-update/*`:
+tool nay đối chiếu phiên bản thẳng với kho GitHub (`core/cap_nhat_github.py`).
+
+Điều còn lại và **không được bỏ**: `stage_update` vẫn đối chiếu SHA-256 cùng
+kích thước ZIP, vẫn chặn path traversal, symbolic link và bom giải nén. Đó là
+lớp phòng thủ duy nhất còn đứng giữa một ZIP tải từ Internet và thư mục cài đặt
+của khách.
 """
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -13,7 +23,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import tempfile
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Mapping, Optional, Union
 import zipfile
 
 
@@ -41,34 +51,6 @@ MAX_UNCOMPRESSED = 2 * 1024 * 1024 * 1024
 
 class UpdateError(RuntimeError):
     pass
-
-
-def canonical_manifest(data: Mapping[str, Any]) -> bytes:
-    clean = {key: value for key, value in data.items() if key != "signature"}
-    return json.dumps(clean, ensure_ascii=False, sort_keys=True,
-                      separators=(",", ":")).encode("utf-8")
-
-
-def verify_manifest(data: Mapping[str, Any], public_key_b64: str,
-                    verifier: Optional[Callable[[bytes, bytes, bytes], None]] = None) -> Mapping[str, Any]:
-    required = ("version", "url", "sha256", "size", "signature")
-    if not isinstance(data, dict) or any(not data.get(key) for key in required):
-        raise UpdateError("Manifest cập nhật thiếu trường bắt buộc")
-    digest = str(data["sha256"])
-    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
-        raise UpdateError("Manifest có SHA-256 không hợp lệ")
-    if not isinstance(data["size"], int) or not 0 < data["size"] <= MAX_UNCOMPRESSED:
-        raise UpdateError("Manifest có kích thước không hợp lệ")
-    try:
-        key = base64.b64decode(public_key_b64, validate=True)
-        signature = base64.b64decode(str(data["signature"]), validate=True)
-    except (ValueError, TypeError) as exc:
-        raise UpdateError("Public key hoặc chữ ký không phải base64 hợp lệ") from exc
-    try:
-        (verifier or _ed25519_verify)(key, signature, canonical_manifest(data))
-    except Exception as exc:
-        raise UpdateError("Chữ ký bản cập nhật không hợp lệ") from exc
-    return dict(data)
 
 
 def stage_update(archive: bytes, manifest: Mapping[str, Any], staging_root: Union[str, Path]) -> Path:
@@ -167,14 +149,6 @@ def _healthcheck_tree(root: Path) -> None:
     manifests = list((root / "tool-catalog").glob("*/tool.json"))
     if not manifests:
         raise UpdateError("Bản staged không có tool manifest")
-
-
-def _ed25519_verify(key: bytes, signature: bytes, message: bytes) -> None:
-    try:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-    except ImportError as exc:
-        raise UpdateError("Thiếu cryptography để xác minh chữ ký cập nhật") from exc
-    Ed25519PublicKey.from_public_bytes(key).verify(signature, message)
 
 
 def _safe_version(value: str) -> str:

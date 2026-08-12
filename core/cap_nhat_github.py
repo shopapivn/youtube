@@ -31,6 +31,11 @@ gọi API Releases: nó không dính hạn mức 60 lượt/giờ của API GitH
 đăng nhập, và không bắt chủ dự án phải tạo một Release cho mỗi lần sửa. Đẩy lên
 là xong — đúng như cách làm việc thật.
 
+**`raw` có cache khoảng 5 phút.** Đẩy xong mà đọc lại vẫn thấy số cũ là bình
+thường, không phải hỏng: đo thật ngày 12/08/2026 — API GitHub trả `0.1.1` ngay
+trong khi `raw` còn trả `0.1.0`. Nghĩa là khách nhận được bản mới **chậm vài
+phút** sau khi đẩy. Đổi lấy: không tốn hạn mức, không cần đăng nhập. Đáng.
+
 Module này **không import Qt và không tự gọi mạng**: mọi lối ra ngoài đi qua tham
 số `tai`, nên test chạy được không cần mạng.
 """

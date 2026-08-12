@@ -50,6 +50,7 @@ TOP_LEVEL_ALLOW = (
     "VERSION",
     "config.example.json",
     "README.md",
+    "LICENSE",
     "core",
     "ui",
     "ui_qt",
