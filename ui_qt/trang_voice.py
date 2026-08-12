@@ -260,38 +260,50 @@ class TrangGiongNoi(QWidget):
         v.setContentsMargins(16, 12, 16, 13)
         v.setSpacing(8)
 
-        # Ô CHỌN, không phải ô dán mã. Bản trước bắt khách tự đi tìm một mã 20
-        # ký tự ngay ở dòng đầu của tab đắt tiền nhất — người vừa tải tool về
-        # không biết mã là gì, lấy ở đâu, cái nào hay. Mà máy chủ đã có sẵn sáu
-        # giọng Việt kèm mô tả hợp việc gì (`core/giong.py`); tool chỉ việc bày.
+        # Ô **Voice ID**, gõ và dán được — kèm danh sách thả xuống để chọn nhanh.
+        #
+        # Hai lần sai liên tiếp, và đây là bản thứ ba:
+        #
+        #   1. Chỉ có ô dán mã trần → người mới không biết mã là gì, lấy ở đâu,
+        #      nên tắc ngay dòng đầu của tab đắt tiền nhất.
+        #   2. Đổi hẳn thành ô chọn tên giọng → **mất đường dán ID**, mà chủ dự
+        #      án nói thẳng: *"chỗ voice đang sai, mày đang để giọng đọc trong
+        #      khi là cần id voice"*. Khách dùng giọng riêng của họ trên
+        #      ElevenLabs, sáu giọng dựng sẵn không thay được chuyện đó.
+        #
+        # Nên: một ô duy nhất, **nội dung của nó CHÍNH LÀ voice_id**. Dán mã 20
+        # ký tự vào là chạy; bấm mũi tên thì có sẵn sáu giọng Việt điền hộ. Ai
+        # cần gì cũng lấy được, không ai bị chặn.
         d1 = QHBoxLayout()
         d1.setSpacing(8)
-        d1.addWidget(self._nhan_cot("Giọng đọc", 70))
+        d1.addWidget(self._nhan_cot("Voice ID", 70))
         self._chon_giong = QComboBox()
+        self._chon_giong.setEditable(True)
+        self._chon_giong.setObjectName("mono")
+        self._chon_giong.lineEdit().setPlaceholderText(
+            "dán Voice ID — ví dụ RGb96Dcl0k5eVje8EBch")
         for g in danh_muc():
-            self._chon_giong.addItem(g.nhan, g.ma)
-        self._chon_giong.addItem("Giọng riêng của tôi (dán mã)…", RIENG)
-        # Ghìm bề rộng: mô tả giọng dài tới ~60 ký tự, và `QComboBox` mặc định
-        # rộng bằng mục dài nhất — đo được trang Voice nhảy lên 1167px trên một
-        # cửa sổ chỉ có 760px, tức tràn hẳn ra ngoài mép.
+            self._chon_giong.addItem("{0}  —  {1}".format(g.ma, g.ten), g.ma)
+        # Ghìm bề rộng: `QComboBox` mặc định rộng bằng mục dài nhất — đo được
+        # trang Voice nhảy lên 1167px trên cửa sổ chỉ có 760px.
         self._chon_giong.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
-        self._chon_giong.setMinimumContentsLength(18)
-        self._chon_giong.setCurrentIndex(
-            max(0, self._chon_giong.findData(GIONG_MAC_DINH)))
-        self._chon_giong.currentIndexChanged.connect(lambda _i: self._doi_giong())
+        self._chon_giong.setMinimumContentsLength(20)
+        self._chon_giong.setToolTip(
+            "Dán Voice ID của bạn (ElevenLabs, 20 ký tự chữ và số), hoặc bấm "
+            "mũi tên để chọn một giọng Việt có sẵn.")
+        self._chon_giong.activated.connect(self._chon_tu_danh_sach)
+        self._chon_giong.setEditText(GIONG_MAC_DINH)
         d1.addWidget(self._chon_giong, 1)
         self._nut_cai_dat = nut_phu("⚙  Cài đặt", self._mo_cai_dat, rong=110)
         d1.addWidget(self._nut_cai_dat)
         v.addLayout(d1)
 
-        # Ô dán mã chỉ hiện khi khách chọn "Giọng riêng của tôi" — ai đã có
-        # giọng riêng trên ElevenLabs vẫn dùng được, người mới không phải nhìn.
-        self._ma_giong = QLineEdit()
-        self._ma_giong.setObjectName("mono")
-        self._ma_giong.setPlaceholderText(
-            "dán mã giọng ElevenLabs — 20 ký tự, ví dụ RGb96Dcl0k5eVje8EBch")
-        self._ma_giong.hide()
-        v.addWidget(self._ma_giong)
+        self._chu_giong = nhan("", "phu")
+        self._chu_giong.setWordWrap(True)
+        self._chu_giong.setMinimumWidth(1)
+        v.addWidget(self._chu_giong)
+        self._chon_giong.editTextChanged.connect(lambda _c: self._ta_giong())
+        self._ta_giong()
 
         d2 = QHBoxLayout()
         d2.setSpacing(8)
@@ -589,34 +601,54 @@ class TrangGiongNoi(QWidget):
 
     # ── Hàng đợi nhiều giọng ─────────────────────────────────────────────────
 
-    def _doi_giong(self) -> None:
-        """Hiện ô dán mã chỉ khi khách chọn giọng riêng."""
-        rieng = self._chon_giong.currentData() == RIENG
-        self._ma_giong.setVisible(rieng)
-        if rieng:
-            self._ma_giong.setFocus()
+    def _chon_tu_danh_sach(self, chi_so: int) -> None:
+        """Chọn một giọng dựng sẵn thì điền **mã** vào ô, không điền tên.
+
+        Ô này là ô Voice ID: thứ nằm trong nó phải là thứ gửi lên máy chủ. Để
+        lại chữ "vi_female_01 — Ngọc Anh" là gửi cả cái tên đi và ăn 422.
+        """
+        ma = self._chon_giong.itemData(chi_so)
+        if ma:
+            self._chon_giong.setEditText(str(ma))
+
+    def _ta_giong(self) -> None:
+        """Một dòng cho biết mã đang gõ là giọng nào — hoặc là giọng riêng."""
+        ma = self.ma_giong
+        for g in danh_muc():
+            if g.ma == ma:
+                self._chu_giong.setText(g.mo_ta)
+                return
+        if la_ma_rieng(ma):
+            self._chu_giong.setText("Giọng riêng của bạn trên ElevenLabs.")
+        elif ma:
+            self._chu_giong.setText(
+                "⚠ Mã này không giống mã có sẵn, cũng không giống mã ElevenLabs "
+                "(phải đúng 20 ký tự chữ và số).")
+        else:
+            self._chu_giong.setText(
+                "Dán Voice ID, hoặc bấm mũi tên để chọn một giọng Việt có sẵn.")
 
     @property
     def ma_giong(self) -> str:
-        """Mã giọng đang chọn — MỘT chỗ duy nhất trả lời câu này.
+        """Voice ID đang dùng — MỘT chỗ duy nhất trả lời câu này.
 
         Hai nơi cần nó (xếp hàng đợi và chạy thẳng); tính riêng ở mỗi nơi là
         kiểu lỗi sửa một chỗ quên chỗ kia.
         """
-        du_lieu = self._chon_giong.currentData()
-        if du_lieu == RIENG:
-            return self._ma_giong.text().strip()
-        return str(du_lieu or "")
+        return self._chon_giong.currentText().strip()
 
     def _thieu_giong(self) -> bool:
-        """Chỉ thiếu được khi khách chọn "giọng riêng" mà chưa dán mã."""
-        ma = self.ma_giong
-        if ma and (self._chon_giong.currentData() != RIENG or la_ma_rieng(ma)):
+        """Ô trống mới là thiếu.
+
+        KHÔNG chặn theo khuôn mã: hãng thêm giọng mới hay đổi cách đặt mã là
+        tool tự nhiên từ chối một mã hợp lệ, mà khách không có đường nào đi
+        tiếp. Máy chủ mới là nơi biết chắc, và nó trả lời rất rõ.
+        """
+        if self.ma_giong:
             return False
         self._app.show_message(
-            "Chưa có mã giọng riêng",
-            "Mã giọng ElevenLabs dài đúng 20 ký tự chữ và số. Hoặc chọn một "
-            "giọng có sẵn trong danh sách để chạy ngay.")
+            "Chưa có Voice ID",
+            "Dán Voice ID vào ô, hoặc bấm mũi tên chọn một giọng Việt có sẵn.")
         return True
 
     def _xep_hang(self) -> None:
@@ -635,9 +667,8 @@ class TrangGiongNoi(QWidget):
         self._cho.append(_Lo(ma_giong, self._nguon or "danh sách đang mở",
                              dinh_dang, list(self._muc)))
         self._muc = []
-        # Trống ô mã riêng để nhập nhân vật kế tiếp ngay, không phải xoá tay.
-        if self._chon_giong.currentData() == RIENG:
-            self._ma_giong.clear()
+        # KHÔNG trống ô Voice ID sau khi xếp: phần lớn lô chỉ có một giọng, và
+        # xoá đi là bắt khách dán lại đúng cái mã họ vừa dán.
         self._ve_lai()
 
     def _bo_lo(self, lo: _Lo) -> None:

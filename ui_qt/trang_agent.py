@@ -46,7 +46,7 @@ from PyQt5.QtWidgets import (
 from core import codex as codex_cli
 from core.claude_code import (
     TinhTrang, cai_vao_settings, duong_settings, go_khoi_settings, kiem_tra,
-    lenh_cai_dat, lenh_chay_duoc, mo_terminal, mo_vscode,
+    ho_tro_cong_cu, lenh_cai_dat, lenh_chay_duoc, mo_terminal, mo_vscode,
     trang_thai_settings,
 )
 
@@ -83,6 +83,7 @@ class TrangAgent(QWidget):
         self._tt = TinhTrang()
         self._ttx = codex_cli.TinhTrangCodex()
         self._dang_cai = False
+        self._cong_cu = None   # None = chưa biết
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(28, 24, 28, 24)
@@ -107,6 +108,7 @@ class TrangAgent(QWidget):
         self._ve_nut_mo()
         self._ve_nguon()
         self.do_lai()
+        self.do_cong_cu()
 
     # ── Thẻ 1: dùng agent nào ────────────────────────────────────────────────
 
@@ -130,6 +132,13 @@ class TrangAgent(QWidget):
 
         self._nhan_nguon = self._chu_phu("")
         doc.addWidget(self._nhan_nguon)
+        # Cảnh báo khi ví ShopAPI chưa gọi được công cụ. Không gọi được công cụ
+        # thì Claude Code không đọc nổi một file — nó chỉ trò chuyện, và khách
+        # trả tiền cho một agent câm mà không biết vì sao.
+        self._canh_bao = self._chu_phu("")
+        self._canh_bao.setStyleSheet(f"color:{theme.DO};")
+        self._canh_bao.hide()
+        doc.addWidget(self._canh_bao)
         hang = HangXuongDong()
         hang.addWidget(nut_chinh("Áp dụng", self.ap_dung_nguon))
         doc.addLayout(hang)
@@ -165,6 +174,36 @@ class TrangAgent(QWidget):
         self._ve_bang()
         self._ve_nut_mo()
         self._ve_nut_cai()
+
+    def do_cong_cu(self) -> None:
+        """Hỏi máy chủ một câu bé xíu: có cho gọi công cụ không.
+
+        Chạy ở luồng nền, một lần mỗi lượt mở tool. Kết quả quyết định có hiện
+        dòng cảnh báo đỏ hay không.
+        """
+        khoa = (self.app.config.api_key or "").strip()
+        if not khoa:
+            return
+        dia_chi = self.app.config.base_url
+
+        def nen():
+            duoc = ho_tro_cong_cu(khoa, dia_chi)
+            self.app.goi_tren_luong_ve(lambda: self._nhan_cong_cu(duoc))
+
+        threading.Thread(target=nen, daemon=True).start()
+
+    def _nhan_cong_cu(self, duoc) -> None:
+        """`None` là **không biết** — im lặng. Chỉ `False` mới cảnh báo."""
+        self._cong_cu = duoc
+        if duoc is False:
+            self._canh_bao.setText(
+                "⚠ Máy chủ ShopAPI hiện chưa cho Claude Code gọi công cụ, nên "
+                "đường “ví ShopAPI” chỉ trò chuyện được — nó KHÔNG đọc hay sửa "
+                "được file trong thư mục tool. Chọn gói Claude hoặc ChatGPT của "
+                "bạn ở trên để làm việc thật.")
+            self._canh_bao.show()
+        else:
+            self._canh_bao.hide()
 
     def ap_dung_nguon(self) -> None:
         if self.nguon != NGUON_SHOPAPI:

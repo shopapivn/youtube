@@ -366,6 +366,61 @@ def lenh_chay(cau_hoi: str, duong_claude: str = "claude", *,
     return lenh
 
 
+#: Lời gọi thử để biết máy chủ có chuyển tiếp `tools` hay không. Bé nhất có thể.
+_THU_CONG_CU = {
+    "model": "claude-sonnet-5",
+    "max_tokens": 64,
+    "tools": [{
+        "name": "xem_gio",
+        "description": "Xem giờ hiện tại",
+        "input_schema": {"type": "object",
+                         "properties": {"mui": {"type": "string"}},
+                         "required": ["mui"]},
+    }],
+    "messages": [{"role": "user",
+                  "content": "Gọi công cụ xem_gio với mui=Asia/Ho_Chi_Minh."}],
+}
+
+
+def ho_tro_cong_cu(api_key: str, base_url: str = "",
+                   goi: Optional[Callable[..., dict]] = None) -> Optional[bool]:
+    """Máy chủ có cho Claude Code **gọi công cụ** không?
+
+    Đây không phải chuyện nhỏ: không gọi được công cụ thì Claude Code không đọc
+    nổi một file, không sửa nổi một dòng — nó chỉ trò chuyện. Đo thật trên prod
+    ngày 12/08/2026, gửi kèm `tools` và nhận về::
+
+        stop_reason: end_turn
+        "Tôi không có công cụ "xem_gio" trong danh sách công cụ hiện có"
+
+    Tức máy chủ **nuốt mất trường `tools`**. Khách thấy Claude Code in ra thẻ
+    `<invoke name="Grep">` như chữ thường rồi đứng im — và không ai đoán được vì
+    sao, vì mọi thứ khác trông vẫn chạy.
+
+    Trả về `True`/`False`, hoặc `None` khi không hỏi được (mất mạng, hết tiền).
+    `None` ≠ `False`: **không biết** thì đừng doạ khách bằng một lỗi chưa chắc có.
+    """
+    import json as _json
+    import urllib.request as _req
+
+    def _goi_that(than: dict) -> dict:
+        yeu_cau = _req.Request(
+            (base_url or "https://api.shopapi.vn").rstrip("/") + "/v1/messages",
+            data=_json.dumps(than).encode("utf-8"),
+            headers={"content-type": "application/json",
+                     "authorization": "Bearer " + (api_key or "").strip(),
+                     "anthropic-version": "2023-06-01"})
+        with _req.urlopen(yeu_cau, timeout=90) as tra_loi:  # noqa: S310
+            return _json.load(tra_loi)
+
+    try:
+        tra = (goi or _goi_that)(dict(_THU_CONG_CU))
+    except Exception:  # noqa: BLE001 — hỏi không được thì trả "không biết"
+        return None
+    khoi = tra.get("content") or []
+    return any(isinstance(k, dict) and k.get("type") == "tool_use" for k in khoi)
+
+
 def doc_su_kien(dong: str) -> Optional[dict]:
     """Đọc một dòng stream-json. Dòng rác thì bỏ qua, không ném lỗi.
 
