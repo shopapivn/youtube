@@ -147,7 +147,7 @@ def _single_root(payload: Path) -> Path:
 
 
 def _healthcheck_tree(root: Path) -> None:
-    required = ("shopapi_studio.py", "core", "ui", "tool-catalog")
+    required = ("shopapi_studio_qt.py", "core", "ui_qt", "tool-catalog")
     missing = [name for name in required if not (root / name).exists()]
     if missing:
         raise UpdateError("Bản staged thiếu: " + ", ".join(missing))

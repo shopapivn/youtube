@@ -39,11 +39,9 @@ ROOT_IN_ZIP = "ShopAPI-Studio"
 
 #: Những thứ ở cấp cao nhất được phép vào gói. Xem quy tắc 1 ở đầu file.
 TOP_LEVEL_ALLOW = (
-    "shopapi_studio.py",
     "shopapi_studio_qt.py",
     "cap-nhat.py",
     "SETUP.bat",
-    "CHAY.bat",
     "CHAY-QT.bat",
     # Bản chạy KHÔNG hiện cửa sổ đen. Thiếu tên này thì khách không bao giờ
     # nhận được nó — file nằm sẵn trong cây mã mà chưa từng vào gói.
@@ -55,7 +53,6 @@ TOP_LEVEL_ALLOW = (
     "README.md",
     "LICENSE",
     "core",
-    "ui",
     "ui_qt",
     "tool-catalog",
     "agent-skills",
@@ -177,7 +174,7 @@ def _is_reviewed_source(arcname: str) -> bool:
     if not arcname.endswith(".py"):
         return False
     parts = arcname.split("/")
-    return len(parts) > 2 and parts[1] in {"core", "ui", "_sdk", "tool-catalog"}
+    return len(parts) > 2 and parts[1] in {"core", "_sdk", "tool-catalog"}
 
 
 def assert_no_secrets(arcnames) -> None:
@@ -373,7 +370,7 @@ def export_tree(tool_dir: str, sdk_src_dir: str, out_dir: str, *, phang: bool = 
 
     `phang=True` bỏ tiền tố `ShopAPI-Studio/`: kho GitHub thì bản thân kho đã là
     thư mục gốc, lồng thêm một tầng nữa là khách `git clone` xong phải đi vào
-    trong mới thấy `CHAY.bat`.
+    trong mới thấy `CHAY-QT.bat`.
 
     **Không xoá gì trong `out_dir`.** Xoá cây thư mục theo đường dẫn nhận từ
     ngoài là loại thao tác chỉ cần sai một lần; nơi gọi tự dọn nếu muốn.
