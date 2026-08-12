@@ -80,6 +80,10 @@ _BUT_DANH: Dict[str, Tuple[str, ...]] = {
 #:
 #: “thành tên chỉ là Tài khoản” — ba từ đầu là cách nói, không phải tên.
 _RIA_DAU = ("ten la", "ten", "chi la", "chi con", "con la", "moi la", "moi",
+            # "chữ X" nghĩa là *dòng chữ X*, không phải tên tab là "chữ X".
+            # Thiếu dòng này thì "sửa tab ví tài khoản thành chữ Tài khoản" đặt
+            # tên tab thành "chữ Tài khoản" — chủ dự án gặp thật, 12/08/2026.
+            "chu la", "chu",
             "la", "thanh", "sang", "cai", "tab")
 
 #: Chữ thừa hay dính vào **đuôi** câu. Người Việt kết câu bằng tiểu từ.
@@ -190,6 +194,22 @@ _MAU_DOI_TEN_DAO = re.compile(
     r"(?<![0-9a-z])(?:doi|dat|sua|thay)(?![0-9a-z])[^\n]{0,16}?"
     r"(?<![0-9a-z])(?:thanh|sang)(?![0-9a-z])\s*(?P<moi>[^\n]{1,60})$")
 
+#: “(muốn) tab X là Y” — nối bằng “là”, không cần động từ đổi/sửa.
+#:
+#: Người ta nói *"tao muốn cái tab ví tài khoản là Tài khoản"* nhiều đúng bằng
+#: *"đổi tab … thành …"*. Thiếu mẫu này thì câu rơi xuống mô hình, và mô hình
+#: bịa ra một câu "Xong" mà chẳng đổi gì.
+#:
+#: `(?!.*\?)` cùng danh sách từ hỏi ở cuối để **không biến câu hỏi thành lệnh**:
+#: "tab X là gì" mà đem đổi tên thì thanh bên có một tab tên "gì".
+_MAU_DOI_TEN_LA = re.compile(
+    r"(?<![0-9a-z])" + _TU_KHOA_TAB + r"(?![0-9a-z])\s*(?P<cu>[^\n?]{1,60}?)\s+"
+    r"(?<![0-9a-z])la(?![0-9a-z])\s*(?P<moi>[^\n?]{1,60})$")
+
+#: Từ hỏi — đứng ở vế sau “là” thì đây là câu hỏi, không phải lệnh đổi tên.
+_TU_HOI = frozenset({"gi", "gi the", "gi vay", "gi day", "sao", "the nao",
+                     "nhu the nao", "bao nhieu", "dau"})
+
 _MAU_AN = re.compile(
     r"(?<![0-9a-z])(?:an|giau|bo|xoa|tat|dong|cat)(?![0-9a-z])[^\n]{0,24}?"
     r"(?<![0-9a-z])" + _TU_KHOA_TAB + r"(?![0-9a-z])\s*(?P<ten>[^\n]{1,60})$")
@@ -200,12 +220,20 @@ _MAU_HIEN = re.compile(
 
 
 def _khop_doi_ten(goc: str, tho: str):
-    for mau in (_MAU_DOI_TEN, _MAU_DOI_TEN_DAO):
+    """Thử lần lượt ba cách nói. Mẫu “là” đứng CUỐI vì nó rộng tay nhất.
+
+    Rộng tay thì dễ nuốt nhầm câu khác, nên chỉ dùng nó khi hai mẫu chặt hơn đã
+    không khớp — và vế sau phải không phải từ hỏi.
+    """
+    for mau in (_MAU_DOI_TEN, _MAU_DOI_TEN_DAO, _MAU_DOI_TEN_LA):
         khop = mau.search(tho)
         if khop is None:
             continue
+        moi_tho = tho[khop.start("moi"):khop.end("moi")]
+        if _tia(moi_tho, moi_tho).lower() in _TU_HOI:
+            continue
         return ((goc[khop.start("cu"):khop.end("cu")], tho[khop.start("cu"):khop.end("cu")]),
-                (goc[khop.start("moi"):khop.end("moi")], tho[khop.start("moi"):khop.end("moi")]))
+                (goc[khop.start("moi"):khop.end("moi")], moi_tho))
     return None
 
 

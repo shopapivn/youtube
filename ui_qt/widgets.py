@@ -144,7 +144,22 @@ class HangXuongDong(QLayout):
         self._xep(o, chi_do=False)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return self.minimumSize()
+        """Bề rộng **ưa thích** là cả hàng nằm ngang, không phải một mục.
+
+        Trả về `minimumSize()` ở đây là bảo Qt "tôi chỉ cần bằng một nút" — và
+        Qt cấp đúng chừng đó, nên mọi mục xuống dòng thành một cột dọc kể cả khi
+        màn hình còn thừa chỗ. Sáu mức nạp tiền ở trang Ví xếp thành sáu dòng vì
+        lỗi này (ảnh chủ dự án gửi 12/08/2026).
+
+        Đúng hợp đồng của một flow layout: *ưa thích* một hàng, *tối thiểu* một
+        mục, và tự xuống dòng ở khoảng giữa.
+        """
+        rong, cao = 0, 0
+        for i, muc in enumerate(self._muc):
+            cd = muc.sizeHint()
+            rong += cd.width() + (self._khoang if i else 0)
+            cao = max(cao, cd.height())
+        return QSize(rong, cao)
 
     def minimumSize(self) -> QSize:  # noqa: N802
         cd = QSize(0, 0)
@@ -255,14 +270,20 @@ class DaiUocTinh(QFrame):
 
 
 class ChonThuMuc(QWidget):
-    """Ô chọn thư mục lưu kết quả: nhãn + đường dẫn + nút Chọn + nút Mở."""
+    """Ô chọn thư mục: nhãn + đường dẫn + nút Chọn + nút Mở.
 
-    def __init__(self, ban_dau: str):
+    `nhan_text` đổi được vì widget này dùng cho **cả thư mục nguồn lẫn thư mục
+    lưu**. Khoá cứng chữ "Lưu vào" là chuyện đã xảy ra: tab Dựng video có hai ô
+    liền nhau cùng ghi "📁 Lưu vào:", ô trên thực ra là thư mục **chứa dự án**
+    cần đọc. Khách nhìn hai dòng giống hệt nhau và không biết điền cái nào.
+    """
+
+    def __init__(self, ban_dau: str, nhan_text: str = "📁  Lưu vào:"):
         super().__init__()
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
         ngang.setSpacing(8)
-        ngang.addWidget(nhan("📁  Lưu vào:"))
+        ngang.addWidget(nhan(nhan_text))
         self._o = QLineEdit(ban_dau)
         ngang.addWidget(self._o, 1)
         ngang.addWidget(nut_phu("Chọn…", self._chon, rong=92))

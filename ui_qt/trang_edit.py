@@ -77,11 +77,12 @@ class TrangDungVideo(QWidget):
             "(.mp3/.wav), các ảnh hoặc clip, và tuỳ chọn thêm file .srt, "
             "thư mục nhac/. Tên file đặt sao cũng được.", "muted"))
         d0 = QHBoxLayout()
-        self._goc = ChonThuMuc("")
+        self._goc = ChonThuMuc("", "📂  Thư mục dự án:")
         d0.addWidget(self._goc, 1)
         d0.addWidget(nut_phu("🔄  Quét lại", self.quet, rong=120))
         v.addLayout(d0)
-        self._ra = ChonThuMuc(app.default_output_dir("video-hoan-chinh"))
+        self._ra = ChonThuMuc(app.default_output_dir("video-hoan-chinh"),
+                              "💾  Video xong lưu vào:")
         v.addWidget(self._ra)
         doc.addWidget(the_tm)
 
