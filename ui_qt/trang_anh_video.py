@@ -107,7 +107,6 @@ class TabThuCong(QWidget):
         self.thu_vien.dat_viec(khi_lam_lai=self._lam_lai,
                                khi_cho_dong=self._cho_dong)
         doc.addWidget(self.thu_vien, 1)
-        doc.addWidget(self._hang_vi_du())
         doc.addWidget(self._thanh_nhap())
 
     #: Ví dụ bấm được, hiện khi màn hình còn trống.
@@ -115,37 +114,16 @@ class TabThuCong(QWidget):
     #: Một ô nhập trắng tinh là chỗ nhiều người dừng lại lâu nhất — không phải
     #: vì khó, mà vì không biết nên viết dài bao nhiêu và tả tới đâu. Ba câu mẫu
     #: bấm một cái là điền vào ô, sửa được ngay.
-    #: `(nhãn ngắn trên nút, câu đầy đủ điền vào ô)`.
-    #:
-    #: Nhãn phải NGẮN: chữ trong nút không tự xuống dòng, và một nút 533px kéo
-    #: cả trang rộng quá mép cửa sổ — đo được ngay lần đầu thử.
-    VI_DU = (
-        ("🏞  Cảnh làng quê",
-         "con đường làng mùa đông, sương mù, ánh sáng dịu"),
-        ("✋  Cận cảnh bàn tay",
-         "cận cảnh bàn tay lật trang sách cũ dưới ánh nến"),
-        ("🌃  Thành phố đêm",
-         "toàn cảnh thành phố về đêm nhìn từ trên cao"),
-    )
-
-    def _hang_vi_du(self) -> QWidget:
-        khung = QWidget()
-        doc = QVBoxLayout(khung)
-        doc.setContentsMargins(0, 0, 0, 0)
-        doc.setSpacing(6)
-        doc.addWidget(nhan("Chưa biết viết gì? Bấm một câu để thử:", "phu"))
-        hang = HangXuongDong()
-        for nhan_nut, cau in self.VI_DU:
-            nut = nut_phu(nhan_nut, lambda _c=cau: self._dien_vi_du(_c))
-            nut.setToolTip(cau)
-            hang.addWidget(nut)
-        doc.addLayout(hang)
-        self._khung_vi_du = khung
-        return khung
-
-    def _dien_vi_du(self, cau: str) -> None:
-        self.o_nhap.setPlainText(cau)
-        self.o_nhap.setFocus()
+    # KHÔNG có nút "ví dụ gợi ý" ở đây.
+    #
+    # Tao từng thêm ba nút mẫu ("Cảnh làng quê", "Cận cảnh bàn tay"…) và chủ dự
+    # án bác ngay — đúng. Khách tới tab này **đã biết mình cần cảnh gì**: họ có
+    # kịch bản, có danh sách cảnh. Không ai ngồi chờ tool gợi ý nên tưởng tượng
+    # cái gì, và một người làm kênh truyện ma được mời "thành phố về đêm" thì đó
+    # là rác chắn đường.
+    #
+    # Chỗ trống ở giữa là chỗ **kết quả sắp hiện ra**. Lấp nó bằng thứ trang trí
+    # là đúng cái lỗi vừa phải gỡ ở thẻ "Chưa có dữ liệu".
 
     def _lam_lai(self, mo_ta: str, _duong_dan: str) -> None:
         """Bấm ↻ trên một thẻ: điền lại mô tả rồi gửi luôn."""
