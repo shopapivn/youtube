@@ -59,7 +59,6 @@ from PyQt5.QtWidgets import (
 from core.batch import split_prompts
 from core.jobs import ACTIVE_STATUSES, STATUS_DONE, STATUS_FAILED, JobSpec
 from core.money import group_thousands
-from core.giong import GIONG_MAC_DINH, RIENG, danh_muc, la_ma_rieng
 from core.pricing import KIND_TTS, hold_for_tts
 from core.validate import check_tts
 from core.voice_text import clean_voice_text
@@ -260,50 +259,35 @@ class TrangGiongNoi(QWidget):
         v.setContentsMargins(16, 12, 16, 13)
         v.setSpacing(8)
 
-        # Ô **Voice ID**, gõ và dán được — kèm danh sách thả xuống để chọn nhanh.
+        # Một ô Voice ID, **để trống**, chữ mờ chỉ đúng chỗ đi lấy mã.
         #
-        # Hai lần sai liên tiếp, và đây là bản thứ ba:
+        # Ba lần sai liên tiếp ở đúng chỗ này, và đây là bản thứ tư:
         #
-        #   1. Chỉ có ô dán mã trần → người mới không biết mã là gì, lấy ở đâu,
-        #      nên tắc ngay dòng đầu của tab đắt tiền nhất.
-        #   2. Đổi hẳn thành ô chọn tên giọng → **mất đường dán ID**, mà chủ dự
-        #      án nói thẳng: *"chỗ voice đang sai, mày đang để giọng đọc trong
-        #      khi là cần id voice"*. Khách dùng giọng riêng của họ trên
-        #      ElevenLabs, sáu giọng dựng sẵn không thay được chuyện đó.
+        #   1. ô dán mã trần, gợi ý chỉ có một chuỗi ví dụ → người mới không
+        #      biết mã là gì, lấy ở đâu;
+        #   2. đổi hẳn thành ô chọn tên giọng → mất đường dán ID, mà đó mới là
+        #      thứ khách dùng thật;
+        #   3. ô ID kèm danh sách sáu giọng dựng sẵn, điền sẵn `vi_female_01` →
+        #      chủ dự án: *"đổi thành: bạn vào elevenlabs lấy id voice điền vào
+        #      đây, chữ mờ hướng dẫn; bỏ cái nữ miền bắc…"*.
         #
-        # Nên: một ô duy nhất, **nội dung của nó CHÍNH LÀ voice_id**. Dán mã 20
-        # ký tự vào là chạy; bấm mũi tên thì có sẵn sáu giọng Việt điền hộ. Ai
-        # cần gì cũng lấy được, không ai bị chặn.
+        # Điền sẵn một mã là **chọn hộ khách** một giọng họ chưa nghe bao giờ:
+        # bấm chạy luôn thì cả lô ra sai giọng, mà vẫn mất tiền. Để trống thì
+        # họ buộc phải nhìn dòng chữ mờ, và dòng ấy nói đúng việc phải làm.
         d1 = QHBoxLayout()
         d1.setSpacing(8)
         d1.addWidget(self._nhan_cot("Voice ID", 70))
-        self._chon_giong = QComboBox()
-        self._chon_giong.setEditable(True)
-        self._chon_giong.setObjectName("mono")
-        self._chon_giong.lineEdit().setPlaceholderText(
-            "dán Voice ID — ví dụ RGb96Dcl0k5eVje8EBch")
-        for g in danh_muc():
-            self._chon_giong.addItem("{0}  —  {1}".format(g.ma, g.ten), g.ma)
-        # Ghìm bề rộng: `QComboBox` mặc định rộng bằng mục dài nhất — đo được
-        # trang Voice nhảy lên 1167px trên cửa sổ chỉ có 760px.
-        self._chon_giong.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
-        self._chon_giong.setMinimumContentsLength(20)
-        self._chon_giong.setToolTip(
-            "Dán Voice ID của bạn (ElevenLabs, 20 ký tự chữ và số), hoặc bấm "
-            "mũi tên để chọn một giọng Việt có sẵn.")
-        self._chon_giong.activated.connect(self._chon_tu_danh_sach)
-        self._chon_giong.setEditText(GIONG_MAC_DINH)
-        d1.addWidget(self._chon_giong, 1)
+        self._ma_giong = QLineEdit()
+        self._ma_giong.setObjectName("mono")
+        self._ma_giong.setPlaceholderText(
+            "Bạn vào elevenlabs.io lấy Voice ID rồi điền vào đây")
+        self._ma_giong.setToolTip(
+            "Mở elevenlabs.io/app/voice-library, chọn giọng bạn thích, bấm nút "
+            "ba chấm rồi chọn “Copy voice ID”, dán vào ô này.")
+        d1.addWidget(self._ma_giong, 1)
         self._nut_cai_dat = nut_phu("⚙  Cài đặt", self._mo_cai_dat, rong=110)
         d1.addWidget(self._nut_cai_dat)
         v.addLayout(d1)
-
-        self._chu_giong = nhan("", "phu")
-        self._chu_giong.setWordWrap(True)
-        self._chu_giong.setMinimumWidth(1)
-        v.addWidget(self._chu_giong)
-        self._chon_giong.editTextChanged.connect(lambda _c: self._ta_giong())
-        self._ta_giong()
 
         d2 = QHBoxLayout()
         d2.setSpacing(8)
@@ -601,33 +585,6 @@ class TrangGiongNoi(QWidget):
 
     # ── Hàng đợi nhiều giọng ─────────────────────────────────────────────────
 
-    def _chon_tu_danh_sach(self, chi_so: int) -> None:
-        """Chọn một giọng dựng sẵn thì điền **mã** vào ô, không điền tên.
-
-        Ô này là ô Voice ID: thứ nằm trong nó phải là thứ gửi lên máy chủ. Để
-        lại chữ "vi_female_01 — Ngọc Anh" là gửi cả cái tên đi và ăn 422.
-        """
-        ma = self._chon_giong.itemData(chi_so)
-        if ma:
-            self._chon_giong.setEditText(str(ma))
-
-    def _ta_giong(self) -> None:
-        """Một dòng cho biết mã đang gõ là giọng nào — hoặc là giọng riêng."""
-        ma = self.ma_giong
-        for g in danh_muc():
-            if g.ma == ma:
-                self._chu_giong.setText(g.mo_ta)
-                return
-        if la_ma_rieng(ma):
-            self._chu_giong.setText("Giọng riêng của bạn trên ElevenLabs.")
-        elif ma:
-            self._chu_giong.setText(
-                "⚠ Mã này không giống mã có sẵn, cũng không giống mã ElevenLabs "
-                "(phải đúng 20 ký tự chữ và số).")
-        else:
-            self._chu_giong.setText(
-                "Dán Voice ID, hoặc bấm mũi tên để chọn một giọng Việt có sẵn.")
-
     @property
     def ma_giong(self) -> str:
         """Voice ID đang dùng — MỘT chỗ duy nhất trả lời câu này.
@@ -635,7 +592,7 @@ class TrangGiongNoi(QWidget):
         Hai nơi cần nó (xếp hàng đợi và chạy thẳng); tính riêng ở mỗi nơi là
         kiểu lỗi sửa một chỗ quên chỗ kia.
         """
-        return self._chon_giong.currentText().strip()
+        return self._ma_giong.text().strip()
 
     def _thieu_giong(self) -> bool:
         """Ô trống mới là thiếu.
@@ -648,7 +605,8 @@ class TrangGiongNoi(QWidget):
             return False
         self._app.show_message(
             "Chưa có Voice ID",
-            "Dán Voice ID vào ô, hoặc bấm mũi tên chọn một giọng Việt có sẵn.")
+            "Vào elevenlabs.io/app/voice-library, chọn giọng bạn thích, bấm nút "
+            "ba chấm rồi chọn “Copy voice ID”, dán vào ô Voice ID.")
         return True
 
     def _xep_hang(self) -> None:
@@ -669,6 +627,7 @@ class TrangGiongNoi(QWidget):
         self._muc = []
         # KHÔNG trống ô Voice ID sau khi xếp: phần lớn lô chỉ có một giọng, và
         # xoá đi là bắt khách dán lại đúng cái mã họ vừa dán.
+        pass
         self._ve_lai()
 
     def _bo_lo(self, lo: _Lo) -> None:

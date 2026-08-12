@@ -292,10 +292,36 @@ class CuaSoChinh(QWidget):
 
     # ── Dịch vụ cho các trang (giữ đúng tên của bản tkinter) ─────────────────
 
+    #: Thư mục gốc của mọi thứ tool làm ra, và tên các ngăn bên trong.
+    #:
+    #: Chủ dự án, 12/08/2026: *"thư mục thì mày cho link về thư mục PROJECTS,
+    #: trong đó có các thư mục con CONTENT / VOICE / EXCEL / VISUAL / DONE, để
+    #: các tab tool mặc định đường dẫn vào đó"*.
+    #:
+    #: Trước đó mỗi tab tự đặt một cái tên tiếng Việt không dấu (`giong-noi`,
+    #: `anh`, `veo3`, `kich-ban`…), nên sản phẩm của một video nằm rải khắp nơi
+    #: và không ai ghép lại được. Một video là **một dự án**: chữ, giọng, hình,
+    #: rồi bản dựng xong — bốn ngăn theo đúng thứ tự làm việc.
+    THU_MUC_GOC = "PROJECTS"
+    NGAN = {
+        "kich-ban": "CONTENT",          # kịch bản, lời bình, tiêu đề
+        KIND_TTS: "VOICE",              # file đọc
+        "excel": "EXCEL",               # bảng phụ đề, bảng cảnh
+        KIND_IMAGE: "VISUAL",           # ảnh
+        KIND_VIDEO: "VISUAL",           # clip — cùng ngăn với ảnh, cùng là hình
+        "video-hoan-chinh": "DONE",     # bản dựng xong
+    }
+
     def default_output_dir(self, kind: str, engine: str = "") -> str:
-        goc = self.config.output_dir or os.path.join(self.base_dir, "ket-qua")
-        ten = {KIND_TTS: "giong-noi", KIND_IMAGE: "anh", KIND_VIDEO: engine or "video"}
-        return os.path.join(goc, ten.get(kind, kind))
+        """Chỗ lưu mặc định của một loại việc.
+
+        `engine` không còn tách thư mục riêng: khách nghĩ theo *video của tôi*,
+        không nghĩ theo *máy nào tạo ra clip này*, mà tách ra thì cùng một video
+        có clip nằm ở `veo3` và clip nằm ở `seedance`.
+        """
+        goc = self.config.output_dir or os.path.join(self.base_dir,
+                                                     self.THU_MUC_GOC)
+        return os.path.join(goc, self.NGAN.get(kind, kind.upper()))
 
     def account_session(self):
         """Phiên đăng nhập web đang có, dựng lại từ refresh token đã cất.
