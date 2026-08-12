@@ -49,7 +49,12 @@ __all__ = ["ThuVienKetQua", "TheKetQua", "TRAN_THE", "mo_file"]
 TRAN_THE = 120
 
 #: Cạnh ô ảnh xem trước.
-CANH = 168
+#:
+#: 240 chứ không phải 168. Việc chính của khách ở đây là **nhìn rồi quyết dùng
+#: hay bỏ**, mà một ảnh 16:9 thu về 168×95 thì không quyết được gì — họ phải mở
+#: từng file ra xem, tức lưới thẻ thành vô dụng. 240 vẫn xếp được ba thẻ một
+#: hàng trên cửa sổ hẹp nhất.
+CANH = 240
 
 
 def mo_file(duong_dan: str) -> None:
@@ -186,10 +191,18 @@ class ThuVienKetQua(QWidget):
         super().__init__()
         self._the: Dict[str, TheKetQua] = {}
         self._thu_tu = []          # uid theo thứ tự thêm, mới nhất ở cuối
+        self._xong = set()
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(0, 0, 0, 0)
-        doc.setSpacing(0)
+        doc.setSpacing(8)
+
+        # MỘT dòng cho cả lô. Bốn mươi thẻ mỗi thẻ một phần trăm riêng không trả
+        # lời được câu duy nhất khách hỏi khi bỏ đi pha trà: *"xong chưa"*.
+        self._dong_lo = nhan("", "phu")
+        self._dong_lo.setMinimumWidth(1)
+        self._dong_lo.hide()
+        doc.addWidget(self._dong_lo)
 
         self._loi_moi = nhan(goi_y or "Kết quả sẽ hiện ở đây.", "phu")
         self._loi_moi.setAlignment(Qt.AlignCenter)
@@ -243,10 +256,24 @@ class ThuVienKetQua(QWidget):
                 return None
             the_nay = self.them(uid, str(getattr(spec, "content", "")),
                                 getattr(spec, "kind", "") == "video")
-        the_nay.cap_nhat(str(getattr(ban_ghi, "status", "")),
+        trang_thai = str(getattr(ban_ghi, "status", ""))
+        the_nay.cap_nhat(trang_thai,
                          int(getattr(ban_ghi, "progress", 0) or 0),
                          getattr(ban_ghi, "files", ()))
+        if trang_thai in (STATUS_DONE, STATUS_FAILED):
+            self._xong.add(uid)
+        self._ve_dong_lo()
         return the_nay
+
+    def _ve_dong_lo(self) -> None:
+        tong = len(self._thu_tu)
+        if tong <= 1:
+            self._dong_lo.hide()
+            return
+        xong = len([u for u in self._thu_tu if u in self._xong])
+        self._dong_lo.setText("{0}/{1} xong".format(xong, tong)
+                              if xong < tong else "Xong cả {0}".format(tong))
+        self._dong_lo.show()
 
     def _cat_bot(self) -> None:
         while len(self._thu_tu) > TRAN_THE:
@@ -263,6 +290,8 @@ class ThuVienKetQua(QWidget):
                 cu.setParent(None)
                 cu.deleteLater()
         self._thu_tu.clear()
+        self._xong.clear()
+        self._dong_lo.hide()
         self._cuon.hide()
         self._loi_moi.show()
 

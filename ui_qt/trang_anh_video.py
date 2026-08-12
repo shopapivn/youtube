@@ -138,7 +138,7 @@ class TabThuCong(QWidget):
         """
         if duong_dan:
             self.anh_vao.dat(duong_dan)
-        self.loai.setCurrentText(LOAI_VIDEO)
+        self.loai.set(LOAI_VIDEO)
         self.o_nhap.setPlainText(mo_ta)
         self.o_nhap.setFocus()
 
@@ -161,8 +161,11 @@ class TabThuCong(QWidget):
         # mũi tên gửi; mọi thứ còn lại nằm sau nút ấy. Thứ chỉnh một lần rồi
         # thôi mà chiếm chỗ ngang với thứ gõ mỗi lần là bố cục sai.
         hang = HangXuongDong()
-        self.loai = _combo((LOAI_ANH, LOAI_VIDEO), LOAI_ANH, 96)
-        self.loai.currentIndexChanged.connect(lambda _i: self._doi_loai())
+        # Ảnh/Video là công tắc đổi CẢ màn hình bên dưới — quan trọng hơn tỉ lệ,
+        # nên không có lý do gì nó phải giấu trong một ô xổ xuống trong khi tỉ lệ
+        # thì được ba nút bấm. Cùng một kiểu widget cho hai lựa chọn cùng hạng.
+        self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
+                             on_change=lambda _t: self._doi_loai())
         hang.addWidget(self.loai)
 
         # TỈ LỆ KHUNG nằm NGOÀI, không giấu sau nút ⚙.
@@ -265,7 +268,7 @@ class TabThuCong(QWidget):
 
     @property
     def la_video(self) -> bool:
-        return self.loai.currentText() == LOAI_VIDEO
+        return self.loai.get() == LOAI_VIDEO
 
     # ── Gửi ──────────────────────────────────────────────────────────────────
 
