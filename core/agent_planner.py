@@ -7,9 +7,11 @@ Ba luat viet o day, ca ba deu la loi da tra gia:
 
 * **Khong bao gio tu choi mot viec Studio lam duoc.** Doi ten tab, an/hien tab
   deu di qua `core.ui_customization` — cho nay chi noi cac manh lai.
-* **Cau tra loi khong duoc la ngo cut.** Moi loi dap khong lam duoc viec deu
-  phai keo theo 2-3 dong khach chep lai duoc ngay. Khach cua tool nay khong biet
-  code, ho khong tu doan ra phai go gi.
+* **Goi y chi danh cho luc khach dang bi.** Loi dap *khong lam duoc viec* phai
+  keo theo 2-3 dong khach chep lai duoc ngay — khach cua tool nay khong biet
+  code, ho khong tu doan ra phai go gi. Nhung dan dung thuc don do sau **moi**
+  luot, ke ca luot vua lam xong viec, la bien Agent thanh may doc kich ban: chu
+  du an doc ba luot lien nhau va noi *"no khung qua"*. Ly do dung, lieu luong sai.
 * **Dai tu tro lui la cach nguoi Viet noi chuyen.** *“sua tool do”*, *“cai vua
   nay”* phai nhin lai luot truoc, khong duoc coi la yeu cau moi toanh.
 """
@@ -152,15 +154,19 @@ def plan_message(message: str, catalog: Any, workflow: Optional[Mapping[str, Any
     new_state = dict(state or {})
     ids = _catalog_ids(catalog)
     stage = str(new_state.get("onboarding_stage") or "")
+    # Luot truoc da bay goi y roi thi luot nay khong duoc bay lai y nguyen —
+    # xem `_vua_goi_y`.
+    da_goi_y = _vua_goi_y(history)
 
     # Chinh giao dien dat TRUOC moi nhanh khac. No la viec Studio lam chac chan
     # duoc, khong phu thuoc catalog, mang hay giai doan onboarding — de no roi
     # xuong duoi la de no bi mot nhanh khac nuot mat roi tra ve cau tu choi.
-    giao_dien = _ke_hoach_giao_dien(original, tabs, new_state)
+    giao_dien = _ke_hoach_giao_dien(original, tabs, new_state, da_goi_y)
     if giao_dien is not None:
         return giao_dien
 
-    tro_lui = _ke_hoach_tro_lui(original, text, catalog, workflow, new_state, history, tabs, ids)
+    tro_lui = _ke_hoach_tro_lui(original, text, catalog, workflow, new_state, history, tabs, ids,
+                               da_goi_y)
     if tro_lui is not None:
         return tro_lui
 
@@ -225,7 +231,8 @@ def plan_message(message: str, catalog: Any, workflow: Optional[Mapping[str, Any
         proposed = _copy_workflow(workflow)
         changed = _change_tool(proposed, operation, tool_id)
         if not changed:
-            return AgentPlan(_no_change_reply(operation, tool_id, tabs), (), proposed, new_state)
+            return AgentPlan(_no_change_reply(operation, tool_id, tabs, da_goi_y),
+                             (), proposed, new_state)
         action = AgentAction(operation + "_tool", {"tool_id": tool_id})
         verbs = {"add": "thêm", "remove": "bỏ", "disable": "tắt", "enable": "bật"}
         return AgentPlan("Đã tạo đề xuất {0} {1}.".format(verbs[operation], tool_id),
@@ -237,12 +244,18 @@ def plan_message(message: str, catalog: Any, workflow: Optional[Mapping[str, Any
     if dich is not None:
         return _dung_toi_dich(dich, ids, new_state)
 
+    # Khách hỏi thẳng “mày làm được gì” thì bảng lựa chọn chính là câu trả lời,
+    # không phải là lời nhắc thừa — bày đủ kể cả khi lượt trước vừa bày rồi.
+    if _hoi_lam_duoc_gi(text):
+        return AgentPlan(_moi_chon_dich(tabs), (),
+                         _copy_workflow(workflow) if workflow is not None else None, new_state)
+
     if operation:
         return AgentPlan(_cau_khong_lam_duoc(
             "Tôi chưa rõ bạn muốn đổi phần nào. Hãy nói tên kết quả — ví dụ "
-            "“thêm giọng đọc”, “bỏ phần ảnh”, “tắt bước video”.", tabs),
+            "“thêm giọng đọc”, “bỏ phần ảnh”, “tắt bước video”.", tabs, da_goi_y),
             (), _copy_workflow(workflow), new_state)
-    return AgentPlan(_moi_chon_dich(tabs), (),
+    return AgentPlan(_moi_chon_dich(tabs, da_goi_y), (),
                      _copy_workflow(workflow) if workflow is not None else None, new_state)
 
 
@@ -278,18 +291,23 @@ _GIAI_DOAN_TU_DO = ("", "active", "complete")
 
 
 def _ke_hoach_giao_dien(original: str, tabs: Optional[Mapping[str, str]],
-                        state: Dict[str, Any]) -> Optional[AgentPlan]:
+                        state: Dict[str, Any], da_goi_y: bool = False) -> Optional[AgentPlan]:
     """Đổi tên / ẩn / hiện tab — việc Studio làm được, nên không bao giờ được từ chối.
 
     Lời đáp viết ở thể đã-xong vì nơi gọi áp dụng hành động **ngay trước khi**
     vẽ câu trả lời (xem `ui_qt/trang_agent.py::_nhan_tra_loi`); áp không được thì
     chính nó nối thêm dòng báo hỏng.
+
+    **Làm xong thì nói một câu rồi thôi.** Bản trước dán thêm thực đơn “còn làm
+    được gì nữa” sau mỗi lần thành công; đọc liền ba lượt là thấy máy đọc kịch
+    bản chứ không phải người trả lời. Khách vừa nhìn thấy tên tab đổi ngay trên
+    thanh bên — dạy họ nước đi tiếp ngay lúc đó là nói thừa.
     """
     thay_doi = parse_ui_change(original, tabs)
     if thay_doi is None:
         return None
     if not thay_doi.lam_duoc:
-        return AgentPlan(_khong_ro_tab(thay_doi, tabs), (), None, state)
+        return AgentPlan(_khong_ro_tab(thay_doi, tabs, da_goi_y), (), None, state)
     if thay_doi.kieu == "doi_ten":
         loi = "Xong — tab “{0}” từ giờ tên là “{1}”.".format(
             thay_doi.old_label, thay_doi.new_label)
@@ -305,14 +323,14 @@ def _ke_hoach_giao_dien(original: str, tabs: Optional[Mapping[str, str]],
         loi = "Đã hiện lại tab “{0}” trên thanh bên.".format(thay_doi.old_label)
         hanh_dong = AgentAction("show_tab", {"key": thay_doi.key,
                                              "label": thay_doi.old_label})
-    return AgentPlan(loi + "\n\n" + _con_lam_duoc(tabs, (thay_doi.key,)),
-                     (hanh_dong,), None, state)
+    return AgentPlan(loi, (hanh_dong,), None, state)
 
 
 def _ke_hoach_tro_lui(original: str, text: str, catalog: Any,
                       workflow: Optional[Mapping[str, Any]], state: Dict[str, Any],
                       history: Sequence[Mapping[str, str]],
-                      tabs: Optional[Mapping[str, str]], ids: set) -> Optional[AgentPlan]:
+                      tabs: Optional[Mapping[str, str]], ids: set,
+                      da_goi_y: bool = False) -> Optional[AgentPlan]:
     """Câu nối ngắn trỏ về lượt trước: *“sửa tool đó”*, *“cái vừa nãy”*.
 
     Coi những câu này là yêu cầu mới toanh là bắt khách nhắc lại nguyên văn thứ
@@ -327,7 +345,7 @@ def _ke_hoach_tro_lui(original: str, text: str, catalog: Any,
     if neo is None:
         return AgentPlan(_cau_khong_lam_duoc(
             "Tôi chưa rõ “{0}” đang trỏ về việc nào — trước đó mình chưa nói tới "
-            "thứ nào cả.".format(original), tabs), (), None, state)
+            "thứ nào cả.".format(original), tabs, da_goi_y), (), None, state)
     truoc = parse_ui_change(neo, tabs)
     if truoc is not None:
         # Không làm lại y nguyên việc cũ: đổi tên hai lần cùng một tên là thay
@@ -415,35 +433,56 @@ def _goi_y_lam_duoc(tabs: Optional[Mapping[str, str]] = None) -> Tuple[str, ...]
                 _tab_lam_vi_du(tabs)[-1]))
 
 
-def _cau_khong_lam_duoc(ly_do: str, tabs: Optional[Mapping[str, str]] = None) -> str:
-    """Câu đáp khi chưa làm được việc — **luôn** kèm việc làm được ngay.
+#: Dấu nhận ra một lượt đáp **đã** bày thực đơn gợi ý.
+#:
+#: Mọi khối gợi ý trong module đều mở đầu mỗi dòng bằng đúng cụm này, nên chỉ cần
+#: dò nó trên lời đáp gần nhất là biết lượt trước có bày rồi hay chưa.
+_DAU_GOI_Y = "• “"
+
+
+def _vua_goi_y(history: Sequence[Mapping[str, str]] = ()) -> bool:
+    """Lượt đáp gần nhất đã bày thực đơn gợi ý chưa?
+
+    Chỉ nhìn **một** lượt gần nhất: khách bí ba lượt liền thì đến lượt thứ ba họ
+    thật sự cần lại danh sách cụ thể, và bày cách một lượt vẫn không phải là
+    nhại. Thứ phải chặn là hai lượt liền nhau y nguyên một khối chữ.
+    """
+    for muc in reversed(list(history or ())):
+        if isinstance(muc, Mapping) and muc.get("role") == "assistant":
+            return _DAU_GOI_Y in str(muc.get("content") or "")
+    return False
+
+
+def _nhac_goi_y_cu() -> str:
+    """Nhắc lại chỗ có gợi ý thay vì chép nguyên khối gợi ý lần nữa."""
+    return "\n\nMấy dòng gợi ý ở lượt trước vẫn dùng được — chép một dòng rồi gửi."
+
+
+def _cau_khong_lam_duoc(ly_do: str, tabs: Optional[Mapping[str, str]] = None,
+                        da_goi_y: bool = False) -> str:
+    """Câu đáp khi chưa làm được việc — kèm việc làm được ngay.
 
     “Bạn muốn mình giúp gì về workflow YouTube không?” là ngõ cụt: khách không
-    biết code thì không biết trả lời gì, và họ đứng lại đúng ở đó.
+    biết code thì không biết trả lời gì, và họ đứng lại đúng ở đó. Nhưng lượt
+    trước vừa bày đúng ba dòng đó rồi thì bày lại y nguyên là nhại chính mình —
+    khi ấy chỉ trỏ ngược lên chỗ cũ.
     """
+    if da_goi_y:
+        return ly_do + _nhac_goi_y_cu()
     return ly_do + "\n\nMấy việc này tôi làm được ngay — chép nguyên một dòng rồi gửi:\n" + \
         "\n".join(_goi_y_lam_duoc(tabs))
 
 
-def _con_lam_duoc(tabs: Optional[Mapping[str, str]] = None,
-                  tru: Iterable[str] = ()) -> str:
-    ten = _tab_lam_vi_du(tabs, tru)
-    khac = ten[1] if len(ten) > 1 else ten[0]
-    return ("Cần sửa nữa thì cứ nói tiếp:\n"
-            "• “ẩn tab {0}” — giấu bớt tab bạn không dùng\n"
-            "• “đổi tên tab {1} thành Tab của tôi” — đổi tiếp tab khác\n"
-            "• “làm content” — tôi quay lại dựng tool cho bạn").format(ten[0], khac)
-
-
 def _khong_ro_tab(thay_doi: ThayDoiGiaoDien,
-                  tabs: Optional[Mapping[str, str]]) -> str:
+                  tabs: Optional[Mapping[str, str]],
+                  da_goi_y: bool = False) -> str:
     if not thay_doi.key:
         return _cau_khong_lam_duoc(
             "Tôi không thấy tab nào tên “{0}”. Các tab đang có: {1}.".format(
-                thay_doi.old_label, ", ".join(ten_tab_dang_co(tabs))), tabs)
+                thay_doi.old_label, ", ".join(ten_tab_dang_co(tabs))), tabs, da_goi_y)
     return _cau_khong_lam_duoc(
         "Tên mới cho tab “{0}” chưa dùng được — cần từ 1 đến 40 ký tự.".format(
-            thay_doi.old_label), tabs)
+            thay_doi.old_label), tabs, da_goi_y)
 
 
 def _moi_sua_tab(thay_doi: ThayDoiGiaoDien,
@@ -520,19 +559,49 @@ def _dung_toi_dich(dich: str, ids: set, state: Dict[str, Any]) -> AgentPlan:
                      proposed, state)
 
 
-def _moi_chon_dich(tabs: Optional[Mapping[str, str]] = None) -> str:
+#: Khách hỏi thẳng phạm vi của tool. Câu này thì bảng lựa chọn CHÍNH LÀ câu trả
+#: lời, nên nó không bị luật “đừng bày lại” cắt đi.
+_HOI_PHAM_VI = ("lam duoc gi", "lam duoc nhung gi", "lam nhung gi", "lam gi duoc",
+                "giup duoc gi", "giup gi duoc", "biet lam gi", "co the lam gi",
+                "ban lam gi", "may lam gi", "chuc nang gi", "dung the nao",
+                "dung sao", "huong dan", "help")
+
+
+def _hoi_lam_duoc_gi(text: str) -> bool:
+    """Khách đang hỏi về phạm vi của tool, không phải đang giao việc.
+
+    >>> _hoi_lam_duoc_gi("may lam duoc gi")
+    True
+    >>> _hoi_lam_duoc_gi("lam giup tao content")
+    False
+    """
+    return _has(text, *_HOI_PHAM_VI)
+
+
+def _moi_chon_dich(tabs: Optional[Mapping[str, str]] = None,
+                   da_goi_y: bool = False) -> str:
     """Câu hỏi lại khi chưa hiểu — luôn kèm lựa chọn cụ thể, không hỏi trống.
 
     “Bạn cứ nói thẳng kết quả bạn muốn” là câu hỏi trống: khách không biết code
-    thì không biết tool này làm được gì để mà nói.
+    thì không biết tool này làm được gì để mà nói. Lượt trước vừa kê bảng này rồi
+    thì lượt sau nói gọn lại: kê hai lần liền y hệt là khách thấy máy, không thấy
+    người.
     """
+    if da_goi_y:
+        return ("Tôi vẫn chưa hiểu ý bạn. Nói thẳng thứ bạn muốn nhận nhé — kịch "
+                "bản, giọng đọc, ảnh hay video — hoặc tả bằng lời thường như “tao "
+                "muốn có video kể chuyện tâm lý”.")
     ten = ten_tab_dang_co(tabs)
     return ("Bạn muốn nhận thứ gì trước? Cứ gõ một dòng, ví dụ:\n\n"
             "• “nghiên cứu đối thủ” → báo cáo xem ngách còn cửa không\n"
             "• “làm content” → một kịch bản hoàn chỉnh\n"
             "• “tạo giọng đọc” → file MP3 dùng được ngay\n"
             "• “tạo ảnh” hoặc “làm video” → tôi dựng đủ các bước cần trước đó\n"
-            "• “đổi tên tab {0} thành Tài khoản” → tôi sửa luôn giao diện cho bạn\n\n"
+            # Tên mới trong ví dụ phải KHÁC tên tab đang lấy làm ví dụ. Trước đây
+            # nó ghi cứng "Tài khoản", nên ngay sau khi khách đổi một tab thành
+            # "Tài khoản" thì gợi ý thành “đổi tên tab Tài khoản thành Tài khoản”
+            # — một ví dụ vô nghĩa, đúng chỗ đang muốn tỏ ra hữu ích.
+            "• “đổi tên tab {0} thành Tab của tôi” → tôi sửa luôn giao diện cho bạn\n\n"
             "Bạn cũng có thể tả bằng lời thường, ví dụ “tao muốn có video kể "
             "chuyện tâm lý”.").format(ten[-1] if ten else NHAN_TAB_MAC_DINH["wallet"])
 
@@ -606,7 +675,15 @@ def _onboarding_step(original: str, text: str, ids: set,
         elif _has(text, "day du", "full", "tron quy trinh", "a-z", "tu dau den cuoi"):
             tools = FULL_PIPELINE; name = "Sản xuất YouTube đầy đủ"
         else:
-            state["channel_goal"] = original[:500]
+            # Ghi lại ý tưởng rồi TRẢ khách về mạch trò chuyện thường.
+            #
+            # Giữ nguyên giai đoạn “goal” là một cái bẫy: `agent_service.respond`
+            # chỉ hỏi mô hình khi giai đoạn nằm ngoài mạch onboarding, nên khách
+            # kẹt ở đây là mọi lượt sau đều rơi xuống bộ hiểu ngoại tuyến và nghe
+            # lại đúng câu hỏi này — máy hỏi vòng tròn. Ở “active” thì câu trả lời
+            # của họ (“một kịch bản”, “file giọng đọc”) dựng được tool thật.
+            state.update({"channel_goal": original[:500], "onboarding_stage": "active",
+                          "onboarding_complete": True})
             return AgentPlan("Tôi hiểu ý tưởng chính rồi. Kết quả đầu tiên bạn muốn cầm trên tay là gì? Ví dụ: một báo cáo đối thủ, một kịch bản, một file giọng đọc, hoặc một thay đổi cụ thể trên giao diện.", (), None, state)
         available = [tool_id for tool_id in tools if tool_id in ids]
         tool_id = _personal_tool_id(state)
@@ -998,7 +1075,8 @@ def _step_number(node_id: str) -> int:
 
 
 def _no_change_reply(operation: str, tool_id: str,
-                     tabs: Optional[Mapping[str, str]] = None) -> str:
+                     tabs: Optional[Mapping[str, str]] = None,
+                     da_goi_y: bool = False) -> str:
     """Không có gì để đổi — nói bằng tên khách hiểu, và vẫn mở đường đi tiếp.
 
     Câu cũ đọc là *“voice.shopapi đã có trong workflow.”*: vừa là mã kỹ thuật
@@ -1012,7 +1090,7 @@ def _no_change_reply(operation: str, tool_id: str,
     else:
         ly_do = ("“{0}” đang đúng trạng thái bạn muốn, hoặc chưa có trong Tool "
                  "của bạn.".format(ten))
-    return _cau_khong_lam_duoc(ly_do, tabs)
+    return _cau_khong_lam_duoc(ly_do, tabs, da_goi_y)
 
 
 def _edge(source_node: str, source_port: str, target_node: str, target_port: str) -> Dict[str, str]:
