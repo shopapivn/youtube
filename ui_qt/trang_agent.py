@@ -44,6 +44,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core import codex as codex_cli
+from core import node_goi_san
 from core.claude_code import (
     TinhTrang, cai_vao_settings, duong_settings, go_khoi_settings, kiem_tra,
     ho_tro_cong_cu, lenh_cai_dat, lenh_chay_duoc, mo_terminal, mo_vscode,
@@ -358,7 +359,7 @@ class TrangAgent(QWidget):
 
         def nen():
             tt = kiem_tra()
-            ttx = codex_cli.kiem_tra(tt)  # dùng lại kết quả, đỡ một lượt dò chậm
+            ttx = codex_cli.kiem_tra(tt, self.app.base_dir)  # dùng lại kết quả + thấy Node đã tải
             self.app.goi_tren_luong_ve(lambda: self._nhan_tinh_trang(tt, ttx))
 
         threading.Thread(target=nen, daemon=True).start()
@@ -387,28 +388,46 @@ class TrangAgent(QWidget):
         lenh = (codex_cli.lenh_cai_dat(self._ttx, them_vscode=xin)
                 if self.dung_codex
                 else lenh_cai_dat(self._tt, them_vscode=xin))
-        if not lenh:
+        # Codex chạy bằng npm nên cần Node. Tự tải bản gói sẵn về thư mục tool
+        # thay vì nhờ winget: máy Windows cũ không có winget, mà máy có winget
+        # thì cài xong PATH của tool vẫn chưa thấy `npm`. Xem `core/node_goi_san`.
+        can_node = self.dung_codex and not self._ttx.node
+        if not lenh and not can_node:
             return
         self._dang_cai = True
         self._nut_cai.setEnabled(False)
         self._nut_cai.setText("⏳  Đang cài…")
         self._nhat_ky.show()
         self._nhat_ky.setPlainText("")
-        threading.Thread(target=lambda: self._chay_cai(lenh),
+        threading.Thread(target=lambda: self._chay_cai(lenh, can_node),
                          daemon=True).start()
 
     def _ghi(self, dong: str) -> None:
         """Gọi được từ luồng nền — mọi chữ đi qua luồng giao diện."""
         self.app.goi_tren_luong_ve(lambda: self._nhat_ky.appendPlainText(dong))
 
-    def _chay_cai(self, lenh: Sequence[Sequence[str]]) -> None:
+    def _chay_cai(self, lenh: Sequence[Sequence[str]],
+                  can_node: bool = False) -> None:
         """Chạy từng lệnh cài, in tiến trình. **Luồng nền.**
 
         Một lệnh hỏng thì báo rồi chạy tiếp lệnh sau, không dừng cả dây: máy
         không có `winget` vẫn cài được agent qua npm nếu Node đã sẵn — dừng ở
         lệnh đầu là chặn mất đường đó.
         """
+        npm_rieng = ""
+        if can_node:
+            self._ghi("› tải Node.js bản gói sẵn về thư mục tool")
+            try:
+                npm_rieng = node_goi_san.cai_node(self.app.base_dir,
+                                                  bao=self._ghi)
+                self._ghi("  ✓ xong — " + npm_rieng)
+            except Exception as loi:  # noqa: BLE001
+                self._ghi("  ✗ không tải được Node: {0}".format(loi))
+
         for buoc in lenh:
+            # Thay `npm` trần bằng bản vừa tải, nếu có.
+            if npm_rieng and buoc and buoc[0] in ("npm", "npm.cmd"):
+                buoc = [npm_rieng] + list(buoc[1:])
             self._ghi("› " + " ".join(buoc))
             # Giải lại đường dẫn NGAY TRƯỚC KHI CHẠY, không dùng danh sách dựng
             # từ đầu: winget vừa cài Node ở bước trên thì `npm` mới xuất hiện,

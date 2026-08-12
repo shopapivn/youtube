@@ -51,6 +51,9 @@ TOP_LEVEL_ALLOW = (
     "VERSION",
     "config.example.json",
     "README.md",
+    # Bản đồ thư mục cho trợ lý lập trình ở tab Agent. Thiếu nó thì nó
+    # phải tự mò từ đầu mỗi phiên, và hay đoán sai chỗ để sửa.
+    "CLAUDE.md",
     "LICENSE",
     "core",
     "ui_qt",

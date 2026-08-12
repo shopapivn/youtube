@@ -45,6 +45,8 @@ PRESERVE = (
     "phien-viet",     # phiên chat của tab Viết kịch bản
     "mau-kich-ban",   # template prompt khách tự lưu
     "skill-cua-toi",  # Skill Agent đẻ ra riêng cho khách (`core.skill_rieng`)
+    "runtime",       # Node bản gói sẵn tool tự tải (`core.node_goi_san`)
+                     # — 35 MB, tải lại mỗi lần cập nhật là phí băng thông khách.
     ".claude",        # cấu hình Claude Code của riêng thư mục này, có KHOÁ của
                       # khách trong đó (`core.claude_code`). Mất là mỗi lần cập
                       # nhật khách lại phải vào tab Agent bấm lại từ đầu — mà họ

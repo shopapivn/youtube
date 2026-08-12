@@ -109,7 +109,7 @@ class TinhTrangCodex:
         return ra
 
 
-def kiem_tra(chung=None) -> TinhTrangCodex:
+def kiem_tra(chung=None, goc: str = "") -> TinhTrangCodex:
     """Xem máy khách đang có gì. **Không cài gì cả.**
 
     `chung` là kết quả dò của `claude_code.kiem_tra()`. Truyền vào thì Node,
@@ -139,6 +139,17 @@ def kiem_tra(chung=None) -> TinhTrangCodex:
             tt.vscode = _chay_lay_chu([tt.duong_code, "--version"])
             ds_ext = _chay_lay_ca_khoi([tt.duong_code, "--list-extensions"])
     tt.ext_vscode = bool(tt.duong_code) and EXT_VSCODE.lower() in ds_ext.lower()
+    if goc:
+        # Node bản gói sẵn tool tự tải về nằm trong `<thư mục tool>/runtime/`,
+        # KHÔNG có trong PATH. Không dò ở đây thì tool vừa tải xong vẫn báo
+        # "Node.js — chưa có", và khách bấm Cài lại lần nữa.
+        from .node_goi_san import tim_node_da_tai
+
+        npm_rieng = tim_node_da_tai(goc)
+        if npm_rieng and not tt.npm:
+            tt.npm = "gói sẵn trong thư mục tool"
+            tt.duong_npm = npm_rieng
+            tt.node = tt.node or "gói sẵn"
     tt.duong_codex = _tim("codex")
     if tt.duong_codex:
         tt.codex = _chay_lay_chu([tt.duong_codex, "--version"])
