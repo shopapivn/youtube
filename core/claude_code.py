@@ -82,7 +82,7 @@ __all__ = [
     "duong_settings", "doc_settings", "cai_vao_settings", "go_khoi_settings",
     "trang_thai_settings", "mo_terminal", "mo_vscode", "KHOA_QUAN_LY",
     "moi_truong_max", "KHOA_CAT_TAM", "DUOI_SAO_LUU", "thu_muc_claude",
-    "lenh_chay_duoc", "tim_lenh",
+    "lenh_chay_duoc", "tim_lenh", "LENH_CAI_CLAUDE", "DIA_CHI_CAI",
 ]
 
 #: Gói npm của Claude Code.
@@ -97,6 +97,27 @@ WINGET_VSCODE = "Microsoft.VisualStudioCode"
 
 #: Id extension Claude cho VS Code.
 EXT_VSCODE = "anthropic.claude-code"
+
+#: Trang cài gốc của Anthropic — tải sẵn một tệp chạy được, **không cần Node**.
+DIA_CHI_CAI = "https://claude.ai/install.ps1"
+
+#: Lệnh cài Claude Code. Một bước, không phụ thuộc gì.
+#:
+#: Đường cũ là `winget install Node` rồi `npm install -g @anthropic-ai/…`, và nó
+#: hỏng ở **cả hai** bước trên máy sạch (đo thật 12/08/2026, chủ dự án bấm nút
+#: “Cài những thứ còn thiếu”)::
+#:
+#:     ✗ máy không có lệnh `winget`
+#:     ✗ máy không có lệnh `npm`
+#:
+#: Máy Windows cũ không có winget; mà máy có winget thì bước hai vẫn chết, vì
+#: PATH của tool được chụp lúc khởi động nên `npm` vừa cài xong vẫn "không tồn
+#: tại". Bản cài gốc bỏ luôn cả hai chỗ hỏng đó: PowerShell có sẵn trên mọi máy
+#: Windows, và nó đặt `claude.exe` thẳng vào `%USERPROFILE%\.local\bin`.
+LENH_CAI_CLAUDE = (
+    "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+    "irm {0} | iex".format(DIA_CHI_CAI),
+)
 
 
 @dataclass
@@ -127,13 +148,16 @@ class TinhTrang:
 
     @property
     def thieu(self) -> List[str]:
-        """Những thứ **bắt buộc** còn thiếu, theo đúng thứ tự phải cài."""
-        ra = []
-        if not self.node:
-            ra.append("Node.js")
-        if not self.claude:
-            ra.append("Claude Code")
-        return ra
+        """Thứ **bắt buộc** còn thiếu. Chỉ có một: Claude Code.
+
+        Node.js **không** còn nằm trong danh sách này. Anthropic có bản cài gốc
+        (`claude.ai/install.ps1`) không cần Node, không cần npm, không cần
+        winget — xem `LENH_CAI_CLAUDE`. Bắt khách cài Node trước là dựng thêm
+        hai chỗ hỏng cho một thứ họ không cần: máy không có winget thì chết ở
+        bước một, mà có winget thì vẫn chết ở bước hai vì PATH của tool chưa
+        thấy `npm` vừa cài xong.
+        """
+        return [] if self.claude else ["Claude Code"]
 
     @property
     def thieu_vscode(self) -> List[str]:
@@ -183,6 +207,11 @@ _CHO_NODE = (
     r"C:\Program Files (x86)\nodejs",
 )
 
+#: Chỗ bản cài gốc đặt `claude.exe`. Cùng lý do với `_CHO_NODE`: cài xong thì
+#: PATH của tool đang chạy vẫn chưa có, nên phải dò tay mới thấy được ngay —
+#: không thì khách cài xong vẫn thấy chữ "chưa có" và tưởng cài hỏng.
+_CHO_CLAUDE = (os.path.join(os.path.expanduser("~"), ".local", "bin"),)
+
 
 def tim_lenh(ten: str) -> str:
     """Tìm một lệnh: PATH trước, rồi những chỗ cài quen thuộc.
@@ -193,7 +222,7 @@ def tim_lenh(ten: str) -> str:
     if duong:
         return duong
     if os.name == "nt":
-        for thu_muc in _CHO_NODE:
+        for thu_muc in _CHO_NODE + _CHO_CLAUDE:
             for duoi in (".cmd", ".CMD", ".exe", ".bat", ""):
                 thu = os.path.join(thu_muc, ten + duoi)
                 if os.path.isfile(thu):
@@ -257,7 +286,7 @@ def kiem_tra() -> TinhTrang:
     tt.node = _chay_lay_chu([duong_node, "--version"]) if duong_node else ""
     tt.npm = _chay_lay_chu([duong_npm, "--version"]) if duong_npm else ""
     tt.duong_npm = duong_npm
-    tt.duong_claude = _tim("claude")
+    tt.duong_claude = tim_lenh("claude")
     if tt.duong_claude:
         tt.claude = _chay_lay_chu([tt.duong_claude, "--version"])
     tt.duong_code = _tim("code")
@@ -280,14 +309,8 @@ def lenh_cai_dat(tt: TinhTrang, *, them_vscode: bool = False,
     bắt buộc chỉ là CLI, còn VS Code là lựa chọn của khách.
     """
     lenh: List[Sequence[str]] = []
-    if not tt.node:
-        lenh.append(["winget", "install", "-e", "--id", WINGET_NODE,
-                     "--accept-source-agreements", "--accept-package-agreements"])
     if not tt.claude:
-        # Đường dẫn đầy đủ, vì cùng lý do với `kiem_tra`. Chưa có npm thì để tên
-        # trần — lệnh cài Node ở trên vừa chạy xong nên đường dẫn lúc dựng danh
-        # sách này còn chưa tồn tại.
-        lenh.append([tt.duong_npm or "npm", "install", "-g", GOI_NPM])
+        lenh.append(list(LENH_CAI_CLAUDE))
     if them_vscode:
         if not tt.vscode:
             lenh.append(["winget", "install", "-e", "--id", WINGET_VSCODE,
