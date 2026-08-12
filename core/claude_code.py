@@ -82,6 +82,7 @@ __all__ = [
     "duong_settings", "doc_settings", "cai_vao_settings", "go_khoi_settings",
     "trang_thai_settings", "mo_terminal", "mo_vscode", "KHOA_QUAN_LY",
     "moi_truong_max", "KHOA_CAT_TAM", "DUOI_SAO_LUU", "thu_muc_claude",
+    "lenh_chay_duoc", "tim_lenh",
 ]
 
 #: Gói npm của Claude Code.
@@ -171,6 +172,61 @@ def _chay_lay_ca_khoi(lenh: Sequence[str]) -> str:
     except (OSError, subprocess.SubprocessError):
         return ""
     return "" if xong.returncode else (xong.stdout or "")
+
+
+#: Chỗ Node tự cài vào trên Windows. Phải dò tay vì PATH của tiến trình đang
+#: chạy được chụp lúc khởi động: winget cài Node xong thì tool **vẫn không thấy**
+#: `npm` cho tới khi khách tắt tool mở lại. Không có danh sách này thì bước "cài
+#: Claude Code" luôn hỏng ngay sau bước "cài Node" — với mọi khách mới, mọi lần.
+_CHO_NODE = (
+    r"C:\Program Files\nodejs",
+    r"C:\Program Files (x86)\nodejs",
+)
+
+
+def tim_lenh(ten: str) -> str:
+    """Tìm một lệnh: PATH trước, rồi những chỗ cài quen thuộc.
+
+    Trả về đường dẫn đầy đủ, hoặc rỗng nếu chịu.
+    """
+    duong = _tim(ten)
+    if duong:
+        return duong
+    if os.name == "nt":
+        for thu_muc in _CHO_NODE:
+            for duoi in (".cmd", ".CMD", ".exe", ".bat", ""):
+                thu = os.path.join(thu_muc, ten + duoi)
+                if os.path.isfile(thu):
+                    return thu
+    return ""
+
+
+def lenh_chay_duoc(lenh: Sequence[str]) -> List[str]:
+    """Sửa một dòng lệnh cho **chạy được thật** trên Windows.
+
+    Hai việc, cả hai đều là lỗi đã trả giá (12/08/2026, chủ dự án bấm “Cài những
+    thứ còn thiếu” trên máy sạch)::
+
+        › npm install -g @anthropic-ai/claude-code
+          ✗ máy không có lệnh `npm`
+
+    1. **Đổi tên trần thành đường dẫn đầy đủ.** `shutil.which("npm")` tìm thấy
+       `npm.CMD`, nhưng `subprocess` thì `FileNotFoundError` — đo thật ở trên.
+    2. **Gọi file `.cmd`/`.bat` qua `cmd /c`.** `CreateProcess` không chạy được
+       tệp lệnh; chỉ `cmd` mới chạy.
+
+    Không tìm ra chương trình thì trả về nguyên lệnh cũ, để nơi gọi báo đúng
+    tên thứ còn thiếu thay vì im lặng bỏ qua.
+    """
+    if not lenh:
+        return []
+    duong = tim_lenh(lenh[0])
+    if not duong:
+        return list(lenh)
+    con_lai = list(lenh[1:])
+    if os.name == "nt" and duong.lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c", duong] + con_lai
+    return [duong] + con_lai
 
 
 def _tim(ten: str) -> str:

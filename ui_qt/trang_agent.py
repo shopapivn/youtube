@@ -46,7 +46,8 @@ from PyQt5.QtWidgets import (
 from core import codex as codex_cli
 from core.claude_code import (
     TinhTrang, cai_vao_settings, duong_settings, go_khoi_settings, kiem_tra,
-    lenh_cai_dat, mo_terminal, mo_vscode, trang_thai_settings,
+    lenh_cai_dat, lenh_chay_duoc, mo_terminal, mo_vscode,
+    trang_thai_settings,
 )
 
 from . import theme
@@ -370,17 +371,20 @@ class TrangAgent(QWidget):
         """
         for buoc in lenh:
             self._ghi("› " + " ".join(buoc))
+            # Giải lại đường dẫn NGAY TRƯỚC KHI CHẠY, không dùng danh sách dựng
+            # từ đầu: winget vừa cài Node ở bước trên thì `npm` mới xuất hiện,
+            # mà PATH của tiến trình này đã chụp từ lúc mở tool nên không thấy.
+            that = lenh_chay_duoc(buoc)
             try:
                 co = (getattr(subprocess, "CREATE_NO_WINDOW", 0)
                       if os.name == "nt" else 0)
-                xong = subprocess.run(list(buoc), capture_output=True, text=True,
+                xong = subprocess.run(that, capture_output=True, text=True,
                                       encoding="utf-8", errors="replace",
                                       timeout=900, creationflags=co)
-            except FileNotFoundError:
-                self._ghi(f"  ✗ máy không có lệnh `{buoc[0]}` — Windows cũ chưa "
-                          "có winget, cần tải tay ở nodejs.org.")
+            except (FileNotFoundError, OSError) as loi:
+                self._ghi("  ✗ " + self._mach_thieu(buoc[0], loi))
                 continue
-            except (OSError, subprocess.SubprocessError) as loi:
+            except subprocess.SubprocessError as loi:
                 self._ghi(f"  ✗ {loi}")
                 continue
             ra = ((xong.stdout or "") + (xong.stderr or "")).strip()
@@ -390,6 +394,23 @@ class TrangAgent(QWidget):
                       else f"  ✗ lệnh trả mã lỗi {xong.returncode}")
         self._ghi("Đang kiểm tra lại…")
         self.app.goi_tren_luong_ve(self._cai_xong)
+
+    @staticmethod
+    def _mach_thieu(ten: str, loi: BaseException) -> str:
+        """Nói đúng thứ đang thiếu và đúng đường ra.
+
+        Bản trước dán chung một câu *"Windows cũ chưa có winget, cần tải tay ở
+        nodejs.org"* cho **mọi** lệnh hỏng — kể cả `npm`. Khách đọc xong đi tải
+        Node trong khi Node đã có sẵn, còn thứ thật sự thiếu thì không ai nói.
+        """
+        if ten == "winget":
+            return ("máy chưa có winget (Windows bản cũ). Bạn tải Node.js bản "
+                    "LTS ở nodejs.org, cài xong mở lại tool rồi bấm Cài lần nữa.")
+        if ten == "npm":
+            return ("chưa thấy npm. Nếu vừa cài Node xong thì tắt tool mở lại "
+                    "rồi bấm Cài lần nữa — Windows cần khởi động lại chương "
+                    "trình mới nhận đường dẫn mới.")
+        return "không chạy được `{0}`: {1}".format(ten, loi)
 
     def _cai_xong(self) -> None:
         self._dang_cai = False
