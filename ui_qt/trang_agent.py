@@ -255,19 +255,44 @@ class TrangAgent(QWidget):
         doc.addWidget(self._nhat_ky)
         return khung
 
+    @staticmethod
+    def _dong(ten: str, gia_tri: str, bat_buoc: bool):
+        """Một dòng bảng: (tên, chữ hiện ra, có đạt không, có bắt buộc không)."""
+        return (ten, gia_tri or ("chưa có — bắt buộc" if bat_buoc
+                                 else "chưa có"), bool(gia_tri), bat_buoc)
+
     def _hang_tinh_trang(self):
         """Bảng phải theo đúng agent khách vừa chọn — xem `_doi_lua_chon`."""
-        if self.dung_codex:
-            t = self._ttx
-            return [("Node.js", t.node, True), ("Codex", t.codex, True),
-                    ("VS Code", t.vscode, False),
-                    ("Extension Codex cho VS Code",
-                     "đã cài" if t.ext_vscode else "", False)]
-        t = self._tt
-        return [("Node.js", t.node, True), ("Claude Code", t.claude, True),
-                ("VS Code", t.vscode, False),
-                ("Extension Claude cho VS Code",
-                 "đã cài" if t.ext_vscode else "", False)]
+        if not self.dung_codex:
+            t = self._tt
+            return [self._dong("Node.js", t.node, True),
+                    self._dong("Claude Code", t.claude, True),
+                    self._dong("VS Code", t.vscode, False),
+                    self._dong("Extension Claude cho VS Code",
+                               "đã cài" if t.ext_vscode else "", False)]
+        t = self._ttx
+        hang = [self._dong("Node.js", t.node, True),
+                self._dong("Codex", t.codex, True)]
+        if t.codex:
+            # Hai dòng này có vì `codex --version` KHÔNG đọc `config.toml`:
+            # thiếu chúng thì bảng bật dấu tích xanh trong khi bấm Mở là cửa sổ
+            # chết ngay dòng đầu — đúng chuyện đã xảy ra 12/08/2026.
+            hang.append(("Cấu hình Codex đọc được",
+                         t.loi_cau_hinh or "bình thường",
+                         not t.loi_cau_hinh, True))
+            # Chỉ hỏi chuyện đăng nhập khi cấu hình đọc được. Cấu hình hỏng thì
+            # phép dò chết trước khi tới phần ấy, nên ta KHÔNG BIẾT — mà hiện
+            # "chưa đăng nhập" lúc đó là bịa ra một lỗi thứ hai không có thật,
+            # và khách sẽ đi sửa nhầm chỗ.
+            if not t.loi_cau_hinh:
+                hang.append(("Đã đăng nhập ChatGPT",
+                             "rồi" if t.da_dang_nhap
+                             else "chưa — bấm Mở Codex rồi làm theo hướng dẫn",
+                             t.da_dang_nhap, False))
+        hang.append(self._dong("VS Code", t.vscode, False))
+        hang.append(self._dong("Extension Codex cho VS Code",
+                               "đã cài" if t.ext_vscode else "", False))
+        return hang
 
     def _ve_bang(self) -> None:
         """Vẽ lại bảng tình trạng. Xoá sạch trước — không thì mỗi lần kiểm tra
@@ -278,15 +303,13 @@ class TrangAgent(QWidget):
             if w is not None:
                 w.setParent(None)
 
-        for i, (ten, ban, bat_buoc) in enumerate(self._hang_tinh_trang()):
-            mau = theme.XANH if ban else (theme.DO if bat_buoc else theme.CHU_MO)
-            co = nhan("✓" if ban else ("✗" if bat_buoc else "○"))
+        for i, (ten, chu, dat, bat_buoc) in enumerate(self._hang_tinh_trang()):
+            mau = theme.XANH if dat else (theme.DO if bat_buoc else theme.CHU_MO)
+            co = nhan("✓" if dat else ("✗" if bat_buoc else "○"))
             co.setStyleSheet(f"color:{mau}; font-weight:600;")
             self._bang.addWidget(co, i, 0)
             self._bang.addWidget(nhan(ten), i, 1)
-            self._bang.addWidget(
-                nhan(ban or ("chưa có — bắt buộc" if bat_buoc else "chưa có"),
-                     "phu"), i, 2)
+            self._bang.addWidget(self._chu_phu(chu), i, 2)
 
     def do_lai(self) -> None:
         """Dò lại máy khách. Chạy ở luồng nền — trên máy chậm, mấy lần gọi tiến
@@ -407,10 +430,18 @@ class TrangAgent(QWidget):
         """
         tt = self._ttx if self.dung_codex else self._tt
         ten = "Codex" if self.dung_codex else "Claude Code"
+        loi = getattr(tt, "loi_cau_hinh", "")
         self._nut_terminal.setText(f"▶  Mở {ten}")
         self._nut_terminal.setEnabled(tt.san_sang)
-        self._nut_terminal.setToolTip(
-            "" if tt.san_sang else f"Cần cài {ten} ở thẻ trên trước.")
+        if tt.san_sang:
+            mach = ""
+        elif loi:
+            mach = (f"{ten} đang có nhưng không đọc nổi tệp cấu hình của bạn:\n"
+                    f"{loi}\n\nBấm “Cài những thứ còn thiếu” ở thẻ trên để cập "
+                    "nhật lên bản mới.")
+        else:
+            mach = f"Cần cài {ten} ở thẻ trên trước."
+        self._nut_terminal.setToolTip(mach)
         self._nut_vscode.setEnabled(bool(tt.vscode))
         self._nut_vscode.setToolTip(
             "" if tt.vscode else "Máy chưa có VS Code — tick ô ở thẻ trên rồi "

@@ -72,10 +72,21 @@ class TinhTrangCodex:
     vscode: str = ""
     duong_code: str = ""
     ext_vscode: bool = False
+    #: Thông báo lỗi khi Codex không đọc nổi `~/.codex/config.toml`. Rỗng là
+    #: đọc được. Xem `_do_cau_hinh` để biết vì sao phải đo riêng.
+    loi_cau_hinh: str = ""
+    da_dang_nhap: bool = False
 
     @property
     def san_sang(self) -> bool:
-        return bool(self.codex)
+        """Cài rồi **và** chạy được.
+
+        `bool(self.codex)` một mình là chưa đủ, và đây là lỗi đã trả giá
+        (12/08/2026): `codex --version` KHÔNG đọc `config.toml`, nên máy có
+        cấu hình hỏng vẫn báo phiên bản ngon lành. Studio bật dấu tích xanh rồi
+        đẩy khách vào một cửa sổ chết ngay dòng đầu.
+        """
+        return bool(self.codex) and not self.loi_cau_hinh
 
     @property
     def thieu(self) -> List[str]:
@@ -84,6 +95,8 @@ class TinhTrangCodex:
             ra.append("Node.js")
         if not self.codex:
             ra.append("Codex")
+        elif self.loi_cau_hinh:
+            ra.append("Codex bản mới")
         return ra
 
     @property
@@ -129,7 +142,44 @@ def kiem_tra(chung=None) -> TinhTrangCodex:
     tt.duong_codex = _tim("codex")
     if tt.duong_codex:
         tt.codex = _chay_lay_chu([tt.duong_codex, "--version"])
+        tt.loi_cau_hinh, tt.da_dang_nhap = _do_cau_hinh(tt.duong_codex)
     return tt
+
+
+#: Dấu hiệu Codex không đọc nổi tệp cấu hình. Bắt theo chữ vì `login status`
+#: dùng chung mã thoát 1 cho cả "chưa đăng nhập" lẫn "cấu hình hỏng", mà hai
+#: chuyện đó cần hai lời khuyên khác hẳn nhau.
+_DAU_HIEU_LOI_CAU_HINH = ("error loading config", "error loading configuration")
+
+
+def _do_cau_hinh(duong_codex: str):
+    """Codex có **chạy nổi** không, và khách đã đăng nhập chưa.
+
+    Phải đo riêng vì `codex --version` không đọc `config.toml` — máy có cấu hình
+    hỏng vẫn khai phiên bản bình thường. Đo thật trên máy chủ dự án, ba hình
+    dạng phân biệt được bằng mã thoát và dòng đầu::
+
+        Error loading config.toml: unknown variant `default`…   mã 1
+        Not logged in                                           mã 1
+        Logged in using ChatGPT                                 mã 0
+
+    `codex login status` là lệnh rẻ nhất có đọc cấu hình: không gọi mạng,
+    không mở phiên, trả lời ngay.
+
+    Trả về `(loi_cau_hinh, da_dang_nhap)`.
+    """
+    try:
+        co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        xong = subprocess.run([duong_codex, "login", "status"],
+                              capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=30, creationflags=co,
+                              stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return "", False  # dò không được thì im lặng, đừng doạ khách vu vơ
+    chu = ((xong.stdout or "") + (xong.stderr or "")).strip()
+    if any(d in chu.lower() for d in _DAU_HIEU_LOI_CAU_HINH):
+        return chu.splitlines()[0][:160], False
+    return "", xong.returncode == 0
 
 
 def lenh_cai_dat(tt: TinhTrangCodex, *, them_vscode: bool = False,
@@ -147,6 +197,13 @@ def lenh_cai_dat(tt: TinhTrangCodex, *, them_vscode: bool = False,
                      "--accept-source-agreements", "--accept-package-agreements"])
     if not tt.codex:
         lenh.append([tt.duong_npm or "npm", "install", "-g", GOI_NPM])
+    elif tt.loi_cau_hinh:
+        # Cài rồi mà không đọc nổi cấu hình: gần như luôn là CLI cũ hơn thứ đã
+        # ghi ra tệp ấy. Extension VS Code tự cập nhật, CLI cài bằng npm thì
+        # đứng yên — đo thật trên máy chủ dự án: CLI 0.121.0, bản mới 0.147.0,
+        # và cấu hình có `service_tier = "default"` mà bản cũ không biết.
+        lenh.append([tt.duong_npm or "npm", "install", "-g",
+                     GOI_NPM + "@latest"])
     if them_vscode:
         if not tt.vscode:
             lenh.append(["winget", "install", "-e", "--id", WINGET_VSCODE,
