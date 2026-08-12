@@ -42,7 +42,7 @@ from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
     QHeaderView, QPlainTextEdit, QSpinBox, QTableWidget, QTableWidgetItem,
     QTabWidget, QVBoxLayout, QWidget,
 )
@@ -116,35 +116,62 @@ class TabThuCong(QWidget):
         self.o_nhap.setFixedHeight(64)
         doc.addWidget(self.o_nhap)
 
+        # BỐN thứ trên màn hình, không hơn: gõ gì · ảnh hay video · tuỳ chọn ·
+        # gửi. Bản trước bày cả 11 ô ra cùng lúc cho một việc "làm lẻ" — trong
+        # khi bản tham chiếu (Google Flow) chỉ để ô nhập, một nút tuỳ chọn và
+        # mũi tên gửi; mọi thứ còn lại nằm sau nút ấy. Thứ chỉnh một lần rồi
+        # thôi mà chiếm chỗ ngang với thứ gõ mỗi lần là bố cục sai.
         hang = HangXuongDong()
         self.loai = _combo((LOAI_ANH, LOAI_VIDEO), LOAI_ANH, 96)
         self.loai.currentIndexChanged.connect(lambda _i: self._doi_loai())
         hang.addWidget(self.loai)
-
-        self.ty_le = _combo(TY_LE_ANH, "16:9", 84)
-        hang.addWidget(self.ty_le)
-
-        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 112)
-        hang.addWidget(self.engine)
-
-        self.so_luong = QSpinBox()
-        self.so_luong.setRange(1, 8)
-        self.so_luong.setPrefix("x")
-        self.so_luong.setFixedWidth(64)
-        self.so_luong.setToolTip("Số ảnh cho mỗi lần gửi")
-        hang.addWidget(self.so_luong)
-
-        self.anh_vao = AnhThamChieu("🖼  Ảnh tham chiếu:", on_change=None)
-        hang.addWidget(self.anh_vao)
-
+        self._nut_tuy_chon = nut_phu("⚙  Tuỳ chọn", self._mo_tuy_chon, rong=124)
+        hang.addWidget(self._nut_tuy_chon)
         self.nut_gui = nut_chinh("➤   Gửi", self.gui)
         hang.addWidget(self.nut_gui)
         doc.addLayout(hang)
 
+        # Dựng widget tuỳ chọn ở đây chứ không dựng trong hộp thoại: phần gửi
+        # đọc `self.ty_le.currentText()` như thường, kể cả khi khách chưa từng
+        # mở hộp thoại lần nào.
+        self.ty_le = _combo(TY_LE_ANH, "16:9", 84)
+        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 112)
+        self.so_luong = QSpinBox()
+        self.so_luong.setRange(1, 8)
+        self.so_luong.setPrefix("x")
+        self.so_luong.setFixedWidth(64)
+        self.anh_vao = AnhThamChieu("🖼  Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
-        doc.addWidget(self._thu_muc)
+        self._hop_tuy_chon = None
         self._doi_loai()
         return khung
+
+    def _mo_tuy_chon(self) -> None:
+        """Hộp tuỳ chọn: tỉ lệ, engine, số lượng, ảnh tham chiếu, chỗ lưu.
+
+        Dựng một lần rồi dùng lại — dựng mới mỗi lần bấm là mất luôn thứ khách
+        vừa chọn ở lần trước.
+        """
+        if self._hop_tuy_chon is None:
+            hop = QDialog(self)
+            hop.setWindowTitle("Tuỳ chọn")
+            doc = QVBoxLayout(hop)
+            doc.setContentsMargins(20, 16, 20, 16)
+            doc.setSpacing(10)
+            for nhan_o, o in (("Tỉ lệ khung", self.ty_le),
+                              ("Engine video", self.engine),
+                              ("Số ảnh mỗi lần gửi", self.so_luong)):
+                hang = QHBoxLayout()
+                hang.addWidget(nhan(nhan_o))
+                hang.addStretch(1)
+                hang.addWidget(o)
+                doc.addLayout(hang)
+            doc.addWidget(self.anh_vao)
+            doc.addWidget(self._thu_muc)
+            doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
+            self._hop_tuy_chon = hop
+        self._doi_loai()
+        self._hop_tuy_chon.exec_()
 
     def _doi_loai(self) -> None:
         """Tuỳ chọn của ảnh và của video không giống nhau — hiện nhầm là khách
