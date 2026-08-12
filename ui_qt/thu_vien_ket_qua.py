@@ -32,7 +32,7 @@ from typing import Dict, Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from core.jobs import (
@@ -40,7 +40,7 @@ from core.jobs import (
 )
 
 from . import theme
-from .widgets import HangXuongDong, nhan
+from .widgets import HangXuongDong, nhan, nut_phu
 
 __all__ = ["ThuVienKetQua", "TheKetQua", "TRAN_THE", "mo_file"]
 
@@ -70,8 +70,12 @@ def mo_file(duong_dan: str) -> None:
 class TheKetQua(QFrame):
     """Một việc: ảnh xem trước (hoặc ô video), nhãn mô tả, dòng trạng thái."""
 
-    def __init__(self, mo_ta: str, la_video: bool):
+    def __init__(self, mo_ta: str, la_video: bool, khi_lam_lai=None,
+                 khi_cho_dong=None):
         super().__init__()
+        self._mo_ta = mo_ta
+        self._khi_lam_lai = khi_lam_lai
+        self._khi_cho_dong = khi_cho_dong
         self._duong_dan = ""
         self._da_ve = ""          # file đã vẽ rồi — đừng nạp lại từ đĩa
         self._la_video = la_video
@@ -106,6 +110,30 @@ class TheKetQua(QFrame):
         self._o_trang_thai.setMinimumWidth(1)
         doc.addWidget(self._o_trang_thai)
 
+        # Hai việc khách làm ngay sau khi nhìn một tấm ảnh, và trước đây không
+        # làm được ở đâu cả: **làm lại** (chưa ưng) và **cho động đậy** (ưng
+        # rồi, muốn thành clip). Thiếu chúng thì mỗi tấm ảnh là một ngõ cụt —
+        # muốn dựng clip từ nó phải tự đi tìm file rồi gắn tay vào ô ảnh.
+        self._hang_nut = QWidget()
+        hang = QHBoxLayout(self._hang_nut)
+        hang.setContentsMargins(0, 0, 0, 0)
+        hang.setSpacing(4)
+        self._nut_lai = nut_phu("↻", lambda: self._goi(self._khi_lam_lai), rong=34)
+        self._nut_lai.setToolTip("Làm lại mô tả này")
+        hang.addWidget(self._nut_lai)
+        if not la_video:
+            self._nut_dong = nut_phu(
+                "🎬", lambda: self._goi(self._khi_cho_dong), rong=34)
+            self._nut_dong.setToolTip("Dùng ảnh này làm khung đầu cho một clip")
+            hang.addWidget(self._nut_dong)
+        hang.addStretch(1)
+        self._hang_nut.hide()          # chỉ hiện khi đã có kết quả
+        doc.addWidget(self._hang_nut)
+
+    def _goi(self, ham) -> None:
+        if ham is not None:
+            ham(self._mo_ta, self._duong_dan)
+
     # ── Cập nhật ─────────────────────────────────────────────────────────────
 
     def cap_nhat(self, trang_thai: str, tien_do: int, files) -> None:
@@ -121,6 +149,7 @@ class TheKetQua(QFrame):
         self._o_trang_thai.setStyleSheet(f"color:{mau};")
         if trang_thai == STATUS_DONE:
             self._ve_anh()
+            self._hang_nut.show()
         elif trang_thai == STATUS_FAILED:
             self._o_anh.setText("✗")
 
@@ -180,12 +209,19 @@ class ThuVienKetQua(QWidget):
 
     # ── Thêm và cập nhật ─────────────────────────────────────────────────────
 
+    def dat_viec(self, khi_lam_lai=None, khi_cho_dong=None) -> None:
+        """Hai việc thẻ kết quả gọi ngược lên trang. Đặt một lần lúc dựng."""
+        self._khi_lam_lai = khi_lam_lai
+        self._khi_cho_dong = khi_cho_dong
+
     def them(self, uid: str, mo_ta: str, la_video: bool) -> TheKetQua:
         """Thêm một thẻ ở **đầu** lưới. Trùng uid thì trả lại thẻ cũ."""
         co_san = self._the.get(uid)
         if co_san is not None:
             return co_san
-        the_moi = TheKetQua(mo_ta, la_video)
+        the_moi = TheKetQua(mo_ta, la_video,
+                            getattr(self, '_khi_lam_lai', None),
+                            getattr(self, '_khi_cho_dong', None))
         self._luoi.insertWidget(0, the_moi)
         self._the[uid] = the_moi
         self._thu_tu.append(uid)

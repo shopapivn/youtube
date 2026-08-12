@@ -58,8 +58,8 @@ from . import theme
 from .huong_dan import nut_huong_dan
 from .thu_vien_ket_qua import ThuVienKetQua
 from .widgets import (
-    AnhThamChieu, ChonThuMuc, HangXuongDong, nhan, nut_chinh, nut_phu, the,
-    tieu_de_trang,
+    AnhThamChieu, ChonThuMuc, HangXuongDong, NhomChon, nhan, nut_chinh,
+    nut_phu, the, tieu_de_trang,
 )
 
 __all__ = ["TrangAnhVideo", "TabThuCong", "TabHangLoat", "LOAI_ANH", "LOAI_VIDEO"]
@@ -69,6 +69,10 @@ LOAI_VIDEO = "Video"
 
 TY_LE_ANH = ("16:9", "9:16", "1:1", "4:3", "3:4")
 TY_LE_VIDEO = ("16:9", "9:16", "1:1")
+
+#: Ba khung người làm YouTube thật sự dùng, gọi bằng tên họ gọi.
+#: `Ngang` đứng đầu vì *"đa phần họ làm ngang"* (chủ dự án, 13/08/2026).
+KHUNG = (("Ngang", "16:9"), ("Dọc", "9:16"), ("Vuông", "1:1"))
 
 
 def _combo(gia_tri, mac_dinh: str, rong: int) -> QComboBox:
@@ -100,8 +104,65 @@ class TabThuCong(QWidget):
 
         self.thu_vien = ThuVienKetQua(
             "Gõ mô tả ở dưới rồi bấm Gửi. Kết quả hiện ở đây.")
+        self.thu_vien.dat_viec(khi_lam_lai=self._lam_lai,
+                               khi_cho_dong=self._cho_dong)
         doc.addWidget(self.thu_vien, 1)
+        doc.addWidget(self._hang_vi_du())
         doc.addWidget(self._thanh_nhap())
+
+    #: Ví dụ bấm được, hiện khi màn hình còn trống.
+    #:
+    #: Một ô nhập trắng tinh là chỗ nhiều người dừng lại lâu nhất — không phải
+    #: vì khó, mà vì không biết nên viết dài bao nhiêu và tả tới đâu. Ba câu mẫu
+    #: bấm một cái là điền vào ô, sửa được ngay.
+    #: `(nhãn ngắn trên nút, câu đầy đủ điền vào ô)`.
+    #:
+    #: Nhãn phải NGẮN: chữ trong nút không tự xuống dòng, và một nút 533px kéo
+    #: cả trang rộng quá mép cửa sổ — đo được ngay lần đầu thử.
+    VI_DU = (
+        ("🏞  Cảnh làng quê",
+         "con đường làng mùa đông, sương mù, ánh sáng dịu"),
+        ("✋  Cận cảnh bàn tay",
+         "cận cảnh bàn tay lật trang sách cũ dưới ánh nến"),
+        ("🌃  Thành phố đêm",
+         "toàn cảnh thành phố về đêm nhìn từ trên cao"),
+    )
+
+    def _hang_vi_du(self) -> QWidget:
+        khung = QWidget()
+        doc = QVBoxLayout(khung)
+        doc.setContentsMargins(0, 0, 0, 0)
+        doc.setSpacing(6)
+        doc.addWidget(nhan("Chưa biết viết gì? Bấm một câu để thử:", "phu"))
+        hang = HangXuongDong()
+        for nhan_nut, cau in self.VI_DU:
+            nut = nut_phu(nhan_nut, lambda _c=cau: self._dien_vi_du(_c))
+            nut.setToolTip(cau)
+            hang.addWidget(nut)
+        doc.addLayout(hang)
+        self._khung_vi_du = khung
+        return khung
+
+    def _dien_vi_du(self, cau: str) -> None:
+        self.o_nhap.setPlainText(cau)
+        self.o_nhap.setFocus()
+
+    def _lam_lai(self, mo_ta: str, _duong_dan: str) -> None:
+        """Bấm ↻ trên một thẻ: điền lại mô tả rồi gửi luôn."""
+        self.o_nhap.setPlainText(mo_ta)
+        self.gui()
+
+    def _cho_dong(self, mo_ta: str, duong_dan: str) -> None:
+        """Bấm 🎬 trên một thẻ ảnh: dùng chính ảnh đó làm khung đầu cho clip.
+
+        Đây là bước khách luôn muốn làm tiếp mà trước đây phải tự đi tìm file
+        trong thư mục rồi gắn tay vào ô ảnh tham chiếu.
+        """
+        if duong_dan:
+            self.anh_vao.dat(duong_dan)
+        self.loai.setCurrentText(LOAI_VIDEO)
+        self.o_nhap.setPlainText(mo_ta)
+        self.o_nhap.setFocus()
 
     # ── Thanh nhập dưới cùng ─────────────────────────────────────────────────
 
@@ -125,7 +186,21 @@ class TabThuCong(QWidget):
         self.loai = _combo((LOAI_ANH, LOAI_VIDEO), LOAI_ANH, 96)
         self.loai.currentIndexChanged.connect(lambda _i: self._doi_loai())
         hang.addWidget(self.loai)
-        self._nut_tuy_chon = nut_phu("⚙  Tuỳ chọn", self._mo_tuy_chon, rong=124)
+
+        # TỈ LỆ KHUNG nằm NGOÀI, không giấu sau nút ⚙.
+        #
+        # Người làm YouTube không nghĩ "16:9" — họ nghĩ **video ngang** hay
+        # **Shorts dọc**, và đó là quyết định đầu tiên của cả video chứ không
+        # phải một tuỳ chỉnh nâng cao. Chủ dự án: *"đa phần họ làm ngang"* — nên
+        # Ngang đứng đầu và là mặc định.
+        self.khung = NhomChon(tuple(t[0] for t in KHUNG), KHUNG[0][0],
+                              on_change=lambda _t: self._doi_khung())
+        self.khung.setToolTip("Ngang 16:9 · Dọc 9:16 (Shorts) · Vuông 1:1")
+        hang.addWidget(self.khung)
+
+        self._nut_tuy_chon = nut_phu("⚙", self._mo_tuy_chon, rong=44)
+        self._nut_tuy_chon.setToolTip(
+            "Số lượng, engine video, ảnh tham chiếu, chỗ lưu")
         hang.addWidget(self._nut_tuy_chon)
         self.nut_gui = nut_chinh("➤   Gửi", self.gui)
         hang.addWidget(self.nut_gui)
@@ -180,6 +255,18 @@ class TabThuCong(QWidget):
         """
         self._doi_loai()
         self._hop_tuy_chon.exec_()
+
+    def _doi_khung(self) -> None:
+        """Nút Ngang/Dọc/Vuông chỉ là mặt ngoài của `self.ty_le`.
+
+        Giữ một nguồn sự thật: phần gửi vẫn đọc `self.ty_le.currentText()` như
+        cũ, nên không có chỗ nào phải nhớ hai giá trị và lệch nhau.
+        """
+        ten = self.khung.get()
+        for nhan_khung, ma in KHUNG:
+            if nhan_khung == ten:
+                self.ty_le.setCurrentText(ma)
+                return
 
     def _doi_loai(self) -> None:
         """Tuỳ chọn của ảnh và của video không giống nhau — hiện nhầm là khách

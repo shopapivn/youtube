@@ -367,6 +367,16 @@ class AnhThamChieu(QWidget):
     def duong_dan(self) -> List[str]:
         return list(self._duong_dan)
 
+    def dat(self, duong_dan: str) -> None:
+        """Đặt ảnh từ nơi khác, không qua hộp chọn file.
+
+        Dùng khi khách bấm 🎬 trên một tấm ảnh vừa tạo: ảnh đó thành khung đầu
+        cho clip ngay, không phải tự đi tìm lại file trong thư mục.
+        """
+        if duong_dan and os.path.isfile(duong_dan):
+            self._duong_dan = [duong_dan]
+            self._ve_lai(1)
+
     def _chon(self) -> None:
         chon, _ = QFileDialog.getOpenFileNames(
             self, "Chọn ảnh tham chiếu", "",
