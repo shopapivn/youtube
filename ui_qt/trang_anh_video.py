@@ -142,9 +142,35 @@ class TabThuCong(QWidget):
         self.so_luong.setFixedWidth(64)
         self.anh_vao = AnhThamChieu("🖼  Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
-        self._hop_tuy_chon = None
+        # Dựng hộp tuỳ chọn NGAY (ẩn), không dựng lúc bấm.
+        #
+        # Widget Qt không có cha mà gọi `setVisible(True)` thì thành **một cửa
+        # sổ riêng trôi nổi giữa màn hình** — chủ dự án chụp được đúng cảnh đó:
+        # một khung con con hiện ra với mỗi ô "x1" và ba nút thu nhỏ/phóng/đóng.
+        # `_doi_loai()` bật/tắt mấy ô này theo Ảnh/Video, nên chúng phải có cha
+        # từ trước khi ai đó chạm vào.
+        self._hop_tuy_chon = self._dung_hop_tuy_chon()
         self._doi_loai()
         return khung
+
+    def _dung_hop_tuy_chon(self) -> QDialog:
+        hop = QDialog(self)
+        hop.setWindowTitle("Tuỳ chọn")
+        doc = QVBoxLayout(hop)
+        doc.setContentsMargins(20, 16, 20, 16)
+        doc.setSpacing(10)
+        for nhan_o, o in (("Tỉ lệ khung", self.ty_le),
+                          ("Engine video", self.engine),
+                          ("Số ảnh mỗi lần gửi", self.so_luong)):
+            hang = QHBoxLayout()
+            hang.addWidget(nhan(nhan_o))
+            hang.addStretch(1)
+            hang.addWidget(o)
+            doc.addLayout(hang)
+        doc.addWidget(self.anh_vao)
+        doc.addWidget(self._thu_muc)
+        doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
+        return hop
 
     def _mo_tuy_chon(self) -> None:
         """Hộp tuỳ chọn: tỉ lệ, engine, số lượng, ảnh tham chiếu, chỗ lưu.
@@ -152,24 +178,6 @@ class TabThuCong(QWidget):
         Dựng một lần rồi dùng lại — dựng mới mỗi lần bấm là mất luôn thứ khách
         vừa chọn ở lần trước.
         """
-        if self._hop_tuy_chon is None:
-            hop = QDialog(self)
-            hop.setWindowTitle("Tuỳ chọn")
-            doc = QVBoxLayout(hop)
-            doc.setContentsMargins(20, 16, 20, 16)
-            doc.setSpacing(10)
-            for nhan_o, o in (("Tỉ lệ khung", self.ty_le),
-                              ("Engine video", self.engine),
-                              ("Số ảnh mỗi lần gửi", self.so_luong)):
-                hang = QHBoxLayout()
-                hang.addWidget(nhan(nhan_o))
-                hang.addStretch(1)
-                hang.addWidget(o)
-                doc.addLayout(hang)
-            doc.addWidget(self.anh_vao)
-            doc.addWidget(self._thu_muc)
-            doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
-            self._hop_tuy_chon = hop
         self._doi_loai()
         self._hop_tuy_chon.exec_()
 

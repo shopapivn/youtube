@@ -51,7 +51,7 @@ from core.youtube import parse_inputs
 
 from . import theme
 from .widgets import (
-    ChonThuMuc, mo_thu_muc, nhan, nut_chinh, nut_phu, the,
+    ChonThuMuc, HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu, the,
     tieu_de_trang,
 )
 
@@ -82,20 +82,32 @@ class TrangNghienCuu(QWidget):
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(14)
-        doc.addWidget(tieu_de_trang(
-            "📥  Lấy dữ liệu đối thủ",
-            "Dán một hay nhiều kênh YouTube — nhận về dữ liệu kênh và từng video. "
-            "Chạy trên máy bạn, miễn phí, không cần đăng nhập."))
-
+        # BA KHỐI ĐÃ BỎ (13/08/2026, chủ dự án nhìn ảnh chụp: *"nhìn rối, thừa
+        # khối"*):
+        #
+        #   • thẻ "Chưa có dữ liệu" — cả một khối chỉ để nói là chưa có gì;
+        #   • ô nhật ký nền đen 110px ở đáy — nó nói lại đúng thứ bảng đã nói,
+        #     mà lại là thứ to nhất trên màn hình;
+        #   • dòng giới thiệu dài — nó chép lại đúng mấy dòng gợi ý đang nằm sẵn
+        #     trong ô dán, tức khách đọc hai lần cùng một câu.
+        #
+        # Còn lại đúng ba thứ: dán vào đâu, bấm gì, kết quả ở đâu.
+        doc.addWidget(tieu_de_trang("📥  Lấy dữ liệu đối thủ",
+                                    "Chạy trên máy bạn, miễn phí."))
         doc.addWidget(self._the_nhap())
-        doc.addWidget(self._the_tom_tat())
         doc.addWidget(self._khoi_bang(), 1)
         doc.addLayout(self._hang_xuat())
 
+        # Nhật ký NHỎ, đúng năm dòng như tool gốc (`log_text height=5`). Bản
+        # trước để 110px nền đen nên nó thành thứ to nhất màn hình; bỏ hẳn thì
+        # lại mất chỗ duy nhất cho biết kênh nào đang lấy, video nào bị bỏ qua.
         self._log = QPlainTextEdit()
-        self._log.setObjectName("log")   # màu nằm ở theme.py, không gõ ở đây
         self._log.setReadOnly(True)
-        self._log.setFixedHeight(110)
+        self._log.setFixedHeight(76)
+        self._log.setStyleSheet(
+            "background:{0}; border:1px solid {1}; border-radius:8px;"
+            " color:{2}; font-size:12px;".format(theme.THE_MO, theme.VIEN,
+                                                 theme.CHU_MO))
         doc.addWidget(self._log)
 
     # ── Dựng giao diện ───────────────────────────────────────────────────────
@@ -107,11 +119,11 @@ class TrangNghienCuu(QWidget):
         v.setSpacing(10)
 
         d0 = QHBoxLayout()
-        d0.addWidget(nhan("Mỗi dòng một kênh — link kênh, @tên, link video, hoặc từ khoá", "h2"))
+        d0.addWidget(nhan("Dán link kênh đối thủ", "h2"))
         d0.addStretch(1)
         # Danh sách kênh đối thủ của người làm YouTube thường nằm sẵn trong một
         # file .txt hoặc một cột Excel; bắt họ dán tay từng dòng là thừa.
-        d0.addWidget(nut_phu("📄  Nạp từ file .txt", self._nap_file, rong=170))
+        d0.addWidget(nut_phu("📄  Nạp .txt", self._nap_file, rong=118))
         v.addLayout(d0)
 
         self._o_nhap = QPlainTextEdit()
@@ -136,7 +148,12 @@ class TrangNghienCuu(QWidget):
 
         # Ô của tool gốc, nhưng ở đây MẶC ĐỊNH TẮT: một lượt có thể là hàng trăm
         # video, mỗi video một lời gọi mạng ≈ 1 giây. Xem `core/doi_thu.py`.
-        self._chi_tiet = QCheckBox("Lấy chi tiết")
+        # Nhãn NGẮN, phần giải thích vào tooltip: chữ trong ô tick không tự
+        # xuống dòng, nhãn dài kéo cả trang rộng 1105px trên cửa sổ chỉ có 760.
+        self._chi_tiet = QCheckBox("Lấy chi tiết đầy đủ")
+        # Tool gốc để BẬT sẵn: thiếu mấy cột này thì bảng chỉ còn tiêu đề và
+        # view, mà đó không phải thứ khách đi nghiên cứu đối thủ để xem.
+        self._chi_tiet.setChecked(True)
         self._chi_tiet.setToolTip(
             "Lấy thêm like, comment, hashtag, mô tả và ngày đăng của từng video. "
             "Phải mở từng video nên chậm hơn nhiều — 10 kênh × 30 video là "
@@ -160,18 +177,6 @@ class TrangNghienCuu(QWidget):
         v.addLayout(d2)
         return the_nhap
 
-    def _the_tom_tat(self) -> QWidget:
-        the_tom = the()
-        k = QVBoxLayout(the_tom)
-        k.setContentsMargins(18, 14, 18, 16)
-        k.setSpacing(6)
-        self._tom_tat = nhan("Chưa có dữ liệu")
-        self._tom_tat.setStyleSheet("font-size:19px;font-weight:700;")
-        k.addWidget(self._tom_tat)
-        self._ly_do = nhan("Dán link kênh đối thủ rồi bấm Lấy dữ liệu.", "muted")
-        k.addWidget(self._ly_do)
-        return the_tom
-
     def _khoi_bang(self) -> QWidget:
         """MỘT bảng, đúng mười cột của tool gốc.
 
@@ -184,7 +189,15 @@ class TrangNghienCuu(QWidget):
         v = QVBoxLayout(khung)
         v.setContentsMargins(18, 14, 18, 16)
         v.setSpacing(8)
-        v.addWidget(nhan("Nội dung lấy về", "h2"))
+        dau = QHBoxLayout()
+        dau.addWidget(nhan("Nội dung lấy về", "h2"))
+        dau.addStretch(1)
+        # Một dòng thay cho cả một thẻ tóm tắt và một ô nhật ký: đủ để biết
+        # đang chạy tới đâu, và không ăn mất chỗ của chính cái bảng.
+        self._tom_tat = nhan("", "phu")
+        self._tom_tat.setMinimumWidth(1)
+        dau.addWidget(self._tom_tat)
+        v.addLayout(dau)
         self._bang_video = self._bang_moi(COT_VIDEO)
         v.addWidget(self._bang_video, 1)
         return khung
@@ -205,17 +218,56 @@ class TrangNghienCuu(QWidget):
         return bang
 
     def _hang_xuat(self) -> QHBoxLayout:
-        hang = QHBoxLayout()
-        self._thu_muc = ChonThuMuc(self._app.default_output_dir("doi-thu"))
-        hang.addWidget(self._thu_muc, 1)
-        self._nut_xuat = nut_phu("💾  Xuất CSV", self._xuat, rong=130)
+        """Hàng nút dưới bảng — đúng bộ của tool gốc.
+
+        `📋 Copy tất cả` là nút tao **bỏ sót** ở bản trước, mà nó mới là đường
+        khách hay đi nhất: chép cả bảng rồi dán thẳng vào Google Sheets, không
+        phải mở file, không phải tìm thư mục. `🗑 Xoá kết quả` cũng của tool gốc.
+        """
+        hang = HangXuongDong()
+        self._nut_copy = nut_phu("📋  Copy tất cả", self._copy_tat_ca, rong=150)
+        self._nut_copy.setToolTip(
+            "Chép cả bảng vào bộ nhớ tạm, ngăn cột bằng Tab — dán thẳng vào "
+            "Google Sheets hay Excel là mỗi ô vào đúng một cột.")
+        self._nut_copy.setEnabled(False)
+        hang.addWidget(self._nut_copy)
+        self._nut_xuat = nut_phu("💾  Lưu CSV", self._xuat, rong=124)
         self._nut_xuat.setEnabled(False)
         hang.addWidget(self._nut_xuat)
         self._nut_mo = nut_phu("📂  Mở kết quả",
-                               lambda: mo_thu_muc(self._thu_muc_da_xuat), rong=180)
+                               lambda: mo_thu_muc(self._thu_muc_da_xuat), rong=150)
         self._nut_mo.setEnabled(False)
         hang.addWidget(self._nut_mo)
+        self._nut_xoa = nut_phu("🗑  Xoá kết quả", self._xoa_ket_qua, rong=150)
+        hang.addWidget(self._nut_xoa)
+        self._thu_muc = ChonThuMuc(self._app.default_output_dir("doi-thu"))
         return hang
+
+    def _copy_tat_ca(self) -> None:
+        """Chép cả bảng vào clipboard, ngăn cột bằng Tab.
+
+        Tab chứ không phải dấu phẩy: dán vào Google Sheets/Excel là mỗi ô vào
+        đúng một cột, không phải qua bước "chia cột theo dấu phân cách".
+        """
+        if self._ket is None:
+            return
+        from PyQt5.QtWidgets import QApplication as _App
+
+        TAB, XUONG_DONG = "\t", "\n"
+        dong = [TAB.join(list(COT_VIDEO))]
+        for hang in self._ket.bang_video():
+            dong.append(TAB.join(str(o).replace(TAB, " ") for o in hang))
+        _App.clipboard().setText(XUONG_DONG.join(dong))
+        self._ghi_log("Đã copy {0} dòng — dán thẳng vào trang tính.".format(
+            len(dong) - 1))
+
+    def _xoa_ket_qua(self) -> None:
+        self._ket = None
+        self._bang_video.setRowCount(0)
+        self._log.clear()
+        self._tom_tat.setText("")
+        for nut in (self._nut_copy, self._nut_xuat, self._nut_mo):
+            nut.setEnabled(False)
 
     # ── Đầu vào ──────────────────────────────────────────────────────────────
 
