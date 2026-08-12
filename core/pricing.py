@@ -79,8 +79,8 @@ class PriceTable:
     #: ra được 2 clip/ngày, giá vốn thật cao hơn hẳn.
     video_seedance: int = 1_000_000_000
     #: Mức nạp tối thiểu, µVND. Máy chủ trả ở `min_topup` của `GET /v1/pricing`.
-    #: 10.000₫ — PRICING.md §5, không có tín dụng tặng lúc đăng ký.
-    min_topup_micro: int = 10_000_000_000
+    #: 50.000₫ — PRICING.md §5, không có tín dụng tặng lúc đăng ký.
+    min_topup_micro: int = 50_000_000_000
     #: Phần trăm thưởng khi nạp. **Hiện tại là 0** và tool KHÔNG được hứa hẹn gì
     #: khác. Máy chủ trả bậc thưởng ở `topup_bonus`; giữ trường này để nếu ngày nào
     #: bật khuyến mại thật thì tool hiện đúng con số máy chủ nói, không phải sửa code.

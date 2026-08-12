@@ -261,8 +261,8 @@ RETAIL_PRICE_VND: Dict[str, int] = {
 }
 
 #: PRICING.md §5 — không có tín dụng tặng lúc đăng ký; ví mới 0₫, nạp tối
-#: thiểu 10.000₫ mới tạo được job.
-MIN_TOPUP_VND = 10_000
+#: thiểu 50.000₫ mới tạo được job.
+MIN_TOPUP_VND = 50_000
 
 #: Trần một lần nạp (đồng) — khớp ``MAX_TOPUP_MICROS`` của máy chủ.
 #:

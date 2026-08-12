@@ -139,8 +139,16 @@ class CuaSoChinh(QWidget):
     #: Tên hiện ở đầu thanh bên.
     TEN_HIEN = "ShopAPI Studio"
     CAU_DUOI_TEN = "Tool của bạn, do bạn tạo"
-    #: Trang mở ra đầu tiên. Phải là một khoá có trong thanh bên.
+    #: Trang mở ra đầu tiên khi ĐÃ có khoá. Phải là một khoá có trong thanh bên.
     TRANG_DAU = "voice"
+
+    #: Trang mở ra khi CHƯA có khoá — phải là tab chạy được mà không cần khoá.
+    #:
+    #: Khách tải từ GitHub về chưa có tài khoản. Mở thẳng vào Voice là ném họ vào
+    #: đúng tab không dùng được, và ấn tượng đầu tiên về tool là một câu báo lỗi.
+    #: Skill → "Lấy dữ liệu đối thủ" chạy hoàn toàn trên máy họ (yt-dlp), miễn
+    #: phí, không cần khoá — nên đó là chỗ nên đứng khi chưa có gì.
+    TRANG_DAU_CHUA_KHOA = "skill"
 
     def widget_duoi_ten(self):
         """Widget nhỏ gắn dưới tên ứng dụng ở thanh bên (hoặc `None`).
@@ -217,7 +225,8 @@ class CuaSoChinh(QWidget):
         self._xong_nen.connect(self._chay_tren_luong_ve)
 
         self._dung_cac_trang()
-        self.show_page(self.TRANG_DAU)
+        self.show_page(self.TRANG_DAU if self.config.is_ready
+                       else self.TRANG_DAU_CHUA_KHOA)
 
         self._dong_ho = QTimer(self)
         self._dong_ho.timeout.connect(self._bom)
@@ -434,6 +443,30 @@ class CuaSoChinh(QWidget):
         # KHÔNG nhảy trang. Danh sách việc nằm ngay trong tab vừa bấm, nên ném
         # khách sang chỗ khác chỉ làm họ mất vị trí đang làm.
         self.jobs.submit(specs)
+
+    def bao_can_khoa(self) -> None:
+        """Nói việc này cần khoá — **và chỉ ra thứ dùng được ngay mà không cần**.
+
+        Câu cũ là *"Chưa đăng nhập. Vào trang Ví & Tài khoản để đăng nhập"*: đúng
+        nhưng là ngõ cụt. Khách vừa tải tool về, chưa có tài khoản, đọc xong vẫn
+        không biết mình đang cầm cái gì.
+
+        Hai tab chạy hoàn toàn trên máy họ — **Lấy dữ liệu đối thủ** (đọc YouTube
+        công khai) và **Dựng video** (ghép bằng FFmpeg) — không tốn đồng nào và
+        không cần khoá. Nói ra ở đây, vì đây đúng là lúc họ đang phân vân có nên
+        bỏ tool đi hay không.
+
+        Gom về một chỗ vì ba trang cùng cần câu này; chép ba bản là ba bản sẽ
+        lệch nhau sau lần sửa đầu tiên.
+        """
+        self.show_message(
+            "Việc này cần khoá API",
+            "Việc bạn vừa bấm gọi mô hình trên máy chủ nên cần khoá API. "
+            "Dán khoá ở trang Ví & Tài khoản — lấy khoá tại shopapi.vn.\n\n"
+            "Chưa có tài khoản cũng không sao: hai phần này chạy ngay trên máy "
+            "bạn, miễn phí, không cần khoá —\n"
+            "  • Skill → Lấy dữ liệu đối thủ\n"
+            "  • Dựng video")
 
     def dat_khoa(self, khoa: str) -> None:
         """Lưu khoá API rồi **dựng lại đường ra máy chủ ngay**, không bắt mở lại tool.

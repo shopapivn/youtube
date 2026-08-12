@@ -263,9 +263,7 @@ class TabTemplate(QWidget):
                                    "Viết ít nhất một prompt rồi bấm Chạy.")
             return
         if self._app.client is None:
-            self._app.show_message(
-                "Chưa đăng nhập",
-                "Vào trang Ví & Tài khoản để đăng nhập trước khi dùng mô hình.")
+            self._app.bao_can_khoa()
             return
         thu_muc = self._thu_muc.value
         client = self._app.client

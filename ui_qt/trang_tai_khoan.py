@@ -168,7 +168,11 @@ class TrangTaiKhoan(QWidget):
         hang.addStretch(1)
         n.addLayout(hang)
         hang2 = QHBoxLayout()
-        hang2.addWidget(nhan("Hoặc nhập số bất kỳ (tối thiểu 10.000₫):"))
+        # Mức tối thiểu lấy từ máy chủ (`min_topup` của `GET /v1/pricing`), không
+        # gõ lại: nâng mức trên máy chủ là câu này tự đổi theo.
+        hang2.addWidget(
+            nhan("Hoặc nhập số bất kỳ (tối thiểu {0}):".format(format_vnd(app.prices.min_topup_micro)))
+        )
         self._o_tien = QLineEdit()
         self._o_tien.setPlaceholderText("50000")
         self._o_tien.setFixedWidth(160)
@@ -220,7 +224,8 @@ class TrangTaiKhoan(QWidget):
 
     def lam_moi(self) -> None:
         if self._app.client is None:
-            self._so_du.setText("Chưa đăng nhập")
+            self._so_du.setText("—")
+            self._quy_doi.setText("Dán khoá API ở trên để xem số dư.")
             return
         self._app.run_bg(lambda: fetch_balance(self._app.client), on_ok=self._ve_so_du)
         self._app.run_bg(lambda: fetch_ledger(self._app.client, limit=50), on_ok=self._ve_so_cai)
@@ -269,8 +274,12 @@ class TrangTaiKhoan(QWidget):
             self._app.show_message("Chưa nhập số tiền", "Chọn một mức, hoặc gõ số tiền muốn nạp.")
             return None
         tien = int(chu)
-        if tien < 10_000:
-            self._app.show_message("Số tiền quá nhỏ", "Mức nạp tối thiểu là 10.000₫.")
+        toi_thieu = self._app.prices.min_topup_vnd
+        if tien < toi_thieu:
+            self._app.show_message(
+                "Số tiền quá nhỏ",
+                "Mức nạp tối thiểu là {0}.".format(format_vnd(self._app.prices.min_topup_micro)),
+            )
             return None
         return tien
 

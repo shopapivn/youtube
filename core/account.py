@@ -255,7 +255,7 @@ def topup_presets(prices: PriceTable, *, count: int = 6) -> List[int]:
     thì hàng nút này tự đổi theo, không cần ai sửa tool.
 
     >>> topup_presets(PriceTable(), count=4)
-    [10000, 20000, 50000, 100000]
+    [50000, 100000, 200000, 500000]
     """
     floor = max(1, int(prices.min_topup_vnd))
     # Đưa mức tối thiểu về dạng `hệ số × 10^mũ` để bắt đầu bậc thang từ đúng chỗ đó.

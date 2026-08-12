@@ -352,9 +352,7 @@ class TabChatViet(QWidget):
         if not cau:
             return
         if self._app.client is None:
-            self._app.show_message(
-                "Chưa đăng nhập",
-                "Vào trang Ví & Tài khoản để đăng nhập trước khi trò chuyện ở đây.")
+            self._app.bao_can_khoa()
             return
         phien = self._phien
         moi = phien.trong

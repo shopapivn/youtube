@@ -106,9 +106,7 @@ class TamSkillChu(QWidget):
                                    "Điền ô “{0}” rồi chạy lại.".format(self.skill.nhan_dau_vao))
             return
         if self._app.client is None:
-            self._app.show_message(
-                "Chưa đăng nhập",
-                "Vào trang Ví & Tài khoản để đăng nhập trước khi dùng Skill này.")
+            self._app.bao_can_khoa()
             return
         yeu_cau = self.skill.prompt.format(dau_vao) if "{0}" in self.skill.prompt \
             else self.skill.prompt + "\n\n" + dau_vao
