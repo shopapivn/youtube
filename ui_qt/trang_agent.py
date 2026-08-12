@@ -140,9 +140,7 @@ class TrangAgent(QWidget):
         self._canh_bao.setStyleSheet(f"color:{theme.DO};")
         self._canh_bao.hide()
         doc.addWidget(self._canh_bao)
-        hang = HangXuongDong()
-        hang.addWidget(nut_chinh("Áp dụng", self.ap_dung_nguon))
-        doc.addLayout(hang)
+
         chu_thich = self._chu_phu(
             "Lựa chọn này chỉ có tác dụng TRONG thư mục tool. Mở agent ở chỗ "
             "khác trên máy thì gói riêng của bạn vẫn chạy nguyên vẹn.")
@@ -277,6 +275,10 @@ class TrangAgent(QWidget):
         self._nut_cai = nut_chinh("⬇  Cài những thứ còn thiếu", self.cai_dat)
         hang.addWidget(self._nut_cai)
         self._xin_vscode = QCheckBox("Cài kèm VS Code")
+        # Bật SẴN. Với người không biết code, một cửa sổ soạn thảo có nút bấm dễ
+        # vào hơn hẳn một màn hình đen — chủ dự án, 13/08/2026: *"mặc định tải vs
+        # code để khách dùng vs code cho dễ"*. Ai không cần thì bỏ tick.
+        self._xin_vscode.setChecked(True)
         self._xin_vscode.setToolTip(
             "Không bắt buộc. VS Code là cửa thứ hai cho ai thích làm việc "
             "trong trình soạn mã; chỉ dùng nút mở dòng lệnh cũng đủ.")
@@ -484,10 +486,10 @@ class TrangAgent(QWidget):
         doc.addWidget(nhan("Mở ra làm việc", "h2"))
 
         hang = HangXuongDong()
-        self._nut_terminal = nut_chinh("▶  Mở Claude Code", self.mo_agent)
-        self._nut_vscode = nut_phu("Mở VS Code", self.mo_vs)
-        hang.addWidget(self._nut_terminal)
+        self._nut_vscode = nut_chinh("▶  Mở VS Code", self.mo_vs)
+        self._nut_terminal = nut_phu("Mở dòng lệnh", self.mo_agent)
         hang.addWidget(self._nut_vscode)
+        hang.addWidget(self._nut_terminal)
         hang.addWidget(nut_phu("Mở thư mục",
                                lambda: mo_thu_muc(self.app.base_dir)))
         doc.addLayout(hang)
@@ -509,7 +511,10 @@ class TrangAgent(QWidget):
         tt = self._ttx if self.dung_codex else self._tt
         ten = "Codex" if self.dung_codex else "Claude Code"
         loi = getattr(tt, "loi_cau_hinh", "")
-        self._nut_terminal.setText(f"▶  Mở {ten}")
+        # Nút phụ: nói rõ đây là lối dòng lệnh, kèm tên agent đang chọn. Để
+        # nguyên "Mở Claude Code" thì hai nút chính–phụ trông ngang hàng nhau,
+        # mà VS Code mới là đường tool muốn khách đi.
+        self._nut_terminal.setText(f"Mở dòng lệnh ({ten})")
         self._nut_terminal.setEnabled(tt.san_sang)
         if tt.san_sang:
             mach = ""
@@ -522,11 +527,33 @@ class TrangAgent(QWidget):
         self._nut_terminal.setToolTip(mach)
         self._nut_vscode.setEnabled(bool(tt.vscode))
         self._nut_vscode.setToolTip(
-            "" if tt.vscode else "Máy chưa có VS Code — tick ô ở thẻ trên rồi "
-            f"bấm cài, hoặc dùng nút “Mở {ten}”.")
+            "" if tt.vscode else "Máy chưa có VS Code — bấm “Cài những thứ còn "
+            "thiếu” ở thẻ trên là tool tải về giúp bạn.")
+
+    def _ap_dung_im(self) -> bool:
+        """Ghi cấu hình theo nguồn đang chọn, không báo gì nếu trót lọt.
+
+        Gọi ngay trước khi mở VS Code / dòng lệnh. Trước đây đây là một nút
+        "Áp dụng" riêng, và ai quên bấm thì mở VS Code ra là extension Claude
+        đòi đăng nhập Anthropic — khách không đoán được vì sao, vì tab hiện đủ
+        dấu tích xanh.
+        """
+        if self.nguon != NGUON_SHOPAPI:
+            go_khoi_settings(self.app.base_dir)
+            self._ve_nguon()
+            return True
+        khoa = (self.app.config.api_key or "").strip()
+        if not khoa:
+            self.app.bao_can_khoa()
+            return False
+        cai_vao_settings(self.app.base_dir, khoa, self.app.config.base_url)
+        self._ve_nguon()
+        return True
 
     def mo_agent(self) -> None:
         """Mở agent khách đã chọn. Cả ba đường đều **toàn quyền**."""
+        if not self._ap_dung_im():
+            return
         if self.dung_codex:
             codex_cli.mo_terminal(self.app.base_dir,
                                   duong_codex=self._ttx.duong_codex)
@@ -537,6 +564,15 @@ class TrangAgent(QWidget):
                     dung_shopapi=self.nguon == NGUON_SHOPAPI)
 
     def mo_vs(self) -> None:
+        """Mở VS Code ngay tại thư mục tool, đã cắm sẵn khoá.
+
+        Đây là **đường chính** cho khách: một cửa sổ soạn thảo có nút bấm dễ vào
+        hơn hẳn màn hình đen, và extension Claude đọc cùng tệp cấu hình mà
+        `_ap_dung_im` vừa ghi — nên mở ra là dùng được ngay, không phải đăng
+        nhập gì thêm.
+        """
+        if not self._ap_dung_im():
+            return
         duong = (self._ttx if self.dung_codex else self._tt).duong_code
         mo_vscode(self.app.base_dir, self.app.config.api_key,
                   self.app.config.base_url, duong_code=duong,
