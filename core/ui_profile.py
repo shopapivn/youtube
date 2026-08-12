@@ -16,7 +16,7 @@ PROFILE_VERSION = 4
 #: trên bản Qt và Agent lại phải nói “không làm được”.
 KNOWN_TABS = ("wallet", "agent", "research", "content", "voice", "srt_excel",
               "image", "veo3", "seedance", "project", "queue",
-              "skill", "video", "edit")
+              "skill", "video", "edit", "media")
 #: Tab hiện sẵn khi khách mở tool lần đầu.
 #:
 #: Ảnh và video nằm trong này vì **API đã có sẵn hai dịch vụ đó** — giấu đi thì

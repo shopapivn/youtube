@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from typing import Callable, List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
 from PyQt5.QtWidgets import (
@@ -45,13 +45,18 @@ def nhan(text: str, kieu: str = "", cha: Optional[QWidget] = None) -> QLabel:
     return nh
 
 
-def tieu_de_trang(tieu_de: str, ghi_chu: str = "") -> QWidget:
+def tieu_de_trang(tieu_de: str, ghi_chu: str = "",
+                  huong_dan: Optional[str] = None) -> QWidget:
     """Tiêu đề một trang — **một dòng**, ghi chú nằm bên phải.
 
     Trước đây ghi chú nằm ở dòng riêng bên dưới. Đo ra: mỗi trang mất thêm ~24px
     cho một câu khách đọc đúng một lần rồi thôi, nhân tám trang. Trong khi sáu
     trên tám trang đang **cao hơn cả cửa sổ** — tức là phần chữ giới thiệu đang
     lấn chỗ của phần khách phải gõ.
+
+    `huong_dan` là khoá bài hướng dẫn (`ui_qt/huong_dan.py`); có thì mọc thêm
+    nút `?` ở góc phải. Gắn ở đây chứ không đi sửa tám trang: mọi trang đều đi
+    qua hàm này, nên một chỗ là đủ và không trang nào bị quên.
     """
     hop = QWidget()
     ngang = QHBoxLayout(hop)
@@ -64,9 +69,18 @@ def tieu_de_trang(tieu_de: str, ghi_chu: str = "") -> QWidget:
         # Ghi chú PHẢI xuống dòng được. Khoá `setWordWrap(False)` ở đây làm bề
         # rộng tối thiểu của cả trang bằng độ dài nguyên câu — đo được: tám trang
         # nhảy lên 973–1569px, tức tràn hết ra ngoài mép cửa sổ nhỏ.
-        ngang.addWidget(nhan(ghi_chu, "muted"), 1)
+        nh = nhan(ghi_chu, "muted")
+        nh.setWordWrap(True)
+        nh.setMinimumWidth(1)
+        ngang.addWidget(nh, 1)
     else:
         ngang.addStretch(1)
+    if huong_dan:
+        from .huong_dan import nut_huong_dan
+
+        nut = nut_huong_dan(huong_dan, hop)
+        if nut is not None:
+            ngang.addWidget(nut)
     return hop
 
 
@@ -120,6 +134,16 @@ class HangXuongDong(QLayout):
     # ── Hợp đồng bắt buộc của QLayout ────────────────────────────────────────
     def addItem(self, muc) -> None:  # noqa: N802 — tên do Qt quy định
         self._muc.append(muc)
+
+    def insertWidget(self, chi_so: int, w) -> None:  # noqa: N802 — tên kiểu Qt
+        """Chèn vào giữa hàng. `QLayout` gốc chỉ biết thêm vào cuối.
+
+        Có mặt vì lưới kết quả xếp **việc mới nhất lên đầu**: người vừa bấm gửi
+        nhìn xuống là thấy ngay thứ mình vừa xin, không phải cuộn xuống đáy.
+        """
+        self.addWidget(w)
+        if 0 <= chi_so < len(self._muc) - 1:
+            self._muc.insert(chi_so, self._muc.pop())
 
     def count(self) -> int:
         return len(self._muc)
@@ -284,6 +308,7 @@ class ChonThuMuc(QWidget):
         ngang.setContentsMargins(0, 0, 0, 0)
         ngang.setSpacing(8)
         ngang.addWidget(nhan(nhan_text))
+        self._mac_dinh = ban_dau
         self._o = QLineEdit(ban_dau)
         ngang.addWidget(self._o, 1)
         ngang.addWidget(nut_phu("Chọn…", self._chon, rong=92))
@@ -293,6 +318,16 @@ class ChonThuMuc(QWidget):
     def value(self) -> str:
         """Đường dẫn đang chọn — đọc thẳng từ ô, khách gõ tay cũng được."""
         return self._o.text().strip()
+
+    def dat(self, duong_dan: str) -> None:
+        """Đổi thư mục mặc định khi trang đổi loại việc (ảnh ⇄ video).
+
+        **Không đè** nếu khách đã tự sửa: họ chọn chỗ lưu là có ý, và bị kéo về
+        thư mục mặc định sau mỗi lần bấm là mất file ở nơi không ngờ tới.
+        """
+        if duong_dan and self._o.text().strip() in ("", self._mac_dinh):
+            self._o.setText(duong_dan)
+        self._mac_dinh = duong_dan or self._mac_dinh
 
     def _chon(self) -> None:
         chon = QFileDialog.getExistingDirectory(self, "Chọn thư mục lưu", self.value)

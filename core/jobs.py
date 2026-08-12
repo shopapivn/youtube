@@ -99,9 +99,17 @@ ACTIVE_STATUSES = (STATUS_WAITING, STATUS_CREATING, STATUS_RUNNING, STATUS_DOWNL
 #: SDK đã tự thử lại bên trong mỗi request rồi; đây là lớp thứ hai ở mức job.
 MAX_JOB_ATTEMPTS = 4
 
-#: Chờ tối đa ngần này giây cho một job trước khi bỏ cuộc và báo khách tra lại.
-#: Video lúc tải cao có thể mất 3–5 phút nên để rộng tay.
-JOB_WAIT_TIMEOUT = 15 * 60
+#: Chờ tối đa ngần này giây cho một job trước khi ngừng theo dõi.
+#:
+#: 45 phút, không phải 15. Đo thật trên máy chủ prod ngày 12/08/2026 bằng khoá
+#: thật: lúc hàng đợi ảnh đông, một job ảnh nằm ở trạng thái `running` **hơn 30
+#: phút**, và video thì còn `queued` sau 15 phút. Với trần 15 phút, tool bỏ cuộc
+#: rồi báo **lỗi** cho một việc khách đã trả tiền và máy chủ vẫn đang làm — khách
+#: mất file, mà nhìn vào chỉ thấy chữ "lỗi".
+#:
+#: Đây là trần *của tool*, không phải của máy chủ: hết giờ thì tool chỉ thôi
+#: theo dõi, job vẫn chạy tiếp và vẫn lấy lại được bằng nút "Kiểm tra lại".
+JOB_WAIT_TIMEOUT = 45 * 60
 
 #: Trạng thái kết thúc phía máy chủ — CONTRACT.md §2.2.
 _TERMINAL = ("succeeded", "failed", "cancelled", "rejected")
@@ -849,10 +857,15 @@ class JobManager:
         params = dict(spec.params)
 
         if spec.kind == KIND_TTS:
+            # KHÔNG gửi `speed`. Máy chủ đã bỏ hẳn tham số này (model giọng
+            # `eleven_v3` không chỉnh được tốc độ) và trả 422 cho bất cứ lời gọi
+            # nào còn kèm nó. Tool vẫn gửi `speed=1.0` mặc định, nên **mọi việc
+            # voice của mọi khách đều hỏng** — đo được 12/08/2026 bằng khoá
+            # thật. Bộ test cũ không thấy vì nó giả lập SDK: chỉ có lần chạy
+            # thật mới chạm tới máy chủ thật.
             return client.tts.create(
                 text=spec.content,
                 voice_id=params.get("voice_id", "vi_female_01"),
-                speed=params.get("speed", 1.0),
                 format=params.get("format", "mp3"),
                 idempotency_key=spec.idempotency_key,
             )
@@ -903,8 +916,13 @@ class JobManager:
                 self._finish(
                     record,
                     STATUS_FAILED,
-                    "Job chạy quá {0} phút nên tool ngừng theo dõi. Job vẫn có thể xong trên "
-                    "máy chủ — bạn bấm “Kiểm tra lại” ở tab Hàng đợi.".format(JOB_WAIT_TIMEOUT // 60),
+                    # KHÔNG nói "tab Hàng đợi": tab đó đã bỏ, mỗi tab giờ tự
+                    # giữ danh sách việc của mình. Chỉ khách sang một tab không
+                    # tồn tại là bỏ họ giữa đường đúng lúc họ đang mất tiền.
+                    "Job chạy quá {0} phút nên tool ngừng theo dõi. Máy chủ vẫn "
+                    "đang làm và bạn KHÔNG mất tiền cho việc chưa xong — bấm "
+                    "“↻ Chạy lại việc lỗi” ngay trên danh sách việc này để lấy kết "
+                    "quả về.".format(JOB_WAIT_TIMEOUT // 60),
                 )
                 return None
 

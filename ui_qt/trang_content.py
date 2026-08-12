@@ -361,7 +361,7 @@ class TrangKichBan(QWidget):
         doc = QVBoxLayout(self)
         doc.setContentsMargins(20, 10, 20, 12)
         doc.setSpacing(6)
-        doc.addWidget(tieu_de_trang("✍️  Viết kịch bản"))
+        doc.addWidget(tieu_de_trang("✍️  Viết kịch bản", "", "content"))
 
         tab = QTabWidget()
         tab.addTab(self._tab_chat(), "💬  Chat")

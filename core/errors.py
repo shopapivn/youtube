@@ -184,8 +184,12 @@ def describe(exc: BaseException) -> ErrorAdvice:
     if isinstance(exc, JobTimeoutError):
         return ErrorAdvice(
             title="Chờ quá lâu",
-            message="Job vẫn đang chạy trên máy chủ nhưng tool đã chờ hết thời gian.",
-            action="Bạn mở tab Hàng đợi bấm “Kiểm tra lại” để cập nhật trạng thái mới nhất.",
+            message="Job vẫn đang chạy trên máy chủ nhưng tool đã chờ hết thời "
+                    "gian. Bạn không mất tiền cho việc chưa xong.",
+            # KHÔNG chỉ sang "tab Hàng đợi": tab đó đã bỏ, mỗi tab giờ tự giữ
+            # danh sách việc của mình.
+            action="Bấm “↻ Chạy lại việc lỗi” ngay trên danh sách việc của tab này "
+                   "để lấy kết quả về.",
             retryable=True,
         )
 

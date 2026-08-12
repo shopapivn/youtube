@@ -62,9 +62,8 @@ class TrangDungVideo(QWidget):
         doc.setContentsMargins(24, 18, 24, 18)
         doc.setSpacing(12)
         doc.addWidget(tieu_de_trang(
-            "✂️  Dựng video",
-            "Ghép ảnh/clip + lời đọc + phụ đề thành video hoàn chỉnh. "
-            "Chạy trên máy bạn bằng FFmpeg — miễn phí."))
+            "✂️  Dựng video", "Ghép clip + lời đọc thành video. Miễn phí.",
+            "edit"))
 
         # ── Thư mục ──────────────────────────────────────────────────────────
         the_tm = the()

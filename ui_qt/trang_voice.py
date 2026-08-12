@@ -51,13 +51,15 @@ from typing import Callable, Dict, List, Optional, Sequence
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QDialog, QFileDialog, QHBoxLayout, QHeaderView,
-    QLabel, QLineEdit, QPlainTextEdit, QSlider, QTableWidget, QTableWidgetItem,
+    QComboBox, QLabel, QLineEdit, QPlainTextEdit, QSlider, QTableWidget,
+    QTableWidgetItem,
     QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from core.batch import split_prompts
 from core.jobs import ACTIVE_STATUSES, STATUS_DONE, STATUS_FAILED, JobSpec
 from core.money import group_thousands
+from core.giong import GIONG_MAC_DINH, RIENG, danh_muc, la_ma_rieng
 from core.pricing import KIND_TTS, hold_for_tts
 from core.validate import check_tts
 from core.voice_text import clean_voice_text
@@ -149,9 +151,7 @@ class TrangGiongNoi(QWidget):
         doc.setContentsMargins(22, 14, 22, 14)
         doc.setSpacing(8)
         doc.addWidget(tieu_de_trang(
-            "🎙️  Voice",
-            "Lấy từ file .txt có sẵn, hoặc dán thẳng một đoạn chữ. "
-            "Nhiều nhân vật thì xếp từng giọng vào hàng đợi rồi chạy một lượt."))
+            "🎙️  Voice", "Đọc chữ thành giọng nói.", "voice"))
 
         doc.addWidget(self._khoi_nguon())
         doc.addWidget(self._the_giong())
@@ -260,19 +260,38 @@ class TrangGiongNoi(QWidget):
         v.setContentsMargins(16, 12, 16, 13)
         v.setSpacing(8)
 
+        # Ô CHỌN, không phải ô dán mã. Bản trước bắt khách tự đi tìm một mã 20
+        # ký tự ngay ở dòng đầu của tab đắt tiền nhất — người vừa tải tool về
+        # không biết mã là gì, lấy ở đâu, cái nào hay. Mà máy chủ đã có sẵn sáu
+        # giọng Việt kèm mô tả hợp việc gì (`core/giong.py`); tool chỉ việc bày.
         d1 = QHBoxLayout()
         d1.setSpacing(8)
-        d1.addWidget(self._nhan_cot("Voice ID", 70))
-        self._ma_giong = QLineEdit()
-        self._ma_giong.setObjectName("mono")
-        self._ma_giong.setPlaceholderText(
-            "dán ID giọng vào đây — ví dụ RGb96Dcl0k5eVje8EBch")
-        self._ma_giong.setToolTip(
-            "Lấy ID ở trang giọng của nhà cung cấp. Mỗi nhân vật một ID.")
-        d1.addWidget(self._ma_giong, 1)
+        d1.addWidget(self._nhan_cot("Giọng đọc", 70))
+        self._chon_giong = QComboBox()
+        for g in danh_muc():
+            self._chon_giong.addItem(g.nhan, g.ma)
+        self._chon_giong.addItem("Giọng riêng của tôi (dán mã)…", RIENG)
+        # Ghìm bề rộng: mô tả giọng dài tới ~60 ký tự, và `QComboBox` mặc định
+        # rộng bằng mục dài nhất — đo được trang Voice nhảy lên 1167px trên một
+        # cửa sổ chỉ có 760px, tức tràn hẳn ra ngoài mép.
+        self._chon_giong.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+        self._chon_giong.setMinimumContentsLength(18)
+        self._chon_giong.setCurrentIndex(
+            max(0, self._chon_giong.findData(GIONG_MAC_DINH)))
+        self._chon_giong.currentIndexChanged.connect(lambda _i: self._doi_giong())
+        d1.addWidget(self._chon_giong, 1)
         self._nut_cai_dat = nut_phu("⚙  Cài đặt", self._mo_cai_dat, rong=110)
         d1.addWidget(self._nut_cai_dat)
         v.addLayout(d1)
+
+        # Ô dán mã chỉ hiện khi khách chọn "Giọng riêng của tôi" — ai đã có
+        # giọng riêng trên ElevenLabs vẫn dùng được, người mới không phải nhìn.
+        self._ma_giong = QLineEdit()
+        self._ma_giong.setObjectName("mono")
+        self._ma_giong.setPlaceholderText(
+            "dán mã giọng ElevenLabs — 20 ký tự, ví dụ RGb96Dcl0k5eVje8EBch")
+        self._ma_giong.hide()
+        v.addWidget(self._ma_giong)
 
         d2 = QHBoxLayout()
         d2.setSpacing(8)
@@ -570,12 +589,40 @@ class TrangGiongNoi(QWidget):
 
     # ── Hàng đợi nhiều giọng ─────────────────────────────────────────────────
 
+    def _doi_giong(self) -> None:
+        """Hiện ô dán mã chỉ khi khách chọn giọng riêng."""
+        rieng = self._chon_giong.currentData() == RIENG
+        self._ma_giong.setVisible(rieng)
+        if rieng:
+            self._ma_giong.setFocus()
+
+    @property
+    def ma_giong(self) -> str:
+        """Mã giọng đang chọn — MỘT chỗ duy nhất trả lời câu này.
+
+        Hai nơi cần nó (xếp hàng đợi và chạy thẳng); tính riêng ở mỗi nơi là
+        kiểu lỗi sửa một chỗ quên chỗ kia.
+        """
+        du_lieu = self._chon_giong.currentData()
+        if du_lieu == RIENG:
+            return self._ma_giong.text().strip()
+        return str(du_lieu or "")
+
+    def _thieu_giong(self) -> bool:
+        """Chỉ thiếu được khi khách chọn "giọng riêng" mà chưa dán mã."""
+        ma = self.ma_giong
+        if ma and (self._chon_giong.currentData() != RIENG or la_ma_rieng(ma)):
+            return False
+        self._app.show_message(
+            "Chưa có mã giọng riêng",
+            "Mã giọng ElevenLabs dài đúng 20 ký tự chữ và số. Hoặc chọn một "
+            "giọng có sẵn trong danh sách để chạy ngay.")
+        return True
+
     def _xep_hang(self) -> None:
-        ma_giong = self._ma_giong.text().strip()
-        if not ma_giong:
-            self._app.show_message("Chưa có Voice ID",
-                                   "Dán Voice ID rồi mới xếp được vào hàng đợi.")
+        if self._thieu_giong():
             return
+        ma_giong = self.ma_giong
         if not self._muc:
             self._app.show_message(
                 "Danh sách trống",
@@ -588,8 +635,9 @@ class TrangGiongNoi(QWidget):
         self._cho.append(_Lo(ma_giong, self._nguon or "danh sách đang mở",
                              dinh_dang, list(self._muc)))
         self._muc = []
-        # Trống ô Voice ID để nhập nhân vật kế tiếp ngay, không phải xoá tay.
-        self._ma_giong.clear()
+        # Trống ô mã riêng để nhập nhân vật kế tiếp ngay, không phải xoá tay.
+        if self._chon_giong.currentData() == RIENG:
+            self._ma_giong.clear()
         self._ve_lai()
 
     def _bo_lo(self, lo: _Lo) -> None:
@@ -607,7 +655,7 @@ class TrangGiongNoi(QWidget):
 
     def _tat_ca(self) -> List[MucDoc]:
         """Hàng đợi trước, rồi tới danh sách đang mở — đúng thứ tự khách xếp."""
-        ma_giong = self._ma_giong.text().strip()
+        ma_giong = self.ma_giong
         dinh_dang = self._dinh_dang.get()
         xong: List[MucDoc] = []
         for lo in self._cho:

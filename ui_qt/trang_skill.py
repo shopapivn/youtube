@@ -43,7 +43,7 @@ __all__ = ["TrangSkill", "TamSkillChu"]
 
 #: Skill nào xong thì gửi kết quả sang trang nào — `(khoá trang, nhãn nút)`.
 GUI_SANG = {
-    "chia-canh": ("image", "🖼  Gửi sang Tạo ảnh"),
+    "chia-canh": ("media", "🎨  Gửi sang Ảnh & Video"),
     "dich": ("voice", "🎙  Gửi sang Voice"),
 }
 
@@ -385,8 +385,7 @@ class TrangSkill(QWidget):
         td.setContentsMargins(0, 0, 0, 0)
         td.setSpacing(8)
         td.addWidget(tieu_de_trang(
-            "🧠  Skill",
-            "Việc lẻ quanh một video. Chọn một Skill để bắt đầu."))
+            "🧠  Skill", "Việc lẻ quanh một video.", "skill"))
         cuon = QScrollArea()
         cuon.setWidgetResizable(True)
         trong = QWidget()

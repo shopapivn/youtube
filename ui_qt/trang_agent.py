@@ -88,8 +88,7 @@ class TrangAgent(QWidget):
         doc.setSpacing(14)
         doc.addWidget(tieu_de_trang(
             "🤖  Agent xây tool",
-            "Một agent lập trình thật chạy ngay trong thư mục tool này — bạn "
-            "nói bằng lời thường, nó sửa tool cho bạn."))
+            "Nhờ nó sửa chính cái tool này.", "agent"))
         doc.addWidget(self._the_nguon())
         doc.addWidget(self._the_may())
         doc.addWidget(self._the_mo())

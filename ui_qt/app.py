@@ -59,8 +59,10 @@ TRANG = (
     ("skill", "🧠", "Skill"),
     ("content", "✍️", "Viết kịch bản"),
     ("voice", "🎙️", "Voice"),
-    ("image", "🖼️", "Tạo ảnh"),
-    ("video", "🎬", "Tạo video"),
+    # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026). Chúng vốn là MỘT
+    # khuôn dùng hai lần, mà thứ khách thật sự muốn — *ảnh này, rồi cho nó động
+    # đậy* — thì không tab nào diễn đạt được vì nó nằm vắt qua cả hai.
+    ("media", "🎨", "Ảnh & Video"),
     ("edit", "✂️", "Dựng video"),
     ("wallet", "💳", "Ví & Tài khoản"),
 )
@@ -238,9 +240,9 @@ class CuaSoChinh(QWidget):
 
     def _dung_cac_trang(self) -> None:
         from .trang_agent import TrangAgent
+        from .trang_anh_video import TrangAnhVideo
         from .trang_content import TrangKichBan
         from .trang_edit import TrangDungVideo
-        from .trang_media import TrangTaoAnh, TrangTaoVideo
         from .trang_skill import TrangSkill
         from .trang_tai_khoan import TrangTaiKhoan
         from .trang_voice import TrangGiongNoi
@@ -250,8 +252,7 @@ class CuaSoChinh(QWidget):
             "skill": lambda: TrangSkill(self),
             "content": lambda: TrangKichBan(self),
             "voice": lambda: TrangGiongNoi(self),
-            "image": lambda: TrangTaoAnh(self),
-            "video": lambda: TrangTaoVideo(self),
+            "media": lambda: TrangAnhVideo(self),
             "edit": lambda: TrangDungVideo(self),
             "wallet": lambda: TrangTaiKhoan(self),
         }

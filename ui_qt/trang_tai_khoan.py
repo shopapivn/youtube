@@ -136,8 +136,7 @@ class TrangTaiKhoan(QWidget):
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(14)
         doc.addWidget(tieu_de_trang(
-            "💳  Ví & Tài khoản",
-            "Số dư, nạp tiền và sổ cái — làm hết ở đây, không phải mở trình duyệt."))
+            "💳  Ví & Tài khoản", "Số dư, nạp tiền, sổ cái.", "wallet"))
         doc.addWidget(self._the_khoa())
 
         # ── Số dư ────────────────────────────────────────────────────────────
