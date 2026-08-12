@@ -115,6 +115,10 @@ class TinhTrang:
     vscode: str = ""
     duong_code: str = ""
     ext_vscode: bool = False
+    #: Kết quả thô của `code --list-extensions`. Giữ lại để lần dò thứ hai
+    #: (Codex) khỏi gọi lại — đó là lệnh chậm nhất trong cả bộ, và gọi hai lần
+    #: là bắt khách chờ gấp đôi ngay khi mở tab.
+    ds_extension: str = ""
 
     @property
     def san_sang(self) -> bool:
@@ -203,8 +207,8 @@ def kiem_tra() -> TinhTrang:
     tt.duong_code = _tim("code")
     if tt.duong_code:
         tt.vscode = _chay_lay_chu([tt.duong_code, "--version"])
-        danh_sach = _chay_lay_ca_khoi([tt.duong_code, "--list-extensions"])
-        tt.ext_vscode = EXT_VSCODE.lower() in danh_sach.lower()
+        tt.ds_extension = _chay_lay_ca_khoi([tt.duong_code, "--list-extensions"])
+        tt.ext_vscode = EXT_VSCODE.lower() in tt.ds_extension.lower()
     return tt
 
 
@@ -499,8 +503,8 @@ def _mo_kem_moi_truong(lenh, thu_muc: str, api_key: str,
     return mo(list(lenh), cwd=thu_muc, env=mt, close_fds=True)
 
 
-def lenh_cua_so_cmd(chuong_trinh: str, tieu_de: str = "Claude Code",
-                    co_cmd: str = "/k") -> str:
+def lenh_cua_so_cmd(chuong_trinh: str, tham_so: Optional[Sequence[str]] = None,
+                    tieu_de: str = "Claude Code", co_cmd: str = "/k") -> str:
     """Dòng lệnh mở một cửa sổ dòng lệnh mới chạy `chuong_trinh`. **Windows.**
 
     Trả về **chuỗi**, và nơi gọi phải chạy nó với `shell=True`. Đó là cả nội
@@ -521,25 +525,40 @@ def lenh_cua_so_cmd(chuong_trinh: str, tieu_de: str = "Claude Code",
     `cmd.exe`. Không có cách nào viết danh sách cho ra chuỗi đúng; lối ra là bỏ
     danh sách, tự dựng chuỗi, và để `shell=True` giao thẳng cho cmd.
 
-    >>> lenh_cua_so_cmd(r"C:\\co dau cach\\claude.EXE")
-    'start "Claude Code" cmd /k "C:\\\\co dau cach\\\\claude.EXE"'
+    >>> lenh_cua_so_cmd(r"C:\\co dau cach\\claude.EXE", ["--x", "co cach"])
+    'start "Claude Code" cmd /k "C:\\\\co dau cach\\\\claude.EXE" --x "co cach"'
     """
-    return 'start "{0}" cmd {1} "{2}"'.format(tieu_de, co_cmd, chuong_trinh)
+    phan = ['start "{0}" cmd {1} "{2}"'.format(tieu_de, co_cmd, chuong_trinh)]
+    for t in tham_so or ():
+        phan.append('"{0}"'.format(t) if " " in t else t)
+    return " ".join(phan)
+
+
+#: Cờ cho Claude Code **toàn quyền**. Quyết định của chủ dự án, nhắc lại
+#: 12/08/2026: *"nhớ là nó toàn quyền quyền cao nhất"*.
+CO_TOAN_QUYEN = ("--permission-mode", "bypassPermissions")
 
 
 def mo_terminal(thu_muc: str, api_key: str = "", base_url: str = "", *,
                 duong_claude: str = "", dung_shopapi: bool = True,
+                toan_quyen: bool = True,
                 mo_tien_trinh: Optional[Callable[..., object]] = None) -> object:
     """Mở Claude Code **bản đầy đủ** trong một cửa sổ dòng lệnh thật.
 
     Đây là bản "nguyên bản" chủ dự án muốn: giao diện gốc của Claude Code, chỉ
     khác ở chỗ nó mở sẵn trong thư mục tool nên khách gõ thẳng yêu cầu sửa tool.
 
+    `toan_quyen` là mặc định và là quyết định của chủ dự án. Thiếu nó thì Claude
+    Code dừng hỏi ở mỗi lần sửa file — với khách không biết code, mỗi câu hỏi ấy
+    là một chỗ để bỏ cuộc. Cờ này từng chỉ có ở đường headless (đã bỏ), nên nút
+    “Mở Claude Code” chạy bản **hỏi từng bước** mà không ai để ý.
+
     `cmd /k` chứ không phải `/c`: chạy xong Claude Code mà cửa sổ đóng ngay thì
     khách không kịp đọc thông báo lỗi — và lỗi ở đây là lúc cần đọc nhất.
     """
     claude = duong_claude or "claude"
-    lenh = lenh_cua_so_cmd(claude) if os.name == "nt" else [claude]
+    co = list(CO_TOAN_QUYEN) if toan_quyen else []
+    lenh = (lenh_cua_so_cmd(claude, co) if os.name == "nt" else [claude] + co)
     return _mo_kem_moi_truong(lenh, thu_muc, api_key, base_url, dung_shopapi,
                               mo_tien_trinh)
 
