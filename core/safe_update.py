@@ -45,6 +45,10 @@ PRESERVE = (
     "phien-viet",     # phiên chat của tab Viết kịch bản
     "mau-kich-ban",   # template prompt khách tự lưu
     "skill-cua-toi",  # Skill Agent đẻ ra riêng cho khách (`core.skill_rieng`)
+    ".claude",        # cấu hình Claude Code của riêng thư mục này, có KHOÁ của
+                      # khách trong đó (`core.claude_code`). Mất là mỗi lần cập
+                      # nhật khách lại phải vào tab Agent bấm lại từ đầu — mà họ
+                      # sẽ không đoán được vì sao Claude Code đòi đăng nhập lại.
 )
 MAX_FILES = 5000
 MAX_UNCOMPRESSED = 2 * 1024 * 1024 * 1024

@@ -35,19 +35,28 @@ năng lực thật của Claude Code, và giao diện hợp với người khôn
 
 Ai muốn bản đầy đủ thì vẫn có nút mở terminal riêng.
 
-═══ VÌ SAO CÒN GHI VÀO `~/.claude/settings.json` ═══
+═══ VÌ SAO CẤU HÌNH NẰM TRONG THƯ MỤC TOOL, KHÔNG PHẢI TOÀN MÁY ═══
 
-Chủ dự án, 12/08/2026: *"agen xây tool là cài đặt và đảm bảo khách dùng được cli
-claude code, tải và cài hết cho khách"* — và *"nguyên bản, chỉ là nó ở thư mục
-tool để có thể điều chỉnh tool thôi"*.
+Chủ dự án, 12/08/2026: *"có làm sao để dùng cái ví shopapi tức key đó mà không
+ảnh hưởng tới claude code max 20, kiểu nó chỉ ở thư mục đó không"*.
 
-Biến môi trường chỉ sống trong tiến trình do Studio đẻ ra. Khách mở terminal
-riêng, hay bấm Claude trong VS Code, thì không có gì trỏ về shopapi cả — Claude
-Code đòi đăng nhập Anthropic và khách tưởng tool hỏng. `~/.claude/settings.json`
-là tệp **cả CLI lẫn extension VS Code cùng đọc**, nên ghi một lần là mọi cửa đều
-chạy trên ví shopapi.
+Có. Claude Code đọc cấu hình **theo thư mục đang làm việc**, và đây là đo thật
+trên máy chủ dự án chứ không phải đọc tài liệu::
 
-Đây là tệp của khách, không phải của Studio, nên ba luật:
+    thư mục CÓ .claude/settings.local.json trỏ địa chỉ chết → treo, mã 124
+    thư mục KHÔNG có                                        → trả lời, mã 0
+
+Nên Studio ghi vào `<thư mục tool>/.claude/settings.local.json`. Khoá shopapi
+chỉ sống trong thư mục ấy; mở Claude Code ở bất cứ chỗ nào khác trên máy thì
+gói Max của khách chạy nguyên vẹn, và `~/.claude/settings.json` không hề bị
+chạm tới.
+
+Chọn `settings.local.json` chứ không phải `settings.json`: đó là tệp dành cho
+máy cá nhân, ưu tiên cao hơn tệp dùng chung, và theo quy ước đã nằm trong
+`.gitignore` — khoá của khách không trôi lên kho mã nếu họ đưa thư mục tool đi
+đâu đó.
+
+Vẫn giữ ba luật của một tệp không phải của mình:
 
 1. **Trộn, không đè.** Giữ nguyên hooks, MCP, và mọi khoá khác của khách.
 2. **Sao lưu một lần** trước lần ghi đầu, và không bao giờ đè bản sao lưu ấy.
@@ -344,39 +353,44 @@ KHOA_CAT_TAM = "SHOPAPI_ANTHROPIC_API_KEY_CU"
 DUOI_SAO_LUU = ".shopapi-backup"
 
 
-def thu_muc_claude() -> str:
-    """Thư mục cấu hình Claude Code. Đổi được bằng `SHOPAPI_CLAUDE_DIR` để test
-    không đụng vào tệp thật của người đang chạy test."""
-    rieng = os.environ.get("SHOPAPI_CLAUDE_DIR", "").strip()
-    return rieng or os.path.join(os.path.expanduser("~"), ".claude")
+#: Tên tệp cấu hình. `settings.local.json` chứ không phải `settings.json`:
+#: đây là tệp Claude Code dành cho **máy cá nhân**, ưu tiên cao hơn tệp dùng
+#: chung, và nằm sẵn trong `.gitignore` của quy ước — nên khoá của khách không
+#: trôi vào git nếu họ lỡ đưa thư mục tool lên kho nào đó.
+TEN_SETTINGS = "settings.local.json"
 
 
-def duong_settings() -> str:
-    return os.path.join(thu_muc_claude(), "settings.json")
+def thu_muc_claude(goc: str) -> str:
+    """Thư mục cấu hình Claude Code **của riêng thư mục tool**."""
+    return os.path.join(goc, ".claude")
 
 
-def doc_settings() -> dict:
+def duong_settings(goc: str) -> str:
+    return os.path.join(thu_muc_claude(goc), TEN_SETTINGS)
+
+
+def doc_settings(goc: str) -> dict:
     """Đọc cấu hình hiện có. Không có tệp, hay tệp hỏng, đều trả về `{}`.
 
     Tệp hỏng mà ném lỗi ở đây là chặn khách ngay ở nút Cài đặt, và họ không có
     cách nào sửa một tệp JSON hỏng. Bản sao lưu giữ nguyên vật chứng.
     """
     try:
-        with open(duong_settings(), "r", encoding="utf-8") as f:
+        with open(duong_settings(goc), "r", encoding="utf-8") as f:
             gia_tri = json.load(f)
     except (OSError, ValueError):
         return {}
     return gia_tri if isinstance(gia_tri, dict) else {}
 
 
-def _ghi_settings(gia_tri: dict) -> str:
+def _ghi_settings(goc: str, gia_tri: dict) -> str:
     """Ghi cấu hình, sao lưu bản cũ đúng một lần. Trả về đường dẫn bản sao lưu
     (rỗng nếu không tạo lần này).
 
     Ghi qua tệp tạm rồi đổi tên: mất điện giữa chừng thì khách còn tệp cũ nguyên
     vẹn, chứ không phải một tệp JSON cụt đầu mà Claude Code từ chối đọc.
     """
-    duong = duong_settings()
+    duong = duong_settings(goc)
     os.makedirs(os.path.dirname(duong), exist_ok=True)
     sao_luu = duong + DUOI_SAO_LUU
     da_sao_luu = ""
@@ -394,14 +408,14 @@ def _ghi_settings(gia_tri: dict) -> str:
     return da_sao_luu
 
 
-def cai_vao_settings(api_key: str, base_url: str = "") -> str:
+def cai_vao_settings(goc: str, api_key: str, base_url: str = "") -> str:
     """Trỏ Claude Code của khách về shopapi. Trả về đường dẫn bản sao lưu.
 
     **Trộn, không đè**: mọi khoá khác của khách (hooks, MCP, quyền, mô hình mặc
     định) giữ nguyên. Không đụng vào khoá `model` cấp cao nhất — đó là lựa chọn
     của khách, và Claude Code đã tự có mặc định.
     """
-    cai = doc_settings()
+    cai = doc_settings(goc)
     env = dict(cai.get("env") or {})
     cu = env.pop("ANTHROPIC_API_KEY", "")
     if cu:
@@ -410,13 +424,13 @@ def cai_vao_settings(api_key: str, base_url: str = "") -> str:
     env["ANTHROPIC_AUTH_TOKEN"] = (api_key or "").strip()
     env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
     cai["env"] = env
-    return _ghi_settings(cai)
+    return _ghi_settings(goc, cai)
 
 
-def go_khoi_settings() -> None:
+def go_khoi_settings(goc: str) -> None:
     """Trả cấu hình khách về như trước: xoá đúng khoá Studio đặt, trả lại khoá
     riêng đã cất tạm. Không đụng gì khác."""
-    cai = doc_settings()
+    cai = doc_settings(goc)
     env = dict(cai.get("env") or {})
     for khoa in KHOA_QUAN_LY:
         env.pop(khoa, None)
@@ -427,13 +441,13 @@ def go_khoi_settings() -> None:
         cai["env"] = env
     else:
         cai.pop("env", None)
-    _ghi_settings(cai)
+    _ghi_settings(goc, cai)
 
 
-def trang_thai_settings() -> dict:
+def trang_thai_settings(goc: str) -> dict:
     """Cấu hình hiện đang trỏ về đâu — để trang Agent nói thật với khách thay vì
     đoán."""
-    env = doc_settings().get("env") or {}
+    env = doc_settings(goc).get("env") or {}
     dia_chi = str(env.get("ANTHROPIC_BASE_URL") or "")
     khoa = str(env.get("ANTHROPIC_AUTH_TOKEN") or "")
     return {
@@ -441,7 +455,7 @@ def trang_thai_settings() -> dict:
         "base_url": dia_chi,
         "la_shopapi": "shopapi" in dia_chi.lower(),
         "khoa_rut_gon": (khoa[:12] + "…") if khoa else "",
-        "duong": duong_settings(),
+        "duong": duong_settings(goc),
         "co_khoa_rieng": bool(env.get("ANTHROPIC_API_KEY")),
     }
 

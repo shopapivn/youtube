@@ -253,9 +253,9 @@ class TrangAgent(QWidget):
         hang.addStretch(1)
         doc.addLayout(hang)
         chu_thich = self._chu_phu(
-            "Lựa chọn này ghi vào tệp cấu hình chung của Claude Code. Bản cũ "
-            "của bạn được sao lưu, mọi cài đặt khác giữ nguyên.")
-        chu_thich.setToolTip(duong_settings())
+            "Lựa chọn này chỉ có tác dụng TRONG thư mục tool. Mở Claude Code ở "
+            "chỗ khác trên máy thì gói Claude riêng của bạn vẫn chạy nguyên vẹn.")
+        chu_thich.setToolTip(duong_settings(self.app.base_dir))
         doc.addWidget(chu_thich)
         return khung
 
@@ -279,15 +279,15 @@ class TrangAgent(QWidget):
 
     def ap_dung_nguon(self) -> None:
         if self.nguon == NGUON_MAX:
-            go_khoi_settings()
-            self._ve_nguon("Đã trả về tài khoản Claude của bạn.")
+            go_khoi_settings(self.app.base_dir)
+            self._ve_nguon("Đã gỡ khoá ShopAPI khỏi thư mục tool.")
             return
         khoa = (self.app.config.api_key or "").strip()
         if not khoa:
             self.app.bao_can_khoa()
             return
-        cai_vao_settings(khoa, self.app.config.base_url)
-        self._ve_nguon("Đã trỏ Claude Code về ví ShopAPI.")
+        cai_vao_settings(self.app.base_dir, khoa, self.app.config.base_url)
+        self._ve_nguon("Đã trỏ Claude Code trong thư mục này về ví ShopAPI.")
 
     def _ve_nguon(self, them: str = "") -> None:
         """Nói thật đang trỏ về đâu, đọc từ chính tệp cấu hình.
@@ -296,12 +296,13 @@ class TrangAgent(QWidget):
         gateway khác từ trước, và báo nhầm là "đang dùng ví ShopAPI" thì họ
         tưởng đang tiêu ví shopapi trong khi không phải.
         """
-        tt = trang_thai_settings()
+        tt = trang_thai_settings(self.app.base_dir)
         if not tt["da_cai"]:
-            chu = ("Hiện chưa cấu hình — Claude Code dùng đăng nhập sẵn có của "
-                   "bạn.")
+            chu = ("Thư mục tool chưa cấu hình gì — Claude Code dùng đăng nhập "
+                   "sẵn có của bạn.")
         elif tt["la_shopapi"]:
-            chu = f"Đang trỏ về ví ShopAPI ({tt['khoa_rut_gon']})."
+            chu = (f"Trong thư mục tool đang trỏ về ví ShopAPI "
+                   f"({tt['khoa_rut_gon']}). Chỗ khác trên máy không đổi.")
             self._chon_shopapi.setChecked(True)
         else:
             chu = f"⚠ Đang trỏ về {tt['base_url']} — không phải ShopAPI."
