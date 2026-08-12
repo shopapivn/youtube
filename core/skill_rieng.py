@@ -101,10 +101,23 @@ def luu_skill(base_dir: str, ten: str, prompt: str, *, mo_ta: str = "",
             duong_dan = thu
             break
     duong_dan = duong_dan or os.path.join(thu_muc, goc + ".json")
-    with open(duong_dan, "w", encoding="utf-8") as tep:
-        json.dump({"ten": ten, "mo_ta": mo_ta[:TRAN_MO_TA], "bieu_tuong": bieu_tuong,
-                   "nhan_dau_vao": nhan_dau_vao, "goi_y": goi_y, "prompt": prompt},
-                  tep, ensure_ascii=False, indent=2)
+    # Ghi ra tệp tạm rồi đổi tên: hết đĩa hay mất điện giữa chừng thì chỗ cũ còn
+    # nguyên, chứ không để lại một tệp JSON cụt đầu — mà tệp cụt bị `_doc` lặng
+    # lẽ bỏ qua, nên khách chỉ thấy Skill của mình biến mất, không thấy lỗi nào.
+    tam = duong_dan + ".tam"
+    try:
+        with open(tam, "w", encoding="utf-8") as tep:
+            json.dump({"ten": ten, "mo_ta": mo_ta[:TRAN_MO_TA],
+                       "bieu_tuong": bieu_tuong, "nhan_dau_vao": nhan_dau_vao,
+                       "goi_y": goi_y, "prompt": prompt},
+                      tep, ensure_ascii=False, indent=2)
+        os.replace(tam, duong_dan)
+    except BaseException:
+        try:
+            os.remove(tam)
+        except OSError:
+            pass
+        raise
     return duong_dan
 
 

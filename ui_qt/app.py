@@ -415,8 +415,13 @@ class CuaSoChinh(QWidget):
         `run_bg` chỉ trả kết quả về khi việc đã xong. Việc chạy nhiều phút (bật
         cả dàn worker) thì phải bắn TIẾN ĐỘ ra giữa chừng — và bắn thẳng vào
         widget từ luồng nền là thứ Qt cho chạy một lúc rồi sập không đoán trước.
+
+        Đi qua `_bao_ve` như mọi lối về khác: khách đóng tool trong lúc một
+        luồng nền còn đang chạy là chuyện thường, và bắn thẳng vào cửa sổ Qt đã
+        xoá thì `RuntimeError` ném ra từ luồng nền — không ai bắt, mà trên bản
+        chạy bằng `pythonw` thì nó chết lặng không để lại dấu vết.
         """
-        self._xong_nen.emit(lambda _bo_qua: ham(), None)
+        self._bao_ve(lambda _bo_qua: ham(), None)
 
     def _chay_tren_luong_ve(self, ham, gia_tri) -> None:
         try:

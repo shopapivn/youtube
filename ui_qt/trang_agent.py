@@ -1,627 +1,359 @@
-"""Trang Agent (Qt) — bản chuyển của `ui/tab_agent.py`.
+"""Trang Agent — **cài và mở Claude Code thật**, ngay tại thư mục tool.
 
-Đây là cửa trước của cả sản phẩm: khách nói việc muốn làm bằng lời thường, Agent
-dựng Tool của họ từ các tool con.
+═══ TRANG NÀY KHÔNG PHẢI MỘT CON AGENT ═══
 
-Ba luật giữ nguyên từ bản tkinter, cả ba đều là lỗi đã trả giá:
+Chủ dự án, 12/08/2026: *"agen xây tool là cài đặt và đảm bảo khách dùng được cli
+claude code, tải và cài hết cho khách"* — và *"nguyên bản, chỉ là nó ở thư mục
+tool để có thể điều chỉnh tool thôi"*.
 
-* **Chỉ vẽ 30 bong bóng gần nhất**, dù phiên nhớ 200 tin. Hai nhu cầu khác nhau:
-  mô hình cần ngữ cảnh, mắt người cần đọc được. Vẽ cả 200 là cuộn mất nửa giây
-  mỗi nhịp.
-* **Không hiện tiền ở đây** — chuyện tiền gom về trang Ví & Tài khoản.
-* **Mọi thay đổi đều là ĐỀ XUẤT**, khách bấm duyệt mới thành thật.
+Bản trước là một khung chat tự viết: bảng từ khoá, rồi vòng lặp công cụ riêng.
+Nó dựng lại một thứ đã có sẵn và dựng kém hơn hẳn. Việc còn lại đáng làm chỉ là
+phần khách không tự làm nổi — **cài cho xong** và **mở đúng chỗ**. Sau đó khách
+làm việc với bản Claude Code nguyên gốc, thứ đã chín sẵn.
 
-Bộ hiểu offline (`core.agent_planner`) là **sàn**: khách chưa nạp tiền, mất mạng,
-hay mô hình lỗi đều rơi xuống đây, và nó vẫn phải dựng được tool.
+═══ HAI ĐƯỜNG TÍNH TIỀN, KHÁCH CHỌN ═══
 
-Trang này còn là **tay của Agent trên thanh bên**: đổi tên tab, ẩn/hiện tab do
-`core.ui_customization` hiểu và `core.ui_profile` nhớ, nhưng chỉ chỗ này mới
-chạm được vào widget thật.
+Chủ dự án, cùng ngày: *"biết đâu khách có claude max 20… ví dụ như tao là tao có
+claude max 20"*.
+
+    Ví ShopAPI  ─► khoá trong tool, trả theo lượt gọi
+    Claude Max  ─► đăng nhập của chính khách, KHÔNG trừ ví shopapi
+
+Người đã trả tiền tháng cho Anthropic mà bị tool ép tiêu thêm ví shopapi thì đó
+là tool ăn cắp. Nên đường Max là **gỡ tay ra**, không phải một chế độ giả.
+
+Trang này chỉ vẽ và bấm; mọi việc thật nằm ở `core/claude_code.py`.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+import os
+import subprocess
+import threading
+from typing import Sequence
 
-from PyQt5.QtCore import QPoint, QRect, QSize, Qt
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLayout, QLineEdit, QPlainTextEdit, QScrollArea,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QButtonGroup, QCheckBox, QGridLayout, QHBoxLayout, QPlainTextEdit,
+    QRadioButton, QVBoxLayout, QWidget,
 )
 
-from core.agent_lam_viec import lam_viec
-from core.agent_planner import HANH_DONG_GIAO_DIEN, plan_message
-from core.agent_service import respond, shopapi_completer
-from core.agent_session import load_agent_session, save_agent_session
-from core.noi_tool import noi_them_tool
-from core.skill_rieng import SkillRiengError, luu_skill
-from core.tool_contract import ToolContractError, load_catalog, load_manifest
-from core.tool_proposals import ToolProposalStore, activate_declarative
-from core.ui_profile import load_hidden_tabs, load_tab_labels, save_hidden_tab, save_tab_label
+from core.claude_code import (
+    TinhTrang, cai_vao_settings, duong_settings, go_khoi_settings, kiem_tra,
+    lenh_cai_dat, mo_terminal, mo_vscode, trang_thai_settings,
+)
 
 from . import theme
-from .widgets import HangXuongDong, nhan, nut_chinh, nut_phu, the, tieu_de_trang
+from .widgets import (HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu,
+                      the, tieu_de_trang)
 
-__all__ = ["TrangAgent"]
-
-#: Số bong bóng được VẼ. Không liên quan số tin được NHỚ — xem docstring module.
-_MAX_BONG_BONG = 30
-
-#: Bề rộng cột “Tool của tôi”.
-#:
-#: Cửa sổ hẹp nhất là 1000px (`ui_qt/app.py::setMinimumSize`), trừ thanh bên
-#: 240px và lề trang còn chưa tới 700px cho hai cột. Cột phải từng để 320px mà
-#: **không đóng khung**, nên nút bên trong tự đẩy nó rộng thêm và cả cột trôi ra
-#: ngoài mép phải: khách nhìn thấy nút “✓ Tạo Tool của tôi” bị cắt mất một nửa.
-#:
-#: 320px là bề rộng nhỏ nhất mà hai nút dưới cột còn đủ chỗ cho **cả câu chữ**;
-#: hẹp hơn là nút bắt đầu phải cắt chữ bằng “…”.
-_RONG_COT_PHAI = 320
-
-
-#: Gợi ý bấm nhanh. Chữ phải NGẮN — chip dài bị layout cắt cụt, khách đọc ra
-#: "m giúp tao conte" thì thà đừng có.
-GOI_Y = ("Làm content", "Tạo giọng đọc", "Tạo ảnh", "Làm video")
-
-
-def _ep_vao_cot(nut, rong: int = _RONG_COT_PHAI) -> None:
-    """Ép một nút nằm trọn trong cột: cắt chữ bằng “…” chứ không tràn ra ngoài.
-
-    Chặn bề rộng tối đa là phần bắt buộc — Qt lấy `max(sizeHint, minimumSizeHint)`
-    làm bề rộng tối thiểu của nút, nên một nhãn dài đủ sức đẩy rộng cả cột. Đo
-    chữ hoãn tới lúc trang hiện ra vì bảng kiểu QSS (nút chính cỡ 15px) chỉ được
-    áp lúc widget được polish, đo sớm hơn là đo bằng phông sai.
-    """
-    nut.setMaximumWidth(rong)
-    nut.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-    # Nhãn gốc giữ trong một thuộc tính riêng, không mượn tooltip: tooltip là
-    # chỗ nói thêm cho khách, mượn nó thì lần đo sau lấy nhầm câu chú thích làm
-    # nhãn nút.
-    day_du = nut.property("nhan_day_du") or nut.text()
-    nut.setProperty("nhan_day_du", day_du)
-    if nut.text() != day_du:
-        nut.setText(day_du)  # đo lại từ chữ gốc, không đo chồng lên chữ đã cắt
-    thua = nut.sizeHint().width() - rong
-    if thua <= 0:
-        return
-    # Lấy phần thừa từ chính `sizeHint` nên không phải đoán lề trong nút — mỗi
-    # kiểu nút một mức lề khác nhau, đoán sai là cắt chữ khi vẫn còn chỗ.
-    do = nut.fontMetrics()
-    rong_chu = (do.horizontalAdvance(day_du) if hasattr(do, "horizontalAdvance")
-                else do.width(day_du))
-    if not nut.toolTip():
-        nut.setToolTip(day_du)
-    nut.setText(do.elidedText(day_du, Qt.ElideRight, max(rong_chu - thua, 32)))
-
-
-class BongBong(QFrame):
-    def __init__(self, vai: str, noi_dung: str):
-        super().__init__()
-        khach = vai == "user"
-        # Chọn theo objectName, KHÔNG theo `QFrame`: `QLabel` là lớp con của
-        # `QFrame`, nên `QFrame {...}` vẽ viền quanh cả từng dòng chữ bên trong —
-        # bong bóng thành một chồng hộp lồng nhau.
-        self.setObjectName("bubble")
-        self.setStyleSheet(
-            "#bubble {{ background: {0}; border: 1px solid {1}; border-radius: 12px; }}".format(
-                theme.NHAN_NHAT if khach else theme.THE, theme.VIEN))
-        doc = QVBoxLayout(self)
-        doc.setContentsMargins(14, 10, 14, 12)
-        doc.setSpacing(4)
-        doc.addWidget(nhan("Bạn" if khach else "Agent", "muted"))
-        chu = nhan(noi_dung)
-        chu.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        doc.addWidget(chu)
-
-
-class _TayGiaoDien:
-    """Tay của agent trên thanh bên — **chỉ ghi hồ sơ, không chạm widget**.
-
-    Công cụ được gọi từ luồng nền của vòng lặp. Chạm widget từ luồng nền là Qt
-    cho chạy một lúc rồi sập không đoán trước — lỗi này đã trả giá một lần ở bản
-    tkinter. Nên ở đây chỉ ghi ra `ui-profile.json` (thuần đọc/ghi file, an toàn
-    từ mọi luồng); trang tự vẽ lại **sau khi** vòng lặp xong, trên luồng vẽ.
-    """
-
-    def __init__(self, trang: "TrangAgent"):
-        self._ho_so = trang._ho_so_ui
-        # Chụp danh sách tab NGAY BÂY GIỜ, trên luồng vẽ. Đọc muộn hơn là đọc
-        # widget từ luồng nền.
-        self._tab = {khoa: ten for khoa, _bt, ten in trang._nav()}
-        self._nhan = dict(self._tab)
-        self._nhan.update(trang._nhan_da_luu())
-        self.da_doi = False
-
-    def danh_sach_tab(self) -> Dict[str, str]:
-        return dict(self._nhan)
-
-    def _khoa_cua(self, ten: str) -> Optional[str]:
-        """Tìm tab theo tên khách/agent gọi. So không phân biệt hoa thường.
-
-        Không bỏ dấu, không dò từ khoá: mô hình đã hiểu tiếng Việt rồi, nó gọi
-        tên tab đúng như đang hiện. Thêm một lớp đoán ở đây chỉ tạo thêm chỗ đoán sai.
-        """
-        can = (ten or "").strip().lower()
-        for khoa, nhan in self._nhan.items():
-            if can in (khoa.lower(), str(nhan).strip().lower()):
-                return khoa
-        return None
-
-    def doi_ten_tab(self, ten_cu: str, ten_moi: str) -> Tuple[bool, str]:
-        khoa = self._khoa_cua(ten_cu)
-        if khoa is None:
-            return False, "Không có tab nào tên “{0}”. Các tab đang có: {1}.".format(
-                ten_cu, ", ".join(self._nhan.values()))
-        try:
-            ten = save_tab_label(self._ho_so, khoa, ten_moi)
-        except (OSError, ValueError) as loi:
-            return False, "Không đổi được: {0}".format(loi)
-        self._nhan[khoa] = ten
-        self.da_doi = True
-        return True, "Đã đổi tên tab thành “{0}”.".format(ten)
-
-    def _dat_an(self, ten: str, an: bool) -> Tuple[bool, str]:
-        khoa = self._khoa_cua(ten)
-        if khoa is None:
-            return False, "Không có tab nào tên “{0}”.".format(ten)
-        try:
-            save_hidden_tab(self._ho_so, khoa, an)
-        except (OSError, ValueError) as loi:
-            return False, "Không đổi được: {0}".format(loi)
-        self.da_doi = True
-        return True, ("Đã ẩn tab “{0}”." if an else "Đã hiện lại tab “{0}”.").format(ten)
-
-    def an_tab(self, ten: str) -> Tuple[bool, str]:
-        return self._dat_an(ten, True)
-
-    def hien_tab(self, ten: str) -> Tuple[bool, str]:
-        return self._dat_an(ten, False)
+#: Nguồn tính tiền. Giá trị này đi thẳng vào `dung_shopapi`.
+NGUON_SHOPAPI = "shopapi"
+NGUON_MAX = "max"
 
 
 class TrangAgent(QWidget):
+    """Cài Claude Code cho khách rồi mở nó đúng trong thư mục tool."""
+
     def __init__(self, app):
         super().__init__()
-        self._app = app
-        self._ho_so_ui = Path(app.base_dir) / "workspace" / "ui-profile.json"
-        self._phien_path = Path(app.base_dir) / "workspace" / "agent-session.json"
-        self._phien = load_agent_session(self._phien_path)
-        self._phien.state.update({"onboarding_complete": True, "onboarding_stage": "active"})
-        self._cho_duyet: Optional[Dict[str, Any]] = None
-        self._tool_cho_duyet = None
-        self._bong: List[BongBong] = []
-        self._kho_de_xuat = ToolProposalStore(
-            Path(app.base_dir) / "workspace" / "tool-proposals")
-        self._catalog = self._nap_catalog()
+        self.app = app
+        self._tt = TinhTrang()
+        self._dang_cai = False
 
-        ngang = QHBoxLayout(self)
-        ngang.setContentsMargins(24, 20, 24, 20)
-        ngang.setSpacing(14)
-
-        # ── Cột trái: hội thoại ──────────────────────────────────────────────
-        trai = QVBoxLayout()
-        trai.setSpacing(12)
-        trai.addWidget(tieu_de_trang(
-            # Tiêu đề là TÊN, không phải một câu. Câu dài 714px ở đây từng ép bề
-            # rộng tối thiểu của cả trang lên 1168px — tràn hẳn ra ngoài mép.
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(28, 24, 28, 24)
+        doc.setSpacing(14)
+        doc.addWidget(tieu_de_trang(
             "🤖  Agent xây tool",
-            "Nói điều bạn muốn, tôi xây giúp. Mỗi tab là một tool con."))
-        self._cuon = QScrollArea()
-        self._cuon.setWidgetResizable(True)
-        trong = QWidget()
-        self._chat = QVBoxLayout(trong)
-        self._chat.setContentsMargins(2, 2, 8, 2)
-        self._chat.setSpacing(8)
-        self._chat.addStretch(1)
-        self._cuon.setWidget(trong)
-        trai.addWidget(self._cuon, 1)
+            "Claude Code chạy ngay trong thư mục tool này — bạn nói bằng lời "
+            "thường, nó sửa tool cho bạn."))
+        doc.addWidget(self._the_may())
+        doc.addWidget(self._the_nguon())
+        doc.addWidget(self._the_mo())
+        doc.addStretch(1)
 
-        goi_y = HangXuongDong()
-        for cau in GOI_Y:
-            goi_y.addWidget(nut_phu(cau, lambda c=cau: self._gui(c.lower())))
-        trai.addLayout(goi_y)
+        self._ve_bang()
+        self._ve_nut_mo()
+        self._ve_nguon()
+        self.do_lai()
 
+    # ── Thẻ 1: máy khách có gì ───────────────────────────────────────────────
+
+    def _the_may(self) -> QWidget:
+        khung = the()
+        doc = QVBoxLayout(khung)
+        doc.setContentsMargins(18, 16, 18, 16)
+        doc.setSpacing(10)
+
+        dau = QHBoxLayout()
+        dau.addWidget(nhan("Máy của bạn", "h2"))
+        dau.addStretch(1)
+        dau.addWidget(nut_phu("⟳  Kiểm tra lại", self.do_lai))
+        doc.addLayout(dau)
+
+        self._bang = QGridLayout()
+        self._bang.setHorizontalSpacing(14)
+        self._bang.setVerticalSpacing(6)
+        self._bang.setColumnStretch(2, 1)
+        doc.addLayout(self._bang)
+
+        # Hàng biết xuống dòng: hai nút cạnh nhau đòi hơn bề rộng cửa sổ nhỏ
+        # nhất, và `QHBoxLayout` không co được nên phần thừa bị cắt ngoài mép.
+        hang = HangXuongDong()
+        self._nut_cai = nut_chinh("⬇  Cài những thứ còn thiếu", self.cai_dat)
+        hang.addWidget(self._nut_cai)
+        self._xin_vscode = QCheckBox("Cài kèm VS Code")
+        self._xin_vscode.setToolTip(
+            "Không bắt buộc. VS Code là cửa thứ hai cho ai thích làm việc "
+            "trong trình soạn mã; chỉ dùng nút “Mở Claude Code” cũng đủ.")
+        self._xin_vscode.setStyleSheet(f"color:{theme.CHU_MO};")
+        hang.addWidget(self._xin_vscode)
+        doc.addLayout(hang)
+
+        self._nhat_ky = QPlainTextEdit()
+        self._nhat_ky.setReadOnly(True)
+        self._nhat_ky.setFixedHeight(120)
+        self._nhat_ky.setStyleSheet(
+            f"background:{theme.THE_MO}; border:1px solid {theme.VIEN};"
+            f" border-radius:8px; color:{theme.CHU_MO};"
+            f" font-family:{theme.PHONG_MA}; font-size:12px;")
+        self._nhat_ky.hide()
+        doc.addWidget(self._nhat_ky)
+        return khung
+
+    def _ve_bang(self) -> None:
+        """Vẽ lại bảng tình trạng. Xoá sạch trước — không thì mỗi lần kiểm tra
+        lại chồng thêm một bộ dòng nữa lên bộ cũ."""
+        while self._bang.count():
+            mon = self._bang.takeAt(0)
+            w = mon.widget()
+            if w is not None:
+                w.setParent(None)
+
+        tt = self._tt
+        dong = [("Node.js", tt.node, True),
+                ("Claude Code", tt.claude, True),
+                ("VS Code", tt.vscode, False),
+                ("Extension Claude cho VS Code",
+                 "đã cài" if tt.ext_vscode else "", False)]
+        for i, (ten, ban, bat_buoc) in enumerate(dong):
+            mau = theme.XANH if ban else (theme.DO if bat_buoc else theme.CHU_MO)
+            co = nhan("✓" if ban else ("✗" if bat_buoc else "○"))
+            co.setStyleSheet(f"color:{mau}; font-weight:600;")
+            self._bang.addWidget(co, i, 0)
+            self._bang.addWidget(nhan(ten), i, 1)
+            self._bang.addWidget(
+                nhan(ban or ("chưa có — bắt buộc" if bat_buoc else "chưa có"),
+                     "phu"), i, 2)
+
+    def do_lai(self) -> None:
+        """Dò lại máy khách. Chạy ở luồng nền — trên máy chậm, năm lần gọi tiến
+        trình con là cửa sổ đứng hình vài giây ngay khi mở tab."""
+        self._nut_cai.setEnabled(False)
+        self._nut_cai.setText("⏳  Đang kiểm tra…")
+
+        def nen():
+            tt = kiem_tra()
+            self.app.goi_tren_luong_ve(lambda: self._nhan_tinh_trang(tt))
+
+        threading.Thread(target=nen, daemon=True).start()
+
+    def _nhan_tinh_trang(self, tt: TinhTrang) -> None:
+        self._tt = tt
+        self._ve_bang()
+        con_thieu = tt.thieu + (tt.thieu_vscode if self._xin_vscode.isChecked()
+                                else [])
+        self._nut_cai.setEnabled(bool(con_thieu) and not self._dang_cai)
+        self._nut_cai.setText("⬇  Cài những thứ còn thiếu" if con_thieu
+                              else "✓  Đã đủ, không cần cài gì")
+        self._ve_nut_mo()
+
+    # ── Cài đặt ──────────────────────────────────────────────────────────────
+
+    def cai_dat(self) -> None:
+        lenh = lenh_cai_dat(self._tt, them_vscode=self._xin_vscode.isChecked())
+        if not lenh:
+            return
+        self._dang_cai = True
+        self._nut_cai.setEnabled(False)
+        self._nut_cai.setText("⏳  Đang cài…")
+        self._nhat_ky.show()
+        self._nhat_ky.setPlainText("")
+        threading.Thread(target=lambda: self._chay_cai(lenh),
+                         daemon=True).start()
+
+    def _ghi(self, dong: str) -> None:
+        """Gọi được từ luồng nền — mọi chữ đi qua luồng giao diện."""
+        self.app.goi_tren_luong_ve(lambda: self._nhat_ky.appendPlainText(dong))
+
+    def _chay_cai(self, lenh: Sequence[Sequence[str]]) -> None:
+        """Chạy từng lệnh cài, in tiến trình. **Luồng nền.**
+
+        Một lệnh hỏng thì báo rồi chạy tiếp lệnh sau, không dừng cả dây: máy
+        không có `winget` vẫn cài được Claude Code qua npm nếu Node đã sẵn —
+        dừng ở lệnh đầu là chặn mất đường đó.
+        """
+        for buoc in lenh:
+            self._ghi("› " + " ".join(buoc))
+            try:
+                co = (getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                      if os.name == "nt" else 0)
+                xong = subprocess.run(list(buoc), capture_output=True, text=True,
+                                      encoding="utf-8", errors="replace",
+                                      timeout=900, creationflags=co)
+            except FileNotFoundError:
+                self._ghi(f"  ✗ máy không có lệnh `{buoc[0]}` — Windows cũ chưa "
+                          "có winget, cần tải tay ở nodejs.org.")
+                continue
+            except (OSError, subprocess.SubprocessError) as loi:
+                self._ghi(f"  ✗ {loi}")
+                continue
+            ra = ((xong.stdout or "") + (xong.stderr or "")).strip()
+            if ra:
+                self._ghi("  " + ra.splitlines()[-1][:200])
+            self._ghi("  ✓ xong" if not xong.returncode
+                      else f"  ✗ lệnh trả mã lỗi {xong.returncode}")
+        self._ghi("Đang kiểm tra lại…")
+        self.app.goi_tren_luong_ve(self._cai_xong)
+
+    def _cai_xong(self) -> None:
+        self._dang_cai = False
+        self.do_lai()
+
+    # ── Thẻ 2: tính tiền bằng gì ─────────────────────────────────────────────
+
+    def _the_nguon(self) -> QWidget:
+        khung = the()
+        doc = QVBoxLayout(khung)
+        doc.setContentsMargins(18, 16, 18, 16)
+        doc.setSpacing(8)
+        doc.addWidget(nhan("Claude Code tính tiền bằng gì", "h2"))
+
+        # Nhãn nút ngắn, phần giải thích xuống dòng dưới: chữ trong QRadioButton
+        # KHÔNG tự xuống dòng, nên một nhãn dài là kéo cả trang rộng ra quá mép
+        # cửa sổ — đo được 1250px trên một cửa sổ chỉ có 760px.
+        self._nhom = QButtonGroup(self)
+        self._chon_shopapi = QRadioButton("Ví ShopAPI")
+        self._chon_max = QRadioButton("Tài khoản Claude của tôi")
+        giai_thich = ["Dùng khoá đã nhập trong tool, trả theo lượt gọi.",
+                      "Bạn đang có gói Max hoặc Pro của Anthropic: đăng nhập "
+                      "bằng trình duyệt, không trừ ví ShopAPI."]
+        for i, nut in enumerate((self._chon_shopapi, self._chon_max)):
+            nut.setStyleSheet(f"color:{theme.CHU}; padding:2px;")
+            self._nhom.addButton(nut, i)
+            doc.addWidget(nut)
+            doc.addWidget(self._chu_phu(giai_thich[i], lui=26))
+        self._chon_shopapi.setChecked(True)
+
+        self._nhan_nguon = self._chu_phu("")
+        doc.addWidget(self._nhan_nguon)
         hang = QHBoxLayout()
-        self._o_nhap = QLineEdit()
-        self._o_nhap.setPlaceholderText("Ví dụ: tôi muốn làm kênh YouTube về tâm lý")
-        self._o_nhap.returnPressed.connect(lambda: self._gui())
-        hang.addWidget(self._o_nhap, 1)
-        self._nut_gui = nut_chinh("Gửi", lambda: self._gui())
-        self._nut_gui.setFixedWidth(110)
-        hang.addWidget(self._nut_gui)
-        trai.addLayout(hang)
-        ngang.addLayout(trai, 1)
+        hang.addWidget(nut_chinh("Áp dụng", self.ap_dung_nguon))
+        hang.addStretch(1)
+        doc.addLayout(hang)
+        chu_thich = self._chu_phu(
+            "Lựa chọn này ghi vào tệp cấu hình chung của Claude Code. Bản cũ "
+            "của bạn được sao lưu, mọi cài đặt khác giữ nguyên.")
+        chu_thich.setToolTip(duong_settings())
+        doc.addWidget(chu_thich)
+        return khung
 
-        # ── Cột phải: Tool của tôi ───────────────────────────────────────────
-        #
-        # Cả cột nằm trong MỘT widget có bề rộng cố định. Trước đây cột chỉ là
-        # một `QVBoxLayout` với vài widget con tự đặt bề rộng: widget nào rộng
-        # hơn thì kéo cả cột rộng theo, và ở cửa sổ nhỏ nhất nó tràn khỏi mép.
-        self._cot_phai = QWidget()
-        self._cot_phai.setFixedWidth(_RONG_COT_PHAI)
-        phai = QVBoxLayout(self._cot_phai)
-        phai.setContentsMargins(0, 0, 0, 0)
-        phai.setSpacing(10)
-        phai.addWidget(nhan("Tool của tôi", "h2"))
-        self._tom_tat = QPlainTextEdit()
-        self._tom_tat.setReadOnly(True)
-        self._tom_tat.setMinimumHeight(240)
-        phai.addWidget(self._tom_tat)
-        # Nhãn nút phải nằm gọn trong 320px. Nhãn cũ “✓  Thêm tool mới vào bộ
-        # tool” cần tới 398px — chính nó kéo cả cột rộng ra và đẩy mọi thứ khỏi
-        # mép phải cửa sổ. Câu hỏi xác nhận vẫn nói đủ ý khi khách bấm vào.
-        self._nut_duyet = nut_chinh("✓ Tạo Tool của tôi", self._duyet)
-        self._nut_duyet.setEnabled(False)
-        phai.addWidget(self._nut_duyet)
-        self._nut_them_tool = nut_phu("✓  Thêm tool mới", self._kich_hoat_tool)
-        self._nut_them_tool.setEnabled(False)
-        self._nut_them_tool.setToolTip("Thêm tool mới vào bộ tool của bạn")
-        phai.addWidget(self._nut_them_tool)
-        phai.addStretch(1)
-        self._trang_thai = nhan("", "muted")
-        phai.addWidget(self._trang_thai)
-        ngang.addWidget(self._cot_phai)
+    @staticmethod
+    def _chu_phu(chu: str, lui: int = 0):
+        """Dòng chữ phụ tự xuống dòng và **không kéo trang rộng ra**.
 
-        self._ve_lai_lich_su()
-        self._ve_tom_tat(self._phien.workflow)
-        self._ap_ho_so_giao_dien()
-
-    def showEvent(self, su_kien) -> None:  # noqa: N802 — tên do Qt quy định
-        super().showEvent(su_kien)
-        for nut in (self._nut_duyet, self._nut_them_tool):
-            _ep_vao_cot(nut)
-
-    # ── Thanh bên: tay của Agent trên giao diện ──────────────────────────────
-
-    def _nav(self) -> Tuple[tuple, ...]:
-        """Danh sách trang của vỏ đang chạy: `(khoá, biểu tượng, nhãn)`.
-
-        Đọc từ chính cửa sổ chứ không nhập hằng `TRANG`: vỏ vận hành thu hẹp
-        danh sách này, mà tab nó cố ý bỏ đi thì Agent cũng không được đụng tới.
+        `setWordWrap` một mình chưa đủ: QLabel vẫn khai một bề rộng tối thiểu
+        theo từ dài nhất, và cộng dồn qua vài dòng là tràn mép phải.
         """
-        return tuple(getattr(self._app, "_nav", ()) or ())
+        nh = nhan(chu, "phu")
+        nh.setWordWrap(True)
+        nh.setMinimumWidth(1)
+        if lui:
+            nh.setContentsMargins(lui, 0, 0, 0)
+        return nh
 
-    def _nhan_tab(self) -> Dict[str, str]:
-        """Bảng *khoá tab → nhãn đang hiện*, đã tính cả tên khách vừa đổi."""
-        da_doi = self._nhan_da_luu()
-        return {khoa: da_doi.get(khoa, ten) for khoa, _bt, ten in self._nav()}
+    @property
+    def nguon(self) -> str:
+        return NGUON_MAX if self._chon_max.isChecked() else NGUON_SHOPAPI
 
-    def _nhan_da_luu(self) -> Dict[str, str]:
-        try:
-            return load_tab_labels(self._ho_so_ui)
-        except OSError:
-            return {}
-
-    def _nut_tab(self, khoa: str):
-        ben = getattr(self._app, "_ben", None)
-        return getattr(ben, "_nut", {}).get(khoa) if ben is not None else None
-
-    def _ve_lai_nut_tab(self, khoa: str, ten: str) -> None:
-        nut = self._nut_tab(khoa)
-        if nut is None:
+    def ap_dung_nguon(self) -> None:
+        if self.nguon == NGUON_MAX:
+            go_khoi_settings()
+            self._ve_nguon("Đã trả về tài khoản Claude của bạn.")
             return
-        bieu_tuong = next((bt for k, bt, _t in self._nav() if k == khoa), "")
-        nut.setText("   {0}    {1}".format(bieu_tuong, ten))
+        khoa = (self.app.config.api_key or "").strip()
+        if not khoa:
+            self.app.bao_can_khoa()
+            return
+        cai_vao_settings(khoa, self.app.config.base_url)
+        self._ve_nguon("Đã trỏ Claude Code về ví ShopAPI.")
 
-    def _ap_ho_so_giao_dien(self) -> None:
-        """Đặt lại tên và trạng thái ẩn của tab ngay khi mở tool.
+    def _ve_nguon(self, them: str = "") -> None:
+        """Nói thật đang trỏ về đâu, đọc từ chính tệp cấu hình.
 
-        Chạy được ở đây vì thanh bên đã dựng xong trước các trang. Không có bước
-        này thì mỗi lần khách mở lại tool là tên tab tự nhảy về mặc định — khách
-        sẽ nghĩ Agent chỉ nói cho vui chứ không sửa thật.
+        Không đoán theo nút khách vừa bấm: khách có thể đã trỏ Claude Code sang
+        gateway khác từ trước, và báo nhầm là "đang dùng ví ShopAPI" thì họ
+        tưởng đang tiêu ví shopapi trong khi không phải.
         """
-        for khoa, ten in self._nhan_da_luu().items():
-            self._ve_lai_nut_tab(khoa, ten)
-        try:
-            an = load_hidden_tabs(self._ho_so_ui)
-        except OSError:
-            return
-        for khoa in an:
-            nut = self._nut_tab(khoa)
-            if nut is not None:
-                nut.setVisible(False)
+        tt = trang_thai_settings()
+        if not tt["da_cai"]:
+            chu = ("Hiện chưa cấu hình — Claude Code dùng đăng nhập sẵn có của "
+                   "bạn.")
+        elif tt["la_shopapi"]:
+            chu = f"Đang trỏ về ví ShopAPI ({tt['khoa_rut_gon']})."
+            self._chon_shopapi.setChecked(True)
+        else:
+            chu = f"⚠ Đang trỏ về {tt['base_url']} — không phải ShopAPI."
+        self._nhan_nguon.setText((them + " " + chu).strip())
 
-    def _lam_viec_giao_dien(self, hanh_dong) -> List[str]:
-        """Thi hành các `AgentAction` chạm giao diện; trả về những lời báo hỏng.
+    # ── Thẻ 3: mở ────────────────────────────────────────────────────────────
 
-        Trả lời của Agent viết ở thể đã-xong, nên phải làm TRƯỚC khi vẽ câu trả
-        lời: hỏng chỗ nào thì nói thẳng chỗ đó, không để câu “Xong” đứng một mình.
+    def _the_mo(self) -> QWidget:
+        khung = the()
+        doc = QVBoxLayout(khung)
+        doc.setContentsMargins(18, 16, 18, 16)
+        doc.setSpacing(8)
+        doc.addWidget(nhan("Mở ra làm việc", "h2"))
+
+        hang = HangXuongDong()
+        self._nut_terminal = nut_chinh("▶  Mở Claude Code", self.mo_claude)
+        self._nut_vscode = nut_phu("Mở VS Code", self.mo_vs)
+        hang.addWidget(self._nut_terminal)
+        hang.addWidget(self._nut_vscode)
+        hang.addWidget(nut_phu("Mở thư mục",
+                               lambda: mo_thu_muc(self.app.base_dir)))
+        doc.addLayout(hang)
+
+        duong = self._chu_phu(f"Làm việc tại: {self.app.base_dir}")
+        duong.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        doc.addWidget(duong)
+        doc.addWidget(self._chu_phu(
+            "Ví dụ để gõ: “thêm cho tôi một tab đọc bình luận YouTube rồi tóm "
+            "tắt”, hay “sửa tab Voice cho nhớ giọng tôi hay dùng”."))
+        return khung
+
+    def _ve_nut_mo(self) -> None:
+        """Nút mở chỉ sáng khi mở được thật.
+
+        Nút bấm không ra gì là lỗi tệ nhất ở đây: khách không phân biệt được
+        mình thiếu Claude Code hay tool hỏng, và họ bỏ đi chứ không đi hỏi.
         """
-        hong: List[str] = []
-        for viec in hanh_dong or ():
-            kieu = getattr(viec, "kind", "")
-            du_lieu = dict(getattr(viec, "payload", {}) or {})
-            khoa = str(du_lieu.get("key") or "")
-            if kieu not in HANH_DONG_GIAO_DIEN or not khoa:
-                continue
-            if khoa not in {k for k, _bt, _t in self._nav()}:
-                hong.append("Bản này không có tab đó nên tôi chưa đổi được gì.")
-                continue
-            try:
-                if kieu == "rename_tab":
-                    ten = save_tab_label(self._ho_so_ui, khoa, str(du_lieu.get("label") or ""))
-                    self._ve_lai_nut_tab(khoa, ten)
-                else:
-                    an = kieu == "hide_tab"
-                    save_hidden_tab(self._ho_so_ui, khoa, an)
-                    nut = self._nut_tab(khoa)
-                    if nut is not None:
-                        nut.setVisible(not an)
-                    if an:
-                        # Ẩn tab đang mở là để khách nhìn vào một trang không còn
-                        # lối quay lại; kéo họ về đúng chỗ vừa ra lệnh.
-                        self._app.show_page("agent")
-            except (OSError, ValueError) as loi:
-                hong.append("Chưa đổi được giao diện: {0}".format(loi))
-        return hong
+        self._nut_terminal.setEnabled(self._tt.san_sang)
+        self._nut_terminal.setToolTip(
+            "" if self._tt.san_sang else "Cần cài Claude Code ở thẻ trên trước.")
+        self._nut_vscode.setEnabled(bool(self._tt.vscode))
+        self._nut_vscode.setToolTip(
+            "" if self._tt.vscode else "Máy chưa có VS Code — tick ô ở thẻ trên "
+            "rồi bấm cài, hoặc dùng nút “Mở Claude Code”.")
 
-    # ── Đẻ tool cho khách ────────────────────────────────────────────────────
+    def mo_claude(self) -> None:
+        mo_terminal(self.app.base_dir, self.app.config.api_key,
+                    self.app.config.base_url,
+                    duong_claude=self._tt.duong_claude,
+                    dung_shopapi=self.nguon == NGUON_SHOPAPI)
 
-    def _de_ra_skill(self, hanh_dong) -> Tuple[List[str], List[str]]:
-        """Ghi các Skill agent vừa đẻ ra, trả về `(dòng báo hỏng, dòng báo xong)`.
-
-        Chạy TRƯỚC khi vẽ câu trả lời, y như việc giao diện: lời đáp viết ở thể
-        đã-xong, nên ghi không được thì phải nói ngay tại đó chứ không để câu
-        “Xong” đứng một mình.
-
-        Tab Skill được nạp lại **ngay tại đây**. Bắt khách tắt tool rồi mở lại
-        mới thấy thứ mình vừa đặt làm là đủ để họ tin agent chỉ nói suông.
-        """
-        hong: List[str] = []
-        xong: List[str] = []
-        for viec in hanh_dong or ():
-            if getattr(viec, "kind", "") != "tao_skill":
-                continue
-            du_lieu = dict(getattr(viec, "payload", {}) or {})
-            ten = str(du_lieu.get("ten") or "")
-            try:
-                duong_dan = luu_skill(
-                    self._app.base_dir, ten, str(du_lieu.get("prompt") or ""),
-                    mo_ta=str(du_lieu.get("mo_ta") or ""),
-                    nhan_dau_vao=str(du_lieu.get("nhan_dau_vao") or "Nội dung"),
-                    bieu_tuong=str(du_lieu.get("bieu_tuong") or "🧩"),
-                    goi_y=str(du_lieu.get("goi_y") or ""))
-            except (SkillRiengError, OSError) as loi:
-                hong.append("Chưa tạo được tool “{0}”: {1}".format(ten, loi))
-                continue
-            trang = self._app.trang("skill")
-            nap_lai = getattr(trang, "nap_lai", None)
-            if callable(nap_lai):
-                # Mở sẵn đúng Skill vừa đẻ: mã do `core.skill_rieng` đặt theo tên
-                # file, nên lấy lại được từ đường dẫn nó vừa trả về.
-                nap_lai("rieng:" + Path(duong_dan).stem)
-            xong.append("Tool “{0}” đã nằm trong tab Skill. File lưu tại: {1}".format(
-                ten, duong_dan))
-        return hong, xong
-
-    # ── Catalog ──────────────────────────────────────────────────────────────
-
-    def _nap_catalog(self):
-        goc = Path(self._app.base_dir)
-        try:
-            catalog = load_catalog(sorted((goc / "tool-catalog").glob("*/tool.json")))
-            for duong in sorted((goc / "user-tools").glob("*/tool.json")):
-                manifest = load_manifest(duong)
-                catalog[manifest.tool_id] = manifest
-            return catalog
-        except ToolContractError:
-            return {}
-
-    # ── Hội thoại ────────────────────────────────────────────────────────────
-
-    def _ve_lai_lich_su(self) -> None:
-        """Vẽ phần đuôi lịch sử, kèm một dòng báo phần bị giấu.
-
-        Dòng báo phải **nằm trong** trần `_MAX_BONG_BONG`, không được cộng thêm.
-        Trước đây nó vẽ dòng báo rồi vẽ tiếp đủ `_MAX_BONG_BONG` bong bóng, nên
-        vòng cắt trong `_them_bong` đẩy chính dòng báo ra ngay lúc vừa vẽ xong —
-        khách không bao giờ thấy nó, và tưởng Agent quên sạch mọi chuyện đã nói.
-        """
-        tin = self._phien.messages
-        an_bot = len(tin) - _MAX_BONG_BONG
-        if an_bot > 0:
-            self._them_bong("assistant", "… {0} tin nhắn cũ hơn vẫn nằm trong ngữ cảnh "
-                                         "của Agent nhưng không hiện ở đây, để khung chat "
-                                         "còn cuộn mượt.".format(an_bot))
-            tin = tin[-(_MAX_BONG_BONG - 1):]
-        for muc in tin:
-            self._them_bong(muc["role"], muc["content"])
-        if not tin:
-            self._them_bong("assistant",
-                            "Chào bạn! Nói việc bạn muốn làm — tôi dựng tool giúp.")
-
-    def _them_bong(self, vai: str, noi_dung: str) -> None:
-        bong = BongBong(vai, noi_dung)
-        self._chat.insertWidget(self._chat.count() - 1, bong)
-        self._bong.append(bong)
-        while len(self._bong) > _MAX_BONG_BONG:
-            cu = self._bong.pop(0)
-            cu.setParent(None)
-            cu.deleteLater()
-        thanh = self._cuon.verticalScrollBar()
-        thanh.setValue(thanh.maximum())
-
-    def _gui(self, san: str = "") -> None:
-        cau = (san or self._o_nhap.text()).strip()
-        if not cau:
-            return
-        self._o_nhap.clear()
-        self._phien.add("user", cau)
-        self._them_bong("user", cau)
-        self._nut_gui.setEnabled(False)
-        self._trang_thai.setText("Agent đang nghĩ…")
-
-        catalog = self._catalog
-        workflow = self._phien.workflow
-        trang_thai = dict(self._phien.state)
-        lich_su = list(self._phien.messages)
-        cau_hinh = self._app.config
-        # Đọc nhãn tab TRÊN luồng vẽ rồi mới giao xuống nền: luồng nền không được
-        # chạm widget, kể cả chỉ để đọc một dòng chữ.
-        nhan_tab = self._nhan_tab()
-
-        khoa = str(getattr(cau_hinh, "api_key", "") or "")
-        dia_chi = str(getattr(cau_hinh, "base_url", "") or "https://api.shopapi.vn")
-        goc = self._app.base_dir
-        tay = _TayGiaoDien(self)
-
-        def viec():
-            if khoa:
-                # Có khoá thì đi VÒNG LẶP CÔNG CỤ: mô hình tự đọc thư mục, tự
-                # quyết, tự gọi công cụ. Không nhánh từ khoá nào ở đây — chủ dự
-                # án: *"api thì có trí thông minh, không cần cứng hay từ khoá,
-                # làm như vs code"*.
-                return lam_viec(cau, goc, khoa, dia_chi, lich_su=lich_su[:-1],
-                                ke_lai=None, tay_giao_dien=tay)
-            # Không khoá thì không có trí thông minh nào để mượn. Bảng từ khoá
-            # cứng nhưng chạy được — sàn, không phải đường chính.
-            return respond(cau, catalog, workflow=workflow, state=trang_thai,
-                           history=lich_su, tabs=nhan_tab, complete=None)
-
-        self._app.run_bg(viec, on_ok=self._nhan_tra_loi, on_err=self._loi_tra_loi)
-
-    def _nhan_ket_qua_vong(self, ket) -> None:
-        """Vẽ kết quả một lượt vòng lặp công cụ.
-
-        Kể lại **từng việc agent đã làm** trước câu trả lời. Khách phải nhìn thấy
-        agent chạm vào đâu trên máy mình, không phải tin — nó vừa đọc thư mục và
-        ghi file thật.
-        """
-        phan: List[str] = []
-        if ket.da_lam:
-            phan.append("\n".join("· " + dong for dong in ket.da_lam))
-        phan.append(ket.tra_loi)
-        loi_nhan = "\n\n".join(p for p in phan if p.strip())
-
-        # Vẽ lại thanh bên TRÊN LUỒNG VẼ — công cụ chỉ ghi hồ sơ, xem `_TayGiaoDien`.
-        self._ap_ho_so_giao_dien()
-        # Skill vừa đẻ phải hiện ngay, không bắt mở lại tool.
-        if ket.da_tao:
-            trang_skill = self._app.trang("skill")
-            nap_lai = getattr(trang_skill, "nap_lai", None)
-            if nap_lai is not None:
-                try:
-                    nap_lai()
-                except Exception:  # noqa: BLE001 — nạp hỏng không được giết câu trả lời
-                    pass
-        self._phien.add("assistant", loi_nhan)
-        self._them_bong("assistant", loi_nhan)
-        save_agent_session(self._phien_path, self._phien)
-
-    def _loi_tra_loi(self, loi: BaseException) -> None:
-        """Mạng hỏng không được làm khách bế tắc — lùi về bộ hiểu offline.
-
-        Đó chính là lý do `core.agent_planner` tồn tại: nó là sàn, không phải
-        đường dự phòng cho vui.
-        """
-        self._nut_gui.setEnabled(True)
-        cuoi = next((muc["content"] for muc in reversed(self._phien.messages)
-                     if muc.get("role") == "user"), "")
-        ke_hoach = plan_message(cuoi, self._catalog, self._phien.workflow,
-                                self._phien.state, history=list(self._phien.messages),
-                                tabs=self._nhan_tab())
-        self._nhan_tra_loi(ke_hoach)
-
-    def _nhan_tra_loi(self, tra_loi) -> None:
-        self._nut_gui.setEnabled(True)
-        self._trang_thai.setText("")
-        if hasattr(tra_loi, "tra_loi"):
-            self._nhan_ket_qua_vong(tra_loi)
-            return
-        loi_nhan = getattr(tra_loi, "reply", "")
-        hanh_dong = getattr(tra_loi, "actions", ())
-        hong = self._lam_viec_giao_dien(hanh_dong)
-        hong_skill, xong_skill = self._de_ra_skill(hanh_dong)
-        hong += hong_skill
-        if hong:
-            loi_nhan = "\n\n".join(["⚠ " + dong for dong in hong] + [loi_nhan])
-        # Đường dẫn file là thứ duy nhất chỉ trang này biết — câu trả lời của
-        # agent nói được tên Skill và chỗ nó nằm, nhưng không nói được nó ở đâu
-        # trên đĩa để khách còn mở ra xem hay chép đi.
-        if xong_skill:
-            loi_nhan = "\n\n".join([loi_nhan] + ["📁 " + dong for dong in xong_skill])
-        self._phien.add("assistant", loi_nhan)
-        self._them_bong("assistant", loi_nhan)
-        de_xuat = getattr(tra_loi, "proposed_workflow", None)
-        if de_xuat:
-            self._cho_duyet = dict(de_xuat)
-            self._nut_duyet.setEnabled(True)
-            self._ve_tom_tat(self._cho_duyet)
-        tool_moi = getattr(tra_loi, "tool_proposal", None)
-        if tool_moi is not None:
-            self._tool_cho_duyet = tool_moi
-            try:
-                self._kho_de_xuat.save(tool_moi)
-            except Exception:  # noqa: BLE001 — lưu nháp hỏng không chặn hội thoại
-                pass
-            self._nut_them_tool.setEnabled(
-                tool_moi.manifest.runtime.get("kind") == "declarative")
-        trang_thai_moi = getattr(tra_loi, "state", None)
-        if trang_thai_moi:
-            self._phien.state.update(dict(trang_thai_moi))
-        self._luu_phien()
-
-    # ── Tool của tôi ─────────────────────────────────────────────────────────
-
-    def _ve_tom_tat(self, workflow) -> None:
-        if not workflow or not workflow.get("nodes"):
-            self._tom_tat.setPlainText(
-                "Chưa có Tool của tôi.\n\nHãy nói việc bạn muốn làm ở ô bên trái.")
-            return
-        dong = ["QUY TRÌNH CỦA BẠN", ""]
-        nodes = list(workflow.get("nodes", []))
-        for so, node in enumerate(nodes, 1):
-            manifest = self._catalog.get(node.get("tool_id"))
-            ten = getattr(manifest, "name", None) or str(node.get("tool_id"))
-            bat = node.get("config", {}).get("enabled", True)
-            dong.append("{0}. {1}{2}".format(so, ten, "" if bat else "   [ĐÃ TẮT]"))
-            if so < len(nodes):
-                dong.append("   ↓")
-        dong += ["", "Muốn đổi gì, cứ nói ở ô chat."]
-        self._tom_tat.setPlainText("\n".join(dong))
-
-    def _duyet(self) -> None:
-        if not self._cho_duyet:
-            return
-        self._phien.workflow = dict(self._cho_duyet)
-        self._cho_duyet = None
-        self._nut_duyet.setEnabled(False)
-        self._ve_tom_tat(self._phien.workflow)
-        self._luu_phien()
-        self._them_bong("assistant", "Đã tạo Tool của bạn. Mở tab tương ứng để chạy thử.")
-
-    def _kich_hoat_tool(self) -> None:
-        de_xuat = self._tool_cho_duyet
-        if de_xuat is None:
-            return
-        from PyQt5.QtWidgets import QMessageBox
-
-        dong_y = QMessageBox.question(
-            self, "Thêm tool mới vào bộ tool của bạn?",
-            "{0}\n\nTên tool: {1}\n\nTool này chỉ soạn chữ và gọi ShopAPI — nó không "
-            "chạy được lệnh nào trên máy bạn. Thêm vào nhé?".format(
-                de_xuat.summary, de_xuat.manifest.name))
-        if dong_y != QMessageBox.Yes:
-            return
-        try:
-            activate_declarative(de_xuat, Path(self._app.base_dir) / "user-tools")
-        except Exception as loi:  # noqa: BLE001
-            self._app.show_error(loi)
-            return
-        self._catalog[de_xuat.manifest.tool_id] = de_xuat.manifest
-        self._tool_cho_duyet = None
-        self._nut_them_tool.setEnabled(False)
-        ket = noi_them_tool(self._phien.workflow, de_xuat.manifest, self._catalog)
-        if ket.noi_duoc:
-            self._cho_duyet = ket.workflow
-            self._nut_duyet.setEnabled(True)
-            self._ve_tom_tat(ket.workflow)
-        self._them_bong("assistant", "Đã thêm “{0}” vào bộ tool của bạn.\n\n{1}".format(
-            de_xuat.manifest.name, ket.loi_nhan))
-        self._luu_phien()
-
-    def _luu_phien(self) -> None:
-        try:
-            save_agent_session(self._phien_path, self._phien)
-        except OSError:
-            pass  # không ghi được phiên thì vẫn cho làm việc tiếp
+    def mo_vs(self) -> None:
+        mo_vscode(self.app.base_dir, self.app.config.api_key,
+                  self.app.config.base_url, duong_code=self._tt.duong_code,
+                  dung_shopapi=self.nguon == NGUON_SHOPAPI)
