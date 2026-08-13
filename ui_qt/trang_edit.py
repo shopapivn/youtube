@@ -28,7 +28,7 @@ from typing import List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
     QHeaderView, QPlainTextEdit, QProgressBar, QSpinBox, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -108,64 +108,17 @@ class TrangDungVideo(QWidget):
         dau.setSectionResizeMode(len(COT) - 1, QHeaderView.Stretch)
         doc.addWidget(self._bang, 1)
 
-        # ── Tuỳ chọn ─────────────────────────────────────────────────────────
-        the_tc = the()
-        t = QVBoxLayout(the_tc)
-        t.setContentsMargins(18, 12, 18, 14)
-        t.setSpacing(9)
-
-        h1 = QHBoxLayout()
-        h1.addWidget(nhan("Độ phân giải"))
-        self._do_phan_giai = QComboBox()
-        self._do_phan_giai.addItems(list(DO_PHAN_GIAI))
-        self._do_phan_giai.setCurrentText("1080p")
-        self._do_phan_giai.setFixedWidth(104)
-        h1.addWidget(self._do_phan_giai)
-        h1.addSpacing(16)
-        h1.addWidget(nhan("FPS"))
-        self._fps = QSpinBox()
-        self._fps.setRange(24, 60)
-        self._fps.setValue(30)
-        self._fps.setFixedWidth(72)
-        h1.addWidget(self._fps)
-        h1.addSpacing(16)
-        self._nhac = QCheckBox("Nhạc nền")
-        self._nhac.setToolTip(
-            "Trộn nhạc nền nếu dự án có thư mục nhac/. Nhạc để nhỏ hơn lời đọc "
-            "nhiều lần — đây là video kể chuyện, không phải MV.")
-        self._nhac.setChecked(True)
-        h1.addWidget(self._nhac)
-        h1.addStretch(1)
-        self._do_phan_giai.setToolTip("4K dựng lâu gấp nhiều lần 1080p.")
-        t.addLayout(h1)
-
-        h2 = QHBoxLayout()
-        self._phu_de = QCheckBox("Chèn phụ đề")
-        self._phu_de.setChecked(True)
-        self._phu_de.stateChanged.connect(self._doi_phu_de)
-        h2.addWidget(self._phu_de)
-        h2.addSpacing(12)
-        h2.addWidget(nhan("Cỡ chữ"))
-        self._co_chu = QSpinBox()
-        self._co_chu.setRange(14, 72)
-        self._co_chu.setValue(28)
-        self._co_chu.setFixedWidth(72)
-        h2.addWidget(self._co_chu)
-        h2.addSpacing(12)
-        h2.addWidget(nhan("Màu"))
-        self._mau = QComboBox()
-        self._mau.addItems(list(MAU_CHU))
-        self._mau.setFixedWidth(120)
-        h2.addWidget(self._mau)
-        h2.addSpacing(12)
-        h2.addWidget(nhan("Vị trí"))
-        self._vi_tri = QComboBox()
-        self._vi_tri.addItems(list(VI_TRI_PHU_DE))
-        self._vi_tri.setFixedWidth(96)
-        h2.addWidget(self._vi_tri)
-        h2.addStretch(1)
-        t.addLayout(h2)
-        doc.addWidget(the_tc)
+        # ── Tuỳ chọn: DỰNG SẴN, CẤT SAU NÚT ⚙ ────────────────────────────────
+        #
+        # Chín ô — độ phân giải, FPS, nhạc nền, phụ đề, cỡ chữ, màu, vị trí —
+        # đều là thứ **đặt một lần rồi thôi**. Bày hết ra ngoài thì tab này
+        # thành 20 nút và rộng 752px, sát mép cửa sổ hẹp nhất; mà thứ khách
+        # thật sự chạm mỗi lần chỉ có hai thư mục và nút Dựng.
+        #
+        # Widget dựng ở đây (có cha là hộp thoại) chứ không dựng lúc bấm: phần
+        # chạy đọc `self._fps.value()` như cũ dù khách chưa mở hộp thoại lần
+        # nào — và widget không cha mà `setVisible` là thành một cửa sổ trôi nổi.
+        self._hop_tuy_chon = self._dung_hop_tuy_chon()
 
         # ── Tiến độ + nhật ký ────────────────────────────────────────────────
         self._thanh = QProgressBar()
@@ -178,6 +131,7 @@ class TrangDungVideo(QWidget):
         doc.addWidget(self._log)
 
         d2 = QHBoxLayout()
+        d2.addWidget(nut_phu("⚙", lambda: self._hop_tuy_chon.exec_(), rong=44))
         self._nut_chay = nut_chinh("▶   Dựng video", self._chay)
         d2.addWidget(self._nut_chay, 1)
         self._nut_dung = nut_phu("■  Dừng", self._dung, rong=110)
@@ -233,6 +187,58 @@ class TrangDungVideo(QWidget):
             sum(1 for d in self._du_an if d.da_xong)))
         self._nut_chay.setEnabled(bool(self._ffmpeg) and bool(san_sang)
                                   and not self._dang_chay)
+
+    def _dung_hop_tuy_chon(self) -> QDialog:
+        """Hộp tuỳ chọn dựng video — chín thứ đặt một lần rồi thôi."""
+        hop = QDialog(self)
+        hop.setWindowTitle("Tuỳ chọn dựng video")
+        doc = QVBoxLayout(hop)
+        doc.setContentsMargins(20, 16, 20, 16)
+        doc.setSpacing(10)
+
+        self._do_phan_giai = QComboBox()
+        self._do_phan_giai.addItems(list(DO_PHAN_GIAI))
+        self._do_phan_giai.setCurrentText("1080p")
+        self._do_phan_giai.setFixedWidth(120)
+        self._do_phan_giai.setToolTip("4K dựng lâu gấp nhiều lần 1080p.")
+        self._fps = QSpinBox()
+        self._fps.setRange(24, 60)
+        self._fps.setValue(30)
+        self._fps.setFixedWidth(88)
+        self._co_chu = QSpinBox()
+        self._co_chu.setRange(14, 72)
+        self._co_chu.setValue(28)
+        self._co_chu.setFixedWidth(88)
+        self._mau = QComboBox()
+        self._mau.addItems(list(MAU_CHU))
+        self._mau.setFixedWidth(120)
+        self._vi_tri = QComboBox()
+        self._vi_tri.addItems(list(VI_TRI_PHU_DE))
+        self._vi_tri.setFixedWidth(120)
+
+        for nhan_o, o in (("Độ phân giải", self._do_phan_giai),
+                          ("FPS", self._fps),
+                          ("Cỡ chữ phụ đề", self._co_chu),
+                          ("Màu chữ", self._mau),
+                          ("Vị trí phụ đề", self._vi_tri)):
+            hang = QHBoxLayout()
+            hang.addWidget(nhan(nhan_o))
+            hang.addStretch(1)
+            hang.addWidget(o)
+            doc.addLayout(hang)
+
+        self._nhac = QCheckBox("Trộn nhạc nền")
+        self._nhac.setToolTip(
+            "Trộn nhạc nền nếu dự án có thư mục nhac/. Nhạc để nhỏ hơn lời "
+            "đọc nhiều lần — đây là video kể chuyện, không phải MV.")
+        self._nhac.setChecked(True)
+        doc.addWidget(self._nhac)
+        self._phu_de = QCheckBox("Chèn phụ đề")
+        self._phu_de.setChecked(True)
+        self._phu_de.stateChanged.connect(self._doi_phu_de)
+        doc.addWidget(self._phu_de)
+        doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
+        return hop
 
     def _doi_phu_de(self) -> None:
         bat = self._phu_de.isChecked()
