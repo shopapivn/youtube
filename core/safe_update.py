@@ -45,6 +45,8 @@ PRESERVE = (
     "phien-viet",     # phiên chat của tab Viết kịch bản
     "mau-kich-ban",   # template prompt khách tự lưu
     "skill-cua-toi",  # Skill Agent đẻ ra riêng cho khách (`core.skill_rieng`)
+    "PROJECTS",     # MỌI sản phẩm của khách, xếp theo dự án (core.du_an).
+                     # Mất thư mục này là mất cả kịch bản, giọng, ảnh, bản dựng.
     "runtime",       # Node bản gói sẵn tool tự tải (`core.node_goi_san`)
                      # — 35 MB, tải lại mỗi lần cập nhật là phí băng thông khách.
     ".claude",        # cấu hình Claude Code của riêng thư mục này, có KHOÁ của

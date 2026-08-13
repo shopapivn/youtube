@@ -32,6 +32,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.api import build_client, fetch_prices, wallet_micro
+from core import du_an
 from core.config import CONFIG_FILENAME, Config, load_config, save_config
 from core.errors import describe
 from core.jobs import JobManager, JobSpec
@@ -153,12 +154,55 @@ class CuaSoChinh(QWidget):
     TRANG_DAU_CHUA_KHOA = "skill"
 
     def widget_duoi_ten(self):
-        """Widget nhỏ gắn dưới tên ứng dụng ở thanh bên (hoặc `None`).
+        """Ô chọn **Dự án** — thứ đứng trên cùng vì nó quyết định mọi tab.
 
-        Lớp vỏ vận hành trả về ô đăng nhập gọn. Bản khách trả `None` — khách
-        đăng nhập ở trang Ví, nơi có cả số dư và lịch sử giao dịch.
+        Bản trước trả `None` và mỗi tab tự chọn thư mục, nên bảy tab là bảy hòn
+        đảo: khách phải tự nhớ file để đâu rồi bê qua lại bằng tay. Làm hai
+        video song song là lẫn, mà lẫn thì chỉ phát hiện lúc đã dựng xong và
+        nghe thấy giọng của video khác.
+
+        (Lớp vỏ vận hành khai đè phương thức này để gắn ô đăng nhập gọn.)
         """
-        return None
+        from PyQt5.QtWidgets import QComboBox
+
+        hop = QWidget()
+        doc = QVBoxLayout(hop)
+        doc.setContentsMargins(0, 0, 0, 0)
+        doc.setSpacing(4)
+        doc.addWidget(nhan("DỰ ÁN", "brandSub"))
+
+        self._o_du_an = QComboBox()
+        self._o_du_an.setEditable(True)
+        self._o_du_an.lineEdit().setPlaceholderText("tên video của bạn…")
+        self._o_du_an.setToolTip(
+            "Mỗi video là một dự án. Mọi tab lưu kết quả vào đúng thư mục của "
+            "dự án đang mở — gõ tên mới rồi Enter là tạo dự án mới.")
+        for ten in du_an.danh_sach(self.base_dir):
+            self._o_du_an.addItem(ten)
+        dang = du_an.doc_dang_mo(self.base_dir)
+        if self._o_du_an.findText(dang) < 0:
+            self._o_du_an.insertItem(0, dang)
+        self._o_du_an.setCurrentText(dang)
+        self._o_du_an.activated.connect(
+            lambda _i: self._chon_du_an(self._o_du_an.currentText()))
+        self._o_du_an.lineEdit().returnPressed.connect(
+            lambda: self._chon_du_an(self._o_du_an.currentText()))
+        doc.addWidget(self._o_du_an)
+        return hop
+
+    def _chon_du_an(self, ten: str) -> None:
+        """Đổi dự án rồi cập nhật lại danh sách trong ô chọn."""
+        ten = du_an.ten_an_toan(ten)
+        self.dat_du_an(ten)
+        o = getattr(self, "_o_du_an", None)
+        if o is None:
+            return
+        o.blockSignals(True)
+        o.clear()
+        for muc in du_an.danh_sach(self.base_dir):
+            o.addItem(muc)
+        o.setCurrentText(ten)
+        o.blockSignals(False)
 
     def nav_them(self) -> tuple:
         """Mục thanh bên riêng của vỏ. Bản khách không có mục nào thêm."""
@@ -312,6 +356,32 @@ class CuaSoChinh(QWidget):
         "video-hoan-chinh": "DONE",     # bản dựng xong
     }
 
+    # ── Dự án đang mở ────────────────────────────────────────────────────────
+
+    @property
+    def du_an(self) -> str:
+        """Tên dự án đang mở. Mọi tab lưu kết quả vào đây."""
+        return getattr(self, "_du_an", "") or du_an.doc_dang_mo(self.base_dir)
+
+    def dat_du_an(self, ten: str) -> None:
+        """Đổi dự án: tạo thư mục nếu chưa có, nhớ lại, rồi báo mọi tab đổi theo.
+
+        Đây là sợi dây nối bảy tab thành một video. Không có nó thì mỗi tab tự
+        chọn một thư mục và khách phải tự bê file qua lại — làm hai video song
+        song là lẫn, mà lẫn thì chỉ phát hiện lúc đã dựng xong.
+        """
+        ten = du_an.ten_an_toan(ten)
+        du_an.tao_du_an(self.base_dir, ten)
+        self._du_an = ten
+        du_an.luu_dang_mo(self.base_dir, ten)
+        for trang in self._trang.values():
+            doi = getattr(trang, "doi_du_an", None)
+            if doi is not None:
+                try:
+                    doi(ten)
+                except Exception:  # noqa: BLE001 — một tab hỏng không giết cả cửa sổ
+                    pass
+
     def default_output_dir(self, kind: str, engine: str = "") -> str:
         """Chỗ lưu mặc định của một loại việc.
 
@@ -319,9 +389,11 @@ class CuaSoChinh(QWidget):
         không nghĩ theo *máy nào tạo ra clip này*, mà tách ra thì cùng một video
         có clip nằm ở `veo3` và clip nằm ở `seedance`.
         """
-        goc = self.config.output_dir or os.path.join(self.base_dir,
-                                                     self.THU_MUC_GOC)
-        return os.path.join(goc, self.NGAN.get(kind, kind.upper()))
+        if self.config.output_dir:
+            return os.path.join(self.config.output_dir,
+                                self.NGAN.get(kind, kind.upper()))
+        return du_an.thu_muc_ngan(self.base_dir, self.du_an,
+                                  self.NGAN.get(kind, kind.upper()))
 
     def account_session(self):
         """Phiên đăng nhập web đang có, dựng lại từ refresh token đã cất.

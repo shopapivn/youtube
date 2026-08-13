@@ -690,6 +690,12 @@ class TrangAnhVideo(QWidget):
 
     # ── Chuyển tiếp cho cửa sổ chính ─────────────────────────────────────────
 
+    def doi_du_an(self, ten: str) -> None:
+        """Dự án đổi thì cả hai tab con đổi chỗ lưu theo."""
+        for tab in (self.thu_cong, self.hang_loat):
+            tab._thu_muc.dat(self._app.default_output_dir(
+                KIND_VIDEO if getattr(tab, "la_video", False) else KIND_IMAGE))
+
     def nhan_su_kien(self, loai: str, du_lieu) -> None:
         self.thu_cong.nhan_su_kien(loai, du_lieu)
         self.hang_loat.nhan_su_kien(loai, du_lieu)

@@ -373,3 +373,6 @@ class TrangDungVideo(QWidget):
 
     def _ghi(self, chu: str) -> None:
         self._log.appendPlainText("[{0}]  {1}".format(time.strftime("%H:%M:%S"), chu))
+
+    def doi_du_an(self, _ten: str) -> None:
+        self._ra.dat(self._app.default_output_dir("video-hoan-chinh"))

@@ -366,6 +366,21 @@ class TrangSkill(QWidget):
         self._cot.setVisible(len(self._ds) > 1)
         self.mo(dang_mo if dang_mo in self._tam else (self._ds[0].ma if self._ds else ""))
 
+    def doi_du_an(self, ten: str) -> None:
+        """Chuyển tiếp xuống các Skill con.
+
+        Trang "Lấy dữ liệu đối thủ" nằm LỒNG trong tab này, nên cửa sổ chính
+        gọi `doi_du_an` tới đây là hết đường — không chuyển tiếp thì nó là tab
+        duy nhất còn lưu vào dự án cũ, mà khách sẽ không hiểu vì sao.
+        """
+        for tam in self._tam.values():
+            tiep = getattr(tam, "doi_du_an", None)
+            if tiep is not None:
+                try:
+                    tiep(ten)
+                except Exception:  # noqa: BLE001
+                    pass
+
     def _bo_tam(self, ma: str) -> None:
         tam = self._tam.pop(ma, None)
         if tam is None:

@@ -703,6 +703,10 @@ class TrangGiongNoi(QWidget):
 
     # ── Nhận sự kiện ─────────────────────────────────────────────────────────
 
+    def doi_du_an(self, _ten: str) -> None:
+        """Dự án đổi thì chỗ lưu đi theo — xem `core/du_an.py`."""
+        self._thu_muc.dat(self._app.default_output_dir(KIND_TTS))
+
     def nhan_su_kien(self, loai: str, du_lieu) -> None:
         """Trang tự nhận sự kiện rồi **chuyển tiếp** cho bảng việc.
 

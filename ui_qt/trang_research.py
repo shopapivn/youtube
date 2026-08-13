@@ -419,3 +419,6 @@ class TrangNghienCuu(QWidget):
             "Đã xuất",
             "Hai file CSV nằm trong:\n{0}\n\nMở bằng Excel được ngay (đã kèm BOM "
             "nên chữ Việt không vỡ).".format(thu_muc))
+
+    def doi_du_an(self, _ten: str) -> None:
+        self._thu_muc.dat(self._app.default_output_dir("doi-thu"))
