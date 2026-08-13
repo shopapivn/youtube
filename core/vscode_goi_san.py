@@ -43,10 +43,27 @@ DIA_CHI_TAI = "https://update.code.visualstudio.com/latest/win32-x64-user/stable
 #: `!runcode` để nó **đừng tự mở VS Code** ngay sau khi cài: khách đang đứng ở
 #: tab Agent, một cửa sổ lạ bật lên giữa chừng là họ tưởng tool làm hỏng gì.
 #: `addtopath` để lần mở tool sau `code` có sẵn trong PATH.
+#:
+#: ═══ HAI CỜ BỊ GỠ, VÀ VÌ SAO ═══
+#:
+#: `associatewithfiles` — gỡ ngày 13/08/2026. Nó bảo Windows giao hàng loạt
+#: đuôi file cho VS Code, **kể cả `.vbs`**. Mà lối chạy hằng ngày của tool
+#: chính là `CHAY-GON.vbs`: khách bấm "cài những thứ còn thiếu" ở tab Agent
+#: xong, nhấp đúp lối tắt thì Windows không chạy script nữa mà **mở mã nguồn
+#: của nó trong VS Code**. Chủ dự án gặp đúng cảnh đó: *"cái cần đến là chạy
+#: tool, hiện tại nó lại là claude code"*.
+#:
+#: Sâu hơn một tầng: khách của tool này là người làm YouTube không viết code.
+#: Đi đổi cách mở file mặc định trên máy họ là một thay đổi lan ra ngoài phạm
+#: vi tool, khó nhận ra và khó hoàn tác — không đáng đổi lấy chút tiện lợi cho
+#: một tính năng phụ.
+#:
+#: `desktopicon` — không khai nên Inno Setup lấy mặc định (có tích). Nay chặn
+#: hẳn: màn hình khách chỉ nên có MỘT lối vào là "My Tool".
 CO_CAI_IM = (
     "/VERYSILENT", "/NORESTART", "/SP-",
-    "/MERGETASKS=!runcode,addcontextmenufiles,addcontextmenufolders,"
-    "associatewithfiles,addtopath",
+    "/MERGETASKS=!runcode,!desktopicon,!associatewithfiles,"
+    "addcontextmenufiles,addcontextmenufolders,addtopath",
 )
 
 #: Chỗ bản User Setup đặt VS Code.

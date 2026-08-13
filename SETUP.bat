@@ -284,8 +284,25 @@ REM
 REM  Vi sao dang lam: file .vbs khong mang icon rieng duoc, no luon deo icon
 REM  cua VBScript. Chi loi tat (.lnk) moi tro duoc IconLocation vao logo.ico,
 REM  nen day la cho DUY NHAT khach nhin thay logo truoc khi tool mo len.
+REM
+REM  === VI SAO TRO VAO wscript.exe CHU KHONG TRO THANG VAO FILE .vbs ===
+REM
+REM  Tro thang vao .vbs thi Windows mo no bang chuong trinh dang GIU duoi .vbs.
+REM  Binh thuong do la wscript.exe (chay script). Nhung tab Agent cua tool nay
+REM  co cai VS Code cho khach, va ban cai do tung duoc truyen co
+REM  "associatewithfiles" - tuc VS Code di gianh hang loat duoi file, ke ca
+REM  .vbs. Tren may da bi gianh, nhay dup loi tat khong chay tool nua ma MO MA
+REM  NGUON trong VS Code. Chu du an gap dung canh do tren may mot khach.
+REM
+REM  Co da go khoi bo cai (xem core/vscode_goi_san.py), nhung go chi cuu may
+REM  CHUA hong. May DA bi gianh thi phai khong phu thuoc lien ket file nua:
+REM  goi thang wscript.exe va dua .vbs vao lam tham so.
+REM
+REM  [char]34 la dau nhay kep - dung no de khoi long nhay trong nhay giua
+REM  cmd va powershell. Duong dan tool co dau cach ("D:\New folder\...") nen
+REM  tham so bat buoc phai duoc boc nhay.
 echo Dang tao loi tat "My Tool" ngoai man hinh chinh...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath=Join-Path '%~dp0' 'CHAY-GON.vbs';$s.WorkingDirectory='%~dp0'.TrimEnd('\');$s.IconLocation=(Join-Path '%~dp0' 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host '  - Da tao loi tat tren Desktop'}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-GON.vbs trong thu muc nay)'}"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$q=[char]34;$g='%~dp0'.TrimEnd('\');$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath=Join-Path $env:SystemRoot 'System32\wscript.exe';$s.Arguments=$q+(Join-Path $g 'CHAY-GON.vbs')+$q;$s.WorkingDirectory=$g;$s.IconLocation=(Join-Path $g 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host '  - Da tao loi tat tren Desktop'}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-GON.vbs trong thu muc nay)'}"
 echo.
 
 echo ============================================================
