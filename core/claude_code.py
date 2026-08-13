@@ -1086,7 +1086,25 @@ def mo_vscode(thu_muc: str, api_key: str = "", base_url: str = "", *,
     `subprocess` chạy thẳng tệp `.cmd` được (đo ở trên), nên đường ngắn nhất
     cũng là đường đúng. Vẫn giải tên trần thành đường đầy đủ bằng `tim_lenh` —
     đó là phần `lenh_chay_duoc` làm đúng và vẫn cần.
+
+    ═══ CẮM KHOÁ TRƯỚC KHI MỞ ═══
+
+    Extension VS Code đọc `~/.claude/settings.json` lúc khởi động, không reload
+    tự động. Nếu tool ghi settings SAU khi VS Code đã mở → extension giữ auth
+    cũ → bắt đăng nhập.
+
+    Giải pháp: ghi settings.json TRƯỚC khi spawn VS Code. Khi ấy extension đọc
+    ngay settings đúng từ lần đầu, không cần reload.
+
+    `_mo_kem_moi_truong` vẫn truyền biến môi trường qua `env=` — đó dành cho
+    Claude Code CLI (nếu khách gọi từ terminal), nhưng VS Code extension chỉ
+    đọc settings.json.
     """
     duong = duong_code or tim_lenh("code") or "code"
+    # Cắm khoá vào settings.json cấp máy TRƯỚC khi mở VS Code, để extension
+    # đọc ngay từ lúc khởi động. Chỉ ghi khi `dung_shopapi=True` — nếu khách
+    # chọn dùng Max thì không được đụng settings của họ.
+    if dung_shopapi and api_key:
+        cai_vao_may(api_key.strip(), base_url or "https://api.shopapi.vn")
     return _mo_kem_moi_truong([duong, thu_muc], thu_muc, api_key, base_url,
                               dung_shopapi, mo_tien_trinh)

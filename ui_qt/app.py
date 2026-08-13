@@ -290,6 +290,11 @@ class CuaSoChinh(QWidget):
         self._xong_nen.connect(self._chay_tren_luong_ve)
 
         self._dung_cac_trang()
+        # Khách đã có khoá từ phiên trước: cắm lại mỗi lần mở tool. Rẻ (ghi
+        # một tệp JSON nhỏ), và nó bịt nốt cảnh khách cập nhật tool xong, cấu
+        # hình cũ không còn khớp, mà chẳng ai nghĩ tới chuyện đi bấm lại nút.
+        if self.config.is_ready:
+            self.cam_khoa_vao_claude()
         self.show_page(self.TRANG_DAU if self.config.is_ready
                        else self.TRANG_DAU_CHUA_KHOA)
 
@@ -607,7 +612,45 @@ class CuaSoChinh(QWidget):
             self.jobs = JobManager(lambda: self.client, self.events,
                                    max_workers=self.config.max_concurrent_jobs,
                                    session_path=self.session_path)
+        self.cam_khoa_vao_claude()
         self.refresh_prices()
+
+    def cam_khoa_vao_claude(self) -> None:
+        """Cắm khoá vào cấu hình Claude Code **ngay khi khách lưu khoá**.
+
+        ═══ VÌ SAO KHÔNG ĐỂ CHỜ NÚT BẤM ═══
+
+        Trước đây việc này chỉ chạy khi khách vào tab Agent rồi bấm "Cắm khoá
+        ShopAPI" hoặc "Mở VS Code". Đúng về mặt cơ chế, sai về mặt người dùng:
+        khách đăng nhập ở tab Tài khoản, rồi mở VS Code — và extension Claude
+        đòi đăng nhập, vì cái tệp kia chưa ai ghi. Chủ dự án gặp đúng vậy nhiều
+        lần trong ngày 13/08/2026, và nói thẳng cái cần: *"khi cài key nó cài
+        vào vs code"*.
+
+        Ghi hai chỗ, vì hai thứ khác nhau đọc hai chỗ khác nhau:
+
+            <thư mục tool>/.claude/settings.local.json   Claude Code chạy
+                                                        trong thư mục tool
+            ~/.claude/settings.json                     extension trong VS
+                                                        Code, mở ở bất cứ đâu
+
+        Đo được (13/08/2026): binary riêng của extension **có** đọc tệp thứ
+        hai — hồ sơ người dùng trắng, không biến môi trường, vẫn chạy qua ví
+        shopapi. Nên thiếu tệp ấy đúng là lý do extension đòi đăng nhập.
+
+        Hỏng thì im lặng: lưu được khoá mới là việc chính, và khách vẫn còn nút
+        bấm tay ở tab Agent.
+        """
+        khoa = (self.config.api_key or "").strip()
+        if not khoa:
+            return
+        try:
+            from core.claude_code import cai_vao_may, cai_vao_settings
+
+            cai_vao_settings(self.base_dir, khoa, self.config.base_url)
+            cai_vao_may(khoa, self.config.base_url)
+        except Exception:  # noqa: BLE001 — không chặn việc lưu khoá
+            pass
 
     def refresh_prices(self) -> None:
         if self.client is None:

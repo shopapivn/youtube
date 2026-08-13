@@ -243,18 +243,6 @@ class TrangAgent(QWidget):
         else:
             self._canh_bao.hide()
 
-    def ap_dung_nguon(self) -> None:
-        if self.nguon != NGUON_SHOPAPI:
-            go_khoi_settings(self.app.base_dir)
-            self._ve_nguon("Đã gỡ khoá ShopAPI khỏi thư mục tool.")
-            return
-        khoa = (self.app.config.api_key or "").strip()
-        if not khoa:
-            self.app.bao_can_khoa()
-            return
-        cai_vao_settings(self.app.base_dir, khoa, self.app.config.base_url)
-        self._ve_nguon("Đã trỏ Claude Code trong thư mục này về ví ShopAPI.")
-
     def _ve_nguon(self, them: str = "") -> None:
         """Nói thật đang trỏ về đâu, đọc từ chính tệp cấu hình.
 
