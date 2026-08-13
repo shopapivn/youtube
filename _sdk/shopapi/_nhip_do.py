@@ -181,6 +181,8 @@ class NhipDo:
     ) -> None:
         self._san = max(1, int(san))
         self._nhip = float(max(self._san, int(bat_dau)))
+        #: Còn trong pha LEO NHANH — chưa gặp tín hiệu nghẽn nào. Xem `xong()`.
+        self._leo_nhanh = True
         self._tran: Optional[int] = None if tran is None else max(0, int(tran))
         self._nguong_tre = float(nguong_tre)
         self._tre_toi_thieu = float(tre_toi_thieu)
@@ -295,6 +297,37 @@ class NhipDo:
                     return
                 self._mau_cho.append(cho_hang_doi)
 
+            # ═══ LEO NHANH TRƯỚC, LEO CHẬM SAU (slow-start) — 13/08/2026 ═══
+            #
+            # Luật cộng-dồn bên dưới cần ``_nhip`` lần xong mới lên được 1, tức
+            # để tới nhịp N phải có 1+2+…+(N-1) job xong::
+            #
+            #     tới nhịp  40  ->      780 job
+            #     tới nhịp 120  ->    7.140 job
+            #     tới nhịp 979  ->  478.731 job
+            #
+            # Trên máy thật mỗi ảnh mất ~60 giây và một cú ``429`` chia đôi
+            # nhịp. Nên nhịp **không bao giờ** tới trần: đo 13/08/2026 nó bò
+            # quanh 1–20 suốt buổi trong khi máy chủ công bố trần 979, và người
+            # dùng thấy 0,8 ảnh/phút trên một hàng chờ 441 ảnh. Nâng trần bao
+            # nhiêu cũng vô nghĩa nếu vòng dò không leo tới đó nổi.
+            #
+            # Đây đúng bài toán TCP đã giải: **slow-start** — leo nhanh cho tới
+            # khi chạm nghẽn LẦN ĐẦU, rồi mới chuyển sang dò từng bước quanh
+            # mép vừa tìm được. Bản này dè dặt hơn TCP thật (cộng 1 mỗi job
+            # xong thay vì nhân đôi), nên tới nhịp 120 cần 120 job thay vì
+            # 7.140 — nhanh gấp 60 lần mà không bắn vọt.
+            #
+            # ``_giam()`` tắt pha này vĩnh viễn cho cả mẻ: mọi tín hiệu nghẽn
+            # (429, hoặc trễ hàng chờ vọt) đều là "đã tìm thấy mép".
+            if self._leo_nhanh:
+                moi = self._nhip + 1.0
+                if self._tran is not None:
+                    moi = min(moi, float(max(self._tran, self._san)))
+                self._nhip = moi
+                self._chuoi = 0
+                return
+
             self._chuoi += 1
             if self._chuoi >= max(1, math.ceil(self._nhip)):
                 self._chuoi = 0
@@ -357,6 +390,9 @@ class NhipDo:
         return max(self._san, n)
 
     def _giam(self) -> None:
+        # Chạm nghẽn = đã tìm thấy mép. Hết pha leo nhanh cho tới hết mẻ; từ
+        # đây dò từng bước quanh mức máy chủ chịu được. Xem .
+        self._leo_nhanh = False
         self._nhip = max(float(self._san), self._nhip / 2.0)
         self._chuoi = 0
 

@@ -1,4 +1,4 @@
-# ShopAPI Studio
+# My Tool
 
 Tool máy tính (Windows) cho người làm YouTube: **nghiên cứu đối thủ, viết kịch
 bản, lồng tiếng, tạo ảnh, tạo video, dựng thành phim** — tất cả trong một cửa sổ,
@@ -10,8 +10,8 @@ Mã nguồn mở, miễn phí, viết bằng Python. Bạn tải về dùng ngay
 
 | Chạy trên máy bạn — miễn phí | Cần khoá API — tính tiền theo lượt |
 |---|---|
-| 📥 **Lấy dữ liệu đối thủ** — dán link kênh YouTube, lấy về view, like, hashtag, ngày đăng của từng video | ✍️ Viết kịch bản (chat hoặc chạy template prompt) |
-| ✂️ **Dựng video** — ghép ảnh/clip + lời đọc + phụ đề bằng FFmpeg | 🎙️ Voice · 🖼️ Tạo ảnh · 🎬 Tạo video · 🤖 Agent xây tool |
+| **Lấy dữ liệu đối thủ** — dán link kênh YouTube, lấy về view, like, hashtag, ngày đăng của từng video | Viết kịch bản (chat hoặc chạy template prompt) |
+| **Dựng video** — ghép ảnh/clip + lời đọc + phụ đề bằng FFmpeg | Voice · Tạo ảnh · Tạo video · Agent xây tool |
 
 Khoá API lấy tại **[shopapi.vn](https://shopapi.vn)**. Tool miễn phí; thứ bán là API.
 
@@ -21,25 +21,30 @@ Khoá API lấy tại **[shopapi.vn](https://shopapi.vn)**. Tool miễn phí; th
 
 **Cần:** Windows 10/11. Không cần biết Python hay dòng lệnh.
 
+Hai bước, không có bước ba.
+
 1. Bấm nút xanh **Code → Download ZIP** ở đầu trang này, rồi **giải nén ra một
-   thư mục thật** — ví dụ `C:\ShopAPI-Studio`.
+   thư mục thật** — ví dụ `C:\My-Tool`.
 
    > Đừng nháy đúp file `.bat` ngay trong cửa sổ ZIP. Windows sẽ chạy tool trong
    > một thư mục tạm rồi xoá đi lúc nào không báo, kéo theo cả khoá API lẫn kết
    > quả của bạn. Tool có kiểm và chặn lại, nhưng tránh được thì hơn.
 
-2. Nháy đúp **`SETUP.bat`** — chạy đúng một lần cho máy mới. Nó tự cài Python và
-   các thư viện cần thiết.
+2. Nháy đúp **`SETUP.bat`** — chạy đúng một lần cho máy mới.
 
-3. Nháy đúp **`CHAY-QT.bat`**.
+Nó tự cài Python và mọi thư viện, tạo biểu tượng **My Tool** ngoài màn hình
+chính, rồi **mở tool ra luôn**. Chạy xong là bạn đang nhìn thấy tool, không phải
+đang đọc hướng dẫn về cách mở tool.
 
-Xong. Tool mở thẳng vào **Skill → Lấy dữ liệu đối thủ** — dùng được ngay, không
-cần khoá.
+Tool mở thẳng vào **Skill → Lấy dữ liệu đối thủ** — dùng được ngay, không cần
+khoá. Muốn dùng phần tạo nội dung thì vào tab **Ví & Tài khoản**, đăng nhập bằng
+email tài khoản [shopapi.vn](https://shopapi.vn); tool tự tạo khoá API và cất mã
+hoá trên máy bạn.
 
-Muốn dùng phần tạo nội dung thì vào tab **Ví & Tài khoản**, dán khoá API lấy từ
-[shopapi.vn](https://shopapi.vn) rồi bấm **Lưu khoá**. Từ đó mọi tab hoạt động.
+Từ lần sau: nháy đúp biểu tượng **My Tool** ngoài màn hình chính.
 
-Từ lần sau chỉ cần nháy đúp `CHAY-QT.bat`.
+> Tool không hiện ra? Nháy đúp `CHAY-QT.bat` trong thư mục tool — nó mở cửa sổ
+> đen và nói rõ đang thiếu gì.
 
 ### Cập nhật
 

@@ -190,8 +190,17 @@ echo   - pip: OK
 echo.
 
 REM --- [3/5] Thu vien --------------------------------------------------------
-echo [3/5] Cai thu vien (pillow, httpx, yt-dlp)...
-%PYEXE% -m pip install -r requirements.txt --disable-pip-version-check
+REM
+REM  "-q" o day KHONG phai de cho dep. Khong co no, buoc nay do ra ~20 dong
+REM  "Requirement already satisfied: ..." lan trong may dong "WARNING:" cua
+REM  chinh may khach. Nguoi lam YouTube doc man hinh do se nghi tool bao loi,
+REM  va nguoi doc man hinh do CHAM CHU nhat lai la nguoi dang lo lang nhat.
+REM  "-q" van cho loi that di qua - no chi bo nhung dong "khong co gi de lam".
+REM  Doi lai voi "-q": buoc nay im lang trong luc tai ~50 MB. Im lang lau la
+REM  khach tuong may treo roi tat cua so giua chung. Nen phai noi truoc.
+echo [3/5] Cai thu vien giao dien va ket noi...
+echo   - Lan dau co the mat vai phut ^(dang tai ~50 MB^). Dung tat cua so nay.
+%PYEXE% -m pip install -q -r requirements.txt --disable-pip-version-check
 if errorlevel 1 (
   echo.
   echo   - Cai kieu thong thuong khong duoc. Thu cai rieng cho tai khoan cua ban...
@@ -200,7 +209,7 @@ if errorlevel 1 (
   REM nam trong Program Files va can quyen quan tri. "--user" ghi vao thu muc
   REM rieng cua khach nen khong can quyen gi ca. Thu cach nay TRUOC khi bat
   REM khach di tim nut "Run as administrator".
-  %PYEXE% -m pip install -r requirements.txt --user --disable-pip-version-check
+  %PYEXE% -m pip install -q -r requirements.txt --user --disable-pip-version-check
   if errorlevel 1 (
     echo.
     echo   !!! CAI THU VIEN THAT BAI.
@@ -219,6 +228,7 @@ if errorlevel 1 (
     exit /b 1
   )
 )
+echo   - Thu vien: OK
 echo.
 
 REM --- [4/5] Kiem tra lai ----------------------------------------------------
@@ -305,18 +315,40 @@ echo Dang tao loi tat "My Tool" ngoai man hinh chinh...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$q=[char]34;$g='%~dp0'.TrimEnd('\');$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath=Join-Path $env:SystemRoot 'System32\wscript.exe';$s.Arguments=$q+(Join-Path $g 'CHAY-GON.vbs')+$q;$s.WorkingDirectory=$g;$s.IconLocation=(Join-Path $g 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host '  - Da tao loi tat tren Desktop'}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-GON.vbs trong thu muc nay)'}"
 echo.
 
+REM --- Mo tool luon ---------------------------------------------------------
+REM
+REM  === MOT MAN HINH, MOT VIEC ===
+REM
+REM  Ban truoc man hinh nay dua ra BON loi vao: loi tat, CHAY-GON.vbs,
+REM  CHAY-QT.bat, roi lai dan "tu gio ban CHI CAN nhay dup CHAY-GON.vbs" -
+REM  mau thuan voi dong dau bao dung loi tat. Nguoi biet viec doc thay day du;
+REM  nguoi khong biet viec doc thay bon nga re va khong biet re dau.
+REM
+REM  Nay chi con MOT viec, va dung cai viec do SETUP tu lam ho luon: mo tool
+REM  ra. Chay xong la khach dang NHIN THAY tool, khong phai dang doc huong dan
+REM  ve cach mo tool. Ba loi vao kia van con nguyen trong thu muc, chi khong
+REM  bat khach phai chon giua chung ngay bay gio.
+REM
+REM  "start" de SETUP thoat duoc ngay, khong nam giu cua so den suot phien
+REM  lam viec cua khach. Dau nhay rong sau "start" la TEN CUA SO - thieu no
+REM  thi cmd hieu duong dan la ten cua so va khong chay gi ca.
+echo Dang mo tool...
+start "" "%SystemRoot%\System32\wscript.exe" "%~dp0CHAY-GON.vbs"
+echo.
+
 echo ============================================================
-echo    CAI XONG!
+echo    XONG! Tool dang mo ra.
 echo.
-echo    Buoc tiep theo:
-echo      1^) Nhay dup loi tat  My Tool  ngoai man hinh chinh
-echo         ^(hoac  CHAY-GON.vbs  trong thu muc nay^)
-echo      2^) Dang nhap bang email tai khoan shopapi.vn ngay trong tool
-echo         ^(tool tu tao khoa API va cat ma hoa tren may ban^)
+echo    Con MOT viec nua, lam ngay trong tool:
+echo      Dang nhap bang email tai khoan shopapi.vn
+echo      ^(tool tu tao khoa API va cat ma hoa tren may ban^)
 echo.
-echo    Chua co tai khoan? Dang ky mien phi tai  https://shopapi.vn/register
+echo    Chua co tai khoan? Dang ky mien phi:  https://shopapi.vn/register
 echo.
-echo    Tu gio ban CHI CAN nhay dup CHAY-GON.vbs, khong phai chay lai SETUP.bat.
-echo    Neu tool khong mo len: chay CHAY-QT.bat - no hien cua so den kem loi.
+echo    Lan sau mo tool: nhay dup bieu tuong  My Tool  ngoai man hinh chinh.
+echo    Khong phai chay lai SETUP.bat nua.
 echo ============================================================
+echo.
+echo    (Neu tool khong hien ra: nhay dup CHAY-QT.bat trong thu muc nay,
+echo     no mo cua so den va noi ro dang thieu gi.)
 pause
