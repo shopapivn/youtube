@@ -123,10 +123,10 @@ class TabChatViet(QWidget):
         self._combo.currentIndexChanged.connect(self._doi_phien)
         hang.addWidget(self._combo, 1)
         hang.addWidget(nut_phu("＋ Mới", self._phien_moi, rong=84))
-        self._nut_doi_ten = nut_phu("✏ Đổi tên", self._doi_ten, rong=104)
+        self._nut_doi_ten = nut_phu("Đổi tên", self._doi_ten, rong=104)
         self._nut_doi_ten.setToolTip("Đổi tên phiên đang mở")
         hang.addWidget(self._nut_doi_ten)
-        self._nut_xoa = nut_nguy_hiem("🗑 Xoá", self._xoa_phien, rong=80)
+        self._nut_xoa = nut_nguy_hiem("Xoá", self._xoa_phien, rong=80)
         self._nut_xoa.setToolTip("Xoá hẳn phiên đang mở khỏi máy")
         hang.addWidget(self._nut_xoa)
         return hop
@@ -253,7 +253,7 @@ class TabChatViet(QWidget):
 
         hang = QHBoxLayout()
         hang.setSpacing(8)
-        nut_kem = nut_phu("📎 Đính kèm .txt", self._them_tu_lieu, rong=150)
+        nut_kem = nut_phu("Đính kèm .txt", self._them_tu_lieu, rong=132)
         nut_kem.setToolTip("Chọn nhiều file .txt: bài của đối thủ, ghi chép, "
                            "transcript. Chúng được gửi kèm ở lượt đầu.")
         hang.addWidget(nut_kem)
@@ -328,7 +328,7 @@ class TabChatViet(QWidget):
         for chi_so, mot in enumerate(tep):
             ten = mot.ten if len(mot.ten) <= _TRAN_TEN_CHIP \
                 else mot.ten[: _TRAN_TEN_CHIP - 1] + "…"
-            chip = nut_phu("{0} · {1} ký tự   ✕".format(ten, so_gon(mot.so_chu)),
+            chip = nut_phu("{0} · {1} ký tự   ".format(ten, so_gon(mot.so_chu)),
                            lambda i=chi_so: self._bo_tu_lieu(i))
             chip.setToolTip("{0} — bấm để bỏ tệp này{1}".format(
                 mot.ten, "\n(đã cắt bớt cho vừa trần gửi đi)" if mot.da_cat else ""))
@@ -413,10 +413,10 @@ class TabChatViet(QWidget):
         doc.addWidget(self._thu_muc)
         hang = QHBoxLayout()
         hang.setSpacing(8)
-        self._nut_luu_txt = nut_phu("💾 Lưu .txt", self._luu_txt, rong=124)
+        self._nut_luu_txt = nut_phu("Lưu .txt", self._luu_txt, rong=124)
         self._nut_luu_txt.setToolTip("Lưu câu trả lời mới nhất thành file .txt")
         hang.addWidget(self._nut_luu_txt)
-        self._nut_voice = nut_phu("🎙 Gửi sang Voice", self._sang_voice, rong=176)
+        self._nut_voice = nut_phu("Gửi sang Voice", self._sang_voice, rong=176)
         self._nut_voice.setToolTip("Đưa câu trả lời mới nhất sang tab Voice để đọc thành tiếng")
         hang.addWidget(self._nut_voice)
         hang.addStretch(1)

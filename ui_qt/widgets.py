@@ -298,11 +298,11 @@ class ChonThuMuc(QWidget):
 
     `nhan_text` đổi được vì widget này dùng cho **cả thư mục nguồn lẫn thư mục
     lưu**. Khoá cứng chữ "Lưu vào" là chuyện đã xảy ra: tab Dựng video có hai ô
-    liền nhau cùng ghi "📁 Lưu vào:", ô trên thực ra là thư mục **chứa dự án**
+    liền nhau cùng ghi "Lưu vào:", ô trên thực ra là thư mục **chứa dự án**
     cần đọc. Khách nhìn hai dòng giống hệt nhau và không biết điền cái nào.
     """
 
-    def __init__(self, ban_dau: str, nhan_text: str = "📁  Lưu vào:"):
+    def __init__(self, ban_dau: str, nhan_text: str = "Lưu vào:"):
         super().__init__()
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
@@ -320,7 +320,7 @@ class ChonThuMuc(QWidget):
         return self._o.text().strip()
 
     def dat(self, duong_dan: str) -> None:
-        """Đổi thư mục mặc định khi trang đổi loại việc (ảnh ⇄ video).
+        """Đổi thư mục mặc định khi trang đổi loại việc (ảnh video).
 
         **Không đè** nếu khách đã tự sửa: họ chọn chỗ lưu là có ý, và bị kéo về
         thư mục mặc định sau mỗi lần bấm là mất file ở nơi không ngờ tới.
@@ -347,7 +347,7 @@ class AnhThamChieu(QWidget):
     #: Máy chủ nhận tối đa 10 ảnh tham chiếu mỗi lượt.
     TRAN = 10
 
-    def __init__(self, nhan_text: str = "🖼  Ảnh tham chiếu:",
+    def __init__(self, nhan_text: str = "Ảnh tham chiếu:",
                  on_change: Optional[Callable[[], None]] = None):
         super().__init__()
         self._duong_dan: List[str] = []
@@ -370,7 +370,7 @@ class AnhThamChieu(QWidget):
     def dat(self, duong_dan: str) -> None:
         """Đặt ảnh từ nơi khác, không qua hộp chọn file.
 
-        Dùng khi khách bấm 🎬 trên một tấm ảnh vừa tạo: ảnh đó thành khung đầu
+        Dùng khi khách bấm trên một tấm ảnh vừa tạo: ảnh đó thành khung đầu
         cho clip ngay, không phải tự đi tìm lại file trong thư mục.
         """
         if duong_dan and os.path.isfile(duong_dan):

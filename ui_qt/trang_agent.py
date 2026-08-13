@@ -13,9 +13,9 @@ làm việc với bản nguyên gốc, thứ đã chín sẵn.
 
 ═══ BA ĐƯỜNG, KHÁCH CHỌN ═══
 
-    Claude Code + ví ShopAPI   ─► khoá trong tool, trả theo lượt gọi
-    Claude Code + tài khoản Claude của khách  ─► Max/Pro, KHÔNG trừ ví
-    Codex + tài khoản ChatGPT của khách       ─► Plus/Pro, KHÔNG trừ ví
+    Claude Code + ví ShopAPI   ─khoá trong tool, trả theo lượt gọi
+    Claude Code + tài khoản Claude của khách  ─Max/Pro, KHÔNG trừ ví
+    Codex + tài khoản ChatGPT của khách       ─Plus/Pro, KHÔNG trừ ví
 
 Hai đường dưới có vì chủ dự án hỏi đúng câu của một người đang trả tiền tháng:
 *"biết đâu khách có claude max 20"* và *"ví dụ khách có tài khoản chat gpt plus
@@ -91,7 +91,7 @@ class TrangAgent(QWidget):
         doc.setContentsMargins(28, 24, 28, 24)
         doc.setSpacing(14)
         doc.addWidget(tieu_de_trang(
-            "🤖  Agent xây tool",
+            "Agent xây tool",
             "Nhờ nó sửa chính cái tool này.", "agent"))
         doc.addWidget(self._the_nguon())
         doc.addWidget(self._the_may())
@@ -197,7 +197,7 @@ class TrangAgent(QWidget):
         self._cong_cu = duoc
         if duoc is False:
             self._canh_bao.setText(
-                "⚠ Máy chủ ShopAPI hiện chưa cho Claude Code gọi công cụ, nên "
+                "Máy chủ ShopAPI hiện chưa cho Claude Code gọi công cụ, nên "
                 "đường “ví ShopAPI” chỉ trò chuyện được — nó KHÔNG đọc hay sửa "
                 "được file trong thư mục tool. Chọn gói Claude hoặc ChatGPT của "
                 "bạn ở trên để làm việc thật.")
@@ -233,7 +233,7 @@ class TrangAgent(QWidget):
                    f"({tt['khoa_rut_gon']}). Chỗ khác trên máy không đổi.")
             self._nut_chon[NGUON_SHOPAPI].setChecked(True)
         else:
-            chu = f"⚠ Đang trỏ về {tt['base_url']} — không phải ShopAPI."
+            chu = f"Đang trỏ về {tt['base_url']} — không phải ShopAPI."
         self._nhan_nguon.setText((them + " " + chu).strip())
 
     @staticmethod
@@ -261,7 +261,7 @@ class TrangAgent(QWidget):
         dau = QHBoxLayout()
         dau.addWidget(nhan("Máy của bạn", "h2"))
         dau.addStretch(1)
-        dau.addWidget(nut_phu("⟳  Kiểm tra lại", self.do_lai))
+        dau.addWidget(nut_phu("Kiểm tra lại", self.do_lai))
         doc.addLayout(dau)
 
         self._bang = QGridLayout()
@@ -273,7 +273,7 @@ class TrangAgent(QWidget):
         # Hàng biết xuống dòng: hai nút cạnh nhau đòi hơn bề rộng cửa sổ nhỏ
         # nhất, và `QHBoxLayout` không co được nên phần thừa bị cắt ngoài mép.
         hang = HangXuongDong()
-        self._nut_cai = nut_chinh("⬇  Cài những thứ còn thiếu", self.cai_dat)
+        self._nut_cai = nut_chinh("Cài những thứ còn thiếu", self.cai_dat)
         hang.addWidget(self._nut_cai)
         self._xin_vscode = QCheckBox("Cài kèm VS Code")
         # Bật SẴN. Với người không biết code, một cửa sổ soạn thảo có nút bấm dễ
@@ -348,7 +348,7 @@ class TrangAgent(QWidget):
 
         for i, (ten, chu, dat, bat_buoc) in enumerate(self._hang_tinh_trang()):
             mau = theme.XANH if dat else (theme.DO if bat_buoc else theme.CHU_MO)
-            co = nhan("✓" if dat else ("✗" if bat_buoc else "○"))
+            co = nhan("" if dat else ("" if bat_buoc else ""))
             co.setStyleSheet(f"color:{mau}; font-weight:600;")
             self._bang.addWidget(co, i, 0)
             self._bang.addWidget(nhan(ten), i, 1)
@@ -358,7 +358,7 @@ class TrangAgent(QWidget):
         """Dò lại máy khách. Chạy ở luồng nền — trên máy chậm, mấy lần gọi tiến
         trình con là cửa sổ đứng hình vài giây ngay khi mở tab."""
         self._nut_cai.setEnabled(False)
-        self._nut_cai.setText("⏳  Đang kiểm tra…")
+        self._nut_cai.setText("Đang kiểm tra…")
 
         def nen():
             tt = kiem_tra()
@@ -381,8 +381,8 @@ class TrangAgent(QWidget):
     def _ve_nut_cai(self) -> None:
         con_thieu = self._con_thieu()
         self._nut_cai.setEnabled(bool(con_thieu) and not self._dang_cai)
-        self._nut_cai.setText("⬇  Cài những thứ còn thiếu" if con_thieu
-                              else "✓  Đã đủ, không cần cài gì")
+        self._nut_cai.setText("Cài những thứ còn thiếu" if con_thieu
+                              else "Đã đủ, không cần cài gì")
 
     # ── Cài đặt ──────────────────────────────────────────────────────────────
 
@@ -399,7 +399,7 @@ class TrangAgent(QWidget):
             return
         self._dang_cai = True
         self._nut_cai.setEnabled(False)
-        self._nut_cai.setText("⏳  Đang cài…")
+        self._nut_cai.setText("Đang cài…")
         self._nhat_ky.show()
         self._nhat_ky.setPlainText("")
         threading.Thread(target=lambda: self._chay_cai(lenh, can_node, xin),
@@ -425,9 +425,9 @@ class TrangAgent(QWidget):
                 duong_code = vscode_goi_san.cai_vscode(bao=self._ghi)
                 self._tt.duong_code = duong_code
                 self._ttx.duong_code = duong_code
-                self._ghi("  ✓ xong — " + duong_code)
+                self._ghi("  xong — " + duong_code)
             except Exception as loi:  # noqa: BLE001
-                self._ghi("  ✗ không cài được VS Code: {0}".format(loi))
+                self._ghi("  không cài được VS Code: {0}".format(loi))
 
         npm_rieng = ""
         if can_node:
@@ -435,9 +435,9 @@ class TrangAgent(QWidget):
             try:
                 npm_rieng = node_goi_san.cai_node(self.app.base_dir,
                                                   bao=self._ghi)
-                self._ghi("  ✓ xong — " + npm_rieng)
+                self._ghi("  xong — " + npm_rieng)
             except Exception as loi:  # noqa: BLE001
-                self._ghi("  ✗ không tải được Node: {0}".format(loi))
+                self._ghi("  không tải được Node: {0}".format(loi))
 
         for buoc in lenh:
             # Thay `npm` trần bằng bản vừa tải, nếu có.
@@ -457,16 +457,16 @@ class TrangAgent(QWidget):
                                       encoding="utf-8", errors="replace",
                                       timeout=900, creationflags=co)
             except (FileNotFoundError, OSError) as loi:
-                self._ghi("  ✗ " + self._mach_thieu(buoc[0], loi))
+                self._ghi("  " + self._mach_thieu(buoc[0], loi))
                 continue
             except subprocess.SubprocessError as loi:
-                self._ghi(f"  ✗ {loi}")
+                self._ghi(f"  {loi}")
                 continue
             ra = ((xong.stdout or "") + (xong.stderr or "")).strip()
             if ra:
                 self._ghi("  " + ra.splitlines()[-1][:200])
-            self._ghi("  ✓ xong" if not xong.returncode
-                      else f"  ✗ lệnh trả mã lỗi {xong.returncode}")
+            self._ghi("  xong" if not xong.returncode
+                      else f"  lệnh trả mã lỗi {xong.returncode}")
         self._ghi("Đang kiểm tra lại…")
         self.app.goi_tren_luong_ve(self._cai_xong)
 
@@ -501,7 +501,7 @@ class TrangAgent(QWidget):
         doc.addWidget(nhan("Mở ra làm việc", "h2"))
 
         hang = HangXuongDong()
-        self._nut_vscode = nut_chinh("▶  Mở VS Code", self.mo_vs)
+        self._nut_vscode = nut_chinh("Mở VS Code", self.mo_vs)
         self._nut_terminal = nut_phu("Mở dòng lệnh", self.mo_agent)
         hang.addWidget(self._nut_vscode)
         hang.addWidget(self._nut_terminal)

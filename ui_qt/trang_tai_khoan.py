@@ -79,7 +79,7 @@ class TrangTaiKhoan(QWidget):
         self._o_khoa.setEchoMode(QLineEdit.Password)
         self._o_khoa.returnPressed.connect(self._luu_khoa)
         d.addWidget(self._o_khoa, 1)
-        self._nut_hien = nut_phu("👁", self._doi_hien_khoa, rong=44)
+        self._nut_hien = nut_phu("Hiện", self._doi_hien_khoa, rong=64)
         self._nut_hien.setToolTip("Hiện khoá để soát lại")
         d.addWidget(self._nut_hien)
         d.addWidget(nut_chinh("Lưu khoá", self._luu_khoa, rong=120))
@@ -136,7 +136,7 @@ class TrangTaiKhoan(QWidget):
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(14)
         doc.addWidget(tieu_de_trang(
-            "💳  Ví & Tài khoản", "Số dư, nạp tiền, sổ cái.", "wallet"))
+            "Ví & Tài khoản", "Số dư, nạp tiền, sổ cái.", "wallet"))
         doc.addWidget(self._the_khoa())
 
         # ── Số dư ────────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ class TrangTaiKhoan(QWidget):
         self._noi_dung_ck.hide()
         hang3 = QHBoxLayout()
         hang3.addWidget(self._noi_dung_ck, 1)
-        self._nut_chep = nut_phu("📋  Chép", self._chep, rong=110)
+        self._nut_chep = nut_phu("Chép", self._chep, rong=110)
         self._nut_chep.hide()
         hang3.addWidget(self._nut_chep)
         n.addLayout(hang3)
@@ -202,7 +202,7 @@ class TrangTaiKhoan(QWidget):
         hang4 = QHBoxLayout()
         hang4.addWidget(nhan("Giao dịch gần đây", "h2"))
         hang4.addStretch(1)
-        hang4.addWidget(nut_phu("↻  Làm mới", self.lam_moi))
+        hang4.addWidget(nut_phu("Làm mới", self.lam_moi))
         doc.addLayout(hang4)
         self._bang = QTableWidget(0, 4)
         self._bang.setHorizontalHeaderLabels(("Thời điểm", "Việc", "Số tiền", "Số dư sau"))
@@ -338,7 +338,7 @@ class TrangTaiKhoan(QWidget):
         self._noi_dung_ck.hide()
         self._nut_chep.hide()
         self._huong_dan.setText("")
-        self._trang_thai_nap.setText("✓  Tiền đã vào ví!")
+        self._trang_thai_nap.setText("Tiền đã vào ví!")
         self._trang_thai_nap.setStyleSheet(
             "color:{0};font-weight:600;".format(theme.XANH))
         self.lam_moi()

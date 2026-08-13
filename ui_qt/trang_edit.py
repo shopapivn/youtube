@@ -62,7 +62,7 @@ class TrangDungVideo(QWidget):
         doc.setContentsMargins(24, 18, 24, 18)
         doc.setSpacing(12)
         doc.addWidget(tieu_de_trang(
-            "✂️  Dựng video", "Ghép clip + lời đọc thành video. Miễn phí.",
+            "Dựng video", "Ghép clip + lời đọc thành video. Miễn phí.",
             "edit"))
 
         # ── Thư mục ──────────────────────────────────────────────────────────
@@ -76,12 +76,12 @@ class TrangDungVideo(QWidget):
             "(.mp3/.wav), các ảnh hoặc clip, và tuỳ chọn thêm file .srt, "
             "thư mục nhac/. Tên file đặt sao cũng được.", "muted"))
         d0 = QHBoxLayout()
-        self._goc = ChonThuMuc("", "📂  Thư mục dự án:")
+        self._goc = ChonThuMuc("", "Thư mục dự án:")
         d0.addWidget(self._goc, 1)
-        d0.addWidget(nut_phu("🔄  Quét lại", self.quet, rong=120))
+        d0.addWidget(nut_phu("Quét lại", self.quet, rong=120))
         v.addLayout(d0)
         self._ra = ChonThuMuc(app.default_output_dir("video-hoan-chinh"),
-                              "💾  Video xong lưu vào:")
+                              "Video xong lưu vào:")
         v.addWidget(self._ra)
         doc.addWidget(the_tm)
 
@@ -91,7 +91,7 @@ class TrangDungVideo(QWidget):
         self._tom_tat = nhan("chưa quét", "muted")
         d1.addWidget(self._tom_tat)
         d1.addStretch(1)
-        d1.addWidget(nut_phu("📂  Mở kết quả", lambda: mo_thu_muc(self._ra.value), rong=140))
+        d1.addWidget(nut_phu("Mở kết quả", lambda: mo_thu_muc(self._ra.value), rong=140))
         doc.addLayout(d1)
         self._bang = QTableWidget(0, len(COT))
         self._bang.setHorizontalHeaderLabels(COT)
@@ -108,7 +108,7 @@ class TrangDungVideo(QWidget):
         dau.setSectionResizeMode(len(COT) - 1, QHeaderView.Stretch)
         doc.addWidget(self._bang, 1)
 
-        # ── Tuỳ chọn: DỰNG SẴN, CẤT SAU NÚT ⚙ ────────────────────────────────
+        # ── Tuỳ chọn: DỰNG SẴN, CẤT SAU NÚT ────────────────────────────────
         #
         # Chín ô — độ phân giải, FPS, nhạc nền, phụ đề, cỡ chữ, màu, vị trí —
         # đều là thứ **đặt một lần rồi thôi**. Bày hết ra ngoài thì tab này
@@ -131,10 +131,10 @@ class TrangDungVideo(QWidget):
         doc.addWidget(self._log)
 
         d2 = QHBoxLayout()
-        d2.addWidget(nut_phu("⚙", lambda: self._hop_tuy_chon.exec_(), rong=44))
-        self._nut_chay = nut_chinh("▶   Dựng video", self._chay)
+        d2.addWidget(nut_phu("Tuỳ chọn", lambda: self._hop_tuy_chon.exec_(), rong=104))
+        self._nut_chay = nut_chinh("Dựng video", self._chay)
         d2.addWidget(self._nut_chay, 1)
-        self._nut_dung = nut_phu("■  Dừng", self._dung, rong=110)
+        self._nut_dung = nut_phu("Dừng", self._dung, rong=110)
         self._nut_dung.setEnabled(False)
         d2.addWidget(self._nut_dung)
         doc.addLayout(d2)
@@ -170,9 +170,9 @@ class TrangDungVideo(QWidget):
                    theme.CHU if du_an.chay_duoc else theme.DO)
             o = (du_an.ten,
                  str(len(du_an.hinh)),
-                 "✓" if du_an.tieng else "—",
-                 "✓" if du_an.phu_de else "—",
-                 "✓" if du_an.nhac else "—",
+                 "" if du_an.tieng else "—",
+                 "" if du_an.phu_de else "—",
+                 "" if du_an.nhac else "—",
                  du_an.trang_thai)
             for cot, chu in enumerate(o):
                 muc = QTableWidgetItem(str(chu))
@@ -356,7 +356,7 @@ class TrangDungVideo(QWidget):
         self._dang_chay = khoa
         self._nut_chay.setEnabled(not khoa)
         self._nut_dung.setEnabled(khoa)
-        self._nut_chay.setText("Đang dựng…" if khoa else "▶   Dựng video")
+        self._nut_chay.setText("Đang dựng…" if khoa else "Dựng video")
 
     def _xong(self, ket) -> None:
         xong, loi, dong = ket

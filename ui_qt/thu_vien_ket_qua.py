@@ -17,7 +17,7 @@ mình vừa xin, không phải cuộn xuống đáy.
    ảnh mà mỗi nhịp bơm nạp lại từ đĩa là cửa sổ sượng hẳn.
 2. **Video không có ảnh xem trước.** Dựng ảnh cho video cần ffmpeg, mà tool
    không đòi khách cài ffmpeg cho việc tạo video. Nên thẻ video vẽ nền tối + dấu
-   ▶ và mở bằng trình phát của máy khi bấm.
+   và mở bằng trình phát của máy khi bấm.
 3. **Trần số thẻ.** Vẽ 500 thẻ là treo. Giữ `TRAN_THE` thẻ gần nhất, phần cũ hơn
    vẫn còn nguyên trong thư mục kết quả.
 """
@@ -101,7 +101,7 @@ class TheKetQua(QFrame):
             f"background:{'#1f2430' if la_video else theme.THE_MO};"
             f" border:none; border-radius:8px;"
             f" color:{'#c7ccd8' if la_video else theme.CHU_MO}; font-size:22px;")
-        self._o_anh.setText("🎬" if la_video else "⏳")
+        self._o_anh.setText("" if la_video else "")
         doc.addWidget(self._o_anh)
 
         self._o_mo_ta = nhan(mo_ta[:64], "phu")
@@ -123,12 +123,13 @@ class TheKetQua(QFrame):
         hang = QHBoxLayout(self._hang_nut)
         hang.setContentsMargins(0, 0, 0, 0)
         hang.setSpacing(4)
-        self._nut_lai = nut_phu("↻", lambda: self._goi(self._khi_lam_lai), rong=34)
+        self._nut_lai = nut_phu("Làm lại", lambda: self._goi(self._khi_lam_lai),
+                                rong=74)
         self._nut_lai.setToolTip("Làm lại mô tả này")
         hang.addWidget(self._nut_lai)
         if not la_video:
             self._nut_dong = nut_phu(
-                "🎬", lambda: self._goi(self._khi_cho_dong), rong=34)
+                "Thành clip", lambda: self._goi(self._khi_cho_dong), rong=96)
             self._nut_dong.setToolTip("Dùng ảnh này làm khung đầu cho một clip")
             hang.addWidget(self._nut_dong)
         hang.addStretch(1)
@@ -156,7 +157,7 @@ class TheKetQua(QFrame):
             self._ve_anh()
             self._hang_nut.show()
         elif trang_thai == STATUS_FAILED:
-            self._o_anh.setText("✗")
+            self._o_anh.setText("")
 
     def _ve_anh(self) -> None:
         """Nạp ảnh xem trước **một lần**.

@@ -12,8 +12,8 @@ có chỗ nào diễn đạt được.
 
 ═══ HAI LỐI, KHÔNG PHẢI HAI TAB CŨ DÁN LẠI ═══
 
-    📝 Thủ công   ─► gửi từng prompt, gửi liên tiếp, nhìn kết quả bằng ảnh
-    📚 Hàng loạt  ─► một bảng cảnh, chạy cả loạt, ảnh nối thẳng sang video
+    Thủ công   ─gửi từng prompt, gửi liên tiếp, nhìn kết quả bằng ảnh
+    Hàng loạt  ─một bảng cảnh, chạy cả loạt, ảnh nối thẳng sang video
 
 *"1 tab làm thủ công như ở bên flow, gửi prompt và nhận kết quả để khách hàng
 làm lẻ, nhưng có thể gửi nhiều prompt liên tục chứ không phải chờ từng cái, và
@@ -126,12 +126,12 @@ class TabThuCong(QWidget):
     # là đúng cái lỗi vừa phải gỡ ở thẻ "Chưa có dữ liệu".
 
     def _lam_lai(self, mo_ta: str, _duong_dan: str) -> None:
-        """Bấm ↻ trên một thẻ: điền lại mô tả rồi gửi luôn."""
+        """Bấm trên một thẻ: điền lại mô tả rồi gửi luôn."""
         self.o_nhap.setPlainText(mo_ta)
         self.gui()
 
     def _cho_dong(self, mo_ta: str, duong_dan: str) -> None:
-        """Bấm 🎬 trên một thẻ ảnh: dùng chính ảnh đó làm khung đầu cho clip.
+        """Bấm trên một thẻ ảnh: dùng chính ảnh đó làm khung đầu cho clip.
 
         Đây là bước khách luôn muốn làm tiếp mà trước đây phải tự đi tìm file
         trong thư mục rồi gắn tay vào ô ảnh tham chiếu.
@@ -168,7 +168,7 @@ class TabThuCong(QWidget):
                              on_change=lambda _t: self._doi_loai())
         hang.addWidget(self.loai)
 
-        # TỈ LỆ KHUNG nằm NGOÀI, không giấu sau nút ⚙.
+        # TỈ LỆ KHUNG nằm NGOÀI, không giấu sau nút .
         #
         # Người làm YouTube không nghĩ "16:9" — họ nghĩ **video ngang** hay
         # **Shorts dọc**, và đó là quyết định đầu tiên của cả video chứ không
@@ -179,11 +179,11 @@ class TabThuCong(QWidget):
         self.khung.setToolTip("Ngang 16:9 · Dọc 9:16 (Shorts) · Vuông 1:1")
         hang.addWidget(self.khung)
 
-        self._nut_tuy_chon = nut_phu("⚙", self._mo_tuy_chon, rong=44)
+        self._nut_tuy_chon = nut_phu("Tuỳ chọn", self._mo_tuy_chon, rong=104)
         self._nut_tuy_chon.setToolTip(
             "Số lượng, engine video, ảnh tham chiếu, chỗ lưu")
         hang.addWidget(self._nut_tuy_chon)
-        self.nut_gui = nut_chinh("➤   Gửi", self.gui)
+        self.nut_gui = nut_chinh("Gửi", self.gui)
         hang.addWidget(self.nut_gui)
         doc.addLayout(hang)
 
@@ -196,7 +196,7 @@ class TabThuCong(QWidget):
         self.so_luong.setRange(1, 8)
         self.so_luong.setPrefix("x")
         self.so_luong.setFixedWidth(64)
-        self.anh_vao = AnhThamChieu("🖼  Ảnh tham chiếu:", on_change=None)
+        self.anh_vao = AnhThamChieu("Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
         # Dựng hộp tuỳ chọn NGAY (ẩn), không dựng lúc bấm.
         #
@@ -405,9 +405,9 @@ class TabHangLoat(QWidget):
         doc.setSpacing(8)
         doc.addWidget(nhan("Bảng cảnh", "h2"))
         hang = HangXuongDong()
-        hang.addWidget(nut_phu("📄  Nạp .txt", self.nap_txt, rong=112))
-        hang.addWidget(nut_phu("+  Thêm dòng", self.them_dong, rong=118))
-        hang.addWidget(nut_phu("🗑  Xoá hết", self.xoa_het, rong=104))
+        hang.addWidget(nut_phu("Nạp .txt", self.nap_txt, rong=112))
+        hang.addWidget(nut_phu("Thêm dòng", self.them_dong, rong=104))
+        hang.addWidget(nut_phu("Xoá hết", self.xoa_het, rong=104))
         doc.addLayout(hang)
         return khung
 
@@ -436,7 +436,7 @@ class TabHangLoat(QWidget):
 
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
         doc.addWidget(self._thu_muc)
-        self.nut_chay = nut_chinh("▶   Chạy cả loạt", self.chay)
+        self.nut_chay = nut_chinh("Chạy cả loạt", self.chay)
         doc.addWidget(self.nut_chay)
         return khung
 
@@ -667,13 +667,13 @@ class TrangAnhVideo(QWidget):
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 18, 24, 18)
         doc.setSpacing(12)
-        doc.addWidget(tieu_de_trang("🎨  Ảnh & Video", "Tạo ảnh và clip."))
+        doc.addWidget(tieu_de_trang("Ảnh & Video", "Tạo ảnh và clip."))
 
         self.tab = QTabWidget()
         self.thu_cong = TabThuCong(app)
         self.hang_loat = TabHangLoat(app)
-        self.tab.addTab(self.thu_cong, "📝  Thủ công")
-        self.tab.addTab(self.hang_loat, "📚  Hàng loạt")
+        self.tab.addTab(self.thu_cong, "Thủ công")
+        self.tab.addTab(self.hang_loat, "Hàng loạt")
         # Nút hướng dẫn nằm ở góc THANH TAB CON, và mở bài của tab con **đang
         # mở** — chủ dự án: *"họ dùng tab nào thì là hướng dẫn riêng tab đó
         # chứ"*. Hai lối làm việc này khác hẳn nhau; một bài gộp cả hai bắt

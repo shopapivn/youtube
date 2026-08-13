@@ -67,7 +67,7 @@ class OPrompt(QWidget):
         self.o.setFixedHeight(58)
         self.o.textChanged.connect(self._doi)
         hang.addWidget(self.o, 1)
-        nut_bo = nut_nguy_hiem("✕", lambda: tab.bo(self), rong=36)
+        nut_bo = nut_nguy_hiem("Xoá", lambda: tab.bo(self), rong=58)
         nut_bo.setToolTip("Xoá prompt này")
         hang.addWidget(nut_bo)
 
@@ -102,8 +102,8 @@ class TabTemplate(QWidget):
         self._chon_mau.setToolTip("Template đã lưu")
         self._chon_mau.currentIndexChanged.connect(lambda _i: self._nap_mau())
         d.addWidget(self._chon_mau, 1)
-        d.addWidget(nut_phu("💾  Lưu template", self._luu_mau, rong=152))
-        self._nut_xoa_mau = nut_nguy_hiem("🗑", self._xoa_mau, rong=40)
+        d.addWidget(nut_phu("Lưu template", self._luu_mau, rong=152))
+        self._nut_xoa_mau = nut_nguy_hiem("Xoá", self._xoa_mau, rong=58)
         self._nut_xoa_mau.setToolTip("Xoá template đang chọn")
         d.addWidget(self._nut_xoa_mau)
         doc.addLayout(d)
@@ -128,19 +128,19 @@ class TabTemplate(QWidget):
 
         d2 = QHBoxLayout()
         d2.setSpacing(8)
-        d2.addWidget(nut_phu("＋  Thêm prompt", lambda: self.them(Buoc("", "")),
+        d2.addWidget(nut_phu("Thêm prompt", lambda: self.them(Buoc("", "")),
                              rong=142))
         d2.addStretch(1)
         self._nhan_ket = nhan("", "muted")
         d2.addWidget(self._nhan_ket)
-        d2.addWidget(nut_phu("📂  Mở thư mục",
+        d2.addWidget(nut_phu("Mở thư mục",
                              lambda: mo_thu_muc(self._thu_muc.value), rong=134))
         doc.addLayout(d2)
 
         # ── Lưu vào & chạy ───────────────────────────────────────────────────
         self._thu_muc = ChonThuMuc(app.default_output_dir("kich-ban"))
         doc.addWidget(self._thu_muc)
-        self._nut_chay = nut_chinh("▶   Chạy", self.chay)
+        self._nut_chay = nut_chinh("Chạy", self.chay)
         doc.addWidget(self._nut_chay)
 
         self._nap_danh_sach_mau()
@@ -245,7 +245,7 @@ class TabTemplate(QWidget):
         so = sum(1 for b in self._buoc if b.prompt.strip())
         self._nut_chay.setEnabled(so > 0 and not self._dang_chay)
         self._nut_chay.setText(
-            "▶   Chạy" if so <= 1 else "▶   Chạy  ({0} prompt)".format(so))
+            "Chạy" if so <= 1 else "Chạy {0} prompt".format(so))
 
     # ── Chạy ─────────────────────────────────────────────────────────────────
 
@@ -345,9 +345,9 @@ class TrangKichBan(QWidget):
 
     Khác nhau ở chỗ **ai cầm lái**:
 
-    * **💬 Chat** — người cầm lái. Gõ, đọc, nghĩ, gõ tiếp. Dùng khi chưa biết
+    * **Chat** — người cầm lái. Gõ, đọc, nghĩ, gõ tiếp. Dùng khi chưa biết
       mình muốn gì, hoặc mỗi video một kiểu.
-    * **🧩 Template** — quy trình cầm lái. Chuỗi prompt đã chốt, dán đầu vào rồi
+    * **Template** — quy trình cầm lái. Chuỗi prompt đã chốt, dán đầu vào rồi
       chạy một mạch ra file. Dùng khi đã tìm ra công thức và cần lặp nó 50 lần.
 
     Người mới bắt đầu ở Chat; tìm ra công thức rồi thì chuyển sang Template và
@@ -361,12 +361,12 @@ class TrangKichBan(QWidget):
         doc = QVBoxLayout(self)
         doc.setContentsMargins(20, 10, 20, 12)
         doc.setSpacing(6)
-        doc.addWidget(tieu_de_trang("✍️  Viết kịch bản", "", "content"))
+        doc.addWidget(tieu_de_trang("Viết kịch bản", "", "content"))
 
         tab = QTabWidget()
-        tab.addTab(self._tab_chat(), "💬  Chat")
+        tab.addTab(self._tab_chat(), "Chat")
         self.template = TabTemplate(app)
-        tab.addTab(self.template, "🧩  Template")
+        tab.addTab(self.template, "Template")
         tab.setTabToolTip(0, "Viết từng lượt, đính kèm tệp, giữ nhiều phiên — "
                              "giống lối làm việc trên trình duyệt.")
         tab.setTabToolTip(1, "Chuỗi prompt cố định: dán một câu lệnh đầu vào, "

@@ -43,8 +43,8 @@ __all__ = ["TrangSkill", "TamSkillChu"]
 
 #: Skill nào xong thì gửi kết quả sang trang nào — `(khoá trang, nhãn nút)`.
 GUI_SANG = {
-    "chia-canh": ("media", "🎨  Gửi sang Ảnh & Video"),
-    "dich": ("voice", "🎙  Gửi sang Voice"),
+    "chia-canh": ("media", "Gửi sang Ảnh & Video"),
+    "dich": ("voice", "Gửi sang Voice"),
 }
 
 
@@ -110,7 +110,7 @@ class TamSkillChu(QWidget):
         v.addWidget(self.o_vao)
         doc.addWidget(the_vao)
 
-        self._nut_chay = nut_chinh("▶   Chạy Skill", self.chay)
+        self._nut_chay = nut_chinh("Chạy Skill", self.chay)
         doc.addWidget(self._nut_chay)
 
         the_ra = the()
@@ -121,9 +121,9 @@ class TamSkillChu(QWidget):
         hang.addWidget(nhan("Kết quả", "h2"))
         self._trang_thai = nhan("", "muted")
         hang.addWidget(self._trang_thai, 1)
-        self._nut_chep = nut_phu("📋  Chép", self._chep, rong=100)
+        self._nut_chep = nut_phu("Chép", self._chep, rong=100)
         hang.addWidget(self._nut_chep)
-        self._nut_luu = nut_phu("💾  Lưu .txt", self._luu, rong=120)
+        self._nut_luu = nut_phu("Lưu .txt", self._luu, rong=120)
         hang.addWidget(self._nut_luu)
         khoa_sang, ten_nut = GUI_SANG.get(skill.ma, ("", ""))
         self._sang = khoa_sang
@@ -156,11 +156,11 @@ class TamSkillChu(QWidget):
         hang = QHBoxLayout()
         hang.setContentsMargins(0, 0, 0, 0)
         hang.setSpacing(12)
-        hang.addWidget(nhan("{0}  {1}".format(self.skill.bieu_tuong, self.skill.ten), "h1"))
+        hang.addWidget(nhan(self.skill.ten, "h1"))
         hang.addWidget(nhan(self.skill.mo_ta, "muted"), 1)
         if la_skill_rieng(self.skill):
-            hang.addWidget(nut_phu("✏  Sửa lời nhắc", self._hoi_loi_nhac, rong=140))
-            hang.addWidget(nut_phu("🗑  Xoá", self._hoi_xoa, rong=84))
+            hang.addWidget(nut_phu("Sửa lời nhắc", self._hoi_loi_nhac, rong=140))
+            hang.addWidget(nut_phu("Xoá", self._hoi_xoa, rong=84))
         return hang
 
     def _hoi_loi_nhac(self) -> None:
@@ -176,7 +176,7 @@ class TamSkillChu(QWidget):
         o_nhap.setMinimumSize(460, 220)
         doc.addWidget(o_nhap, 1)
         nut = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        nut.button(QDialogButtonBox.Save).setText("💾  Lưu")
+        nut.button(QDialogButtonBox.Save).setText("Lưu")
         nut.button(QDialogButtonBox.Cancel).setText("Thôi")
         nut.accepted.connect(hop.accept)
         nut.rejected.connect(hop.reject)
@@ -245,7 +245,7 @@ class TamSkillChu(QWidget):
     def _khoa(self, khoa: bool) -> None:
         self._dang_chay = khoa
         self._nut_chay.setEnabled(not khoa)
-        self._nut_chay.setText("Đang chạy…" if khoa else "▶   Chạy Skill")
+        self._nut_chay.setText("Đang chạy…" if khoa else "Chạy Skill")
         if khoa:
             self._trang_thai.setText("đang chạy…")
 
@@ -400,7 +400,7 @@ class TrangSkill(QWidget):
         td.setContentsMargins(0, 0, 0, 0)
         td.setSpacing(8)
         td.addWidget(tieu_de_trang(
-            "🧠  Skill", "Việc lẻ quanh một video.", "skill"))
+            "Skill", "Việc lẻ quanh một video.", "skill"))
         cuon = QScrollArea()
         cuon.setWidgetResizable(True)
         trong = QWidget()
@@ -482,7 +482,7 @@ def _nhan_nut(nut: QPushButton, skill: Skill) -> str:
     """
     nut.ensurePolished()
     do = nut.fontMetrics()
-    dong = ("{0}   {1}".format(skill.bieu_tuong, skill.ten), _rut_gon(skill.mo_ta))
+    dong = (skill.ten, _rut_gon(skill.mo_ta))
     return "\n".join(do.elidedText(chu, Qt.ElideRight, _RONG_CHU_NUT) for chu in dong)
 
 

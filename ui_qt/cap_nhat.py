@@ -68,15 +68,15 @@ class NutCapNhat:
 
     Nên nút ở nguyên đó với ba trạng thái, ai nhìn cũng biết mình đang ở đâu:
 
-        ⏳ Đang kiểm tra…          vừa mở tool, đang hỏi GitHub
-        ⬆ Cập nhật lên 0.6.3      có bản mới, bấm là tải
-        ✓ Đã mới nhất (0.6.2)     bấm để hỏi lại
+        Đang kiểm tra…          vừa mở tool, đang hỏi GitHub
+        Cập nhật lên 0.6.3      có bản mới, bấm là tải
+        Đã mới nhất (0.6.2)     bấm để hỏi lại
     """
 
     def __init__(self, app):
         self._app = app
         self._ban_moi: Optional[str] = None
-        self.nut = nut_chinh("⏳  Đang kiểm tra…", self._bam)
+        self.nut = nut_chinh("Đang kiểm tra…", self._bam)
         self.nut.setToolTip("Tool tự hỏi GitHub xem có bản mới không.")
 
     def do_ngam(self) -> None:
@@ -86,27 +86,27 @@ class NutCapNhat:
         if not dang_dung:
             self._khong_biet()
             return
-        self.nut.setText("⏳  Đang kiểm tra…")
+        self.nut.setText("Đang kiểm tra…")
         self._app.run_bg(lambda: kiem_ban_moi(dang_dung, tai_https),
                          on_ok=self._co_ban_moi, on_err=lambda _loi: self._hong_mang())
 
     def _khong_biet(self) -> None:
-        self.nut.setText("↻  Kiểm tra bản mới")
+        self.nut.setText("Kiểm tra bản mới")
         self.nut.setToolTip("Không đọc được số hiệu bản đang cài.")
 
     def _hong_mang(self) -> None:
         """Hỏi không được thì nói thật, đừng giả vờ đã mới nhất."""
-        self.nut.setText("↻  Kiểm tra lại")
+        self.nut.setText("Kiểm tra lại")
         self.nut.setToolTip("Chưa hỏi được github.com — kiểm tra mạng rồi bấm lại.")
 
     def _co_ban_moi(self, ban_moi) -> None:
         self._ban_moi = ban_moi or None
         if not ban_moi:
             dang = doc_phien_ban(self._app.base_dir) or "?"
-            self.nut.setText("✓  Đã mới nhất ({0})".format(dang))
+            self.nut.setText("Đã mới nhất ({0})".format(dang))
             self.nut.setToolTip("Bấm để hỏi lại GitHub xem có bản mới chưa.")
             return
-        self.nut.setText("⬆  Cập nhật lên {0}".format(ban_moi))
+        self.nut.setText("Cập nhật lên {0}".format(ban_moi))
         self.nut.setToolTip(
             "Tải bản {0} từ github.com/{1} rồi khởi động lại tool.\n"
             "Khoá API, kết quả đã tạo, phiên viết và template của bạn được giữ "
@@ -146,5 +146,5 @@ class NutCapNhat:
 
     def _hong(self, loi: BaseException) -> None:
         self.nut.setEnabled(True)
-        self.nut.setText("⬆  Cập nhật lên {0}".format(self._ban_moi or ""))
+        self.nut.setText("Cập nhật lên {0}".format(self._ban_moi or ""))
         self._app.show_error(loi)

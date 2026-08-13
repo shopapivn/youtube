@@ -44,7 +44,7 @@ __all__ = ["HUONG_DAN", "HopHuongDan", "nut_huong_dan", "co_huong_dan"]
 #: Hướng dẫn theo khoá tab. Khoá trùng với `ui_qt/app.py:TRANG`.
 HUONG_DAN: Dict[str, Dict[str, object]] = {
     "agent": {
-        "tieu_de": "🤖  Agent xây tool",
+        "tieu_de": "Agent xây tool",
         "tom_tat": "Cài sẵn một trợ lý lập trình chạy ngay trong thư mục tool, "
                    "để bạn nhờ nó sửa chính cái tool này.",
         "buoc": [
@@ -66,7 +66,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "skill": {
-        "tieu_de": "🧠  Skill",
+        "tieu_de": "Skill",
         "tom_tat": "Những việc lẻ làm một phát ra kết quả: đưa vào một thứ, "
                    "nhận về một thứ.",
         "buoc": [
@@ -82,7 +82,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "content": {
-        "tieu_de": "✍️  Viết kịch bản",
+        "tieu_de": "Viết kịch bản",
         "tom_tat": "Hai lối viết: nói chuyện qua lại, hoặc chạy sẵn một chuỗi "
                    "lời nhắc bạn tự soạn.",
         "buoc": [
@@ -95,13 +95,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": ["Cả hai lối đều gọi mô hình ngôn ngữ nên đều trừ ví."],
     },
     "voice": {
-        "tieu_de": "🎙️  Voice",
+        "tieu_de": "Voice",
         "tom_tat": "Đọc chữ thành giọng nói, làm lẻ hoặc cả thư mục.",
         "buoc": [
             "Tab “File & thư mục”: chọn file .txt hoặc cả thư mục, mỗi file ra "
             "một bản đọc.",
             "Tab “Text”: dán chữ vào ô — cả ô là một bài.",
-            "Dán Voice ID rồi bấm chạy. Các cài đặt ít dùng nằm sau nút ⚙.",
+            "Dán Voice ID rồi bấm chạy. Các cài đặt ít dùng nằm sau nút .",
         ],
         "luu_y": ["Mặc định lưu .mp3.", "Tính tiền theo số ký tự."],
     },
@@ -110,7 +110,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     # dẫn riêng tab đó chứ"*. Một bài gộp cả hai buộc khách phải tự lọc xem đoạn
     # nào nói về màn hình họ đang nhìn.
     "media.thu_cong": {
-        "tieu_de": "📝  Ảnh & Video → Thủ công",
+        "tieu_de": "Ảnh & Video → Thủ công",
         "tom_tat": "Làm lẻ từng cái: gõ mô tả, bấm Gửi, xem kết quả bằng ảnh.",
         "buoc": [
             "Gõ mô tả vào ô dưới cùng.",
@@ -128,7 +128,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "media.hang_loat": {
-        "tieu_de": "📚  Ảnh & Video → Hàng loạt",
+        "tieu_de": "Ảnh & Video → Hàng loạt",
         "tom_tat": "Một bảng cảnh, chạy hết một lượt, ảnh nối thẳng sang video.",
         "buoc": [
             "Mỗi dòng một cảnh: cột trái là mô tả ảnh, cột phải là mô tả video.",
@@ -145,7 +145,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "edit": {
-        "tieu_de": "✂️  Dựng video",
+        "tieu_de": "Dựng video",
         "tom_tat": "Ghép các clip và giọng đọc đã có thành video hoàn chỉnh.",
         "buoc": [
             "Chọn thư mục chứa clip, thư mục giọng đọc, rồi chọn chỗ lưu.",
@@ -157,7 +157,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "wallet": {
-        "tieu_de": "💳  Ví & Tài khoản",
+        "tieu_de": "Ví & Tài khoản",
         "tom_tat": "Đăng nhập, xem số dư, nạp tiền, lấy khoá API.",
         "buoc": [
             "Đăng nhập bằng email đã đăng ký ở shopapi.vn.",
@@ -248,6 +248,6 @@ def nut_huong_dan(khoa, cha=None):
         if co_huong_dan(thuc):
             HopHuongDan(thuc, cha).exec_()
 
-    nut = nut_phu("?  Hướng dẫn", mo, rong=112)
+    nut = nut_phu("Hướng dẫn", mo, rong=104)
     nut.setToolTip("Cách dùng đúng phần bạn đang mở")
     return nut

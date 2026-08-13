@@ -5,10 +5,10 @@
 ```
   Luồng giao diện (Qt)                    Luồng nền (ThreadPoolExecutor)
   ────────────────────                    ─────────────────────────────
-  bấm nút ──► JobManager.submit() ──────► gọi API, chờ job, tải file
-      ▲                                            │
+  bấm nút ──JobManager.submit() ──────gọi API, chờ job, tải file
+      │
       │        queue.Queue (an toàn đa luồng)      │
-      └────────── QTimer mỗi 150ms ◄───────────────┘
+      └────────── QTimer mỗi 150ms ───────────────┘
 ```
 
 Luồng nền **không bao giờ** chạm vào widget — Qt cũng không an toàn với đa luồng
@@ -56,16 +56,16 @@ _NHIP_MS = 150
 #: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
 #: xem `ui_qt/bang_viec.py` để biết vì sao.
 TRANG = (
-    ("agent", "🤖", "Agent xây tool"),
-    ("skill", "🧠", "Skill"),
-    ("content", "✍️", "Viết kịch bản"),
-    ("voice", "🎙️", "Voice"),
+    ("agent", "", "Agent xây tool"),
+    ("skill", "", "Skill"),
+    ("content", "", "Viết kịch bản"),
+    ("voice", "", "Voice"),
     # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026). Chúng vốn là MỘT
     # khuôn dùng hai lần, mà thứ khách thật sự muốn — *ảnh này, rồi cho nó động
     # đậy* — thì không tab nào diễn đạt được vì nó nằm vắt qua cả hai.
-    ("media", "🎨", "Ảnh & Video"),
-    ("edit", "✂️", "Dựng video"),
-    ("wallet", "💳", "Ví & Tài khoản"),
+    ("media", "", "Ảnh & Video"),
+    ("edit", "", "Dựng video"),
+    ("wallet", "", "Ví & Tài khoản"),
 )
 
 
@@ -91,7 +91,10 @@ class ThanhBen(QFrame):
             doc.addWidget(duoi_ten)
         doc.addSpacing(18)
         for khoa, bieu_tuong, ten in nav:
-            nut = QPushButton("   {0}    {1}".format(bieu_tuong, ten))
+            # Chỉ còn chữ. Biểu tượng vẫn nằm trong `TRANG` cho nơi khác dùng,
+            # nhưng thanh bên không vẽ nữa — chủ dự án, 13/08/2026: *"icon đang
+            # trẻ con quá, bỏ hết icon đi"*.
+            nut = QPushButton("   " + ten)
             nut.setObjectName("nav")
             nut.setCheckable(True)
             nut.setCursor(Qt.PointingHandCursor)
@@ -451,7 +454,7 @@ class CuaSoChinh(QWidget):
     def _nho_phien(self, phien) -> None:
         """Cất lại refresh token mỗi lần máy chủ xoay nó.
 
-        ⚠ Chạy ở LUỒNG NỀN (gọi từ trong lời gọi mạng): chỉ ghi đĩa, tuyệt đối
+        Chạy ở LUỒNG NỀN (gọi từ trong lời gọi mạng): chỉ ghi đĩa, tuyệt đối
         không đụng widget.
         """
         token = phien.refresh_token

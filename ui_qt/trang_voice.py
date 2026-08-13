@@ -10,9 +10,9 @@ cũng chẳng có lý do gì phải đoán thứ tự — đánh số là hết 
 
 ═══ HAI TAB CON ═══
 
-* **📁 File & thư mục** (mặc định) — 200 file .txt có sẵn trên đĩa. Đây là đường
+* **File & thư mục** (mặc định) — 200 file .txt có sẵn trên đĩa. Đây là đường
   chính của việc lồng tiếng hàng loạt nên nó là tab mở sẵn.
-* **✍ Text** — dán một đoạn, **cả ô thành một file**, không hỏi lại gì thêm.
+* **Text** — dán một đoạn, **cả ô thành một file**, không hỏi lại gì thêm.
 
 Là tab thật (`QTabWidget`) chứ không phải dãy nút giả làm tab: hình cái tab dính
 liền khung nội dung nói ngay "đây là hai màn hình riêng", còn dãy nút chỉ nói
@@ -79,8 +79,8 @@ DINH_DANG = ("mp3", "wav")
 MA_HOA = ("utf-8-sig", "utf-8", "cp1258", "latin-1")
 
 #: Hai lối đưa nội dung vào — xem `TrangGiongNoi._khoi_nguon`.
-LOI_FILE = "📁  File & thư mục"
-LOI_TEXT = "✍  Text"
+LOI_FILE = "File & thư mục"
+LOI_TEXT = "Text"
 
 
 
@@ -99,8 +99,8 @@ class _Lo:
     """Một **lô** đã xếp vào hàng đợi: một giọng, một nguồn, một mớ file.
 
     Bảng hàng đợi của tool gốc liệt kê từng file, nên xếp 200 file là 200 dòng
-    và cái nút ✕ trở nên vô dụng — muốn bỏ một nhân vật phải bấm 200 lần. Ở đây
-    mỗi dòng là một lô, ✕ bỏ nguyên lô.
+    và cái nút trở nên vô dụng — muốn bỏ một nhân vật phải bấm 200 lần. Ở đây
+    mỗi dòng là một lô, bỏ nguyên lô.
     """
 
     voice_id: str
@@ -150,7 +150,7 @@ class TrangGiongNoi(QWidget):
         doc.setContentsMargins(22, 14, 22, 14)
         doc.setSpacing(8)
         doc.addWidget(tieu_de_trang(
-            "🎙️  Voice", "Đọc chữ thành giọng nói.", "voice"))
+            "Voice", "Đọc chữ thành giọng nói.", "voice"))
 
         doc.addWidget(self._khoi_nguon())
         doc.addWidget(self._the_giong())
@@ -183,7 +183,7 @@ class TrangGiongNoi(QWidget):
         được trên máy chủ dự án: mấy nút bên phải bị đẩy ra ngoài mép cửa sổ, và
         ô Voice ID — thứ **phải gõ mỗi lần** — hẹp tới mức không đọc hết nổi
         chính dòng chữ gợi ý của nó. Đổi chỗ: thứ dùng mỗi lần thì to và nằm
-        ngoài, thứ đặt một lần thì nằm sau nút ⚙.
+        ngoài, thứ đặt một lần thì nằm sau nút .
 
         Widget dựng ở đây chứ không dựng trong hộp thoại, để phần chạy việc đọc
         `self._on_dinh.value()` như cũ dù khách chưa từng mở hộp thoại lần nào.
@@ -285,14 +285,14 @@ class TrangGiongNoi(QWidget):
             "Mở elevenlabs.io/app/voice-library, chọn giọng bạn thích, bấm nút "
             "ba chấm rồi chọn “Copy voice ID”, dán vào ô này.")
         d1.addWidget(self._ma_giong, 1)
-        self._nut_cai_dat = nut_phu("⚙  Cài đặt", self._mo_cai_dat, rong=110)
+        self._nut_cai_dat = nut_phu("Cài đặt", self._mo_cai_dat, rong=110)
         d1.addWidget(self._nut_cai_dat)
         v.addLayout(d1)
 
         d2 = QHBoxLayout()
         d2.setSpacing(8)
         d2.addStretch(1)
-        nut_xep = nut_phu("➕  Xếp vào hàng đợi", self._xep_hang, rong=176)
+        nut_xep = nut_phu("Xếp vào hàng đợi", self._xep_hang, rong=176)
         nut_xep.setToolTip(
             "Nhiều nhân vật: xếp giọng này cùng danh sách hiện tại thành một lô, "
             "rồi nhập nhân vật kế tiếp. Bấm START là chạy hết một lượt.")
@@ -374,7 +374,7 @@ class TrangGiongNoi(QWidget):
         hang = QHBoxLayout()
         hang.setSpacing(8)
         hang.addWidget(nhan("Cả ô thành một file giọng đọc.", "muted"), 1)
-        hang.addWidget(nut_phu("⬇  Đưa vào danh sách", self._nap_o_chu, rong=178))
+        hang.addWidget(nut_phu("Đưa vào danh sách", self._nap_o_chu, rong=178))
         v.addLayout(hang)
         return tam
 
@@ -399,8 +399,8 @@ class TrangGiongNoi(QWidget):
             "thư mục chứa file .txt — gõ đường dẫn rồi Enter, hoặc bấm nút bên phải")
         self._o_nguon.returnPressed.connect(self._nap_thu_muc_dang_go)
         hang.addWidget(self._o_nguon, 1)
-        hang.addWidget(nut_phu("📄  Chọn file…", self._them_file, rong=134))
-        hang.addWidget(nut_phu("📁  Chọn thư mục…", self._chon_thu_muc, rong=158))
+        hang.addWidget(nut_phu("Chọn file…", self._them_file, rong=134))
+        hang.addWidget(nut_phu("Chọn thư mục…", self._chon_thu_muc, rong=158))
         v.addLayout(hang)
         self._nhan_nguon = nhan(
             "Chọn vài file .txt lẻ, hoặc nạp cả thư mục — mỗi file thành một "
@@ -458,12 +458,12 @@ class TrangGiongNoi(QWidget):
         """
         hang = QHBoxLayout()
         hang.setSpacing(8)
-        self._nut_chay = nut_chinh("▶  START", self._chay, rong=200)
+        self._nut_chay = nut_chinh("START", self._chay, rong=200)
         hang.addWidget(self._nut_chay)
-        self._nut_dung = nut_nguy_hiem("■  STOP", self._dung, rong=110)
+        self._nut_dung = nut_nguy_hiem("STOP", self._dung, rong=110)
         hang.addWidget(self._nut_dung)
         hang.addStretch(1)
-        hang.addWidget(nut_nguy_hiem("🗑  Xoá danh sách", self._xoa_danh_sach, rong=150))
+        hang.addWidget(nut_nguy_hiem("Xoá danh sách", self._xoa_danh_sach, rong=150))
         self._cap_nhat_nut_dung()
         return hang
 
@@ -663,10 +663,10 @@ class TrangGiongNoi(QWidget):
         self.bang.dat_thu_muc(self._thu_muc.value)
         self._nut_chay.setEnabled(bool(muc))
         self._nut_chay.setText(
-            "▶  START" if not muc else "▶  START  ({0} file)".format(len(muc)))
+            "START" if not muc else "START  ({0} file)".format(len(muc)))
 
     def _ve_tom_tat_cai_dat(self) -> None:
-        """Cài đặt hiện ở tooltip của nút ⚙, không chiếm một dòng trên màn hình."""
+        """Cài đặt hiện ở tooltip của nút , không chiếm một dòng trên màn hình."""
         phan = [self._dinh_dang.get(),
                 "Stability {0:.2f}".format(self._on_dinh.value() / 100),
                 "Similarity {0:.2f}".format(self._giong_nhau.value() / 100)]
@@ -697,7 +697,7 @@ class TrangGiongNoi(QWidget):
                 if chu:
                     muc.setToolTip(chu)
                 self._bang_cho.setItem(dong, cot, muc)
-            nut_bo = nut_nguy_hiem("✕", lambda l=lo: self._bo_lo(l), rong=30)
+            nut_bo = nut_nguy_hiem("Bỏ", lambda l=lo: self._bo_lo(l), rong=52)
             nut_bo.setToolTip("Bỏ cả lô này khỏi hàng đợi")
             self._bang_cho.setCellWidget(dong, 4, nut_bo)
 

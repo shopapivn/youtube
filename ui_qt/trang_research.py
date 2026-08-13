@@ -10,12 +10,12 @@ tải tool về **vì** nó, lúc chưa hề có tài khoản.
 ═══ BỐ CỤC ═══
 
 ```
-  ┌ Ô nhập: mỗi dòng một kênh ─── 📄 Nạp từ file .txt ─┐
+  ┌ Ô nhập: mỗi dòng một kênh ─── Nạp từ file .txt ─┐
   │ [số video/kênh] [chi tiết đầy đủ] [dò thêm kênh]   │
-  │                       ▶ Lấy dữ liệu      ■ Dừng    │
+  │                       Lấy dữ liệu      Dừng    │
   ├ Tóm tắt: bao nhiêu kênh/video + kết luận ngách ────┤
   ├ [ Kênh | Video ] ← một bảng, đổi qua lại bằng nút ─┤
-  ├ 📁 Lưu vào … 💾 Xuất CSV 📂 Mở thư mục ────────────┤
+  ├ Lưu vào … Xuất CSV Mở thư mục ────────────┤
   └ Nhật ký ──────────────────────────────────────────┘
 ```
 
@@ -92,7 +92,7 @@ class TrangNghienCuu(QWidget):
         #     trong ô dán, tức khách đọc hai lần cùng một câu.
         #
         # Còn lại đúng ba thứ: dán vào đâu, bấm gì, kết quả ở đâu.
-        doc.addWidget(tieu_de_trang("📥  Lấy dữ liệu đối thủ",
+        doc.addWidget(tieu_de_trang("Lấy dữ liệu đối thủ",
                                     "Chạy trên máy bạn, miễn phí."))
         doc.addWidget(self._the_nhap())
         doc.addWidget(self._khoi_bang(), 1)
@@ -123,7 +123,7 @@ class TrangNghienCuu(QWidget):
         d0.addStretch(1)
         # Danh sách kênh đối thủ của người làm YouTube thường nằm sẵn trong một
         # file .txt hoặc một cột Excel; bắt họ dán tay từng dòng là thừa.
-        d0.addWidget(nut_phu("📄  Nạp .txt", self._nap_file, rong=118))
+        d0.addWidget(nut_phu("Nạp .txt", self._nap_file, rong=118))
         v.addLayout(d0)
 
         self._o_nhap = QPlainTextEdit()
@@ -168,10 +168,10 @@ class TrangNghienCuu(QWidget):
         # mạng lên nhiều lần và làm bảng đầy những kênh họ chưa từng nghe tên.
         d2 = QHBoxLayout()
         d2.addStretch(1)
-        self._nut_chay = nut_chinh("▶   Lấy dữ liệu", self._chay)
+        self._nut_chay = nut_chinh("Lấy dữ liệu", self._chay)
         self._nut_chay.setFixedWidth(220)
         d2.addWidget(self._nut_chay)
-        self._nut_dung = nut_phu("■  Dừng", self._dung, rong=96)
+        self._nut_dung = nut_phu("Dừng", self._dung, rong=96)
         self._nut_dung.setEnabled(False)
         d2.addWidget(self._nut_dung)
         v.addLayout(d2)
@@ -220,25 +220,25 @@ class TrangNghienCuu(QWidget):
     def _hang_xuat(self) -> QHBoxLayout:
         """Hàng nút dưới bảng — đúng bộ của tool gốc.
 
-        `📋 Copy tất cả` là nút tao **bỏ sót** ở bản trước, mà nó mới là đường
+        `Copy tất cả` là nút tao **bỏ sót** ở bản trước, mà nó mới là đường
         khách hay đi nhất: chép cả bảng rồi dán thẳng vào Google Sheets, không
-        phải mở file, không phải tìm thư mục. `🗑 Xoá kết quả` cũng của tool gốc.
+        phải mở file, không phải tìm thư mục. `Xoá kết quả` cũng của tool gốc.
         """
         hang = HangXuongDong()
-        self._nut_copy = nut_phu("📋  Copy tất cả", self._copy_tat_ca, rong=150)
+        self._nut_copy = nut_phu("Copy tất cả", self._copy_tat_ca, rong=150)
         self._nut_copy.setToolTip(
             "Chép cả bảng vào bộ nhớ tạm, ngăn cột bằng Tab — dán thẳng vào "
             "Google Sheets hay Excel là mỗi ô vào đúng một cột.")
         self._nut_copy.setEnabled(False)
         hang.addWidget(self._nut_copy)
-        self._nut_xuat = nut_phu("💾  Lưu CSV", self._xuat, rong=124)
+        self._nut_xuat = nut_phu("Lưu CSV", self._xuat, rong=124)
         self._nut_xuat.setEnabled(False)
         hang.addWidget(self._nut_xuat)
-        self._nut_mo = nut_phu("📂  Mở kết quả",
+        self._nut_mo = nut_phu("Mở kết quả",
                                lambda: mo_thu_muc(self._thu_muc_da_xuat), rong=150)
         self._nut_mo.setEnabled(False)
         hang.addWidget(self._nut_mo)
-        self._nut_xoa = nut_phu("🗑  Xoá kết quả", self._xoa_ket_qua, rong=150)
+        self._nut_xoa = nut_phu("Xoá kết quả", self._xoa_ket_qua, rong=150)
         hang.addWidget(self._nut_xoa)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir("doi-thu"))
         return hang
