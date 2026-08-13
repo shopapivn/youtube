@@ -13,13 +13,19 @@ Khách chạy bằng `CHAY-GON.vbs` → `pythonw.exe`, tức **không có cửa 
 thiếu thư viện, mã nguồn lỗi — thì khách nhấp đúp và **không thấy gì cả**, không
 một dấu hiệu nào để đoán chuyện gì đã xảy ra.
 
-Nên có ba đường báo, thử lần lượt:
+Nên có bốn đường báo, thử lần lượt:
 
-    1. còn console  → in ra rồi chờ Enter
-    2. không console → bật một hộp thoại
-    3. hộp thoại cũng không dựng nổi → ghi `LOI-KHOI-DONG.txt` cạnh tool
+    1. còn console   → in ra rồi chờ Enter
+    2. hộp thoại tkinter — có sẵn trong mọi bản Python, KHÔNG cài bằng pip
+    3. hộp thoại Qt  — khi tkinter bị lược bỏ khỏi bản Python của máy
+    4. không dựng nổi hộp nào → ghi `LOI-KHOI-DONG.txt` cạnh tool
 
-Đường thứ ba là manh mối cuối cùng còn lại, và nó phải luôn còn.
+Thứ tự tkinter TRƯỚC Qt là điểm mấu chốt, không phải sở thích: lý do số một
+khiến tool không khởi động được là **thiếu PyQt5**, nên một hộp thoại vẽ bằng Qt
+chắc chắn hỏng đúng lúc cần nó nhất. Bản trước đúng là như vậy, và khách nhấp
+đúp thì không thấy gì cả.
+
+Đường thứ tư là manh mối cuối cùng còn lại, và nó phải luôn còn.
 """
 
 from __future__ import annotations
@@ -66,20 +72,54 @@ def _die(tieu_de: str, chi_tiet: str) -> None:
             pass
         sys.exit(1)
 
-    try:
-        from PyQt5.QtWidgets import QApplication, QMessageBox
-
-        app = QApplication.instance() or QApplication(sys.argv)
-        QMessageBox.critical(None, tieu_de, chi_tiet)
-        del app
-    except Exception:  # noqa: BLE001 — không dựng nổi cả Qt thì đành ghi file
+    # Hộp thoại dựng bằng **tkinter**, không phải Qt.
+    #
+    # Bản trước dựng bằng `QMessageBox`, và nó hỏng đúng ở lần cần nhất: lý do
+    # số một khiến tool không khởi động được là **thiếu PyQt5**, mà đó chính là
+    # thứ dùng để vẽ hộp thoại báo "thiếu PyQt5". Nên khách nhấp đúp
+    # CHAY-GON.vbs rồi không thấy gì cả — không cửa sổ, không báo lỗi, chỉ có
+    # một file .txt lặng lẽ hiện ra mà không ai nghĩ tới chuyện mở.
+    #
+    # tkinter đi kèm sẵn mọi bản Python trên Windows và tool KHÔNG cài nó, nên
+    # nó còn sống kể cả khi mọi thứ cài bằng pip đều hỏng. (Cùng tính chất ấy
+    # làm nó vô dụng khi đem đi *kiểm tra* xem giao diện cài được chưa — xem
+    # SETUP.bat. Vô dụng để hỏi, hoàn hảo để cấp cứu.)
+    for dung_hop in (_hop_tkinter, _hop_qt):
         try:
-            with open(os.path.join(BASE_DIR, "LOI-KHOI-DONG.txt"), "w",
-                      encoding="utf-8") as tep:
-                tep.write(tieu_de + "\n\n" + chi_tiet + "\n")
-        except OSError:
+            if dung_hop(tieu_de, chi_tiet):
+                sys.exit(1)
+        except Exception:  # noqa: BLE001 — còn đường sau, không được ném tiếp
             pass
+
+    # Cả hai đều không dựng nổi: ghi file. Manh mối cuối cùng, phải luôn còn.
+    try:
+        with open(os.path.join(BASE_DIR, "LOI-KHOI-DONG.txt"), "w",
+                  encoding="utf-8") as tep:
+            tep.write(tieu_de + "\n\n" + chi_tiet + "\n")
+    except OSError:
+        pass
     sys.exit(1)
+
+
+def _hop_tkinter(tieu_de: str, chi_tiet: str) -> bool:
+    from tkinter import Tk, messagebox
+
+    goc = Tk()
+    goc.withdraw()          # chỉ cần hộp thoại, không cần cửa sổ nền
+    try:
+        messagebox.showerror(tieu_de, chi_tiet)
+    finally:
+        goc.destroy()
+    return True
+
+
+def _hop_qt(tieu_de: str, chi_tiet: str) -> bool:
+    from PyQt5.QtWidgets import QApplication, QMessageBox
+
+    app = QApplication.instance() or QApplication(sys.argv)
+    QMessageBox.critical(None, tieu_de, chi_tiet)
+    del app
+    return True
 
 
 def main() -> int:

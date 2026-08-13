@@ -1,4 +1,4 @@
-﻿' ===========================================================================
+' ===========================================================================
 '  ShopAPI Studio — BẬT KHÔNG CÓ CỬA SỔ ĐEN
 ' ===========================================================================
 '
@@ -87,10 +87,36 @@ End If
 ' ── Bật tool ───────────────────────────────────────────────────────────────
 '
 ' Tham số thứ hai `0` = cửa sổ ẩn hoàn toàn.
-' Tham số thứ ba `False` = không chờ tool thoát; script này xong việc là biến mất.
+' Tham số thứ ba `True` = CHỜ tool thoát rồi mới đọc mã trả về.
+'
+' Vì sao chờ, dù script này trước đây thả tay ra là biến mất: chạy ẩn mà không
+' chờ thì tool chết lúc khởi động là khách **không nhận được tín hiệu nào** —
+' nhấp đúp, màn hình không đổi, không biết mình đã bấm đúng chưa nên bấm thêm
+' vài lần nữa. Chờ thì tốn một tiến trình wscript.exe vô hình nằm không suốt
+' phiên làm việc; đổi lại, mọi kiểu chết lúc khởi động đều nói được thành lời.
 '
 ' Bọc đường dẫn trong dấu nháy: thư mục của tool có thể chứa khoảng trắng
 ' (mặc định nằm trong "D:\New folder\...").
+Dim tepLoi, ma, chiTiet
+tepLoi = thuMuc & "\LOI-KHOI-DONG.txt"
+' Xoá manh mối của lần chạy TRƯỚC, không thì lát nữa đọc nhầm lỗi cũ.
+If fso.FileExists(tepLoi) Then fso.DeleteFile tepLoi, True
+
 lenh = """" & pythonw & """ """ & thuMuc & "\shopapi_studio_qt.py"""
 shell.CurrentDirectory = thuMuc
-shell.Run lenh, 0, False
+ma = shell.Run(lenh, 0, True)
+
+If ma <> 0 Then
+    chiTiet = ""
+    If fso.FileExists(tepLoi) Then
+        On Error Resume Next
+        chiTiet = fso.OpenTextFile(tepLoi, 1).ReadAll()
+        On Error GoTo 0
+    End If
+    If Trim(chiTiet) = "" Then
+        chiTiet = "Tool đóng lại ngay khi vừa mở (mã " & ma & ")." & vbCrLf & vbCrLf & _
+                  "Hãy nhấp đúp CHAY-QT.bat — nó hiện cửa sổ đen và nói rõ đang thiếu gì."
+    End If
+    MsgBox chiTiet, vbCritical, "ShopAPI Studio"
+    WScript.Quit ma
+End If
