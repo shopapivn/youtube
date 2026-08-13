@@ -64,6 +64,27 @@ if exist "%~dp0.claude\settings.local.json" (
 )
 echo.
 echo ============================================================
+
+echo --- MOI loi tat tren Desktop ----------------------------------
+REM  Khach bao "chay tool o man hinh la mo kem claude code". Tool da do:
+REM  no KHONG chay tien trinh nao co cua so. Nen thu bat cua so do la MOT
+REM  thu khac tren may - va cach duy nhat de biet la liet ke het ra.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$w=New-Object -ComObject WScript.Shell; Get-ChildItem (Join-Path $w.SpecialFolders('Desktop') '*.lnk') -ErrorAction SilentlyContinue | ForEach-Object { $s=$w.CreateShortcut($_.FullName); Write-Host ('  ' + $_.Name + '  ->  ' + $s.TargetPath + ' ' + $s.Arguments) }"
+echo.
+
+echo --- Thu tu chay cung Windows ----------------------------------
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup') -ErrorAction SilentlyContinue | ForEach-Object { Write-Host ('  Startup: ' + $_.Name) }; foreach($k in 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run','HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'){ if(Test-Path $k){ (Get-ItemProperty $k).PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { Write-Host ('  Run: ' + $_.Name + ' = ' + $_.Value) } } }"
+echo.
+
+echo --- Tool da chay nhung tien trinh nao (lan mo gan nhat) -------
+REM  Cot thu ba: "ngam" = chay khong cua so, "CO CUA SO" = se nhay len
+REM  mot o den. Neu co dong nao CO CUA SO thi do chinh la thu dang bat len.
+if exist "%~dp0workspace	ien-trinh.log" (
+  powershell -NoProfile -Command "Get-Content '%~dp0workspace	ien-trinh.log' -Tail 25 | ForEach-Object { Write-Host ('  ' + $_) }"
+) else (
+  echo   chua co - hay mo tool mot lan roi chay lai file nay
+)
+echo.
 echo    Chup man hinh nay gui nguoi ho tro.
 echo ============================================================
 pause

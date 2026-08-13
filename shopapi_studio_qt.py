@@ -147,6 +147,20 @@ def main() -> int:
                                       traceback.format_exc()[-1500:]))
         return 1
 
+    # Ghi lại mọi tiến trình tool chạy, vào `workspace/tien-trinh.log`.
+    #
+    # Có vì một sự cố không tái hiện được: máy khách báo tool mở kèm một cửa sổ
+    # Claude Code, còn máy dựng tool đo ba cách đều không thấy tiến trình nào.
+    # Khi hai bên nhìn thấy hai thứ khác nhau, thứ cần không phải thêm một giả
+    # thuyết nữa mà là bản ghi từ chính máy đó. Bật sớm nhất có thể — trước cả
+    # lúc dựng cửa sổ — để không bỏ sót lệnh nào.
+    try:
+        from core import nhat_ky_tien_trinh
+
+        nhat_ky_tien_trinh.bat_ghi(BASE_DIR)
+    except Exception:  # noqa: BLE001 — nhật ký hỏng không được chặn tool
+        pass
+
     # Khai TRƯỚC khi dựng QApplication. Windows chốt nhóm thanh tác vụ cho tiến
     # trình ở cửa sổ đầu tiên; khai sau đó thì nút dưới thanh tác vụ vẫn đeo
     # icon của `pythonw.exe`, dù cửa sổ đã mang logo của tool.
