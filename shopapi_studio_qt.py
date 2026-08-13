@@ -136,6 +136,7 @@ def main() -> int:
     try:
         import core  # noqa: F401 — tự tìm SDK shopapi
 
+        from ui_qt import logo
         from ui_qt.app import CuaSoChinh
         from ui_qt.theme import QSS
     except Exception as loi:  # noqa: BLE001
@@ -146,8 +147,14 @@ def main() -> int:
                                       traceback.format_exc()[-1500:]))
         return 1
 
+    # Khai TRƯỚC khi dựng QApplication. Windows chốt nhóm thanh tác vụ cho tiến
+    # trình ở cửa sổ đầu tiên; khai sau đó thì nút dưới thanh tác vụ vẫn đeo
+    # icon của `pythonw.exe`, dù cửa sổ đã mang logo của tool.
+    logo.khai_bao_voi_windows()
+
     app = QApplication(sys.argv)
     app.setStyleSheet(QSS)
+    logo.gan_cho(app)
     cua_so = CuaSoChinh(BASE_DIR)
     cua_so.show()
     if os.environ.get("SHOPAPI_STUDIO_CHAY_THU"):

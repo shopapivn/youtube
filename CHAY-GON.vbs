@@ -1,5 +1,5 @@
 ' ===========================================================================
-'  ShopAPI Studio — BẬT KHÔNG CÓ CỬA SỔ ĐEN
+'  My Tool — BẬT KHÔNG CÓ CỬA SỔ ĐEN
 ' ===========================================================================
 '
 '  Nhấp đúp file này thay cho CHAY-QT.bat. Không hiện cửa sổ dòng lệnh nào.
@@ -80,7 +80,7 @@ If pythonw = "" Then
         "Bạn nhấp đúp SETUP.bat một lần để cài Python và thư viện, rồi mở lại file này." & vbCrLf & vbCrLf & _
         "Nếu đã cài rồi mà vẫn báo lỗi này thì mở CHAY-QT.bat — nó hiện cửa sổ đen và " & _
         "nói rõ hơn đang thiếu gì.", _
-        vbCritical, "ShopAPI Studio"
+        vbCritical, "My Tool"
     WScript.Quit 1
 End If
 
@@ -117,6 +117,6 @@ If ma <> 0 Then
         chiTiet = "Tool đóng lại ngay khi vừa mở (mã " & ma & ")." & vbCrLf & vbCrLf & _
                   "Hãy nhấp đúp CHAY-QT.bat — nó hiện cửa sổ đen và nói rõ đang thiếu gì."
     End If
-    MsgBox chiTiet, vbCritical, "ShopAPI Studio"
+    MsgBox chiTiet, vbCritical, "My Tool"
     WScript.Quit ma
 End If

@@ -40,7 +40,7 @@ from core.money import format_vnd
 from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
 from core.session import SESSION_FILENAME
 
-from . import theme
+from . import logo, theme
 from .widgets import nhan
 
 __all__ = ["CuaSoChinh", "TRANG"]
@@ -71,7 +71,7 @@ TRANG = (
 
 class ThanhBen(QFrame):
     def __init__(self, on_chon: Callable[[str], None], nav=TRANG,
-                 ten_hien: str = "ShopAPI Studio",
+                 ten_hien: str = "My Tool",
                  cau_duoi: str = "Tool của bạn, do bạn tạo",
                  duoi_ten=None):
         super().__init__()
@@ -142,8 +142,14 @@ class CuaSoChinh(QWidget):
 
     #: Trang sản phẩm hiện trên thanh bên. Bản khách lấy đủ.
     TRANG_SAN_PHAM = TRANG
-    #: Tên hiện ở đầu thanh bên.
-    TEN_HIEN = "ShopAPI Studio"
+    #: Tên hiện ở đầu thanh bên và trên thanh tiêu đề cửa sổ.
+    #:
+    #: Chủ dự án, 13/08/2026: *"tool khách chạy mày đổi tên My Tool"*. Đổi ở
+    #: ĐÂY là đổi cả thanh bên lẫn tiêu đề cửa sổ — hai chỗ cùng đọc hằng này.
+    #: Tên gói, tên thư mục và tên kho vẫn giữ nguyên: chúng nằm trong đường
+    #: cập nhật (`cap-nhat.py` tráo thư mục theo tên) và trong khoá lưu bí mật
+    #: của khách, đổi là bản đang cài của khách mất lối lên bản mới.
+    TEN_HIEN = "My Tool"
     CAU_DUOI_TEN = "Tool của bạn, do bạn tạo"
     #: Trang mở ra đầu tiên khi ĐÃ có khoá. Phải là một khoá có trong thanh bên.
     TRANG_DAU = "voice"
@@ -224,6 +230,9 @@ class CuaSoChinh(QWidget):
 
         self._nav = tuple(self.TRANG_SAN_PHAM) + tuple(self.nav_them())
         self.setWindowTitle("{0} — {1}".format(self.TEN_HIEN, self.CAU_DUOI_TEN))
+        hinh = logo.icon()
+        if hinh is not None:
+            self.setWindowIcon(hinh)
         self.resize(1180, 840)
         self.setMinimumSize(1000, 700)
 

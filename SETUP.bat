@@ -14,9 +14,9 @@ REM  ong dan (pipe) thang vao find, khong can bien trung gian.
 chcp 65001 >nul
 cd /d "%~dp0"
 set PYTHONUTF8=1
-title ShopAPI Studio - CAI DAT (chay 1 lan)
+title My Tool - CAI DAT (chay 1 lan)
 echo ============================================================
-echo    ShopAPI Studio - Cai dat cho may moi
+echo    My Tool - Cai dat cho may moi
 echo ============================================================
 echo.
 
@@ -47,9 +47,9 @@ echo   Windows se xoa no bat cu luc nao - keo theo khoa API va ket qua cua ban.
 echo.
 echo   Hay lam dung the nay:
 echo     1^) Dong cua so nay lai.
-echo     2^) Bam chuot phai vao file ShopAPI-Studio.zip, chon "Extract All"
+echo     2^) Bam chuot phai vao file .zip vua tai ve, chon "Extract All"
 echo        ^(hoac "Giai nen tat ca"^).
-echo     3^) Chon mot cho de nho, vi du:   C:\ShopAPI-Studio
+echo     3^) Chon mot cho de nho, vi du:   C:\My-Tool
 echo     4^) Mo thu muc VUA GIAI NEN ra, roi nhay dup SETUP.bat trong do.
 echo.
 pause
@@ -274,11 +274,26 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
+
+REM --- Loi tat ngoai man hinh chinh -----------------------------------------
+REM
+REM  Khong bat buoc, nen HONG O DAY THI KE. Thieu loi tat thi khach van nhay
+REM  dup CHAY-GON.vbs trong thu muc tool duoc; chan ca buoc cai vi mot cai
+REM  shortcut la doi mot thu tien nghi lay mot thu thiet yeu.
+REM
+REM  Vi sao dang lam: file .vbs khong mang icon rieng duoc, no luon deo icon
+REM  cua VBScript. Chi loi tat (.lnk) moi tro duoc IconLocation vao logo.ico,
+REM  nen day la cho DUY NHAT khach nhin thay logo truoc khi tool mo len.
+echo Dang tao loi tat "My Tool" ngoai man hinh chinh...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath=Join-Path '%~dp0' 'CHAY-GON.vbs';$s.WorkingDirectory='%~dp0'.TrimEnd('\');$s.IconLocation=(Join-Path '%~dp0' 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host '  - Da tao loi tat tren Desktop'}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-GON.vbs trong thu muc nay)'}"
+echo.
+
 echo ============================================================
 echo    CAI XONG!
 echo.
 echo    Buoc tiep theo:
-echo      1^) Nhay dup  CHAY-GON.vbs
+echo      1^) Nhay dup loi tat  My Tool  ngoai man hinh chinh
+echo         ^(hoac  CHAY-GON.vbs  trong thu muc nay^)
 echo      2^) Dang nhap bang email tai khoan shopapi.vn ngay trong tool
 echo         ^(tool tu tao khoa API va cat ma hoa tren may ban^)
 echo.
