@@ -43,8 +43,8 @@ from typing import Dict, List, Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
-    QHeaderView, QPlainTextEdit, QSpinBox, QTableWidget, QTableWidgetItem,
-    QTabWidget, QVBoxLayout, QWidget,
+    QHeaderView, QPlainTextEdit, QSpinBox, QSplitter, QTableWidget,
+    QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from core.jobs import JobSpec, STATUS_DONE
@@ -125,12 +125,12 @@ class TabThuCong(QWidget):
     # Chỗ trống ở giữa là chỗ **kết quả sắp hiện ra**. Lấp nó bằng thứ trang trí
     # là đúng cái lỗi vừa phải gỡ ở thẻ "Chưa có dữ liệu".
 
-    def _lam_lai(self, mo_ta: str, _duong_dan: str) -> None:
+    def _lam_lai(self, mo_ta: str, _duong_dan: str, _uid: str = "") -> None:
         """Bấm trên một thẻ: điền lại mô tả rồi gửi luôn."""
         self.o_nhap.setPlainText(mo_ta)
         self.gui()
 
-    def _cho_dong(self, mo_ta: str, duong_dan: str) -> None:
+    def _cho_dong(self, mo_ta: str, duong_dan: str, _uid: str = "") -> None:
         """Bấm trên một thẻ ảnh: dùng chính ảnh đó làm khung đầu cho clip.
 
         Đây là bước khách luôn muốn làm tiếp mà trước đây phải tự đi tìm file
@@ -373,6 +373,14 @@ class TabHangLoat(QWidget):
         self._dong_cua_anh: Dict[str, int] = {}
         self._dong_cua_video: Dict[str, int] = {}
         self._cho_noi: Dict[int, str] = {}   # dòng → file ảnh vừa xong, chờ nối
+        #: Những dòng khách **tự tay** bấm "Thành clip".
+        #:
+        #: Tách khỏi `_cho_noi` vì ô "Ảnh vừa tạo → đầu vào video" chỉ nói về
+        #: việc nối TỰ ĐỘNG. Tắt ô đó rồi bấm nút trên thẻ là một yêu cầu rõ
+        #: ràng của người dùng — mà bản đầu tao viết thì nó rơi vào đúng nhánh
+        #: `continue` của ô ấy: bấm xong không có gì xảy ra, không lời giải
+        #: thích. Nút không làm gì mà cũng không nói gì là kiểu hỏng tệ nhất.
+        self._ep_noi: set = set()
         self._dang_chay = False
 
         doc = QVBoxLayout(self)
@@ -392,7 +400,30 @@ class TabHangLoat(QWidget):
         for cot in (_CotBang.TT_ANH, _CotBang.TT_VIDEO):
             dau.setSectionResizeMode(cot, QHeaderView.Fixed)
             self.bang.setColumnWidth(cot, 108)
-        doc.addWidget(self.bang, 1)
+        # ═══ BẢNG Ở TRÊN, ẢNH Ở DƯỚI, KHÁCH TỰ KÉO ═══
+        #
+        # Bản trước chỉ có bảng: chạy xong một lô 40 cảnh, thứ khách nhận được
+        # là 40 dòng chữ "xong". Nhưng câu họ hỏi lúc ấy không phải *"chạy tới
+        # đâu rồi"* mà **"cái vừa ra trông thế nào"** — mà muốn trả lời thì
+        # phải tự mở thư mục, tự dò tên file, tự đoán file nào là cảnh nào.
+        # Tab Thủ công đã có lưới ảnh từ 12/08; tab này thì không, dù nó mới
+        # là chỗ khách chạy 40 cảnh một lượt.
+        #
+        # Dùng thanh kéo chứ không chia cứng: lúc gõ bảng cảnh thì bảng cần
+        # cao, lúc soi kết quả thì lưới ảnh cần cao. Hai việc ấy không xảy ra
+        # cùng lúc, nên để khách tự kéo thay vì đoán hộ họ.
+        self.thu_vien = ThuVienKetQua(
+            "Ảnh và clip của cả loạt sẽ hiện ở đây sau khi bấm Chạy.")
+        self.thu_vien.dat_viec(khi_lam_lai=self._lam_lai_canh,
+                               khi_cho_dong=self._cho_dong_canh)
+
+        self._chia = QSplitter(Qt.Vertical)
+        self._chia.addWidget(self.bang)
+        self._chia.addWidget(self.thu_vien)
+        self._chia.setStretchFactor(0, 3)
+        self._chia.setStretchFactor(1, 2)
+        self._chia.setChildrenCollapsible(False)
+        doc.addWidget(self._chia, 1)
         doc.addWidget(self._thanh_chay())
         self.them_dong()
 
@@ -461,6 +492,8 @@ class TabHangLoat(QWidget):
         self._dong_cua_anh.clear()
         self._dong_cua_video.clear()
         self._cho_noi.clear()
+        self._ep_noi.clear()
+        self.thu_vien.xoa_het()
         self.them_dong()
 
     def _chu(self, dong: int, cot: int) -> str:
@@ -514,6 +547,75 @@ class TabHangLoat(QWidget):
         self._don_dong_trong()
         return them
 
+    # ── Hai nút trên thẻ kết quả ─────────────────────────────────────────────
+
+    def _dong_cua(self, uid: str):
+        """Thẻ này là cảnh nào? `None` nếu không tra ra.
+
+        Tra bằng **khoá việc**, không tra bằng mô tả: bảng cảnh hoàn toàn có
+        thể có hai dòng chữ giống hệt nhau (cùng một cảnh quay hai góc), và khi
+        đó tra theo mô tả là chạy nhầm dòng — sai âm thầm, khách chỉ phát hiện
+        lúc đã dựng xong phim.
+        """
+        if uid in self._dong_cua_anh:
+            return self._dong_cua_anh[uid]
+        return self._dong_cua_video.get(uid)
+
+    def _lam_lai_canh(self, _mo_ta: str, _duong_dan: str, uid: str = "") -> None:
+        """Làm lại **một cảnh**, không chạy lại cả loạt.
+
+        Đọc lại mô tả từ BẢNG chứ không dùng mô tả cũ kèm theo thẻ: khách hay
+        sửa chữ trong bảng rồi mới bấm làm lại, và cái họ muốn chạy là chữ vừa
+        sửa.
+        """
+        dong = self._dong_cua(uid)
+        if dong is None or dong >= self.bang.rowCount():
+            return
+        mo_ta = self._chu(dong, _CotBang.ANH)
+        if not mo_ta:
+            self._app.show_message("Cảnh này trống",
+                                   "Nhập mô tả ảnh cho dòng đó rồi làm lại.")
+            return
+        self._gui_mot_canh(dong, mo_ta)
+
+    def _gui_mot_canh(self, dong: int, mo_ta: str) -> None:
+        ty_le = self.ty_le.currentText()
+        van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
+                             reference_images=[])
+        if van_de:
+            self._app.show_message("Cần sửa cảnh {0}".format(dong + 1),
+                                   "\n".join("• " + v for v in van_de))
+            return
+        thu_muc = self._thu_muc.value
+        spec = JobSpec(
+            kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80], index=dong + 1,
+            params={"n": 1, "aspect_ratio": ty_le, "reference_images": None},
+            out_dir=thu_muc,
+            estimate_micro=hold_for_image(1, self._app.prices))
+        self._dong_cua_anh[spec.idempotency_key] = dong
+        self._dat_trang_thai(dong, _CotBang.TT_ANH, "đang chờ")
+        self.thu_vien.them(spec.idempotency_key, mo_ta, False)
+        self._app.start_batch([spec], folder=thu_muc)
+
+    def _cho_dong_canh(self, _mo_ta: str, duong_dan: str, uid: str = "") -> None:
+        """Ưng tấm ảnh này → cho nó thành clip.
+
+        Không gửi thẳng ở đây mà đặt vào hàng `_cho_noi` để `cuoi_nhip()` lo —
+        đúng đường mà việc nối tự động đi. Hai đường cùng gửi việc video là hai
+        chỗ phải sửa mỗi lần đổi cách gửi, và là hai cơ hội gửi trùng.
+        """
+        dong = self._dong_cua(uid)
+        if dong is None or not duong_dan:
+            return
+        if not self._chu(dong, _CotBang.VIDEO):
+            self._app.show_message(
+                "Cảnh này chưa có mô tả video",
+                "Gõ mô tả vào cột “Mô tả video” của dòng {0} rồi bấm lại. "
+                "Ảnh đã có sẽ được dùng làm khung đầu cho clip.".format(dong + 1))
+            return
+        self._ep_noi.add(dong)
+        self._cho_noi[dong] = duong_dan
+
     def _don_dong_trong(self) -> None:
         """Bỏ những dòng trống ở cuối do bấm "Thêm dòng" để lại — nạp xong mà
         bảng còn một dòng rỗng thì đếm số cảnh ra sai."""
@@ -544,6 +646,7 @@ class TabHangLoat(QWidget):
         self._dong_cua_anh.clear()
         self._dong_cua_video.clear()
         self._cho_noi.clear()
+        self._ep_noi.clear()
         for thu_tu, (dong, mo_ta, _mo_ta_video) in enumerate(canh, 1):
             van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
                                  reference_images=[])
@@ -559,6 +662,11 @@ class TabHangLoat(QWidget):
             self._dong_cua_anh[spec.idempotency_key] = dong
             self._dat_trang_thai(dong, _CotBang.TT_ANH, "đang chờ")
             specs.append(spec)
+        # Dọn lưới TRƯỚC khi gửi, không phải sau: lô cũ còn nằm đó thì dòng
+        # "12/40 xong" đếm lẫn hai lô và chẳng nói lên điều gì.
+        self.thu_vien.xoa_het()
+        for spec in specs:
+            self.thu_vien.them(spec.idempotency_key, spec.content, False)
         self._dang_chay = True
         self._app.start_batch(specs, folder=thu_muc)
 
@@ -572,6 +680,8 @@ class TabHangLoat(QWidget):
             return
         khoa = getattr(spec, "idempotency_key", "")
         trang_thai = str(getattr(du_lieu, "status", ""))
+        if khoa in self._dong_cua_anh or khoa in self._dong_cua_video:
+            self.thu_vien.cap_nhat(du_lieu)
         dong = self._dong_cua_anh.get(khoa)
         if dong is not None:
             self._dat_trang_thai(dong, _CotBang.TT_ANH,
@@ -606,9 +716,13 @@ class TabHangLoat(QWidget):
         sang = dict(self._cho_noi)
         self._cho_noi.clear()
         cho_tai = []
+        ep = self._ep_noi
+        self._ep_noi = set()
         for dong, duong_anh in sang.items():
             mo_ta_video = self._chu(dong, _CotBang.VIDEO)
-            if not mo_ta_video or not self.noi_chuoi.isChecked():
+            if not mo_ta_video:
+                continue
+            if not self.noi_chuoi.isChecked() and dong not in ep:
                 continue
             if not os.path.isfile(duong_anh):
                 continue
@@ -653,6 +767,7 @@ class TabHangLoat(QWidget):
                         "aspect_ratio": ty_le, "image_url": url},
                 out_dir=thu_muc, estimate_micro=don_gia)
             self._dong_cua_video[spec.idempotency_key] = dong
+            self.thu_vien.them(spec.idempotency_key, mo_ta, True)
             specs.append(spec)
         if specs:
             self._app.start_batch(specs, folder=thu_muc)

@@ -295,24 +295,43 @@ REM  Vi sao dang lam: file .vbs khong mang icon rieng duoc, no luon deo icon
 REM  cua VBScript. Chi loi tat (.lnk) moi tro duoc IconLocation vao logo.ico,
 REM  nen day la cho DUY NHAT khach nhin thay logo truoc khi tool mo len.
 REM
-REM  === VI SAO TRO VAO wscript.exe CHU KHONG TRO THANG VAO FILE .vbs ===
+REM  === LOI TAT TRO THANG pythonw.exe, KHONG QUA wscript, KHONG QUA .vbs ===
 REM
-REM  Tro thang vao .vbs thi Windows mo no bang chuong trinh dang GIU duoi .vbs.
-REM  Binh thuong do la wscript.exe (chay script). Nhung tab Agent cua tool nay
-REM  co cai VS Code cho khach, va ban cai do tung duoc truyen co
-REM  "associatewithfiles" - tuc VS Code di gianh hang loat duoi file, ke ca
-REM  .vbs. Tren may da bi gianh, nhay dup loi tat khong chay tool nua ma MO MA
-REM  NGUON trong VS Code. Chu du an gap dung canh do tren may mot khach.
+REM  Ba doi cua cho nay, va vi sao doi:
 REM
-REM  Co da go khoi bo cai (xem core/vscode_goi_san.py), nhung go chi cuu may
-REM  CHUA hong. May DA bi gianh thi phai khong phu thuoc lien ket file nua:
-REM  goi thang wscript.exe va dua .vbs vao lam tham so.
+REM   1. Tro vao CHAY-GON.vbs.  Windows mo .vbs bang chuong trinh dang GIU duoi
+REM      .vbs. Tab Agent cua tool co cai VS Code, va ban cai tung mang co
+REM      "associatewithfiles" - VS Code gianh ca .vbs. May da bi gianh thi nhay
+REM      dup loi tat khong chay tool nua ma MO MA NGUON trong trinh soan thao.
+REM   2. Tro vao wscript.exe, dua .vbs lam tham so.  Het phu thuoc lien ket
+REM      file, nhung VAN con wscript va van con .vbs trong day chuyen - hai mat
+REM      xich nua co the hong tren may khach ma minh khong nhin thay.
+REM   3. (nay) Tro thang pythonw.exe, dua shopapi_studio_qt.py lam tham so.
 REM
-REM  [char]34 la dau nhay kep - dung no de khoi long nhay trong nhay giua
-REM  cmd va powershell. Duong dan tool co dau cach ("D:\New folder\...") nen
+REM  Doi lan 3 vi mot bang chung chu khong phai vi mot linh cam: tren may chu
+REM  du an co san hai loi tat tool khac - CONTENT.lnk va VOICE.lnk - ca hai deu
+REM  tro thang pythonw.exe kem mot file .py, va ca hai deu chay duoc. Do la
+REM  cach ngan nhat: khong script host, khong lien ket file, khong gi de gianh.
+REM
+REM  Duong pythonw lay tu chinh Python vua dung o cac buoc tren (%PYEXE%), nen
+REM  loi tat chac chan dung ban Python da cai thu vien - khong phai ban nao do
+REM  lan trong PATH.
+REM
+REM  [char]34 la dau nhay kep - dung no de khoi long nhay trong nhay giua cmd
+REM  va powershell. Duong dan co dau cach ("C:\Users\A Plus Computer\...") nen
 REM  tham so bat buoc phai duoc boc nhay.
 echo Dang tao loi tat "My Tool" ngoai man hinh chinh...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$q=[char]34;$g='%~dp0'.TrimEnd('\');$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath=Join-Path $env:SystemRoot 'System32\wscript.exe';$s.Arguments=$q+(Join-Path $g 'CHAY-GON.vbs')+$q;$s.WorkingDirectory=$g;$s.IconLocation=(Join-Path $g 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host '  - Da tao loi tat tren Desktop'}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-GON.vbs trong thu muc nay)'}"
+set "PYW="
+for /f "delims=" %%i in ('%PYEXE% -c "import os,sys;d=os.path.dirname(sys.executable);p=os.path.join(d,'pythonw.exe');print(p if os.path.isfile(p) else '')" 2^>nul') do set "PYW=%%i"
+if not defined PYW (
+  REM Khong tim ra pythonw thi lui ve duong cu. Ban Python rut gon co the
+  REM khong kem pythonw.exe; luc do wscript+vbs van hon la khong co loi tat.
+  set "PYW=%SystemRoot%\System32\wscript.exe"
+  set "PYARG=%~dp0CHAY-GON.vbs"
+) else (
+  set "PYARG=%~dp0shopapi_studio_qt.py"
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$q=[char]34;$g='%~dp0'.TrimEnd('\');$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath='%PYW%';$s.Arguments=$q+'%PYARG%'+$q;$s.WorkingDirectory=$g;$s.IconLocation=(Join-Path $g 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host ('  - Da tao loi tat tren Desktop -> ' + (Split-Path $s.TargetPath -Leaf))}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-QT.bat trong thu muc nay)'}"
 echo.
 
 REM --- Mo tool luon ---------------------------------------------------------
@@ -332,8 +351,12 @@ REM
 REM  "start" de SETUP thoat duoc ngay, khong nam giu cua so den suot phien
 REM  lam viec cua khach. Dau nhay rong sau "start" la TEN CUA SO - thieu no
 REM  thi cmd hieu duong dan la ten cua so va khong chay gi ca.
+REM  Mo bang DUNG thu ma loi tat se chay (%PYW% + %PYARG%, dat o buoc tren).
+REM  Neu hai duong khac nhau thi lan mo dau tien thanh cong khong chung minh
+REM  duoc gi ve lan nhay dup ngay mai - ma lan nhay dup ngay mai moi la lan
+REM  quan trong.
 echo Dang mo tool...
-start "" "%SystemRoot%\System32\wscript.exe" "%~dp0CHAY-GON.vbs"
+start "" "%PYW%" "%PYARG%"
 echo.
 
 echo ============================================================

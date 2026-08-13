@@ -145,8 +145,15 @@ class TheKetQua(QFrame):
         doc.addWidget(self._hang_nut)
 
     def _goi(self, ham) -> None:
+        """Gọi ngược lên trang: `(mô tả, đường dẫn file, khoá việc)`.
+
+        Khoá việc là tham số thứ ba chứ không phải thứ nhất vì hai trang dùng
+        nó khác nhau: tab Thủ công chỉ cần mô tả để gửi lại, còn tab Hàng loạt
+        phải tra ngược ra **dòng nào trong bảng cảnh** — mà tra bằng mô tả thì
+        hai cảnh trùng chữ là chạy nhầm dòng.
+        """
         if ham is not None:
-            ham(self._mo_ta, self._duong_dan)
+            ham(self._mo_ta, self._duong_dan, self.uid)
 
     # ── Cập nhật ─────────────────────────────────────────────────────────────
 
