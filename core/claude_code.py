@@ -78,7 +78,7 @@ from typing import Callable, Dict, Iterator, List, Optional, Sequence
 __all__ = [
     "TinhTrang", "kiem_tra", "moi_truong", "lenh_chay", "lenh_cai_dat",
     "doc_su_kien", "chay_claude", "GOI_NPM", "MO_HINH_MAC_DINH",
-    "EXT_VSCODE", "WINGET_NODE", "WINGET_VSCODE",
+    "EXT_VSCODE", "WINGET_NODE", "WINGET_VSCODE", "them_duong_vao_path",
     "duong_settings", "doc_settings", "cai_vao_settings", "go_khoi_settings",
     "trang_thai_settings", "mo_terminal", "mo_vscode", "KHOA_QUAN_LY",
     "moi_truong_max", "KHOA_CAT_TAM", "DUOI_SAO_LUU", "thu_muc_claude",
@@ -320,6 +320,50 @@ def lenh_cai_dat(tt: TinhTrang, *, them_vscode: bool = False,
     return lenh
 
 
+def them_duong_vao_path(moi: Dict[str, str]) -> Dict[str, str]:
+    """Nhét thư mục chứa `claude` (và `node`) vào PATH của tiến trình con.
+
+    ═══ VÌ SAO CẦN, DÙ TOOL VẪN CHẠY ĐƯỢC CLAUDE ═══
+
+    `tim_lenh()` dò cả những chỗ cài quen thuộc (`~/.local/bin`), nên **tool**
+    luôn gọi được `claude` kể cả khi PATH chưa có. Nhưng thứ tool mở ra —
+    **VS Code, và extension Claude chạy bên trong nó** — thì không biết mẹo ấy:
+    extension đi tìm `claude` bằng đúng PATH nó được thừa kế.
+
+    Mà PATH ấy thiếu thật, vì hai chuyện cộng lại:
+
+      * bộ cài Claude Code ghi `~/.local/bin` vào PATH của **người dùng**, còn
+        tiến trình đang chạy thì đã chụp PATH từ lúc mở tool;
+      * khách vừa bấm "Cài những thứ còn thiếu" xong là mở VS Code luôn, không
+        khởi động lại máy — mà đó chính là lúc họ muốn dùng nhất.
+
+    Kết quả: VS Code mở lên, extension nằm đó, và **không dùng được** — chủ dự
+    án báo đúng cảnh này trên máy một khách (13/08/2026). Không có thông báo
+    nào, vì đứng từ phía extension thì máy này chỉ đơn giản là chưa cài CLI.
+
+    Thêm vào ĐẦU PATH chứ không phải cuối: máy khách có thể còn một bản `claude`
+    cũ ở chỗ khác, và bản tool vừa cài mới là bản đã được cấu hình.
+    """
+    them = []
+    for ten in ("claude", "node"):
+        duong = tim_lenh(ten)
+        if duong:
+            thu_muc = os.path.dirname(duong)
+            if thu_muc and thu_muc not in them:
+                them.append(thu_muc)
+    if not them:
+        return moi
+    cu = moi.get("PATH") or moi.get("Path") or ""
+    co_san = {p.strip().rstrip("\\/").lower() for p in cu.split(os.pathsep) if p.strip()}
+    moi_them = [d for d in them if d.rstrip("\\/").lower() not in co_san]
+    if moi_them:
+        moi["PATH"] = os.pathsep.join(moi_them + ([cu] if cu else []))
+        # Windows đọc biến này không phân biệt hoa thường, nhưng `dict` thì có.
+        # Để sót `Path` cũ nằm lại là tiến trình con đọc phải bản chưa sửa.
+        moi.pop("Path", None)
+    return moi
+
+
 def moi_truong(api_key: str, base_url: str,
                nen: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Biến môi trường để Claude Code gọi vào shopapi thay vì gọi thẳng hãng.
@@ -336,7 +380,7 @@ def moi_truong(api_key: str, base_url: str,
     # Tắt phần đo đạc và cập nhật tự động: khách trả tiền theo lượt gọi, không
     # có lý do gì để tool gọi thêm thứ họ không yêu cầu.
     moi["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
-    return moi
+    return them_duong_vao_path(moi)
 
 
 def lenh_chay(cau_hoi: str, duong_claude: str = "claude", *,
@@ -612,7 +656,9 @@ def moi_truong_max(nen: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     moi = dict(nen if nen is not None else os.environ)
     for khoa in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
         moi.pop(khoa, None)
-    return moi
+    # Khách dùng Max cũng cần tìm thấy `claude` y như khách dùng ví shopapi:
+    # chỗ này chỉ đổi *tiền trả cho ai*, không đổi *chương trình nằm ở đâu*.
+    return them_duong_vao_path(moi)
 
 
 def _mo_kem_moi_truong(lenh, thu_muc: str, api_key: str,
