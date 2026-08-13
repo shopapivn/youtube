@@ -43,6 +43,8 @@ TOP_LEVEL_ALLOW = (
     "cap-nhat.py",
     "SETUP.bat",
     "CHAY-QT.bat",
+    # Cong cu chan doan cho luc tool hong tren may khach — xem dau file do.
+    "KIEM-TRA.bat",
     # Bản chạy KHÔNG hiện cửa sổ đen. Thiếu tên này thì khách không bao giờ
     # nhận được nó — file nằm sẵn trong cây mã mà chưa từng vào gói.
     "CHAY-GON.vbs",

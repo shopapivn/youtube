@@ -345,7 +345,10 @@ def them_duong_vao_path(moi: Dict[str, str]) -> Dict[str, str]:
     cũ ở chỗ khác, và bản tool vừa cài mới là bản đã được cấu hình.
     """
     them = []
-    for ten in ("claude", "node"):
+    # `code` nằm trong danh sách vì extension Claude gọi lại `code` cho vài việc
+    # của nó, và vì chính tool cũng mở VS Code bằng tên trần khi chưa dò ra
+    # đường đầy đủ.
+    for ten in ("claude", "node", "code"):
         duong = tim_lenh(ten)
         if duong:
             thu_muc = os.path.dirname(duong)
@@ -762,6 +765,15 @@ def mo_terminal(thu_muc: str, api_key: str = "", base_url: str = "", *,
 def mo_vscode(thu_muc: str, api_key: str = "", base_url: str = "", *,
               duong_code: str = "", dung_shopapi: bool = True,
               mo_tien_trinh: Optional[Callable[..., object]] = None) -> object:
-    """Mở VS Code ngay tại thư mục tool, theo đúng nguồn khách chọn."""
-    return _mo_kem_moi_truong([duong_code or "code", thu_muc], thu_muc,
-                              api_key, base_url, dung_shopapi, mo_tien_trinh)
+    """Mở VS Code ngay tại thư mục tool, theo đúng nguồn khách chọn.
+
+    Đi qua `lenh_chay_duoc()` như mọi lệnh khác trong tệp này. Trên máy chủ dự
+    án, `tim_code()` trả về `...in\code.CMD`, và Python ở đây chạy thẳng
+    tệp `.CMD` đó được — nhưng đó là chuyện của MỘT máy với MỘT bản Python.
+    `lenh_chay_duoc` đã có sẵn luật "tệp lệnh thì gọi qua `cmd /c`" và luật
+    "tên trần thì giải thành đường đầy đủ"; `mo_vscode` là chỗ duy nhất trong
+    tệp này bỏ qua nó, và không có lý do gì để là ngoại lệ.
+    """
+    return _mo_kem_moi_truong(lenh_chay_duoc([duong_code or "code", thu_muc]),
+                              thu_muc, api_key, base_url, dung_shopapi,
+                              mo_tien_trinh)
