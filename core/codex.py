@@ -182,9 +182,9 @@ def _do_cau_hinh(duong_codex: str):
     try:
         co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         xong = subprocess.run([duong_codex, "login", "status"],
+                              stdin=subprocess.DEVNULL,
                               capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=30, creationflags=co,
-                              stdin=subprocess.DEVNULL)
+                              errors="replace", timeout=30, creationflags=co)
     except (OSError, subprocess.SubprocessError):
         return "", False  # dò không được thì im lặng, đừng doạ khách vu vơ
     chu = ((xong.stdout or "") + (xong.stderr or "")).strip()

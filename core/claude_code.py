@@ -83,6 +83,7 @@ __all__ = [
     "trang_thai_settings", "mo_terminal", "mo_vscode", "KHOA_QUAN_LY",
     "moi_truong_max", "KHOA_CAT_TAM", "DUOI_SAO_LUU", "thu_muc_claude",
     "lenh_chay_duoc", "tim_lenh", "LENH_CAI_CLAUDE", "DIA_CHI_CAI",
+    "danh_dau_da_chao", "duong_trang_thai_chung",
 ]
 
 #: Gói npm của Claude Code.
@@ -171,12 +172,43 @@ class TinhTrang:
         return ra
 
 
+#: Môi trường cho MỌI lệnh dò máy.
+#:
+#: `CI=1` là quy ước chung của công cụ dòng lệnh: "đang chạy tự động, đừng hỏi
+#: gì". Claude Code và Codex đều hiểu nó. Thiếu nó thì một lệnh tưởng như vô
+#: hại (`claude --version`) vẫn có thể rẽ vào màn hình chào lần đầu.
+def _moi_truong_do() -> Dict[str, str]:
+    mt = dict(os.environ)
+    mt["CI"] = "1"
+    return mt
+
+
 def _chay_lay_chu(lenh: Sequence[str]) -> str:
-    """Chạy một lệnh, trả về dòng đầu của kết quả. Không có lệnh thì trả rỗng."""
+    """Chạy một lệnh dò, trả về dòng đầu của kết quả. Không có lệnh thì rỗng.
+
+    ═══ `stdin=DEVNULL` LÀ BẮT BUỘC, KHÔNG PHẢI CHO GỌN ═══
+
+    Khách mở tool bằng lối tắt → `pythonw.exe` → **tiến trình không có console
+    nào**. Lệnh con thừa kế một stdin không dùng được; chương trình dòng lệnh
+    kiểu TUI (Claude Code vẽ bằng ink/React) gặp cảnh đó thì **tự cấp cho mình
+    một console** để còn hỏi người dùng — và một ô đen hiện ra giữa màn hình,
+    mang màn hình chào "Let's get started. Choose the text style…".
+
+    Đúng cảnh chủ dự án chụp lại ngày 13/08/2026: mở tool là kèm một cửa sổ
+    `claude` chưa đăng nhập, lần nào cũng vậy.
+
+    Và đây là lý do máy dựng tool **không tái hiện được**: ở đó tool luôn được
+    mở từ một shell đã có sẵn console, nên không có gì phải tự cấp. Cùng một
+    dòng mã, hai kết quả, khác nhau ở chỗ ai là cha của tiến trình.
+
+    `DEVNULL` cắt hẳn đường ấy: stdin đóng thì không có gì để hỏi, và lệnh dò
+    trả lời rồi thoát như nó phải thế.
+    """
     try:
         co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         xong = subprocess.run(list(lenh), capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=30,
+                              stdin=subprocess.DEVNULL, env=_moi_truong_do(),
                               creationflags=co)
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -192,6 +224,7 @@ def _chay_lay_ca_khoi(lenh: Sequence[str]) -> str:
         co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         xong = subprocess.run(list(lenh), capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=30,
+                              stdin=subprocess.DEVNULL, env=_moi_truong_do(),
                               creationflags=co)
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -281,14 +314,42 @@ def kiem_tra() -> TinhTrang:
     không có lệnh, nên Studio kết luận nhầm là máy chưa cài npm rồi đòi cài lại
     Node trên một máy đã có sẵn.
     """
+    # Tắt màn hình chào TRƯỚC khi dò. `claude --version` chạy ngay bên dưới, và
+    # trên máy chưa từng chạy Claude Code thì chính lệnh đó làm màn hình chào
+    # bật lên — nên phải dập trước, không phải sau.
+    danh_dau_da_chao()
+
     tt = TinhTrang()
     duong_node, duong_npm = _tim("node"), _tim("npm")
     tt.node = _chay_lay_chu([duong_node, "--version"]) if duong_node else ""
     tt.npm = _chay_lay_chu([duong_npm, "--version"]) if duong_npm else ""
     tt.duong_npm = duong_npm
+    # ═══ KHÔNG CHẠY `claude` ĐỂ DÒ. CHỈ XEM TỆP CÓ HAY KHÔNG ═══
+    #
+    # Câu hỏi tab này cần trả lời là "máy đã có Claude Code chưa", và **sự tồn
+    # tại của tệp đã trả lời xong**. Chạy nó chỉ để lấy thêm chuỗi số hiệu —
+    # một thứ trang trí trong bảng — mà cái giá thì đắt:
+    #
+    # Khách mở tool bằng lối tắt → `pythonw.exe` → tiến trình **không có
+    # console**. Claude Code là giao diện dòng lệnh vẽ bằng ink/React; chạy nó
+    # trong hoàn cảnh ấy là để nó tự quyết định có cần một terminal hay không.
+    # Trên máy chưa đăng nhập, nó tự cấp một console và mở thẳng màn hình::
+    #
+    #     Welcome to Claude Code v2.1.229
+    #     Select login method:
+    #       1. Claude account with subscription …
+    #
+    # Chủ dự án chụp lại đúng cửa sổ đó, 13/08/2026, và nó hiện **mỗi lần mở
+    # tool** — vì không ai trả lời nên nó chẳng bao giờ xong.
+    #
+    # Máy dựng tool không tái hiện được: ở đó tool luôn chạy từ một shell đã có
+    # console sẵn. Cùng một dòng mã, hai kết quả, khác nhau ở chỗ ai là cha.
+    #
+    # Nên: dò bằng đường dẫn, không bằng cách chạy. Mất chuỗi số hiệu, đổi lại
+    # không còn cửa sổ lạ nào — một cuộc đổi chác không cần cân nhắc.
     tt.duong_claude = tim_lenh("claude")
     if tt.duong_claude:
-        tt.claude = _chay_lay_chu([tt.duong_claude, "--version"])
+        tt.claude = "đã cài"
     tt.duong_code = _tim("code")
     if tt.duong_code:
         tt.vscode = _chay_lay_chu([tt.duong_code, "--version"])
@@ -377,9 +438,22 @@ def moi_truong(api_key: str, base_url: str,
     thấy gì bất thường.
     """
     moi = dict(nen if nen is not None else os.environ)
-    moi.pop("ANTHROPIC_API_KEY", None)
+    khoa = (api_key or "").strip()
     moi["ANTHROPIC_BASE_URL"] = (base_url or "https://api.shopapi.vn").rstrip("/")
-    moi["ANTHROPIC_AUTH_TOKEN"] = (api_key or "").strip()
+    moi["ANTHROPIC_AUTH_TOKEN"] = khoa
+    # ═══ GHI ĐÈ `ANTHROPIC_API_KEY`, KHÔNG XOÁ ═══
+    #
+    # Bản trước **xoá** biến này, để khoá Anthropic riêng của khách không thắng
+    # `AUTH_TOKEN` rồi âm thầm tiêu tiền của họ. Ý đúng, cách sai: xoá xong thì
+    # Claude Code không thấy khoá nào cả, và trên máy chưa đăng nhập nó mở
+    # thẳng màn hình "Select login method" thay vì chạy trên ví shopapi.
+    #
+    # Hướng dẫn của chính nhà cung cấp nói rõ: *"Giữ cả ANTHROPIC_API_KEY và
+    # ANTHROPIC_AUTH_TOKEN dùng cùng một key"*.
+    #
+    # Ghi đè đạt cả hai: khoá riêng của khách không còn ở đó để mà thắng, và
+    # Claude Code thấy mình đã được cấu hình nên không hỏi đăng nhập.
+    moi["ANTHROPIC_API_KEY"] = khoa
     # Tắt phần đo đạc và cập nhật tự động: khách trả tiền theo lượt gọi, không
     # có lý do gì để tool gọi thêm thứ họ không yêu cầu.
     moi["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
@@ -523,6 +597,7 @@ def chay_claude(cau_hoi: str, thu_muc: str, api_key: str, base_url: str, *,
 
 #: Những khoá `env` do Studio quản. `go_khoi_settings` chỉ xoá đúng chừng này.
 KHOA_QUAN_LY = ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN",
+                "ANTHROPIC_API_KEY",
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
 
 #: Chỗ cất `ANTHROPIC_API_KEY` cũ của khách trong lúc Studio đang trỏ về shopapi.
@@ -540,6 +615,64 @@ DUOI_SAO_LUU = ".shopapi-backup"
 #: chung, và nằm sẵn trong `.gitignore` của quy ước — nên khoá của khách không
 #: trôi vào git nếu họ lỡ đưa thư mục tool lên kho nào đó.
 TEN_SETTINGS = "settings.local.json"
+
+
+#: Tệp trạng thái TOÀN MÁY của Claude Code (không phải của thư mục tool).
+TEP_TRANG_THAI_CHUNG = ".claude.json"
+
+
+def duong_trang_thai_chung() -> str:
+    return os.path.join(os.path.expanduser("~"), TEP_TRANG_THAI_CHUNG)
+
+
+def danh_dau_da_chao(duong: str = "") -> bool:
+    """Đánh dấu "đã xem màn hình chào" cho Claude Code. Trả về `True` nếu có sửa.
+
+    ═══ VÌ SAO PHẢI LÀM HỘ KHÁCH ═══
+
+    Chạy lần đầu, Claude Code mở màn hình chào hỏi chọn kiểu chữ::
+
+        Let's get started.
+        Choose the text style that looks best with your terminal
+
+    Nó chờ người gõ phím. Nhưng tool gọi `claude --version` để **dò xem máy có
+    gì**, ở luồng nền, không ai ngồi đó mà trả lời — nên màn hình ấy không bao
+    giờ xong, cờ `hasCompletedOnboarding` không bao giờ được ghi, và **lần mở
+    tool nào cũng lặp lại y hệt**. Chủ dự án chụp lại đúng cảnh đó, 13/08/2026.
+
+    Đây là thứ duy nhất trong tool cố ý chạm vào tệp cấu hình TOÀN MÁY của
+    khách, nên nó chỉ làm đúng một việc và làm theo ba luật:
+
+    1. **Trộn, không đè** — giữ nguyên mọi khoá khác, kể cả phiên đăng nhập.
+    2. **Không đụng nếu đã có** — khách đã qua màn hình chào thì không sửa gì.
+    3. **Hỏng thì im** — không ghi được cũng không được chặn khách cài đặt.
+
+    Nó KHÔNG đăng nhập hộ và KHÔNG đụng tới khoá của khách: chỉ tắt một màn
+    hình chào mà bất cứ ai chạy Claude Code lần đầu cũng sẽ tự tắt.
+    """
+    duong = duong or duong_trang_thai_chung()
+    try:
+        with open(duong, "r", encoding="utf-8") as tep:
+            cai = json.load(tep)
+        if not isinstance(cai, dict):
+            cai = {}
+    except (OSError, ValueError):
+        cai = {}
+    if cai.get("hasCompletedOnboarding"):
+        return False
+    cai["hasCompletedOnboarding"] = True
+    # Kiểu chữ là câu hỏi đầu tiên của màn hình chào; trả lời sẵn thì nó không
+    # còn gì để hỏi. "dark" là mặc định Claude Code tự chọn.
+    cai.setdefault("theme", "dark")
+    try:
+        os.makedirs(os.path.dirname(duong), exist_ok=True)
+        tam = duong + ".tam"
+        with open(tam, "w", encoding="utf-8") as tep:
+            json.dump(cai, tep, ensure_ascii=False, indent=2)
+        os.replace(tam, duong)
+    except OSError:
+        return False
+    return True
 
 
 def thu_muc_claude(goc: str) -> str:
@@ -604,6 +737,10 @@ def cai_vao_settings(goc: str, api_key: str, base_url: str = "") -> str:
         env[KHOA_CAT_TAM] = cu
     env["ANTHROPIC_BASE_URL"] = (base_url or "https://api.shopapi.vn").rstrip("/")
     env["ANTHROPIC_AUTH_TOKEN"] = (api_key or "").strip()
+    # Cùng một khoá cho cả hai biến — xem ghi chú ở `moi_truong()`. Khoá riêng
+    # của khách (nếu có) đã được cất vào `KHOA_CAT_TAM` ở dòng trên, nên nút
+    # "trả về như cũ" vẫn hoàn nguyên được.
+    env["ANTHROPIC_API_KEY"] = (api_key or "").strip()
     env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
     cai["env"] = env
     return _ghi_settings(goc, cai)
