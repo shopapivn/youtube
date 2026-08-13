@@ -83,7 +83,8 @@ __all__ = [
     "trang_thai_settings", "mo_terminal", "mo_vscode", "KHOA_QUAN_LY",
     "moi_truong_max", "KHOA_CAT_TAM", "DUOI_SAO_LUU", "thu_muc_claude",
     "lenh_chay_duoc", "tim_lenh", "LENH_CAI_CLAUDE", "DIA_CHI_CAI",
-    "danh_dau_da_chao", "duong_trang_thai_chung",
+    "danh_dau_da_chao", "duong_trang_thai_chung", "MODEL_MAC_DINH",
+    "duong_settings_may", "cai_vao_may", "go_khoi_may",
 ]
 
 #: Gói npm của Claude Code.
@@ -452,6 +453,7 @@ def moi_truong(api_key: str, base_url: str,
     # Ghi đè đạt cả hai: khoá riêng của khách không còn ở đó để mà thắng, và
     # Claude Code thấy mình đã được cấu hình nên không hỏi đăng nhập.
     moi["ANTHROPIC_API_KEY"] = khoa
+    moi.update(MODEL_MAC_DINH)
     # Tắt phần đo đạc và cập nhật tự động: khách trả tiền theo lượt gọi, không
     # có lý do gì để tool gọi thêm thứ họ không yêu cầu.
     moi["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
@@ -593,10 +595,25 @@ def chay_claude(cau_hoi: str, thu_muc: str, api_key: str, base_url: str, *,
 # Tệp này CẢ Claude Code CLI LẪN extension VS Code cùng đọc. Ghi một lần là mọi
 # cửa đều chạy trên ví shopapi, kể cả terminal khách tự mở.
 
+#: Tên model mặc định, theo đúng khuôn nhà cung cấp hướng dẫn.
+#:
+#: Claude Code tự chọn một mã bản cụ thể của Anthropic (`claude-sonnet-4-5-…`)
+#: nếu không ai chỉ định. Cổng shopapi dùng tên riêng — `claude-sonnet-5`,
+#: `claude-opus-5`, `claude-fable-5` (xem `apps/api/.../llm.catalog.ts`) — nên
+#: chốt sẵn ba tên ấy thay vì trông chờ cổng đoán đúng ý.
+#:
+#: Ba biến này là của Claude Code, không phải của shopapi: `HAIKU` là **khe mô
+#: hình nhanh–rẻ**, và shopapi đặt `claude-fable-5` vào khe đó.
+MODEL_MAC_DINH = {
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-fable-5",
+}
+
 #: Những khoá `env` do Studio quản. `go_khoi_settings` chỉ xoá đúng chừng này.
 KHOA_QUAN_LY = ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN",
                 "ANTHROPIC_API_KEY",
-                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
+                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC") + tuple(MODEL_MAC_DINH)
 
 #: Chỗ cất `ANTHROPIC_API_KEY` cũ của khách trong lúc Studio đang trỏ về shopapi.
 #: Xoá thẳng là mất luôn khoá riêng của họ; để nguyên thì nó thắng `AUTH_TOKEN`
@@ -740,8 +757,97 @@ def cai_vao_settings(goc: str, api_key: str, base_url: str = "") -> str:
     # "trả về như cũ" vẫn hoàn nguyên được.
     env["ANTHROPIC_API_KEY"] = (api_key or "").strip()
     env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+    env.update(MODEL_MAC_DINH)
     cai["env"] = env
     return _ghi_settings(goc, cai)
+
+
+#: Tệp cấu hình Claude Code **cấp máy** — `~/.claude/settings.json`.
+#:
+#: Khác `duong_settings()` (nằm trong thư mục tool) ở đúng một điểm, và điểm ấy
+#: là cả vấn đề: tệp trong thư mục tool chỉ có tác dụng khi Claude Code chạy
+#: **trong** thư mục đó. Cửa sổ Claude Code bật lên từ chỗ khác — từ Start
+#: Menu, từ một VS Code đang mở dự án khác — không đọc nó, nên vẫn đòi đăng
+#: nhập dù tool đã cắm khoá. Đó là cảnh trên máy khách ngày 13/08/2026.
+#:
+#: Hướng dẫn của nhà cung cấp cũng chỉ vào đúng tệp này:
+#: *"Windows: C:\\Users\\<username>\\.claude\\settings.json"*.
+def duong_settings_may() -> str:
+    return os.path.join(os.path.expanduser("~"), ".claude", "settings.json")
+
+
+def cai_vao_may(api_key: str, base_url: str = "", duong: str = "") -> str:
+    """Cắm khoá shopapi vào cấu hình Claude Code **của cả máy**.
+
+    ⚠ Đây là tệp dùng chung của khách, không phải của tool. Nên nó theo đúng ba
+    luật của `cai_vao_settings`: trộn chứ không đè, sao lưu một lần, và gỡ được
+    sạch bằng `go_khoi_may()`.
+
+    Chỉ gọi khi khách đang chọn nguồn **ví ShopAPI**. Khách dùng gói Max của
+    chính họ mà bị tool ghi đè khoá ở cấp máy thì đó là tool ăn cắp — nên nhánh
+    Max gọi `go_khoi_may()` để trả lại nguyên trạng.
+    """
+    duong = duong or duong_settings_may()
+    try:
+        with open(duong, "r", encoding="utf-8") as tep:
+            cai = json.load(tep)
+        if not isinstance(cai, dict):
+            cai = {}
+    except (OSError, ValueError):
+        cai = {}
+    env = dict(cai.get("env") or {})
+    cu = env.get("ANTHROPIC_API_KEY", "")
+    if cu and cu != (api_key or "").strip() and KHOA_CAT_TAM not in env:
+        env[KHOA_CAT_TAM] = cu
+    env["ANTHROPIC_BASE_URL"] = (base_url or "https://api.shopapi.vn").rstrip("/")
+    env["ANTHROPIC_AUTH_TOKEN"] = (api_key or "").strip()
+    env["ANTHROPIC_API_KEY"] = (api_key or "").strip()
+    env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+    env.update(MODEL_MAC_DINH)
+    cai["env"] = env
+    return _ghi_json_an_toan(duong, cai)
+
+
+def go_khoi_may(duong: str = "") -> None:
+    """Trả cấu hình cấp máy về như trước khi tool chạm vào."""
+    duong = duong or duong_settings_may()
+    try:
+        with open(duong, "r", encoding="utf-8") as tep:
+            cai = json.load(tep)
+        if not isinstance(cai, dict):
+            return
+    except (OSError, ValueError):
+        return
+    env = dict(cai.get("env") or {})
+    for khoa in KHOA_QUAN_LY:
+        env.pop(khoa, None)
+    cu = env.pop(KHOA_CAT_TAM, "")
+    if cu:
+        env["ANTHROPIC_API_KEY"] = cu
+    if env:
+        cai["env"] = env
+    else:
+        cai.pop("env", None)
+    _ghi_json_an_toan(duong, cai)
+
+
+def _ghi_json_an_toan(duong: str, gia_tri: dict) -> str:
+    """Ghi JSON qua tệp tạm, sao lưu bản cũ đúng một lần. Trả về đường sao lưu."""
+    os.makedirs(os.path.dirname(duong), exist_ok=True)
+    sao_luu = duong + DUOI_SAO_LUU
+    da = ""
+    if os.path.exists(duong) and not os.path.exists(sao_luu):
+        try:
+            shutil.copyfile(duong, sao_luu)
+            da = sao_luu
+        except OSError:
+            pass
+    tam = duong + ".tam"
+    with open(tam, "w", encoding="utf-8") as tep:
+        json.dump(gia_tri, tep, ensure_ascii=False, indent=2)
+        tep.write("\n")
+    os.replace(tam, duong)
+    return da
 
 
 def go_khoi_settings(goc: str) -> None:

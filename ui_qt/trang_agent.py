@@ -47,7 +47,8 @@ from core import codex as codex_cli
 from core import node_goi_san
 from core import vscode_goi_san
 from core.claude_code import (
-    TinhTrang, cai_vao_settings, duong_settings, go_khoi_settings, kiem_tra,
+    TinhTrang, cai_vao_may, cai_vao_settings, duong_settings, go_khoi_may,
+    go_khoi_settings, kiem_tra,
     ho_tro_cong_cu, lenh_cai_dat, lenh_chay_duoc, mo_terminal, mo_vscode,
     trang_thai_settings,
 )
@@ -604,6 +605,11 @@ class TrangAgent(QWidget):
         """
         if self.nguon != NGUON_SHOPAPI:
             go_khoi_settings(self.app.base_dir)
+            # Gỡ cả cấp máy: khách đã chuyển sang gói Max hoặc Codex của chính
+            # họ mà tool còn để khoá shopapi nằm ở `~/.claude/settings.json`
+            # thì mọi cửa sổ Claude Code trên máy vẫn tiêu ví shopapi — trừ
+            # tiền im lặng, đúng loại lỗi không ai báo.
+            go_khoi_may()
             self._ve_nguon()
             return True
         khoa = (self.app.config.api_key or "").strip()
@@ -611,6 +617,22 @@ class TrangAgent(QWidget):
             self.app.bao_can_khoa()
             return False
         cai_vao_settings(self.app.base_dir, khoa, self.app.config.base_url)
+        # ═══ GHI CẢ CẤP MÁY ═══
+        #
+        # Chủ dự án, 13/08/2026: *"nếu khách đã tích là dùng api của shopapi
+        # là cấp máy đi"*.
+        #
+        # Tệp trong thư mục tool chỉ có tác dụng khi Claude Code chạy **trong**
+        # thư mục ấy. Cửa sổ Claude Code bật lên từ chỗ khác — Start Menu, hay
+        # một VS Code đang mở dự án khác — không đọc nó, nên vẫn đòi đăng nhập
+        # dù tool đã cắm khoá. Hướng dẫn của nhà cung cấp cũng chỉ thẳng vào
+        # `~/.claude/settings.json`.
+        #
+        # Đây là đánh đổi có chủ đích, không phải sơ suất: nó đổi phạm vi từ
+        # "chỉ thư mục tool" sang "cả máy". Chấp nhận được vì khách đã **tự
+        # tích** chọn ví ShopAPI, và chuyển sang nguồn khác là nhánh trên gỡ ra
+        # ngay.
+        cai_vao_may(khoa, self.app.config.base_url)
         self._ve_nguon()
         return True
 
