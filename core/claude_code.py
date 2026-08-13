@@ -760,8 +760,24 @@ def cai_vao_settings(goc: str, api_key: str, base_url: str = "") -> str:
     """
     cai = doc_settings(goc)
     env = dict(cai.get("env") or {})
-    cu = env.pop("ANTHROPIC_API_KEY", "")
-    if cu:
+    # ═══ CHỈ CẤT KHOÁ THẬT CỦA KHÁCH, VÀ CHỈ CẤT MỘT LẦN ═══
+    #
+    # Hai điều kiện, thiếu cái nào cũng mất khoá của khách:
+    #
+    # * `cu != api_key` — lần chạy thứ hai trở đi, thứ nằm trong
+    #   `ANTHROPIC_API_KEY` chính là khoá shopapi do lần chạy trước ghi vào.
+    #   Cất nó đi là ghi đè khoá thật đang nằm trong chỗ cất tạm.
+    # * `KHOA_CAT_TAM not in env` — đã cất rồi thì bản đầu tiên là bản duy nhất
+    #   chắc chắn chưa có tay Studio chạm vào, giữ nguyên nó.
+    #
+    # Trước 13/08/2026 hàm này không canh gì cả, trong khi hàm chị em
+    # `cai_vao_may` thì có. Không ai thấy vì nó chỉ chạy khi khách bấm nút. Rồi
+    # bản 2.11.1 cho gọi mỗi lần mở tool — và mỗi lần mở là một lần khoá thật
+    # bị đè thêm một bậc. Chủ dự án dính đúng vậy ngày 13/08/2026: gỡ khoá ra
+    # xong Claude Code vẫn chạy qua ví shopapi, vì nút "trả về như cũ" trả về
+    # đúng cái khoá shopapi đã bị cất nhầm.
+    cu = env.get("ANTHROPIC_API_KEY", "")
+    if cu and cu != (api_key or "").strip() and KHOA_CAT_TAM not in env:
         env[KHOA_CAT_TAM] = cu
     env["ANTHROPIC_BASE_URL"] = (base_url or "https://api.shopapi.vn").rstrip("/")
     env["ANTHROPIC_AUTH_TOKEN"] = (api_key or "").strip()
