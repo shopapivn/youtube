@@ -604,6 +604,19 @@ def chay_claude(cau_hoi: str, thu_muc: str, api_key: str, base_url: str, *,
 #:
 #: Ba biến này là của Claude Code, không phải của shopapi: `HAIKU` là **khe mô
 #: hình nhanh–rẻ**, và shopapi đặt `claude-fable-5` vào khe đó.
+#: Chế độ quyền ghi vào tệp settings — bản "không hỏi gì" của
+#: `--permission-mode bypassPermissions`.
+#:
+#: Cờ dòng lệnh chỉ áp cho cửa sổ terminal tool tự mở. **Extension trong VS
+#: Code không đi qua cờ ấy** — nó tự dựng lệnh của nó, nên muốn nó cũng toàn
+#: quyền thì phải khai trong settings. Chủ dự án, 13/08/2026: *"mày cho nó
+#: quyền cao nhất, toàn quyền không cần hỏi"* (nhắc lại yêu cầu từ 12/08).
+#:
+#: Với khách không biết code, mỗi câu hỏi duyệt là một chỗ để bỏ cuộc: họ
+#: không đọc được "cho phép Edit(app.py)?" nghĩa là gì, nên chỉ có hai kết cục
+#: — bấm bừa, hoặc đóng cửa sổ.
+CHE_DO_QUYEN = "bypassPermissions"
+
 MODEL_MAC_DINH = {
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5",
@@ -759,6 +772,7 @@ def cai_vao_settings(goc: str, api_key: str, base_url: str = "") -> str:
     env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
     env.update(MODEL_MAC_DINH)
     cai["env"] = env
+    cai["permissions"] = _quyen_toan_phan(cai.get("permissions"))
     return _ghi_settings(goc, cai)
 
 
@@ -805,6 +819,7 @@ def cai_vao_may(api_key: str, base_url: str = "", duong: str = "") -> str:
     env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
     env.update(MODEL_MAC_DINH)
     cai["env"] = env
+    cai["permissions"] = _quyen_toan_phan(cai.get("permissions"))
     return _ghi_json_an_toan(duong, cai)
 
 
@@ -828,7 +843,37 @@ def go_khoi_may(duong: str = "") -> None:
         cai["env"] = env
     else:
         cai.pop("env", None)
+    _bo_che_do_quyen(cai)
     _ghi_json_an_toan(duong, cai)
+
+
+def _bo_che_do_quyen(cai: dict) -> None:
+    """Gỡ `defaultMode` Studio đặt vào; giữ nguyên `allow`/`deny` của khách.
+
+    Bỏ cả khối `permissions` là xoá công của khách. Chỉ gỡ đúng thứ mình đặt.
+    """
+    quyen = cai.get("permissions")
+    if not isinstance(quyen, dict):
+        return
+    if quyen.get("defaultMode") == CHE_DO_QUYEN:
+        quyen.pop("defaultMode", None)
+    if not any(quyen.get(k) for k in ("allow", "deny", "defaultMode", "ask")):
+        cai.pop("permissions", None)
+
+
+def _quyen_toan_phan(cu) -> dict:
+    """Khối `permissions` cho Claude Code chạy **không hỏi duyệt**.
+
+    Giữ nguyên `allow`/`deny` khách đã có — đó là danh sách họ tự dựng qua
+    nhiều phiên làm việc, xoá đi là xoá công của họ. Chỉ đặt thêm
+    `defaultMode`, thứ quyết định "gặp việc chưa có trong danh sách thì hỏi hay
+    làm luôn".
+    """
+    ra = dict(cu) if isinstance(cu, dict) else {}
+    ra.setdefault("allow", [])
+    ra.setdefault("deny", [])
+    ra["defaultMode"] = CHE_DO_QUYEN
+    return ra
 
 
 def _ghi_json_an_toan(duong: str, gia_tri: dict) -> str:
@@ -864,6 +909,7 @@ def go_khoi_settings(goc: str) -> None:
         cai["env"] = env
     else:
         cai.pop("env", None)
+    _bo_che_do_quyen(cai)
     _ghi_settings(goc, cai)
 
 

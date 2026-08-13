@@ -683,7 +683,35 @@ class TrangAgent(QWidget):
         """
         if not self._ap_dung_im():
             return
+        # ═══ HỎNG THÌ PHẢI NÓI, KHÔNG ĐƯỢC IM ═══
+        #
+        # Chủ dự án, 13/08/2026: *"ấn mở vs code nó không mở"*. Bản trước không
+        # có một dòng bắt lỗi nào: `Popen` ném `FileNotFoundError` là PyQt5
+        # nuốt mất trong slot, nút bấm xong **không có gì xảy ra và không có
+        # lời nào** — khách không phân biệt nổi "tool hỏng" với "mình bấm hụt",
+        # nên họ bấm thêm mấy lần rồi bỏ.
+        #
+        # Dò lại đường dẫn ngay tại đây thay vì tin bảng tình trạng: khách có
+        # thể vừa bấm "Cài những thứ còn thiếu" xong, VS Code mới cài xong vài
+        # giây trước, mà `self._tt` thì chụp từ lượt dò cũ.
         duong = (self._ttx if self.dung_codex else self._tt).duong_code
-        mo_vscode(self.app.base_dir, self.app.config.api_key,
-                  self.app.config.base_url, duong_code=duong,
-                  dung_shopapi=self.nguon == NGUON_SHOPAPI)
+        if not duong:
+            duong = vscode_goi_san.tim_code()
+            self._tt.duong_code = self._ttx.duong_code = duong
+        if not duong:
+            self.app.show_message(
+                "Chưa tìm thấy VS Code",
+                "Máy này chưa cài VS Code, hoặc tool chưa dò ra chỗ cài.\n\n"
+                "Bấm “Cài những thứ còn thiếu” ở thẻ trên (nhớ tích “Cài kèm "
+                "VS Code”), đợi cài xong rồi bấm lại nút này.")
+            return
+        try:
+            mo_vscode(self.app.base_dir, self.app.config.api_key,
+                      self.app.config.base_url, duong_code=duong,
+                      dung_shopapi=self.nguon == NGUON_SHOPAPI)
+        except Exception as loi:  # noqa: BLE001 — nút bấm không được im lặng
+            self.app.show_message(
+                "Không mở được VS Code",
+                "{0}\n\nĐường dẫn tool đang gọi:\n{1}\n\nBạn mở VS Code bằng "
+                "tay cũng được, nhưng nhớ mở ĐÚNG thư mục:\n{2}".format(
+                    loi, duong, self.app.base_dir))
