@@ -432,10 +432,8 @@ def moi_truong(api_key: str, base_url: str,
                nen: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Biến môi trường để Claude Code gọi vào shopapi thay vì gọi thẳng hãng.
 
-    `ANTHROPIC_API_KEY` bị **xoá** khỏi môi trường con: khách nào từng cài Claude
-    Code cho việc riêng sẽ có sẵn biến đó, và nó thắng `AUTH_TOKEN` — khi ấy tiền
-    trừ vào tài khoản Anthropic của họ chứ không phải ví shopapi, mà không ai
-    thấy gì bất thường.
+    Ba biến, cùng một khoá shopapi cho hai biến khoá — xem ghi chú trong thân
+    hàm về việc **ghi đè** `ANTHROPIC_API_KEY` thay vì xoá nó.
     """
     moi = dict(nen if nen is not None else os.environ)
     khoa = (api_key or "").strip()
