@@ -967,7 +967,14 @@ def _mo_kem_moi_truong(lenh, thu_muc: str, api_key: str,
     mt = moi_truong(api_key, base_url) if dung_shopapi else moi_truong_max()
     if isinstance(lenh, str):
         return mo(lenh, cwd=thu_muc, env=mt, shell=True)
-    return mo(list(lenh), cwd=thu_muc, env=mt, close_fds=True)
+    # Nhánh danh sách = mở VS Code. Không được kèm một ô đen nháy lên: khách
+    # thấy cửa sổ đen chớp rồi tắt là họ tưởng tool hỏng, kể cả khi VS Code mở
+    # ra bình thường ngay sau đó.
+    #
+    # Nhánh chuỗi ở trên thì CỐ Ý có cửa sổ — đó chính là nút "Mở dòng lệnh".
+    co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    return mo(list(lenh), cwd=thu_muc, env=mt, close_fds=True,
+              creationflags=co)
 
 
 def lenh_cua_so_cmd(chuong_trinh: str, tham_so: Optional[Sequence[str]] = None,
@@ -1054,13 +1061,32 @@ def mo_vscode(thu_muc: str, api_key: str = "", base_url: str = "", *,
               mo_tien_trinh: Optional[Callable[..., object]] = None) -> object:
     """Mở VS Code ngay tại thư mục tool, theo đúng nguồn khách chọn.
 
-    Đi qua `lenh_chay_duoc()` như mọi lệnh khác trong tệp này. Trên máy chủ dự
-    án, `tim_code()` trả về `...in\code.CMD`, và Python ở đây chạy thẳng
-    tệp `.CMD` đó được — nhưng đó là chuyện của MỘT máy với MỘT bản Python.
-    `lenh_chay_duoc` đã có sẵn luật "tệp lệnh thì gọi qua `cmd /c`" và luật
-    "tên trần thì giải thành đường đầy đủ"; `mo_vscode` là chỗ duy nhất trong
-    tệp này bỏ qua nó, và không có lý do gì để là ngoại lệ.
+    ═══ KHÔNG BỌC `cmd /c` Ở ĐÂY ═══
+
+    Sáng 13/08/2026 tao cho hàm này đi qua `lenh_chay_duoc()` "cho đồng bộ với
+    mọi lệnh khác trong tệp". Đó là một bước lùi, và nó làm hỏng đúng cái nút
+    khách cần nhất.
+
+    `lenh_chay_duoc` bọc tệp `.cmd` vào `cmd /c`. Nhưng ở đây có **hai** đường
+    dẫn cùng chứa dấu cách — chỗ cài VS Code (`Microsoft VS Code`) và thư mục
+    tool (`New folder`) — nên dòng lệnh thành bốn dấu nháy. `cmd /?` nói rõ:
+    quá hai dấu nháy thì nó **bỏ dấu đầu và dấu cuối của cả dòng**.
+
+    Đo thật, hai cách chạy cạnh nhau trên cùng một máy::
+
+        cmd /c "…Microsoft VS Code…code.CMD" "…New folder…"
+          -> 'C:/Users/…/Programs/Microsoft' is not recognized  (ma 1)
+
+        Popen(["…code.CMD", "…New folder…"])
+          -> Version: Code 1.132.0                                     (ma 0)
+
+    Tên chương trình đứt ngay ở chữ `Microsoft`. Khách thấy một cửa sổ đen nháy
+    lên rồi tắt, VS Code không mở — chủ dự án báo đúng như vậy.
+
+    `subprocess` chạy thẳng tệp `.cmd` được (đo ở trên), nên đường ngắn nhất
+    cũng là đường đúng. Vẫn giải tên trần thành đường đầy đủ bằng `tim_lenh` —
+    đó là phần `lenh_chay_duoc` làm đúng và vẫn cần.
     """
-    return _mo_kem_moi_truong(lenh_chay_duoc([duong_code or "code", thu_muc]),
-                              thu_muc, api_key, base_url, dung_shopapi,
-                              mo_tien_trinh)
+    duong = duong_code or tim_lenh("code") or "code"
+    return _mo_kem_moi_truong([duong, thu_muc], thu_muc, api_key, base_url,
+                              dung_shopapi, mo_tien_trinh)

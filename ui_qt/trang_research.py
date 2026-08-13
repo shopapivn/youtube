@@ -198,6 +198,21 @@ class TrangNghienCuu(QWidget):
         self._tom_tat.setMinimumWidth(1)
         dau.addWidget(self._tom_tat)
         v.addLayout(dau)
+        # Dòng phụ dưới dòng tóm tắt: nói NGHĨA của con số vừa hiện.
+        #
+        # ⚠ Widget này từng bị gỡ trong một lượt làm lại giao diện, nhưng bốn
+        # chỗ trong `_chay`/`_xong` vẫn gọi `self._ly_do.setText(...)`. Hậu quả
+        # không phải một dòng chữ thiếu: PyQt5 gặp ngoại lệ trong slot thì
+        # **abort cả tiến trình** — khách bấm "Lấy dữ liệu" là tool tắt ngóm,
+        # không báo gì. Chủ dự án, 13/08/2026: *"ở tab nghiên cứu tao ấn chạy
+        # thì nó thoát tool"*.
+        #
+        # Ai định gỡ nó lần nữa: gỡ luôn cả bốn chỗ gọi, và chạy
+        # `test_bam_chay_khong_lam_chet_tool`.
+        self._ly_do = nhan("", "phu")
+        self._ly_do.setWordWrap(True)
+        self._ly_do.setMinimumWidth(1)
+        v.addWidget(self._ly_do)
         self._bang_video = self._bang_moi(COT_VIDEO)
         v.addWidget(self._bang_video, 1)
         return khung
@@ -343,7 +358,6 @@ class TrangNghienCuu(QWidget):
             self._log.appendPlainText(str(dong))
 
         self._do_bang(self._bang_video, ket.bang_video())
-        self._dem.setText("{0} kênh · {1} video".format(ket.so_kenh, ket.so_video))
 
         if not ket.insights:
             self._tom_tat.setText("Không lấy được kênh nào")

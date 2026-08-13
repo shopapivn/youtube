@@ -37,7 +37,24 @@ def main(argv=None) -> int:
     try:
         wait_for_exit(args.wait_pid)
         apply_staged(args.staged, current)
-        command = [sys.executable, str(current / "shopapi_studio.py")]
+        # ═══ MỞ LẠI ĐÚNG ĐIỂM VÀO ĐANG CÒN SỐNG ═══
+        #
+        # Bản trước gọi `shopapi_studio.py` — điểm vào của bản tkinter, **đã
+        # xoá ngày 12/08/2026**. Nên tráo thư mục xong nó chạy một tệp không
+        # tồn tại: tool tắt và không bao giờ mở lại. Chủ dự án, 13/08/2026:
+        # *"khi ấn update nó cập nhật và mở lại tool chứ hiện tại nó tắt luôn"*.
+        #
+        # Không ai thấy lỗi vì launcher chạy sau khi tool đã thoát — nó không
+        # còn cửa sổ nào để báo, chỉ ghi vào tệp log cạnh thư mục tool.
+        #
+        # Chạy bằng `pythonw.exe` nếu có: mở lại tool mà kèm một ô đen thì
+        # khách tưởng cập nhật hỏng.
+        diem_vao = current / "shopapi_studio_qt.py"
+        chay = Path(sys.executable)
+        khong_console = chay.with_name("pythonw.exe")
+        if os.name == "nt" and khong_console.is_file():
+            chay = khong_console
+        command = [str(chay), str(diem_vao)]
         kwargs = {"cwd": str(current)}
         if os.name == "nt":
             kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

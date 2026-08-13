@@ -79,8 +79,8 @@ echo.
 echo --- Tool da chay nhung tien trinh nao (lan mo gan nhat) -------
 REM  Cot thu ba: "ngam" = chay khong cua so, "CO CUA SO" = se nhay len
 REM  mot o den. Neu co dong nao CO CUA SO thi do chinh la thu dang bat len.
-if exist "%~dp0workspace	ien-trinh.log" (
-  powershell -NoProfile -Command "Get-Content '%~dp0workspace	ien-trinh.log' -Tail 25 | ForEach-Object { Write-Host ('  ' + $_) }"
+if exist "%~dp0workspace\tien-trinh.log" (
+  powershell -NoProfile -Command "Get-Content '%~dp0workspace\tien-trinh.log' -Tail 25 | ForEach-Object { Write-Host ('  ' + $_) }"
 ) else (
   echo   chua co - hay mo tool mot lan roi chay lai file nay
 )

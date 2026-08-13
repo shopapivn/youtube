@@ -49,6 +49,51 @@ class TrangTaiKhoan(QWidget):
 
     # ── Khoá API ─────────────────────────────────────────────────────────────
 
+    #: Ba bước đầu tiên, theo đúng thứ tự phải làm.
+    #:
+    #: Chủ dự án, 13/08/2026: *"có hướng dẫn cụ thể, đang nhiều thứ quá, ví dụ
+    #: 1-2-3 để khách biết làm gì tiếp theo"*.
+    #:
+    #: Tool có bảy tab và mỗi tab một đống nút. Với người làm YouTube không
+    #: viết code, màn hình đầu tiên không trả lời được câu duy nhất họ đang
+    #: hỏi: **giờ bấm gì?** Ba dòng này trả lời đúng câu đó, và không nói gì
+    #: thêm — thêm dòng thứ tư là lại thành một danh sách phải đọc.
+    #:
+    #: Bước 3 KHÔNG kể tên bảy tab: đọc xong bảy cái tên vẫn không biết bắt đầu
+    #: từ đâu. Nó chỉ tên MỘT tab, cái đầu tiên của mạch làm video.
+    BA_BUOC = (
+        ("1", "Đăng nhập", "Nhập email shopapi.vn ở ô ngay dưới."),
+        ("2", "Nạp tiền", "Bấm “Nạp tiền”, quét mã QR."),
+        ("3", "Làm video", "Sang tab Viết kịch bản, rồi đi tiếp xuống dưới."),
+    )
+
+    def _the_bat_dau(self):
+        """Thẻ “Làm theo 3 bước” — thứ đầu tiên khách nhìn thấy khi mở tool."""
+        khung = the()
+        doc = QVBoxLayout(khung)
+        doc.setContentsMargins(20, 12, 20, 12)
+        doc.setSpacing(4)
+        doc.addWidget(nhan("Làm theo 3 bước", "h2"))
+        for so, tieu_de, chi_tiet in self.BA_BUOC:
+            hang = QHBoxLayout()
+            hang.setSpacing(12)
+            o_so = nhan(so)
+            o_so.setFixedWidth(26)
+            o_so.setAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
+            o_so.setStyleSheet(
+                "font-size:17px;font-weight:800;color:{0};".format(theme.NHAN))
+            hang.addWidget(o_so)
+
+            # MỘT dòng cho mỗi bước, không phải hai. Tách tiêu đề ra một nhãn
+            # riêng đọc thì đẹp nhưng tốn 60px cho ba bước — và trang này đã
+            # chạm trần chiều cao của cửa sổ nhỏ nhất (test bố cục bắt được).
+            o_chu = nhan("<b>{0}</b> — {1}".format(tieu_de, chi_tiet), "phu")
+            o_chu.setWordWrap(True)
+            o_chu.setMinimumWidth(1)
+            hang.addWidget(o_chu, 1)
+            doc.addLayout(hang)
+        return khung
+
     def _the_khoa(self):
         """Ô dán khoá API — **cửa vào duy nhất của cả tool**.
 
@@ -84,8 +129,12 @@ class TrangTaiKhoan(QWidget):
         d.addWidget(self._nut_hien)
         d.addWidget(nut_chinh("Lưu khoá", self._luu_khoa, rong=120))
         v.addLayout(d)
-        v.addWidget(nhan("Lấy khoá ở shopapi.vn → Khoá API. Khoá được cất mã hoá "
-                         "theo máy này, không nằm trong mã nguồn.", "muted"))
+        # Câu "lấy khoá ở shopapi.vn" đã nằm ở bước 1 của thẻ "Làm theo 3
+        # bước" ngay phía trên. Nói lại lần hai chỉ tốn chiều cao — mà trang
+        # này đã chạm trần cửa sổ nhỏ nhất. Phần "khoá cất mã hoá" chuyển vào
+        # tooltip của ô nhập.
+        self._o_khoa.setToolTip(
+            "Khoá được cất mã hoá theo máy này, không nằm trong mã nguồn.")
         self._ve_trang_thai_khoa()
         return khung
 
@@ -133,10 +182,11 @@ class TrangTaiKhoan(QWidget):
         self._so_nhip = 0
 
         doc = QVBoxLayout(self)
-        doc.setContentsMargins(24, 20, 24, 20)
-        doc.setSpacing(14)
+        doc.setContentsMargins(24, 16, 24, 16)
+        doc.setSpacing(10)
         doc.addWidget(tieu_de_trang(
-            "Ví & Tài khoản", "Số dư, nạp tiền, sổ cái.", "wallet"))
+            "Tài khoản", "Đăng nhập, số dư, nạp tiền.", "wallet"))
+        doc.addWidget(self._the_bat_dau())
         doc.addWidget(self._the_khoa())
 
         # ── Số dư ────────────────────────────────────────────────────────────

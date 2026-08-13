@@ -65,7 +65,7 @@ TRANG = (
     # đậy* — thì không tab nào diễn đạt được vì nó nằm vắt qua cả hai.
     ("media", "", "Ảnh & Video"),
     ("edit", "", "Dựng video"),
-    ("wallet", "", "Ví & Tài khoản"),
+    ("wallet", "", "Tài khoản"),
 )
 
 
@@ -152,7 +152,14 @@ class CuaSoChinh(QWidget):
     TEN_HIEN = "My Tool"
     CAU_DUOI_TEN = "Tool của bạn, do bạn tạo"
     #: Trang mở ra đầu tiên khi ĐÃ có khoá. Phải là một khoá có trong thanh bên.
-    TRANG_DAU = "voice"
+    #: Trang mở ra đầu tiên — **luôn là Tài khoản**, có khoá hay chưa.
+    #:
+    #: Chủ dự án, 13/08/2026: *"mặc định khi mở tool sẽ vào tab tài khoản"*.
+    #: Bản trước mở vào Voice (đã có khoá) hoặc Skill (chưa có), tức khách mới
+    #: rơi thẳng vào một tab làm việc trong khi việc đầu tiên họ phải làm là
+    #: **đăng nhập**. Còn khách cũ thì mỗi lần mở tool lại phải tự đi tìm xem
+    #: ví còn bao nhiêu tiền.
+    TRANG_DAU = "wallet"
 
     #: Trang mở ra khi CHƯA có khoá — phải là tab chạy được mà không cần khoá.
     #:
@@ -160,7 +167,7 @@ class CuaSoChinh(QWidget):
     #: đúng tab không dùng được, và ấn tượng đầu tiên về tool là một câu báo lỗi.
     #: Skill → "Lấy dữ liệu đối thủ" chạy hoàn toàn trên máy họ (yt-dlp), miễn
     #: phí, không cần khoá — nên đó là chỗ nên đứng khi chưa có gì.
-    TRANG_DAU_CHUA_KHOA = "skill"
+    TRANG_DAU_CHUA_KHOA = "wallet"
 
     def widget_duoi_ten(self):
         """Ô chọn **Dự án** — thứ đứng trên cùng vì nó quyết định mọi tab.
