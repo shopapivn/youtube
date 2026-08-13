@@ -132,6 +132,21 @@ class TrangAgent(QWidget):
             doc.addWidget(self._chu_phu(giai_thich, lui=26))
         self._nut_chon[NGUON_SHOPAPI].setChecked(True)
 
+        # ═══ MỘT NÚT THẬT ĐỂ CẮM KHOÁ ═══
+        #
+        # Trước đây khoá chỉ được ghi NGẦM, ngay trước lúc mở VS Code. Trên
+        # giấy thì gọn: khách không phải nhớ bấm gì. Trên thực tế nó có nghĩa
+        # là **không có chỗ nào để nhìn và không có gì để bấm** — chính chủ dự
+        # án, người ra yêu cầu cho tab này, cũng hỏi (13/08/2026): *"tao không
+        # hiểu cài key của shopapi để vs code dùng key đó cho claude kiểu gì"*.
+        # Người viết ra yêu cầu mà còn không tìm thấy thì khách không có cơ hội
+        # nào.
+        #
+        # Việc ngầm vẫn giữ (mở VS Code vẫn tự cắm). Cái thêm vào là **nhìn
+        # thấy được**: một nút, một dòng trạng thái có màu, và đường dẫn tệp.
+        self._nut_cam_khoa = nut_chinh("Cắm khoá ShopAPI", self.cam_khoa)
+        doc.addWidget(self._nut_cam_khoa)
+
         self._nhan_nguon = self._chu_phu("")
         doc.addWidget(self._nhan_nguon)
         # Cảnh báo khi ví ShopAPI chưa gọi được công cụ. Không gọi được công cụ
@@ -142,11 +157,9 @@ class TrangAgent(QWidget):
         self._canh_bao.hide()
         doc.addWidget(self._canh_bao)
 
-        chu_thich = self._chu_phu(
-            "Lựa chọn này chỉ có tác dụng TRONG thư mục tool. Mở agent ở chỗ "
-            "khác trên máy thì gói riêng của bạn vẫn chạy nguyên vẹn.")
-        chu_thich.setToolTip(duong_settings(self.app.base_dir))
-        doc.addWidget(chu_thich)
+        # Câu "chỉ có tác dụng trong thư mục tool" đã nằm trong dòng trạng
+        # thái phía trên và trong tooltip của nút — nói lại lần thứ ba là lấy
+        # mất chiều cao mà tab này không còn thừa (test bố cục bắt được).
         return khung
 
     @property
@@ -226,15 +239,51 @@ class TrangAgent(QWidget):
         """
         tt = trang_thai_settings(self.app.base_dir)
         if not tt["da_cai"]:
-            chu = ("Thư mục tool chưa cấu hình gì — agent dùng đăng nhập sẵn có "
-                   "của bạn.")
+            chu = ("CHƯA cắm khoá. Claude Code trong thư mục này đang dùng tài "
+                   "khoản riêng của bạn, không tiêu ví ShopAPI.")
+            mau = theme.CHU_MO
         elif tt["la_shopapi"]:
-            chu = (f"Trong thư mục tool đang trỏ về ví ShopAPI "
-                   f"({tt['khoa_rut_gon']}). Chỗ khác trên máy không đổi.")
+            chu = ("ĐÃ cắm khoá ShopAPI ({0}). Claude Code mở từ đây — kể cả "
+                   "extension trong VS Code — đều tiêu ví ShopAPI. Chỗ khác "
+                   "trên máy không đổi.".format(tt["khoa_rut_gon"]))
+            mau = theme.XANH
             self._nut_chon[NGUON_SHOPAPI].setChecked(True)
         else:
-            chu = f"Đang trỏ về {tt['base_url']} — không phải ShopAPI."
+            chu = "Đang trỏ về {0} — KHÔNG phải ShopAPI.".format(tt["base_url"])
+            mau = theme.DO
         self._nhan_nguon.setText((them + " " + chu).strip())
+        self._nhan_nguon.setStyleSheet("color:{0};".format(mau))
+        if hasattr(self, "_nut_cam_khoa"):
+            da = tt["da_cai"] and tt["la_shopapi"]
+            self._nut_cam_khoa.setText("Đã cắm — cắm lại" if da
+                                       else "Cắm khoá ShopAPI")
+            self._nut_cam_khoa.setToolTip(
+                "Ghi khoá ShopAPI vào cấu hình Claude Code của RIÊNG thư mục "
+                "tool, để Claude Code và extension trong VS Code tiêu ví "
+                "ShopAPI thay vì đòi bạn đăng nhập Anthropic.\n\n"
+                + tt["duong"])
+
+    def cam_khoa(self) -> None:
+        """Nút: ghi khoá vào cấu hình Claude Code của thư mục tool.
+
+        Nói ra **đúng tệp vừa ghi**. Với thứ vô hình như một tệp cấu hình, câu
+        "đã xong" mà không kèm đường dẫn thì không kiểm chứng được — và người
+        không kiểm chứng được thì không tin.
+        """
+        if not self._ap_dung_im():
+            return
+        tt = trang_thai_settings(self.app.base_dir)
+        if tt["da_cai"] and tt["la_shopapi"]:
+            self.app.show_message(
+                "Đã cắm khoá ShopAPI",
+                "Claude Code mở từ thư mục này — kể cả extension trong VS "
+                "Code — sẽ tiêu ví ShopAPI.\n\nGhi vào:\n{0}\n\n"
+                "Mở VS Code bằng nút ở dưới, đừng mở từ Start Menu: mở kiểu "
+                "đó không đi qua thư mục này.".format(tt["duong"]))
+        else:
+            self.app.show_message(
+                "Đã gỡ khoá ShopAPI",
+                "Thư mục này trở lại dùng tài khoản Claude riêng của bạn.")
 
     @staticmethod
     def _chu_phu(chu: str, lui: int = 0):

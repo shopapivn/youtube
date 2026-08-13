@@ -64,7 +64,15 @@ TOP_LEVEL_ALLOW = (
 )
 
 #: Thư mục bỏ qua ở mọi độ sâu.
-SKIP_DIRS = frozenset({"__pycache__", ".pytest_cache", "tests", "ket-qua", ".git"})
+SKIP_DIRS = frozenset({
+    "__pycache__", ".pytest_cache", "tests", "ket-qua", ".git",
+    # `.claude/settings.local.json` chứa **khoá API sống** của người đóng gói:
+    # tool tự ghi nó mỗi lần ai đó bấm "Mở VS Code" ở tab Agent. Nó không có
+    # trong cây mã nên dễ tưởng là không tồn tại — cho tới ngày một người mở
+    # VS Code từ cây dev rồi chạy `xuat-github.py`, và khoá đi thẳng lên kho
+    # công khai. Đo ngày 13/08/2026: CẢ HAI lớp chặn đều lọt tên file này.
+    ".claude",
+})
 
 #: Đuôi file bỏ qua ở mọi độ sâu.
 SKIP_SUFFIXES = (".pyc", ".pyo", ".part", ".log")
@@ -330,10 +338,51 @@ def vendored_sdk_matches(tool_dir: str, sdk_src_dir: str):
     return khac
 
 
+#: Dấu vết của một khoá THẬT trong nội dung file.
+#:
+#: Lớp chặn thứ hai vốn soi **tên file**, và ngày 13/08/2026 nó lọt sạch:
+#: `.claude/settings.local.json` là một cái tên hoàn toàn vô hại, mà bên trong
+#: là khoá `sk_live_…` còn sống. Tên thì đổi được, nội dung thì không — nên
+#: phải có một lớp soi cái không đổi được.
+#:
+#: Đòi tối thiểu 20 ký tự sau tiền tố: mã nguồn của tool có nhắc tới dạng khoá
+#: trong chú thích và ví dụ, và bắt nhầm chúng thì lần sau người ta tắt cả lớp
+#: kiểm tra này đi.
+_DAU_VET_KHOA = re.compile(r"(sk_live_|sk-ant-|sk-proj-)[A-Za-z0-9_\-]{20,}")
+
+
+def assert_no_secret_content(items) -> None:
+    """Đọc nội dung từng file sắp vào gói, chặn nếu thấy khoá còn sống.
+
+    Chỉ đọc file văn bản và bỏ qua file lớn: ảnh, `.ico`, SDK nén không phải
+    chỗ người ta vô tình để quên khoá, mà đọc hết thì đóng gói chậm hẳn.
+    """
+    dinh = []
+    for duong, arc in items:
+        try:
+            if os.path.getsize(duong) > 512 * 1024:
+                continue
+            with open(duong, "rb") as f:
+                chu = f.read().decode("utf-8", errors="ignore")
+        except OSError:
+            continue
+        thay = _DAU_VET_KHOA.search(chu)
+        if thay:
+            dinh.append("{0}  (thấy {1}…)".format(arc, thay.group(0)[:16]))
+    if dinh:
+        raise PackagingError(
+            "Dừng đóng gói: có KHOÁ THẬT nằm trong file sắp phát hành.\n"
+            + "\n".join("  - " + d for d in dinh)
+            + "\n\nXoá khoá khỏi file đó rồi đóng gói lại. Đừng nới lớp kiểm "
+            "tra này — khoá đã lên kho công khai thì git giữ mãi trong lịch sử."
+        )
+
+
 def build_manifest(tool_dir: str, sdk_src_dir: str):
     """Toàn bộ danh sách file của gói, đã kiểm bí mật. Không chạm đĩa để ghi."""
     items = collect_tool_files(tool_dir) + collect_sdk_files(sdk_src_dir)
     assert_no_secrets([arc for _, arc in items])
+    assert_no_secret_content(items)
     return items
 
 
