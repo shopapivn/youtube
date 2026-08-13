@@ -76,9 +76,14 @@ class TheKetQua(QFrame):
     """Một việc: ảnh xem trước (hoặc ô video), nhãn mô tả, dòng trạng thái."""
 
     def __init__(self, mo_ta: str, la_video: bool, khi_lam_lai=None,
-                 khi_cho_dong=None):
+                 khi_cho_dong=None, uid: str = ""):
         super().__init__()
         self._mo_ta = mo_ta
+        #: Khoá của việc sinh ra thẻ này. Trang nào gửi việc thì trang ấy giữ
+        #: bảng `khoá → dòng`, nên thẻ phải khai được mình là việc nào —
+        #: không thì bấm "Làm lại" ở tab Hàng loạt chỉ còn cách dò theo mô tả,
+        #: mà hai cảnh trùng chữ là chạy nhầm dòng.
+        self.uid = uid
         self._khi_lam_lai = khi_lam_lai
         self._khi_cho_dong = khi_cho_dong
         self._duong_dan = ""
@@ -100,8 +105,11 @@ class TheKetQua(QFrame):
         self._o_anh.setStyleSheet(
             f"background:{'#1f2430' if la_video else theme.THE_MO};"
             f" border:none; border-radius:8px;"
-            f" color:{'#c7ccd8' if la_video else theme.CHU_MO}; font-size:22px;")
-        self._o_anh.setText("" if la_video else "")
+            f" color:{'#c7ccd8' if la_video else theme.CHU_MO}; font-size:13px;")
+        # Video không dựng được ảnh xem trước (cần ffmpeg, mà tool không đòi
+        # khách cài ffmpeg để tạo video). Ô đen rỗng không nói được gì, nên nó
+        # tự khai mình là clip và bấm vào thì mở bằng trình phát của máy.
+        self._o_anh.setText("clip" if la_video else "")
         doc.addWidget(self._o_anh)
 
         self._o_mo_ta = nhan(mo_ta[:64], "phu")
@@ -157,7 +165,9 @@ class TheKetQua(QFrame):
             self._ve_anh()
             self._hang_nut.show()
         elif trang_thai == STATUS_FAILED:
-            self._o_anh.setText("")
+            # Ô trống trơn đọc ra là "đang chờ", không phải "hỏng". Dòng trạng
+            # thái đỏ ở dưới đã nói, nhưng người ta nhìn ô ảnh trước.
+            self._o_anh.setText("hỏng")
 
     def _ve_anh(self) -> None:
         """Nạp ảnh xem trước **một lần**.
@@ -235,7 +245,7 @@ class ThuVienKetQua(QWidget):
             return co_san
         the_moi = TheKetQua(mo_ta, la_video,
                             getattr(self, '_khi_lam_lai', None),
-                            getattr(self, '_khi_cho_dong', None))
+                            getattr(self, '_khi_cho_dong', None), uid=uid)
         self._luoi.insertWidget(0, the_moi)
         self._the[uid] = the_moi
         self._thu_tu.append(uid)

@@ -15,6 +15,12 @@
 #  3.9-3.11 thi dinh. Giai thich day du bang tieng Viet nam trong README.md.
 # ===========================================================================
 #
+#   PyQt5         : CHINH CAI DUNG NEN CUA SO. Ban tkinter da xoa 12/08/2026,
+#                   nen thieu dong nay la tool khong mo len duoc mot cach nao.
+#                   No tung THIEU that: SETUP.bat cai xong 4 thu vien kia roi
+#                   bao "OK", khach nhay dup thi tool chet - vi buoc kiem cuoi
+#                   van do "import tkinter" (Python nao cung co san) nen khong
+#                   ai thay gi sai. Ai xoa dong nay hay chay thu tren may sach.
 #   pillow        : hien thi anh QR nap tien va icon
 #   httpx         : SDK shopapi goi HTTP qua thu vien nay
 #   yt-dlp        : doc du lieu YouTube cong khai cho tab Nghien cuu doi thu.
@@ -30,6 +36,7 @@
 #
 # Cai: SETUP.bat  (hoac  python -m pip install -r requirements.txt)
 
+PyQt5>=5.15
 pillow>=10.0
 httpx>=0.27
 cryptography>=42.0

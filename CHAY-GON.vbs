@@ -1,27 +1,27 @@
-' ===========================================================================
+﻿' ===========================================================================
 '  ShopAPI Studio — BẬT KHÔNG CÓ CỬA SỔ ĐEN
 ' ===========================================================================
 '
-'  Nhấp đúp file này thay cho CHAY.bat. Không hiện cửa sổ dòng lệnh nào.
+'  Nhấp đúp file này thay cho CHAY-QT.bat. Không hiện cửa sổ dòng lệnh nào.
 '
 '  ── Vì sao có file này ─────────────────────────────────────────────────────
 '
-'  CHAY.bat chạy `python.exe`, mà `python.exe` luôn kéo theo một cửa sổ đen.
+'  CHAY-QT.bat chạy `python.exe`, mà `python.exe` luôn kéo theo một cửa sổ đen.
 '  Cửa sổ đó có ích lúc gỡ lỗi, nhưng với người dùng hằng ngày thì nó chỉ là
 '  một ô đen nằm chình ình và bấm nhầm vào là tắt cả tool.
 '
-'  ── Vì sao KHÔNG xoá CHAY.bat ──────────────────────────────────────────────
+'  ── Vì sao KHÔNG xoá CHAY-QT.bat ───────────────────────────────────────────
 '
 '  Giữ cả hai là cố ý:
 '
 '      CHAY-GON.vbs  → dùng hằng ngày, không cửa sổ
 '      CHAY-QT.bat   → khi có trục trặc, xem thẳng thông báo trong cửa sổ đen
 '
-'  Bỏ hẳn CHAY.bat thì lúc hỏng sẽ không còn cách nào nhìn thấy lỗi.
+'  Bỏ hẳn CHAY-QT.bat thì lúc hỏng sẽ không còn cách nào nhìn thấy lỗi.
 '
 '  ── Lỗi thì biết bằng cách nào khi không có cửa sổ ────────────────────────
 '
-'  `shopapi_studio.py::_die` tự nhận ra mình đang chạy không console và bật một
+'  `shopapi_studio_qt.py::_die` tự nhận ra mình chạy không console và bật một
 '  hộp thoại thay vì in ra màn hình. Dựng cả hộp thoại cũng không nổi thì nó ghi
 '  `LOI-KHOI-DONG.txt` ngay cạnh file này.
 '
@@ -78,7 +78,7 @@ If pythonw = "" Then
     MsgBox _
         "Không tìm thấy pythonw.exe." & vbCrLf & vbCrLf & _
         "Bạn nhấp đúp SETUP.bat một lần để cài Python và thư viện, rồi mở lại file này." & vbCrLf & vbCrLf & _
-        "Nếu đã cài rồi mà vẫn báo lỗi này thì mở CHAY.bat — nó hiện cửa sổ đen và " & _
+        "Nếu đã cài rồi mà vẫn báo lỗi này thì mở CHAY-QT.bat — nó hiện cửa sổ đen và " & _
         "nói rõ hơn đang thiếu gì.", _
         vbCritical, "ShopAPI Studio"
     WScript.Quit 1

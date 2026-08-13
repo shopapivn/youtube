@@ -223,10 +223,13 @@ echo.
 
 REM --- [4/5] Kiem tra lai ----------------------------------------------------
 echo [4/5] Kiem tra lai...
-%PYEXE% -c "import tkinter, PIL; print('  - Giao dien: OK')"
+REM Do PyQt5, KHONG do tkinter. Buoc nay tung do "import tkinter" - ma tkinter
+REM di kem san moi ban Python, nen no bao OK tren MOI may ke ca may chua he co
+REM PyQt5. Mot buoc kiem luon luon dung la mot buoc kiem vo dung.
+%PYEXE% -c "import PyQt5.QtWidgets, PIL; print('  - Giao dien Qt: OK')"
 if errorlevel 1 (
   echo.
-  echo   !!! Chua import duoc Tkinter hoac Pillow.
+  echo   !!! Chua import duoc PyQt5 hoac Pillow.
   echo   -^> Chup man hinh nay gui nguoi ho tro.
   echo.
   pause
@@ -259,9 +262,9 @@ echo.
 REM --- [5/5] Thu mo tool that ------------------------------------------------
 REM Import duoc thu vien KHONG co nghia la tool mo duoc cua so. Buoc nay nap
 REM dung man hinh chinh (khong hien ra) de bat loi ngay bay gio, luc man hinh
-REM con dang huong dan, thay vi de khach gap luc nhay dup CHAY.bat.
+REM con dang huong dan, thay vi de khach gap luc nhay dup CHAY-GON.vbs.
 echo [5/5] Thu nap giao dien...
-%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); import core; from ui.app import StudioApp; print('  - Giao dien nap duoc: OK')"
+%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); import core; from ui_qt.app import CuaSoChinh; print('  - Giao dien nap duoc: OK')"
 if errorlevel 1 (
   echo.
   echo   !!! Thu vien da cai xong nhung giao dien khong nap duoc.
@@ -275,12 +278,13 @@ echo ============================================================
 echo    CAI XONG!
 echo.
 echo    Buoc tiep theo:
-echo      1^) Nhay dup  CHAY.bat
+echo      1^) Nhay dup  CHAY-GON.vbs
 echo      2^) Dang nhap bang email tai khoan shopapi.vn ngay trong tool
 echo         ^(tool tu tao khoa API va cat ma hoa tren may ban^)
 echo.
 echo    Chua co tai khoan? Dang ky mien phi tai  https://shopapi.vn/register
 echo.
-echo    Tu gio ban CHI CAN nhay dup CHAY.bat, khong phai chay lai SETUP.bat.
+echo    Tu gio ban CHI CAN nhay dup CHAY-GON.vbs, khong phai chay lai SETUP.bat.
+echo    Neu tool khong mo len: chay CHAY-QT.bat - no hien cua so den kem loi.
 echo ============================================================
 pause

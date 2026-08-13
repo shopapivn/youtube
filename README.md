@@ -98,8 +98,7 @@ làm gì. Đó là phần đáng đọc nhất nếu bạn muốn dựng công c
 
 ```
 core/          phần nghĩ — không import giao diện, test được không cần cửa sổ
-ui_qt/         giao diện PyQt5 (bản chính, chạy bằng CHAY-QT.bat)
-ui/            giao diện tkinter (bản cũ, chạy bằng CHAY.bat)
+ui_qt/         giao diện PyQt5 — chạy bằng CHAY-GON.vbs (hoặc CHAY-QT.bat)
 tool-catalog/  8 tool mẫu để agent phát triển tiếp
 agent-skills/  hướng dẫn cho agent
 _sdk/          SDK shopapi đi kèm, không phải cài thêm
