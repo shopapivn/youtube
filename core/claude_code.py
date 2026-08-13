@@ -82,6 +82,7 @@ __all__ = [
     "duong_settings", "doc_settings", "cai_vao_settings", "go_khoi_settings",
     "trang_thai_settings", "mo_terminal", "mo_vscode", "KHOA_QUAN_LY",
     "moi_truong_max", "KHOA_CAT_TAM", "DUOI_SAO_LUU", "thu_muc_claude",
+    "TEN_CO_KHONG_CAM", "duong_co_khong_cam", "khong_duoc_cam_khoa",
     "lenh_chay_duoc", "tim_lenh", "LENH_CAI_CLAUDE", "DIA_CHI_CAI",
     "danh_dau_da_chao", "duong_trang_thai_chung", "MODEL_MAC_DINH",
     "duong_settings_may", "cai_vao_may", "go_khoi_may",
@@ -637,6 +638,40 @@ KHOA_CAT_TAM = "SHOPAPI_ANTHROPIC_API_KEY_CU"
 #: nhất chắc chắn chưa có tay Studio chạm vào.
 DUOI_SAO_LUU = ".shopapi-backup"
 
+#: Cờ chặn: có tệp này thì Studio KHÔNG cắm khoá vào cấu hình Claude Code nào
+#: trên máy, kể cả cấp thư mục lẫn cấp máy.
+#:
+#: ═══ VÌ SAO CẦN MỘT CÔNG TẮC, KHÔNG PHẢI CHỈ NHỚ ĐỪNG BẤM ═══
+#:
+#: Studio cắm khoá **mỗi lần mở tool**, không đợi ai bấm nút. Trên máy khách đó
+#: là đúng: họ mua khoá để dùng. Nhưng trên máy có sẵn gói thuê bao Claude, cắm
+#: vào là mọi lượt chạy đi qua ví shopapi — trả tiền hai lần cho một việc, mà
+#: không có dấu hiệu gì trên màn hình.
+#:
+#: Dọn tay không cứu được: lần mở tool kế tiếp ghi đè lại ngay. Chủ dự án gặp
+#: đúng vòng đó ngày 13/08/2026 — dọn lúc 22:58, mở tool lúc 23:01 là khoá về
+#: chỗ cũ. Nên cái cần là một cờ nằm ngoài tầm với của tool.
+TEN_CO_KHONG_CAM = ".shopapi-khong-cam-khoa"
+
+
+def duong_co_khong_cam() -> str:
+    """Đường dẫn cờ chặn: `~/.claude/.shopapi-khong-cam-khoa`."""
+    return os.path.join(os.path.expanduser("~"), ".claude", TEN_CO_KHONG_CAM)
+
+
+def khong_duoc_cam_khoa() -> bool:
+    """Máy này có cấm cắm khoá không.
+
+    Đặt cờ ở cấp máy (`~/.claude/`) chứ không phải cấp thư mục tool: người cần
+    nó thường có nhiều bản tool trên cùng một máy — bản đang sửa, bản đóng gói,
+    bản giải nén ra để thử. Đặt theo thư mục là sót, mà sót một chỗ thì hỏng
+    đúng bằng không đặt gì cả.
+    """
+    try:
+        return os.path.isfile(duong_co_khong_cam())
+    except OSError:
+        return False
+
 
 #: Tên tệp cấu hình. `settings.local.json` chứ không phải `settings.json`:
 #: đây là tệp Claude Code dành cho **máy cá nhân**, ưu tiên cao hơn tệp dùng
@@ -758,6 +793,8 @@ def cai_vao_settings(goc: str, api_key: str, base_url: str = "") -> str:
     định) giữ nguyên. Không đụng vào khoá `model` cấp cao nhất — đó là lựa chọn
     của khách, và Claude Code đã tự có mặc định.
     """
+    if khong_duoc_cam_khoa():
+        return ""
     cai = doc_settings(goc)
     env = dict(cai.get("env") or {})
     # ═══ CHỈ CẤT KHOÁ THẬT CỦA KHÁCH, VÀ CHỈ CẤT MỘT LẦN ═══
@@ -816,7 +853,12 @@ def cai_vao_may(api_key: str, base_url: str = "", duong: str = "") -> str:
     Chỉ gọi khi khách đang chọn nguồn **ví ShopAPI**. Khách dùng gói Max của
     chính họ mà bị tool ghi đè khoá ở cấp máy thì đó là tool ăn cắp — nên nhánh
     Max gọi `go_khoi_may()` để trả lại nguyên trạng.
+
+    Máy đã bật cờ `TEN_CO_KHONG_CAM` thì hàm này không làm gì và trả về chuỗi
+    rỗng — xem ghi chú ở chỗ khai báo cờ.
     """
+    if khong_duoc_cam_khoa():
+        return ""
     duong = duong or duong_settings_may()
     try:
         with open(duong, "r", encoding="utf-8") as tep:
