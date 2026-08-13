@@ -180,7 +180,17 @@ def _command(runtime: Mapping[str, Any], root: Path, policy: RuntimePolicy) -> S
     if not isinstance(raw_args, list) or not all(isinstance(arg, str) for arg in raw_args):
         raise ToolRuntimeError("runtime.args phai la danh sach chuoi.")
     if kind == "python":
-        return [sys.executable, "-I", str(script)] + raw_args
+        # `-X utf8=1` chu KHONG phai bien moi truong PYTHONIOENCODING.
+        #
+        # `-I` la che do co lap, keo theo `-E`: con BO QUA moi bien `PYTHON*`.
+        # Nen dat PYTHONIOENCODING cho tool python la dat vao cho khong ai doc.
+        # `-X` la tuy chon dong lenh, `-I` khong gat duoc.
+        #
+        # Thieu no thi tren Windows con ghi stdout bang bang ma cua may
+        # (cp1252/cp1258): dong log tieng Viet dau tien la chet vi
+        # UnicodeEncodeError, stdout rong, va khach chi thay tool "khong lay
+        # duoc du lieu". Cha thi luon doc stdout bang UTF-8 (`_decode`).
+        return [sys.executable, "-I", "-X", "utf8=1", str(script)] + raw_args
     if kind == "process":
         executable = str(script)
         allowed = {_normal_executable(item, root) for item in policy.allowed_executables}
@@ -225,6 +235,17 @@ def _environment(allowlist: Iterable[str], supplied: Optional[Mapping[str, str]]
     # Khong ke thua PATH cua may (co the tro toi script ngoai y muon); chi cho
     # thay thu muc Python dang chay.
     result.setdefault("PATH", str(Path(sys.executable).resolve().parent))
+    # Cha doc stdout cua con bang UTF-8 (`_decode`), nen con PHAI ghi UTF-8.
+    #
+    # Khong dat bien nay thi tren Windows con lay bang ma cua may — cp1252,
+    # cp1258 tren may Viet Nam. Dong log tieng Viet dau tien la con chet vi
+    # UnicodeEncodeError: stdout rong, exit code 2, va tren giao dien khach chi
+    # thay tool "khong lay duoc du lieu". Do ngay 13/08/2026 tren Skill "Lay du
+    # lieu doi thu": loi that nam o stderr, con man hinh khach thi cam.
+    #
+    # Day la sieu du lieu van hanh nhu SystemRoot va PATH o tren, khong phai
+    # thong tin ke thua tu moi truong khach.
+    result.setdefault("PYTHONIOENCODING", "utf-8")
     return result
 
 
