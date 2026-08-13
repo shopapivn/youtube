@@ -110,6 +110,30 @@ class TrangAgent(QWidget):
         self._ve_bang()
         self._ve_nut_mo()
         self._ve_nguon()
+        #: Đã dò máy lần nào chưa. Xem `showEvent`.
+        self._da_do = False
+
+    # ═══ CHỈ DÒ MÁY KHI KHÁCH THẬT SỰ MỞ TAB NÀY ═══
+    #
+    # Chủ dự án, 13/08/2026: *"sao mở tool nó cứ mở claude code vậy, như thế là
+    # sai logic nhá"*. Đúng, và cái sai nằm ở đây chứ không ở chỗ nào khác.
+    #
+    # Cửa sổ chính dựng SẴN cả bảy tab lúc khởi động (để chuyển tab không giật).
+    # Bản trước, `__init__` của tab này bắn luôn hai lượt dò — chạy `code`,
+    # `codex`, và trước 2.7.0 là cả `claude`. Tức **mở tool là chạy agent**, dù
+    # khách vào thẳng tab Voice và cả buổi không đụng tới tab Agent.
+    #
+    # Hậu quả nhìn thấy được: một cửa sổ Claude Code hiện lên đòi đăng nhập,
+    # lần mở tool nào cũng vậy. Hậu quả không nhìn thấy: mỗi lần mở tool là
+    # vài lượt gọi tiến trình con, trên máy yếu là mấy giây đơ.
+    #
+    # Luật đúng: **tab nào chưa mở thì chưa làm gì cả.** `showEvent` bắn khi
+    # widget thật sự hiện ra, tức đúng lúc khách bấm vào tab — không sớm hơn.
+    def showEvent(self, su_kien):  # noqa: N802 — tên do Qt quy định
+        super().showEvent(su_kien)
+        if self._da_do:
+            return
+        self._da_do = True
         self.do_lai()
         self.do_cong_cu()
 
