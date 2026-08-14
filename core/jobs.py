@@ -44,7 +44,7 @@ from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 from shopapi import NhipDo, ShopAPI, cho_hang_doi_cua, poll_delays
 
 from .api import extract_outputs
-from .batch import guess_extension, safe_filename, unique_path
+from .batch import duoi_cua_output, safe_filename, unique_path
 from .config import DEFAULT_CONCURRENCY, HARD_CAPS, redact
 from .download import DownloadError, download_to
 from .errors import ErrorAdvice, describe, retry_after_seconds
@@ -974,7 +974,7 @@ class JobManager:
                 self._finish(record, STATUS_CANCELLED, "Bạn đã dừng trong lúc tải kết quả.")
                 return
             url = str(output.get("url"))
-            extension = guess_extension(url, str(output.get("format") or ""))
+            extension = duoi_cua_output(output)
             suffix = "" if len(outputs) == 1 else "_{0}".format(order)
             filename = safe_filename(
                 record.spec.display_label() + suffix,

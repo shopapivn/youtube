@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Iterable, List, Optional, Set
+from typing import Any, Iterable, List, Optional, Set
 
 __all__ = [
     "split_prompts",
     "safe_filename",
     "unique_path",
     "guess_extension",
+    "duoi_cua_output",
     "COMMENT_PREFIX",
 ]
 
@@ -143,36 +144,60 @@ _CONTENT_TYPE_EXT = {
 _DOI_DUOI = {"jpeg": "jpg", "mpeg": "mp3", "mpga": "mp3", "qt": "mov"}
 
 
-def guess_extension(url: str, content_type: str = "", fallback: str = "bin") -> str:
-    """Tìm đuôi file: `output.format` trước, rồi MIME, rồi URL, cuối cùng `fallback`.
+def duoi_cua_output(output: Any, fallback: str = "bin") -> str:
+    """Đuôi file cho một phần tử `outputs` của job — dùng cái này, đừng tự đoán.
 
-    Tham số `content_type` nhận cả hai kiểu: MIME đầy đủ (`video/mp4`, có dấu
-    gạch chéo) hoặc đuôi trần lấy từ `output.format` (`mp4`, `jpeg`).
+    Hỏi theo đúng thứ tự **chắc chắn dần xuống may rủi**:
+
+    1. `content_type` — MIME máy chủ **đo từ byte thật** (`video/mp4`).
+    2. `format` — định dạng máy chủ khai (`mp4`, `jpeg`).
+    3. đuôi trong URL — chỉ là gợi ý; link có thể là của bên thứ ba.
+    4. `fallback`.
 
     THỨ TỰ NÀY TỪNG NGƯỢC LẠI VÀ ĐÃ LÀM HỎNG THẬT (14/08/2026). Trước đó link
-    kết quả có dạng `.../x7k2m9.mp4?...` nên đoán từ URL luôn trúng. Rồi ShopAPI
-    đổi cách giao file: link ảnh và video giờ trỏ sang Google và KHÔNG còn đuôi
-    trong đường dẫn. Đoán từ URL trượt, tra MIME cũng trượt (vì chỗ gọi truyền
-    `output.format` là `"mp4"` chứ không phải `"video/mp4"`), thế là mọi video
-    khách tạo ra đều rơi xuống `fallback` và lưu thành `.bin` — Windows không
-    biết mở bằng gì, khách tưởng file hỏng.
+    kết quả có dạng `cdn.shopapi.vn/.../x7k2m9.mp4?…` nên đoán từ URL luôn
+    trúng. Rồi ShopAPI đổi cách giao file: link ảnh và video trỏ sang Google,
+    dạng `flow-content.google/video/<uuid>` — **không còn đuôi trong đường
+    dẫn**. Đoán từ URL trượt, tra MIME cũng trượt (chỗ gọi truyền `format` là
+    `"mp4"` chứ không phải `"video/mp4"`), thế là mọi video khách tạo ra đều
+    rơi xuống `fallback` và lưu thành `.bin`. Windows không biết mở bằng gì,
+    bấm vào không có gì xảy ra — khách tưởng file chưa tải về, trong khi nó đã
+    nằm sẵn trong thư mục kết quả.
 
-    Nên `output.format` phải được hỏi TRƯỚC. Đó là chỗ duy nhất máy chủ nói
-    thẳng định dạng thật, không phụ thuộc link trông ra sao.
+    `content_type` là trường máy chủ **mới thêm** sau sự cố đó. Hỏi nó trước
+    chứ đừng chỉ dừng ở `format`: `format` là thứ máy chủ định làm, còn
+    `content_type` là thứ máy chủ đã làm ra thật.
+    """
+    lay = output.get if hasattr(output, "get") else (lambda _k, _d=None: None)
+    for thu in (lay("content_type") or "", lay("format") or ""):
+        duoi = guess_extension("", str(thu), fallback="")
+        if duoi:
+            return duoi
+    return guess_extension(str(lay("url") or ""), "", fallback=fallback)
+
+
+def guess_extension(url: str, content_type: str = "", fallback: str = "bin") -> str:
+    """Tìm đuôi file từ một gợi ý và một URL.
+
+    Phần lớn chỗ gọi nên dùng :func:`duoi_cua_output` thay vì hàm này — nó biết
+    hỏi đúng thứ tự các trường của `outputs`.
+
+    `content_type` nhận cả hai kiểu: MIME đầy đủ (`video/mp4`, có dấu gạch
+    chéo) hoặc đuôi trần (`mp4`, `jpeg`).
     """
     thu = (content_type or "").split(";", 1)[0].strip().lower()
 
-    # 1. Đuôi trần từ output.format — nguồn đáng tin nhất.
+    # Gợi ý dạng đuôi trần ("mp4", "jpeg").
     if thu and "/" not in thu:
         goc = thu.lstrip(".")
         if goc.isalnum() and len(goc) <= 5:
             return _DOI_DUOI.get(goc, goc)
 
-    # 2. MIME đầy đủ, phòng khi chỗ gọi truyền header Content-Type thật.
+    # Gợi ý dạng MIME đầy đủ ("video/mp4").
     if thu in _CONTENT_TYPE_EXT:
         return _CONTENT_TYPE_EXT[thu]
 
-    # 3. Đuôi trong URL — vẫn đúng với link tiếng nói (.mp3), nên giữ lại.
+    # Cuối cùng mới tới đuôi trong URL — vẫn đúng với link tiếng nói (.mp3).
     path = (url or "").split("?", 1)[0].split("#", 1)[0]
     _, ext = os.path.splitext(path)
     ext = ext.lstrip(".").lower()

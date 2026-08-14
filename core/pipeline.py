@@ -48,7 +48,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from shopapi import ShopAPI, poll_delays
 
 from .api import extract_outputs
-from .batch import guess_extension
+from .batch import duoi_cua_output
 from .config import redact
 from .download import DownloadError, download_to
 from .errors import describe, retry_after_seconds
@@ -702,7 +702,7 @@ class ProjectRunner:
             url = str(output.get("url") or "")
             if not url:
                 continue
-            extension = guess_extension(url, str(output.get("format") or ""))
+            extension = duoi_cua_output(output)
             dest = project.output_path(scene, stage, extension=extension, order=order)
             state.message = "Đang tải file {0}/{1} về máy…".format(order, len(outputs))
             self._emit()

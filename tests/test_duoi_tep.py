@@ -11,7 +11,7 @@ Mấy bài dưới đây khoá lại đúng thứ tự ưu tiên đó. Không b�
 
 from __future__ import annotations
 
-from core.batch import guess_extension
+from core.batch import duoi_cua_output, guess_extension
 
 #: Đúng dạng link ShopAPI trả về từ 14/08/2026: không có đuôi, có hạn dùng.
 LINK_GOOGLE = ("https://flow-content.google/video/9f3a2b7c11d4"
@@ -77,14 +77,58 @@ class TestKhongTuTinBay:
         assert guess_extension("https://x/a", "application/octet-stream") == "bin"
 
 
-def test_cho_goi_that_trong_jobs_truyen_dung_thu():
-    """Chỗ gọi thật vẫn truyền `output.format` — nếu ai đó đổi, bài này gãy."""
+class TestThuTuHoi:
+    """`duoi_cua_output` phải hỏi content_type → format → URL → fallback.
+
+    Máy chủ thêm `content_type` sau sự cố `.bin`; nó đo từ byte thật nên chắc
+    hơn `format` (thứ máy chủ *định* làm) và chắc hơn URL rất nhiều.
+    """
+
+    def test_content_type_thang_format(self):
+        # Máy chủ khai format là webp nhưng byte thật là jpeg -> tin byte thật.
+        assert duoi_cua_output({"url": LINK_GOOGLE, "content_type": "image/jpeg",
+                                "format": "webp"}) == "jpg"
+
+    def test_content_type_thang_ca_duoi_url(self):
+        assert duoi_cua_output({"url": "https://x/a.bin",
+                                "content_type": "video/mp4"}) == "mp4"
+
+    def test_thieu_content_type_thi_dung_format(self):
+        # Tool cũ chạy trên máy khách vẫn phải sống: máy chủ chưa trả
+        # content_type thì format gánh.
+        assert duoi_cua_output({"url": LINK_GOOGLE, "format": "mp4"}) == "mp4"
+
+    def test_thieu_ca_hai_thi_dung_url(self):
+        assert duoi_cua_output({"url": "https://api.shopapi.vn/x7k2m9.mp3?s=1"}) == "mp3"
+
+    def test_khong_co_gi_thi_bin(self):
+        assert duoi_cua_output({"url": LINK_GOOGLE}) == "bin"
+
+    def test_content_type_rac_thi_tut_xuong_format(self):
+        assert duoi_cua_output({"url": LINK_GOOGLE,
+                                "content_type": "application/octet-stream",
+                                "format": "mp4"}) == "mp4"
+
+    def test_output_khong_phai_tu_dien_thi_khong_no(self):
+        assert duoi_cua_output(None) == "bin"
+        assert duoi_cua_output("linh tinh") == "bin"
+
+    def test_ba_dinh_dang_may_chu_that_su_tra_ve(self):
+        # Đo trên máy chủ 6 giờ sau khi sửa: chỉ có đúng ba loại này.
+        cho = {"video/mp4": "mp4", "image/jpeg": "jpg", "audio/mpeg": "mp3"}
+        for mime, duoi in cho.items():
+            assert duoi_cua_output({"url": LINK_GOOGLE, "content_type": mime}) == duoi
+
+
+def test_cho_goi_that_dung_duoi_cua_output():
+    """Hai chỗ tải file phải gọi `duoi_cua_output` — đừng ai tự đoán lại."""
     import re
     from pathlib import Path
 
     goc = Path(__file__).resolve().parent.parent
     for ten in ("core/jobs.py", "core/pipeline.py"):
         chu = (goc / ten).read_text(encoding="utf-8")
-        assert re.search(r'guess_extension\(\s*url\s*,\s*str\(\s*output\.get\('
-                         r'"format"\)', chu), \
-            "{0}: chỗ gọi guess_extension phải truyền output.format".format(ten)
+        assert re.search(r"=\s*duoi_cua_output\(\s*output\s*\)", chu), \
+            "{0}: chỗ đặt tên file phải gọi duoi_cua_output(output)".format(ten)
+        assert "guess_extension(url" not in chu, \
+            "{0}: đừng đoán đuôi từ URL nữa — link giờ không có đuôi".format(ten)
