@@ -201,3 +201,107 @@ def test_launcher_dung_cap_nhat_tai_cho():
     assert "apply_tai_cho" in chu
     assert "apply_staged(" not in chu, \
         "đổi tên thư mục cài hỏng 100% trên Windows — xem core/safe_update.py"
+
+
+class TestKenhCuaKhach:
+    """Cập nhật KHÔNG được xoá lời nhắc khách đã sửa, nhưng vẫn phải mang kênh mẫu mới về.
+
+    Đây là lỗi tệ nhất trong loạt 15/08/2026, và là loại lỗi không ai báo: nó
+    không làm tool tắt, không hiện thông báo nào. Khách sửa lời nhắc trong hộp
+    "Quản lý kênh", vài ngày sau bấm Cập nhật, và công đó biến mất — họ chỉ
+    thấy kênh "tự nhiên chạy khác đi" mà không nối được hai chuyện với nhau.
+
+    Tool vừa mời khách sửa những tệp ấy, vừa xoá công của họ ở lần cập nhật
+    kế tiếp. Không thùng rác, không hỏi lại.
+    """
+
+    def _dung_kenh(self, goc: Path, ma: str, loi_nhac: str) -> None:
+        d = goc / "CHANNEL" / ma / "prompt"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "2-viet.md").write_text(loi_nhac, encoding="utf-8")
+
+    def test_loi_nhac_khach_da_sua_KHONG_bi_de(self, san):
+        _goc, cai, moi = san
+        self._dung_kenh(cai, "TL1-T1", "LOI NHAC TOI TU SUA")
+        self._dung_kenh(moi, "TL1-T1", "loi nhac mac dinh cua ban moi")
+
+        apply_tai_cho(moi, cai)
+
+        assert (cai / "CHANNEL" / "TL1-T1" / "prompt" / "2-viet.md").read_text(
+            encoding="utf-8") == "LOI NHAC TOI TU SUA"
+
+    def test_kenh_khach_tu_tao_van_con(self, san):
+        _goc, cai, moi = san
+        self._dung_kenh(cai, "KENH-CUA-TOI", "kenh rieng")
+        self._dung_kenh(moi, "TL1-T1", "mau")
+
+        apply_tai_cho(moi, cai)
+
+        assert (cai / "CHANNEL" / "KENH-CUA-TOI" / "prompt" / "2-viet.md").exists()
+
+    def test_kenh_mau_MOI_van_duoc_mang_ve(self, san):
+        """Giữ đồ khách không được biến thành 'không bao giờ nhận bản mới'."""
+        _goc, cai, moi = san
+        self._dung_kenh(cai, "TL1-T1", "cua toi")
+        self._dung_kenh(moi, "TL1-T1", "mau")
+        self._dung_kenh(moi, "TL9-T9", "kenh mau moi toanh")
+
+        apply_tai_cho(moi, cai)
+
+        assert (cai / "CHANNEL" / "TL9-T9" / "prompt" / "2-viet.md").exists(), \
+            "kênh mẫu mới phải tới được máy khách"
+
+    def test_tep_moi_trong_kenh_cu_cung_duoc_them(self, san):
+        """Dừng ở cấp thư mục là tệp mới không bao giờ tới được máy khách."""
+        _goc, cai, moi = san
+        self._dung_kenh(cai, "TL1-T1", "cua toi")
+        self._dung_kenh(moi, "TL1-T1", "mau")
+        (moi / "CHANNEL" / "TL1-T1" / "prompt" / "9-nhac.md").write_text(
+            "loi nhac moi them o ban sau", encoding="utf-8")
+
+        apply_tai_cho(moi, cai)
+
+        assert (cai / "CHANNEL" / "TL1-T1" / "prompt" / "9-nhac.md").exists()
+        assert (cai / "CHANNEL" / "TL1-T1" / "prompt" / "2-viet.md").read_text(
+            encoding="utf-8") == "cua toi"
+
+
+class TestThuMucLaThiKhongDung:
+    """Thứ bản mới không mang theo thì tool không có quyền đụng vào.
+
+    `PRESERVE` là danh sách phải nhớ, và người ta thì quên — đã quên `CHANNEL`
+    một lần, và trước đó quên `ket-qua`, `phien-viet`, `mau-kich-ban`. Mỗi lần
+    quên là khách mất đồ, im lặng, không thùng rác.
+
+    Luật này không cần ai nhớ: thư mục lạ trong chỗ cài chỉ có thể do khách tạo
+    ra, và tool không biết nó là gì thì càng không nên xoá.
+    """
+
+    def test_thu_muc_khach_tu_tao_van_con(self, san):
+        _goc, cai, moi = san
+        (cai / "kich-ban-cua-toi").mkdir()
+        (cai / "kich-ban-cua-toi" / "bai-1.txt").write_text("cua toi",
+                                                           encoding="utf-8")
+        apply_tai_cho(moi, cai)
+        assert (cai / "kich-ban-cua-toi" / "bai-1.txt").exists()
+
+    def test_tep_le_o_goc_van_con(self, san):
+        _goc, cai, moi = san
+        (cai / "ghi-chu-cua-toi.txt").write_text("dung xoa", encoding="utf-8")
+        apply_tai_cho(moi, cai)
+        assert (cai / "ghi-chu-cua-toi.txt").read_text(encoding="utf-8") == "dung xoa"
+
+    def test_thu_muc_du_lieu_them_sau_nay_tu_dong_duoc_che(self, san):
+        """Người viết bản sau thêm thư mục dữ liệu mới mà quên khai — vẫn an toàn."""
+        _goc, cai, moi = san
+        (cai / "giong-da-thu").mkdir()
+        (cai / "giong-da-thu" / "a.mp3").write_bytes(b"tieng")
+        apply_tai_cho(moi, cai)
+        assert (cai / "giong-da-thu" / "a.mp3").exists()
+
+    def test_van_thay_duoc_ma_cua_tool(self, san):
+        """Che đồ khách không được biến thành 'không cập nhật được gì'."""
+        _goc, cai, moi = san
+        apply_tai_cho(moi, cai)
+        assert (cai / "VERSION").read_text(encoding="utf-8").strip() == "2.12.1"
+        assert (cai / "dau-vet.txt").read_text(encoding="utf-8") == "ban moi"

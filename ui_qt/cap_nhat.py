@@ -53,7 +53,18 @@ def tai_https(url: str) -> bytes:
     """
     if not url.startswith("https://"):
         raise ValueError("Chỉ tải qua HTTPS")
-    yeu_cau = Request(url, headers={"User-Agent": "ShopAPI-Studio"})
+    # ═══ ĐỪNG ĐỂ MÁY CHỦ ĐỆM TRẢ LỜI CŨ ═══
+    #
+    # `raw.githubusercontent.com` đi qua CDN và giữ đệm chừng năm phút. Trong
+    # năm phút đó, tool hỏi "bản mới nhất là gì" và nhận về số hiệu CŨ — rồi
+    # bình thản hiện **"Đã mới nhất (2.12.2)"** trong khi 2.12.3 đã có trên
+    # kho. Khách bấm lại mấy lần cũng đúng câu ấy, và kết luận là nút cập nhật
+    # hỏng. Xảy ra thật 15/08/2026.
+    yeu_cau = Request(url, headers={
+        "User-Agent": "ShopAPI-Studio",
+        "Cache-Control": "no-cache, max-age=0",
+        "Pragma": "no-cache",
+    })
     with urlopen(yeu_cau, timeout=CHO_GIAY) as tra_loi:  # noqa: S310 — đã chốt https
         return tra_loi.read()
 
@@ -116,10 +127,36 @@ class NutCapNhat:
             "nếu vẫn vậy thì đóng hết cửa sổ Explorer đang mở thư mục tool rồi "
             "thử lại.".format(chu))
 
+    def _don_ban_lui(self) -> None:
+        """Xoá `<tên>.rollback` — bản cũ giữ lại phòng khi bản mới không chạy.
+
+        Gọi ở đây, tức **sau khi cửa sổ đã dựng xong**, là cố ý: tới được dòng
+        này nghĩa là bản mới nạp được mọi mô-đun, dựng được đủ chín trang và mở
+        lên tới nơi. Đó là bằng chứng đủ tốt rằng không cần lùi nữa.
+
+        Xoá sớm hơn — ngay trong lúc cập nhật — là vứt cái phao đúng lúc còn
+        cần nó nhất. Không xoá thì cạnh thư mục tool đọng lại một thư mục nặng
+        bằng cả bản cài, và khách hỏi nó là cái gì.
+        """
+        goc = os.path.abspath(self._app.base_dir)
+        lui = goc + ".rollback"
+        if not os.path.isdir(lui):
+            return
+
+        def don():
+            import shutil  # noqa: PLC0415
+
+            shutil.rmtree(lui, ignore_errors=True)
+
+        # Ở luồng nền: thư mục này cỡ vài chục MB, xoá trên luồng vẽ là cửa sổ
+        # khựng đúng lúc khách vừa mở tool lên.
+        self._app.run_bg(don, on_ok=lambda _k: None, on_err=lambda _l: None)
+
     def do_ngam(self) -> None:
         """Hỏi GitHub ở luồng nền. Gọi lúc cửa sổ vừa dựng xong, và mỗi lần
         khách bấm nút lúc đang ở bản mới nhất."""
         self._bao_lan_truoc_hong()
+        self._don_ban_lui()
         dang_dung = doc_phien_ban(self._app.base_dir)
         if not dang_dung:
             self._khong_biet()

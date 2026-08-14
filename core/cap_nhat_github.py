@@ -31,10 +31,16 @@ gọi API Releases: nó không dính hạn mức 60 lượt/giờ của API GitH
 đăng nhập, và không bắt chủ dự án phải tạo một Release cho mỗi lần sửa. Đẩy lên
 là xong — đúng như cách làm việc thật.
 
-**`raw` có cache khoảng 5 phút.** Đẩy xong mà đọc lại vẫn thấy số cũ là bình
-thường, không phải hỏng: đo thật ngày 12/08/2026 — API GitHub trả `0.1.1` ngay
-trong khi `raw` còn trả `0.1.0`. Nghĩa là khách nhận được bản mới **chậm vài
-phút** sau khi đẩy. Đổi lấy: không tốn hạn mức, không cần đăng nhập. Đáng.
+**`raw` có cache khoảng 5 phút** — và cái đệm ấy đã cắn thật. Đo ngày
+12/08/2026: API GitHub trả `0.1.1` ngay trong khi `raw` còn trả `0.1.0`. Lúc đó
+kết luận là "khách nhận bản mới chậm vài phút, đổi lấy không tốn hạn mức —
+đáng". Sai ở chỗ: tool không nói "chưa biết", nó nói **"Đã mới nhất (2.12.2)"**.
+Khách bấm lại mấy lần, nhận đúng câu ấy, rồi kết luận nút cập nhật hỏng —
+15/08/2026 đúng như vậy.
+
+Nên giờ hỏi kèm một tham số đổi mỗi lần (`_url_version_khong_dem`) cộng header
+`Cache-Control: no-cache`. Vẫn `raw`, vẫn không tốn hạn mức, nhưng hỏi là tới
+nơi. Riêng gói ZIP thì để đệm nguyên — cùng một bản thì nội dung không đổi.
 
 Module này **không import Qt và không tự gọi mạng**: mọi lối ra ngoài đi qua tham
 số `tai`, nên test chạy được không cần mạng.
@@ -43,6 +49,7 @@ số `tai`, nên test chạy được không cần mạng.
 from __future__ import annotations
 
 import hashlib
+import time
 import re
 from typing import Callable, Optional, Tuple
 
@@ -146,10 +153,23 @@ def kiem_ban_moi(dang_dung: str, tai: Callable[[str], bytes]) -> Optional[str]:
     đúng ở khâu này.
     """
     try:
-        chu = tai(url_version()).decode("utf-8", "replace").strip()
+        chu = tai(_url_version_khong_dem()).decode("utf-8", "replace").strip()
     except Exception:  # noqa: BLE001 — mất mạng là chuyện thường, không phải lỗi
         return None
     return chu if chu and moi_hon(chu, dang_dung) else None
+
+
+def _url_version_khong_dem() -> str:
+    """Địa chỉ VERSION kèm một tham số đổi mỗi lần hỏi.
+
+    CDN của GitHub đệm theo **địa chỉ đầy đủ**, tham số truy vấn tính cả vào
+    khoá đệm. Thêm một tham số luôn khác nhau là chắc chắn hỏi tới nơi, không
+    nhận lại bản đã đệm.
+
+    Chỉ dùng cho việc **hỏi số hiệu** — thứ phải luôn mới. Gói ZIP thì ngược
+    lại: đệm nó là tốt, vì cùng một bản thì nội dung không đổi.
+    """
+    return "{0}?t={1}".format(url_version(), int(time.time()))
 
 
 def tai_ve_va_dung_san(phien_ban: str, thu_muc_dung: str,

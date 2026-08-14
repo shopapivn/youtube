@@ -55,6 +55,23 @@ PRESERVE = (
                       # nhật khách lại phải vào tab Agent bấm lại từ đầu — mà họ
                       # sẽ không đoán được vì sao Claude Code đòi đăng nhập lại.
 )
+#: Thư mục **hoà vào nhau**: giữ nguyên thứ khách đang có, chỉ thêm thứ còn thiếu.
+#:
+#: `PRESERVE` không dùng được cho `CHANNEL`, và để nguyên như cũ cũng không
+#: được — hai đằng đều sai một nửa:
+#:
+#: * Bỏ ngoài `PRESERVE` (như trước 15/08/2026): mỗi lần cập nhật là **xoá sạch
+#:   lời nhắc khách đã sửa và mọi kênh họ tự tạo**. Mà cả hộp "Quản lý kênh"
+#:   sinh ra để mời khách sửa đúng những tệp ấy — tool vừa bảo họ sửa, vừa xoá
+#:   công của họ ở lần cập nhật kế tiếp. Không thùng rác, không hỏi lại.
+#: * Cho vào `PRESERVE`: khách giữ được đồ, nhưng **không bao giờ** nhận được
+#:   kênh mẫu mới hay lời nhắc được cải tiến ở các bản sau.
+#:
+#: Nên hoà: tệp nào khách đã có thì để nguyên, tệp nào bản mới có mà máy khách
+#: chưa có thì thêm vào. Kênh mẫu mới xuất hiện, kênh cũ của khách không suy
+#: suyển.
+HOA_NHAP = ("CHANNEL", "agent-skills")
+
 MAX_FILES = 5000
 MAX_UNCOMPRESSED = 2 * 1024 * 1024 * 1024
 
@@ -88,6 +105,25 @@ def stage_update(archive: bytes, manifest: Mapping[str, Any], staging_root: Unio
         return target
     finally:
         shutil.rmtree(temp, ignore_errors=True)
+
+
+def _chep_thieu(nguon: Path, dich: Path) -> None:
+    """Chép từ `nguon` sang `dich` những gì `dich` **chưa có**. Không đè gì cả.
+
+    Đi vào tận từng tệp chứ không dừng ở cấp thư mục: khách có thư mục
+    `CHANNEL/TL1-T1` rồi, nhưng bản mới có thêm `prompt/9-nhac.md` trong đó —
+    dừng ở cấp thư mục là tệp mới ấy không bao giờ tới được máy khách.
+
+    Không đè: một tệp khách đã sửa thì bản mới không có quyền ghi lên. Kể cả
+    khi bản mới viết hay hơn — đó là lựa chọn của khách, không phải của tool.
+    """
+    dich.mkdir(parents=True, exist_ok=True)
+    for muc in nguon.iterdir():
+        ra = dich / muc.name
+        if muc.is_dir():
+            _chep_thieu(muc, ra)
+        elif not ra.exists():
+            shutil.copy2(muc, ra)
 
 
 def _doi_ten_kien_tri(nguon: Path, dich: Path, so_lan: int = 12) -> None:
@@ -157,19 +193,43 @@ def apply_tai_cho(staged: Union[str, Path], current: Union[str, Path], *,
 
     da_don: list = []
     try:
-        # 1. Dọn ruột cũ ra chỗ lùi. Đồ của khách (`PRESERVE`) để nguyên tại chỗ.
+        # ═══ CHỈ ĐỘNG VÀO THỨ BẢN MỚI CÓ MANG THEO ═══
+        #
+        # `PRESERVE` là một danh sách **phải nhớ**, và người ta thì quên. Nó đã
+        # quên `CHANNEL` một lần, và cái giá là lời nhắc khách sửa cùng mọi kênh
+        # họ tự tạo bị xoá sạch ở mỗi lần cập nhật — im lặng, không thùng rác.
+        # Ghi chú ở đầu `PRESERVE` cũng kể đúng chuyện ấy đã xảy ra ba lần với
+        # ba thư mục khác nhau.
+        #
+        # Chủ dự án, 15/08/2026: *"channel và các prompt… về sau khách sẽ có
+        # nhiều, không nên làm mất của họ"*.
+        #
+        # Nên thêm một luật **không cần ai nhớ**: thứ gì bản mới không mang
+        # theo thì tool không có quyền đụng vào. Thư mục lạ trong chỗ cài chỉ
+        # có thể do khách tạo ra, và tool không biết nó là gì thì càng không
+        # nên xoá nó.
+        #
+        # Đổi lại: tệp bị **bỏ đi** giữa hai bản sẽ nằm lại. Chấp nhận được —
+        # một tệp thừa không hại ai, còn xoá nhầm đồ khách thì không lấy lại
+        # được.
+        ten_ban_moi = {m.name for m in staged_path.iterdir()}
         for muc in list(current_path.iterdir()):
-            if muc.name in PRESERVE or muc.name == lui.name:
+            if muc.name in PRESERVE or muc.name in HOA_NHAP:
+                continue
+            if muc.name == lui.name or muc.name not in ten_ban_moi:
                 continue
             _doi_ten_kien_tri(muc, lui / muc.name)
             da_don.append(muc.name)
 
-        # 2. Chép ruột mới vào. Bỏ qua tên nằm trong `PRESERVE` — bản tải về
-        #    cũng có `CHANNEL`, `workspace`… và đè lên là xoá đồ khách đã sửa.
+        # 2. Chép ruột mới vào.
         for muc in list(staged_path.iterdir()):
-            if muc.name in PRESERVE and (current_path / muc.name).exists():
-                continue
             dich = current_path / muc.name
+            if muc.name in PRESERVE and dich.exists():
+                continue
+            if muc.name in HOA_NHAP and dich.exists():
+                # Hoà: chỉ thêm thứ còn thiếu, không đụng thứ khách đã có.
+                _chep_thieu(muc, dich)
+                continue
             if muc.is_dir():
                 shutil.copytree(muc, dich, dirs_exist_ok=True)
             else:
