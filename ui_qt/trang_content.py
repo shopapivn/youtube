@@ -322,22 +322,11 @@ def _goi_mo_hinh(client, yeu_cau: str) -> str:
     chặn phần thừa — không có nó thì mô hình trả về "Chắc chắn rồi! Đây là…" kèm
     một đống markdown, mà đây là chữ để đem đi đọc thành tiếng.
     """
-    tra_loi = client.request("POST", "/v1/chat/completions", json={
-        "model": "claude-sonnet-5", "stream": False, "max_tokens": 16384,
-        "messages": [
-            {"role": "system",
-             "content": "Chỉ trả về đúng nội dung được yêu cầu — không lời dẫn, "
-                        "không giải thích, không markdown."},
-            {"role": "user", "content": yeu_cau}],
-    }, idempotent=True)
-    du_lieu = tra_loi.to_dict() if hasattr(tra_loi, "to_dict") else tra_loi
-    try:
-        noi_dung = du_lieu["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as loi:
-        raise ValueError("Máy chủ trả về nội dung không đúng dạng.") from loi
-    if not isinstance(noi_dung, str) or not noi_dung.strip():
-        raise ValueError("Máy chủ trả về nội dung rỗng.")
-    return noi_dung.strip()
+    from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+
+    return goi_van_ban(client, [
+        {"role": "system", "content": "Chỉ trả về đúng nội dung được yêu cầu — không lời dẫn, không giải thích, không markdown."},
+        {"role": "user", "content": yeu_cau}])
 
 
 class TrangKichBan(QWidget):

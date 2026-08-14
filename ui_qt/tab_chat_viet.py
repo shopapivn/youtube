@@ -460,15 +460,6 @@ class TabChatViet(QWidget):
 
 def _goi_mo_hinh(client, tin: List[Dict[str, str]]) -> str:
     """Một lượt gọi mô hình với **cả hội thoại**. **Chạy ở luồng nền.**"""
-    tra_loi = client.request("POST", "/v1/chat/completions", json={
-        "model": "claude-sonnet-5", "stream": False, "max_tokens": _TOI_DA_TOKEN,
-        "messages": tin,
-    }, idempotent=True)
-    du_lieu = tra_loi.to_dict() if hasattr(tra_loi, "to_dict") else tra_loi
-    try:
-        noi_dung = du_lieu["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as loi:
-        raise ValueError("Máy chủ trả về nội dung không đúng dạng.") from loi
-    if not isinstance(noi_dung, str) or not noi_dung.strip():
-        raise ValueError("Máy chủ trả về nội dung rỗng.")
-    return noi_dung.strip()
+    from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+
+    return goi_van_ban(client, list(tin), toi_da_token=_TOI_DA_TOKEN)

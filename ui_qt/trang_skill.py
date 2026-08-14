@@ -501,19 +501,8 @@ def _nhan_nut(nut: QPushButton, skill: Skill) -> str:
 
 def _goi_mo_hinh(client, yeu_cau: str, toi_da_token: int) -> str:
     """Một lượt gọi mô hình. **Chạy ở luồng nền.**"""
-    tra_loi = client.request("POST", "/v1/chat/completions", json={
-        "model": "claude-sonnet-5", "stream": False, "max_tokens": toi_da_token,
-        "messages": [
-            {"role": "system",
-             "content": "Bạn giúp người làm YouTube. Trả lời bằng tiếng Việt, đúng thứ "
-                        "được hỏi, không lời dẫn, không markdown thừa."},
-            {"role": "user", "content": yeu_cau}],
-    }, idempotent=True)
-    du_lieu = tra_loi.to_dict() if hasattr(tra_loi, "to_dict") else tra_loi
-    try:
-        noi_dung = du_lieu["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as loi:
-        raise ValueError("Máy chủ trả về nội dung không đúng dạng.") from loi
-    if not isinstance(noi_dung, str) or not noi_dung.strip():
-        raise ValueError("Máy chủ trả về nội dung rỗng.")
-    return noi_dung.strip()
+    from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+
+    return goi_van_ban(client, [
+        {"role": "system", "content": "Bạn giúp người làm YouTube. Trả lời bằng tiếng Việt, đúng thứ được hỏi, không lời dẫn, không markdown thừa."},
+        {"role": "user", "content": yeu_cau}], toi_da_token=toi_da_token)

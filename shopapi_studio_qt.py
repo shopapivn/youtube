@@ -185,6 +185,25 @@ def main() -> int:
     logo.khai_bao_voi_windows()
 
     app = QApplication(sys.argv)
+
+    # ═══ HỨNG LỖI LÚC ĐANG CHẠY ═══
+    #
+    # Khách báo 14/08/2026: *"tool tự đẩy ra, khoảng 5-10 phút tự thoát"* —
+    # không hộp thoại, không báo gì. Đó không phải tool tự tắt: PyQt5 từ bản
+    # 5.5 gọi `qFatal()` (tức `abort()`) khi một lỗi Python chưa ai bắt ném ra
+    # từ trong một slot — một nút bấm, một lần vẽ lại, một nhịp hẹn giờ. Cắm
+    # `sys.excepthook` là Qt thôi giết tiến trình; đã đo được cả hai chiều, xem
+    # đầu `core/hung_su_co.py`.
+    #
+    # Đặt NGAY SAU `QApplication` chứ không sớm hơn (hộp thoại cần nó) và
+    # không muộn hơn (dựng cửa sổ chính cũng có thể ném lỗi).
+    try:
+        from core import hung_su_co
+
+        hung_su_co.bat(BASE_DIR)
+    except Exception:  # noqa: BLE001 — thiếu bộ hứng lỗi không được chặn tool
+        pass
+
     app.setStyleSheet(QSS)
     logo.gan_cho(app)
     cua_so = CuaSoChinh(BASE_DIR)

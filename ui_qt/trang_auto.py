@@ -327,26 +327,16 @@ class TrangTuDong(QWidget):
 
         def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
                 khoa: str = "", toi_da_token: int = 8192) -> str:
-            from core.su_co import goi_kien_nhan  # noqa: PLC0415
-
-            def mot_lan():
-                phan_hoi = client.request(
-                    "POST", "/v1/chat/completions",
-                    json={"model": mo_hinh, "stream": False,
-                          "max_tokens": int(toi_da_token),
-                          "messages": [{"role": "user", "content": loi_nhac}]},
-                    idempotent=not khoa,
-                    idempotency_key=khoa or None)
-                tho = (phan_hoi.to_dict() if hasattr(phan_hoi, "to_dict")
-                       else phan_hoi)
-                return str(tho["choices"][0]["message"]["content"] or "")
+            from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
 
             def kiem_dung():
                 if self._huy is not None and self._huy.is_set():
                     raise RuntimeError("đã dừng")
 
-            return goi_kien_nhan(mot_lan, on_log=self._ghi_nen,
-                                 kiem_dung=kiem_dung)
+            return goi_van_ban(
+                client, [{"role": "user", "content": loi_nhac}],
+                mo_hinh=mo_hinh, toi_da_token=int(toi_da_token), khoa=khoa,
+                on_log=self._ghi_nen, kiem_dung=kiem_dung)
 
         return goi
 

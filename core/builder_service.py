@@ -196,13 +196,13 @@ class BuilderService:
         client = ShopAPI(api_key=key, base_url=str(values.get("SHOPAPI_BASE_URL") or "https://api.shopapi.vn"),
                          default_headers={"X-ShopAPI-Client":"shopapi-declarative-tool"})
         try:
-            response = client.request("POST", "/v1/chat/completions", json={"model":model,"stream":False,
-                "max_tokens":8192,"messages":[{"role":"system","content":system_prompt},
-                                                {"role":"user","content":user_prompt}]}, idempotent=True)
-            raw = response.to_dict() if hasattr(response,"to_dict") else response
-            text = raw["choices"][0]["message"]["content"]
-            if not isinstance(text,str): raise ValueError("ShopAPI chat tra output sai")
-            return text
+            # Qua goi_van_ban chu khong goi thang: no biet doi khi may chu bao
+            # "chua nhan duoc yeu cau" thay vi nem loi ngay len man hinh khach.
+            from .goi_van_ban import goi_van_ban
+
+            return goi_van_ban(client, [{"role":"system","content":system_prompt},
+                                        {"role":"user","content":user_prompt}],
+                               mo_hinh=model, toi_da_token=8192)
         finally:
             close=getattr(client,"close",None)
             if callable(close): close()

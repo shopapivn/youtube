@@ -284,12 +284,18 @@ class TheKetQua(QFrame):
         def lam() -> None:
             try:
                 png = _cho_khung_hinh(duong_video)
+                if png:
+                    # Không đụng vào widget từ luồng nền — Qt cấm. Tín hiệu đưa
+                    # việc vẽ về đúng luồng giao diện.
+                    #
+                    # `emit` nằm TRONG try là có chủ ý: lưới chỉ giữ `TRAN_THE`
+                    # thẻ, nên một lô dài làm thẻ cũ bị Qt xoá trong lúc FFmpeg
+                    # còn đang rút khung hình cho chính nó. Phát tín hiệu vào
+                    # thẻ đã xoá thì `RuntimeError: wrapped C/C++ object has
+                    # been deleted` — ném ra từ luồng nền, không ai bắt.
+                    self.khung_xong.emit(png)
             except Exception:  # noqa: BLE001 — không được để luồng nền làm sập
-                png = ""
-            if png:
-                # Không đụng vào widget từ luồng nền — Qt cấm. Tín hiệu đưa
-                # việc vẽ về đúng luồng giao diện.
-                self.khung_xong.emit(png)
+                pass
 
         threading.Thread(target=lam, daemon=True).start()
 
