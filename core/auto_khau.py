@@ -358,11 +358,42 @@ def _ngu_ngat(bc: BoiCanh, giay: float) -> None:
         con -= buoc
 
 
-def _cho_job(bc: BoiCanh, job) -> Dict[str, Any]:
+class LoiKetJob(RuntimeError):
+    """Job đã nhận nhưng đợi mãi không xong — gần như chắc chắn khoá bị kẹt.
+
+    Tách riêng khỏi lỗi thường vì nơi gọi xử khác hẳn: gọi lại y nguyên là rơi
+    vào đúng job kẹt ấy, phải **đặt job mới bằng khoá mới** mới thoát ra được.
+    """
+
+
+#: Bao lâu thì nhắc một câu trong lúc đợi job.
+#:
+#: 90 giây: đủ thưa để không làm rác màn hình, đủ dày để người ngồi trước máy
+#: biết tool còn sống. Clip veo3 mất 1–3 phút nên phần lớn job xong trước khi
+#: có dòng nhắc nào.
+KHOANG_KE_CHO = 90.0
+
+#: Đợi một job tối đa bao lâu rồi coi như kẹt.
+#:
+#: Từng để 3600 giây. Số đó sai theo cả hai hướng: quá dài để hữu ích (clip
+#: veo3 mất 1–3 phút; đợi một tiếng là đợi một thứ không bao giờ tới) và quá
+#: ngắn để an toàn (nó vẫn hết hạn, chỉ là sau khi đã giữ chỗ một luồng suốt
+#: 60 phút). 12 phút là gấp bốn lần thời gian thật của job chậm nhất — đủ rộng
+#: cho lúc nhà máy đông, đủ hẹp để cái kẹt lộ ra khi khách còn ngồi đó.
+TRAN_CHO_JOB = 12 * 60.0
+
+
+def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
+             ten_viec: str = "") -> Dict[str, Any]:
     """Đợi một job của cổng ShopAPI xong, vẫn bấm Dừng được.
 
     Không dùng `client.jobs.wait()`: nó ngủ trong luồng và không nhả ra, nên nút
     Dừng mất tác dụng — đúng lý do `core/jobs.py` cũng tự chờ lấy.
+
+    Quá `tran` giây thì ném `LoiKetJob` — xem giải thích ở hằng `TRAN_CHO_JOB`.
+
+    `ten_viec` là tên hiện trong dòng nhắc lúc đợi ("cảnh 47"), để người nhìn
+    biết cái nào đang chậm chứ không phải chỉ biết "có cái gì đó đang chậm".
     """
     goi = job.to_dict() if hasattr(job, "to_dict") else dict(job or {})
     ma = str(goi.get("id") or goi.get("job_id") or "")
@@ -381,7 +412,9 @@ def _cho_job(bc: BoiCanh, job) -> Dict[str, Any]:
     # MỘT job — sáu job song song đã gấp đôi trần của cả tài khoản. Bắt đầu ở 8
     # giây, giãn tới 25 giây. Ảnh xong nhanh thì chậm nhất cũng chỉ trễ 8 giây.
     cho = 8.0
-    het_han = time.time() + 3600
+    bat_dau = time.time()
+    het_han = bat_dau + max(60.0, float(tran))
+    lan_ke = bat_dau + KHOANG_KE_CHO
     while time.time() < het_han:
         bc.kiem_dung()
         _ngu_ngat(bc, cho)
@@ -395,7 +428,21 @@ def _cho_job(bc: BoiCanh, job) -> Dict[str, Any]:
         if trang_thai in ("failed", "cancelled", "canceled"):
             raise RuntimeError("máy chủ báo job hỏng: {0}".format(
                 goi.get("error") or trang_thai))
-    raise RuntimeError("đợi quá lâu mà job chưa xong")
+        # ═══ NÓI RA TRONG LÚC ĐỢI ═══
+        #
+        # Vòng này từng đợi trong im lặng tuyệt đối. Đã xảy ra thật
+        # (14/08/2026): chín clip cuối kẹt, sáu luồng cùng ngồi đợi, màn hình
+        # không nhích một dòng nào suốt mười hai phút — không cách gì phân biệt
+        # "máy chủ đang làm" với "tool treo", kể cả người dựng tool cũng chịu.
+        #
+        # Im lặng là câu trả lời tệ nhất cho câu hỏi "nó còn chạy không".
+        if time.time() >= lan_ke:
+            lan_ke = time.time() + KHOANG_KE_CHO
+            bc.ghi("    {0}: máy chủ vẫn đang làm, đã đợi {1:.0f} phút…".format(
+                ten_viec or ma[:16], (time.time() - bat_dau) / 60.0))
+    raise LoiKetJob(
+        "đợi {0:.0f} phút mà máy chủ vẫn chưa trả kết quả".format(
+            (time.time() - bat_dau) / 60.0))
 
 
 #: Nhớ URL ảnh tham chiếu ở cấp KÊNH, không phải cấp lượt chạy.
@@ -607,7 +654,7 @@ _ANH_THAM_CHIEU_HONG = ("ảnh tham chiếu tải không được",
 
 
 def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
-             hop: "ThamChieu", khoa: str):
+             hop: "ThamChieu", khoa: str, ten_hien: str = ""):
     """Tạo một tấm ảnh. Chữ ký ảnh tham chiếu hết hạn thì **tự tải lại**.
 
     ═══ VÌ SAO CẦN TỰ CHỮA, KHÔNG CHỈ CẦN NHỚ ĐÚNG HẠN ═══
@@ -632,11 +679,17 @@ def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
                        prompt=loi_nhac, n=1, aspect_ratio="16:9",
                        reference_images=anh_tc or None,
                        idempotency_key=khoa + hau_to)
-        return _cho_job(bc, job)
+        return _cho_job(bc, job, ten_viec=ten_hien)
 
     dang_dung = hop.lay()
     try:
         return mot_lan(dang_dung)
+    except LoiKetJob:
+        # Job đã nhận nhưng bỏ đó. Khoá mới là đường duy nhất — xem ghi chú
+        # dài ở chỗ tạo clip.
+        bc.ghi("    {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá "
+               "mới.".format(ten_hien or "ảnh"))
+        return mot_lan(dang_dung, ":k2")
     except Exception as loi:  # noqa: BLE001
         chu = str(loi).lower()
         if not any(d in chu for d in _ANH_THAM_CHIEU_HONG) or not dang_dung:
@@ -1531,7 +1584,8 @@ def _khau_anh(bc: BoiCanh):
             if os.path.exists(tep):
                 return so, True
             goi = _tao_anh(bc, luot, c["img_prompt"], hop,
-                           khoa_viec(luot, "img", so, c["img_prompt"]))
+                           khoa_viec(luot, "img", so, c["img_prompt"]),
+                           ten_hien="ảnh cảnh {0}".format(so))
             _tai_ket_qua(bc, goi, 0, tep)
             return so, False
 
@@ -1591,10 +1645,25 @@ def _khau_clip(bc: BoiCanh):
                     idempotency_key=khoa_viec(luot, "vid", so,
                                               c["video_prompt"], dia_chi,
                                               giay) + hau_to)
-                return _cho_job(bc, job)
+                return _cho_job(bc, job, ten_viec="cảnh {0}".format(so))
 
             try:
                 goi = goi_clip(url_anh)
+            except LoiKetJob:
+                # ═══ JOB KẸT: ĐẶT LẠI BẰNG KHOÁ MỚI ═══
+                #
+                # Máy chủ đã nhận việc nhưng mười hai phút vẫn "đang xử lý", với
+                # một clip lẽ ra mất 1–3 phút. Gọi lại y nguyên là rơi vào đúng
+                # job kẹt đó, mãi mãi. Chỉ khoá mới mới thoát ra.
+                #
+                # Có tốn thêm tiền không? Có thể — 300₫ cho cảnh này, nếu job cũ
+                # rốt cuộc vẫn chạy xong. Đổi lại là cả lượt chạy không đứng
+                # hình. Đã đo thật 14/08/2026: chín clip cuối kẹt, sáu luồng
+                # cùng ngồi đợi, cả mẻ 112 cảnh không nhích suốt mười hai phút.
+                # Đường còn lại — bỏ cả lượt — đắt hơn nhiều lần.
+                bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó — đặt lại "
+                       "bằng khoá mới.".format(so))
+                goi = goi_clip(url_anh, ":k2")
             except Exception as loi:  # noqa: BLE001
                 chu = str(loi).lower()
                 if not url_anh or not any(d in chu
@@ -1708,7 +1777,8 @@ def _khau_thumbnail(bc: BoiCanh):
             loi_nhac = ta_bia.get(ten_kieu) or _bia_du_phong(st, tieu_de,
                                                             chu_bia, _mac_dinh)
             goi = _tao_anh(bc, luot, loi_nhac, hop,
-                           khoa_viec(luot, "thumb", so, loi_nhac))
+                           khoa_viec(luot, "thumb", so, loi_nhac),
+                           ten_hien="ảnh bìa {0}".format(so))
             _tai_ket_qua(bc, goi, 0, tep)
             return so, False
 
