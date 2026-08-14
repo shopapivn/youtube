@@ -139,17 +139,44 @@ _CONTENT_TYPE_EXT = {
     "video/webm": "webm",
 }
 
+# Đuôi máy chủ trả về -> đuôi quen mắt trên Windows. Cùng một file, chỉ khác tên.
+_DOI_DUOI = {"jpeg": "jpg", "mpeg": "mp3", "mpga": "mp3", "qt": "mov"}
+
 
 def guess_extension(url: str, content_type: str = "", fallback: str = "bin") -> str:
-    """Đoán đuôi file từ URL, rồi tới `content_type`, cuối cùng là `fallback`.
+    """Tìm đuôi file: `output.format` trước, rồi MIME, rồi URL, cuối cùng `fallback`.
 
-    Link kết quả của ShopAPI có dạng `.../x7k2m9.mp3?...` nên phần lớn trường hợp
-    lấy được ngay từ URL.
+    Tham số `content_type` nhận cả hai kiểu: MIME đầy đủ (`video/mp4`, có dấu
+    gạch chéo) hoặc đuôi trần lấy từ `output.format` (`mp4`, `jpeg`).
+
+    THỨ TỰ NÀY TỪNG NGƯỢC LẠI VÀ ĐÃ LÀM HỎNG THẬT (14/08/2026). Trước đó link
+    kết quả có dạng `.../x7k2m9.mp4?...` nên đoán từ URL luôn trúng. Rồi ShopAPI
+    đổi cách giao file: link ảnh và video giờ trỏ sang Google và KHÔNG còn đuôi
+    trong đường dẫn. Đoán từ URL trượt, tra MIME cũng trượt (vì chỗ gọi truyền
+    `output.format` là `"mp4"` chứ không phải `"video/mp4"`), thế là mọi video
+    khách tạo ra đều rơi xuống `fallback` và lưu thành `.bin` — Windows không
+    biết mở bằng gì, khách tưởng file hỏng.
+
+    Nên `output.format` phải được hỏi TRƯỚC. Đó là chỗ duy nhất máy chủ nói
+    thẳng định dạng thật, không phụ thuộc link trông ra sao.
     """
+    thu = (content_type or "").split(";", 1)[0].strip().lower()
+
+    # 1. Đuôi trần từ output.format — nguồn đáng tin nhất.
+    if thu and "/" not in thu:
+        goc = thu.lstrip(".")
+        if goc.isalnum() and len(goc) <= 5:
+            return _DOI_DUOI.get(goc, goc)
+
+    # 2. MIME đầy đủ, phòng khi chỗ gọi truyền header Content-Type thật.
+    if thu in _CONTENT_TYPE_EXT:
+        return _CONTENT_TYPE_EXT[thu]
+
+    # 3. Đuôi trong URL — vẫn đúng với link tiếng nói (.mp3), nên giữ lại.
     path = (url or "").split("?", 1)[0].split("#", 1)[0]
     _, ext = os.path.splitext(path)
     ext = ext.lstrip(".").lower()
     if ext and len(ext) <= 5 and ext.isalnum():
-        return ext
-    mime = (content_type or "").split(";", 1)[0].strip().lower()
-    return _CONTENT_TYPE_EXT.get(mime, fallback)
+        return _DOI_DUOI.get(ext, ext)
+
+    return fallback

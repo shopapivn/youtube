@@ -187,8 +187,51 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
     Khoá ở đây gắn với `(mã lượt, tên bước)`, nên chạy lại lượt cũ cũng rơi vào
     đúng kết quả cũ chứ không đẻ ra lượt tính tiền mới.
     """
-    return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh, khoa=khoa,
-                       toi_da_token=toi_da_token)
+    # ═══ LỜI GỌI AI CŨNG PHẢI QUA VAN NHỊP ═══
+    #
+    # Tôi để sót đúng chỗ này: van 48 lượt/phút áp cho tạo job, tải tệp và hỏi
+    # job — nhưng **không** áp cho lời gọi viết chữ. Bình thường không sao vì
+    # các bước viết chạy tuần tự.
+    #
+    # Khâu chia cảnh thì khác: ba khúc bắn cùng lúc. Đo được: cùng lời nhắc ấy
+    # gửi **một mình** xong trong 46 giây và trả về 7 cảnh đúng; gửi ba cái một
+    # lượt là ăn "gửi quá nhanh", rồi mỗi lần hỏi lại nhận "đang được xử lý" —
+    # kẹt hơn tám phút mà nhìn vào tưởng máy chủ chậm.
+    #
+    # Một lời gọi viết chữ nặng hơn một lời gọi tạo job nhiều, nên tính hai
+    # suất: nó chiếm cổng lâu hơn hẳn.
+    # ═══ "CHƯA NHẬN ĐƯỢC YÊU CẦU" THÌ PHẢI ĐỔI KHOÁ, KHÔNG PHẢI ĐỢI ═══
+    #
+    # Đây là cái bẫy tốn nhiều thời gian nhất của cả ngày, và nó ngược hẳn với
+    # trực giác. Hai câu của máy chủ nghe giống nhau nhưng nghĩa trái ngược:
+    #
+    #   "tạm gián đoạn, CHƯA NHẬN ĐƯỢC yêu cầu, KHÔNG bị trừ tiền"
+    #        -> chưa có gì tồn tại. Đợi là đợi một thứ không có.
+    #   "Idempotency-Key này ĐANG ĐƯỢC XỬ LÝ"
+    #        -> đang có thật. Đợi là đúng.
+    #
+    # Chỗ chết người: sau câu thứ nhất, hỏi lại **cùng khoá** thì máy chủ ghi
+    # nhận cái khoá ấy, và từ đó mọi lần hỏi tiếp đều trả câu thứ hai — kẹt
+    # vĩnh viễn. Đúng chuỗi mà máy khách gặp ở khâu "đọc lại lần cuối":
+    # trục trặc → trục trặc → đang xử lý → đang xử lý → …
+    #
+    # Nên: gặp "chưa nhận được" thì **đổi khoá**. An toàn tuyệt đối, vì chính
+    # máy chủ đã nói chưa trừ tiền và chưa tạo việc gì.
+    from .su_co import TAM_NGHI, phan_loai as _phan  # noqa: PLC0415
+
+    for lan in range(4):
+        xin_nhip(bc.on_log, so_suat=2)
+        khoa_lan = khoa if lan == 0 else "{0}:r{1}".format(khoa, lan)
+        try:
+            return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
+                               khoa=khoa_lan, toi_da_token=toi_da_token)
+        except Exception as loi:  # noqa: BLE001
+            if lan == 3:
+                raise
+            bc.ghi("  {0} — làm lại bằng khoá mới (lần {1}).".format(
+                "máy chủ chưa nhận được yêu cầu"
+                if _phan(loi) == TAM_NGHI else str(loi)[:60], lan + 1))
+    raise RuntimeError("không gọi được AI sau 4 lần đổi khoá")
 
 
 def loc_json(chu: str) -> Any:
@@ -1019,7 +1062,17 @@ def _khau_bang_canh(bc: BoiCanh):
 #: `claude_cli_chunk_parallel: 3`). Trần trên thì **không** cố định 8 mà lấy
 #: theo engine — Veo3 8 giây, Seedance 10.
 MIN_GIAY_CANH = 3.0
-CUE_MOI_KHUC = 60
+
+#: Bao nhiêu dòng phụ đề gửi cho AI mỗi khúc.
+#:
+#: Hạ từ 60 xuống 30 sau khi đo thật: 60 dòng đẻ ra khoảng mười lăm tới hai
+#: mươi cảnh, mỗi cảnh hai lời nhắc tiếng Anh chi tiết — tức mười lăm nghìn
+#: chữ trả về cho **một** lời gọi. Máy chủ giữ hơn tám phút chưa xong, và
+#: càng dài thì càng dễ đứt giữa câu.
+#:
+#: 30 dòng cho ra khoảng bảy tám cảnh mỗi lượt: trả về nhanh hơn hẳn, ít đứt
+#: hơn, và vì các khúc chạy song song nên chia nhỏ **không** làm chậm tổng.
+CUE_MOI_KHUC = 30
 KHUC_SONG_SONG = 3
 
 
@@ -1148,10 +1201,24 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
         try:
             ds = mot_lan(lan)
             break
-        except LoiNoiDung as loi:
+        except Exception as loi:  # noqa: BLE001
+            # ═══ KHOÁ BỊ KẸT THÌ PHẢI ĐỔI KHOÁ, KHÔNG PHẢI ĐỢI TIẾP ═══
+            #
+            # Bắt cả `Exception` chứ không riêng `LoiNoiDung`, vì có một kiểu
+            # kẹt rất khó chịu: lời gọi đầu bị chặn nhịp, nhưng máy chủ đã kịp
+            # **ghi nhận cái khoá**. Từ đó trở đi mọi lần hỏi lại cùng khoá ấy
+            # đều nhận "đang được xử lý" — và cứ đợi mãi.
+            #
+            # Đo được: cùng lời nhắc ấy gửi một mình xong trong 46 giây; còn
+            # trong mẻ song song thì kẹt hơn tám phút rồi vẫn "đang xử lý".
+            #
+            # `lan` nằm trong khoá, nên vòng sau là một khoá hoàn toàn mới —
+            # thoát hẳn cái khoá kẹt thay vì kiên nhẫn với nó. Đây là chỗ
+            # **kiên nhẫn đúng cách là bỏ đi làm lại**, khác với mọi chỗ khác
+            # trong tool nơi kiên nhẫn nghĩa là đợi.
             if lan == 2:
                 raise
-            bc.ghi("  khúc {0} chưa dùng được ({1}) — hỏi lại.".format(
+            bc.ghi("  khúc {0} chưa xong ({1}) — hỏi lại bằng khoá mới.".format(
                 thu_tu + 1, str(loi)[:70]))
     return _canh_lai(bc, ds or [], cue, tran, thu_tu)
 
@@ -1560,6 +1627,55 @@ KIEU_THUMB = (
 )
 
 
+def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
+                  chu_bia: str, kieu) -> Dict[str, str]:
+    """Nhờ AI viết lời nhắc cho ba ảnh bìa. Hỏng thì trả rỗng, không giết khâu.
+
+    Ảnh bìa thiếu thì video vẫn dùng được — nên chỗ này không được phép làm
+    hỏng cả lượt. Hỏng thì rơi về bản ghép cứng ở `_bia_du_phong`.
+    """
+    if not khuon.strip():
+        return {}
+    st = bc.kenh.style
+    mo_dau = _doc_chu(os.path.join(luot.thu_muc, "1-kich-ban.txt"))[:1200]
+    loi_nhac = _thay(khuon, {
+        "TITLE": tieu_de, "THUMB": chu_bia,
+        "SCRIPT_OPENING": mo_dau,
+        "THUMBNAIL_STYLE": st.get("thumbnail_style", st.get("image_style", "")),
+        "PALETTE": st.get("palette", ""),
+        "REFERENCE_LOCK": st.get("reference_lock", ""),
+        "NEGATIVE_PROMPT": st.get("negative_prompt", ""),
+        "THUMB_TEXT_STYLE": st.get("thumb_text_style", ""),
+        "THUMB_TEXT_FONT": st.get("thumb_text_font", ""),
+        "THUMB_TEXT_SHADOW": st.get("thumb_text_shadow", ""),
+    })
+    try:
+        goi = loc_json(_goi(bc, loi_nhac,
+                            khoa_viec(luot, "chat", "thumb", tieu_de, chu_bia)))
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("  (AI chưa viết được lời nhắc ảnh bìa: {0}) — dùng bản mặc "
+               "định.".format(str(loi)[:90]))
+        return {}
+    ds = goi.get("thumbnails") if isinstance(goi, dict) else goi
+    ra: Dict[str, str] = {}
+    for m in (ds or []):
+        if isinstance(m, dict) and m.get("img_prompt"):
+            ra[str(m.get("version_desc") or "")] = str(m["img_prompt"])
+    if ra:
+        bc.ghi("  AI viết {0} lời nhắc ảnh bìa.".format(len(ra)))
+    return ra
+
+
+def _bia_du_phong(st: Dict[str, Any], tieu_de: str, chu_bia: str,
+                  ta: str) -> str:
+    """Bản ghép cứng, chỉ dùng khi AI không viết được."""
+    return ("{0}\nYouTube thumbnail, {1}. Video topic: {2}. "
+            "Emotional message: {3}. {4} Avoid: {5}".format(
+                st.get("thumbnail_style", st.get("image_style", "")),
+                ta, tieu_de, chu_bia, st.get("reference_lock", ""),
+                st.get("negative_prompt", "")))
+
+
 def _khau_thumbnail(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         st = bc.kenh.style
@@ -1570,19 +1686,27 @@ def _khau_thumbnail(bc: BoiCanh):
         hop = ThamChieu(bc)
         kieu = list(KIEU_THUMB[:max(1, bc.kenh.so_thumbnail)])
 
+        # ═══ LỜI NHẮC ẢNH BÌA DO AI VIẾT, KHÔNG PHẢI CHUỖI GHÉP CỨNG ═══
+        #
+        # Bản trước ghép chuỗi ngay trong code: style + một câu tả kiểu + tiêu
+        # đề. Ra ảnh đúng phong cách nhưng **không có chữ hook** và không bám
+        # nội dung — trong khi ảnh bìa là thứ duy nhất quyết định người ta có
+        # bấm vào hay không.
+        #
+        # Tool gốc để AI viết ba lời nhắc, ba ý cảm xúc khác nhau, và ảnh bìa
+        # thì **CÓ chữ** (khác hẳn các cảnh trong video vốn không có chữ nào).
+        # Nay cũng vậy, và lời nhắc nằm ở `prompt/8-thumbnail.md` của kênh nên
+        # người dùng sửa được.
+        khuon_bia = bc.kenh.prompt.get("8-thumbnail.md", "")
+        ta_bia = _loi_nhac_bia(bc, luot, khuon_bia, tieu_de, chu_bia, kieu)
+
         def mot_bia(muc):
-            so, (ten_kieu, ta) = muc
+            so, (ten_kieu, _mac_dinh) = muc
             tep = os.path.join(thu_muc, "thumb_{0:03d}.png".format(so))
             if os.path.exists(tep):
                 return so, True
-            loi_nhac = (
-                "{0}\nYouTube thumbnail, {1}. Video topic: {2}. "
-                "Emotional message: {3}. {4} No readable text in the image. "
-                "Avoid: {5}".format(
-                    st.get("thumbnail_style", st.get("image_style", "")),
-                    ta, tieu_de, chu_bia,
-                    st.get("reference_lock", ""),
-                    st.get("negative_prompt", "")))
+            loi_nhac = ta_bia.get(ten_kieu) or _bia_du_phong(st, tieu_de,
+                                                            chu_bia, _mac_dinh)
             goi = _tao_anh(bc, luot, loi_nhac, hop,
                            khoa_viec(luot, "thumb", so, loi_nhac))
             _tai_ket_qua(bc, goi, 0, tep)

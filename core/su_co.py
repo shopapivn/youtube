@@ -129,7 +129,13 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
 #: chủ nói *"nếu kéo dài quá vài phút hãy báo hỗ trợ"*, tức vài phút là bình
 #: thường. `CHAM_LAI` lùi mạnh nhất — gọi lại sớm là ăn 429 tiếp.
 _NHIP = {
-    CHO_TIEP: (10, 20, 30, 45, 60, 60, 90, 120, 120, 180, 180),
+    # Bốn nhịp (~1 phút) rồi thôi — KHÔNG kiên nhẫn hơn. Máy chủ đang viết
+    # thật thì một phút là xong (đo: 46 giây cho lời nhắc nặng nhất). Còn quá
+    # một phút mà vẫn "đang xử lý" thì gần như chắc chắn **cái khoá bị kẹt**,
+    # và với khoá kẹt thì đợi thêm mười phút cũng vô ích — nơi gọi phải đổi
+    # khoá. Trước đây để mười một nhịp (~14 phút) nên mỗi lần kẹt là mất cả
+    # buổi chiều.
+    CHO_TIEP: (10, 15, 20, 30),
     TAM_NGHI: (15, 30, 60, 60, 90, 120, 120, 180, 180),
     CHAM_LAI: (30, 60, 120, 180, 240, 300),
     NHA_MAY_NGHI: (60, 120, 180, 300, 300),

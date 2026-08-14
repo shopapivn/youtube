@@ -15,21 +15,34 @@ mình vừa xin, không phải cuộn xuống đáy.
 
 1. **Không đọc file ở luồng vẽ quá một lần.** Ảnh đã nạp thì nhớ lại; một lô 40
    ảnh mà mỗi nhịp bơm nạp lại từ đĩa là cửa sổ sượng hẳn.
-2. **Video không có ảnh xem trước.** Dựng ảnh cho video cần ffmpeg, mà tool
-   không đòi khách cài ffmpeg cho việc tạo video. Nên thẻ video vẽ nền tối + dấu
-   và mở bằng trình phát của máy khi bấm.
+2. **Video cũng có ảnh xem trước** — lấy một khung hình bằng FFmpeg, ở luồng
+   nền, và **không bao giờ nhiều hơn hai lượt cùng lúc**.
+
+   Luật này trước đây ngược lại: "video không có ảnh xem trước", vì tool không
+   đòi khách cài FFmpeg. Từ 14/08/2026 `imageio-ffmpeg` nằm trong
+   `requirements.txt` nên máy nào cài tool cũng có sẵn FFmpeg — tiền đề cũ hết
+   hiệu lực. Mà ô đen chữ "clip" thì đắt hơn ta tưởng: chủ dự án báo lại khách
+   nhìn ô đó rồi hỏi *"tạo video xong sao còn phải ấn tải?"* — họ tưởng file
+   chưa về máy, trong khi nó đã nằm trong thư mục kết quả từ lâu.
+
+   Vẫn phải để dành đường lui: máy không có FFmpeg thì thẻ quay lại ô đen chữ
+   "clip" như cũ, không báo lỗi gì. Xem trước là thứ có thì hơn, thiếu không
+   chết ai.
 3. **Trần số thẻ.** Vẽ 500 thẻ là treo. Giữ `TRAN_THE` thẻ gần nhất, phần cũ hơn
    vẫn còn nguyên trong thư mục kết quả.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
+import tempfile
+import threading
 from typing import Dict, Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
@@ -56,6 +69,65 @@ TRAN_THE = 120
 #: hàng trên cửa sổ hẹp nhất.
 CANH = 240
 
+#: Nhiều nhất hai lượt rút khung hình chạy cùng lúc.
+#:
+#: Một lô 40 clip mà thả 40 tiến trình FFmpeg một lượt thì máy khách đứng hình,
+#: và đứng đúng lúc họ đang muốn xem kết quả. Hai lượt là đủ: mỗi khung mất
+#: chừng hai phần mười giây, xếp hàng gần như không thấy chờ.
+_LUOT_KHUNG = threading.Semaphore(2)
+
+
+def _cho_khung_hinh(duong_video: str) -> str:
+    """Rút một khung hình của clip ra file PNG, trả về đường dẫn PNG đó.
+
+    Chạy ở **luồng nền**, không bao giờ gọi từ luồng vẽ. Trả về chuỗi rỗng khi
+    máy không có FFmpeg hoặc clip không đọc được — chỗ gọi phải chịu được điều
+    đó chứ đừng báo lỗi lên màn hình: đây là thứ làm đẹp, không phải kết quả
+    khách trả tiền để lấy.
+    """
+    from core.dung_video import tim_ffmpeg
+
+    ffmpeg = tim_ffmpeg()
+    if not ffmpeg or not os.path.isfile(duong_video):
+        return ""
+
+    # Tên file xem trước gắn theo đường dẫn + lần sửa cuối, nên clip bị làm lại
+    # (ghi đè cùng tên) sẽ ra ảnh mới chứ không dùng lại ảnh cũ.
+    try:
+        dau = "{0}|{1}".format(duong_video, os.path.getmtime(duong_video))
+    except OSError:
+        return ""
+    ten = hashlib.sha1(dau.encode("utf-8", "replace")).hexdigest()[:16] + ".png"
+    kho = os.path.join(tempfile.gettempdir(), "shopapi-xem-truoc")
+    dich = os.path.join(kho, ten)
+    if os.path.isfile(dich):
+        return dich
+    try:
+        os.makedirs(kho, exist_ok=True)
+    except OSError:
+        return ""
+
+    # -ss 1: khung ở giây thứ nhất, không phải khung đầu. Rất nhiều clip mở
+    # bằng một khung đen hoặc gần đen; lấy đúng khung đó thì công rút ra bằng
+    # không. Đặt -ss TRƯỚC -i để FFmpeg nhảy thẳng tới đó thay vì giải mã từ
+    # đầu. Clip ngắn hơn 1 giây thì lần rút này ra rỗng, nên có lượt thứ hai
+    # lấy khung đầu.
+    for truoc in (["-ss", "1"], []):
+        lenh = ([ffmpeg, "-y", "-loglevel", "error"] + truoc
+                + ["-i", duong_video, "-frames:v", "1",
+                   "-vf", "scale={0}:-2".format(CANH), dich])
+        try:
+            with _LUOT_KHUNG:
+                subprocess.run(
+                    lenh, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=25,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except Exception:  # noqa: BLE001 — thiếu ảnh xem trước không phải sự cố
+            return ""
+        if os.path.isfile(dich) and os.path.getsize(dich) > 0:
+            return dich
+    return ""
+
 
 def mo_file(duong_dan: str) -> None:
     """Mở một file bằng chương trình mặc định của máy."""
@@ -73,11 +145,19 @@ def mo_file(duong_dan: str) -> None:
 
 
 class TheKetQua(QFrame):
-    """Một việc: ảnh xem trước (hoặc ô video), nhãn mô tả, dòng trạng thái."""
+    """Một việc: ảnh xem trước (hoặc khung hình clip), nhãn mô tả, trạng thái."""
+
+    #: Luồng nền rút xong khung hình của clip -> đường dẫn file PNG.
+    #:
+    #: Phải đi qua tín hiệu chứ không gọi thẳng: Qt cấm sờ vào widget từ luồng
+    #: khác luồng vẽ, và cái giá của việc phạm luật không phải một dòng lỗi mà
+    #: là cửa sổ tự tắt giữa lúc khách đang xem.
+    khung_xong = pyqtSignal(str)
 
     def __init__(self, mo_ta: str, la_video: bool, khi_lam_lai=None,
                  khi_cho_dong=None, uid: str = ""):
         super().__init__()
+        self.khung_xong.connect(self._dat_khung)
         self._mo_ta = mo_ta
         #: Khoá của việc sinh ra thẻ này. Trang nào gửi việc thì trang ấy giữ
         #: bảng `khoá → dòng`, nên thẻ phải khai được mình là việc nào —
@@ -106,9 +186,9 @@ class TheKetQua(QFrame):
             f"background:{'#1f2430' if la_video else theme.THE_MO};"
             f" border:none; border-radius:8px;"
             f" color:{'#c7ccd8' if la_video else theme.CHU_MO}; font-size:13px;")
-        # Video không dựng được ảnh xem trước (cần ffmpeg, mà tool không đòi
-        # khách cài ffmpeg để tạo video). Ô đen rỗng không nói được gì, nên nó
-        # tự khai mình là clip và bấm vào thì mở bằng trình phát của máy.
+        # Chữ "clip" là thứ khách nhìn trong lúc FFmpeg đang rút khung hình, và
+        # là thứ ở lại nếu máy không có FFmpeg. Ô đen rỗng đọc ra là "chưa có
+        # gì"; ô đen có chữ đọc ra là "có clip, bấm vào xem".
         self._o_anh.setText("clip" if la_video else "")
         doc.addWidget(self._o_anh)
 
@@ -182,14 +262,43 @@ class TheKetQua(QFrame):
         Mỗi nhịp bơm gọi lại `cap_nhat`; đọc lại file từ đĩa mỗi lần là một lô 40
         ảnh làm cửa sổ sượng hẳn mà chẳng thêm thông tin gì.
         """
-        if self._la_video or not self._duong_dan:
+        if not self._duong_dan or self._da_ve == self._duong_dan:
             return
-        if self._da_ve == self._duong_dan:
+        if self._la_video:
+            # Đánh dấu đã làm NGAY, trước khi luồng nền chạy xong. Thiếu dòng
+            # này thì mỗi nhịp bơm lại thả thêm một tiến trình FFmpeg cho cùng
+            # một clip, và chúng xếp hàng sau cái chốt hai lượt đến vô tận.
+            self._da_ve = self._duong_dan
+            self._xin_khung_hinh(self._duong_dan)
             return
         anh = QPixmap(self._duong_dan)
         if anh.isNull():
             return
         self._da_ve = self._duong_dan
+        self._o_anh.setPixmap(anh.scaled(CANH, CANH, Qt.KeepAspectRatio,
+                                         Qt.SmoothTransformation))
+
+    def _xin_khung_hinh(self, duong_video: str) -> None:
+        """Nhờ luồng nền rút khung hình, rồi vẽ khi có."""
+
+        def lam() -> None:
+            try:
+                png = _cho_khung_hinh(duong_video)
+            except Exception:  # noqa: BLE001 — không được để luồng nền làm sập
+                png = ""
+            if png:
+                # Không đụng vào widget từ luồng nền — Qt cấm. Tín hiệu đưa
+                # việc vẽ về đúng luồng giao diện.
+                self.khung_xong.emit(png)
+
+        threading.Thread(target=lam, daemon=True).start()
+
+    def _dat_khung(self, duong_png: str) -> None:
+        """Vẽ khung hình vừa rút. Chạy ở **luồng giao diện**."""
+        anh = QPixmap(duong_png)
+        if anh.isNull():
+            return
+        self._o_anh.setText("")
         self._o_anh.setPixmap(anh.scaled(CANH, CANH, Qt.KeepAspectRatio,
                                          Qt.SmoothTransformation))
 

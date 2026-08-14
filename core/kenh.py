@@ -63,7 +63,9 @@ BUOC_PROMPT = (
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
     ("6-seo.md", "Mô tả, hashtag, từ khoá"),
-    ("7-canh.md", "Viết lời nhắc tạo ảnh và clip cho từng cảnh"),
+    ("7-canh.md", "Chia cảnh theo nghĩa, viết lời nhắc ảnh và clip"),
+    ("8-thumbnail.md", "Viết lời nhắc ba ảnh bìa"),
+    ("9-nhac.md", "Viết lời nhắc nhạc nền"),
 )
 
 #: Bước bắt buộc phải có thì luồng AUTO mới chạy nổi. Bước 6 (SEO) thiếu thì vẫn
