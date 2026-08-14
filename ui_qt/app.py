@@ -27,8 +27,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QMessageBox, QPushButton, QStackedWidget, QVBoxLayout,
-    QWidget,
+    QFrame, QHBoxLayout, QMessageBox, QPushButton, QScrollArea,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from core.api import build_client, fetch_prices, wallet_micro
@@ -275,6 +275,8 @@ class CuaSoChinh(QWidget):
         ngang.setSpacing(0)
         self._ben = ThanhBen(self.show_page, self._nav, self.TEN_HIEN, self.CAU_DUOI_TEN, self.widget_duoi_ten())
         ngang.addWidget(self._ben)
+        #: khoá -> vùng cuộn bọc ngoài trang. Xem `_boc_cuon`.
+        self._vo_cuon: Dict[str, QWidget] = {}
         self._chong = QStackedWidget()
         ngang.addWidget(self._chong, 1)
 
@@ -360,7 +362,36 @@ class CuaSoChinh(QWidget):
             tao = xuong.get(khoa)
             trang = tao() if tao else self._trang_dang_lam(ten)
             self._trang[khoa] = trang
-            self._chong.addWidget(trang)
+            self._vo_cuon[khoa] = self._boc_cuon(trang)
+            self._chong.addWidget(self._vo_cuon[khoa])
+
+    def _boc_cuon(self, trang: QWidget) -> QWidget:
+        """Bọc một trang trong vùng cuộn DỌC.
+
+        ═══ VÌ SAO ═══
+
+        Cửa sổ nhỏ nhất là 1000×700, tức vùng nội dung cao chừng 660px. Bốn
+        trang cần hơn thế — tab Tự động cần 897px vì nó có thẻ chạy, bảng tám
+        khâu và ô nhật ký chồng lên nhau. Không có vùng cuộn thì phần dư không
+        co lại, nó **bị cắt**: ô nhật ký của tab Tự động nằm dưới mép màn hình
+        và khách không biết là có nó.
+
+        Trên máy 1366×768 — vẫn là loại laptop phổ biến nhất — đây không phải
+        chuyện hiếm gặp mà là chuyện mặc định.
+
+        Bọc ở đây, một chỗ, thay vì bắt từng trang tự lo: trang thứ chín viết
+        sau này cũng được che luôn mà người viết không phải nhớ gì.
+
+        Chỉ cuộn DỌC. Cuộn ngang thì che mất lỗi tràn mép — thứ
+        `tests/test_bo_cuc.py` đang canh — và một trang phải kéo ngang mới đọc
+        hết là một trang thiết kế sai, không phải một trang cần thanh cuộn.
+        """
+        cuon = QScrollArea()
+        cuon.setWidget(trang)
+        cuon.setWidgetResizable(True)
+        cuon.setFrameShape(QFrame.NoFrame)
+        cuon.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        return cuon
 
     def _trang_dang_lam(self, ten: str) -> QWidget:
         """Chỗ giữ sẵn cho trang chưa chuyển xong.
@@ -385,7 +416,8 @@ class CuaSoChinh(QWidget):
         trang = self._trang.get(khoa)
         if trang is None:
             return
-        self._chong.setCurrentWidget(trang)
+        # Thứ nằm trong chồng là VÙNG CUỘN bọc ngoài trang, không phải trang.
+        self._chong.setCurrentWidget(self._vo_cuon.get(khoa, trang))
         self._ben.danh_dau(khoa)
 
     # ── Dịch vụ cho các trang (giữ đúng tên của bản tkinter) ─────────────────

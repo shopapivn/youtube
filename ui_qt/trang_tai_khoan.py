@@ -33,7 +33,8 @@ from . import theme
 from core.config import looks_like_api_key
 
 from .widgets import (
-    DaiUocTinh, NhomChon, nhan, nut_chinh, nut_phu, the, tieu_de_trang,
+    DaiUocTinh, HangXuongDong, NhomChon, nhan, nut_chinh, nut_phu, the,
+    tieu_de_trang,
 )
 
 __all__ = ["TrangTaiKhoan"]
@@ -216,7 +217,17 @@ class TrangTaiKhoan(QWidget):
         hang.addWidget(self._muc)
         hang.addStretch(1)
         n.addLayout(hang)
-        hang2 = QHBoxLayout()
+        # Hàng BIẾT XUỐNG DÒNG, không phải QHBoxLayout.
+        #
+        # Ba thứ trên hàng này — nhãn 153px, ô nhập 160px, nút — cộng lại đẩy
+        # thẻ lên 759px, và cả tab Ví lên 807px trên một cửa sổ rộng 760px.
+        # Hàng ngang cứng không co được nên nó không nén, nó **đẩy mép cửa sổ
+        # ra**: khách kéo hẹp cửa sổ là nút biến mất bên phải.
+        #
+        # Nhãn nút cũng rút từ "Tạo mã QR chuyển khoản" (382px) xuống "Tạo mã
+        # QR". Phần giải thích chuyển vào tooltip — đúng luật trong CLAUDE.md:
+        # chữ trong nút không tự xuống dòng, nhãn dài kéo cả trang rộng ra.
+        hang2 = HangXuongDong()
         # Mức tối thiểu lấy từ máy chủ (`min_topup` của `GET /v1/pricing`), không
         # gõ lại: nâng mức trên máy chủ là câu này tự đổi theo.
         hang2.addWidget(
@@ -226,8 +237,11 @@ class TrangTaiKhoan(QWidget):
         self._o_tien.setPlaceholderText("50000")
         self._o_tien.setFixedWidth(160)
         hang2.addWidget(self._o_tien)
-        hang2.addWidget(nut_phu("Tạo mã QR chuyển khoản", self._tao_phieu))
-        hang2.addStretch(1)
+        nut_qr = nut_phu("Tạo mã QR", self._tao_phieu, rong=150)
+        nut_qr.setToolTip("Tạo mã QR để chuyển khoản nạp tiền vào ví")
+        hang2.addWidget(nut_qr)
+        # Không `addStretch` — HangXuongDong xếp sát trái sẵn, và nó không có
+        # hàm đó (nó là QLayout tự viết, không phải QHBoxLayout).
         n.addLayout(hang2)
 
         self._huong_dan = nhan("", "muted")

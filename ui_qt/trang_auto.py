@@ -24,8 +24,8 @@ from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QHeaderView, QLineEdit, QPlainTextEdit, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QFileDialog, QHeaderView, QLineEdit, QPlainTextEdit,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.auto import (BO_QUA, CHO, DANG, HONG, MA_KHAU, XONG, LuotChay,
@@ -171,11 +171,22 @@ class TrangTuDong(QWidget):
         hang.addWidget(nut_phu("Làm lại khâu này", self._lam_lai_mot, rong=180))
         hang.addWidget(nut_phu("Làm lại từ khâu này", self._lam_lai_tu, rong=196))
         v.addLayout(hang)
+
+        # Hàng thứ hai: đưa đồ CỦA BẠN vào thay vì để tool tự làm khâu đó.
+        hang2 = HangXuongDong()
+        hang2.addWidget(nut_phu("Tải file mẫu", self._tai_mau, rong=140))
+        hang2.addWidget(nut_phu("Nạp file có sẵn", self._nap_san, rong=170))
+        v.addLayout(hang2)
+
         v.addWidget(self._phu(
             "“Làm lại khâu này” chỉ chạy đúng khâu ấy — hợp khi vài tấm ảnh "
             "xấu. “Làm lại từ khâu này” chạy lại cả các khâu sau — bắt buộc khi "
             "bạn sửa kịch bản, vì giọng đọc cũ đang đọc bản kịch bản không còn "
             "nữa."))
+        v.addWidget(self._phu(
+            "Đã có sẵn kịch bản viết ở chỗ khác? Chọn dòng “Viết kịch bản” rồi "
+            "bấm “Nạp file có sẵn” — tool bỏ qua khâu đó, không tính tiền. Bảng "
+            "cảnh cũng vậy: tải file mẫu về, điền, rồi nạp lên."))
         return khung
 
     # ── Kênh ─────────────────────────────────────────────────────────────────
@@ -460,6 +471,115 @@ class TrangTuDong(QWidget):
             "quả khâu này” mở đúng thư mục).".format(
                 ", ".join(ten_khau(m) for m in doi)))
         self._ve_bang()
+
+    # ── Đưa đồ của bạn vào ───────────────────────────────────────────────────
+    #
+    # Người làm YouTube thường ĐÃ CÓ kịch bản — viết trong Google Docs, thuê
+    # người viết, hoặc lấy lại từ video cũ. Bắt tool viết lại từ đầu là vừa mất
+    # tiền vừa ra bản kém hơn bản họ đã ưng.
+    #
+    # Không viết riêng "nạp kịch bản", "nạp Excel", "nạp giọng đọc": mỗi khâu
+    # đã tự khai tên sản phẩm của nó, nên một đường dùng chung cho cả tám.
+
+    def _chon_khau_cho(self, viec: str) -> str:
+        """Lấy khâu đang chọn, hoặc nói cho khách biết cần chọn trước."""
+        ma = self._khau_dang_chon()
+        if not ma:
+            self._app.show_message(
+                "Chưa chọn khâu",
+                "Bấm vào một dòng trong bảng trước, rồi bấm “{0}”.".format(viec))
+        return ma
+
+    def _tai_mau(self) -> None:
+        from core.nap_san import LoiNapSan, co_mau, viet_mau  # noqa: PLC0415
+
+        ma = self._chon_khau_cho("Tải file mẫu")
+        if not ma:
+            return
+        if not co_mau(ma):
+            self._app.show_message(
+                "Khâu này không có file mẫu",
+                "Hiện chỉ hai khâu có file mẫu để điền tay: “Viết kịch bản” "
+                "(file .txt) và “Cắt cảnh và viết lời nhắc” (file Excel).")
+            return
+        goi_y = ("mau-kich-ban.txt" if ma == "kich-ban" else "mau-bang-canh.xlsx")
+        duong, _ = QFileDialog.getSaveFileName(
+            self, "Lưu file mẫu", os.path.join(os.path.expanduser("~"), goi_y))
+        if not duong:
+            return
+        try:
+            viet_mau(ma, duong)
+        except (LoiNapSan, OSError) as loi:
+            self._app.show_message("Không lưu được file mẫu", str(loi))
+            return
+        self._ghi("Đã lưu file mẫu: {0}".format(duong))
+        self._app.show_message(
+            "Đã lưu file mẫu",
+            "{0}\n\nBạn mở ra điền, lưu lại, rồi bấm “Nạp file có sẵn”."
+            .format(duong))
+
+    def _nap_san(self) -> None:
+        from core.nap_san import (  # noqa: PLC0415
+            LoiNapSan, kieu_file_cua_khau, nap_file,
+        )
+
+        ma = self._chon_khau_cho("Nạp file có sẵn")
+        if not ma:
+            return
+        if self._luot is None:
+            self._app.show_message(
+                "Chưa có lượt chạy nào",
+                "Bạn điền link rồi bấm “Chạy” một lần để tool mở lượt chạy, "
+                "sau đó mới nạp file vào được.")
+            return
+        if self._dang_chay:
+            self._app.show_message("Đang chạy",
+                                   "Bấm Dừng trước rồi hãy nạp file.")
+            return
+
+        mo_ta, duoi = kieu_file_cua_khau(ma)
+        if not duoi and ma in ("anh", "clip", "thumbnail"):
+            duong = QFileDialog.getExistingDirectory(
+                self, "Chọn thư mục cho khâu “{0}”".format(ten_khau(ma)))
+        else:
+            duong, _ = QFileDialog.getOpenFileName(
+                self, "Chọn file cho khâu “{0}”".format(ten_khau(ma)), "",
+                "{0};;Mọi loại file (*)".format(mo_ta))
+        if not duong:
+            return
+
+        try:
+            dich = nap_file(self._luot.thu_muc, ma, duong)
+        except LoiNapSan as loi:
+            # Nói rõ thiếu đúng cái gì. "File không hợp lệ" thì khách chỉ biết
+            # ngồi nhìn; "thiếu cột srt_start" thì họ sửa được.
+            self._app.show_message("File này chưa dùng được", str(loi))
+            return
+        except OSError as loi:
+            self._app.show_message("Không chép được file", str(loi))
+            return
+
+        # Đánh dấu khâu đã xong. Các khâu sau vẫn ở nguyên trạng thái cũ — nạp
+        # kịch bản mới mà giọng đọc cũ còn đó thì giọng đọc đang đọc một bản
+        # kịch bản không còn tồn tại, nên phải bảo họ làm lại từ đây.
+        tt = self._luot.tt(ma)
+        tt.trang_thai = XONG
+        tt.loi = ""
+        tt.ghi_chu["nap_san"] = duong
+        ghi_luot(self._luot)
+        self._ve_bang()
+        self._ghi("Đã nạp “{0}” từ {1}".format(ten_khau(ma), duong))
+
+        sau = [ten_khau(m) for m in MA_KHAU[MA_KHAU.index(ma) + 1:]
+               if self._luot.tt(m).trang_thai == XONG]
+        them = ("\n\nCác khâu sau đã chạy rồi: {0}.\nChúng đang dựa trên bản "
+                "cũ, nên bạn chọn dòng này rồi bấm “Làm lại từ khâu này”."
+                .format(", ".join(sau))) if sau else ""
+        self._app.show_message(
+            "Đã nạp xong",
+            "Khâu “{0}” giờ dùng file của bạn:\n{1}\n\nTool sẽ bỏ qua khâu này "
+            "và không tính tiền cho nó. Bấm “Chạy tiếp” để đi tiếp.{2}"
+            .format(ten_khau(ma), dich, them))
 
     def _mo_ket_qua(self) -> None:
         if self._luot is not None and os.path.isdir(self._luot.thu_muc):
