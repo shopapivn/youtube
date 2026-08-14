@@ -449,22 +449,33 @@ def _days_since(date_text: str) -> Optional[int]:
 def fetch_channel(
     channel_url: str,
     *,
-    max_videos: int = 30,
+    max_videos: int = 0,
     cancel: Optional[threading.Event] = None,
     source: str = "dán tay",
 ) -> Channel:
-    """Lấy ảnh chụp một kênh: số subs + danh sách video gần nhất.
+    """Lấy ảnh chụp một kênh: số subs + danh sách video.
 
-    **Một lời gọi mạng duy nhất** cho cả kênh (xem phần đầu file). Video nào
-    YouTube không cho biết view (sắp công chiếu, hội viên) thì vẫn giữ lại
-    nhưng `views = -1`, và `core/research.py` bỏ qua khi tính toán.
+    `max_videos=0` là **lấy hết kênh** — và đó là mặc định. Trước đây mặc định
+    là 30 video gần nhất; con số ấy không có căn cứ nào ngoài việc nó nhanh.
+    Người đi nghiên cứu một kênh cần biết kênh đó có gì, chứ không phải 30 thứ
+    đầu bảng. Chủ dự án, 14/08/2026: *"không mặc định 30 nữa mà kênh đó bao
+    nhiêu lấy hết"*.
+
+    Lấy hết vẫn là **một lời gọi mạng duy nhất** (xem phần đầu file): bỏ
+    `playlistend` đi thì yt-dlp trả về cả tab video của kênh trong cùng lượt
+    đó. Kênh vài trăm video thì lượt ấy lâu hơn, nhưng không nhân số lần gọi.
+
+    Video nào YouTube không cho biết view (sắp công chiếu, hội viên) thì vẫn
+    giữ lại nhưng `views = -1`, và `core/research.py` bỏ qua khi tính toán.
     """
+    gioi_han = max(0, int(max_videos or 0))
     url = channel_videos_url(channel_url)
     payload = _extract(
         url,
         {
             "extract_flat": "in_playlist",
-            "playlistend": max(1, int(max_videos)),
+            # Không khai `playlistend` = không chặn, tức lấy hết kênh.
+            **({"playlistend": gioi_han} if gioi_han else {}),
             # Xin luôn ngày đăng xấp xỉ — mẹo giúp một lần gọi là đủ.
             "extractor_args": {"youtubetab": {"approximate_date": ["timestamp"]}},
         },
@@ -479,7 +490,9 @@ def fetch_channel(
         channel_id=str(payload.get("channel_id") or payload.get("id") or ""),
         channel_url=str(payload.get("uploader_url") or payload.get("channel_url") or url),
         subscribers=_int_or(payload.get("channel_follower_count")),
-        complete=len(entries) < max(1, int(max_videos)),
+        # Lấy hết kênh thì đương nhiên là đủ; có giới hạn thì chỉ đủ khi số
+        # video trả về còn chưa chạm trần.
+        complete=True if not gioi_han else len(entries) < gioi_han,
         source=source,
     )
     # Tiêu đề tab kênh là "Tên kênh - Videos" — cắt đuôi cho gọn.
@@ -574,7 +587,7 @@ def resolve_video_channel(video_url: str, *, cancel: Optional[threading.Event] =
 def collect(
     inputs: List[Tuple[str, str]],
     *,
-    max_videos: int = 30,
+    max_videos: int = 0,   # 0 = lấy hết kênh, xem `fetch_channel`
     expand: bool = True,
     expand_limit: int = 6,
     search_size: int = 12,

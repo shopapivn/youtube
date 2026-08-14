@@ -139,10 +139,23 @@ class TrangNghienCuu(QWidget):
 
         d1 = QHBoxLayout()
         d1.addWidget(nhan("Số video mỗi kênh"))
+        # ═══ MẶC ĐỊNH LÀ LẤY HẾT ═══
+        #
+        # `0` không hiện ra số 0 mà hiện chữ "Tất cả" — `setSpecialValueText`
+        # dành đúng cho việc này. Nhờ vậy vẫn chỉ một ô: kéo xuống đáy là lấy
+        # hết kênh, gõ một số vào là chỉ lấy ngần ấy video mới nhất.
+        #
+        # Chủ dự án, 14/08/2026: *"không mặc định 30 nữa mà kênh đó bao nhiêu
+        # lấy hết, có 1 option để chọn"*.
         self._so_video = QSpinBox()
-        self._so_video.setRange(1, 500)   # đúng khoảng của tool gốc
-        self._so_video.setValue(30)
-        self._so_video.setFixedWidth(84)
+        self._so_video.setRange(0, 5000)
+        self._so_video.setSpecialValueText("Tất cả")
+        self._so_video.setValue(0)
+        self._so_video.setFixedWidth(96)
+        self._so_video.setToolTip(
+            "“Tất cả” là lấy hết video của kênh — vẫn chỉ một lượt gọi mạng "
+            "cho mỗi kênh, nhưng kênh vài trăm video thì lượt đó lâu hơn.\n\n"
+            "Gõ một số vào nếu chỉ cần ngần ấy video mới nhất.")
         d1.addWidget(self._so_video)
         d1.addSpacing(16)
 
@@ -161,6 +174,11 @@ class TrangNghienCuu(QWidget):
         d1.addWidget(self._chi_tiet)
         d1.addStretch(1)
         v.addLayout(d1)
+
+        # Lời thoại KHÔNG lấy ở đây — nó có Skill riêng ("Lấy lời thoại video").
+        # Chủ dự án, 14/08/2026: *"để phần đó riêng chứ không phải là chạy lúc
+        # lấy dữ liệu"*. Đúng: lấy lời thoại có thể phải tải cả tiếng của video
+        # về nghe, tức lâu gấp hàng chục lần phần còn lại của trang này.
 
         # KHÔNG còn ô "Dò thêm kênh". Chủ dự án, 13/08/2026: *"hiện tại hơi phức
         # tạp, cái tao cần chỉ là lấy các content của các kênh, paste vào ô"*.
@@ -189,15 +207,22 @@ class TrangNghienCuu(QWidget):
         v = QVBoxLayout(khung)
         v.setContentsMargins(18, 14, 18, 16)
         v.setSpacing(8)
-        dau = QHBoxLayout()
-        dau.addWidget(nhan("Nội dung lấy về", "h2"))
-        dau.addStretch(1)
-        # Một dòng thay cho cả một thẻ tóm tắt và một ô nhật ký: đủ để biết
-        # đang chạy tới đâu, và không ăn mất chỗ của chính cái bảng.
+        # ═══ TÓM TẮT NẰM DƯỚI TIÊU ĐỀ, KHÔNG NẰM CẠNH ═══
+        #
+        # Bản trước đặt nó cuối một hàng ngang, sau `addStretch(1)`, và ép
+        # `setMinimumWidth(1)`. Hai thứ đó cộng lại thì phần giãn ăn hết bề
+        # ngang, nhãn co về đúng 1px, và vì `nhan()` có bật xuống dòng nên chữ
+        # rơi thành **một cột dọc từng chữ một** ở góc phải — kéo cả thẻ cao lên
+        # gấp ba. Chủ dự án gửi ảnh đúng cảnh ấy, 14/08/2026.
+        #
+        # Xếp dọc thì không có gì để tranh chỗ: tiêu đề một dòng, con số một
+        # dòng, câu giải thích một dòng. Đọc từ trên xuống, và không cách nào
+        # vỡ nữa.
+        v.addWidget(nhan("Nội dung lấy về", "h2"))
         self._tom_tat = nhan("", "phu")
         self._tom_tat.setMinimumWidth(1)
-        dau.addWidget(self._tom_tat)
-        v.addLayout(dau)
+        self._tom_tat.setWordWrap(True)
+        v.addWidget(self._tom_tat)
         # Dòng phụ dưới dòng tóm tắt: nói NGHĨA của con số vừa hiện.
         #
         # ⚠ Widget này từng bị gỡ trong một lượt làm lại giao diện, nhưng bốn
@@ -324,7 +349,7 @@ class TrangNghienCuu(QWidget):
         self._ly_do.setText("Cửa sổ vẫn dùng được; bấm Dừng là ngắt giữa chừng, "
                             "phần đã lấy vẫn giữ nguyên.")
 
-        so_video = self._so_video.value()
+        so_video = self._so_video.value()   # 0 = lấy hết kênh
         chi_tiet = self._chi_tiet.isChecked()
         huy = self._huy
 
@@ -353,7 +378,18 @@ class TrangNghienCuu(QWidget):
         self._ket = ket
         self._nut_chay.setEnabled(True)
         self._nut_dung.setEnabled(False)
-        self._nut_xuat.setEnabled(bool(ket.insights))
+        # ═══ BẬT CẢ HAI NÚT, KHÔNG PHẢI MỖI "LƯU CSV" ═══
+        #
+        # Bản trước chỉ bật `_nut_xuat`. `_nut_copy` dựng ra ở trạng thái tắt và
+        # **không có dòng nào bật nó lại** — nên nút "Copy tất cả" mờ vĩnh viễn,
+        # kể cả khi bảng đã đầy dữ liệu. Chủ dự án, 14/08/2026: *"nút copy đang
+        # không hiện"*.
+        #
+        # Mà đó lại là đường đi hay nhất của trang này: chép cả bảng, dán thẳng
+        # vào Google Sheets, không phải lưu file rồi đi tìm thư mục.
+        co_du_lieu = bool(ket.insights)
+        self._nut_xuat.setEnabled(co_du_lieu)
+        self._nut_copy.setEnabled(co_du_lieu)
         for dong in ket.nhat_ky[-TRAN_NHAT_KY:]:
             self._log.appendPlainText(str(dong))
 

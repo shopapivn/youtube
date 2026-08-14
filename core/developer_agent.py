@@ -106,6 +106,11 @@ def run_developer_agent(prompt: str, cwd: Union[str, Path], *,
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / ("agent-{0}.jsonl".format(int(started * 1000)))
     child_env=dict(os.environ)
+    # Máy đã bật khoá cứng thì không đường nào được truyền khoá shopapi đi,
+    # kể cả đường này. Xem `core.claude_code.TEN_CO_KHONG_CAM`.
+    from .claude_code import khong_duoc_cam_khoa
+    if khong_duoc_cam_khoa():
+        api_key = ""
     if api_key:
         child_env["ANTHROPIC_AUTH_TOKEN"]=api_key
         child_env["ANTHROPIC_BASE_URL"]=base_url or "https://api.shopapi.vn"

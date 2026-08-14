@@ -265,6 +265,11 @@ def chi_tiet_video(url: str, *, cancel: Optional[threading.Event] = None) -> Chi
     Dùng lại `youtube._extract` thay vì tự gọi `YoutubeDL`: hàm đó đã có sẵn ba
     thứ mà viết lại là viết lại đủ ba — thử lại khi rớt mạng, ngắt được giữa
     chừng bằng `cancel`, và chặn yt-dlp in chữ đỏ ra console.
+
+    **Không lấy lời thoại ở đây.** Việc đó nằm ở `core/script_video.py` và có
+    Skill riêng: nó cần tới bốn phương án dự phòng, có phương án phải tải cả
+    tiếng của video về nghe — nhồi vào vòng chạy này thì một lượt lấy dữ liệu
+    10 kênh biến thành cả tiếng đồng hồ mà người dùng không hiểu vì sao.
     """
     from .youtube import _extract  # noqa: PLC0415 — cùng gói, cố ý dùng lại
 
@@ -427,7 +432,7 @@ class KetQua:
 def lay_du_lieu(
     dau_vao,
     *,
-    so_video: int = 30,
+    so_video: int = 0,
     mo_rong: bool = False,
     chi_tiet: bool = False,
     cancel: Optional[threading.Event] = None,
@@ -456,7 +461,8 @@ def lay_du_lieu(
 
     kenh, hits = thu_thap(
         inputs,
-        max_videos=max(1, int(so_video)),
+        # 0 = lấy hết kênh. Xem `youtube.fetch_channel`.
+        max_videos=max(0, int(so_video or 0)),
         expand=bool(mo_rong),
         cancel=cancel,
         on_log=ket.nhat_ky.append,
@@ -465,9 +471,11 @@ def lay_du_lieu(
     ket.hits = list(hits)
 
     if chi_tiet and ket.insights:
-        ket.nhat_ky.append("Đang lấy chi tiết từng video (like, comment, hashtag, mô tả)…")
+        ket.nhat_ky.append(
+            "Đang lấy chi tiết từng video (like, comment, hashtag, mô tả)…")
         ket.chi_tiet = bo_sung_chi_tiet(
-            ket.insights, cancel=cancel, on_log=ket.nhat_ky.append, lay=lay_chi_tiet)
+            ket.insights, cancel=cancel, on_log=ket.nhat_ky.append,
+            lay=lay_chi_tiet)
 
     # `scanned` chỉ đúng khi thật sự có dò ngách; báo bừa là chấm điểm độ bão
     # hoà trên dữ liệu không tồn tại.

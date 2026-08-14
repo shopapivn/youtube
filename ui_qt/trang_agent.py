@@ -47,8 +47,9 @@ from core import codex as codex_cli
 from core import node_goi_san
 from core import vscode_goi_san
 from core.claude_code import (
-    TinhTrang, cai_vao_may, cai_vao_settings, duong_settings, go_khoi_may,
-    go_khoi_settings, kiem_tra,
+    TinhTrang, cai_vao_may, cai_vao_settings, duong_co_khong_cam,
+    duong_settings, duong_settings_may, go_khoi_may,
+    go_khoi_settings, khong_duoc_cam_khoa, kiem_tra,
     ho_tro_cong_cu, lenh_cai_dat, lenh_chay_duoc, mo_terminal, mo_vscode,
     trang_thai_settings,
 )
@@ -172,6 +173,24 @@ class TrangAgent(QWidget):
         self._nut_cam_khoa = nut_chinh("Cắm khoá ShopAPI", self.cam_khoa)
         doc.addWidget(self._nut_cam_khoa)
 
+        # ═══ KHOÁ CỨNG, CHO NGƯỜI ĐÃ CÓ GÓI CLAUDE RIÊNG ═══
+        #
+        # Người trả 200 đô/tháng cho gói Max cần một câu chắc chắn, không phải
+        # một lời hứa "tool không tự cắm nữa đâu". Tích ô này là tạo tệp chặn ở
+        # `~/.claude/`, và từ đó không đường nào trong tool ghi được khoá — kể
+        # cả nút ngay phía trên, kể cả biến môi trường truyền cho tiến trình con.
+        self._o_khoa = QCheckBox("Không bao giờ cắm khoá vào máy này")
+        self._o_khoa.setStyleSheet(f"color:{theme.CHU}; padding:2px;")
+        self._o_khoa.setToolTip(
+            "Dành cho máy đã có gói Claude riêng (Max/Pro). Tích vào là tool "
+            "không được ghi khoá ShopAPI vào cấu hình Claude Code, và cũng "
+            "không truyền khoá cho bất kỳ cửa sổ nào nó mở — mọi cửa sổ Claude "
+            "giữ nguyên tài khoản của bạn.\n\nĐổi lại: việc chạy nền trong "
+            "tool cũng không đi qua ví ShopAPI nữa.")
+        self._o_khoa.setChecked(khong_duoc_cam_khoa())
+        self._o_khoa.toggled.connect(self._doi_khoa_cung)
+        doc.addWidget(self._o_khoa)
+
         self._nhan_nguon = self._chu_phu("")
         doc.addWidget(self._nhan_nguon)
         # Cảnh báo khi ví ShopAPI chưa gọi được công cụ. Không gọi được công cụ
@@ -201,6 +220,34 @@ class TrangAgent(QWidget):
     def _doi_xin_vscode(self, _bat: bool) -> None:
         self._ve_nut_cai()
 
+    def _doi_khoa_cung(self, bat: bool) -> None:
+        """Bật/tắt tệp chặn ở `~/.claude/`.
+
+        Bật thì **dọn luôn**, không chỉ chặn từ giờ trở đi: máy đang dính khoá
+        shopapi từ bản tool cũ mà chỉ chặn tương lai thì khách vẫn tiêu nhầm ví
+        cho tới khi tự tìm ra. Tích một cái phải sạch ngay một cái.
+        """
+        duong = duong_co_khong_cam()
+        try:
+            if bat:
+                os.makedirs(os.path.dirname(duong), exist_ok=True)
+                with open(duong, "w", encoding="utf-8") as tep:
+                    tep.write("Tool bi cam ghi khoa ShopAPI vao may nay.\n"
+                              "Xoa tep nay di thi tool moi cam khoa duoc.\n")
+                go_khoi_settings(self.app.base_dir)
+                go_khoi_may()
+            elif os.path.isfile(duong):
+                os.remove(duong)
+        except OSError as loi:
+            self.app.show_message(
+                "Không đổi được",
+                "Tool không ghi/xoá được tệp này:\n{0}\n\n{1}".format(duong, loi))
+            self._o_khoa.blockSignals(True)
+            self._o_khoa.setChecked(khong_duoc_cam_khoa())
+            self._o_khoa.blockSignals(False)
+            return
+        self._ve_nguon()
+
     def _doi_lua_chon(self, bat: bool) -> None:
         """Đổi nút chọn thì bảng tình trạng và nút mở phải đổi theo ngay.
 
@@ -209,6 +256,18 @@ class TrangAgent(QWidget):
         """
         if not bat:
             return  # `toggled` bắn hai lần mỗi lần đổi: nút tắt và nút bật
+        # ═══ CHỌN NGUỒN KHÁC THÌ GỠ KHOÁ NGAY, KHÔNG ĐỢI BẤM THÊM ═══
+        #
+        # Chiều này chỉ **gỡ**, không bao giờ cắm — nên gọi ngầm được. Khách
+        # tích "gói Max" mà khoá shopapi còn nằm trong `~/.claude/settings.json`
+        # thì họ tưởng đang tiêu gói Max trong khi đang tiêu ví ShopAPI.
+        #
+        # Chiều ngược lại (tích về ví ShopAPI) KHÔNG tự cắm: cắm khoá là việc
+        # phải bấm nút mới xảy ra.
+        if self.nguon != NGUON_SHOPAPI:
+            go_khoi_settings(self.app.base_dir)
+            go_khoi_may()
+            self._ve_nguon()
         self._ve_bang()
         self._ve_nut_mo()
         self._ve_nut_cai()
@@ -266,15 +325,25 @@ class TrangAgent(QWidget):
             mau = theme.DO
         self._nhan_nguon.setText((them + " " + chu).strip())
         self._nhan_nguon.setStyleSheet("color:{0};".format(mau))
+        khoa_cung = khong_duoc_cam_khoa()
+        if khoa_cung:
+            self._nhan_nguon.setText(
+                "Máy này đang KHOÁ: tool không được phép cắm khoá ShopAPI vào "
+                "cấu hình Claude Code. Mọi cửa sổ Claude giữ nguyên tài khoản "
+                "riêng của bạn.")
+            self._nhan_nguon.setStyleSheet("color:{0};".format(theme.XANH))
         if hasattr(self, "_nut_cam_khoa"):
             da = tt["da_cai"] and tt["la_shopapi"]
+            self._nut_cam_khoa.setEnabled(not khoa_cung)
             self._nut_cam_khoa.setText("Đã cắm — cắm lại" if da
                                        else "Cắm khoá ShopAPI")
             self._nut_cam_khoa.setToolTip(
-                "Ghi khoá ShopAPI vào cấu hình Claude Code của RIÊNG thư mục "
-                "tool, để Claude Code và extension trong VS Code tiêu ví "
-                "ShopAPI thay vì đòi bạn đăng nhập Anthropic.\n\n"
-                + tt["duong"])
+                "Đang bị khoá bởi ô tích ngay dưới. Bỏ tích thì mới cắm được."
+                if khoa_cung else
+                "Ghi khoá ShopAPI vào cấu hình Claude Code, để Claude Code và "
+                "extension trong VS Code tiêu ví ShopAPI thay vì đòi bạn đăng "
+                "nhập Anthropic.\n\nChỉ ghi khi bạn bấm nút này — mở tool hay "
+                "mở VS Code đều không tự cắm.\n\n" + tt["duong"])
 
     def cam_khoa(self) -> None:
         """Nút: ghi khoá vào cấu hình Claude Code của thư mục tool.
@@ -289,10 +358,19 @@ class TrangAgent(QWidget):
         if tt["da_cai"] and tt["la_shopapi"]:
             self.app.show_message(
                 "Đã cắm khoá ShopAPI",
-                "Claude Code mở từ thư mục này — kể cả extension trong VS "
-                "Code — sẽ tiêu ví ShopAPI.\n\nGhi vào:\n{0}\n\n"
-                "Mở VS Code bằng nút ở dưới, đừng mở từ Start Menu: mở kiểu "
-                "đó không đi qua thư mục này.".format(tt["duong"]))
+                "Claude Code trên máy này — kể cả extension trong VS Code — sẽ "
+                "tiêu ví ShopAPI.\n\nGhi vào:\n{0}\nvà:\n{1}\n\n"
+                "Bấm lại nút này sau khi tích “gói Max” hoặc “Codex” là gỡ "
+                "sạch, trả máy về tài khoản riêng của bạn.".format(
+                    tt["duong"], duong_settings_may()))
+        elif khong_duoc_cam_khoa():
+            # Nói thẳng là tool đã bị chặn, thay vì báo "đã gỡ" cho một việc
+            # chưa từng chạy. Người bật cờ này thường quên mất mình đã bật.
+            self.app.show_message(
+                "Máy này đang khoá — không cắm gì cả",
+                "Có tệp chặn nên tool không được phép ghi khoá vào cấu hình "
+                "Claude Code của máy này:\n{0}\n\nXoá tệp đó đi thì nút này "
+                "mới cắm được khoá.".format(duong_co_khong_cam()))
         else:
             self.app.show_message(
                 "Đã gỡ khoá ShopAPI",
@@ -608,12 +686,23 @@ class TrangAgent(QWidget):
             "thiếu” ở thẻ trên là tool tải về giúp bạn.")
 
     def _ap_dung_im(self) -> bool:
-        """Ghi cấu hình theo nguồn đang chọn, không báo gì nếu trót lọt.
+        """Ghi cấu hình theo nguồn đang chọn. **Chỉ chạy khi khách bấm nút.**
 
-        Gọi ngay trước khi mở VS Code / dòng lệnh. Trước đây đây là một nút
-        "Áp dụng" riêng, và ai quên bấm thì mở VS Code ra là extension Claude
-        đòi đăng nhập Anthropic — khách không đoán được vì sao, vì tab hiện đủ
-        dấu tích xanh.
+        ═══ VÌ SAO KHÔNG CÒN GỌI NGẦM LÚC MỞ VS CODE ═══
+
+        Bản trước gọi hàm này ngay trước khi mở VS Code / dòng lệnh, với lý do
+        "ai quên bấm Áp dụng thì mở VS Code ra bị đòi đăng nhập". Lý do ấy chỉ
+        đúng với khách chưa có tài khoản Claude nào. Với người đã trả tiền gói
+        Max thì nó đảo ngược: họ chỉ định mở một cửa sổ soạn thảo, mà tool nhân
+        đó cắm khoá shopapi vào cấu hình **cấp máy** — mất gói Max, im lặng,
+        không ai hỏi họ một câu.
+
+        Chủ dự án, 14/08/2026: *"chỉ khi khách chạy cái phần cài key, chứ giờ
+        mở tool là bị cài key là sai, tao không muốn xảy ra việc đó"*.
+
+        Nên giờ đúng hai chỗ gọi hàm này, cả hai đều là khách tự bấm:
+        nút "Cắm khoá ShopAPI", và lúc khách đổi nút chọn nguồn (nhánh gỡ).
+        Mở VS Code / dòng lệnh thì **không ghi gì cả**.
         """
         if self.nguon != NGUON_SHOPAPI:
             go_khoi_settings(self.app.base_dir)
@@ -649,9 +738,11 @@ class TrangAgent(QWidget):
         return True
 
     def mo_agent(self) -> None:
-        """Mở agent khách đã chọn. Cả ba đường đều **toàn quyền**."""
-        if not self._ap_dung_im():
-            return
+        """Mở agent khách đã chọn. Cả ba đường đều **toàn quyền**.
+
+        Không ghi cấu hình ở đây — xem ghi chú ở `_ap_dung_im`. Nút này chỉ mở
+        cửa sổ; khoá nằm ở đâu là do khách đã bấm gì trước đó.
+        """
         if self.dung_codex:
             codex_cli.mo_terminal(self.app.base_dir,
                                   duong_codex=self._ttx.duong_codex)
@@ -662,15 +753,16 @@ class TrangAgent(QWidget):
                     dung_shopapi=self.nguon == NGUON_SHOPAPI)
 
     def mo_vs(self) -> None:
-        """Mở VS Code ngay tại thư mục tool, đã cắm sẵn khoá.
+        """Mở VS Code ngay tại thư mục tool. **Không đụng vào khoá.**
 
         Đây là **đường chính** cho khách: một cửa sổ soạn thảo có nút bấm dễ vào
-        hơn hẳn màn hình đen, và extension Claude đọc cùng tệp cấu hình mà
-        `_ap_dung_im` vừa ghi — nên mở ra là dùng được ngay, không phải đăng
-        nhập gì thêm.
+        hơn hẳn màn hình đen.
+
+        Nút này từng cắm khoá shopapi vào cấu hình cấp máy trước khi mở. Bỏ rồi
+        — xem ghi chú ở `_ap_dung_im` và ở `core.claude_code.mo_vscode`. Khách
+        muốn extension trong VS Code tiêu ví ShopAPI thì bấm "Cắm khoá ShopAPI"
+        ở thẻ trên, một lần, rồi mở.
         """
-        if not self._ap_dung_im():
-            return
         # ═══ HỎNG THÌ PHẢI NÓI, KHÔNG ĐƯỢC IM ═══
         #
         # Chủ dự án, 13/08/2026: *"ấn mở vs code nó không mở"*. Bản trước không

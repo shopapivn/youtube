@@ -34,7 +34,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.skill_rieng import SkillRiengError, liet_ke_rieng, luu_skill, xoa_skill
-from core.skills import MA_NGHIEN_CUU, SKILL, Skill
+from core.skills import MA_NGHIEN_CUU, MA_SCRIPT, SKILL, Skill
 
 from . import theme
 from .widgets import ChonThuMuc, nhan, nut_chinh, nut_phu, the, tieu_de_trang
@@ -434,17 +434,30 @@ class TrangSkill(QWidget):
             self._nut[skill.ma] = nut
 
     def _dung_tam(self, skill: Skill) -> QWidget:
-        if skill.ma == MA_NGHIEN_CUU:
-            from .trang_research import TrangNghienCuu
+        #: Skill chạy trên máy → mỗi cái một trang riêng, không dùng khuôn
+        #: "một ô nhập → một kết quả" của Skill chữ.
+        rieng = {MA_NGHIEN_CUU: self._trang_nghien_cuu,
+                 MA_SCRIPT: self._trang_script}
+        tao = rieng.get(skill.ma)
+        if tao is None:
+            return TamSkillChu(self._app, skill, self)
+        tam = tao()
+        # Chúng vốn là trang đứng riêng nên tự chừa lề. Nhúng vào đây thì lề đó
+        # cộng với lề của trang Skill thành khoảng trắng gấp đôi.
+        bo_cuc = tam.layout()
+        if bo_cuc is not None:
+            bo_cuc.setContentsMargins(0, 0, 0, 0)
+        return tam
 
-            tam = TrangNghienCuu(self._app)
-            # Nó vốn là một trang đứng riêng nên tự chừa lề. Nhúng vào đây thì
-            # lề đó cộng với lề của trang Skill thành khoảng trắng gấp đôi.
-            bo_cuc = tam.layout()
-            if bo_cuc is not None:
-                bo_cuc.setContentsMargins(0, 0, 0, 0)
-            return tam
-        return TamSkillChu(self._app, skill, self)
+    def _trang_nghien_cuu(self) -> QWidget:
+        from .trang_research import TrangNghienCuu
+
+        return TrangNghienCuu(self._app)
+
+    def _trang_script(self) -> QWidget:
+        from .trang_script import TrangLayScript
+
+        return TrangLayScript(self._app)
 
     def mo(self, ma: str) -> None:
         tam = self._tam.get(ma)

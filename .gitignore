@@ -4,6 +4,11 @@ secrets.json
 secrets.json.tmp
 
 # Đồ khách tạo ra khi dùng tool.
+#
+# PROJECTS/ là SẢN PHẨM của khách — video, ảnh, clip, giọng đọc. Một lượt chạy
+# 99 cảnh đã là gần 700 MB. Đẩy lên kho mã là vừa làm kho phình không dùng
+# được, vừa đưa đồ riêng của khách lên chỗ công khai.
+PROJECTS/
 ket-qua/
 workspace/
 phien-viet/

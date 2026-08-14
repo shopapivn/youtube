@@ -25,10 +25,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 
-__all__ = ["Skill", "SKILL", "SKILL_CHO_BAT", "MA_NGHIEN_CUU", "tim_skill", "skill_chu"]
+__all__ = ["Skill", "SKILL", "SKILL_CHO_BAT", "MA_NGHIEN_CUU", "MA_SCRIPT",
+           "tim_skill", "skill_chu"]
 
 #: Skill chạy trên máy, có trang riêng thay vì ô nhập chữ.
 MA_NGHIEN_CUU = "doi-thu"
+
+#: Cũng chạy trên máy, cũng có trang riêng. Tách khỏi `MA_NGHIEN_CUU` vì lấy lời
+#: thoại chậm hơn hẳn phần còn lại — xem đầu `ui_qt/trang_script.py`.
+MA_SCRIPT = "script"
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,15 @@ SKILL: Tuple[Skill, ...] = (
         mo_ta="Dán một hay nhiều kênh YouTube — lấy về dữ liệu kênh và từng video "
               "(view, view/subs, ngày đăng, thời lượng, like, comment, hashtag, mô tả), "
               "xem trên bảng rồi xuất CSV. Chạy trên máy bạn — miễn phí, không cần đăng nhập.",
+        loai="may",
+    ),
+    Skill(
+        ma=MA_SCRIPT,
+        ten="Lấy lời thoại video",
+        bieu_tuong="📝",
+        mo_ta="Dán link video — hoặc cả một kênh — nhận về nguyên lời thoại, xuất "
+              "CSV hay từng tệp .txt. Thử lần lượt bốn cách, kể cả cho máy bạn tự "
+              "nghe khi video không có phụ đề. Chạy trên máy bạn — miễn phí.",
         loai="may",
     ),
 )

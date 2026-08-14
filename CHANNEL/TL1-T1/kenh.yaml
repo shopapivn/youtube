@@ -1,0 +1,46 @@
+# ============================================================================
+#  KÊNH TL1-T1 — tâm lý, khán giả NHẬT BẢN
+# ============================================================================
+#
+#  Kênh mẫu, gom từ dây chuyền cũ của bạn: style và nhân vật lấy ở kênh Nhật
+#  (VE3_SUITE .../psychology/TL1-T7), giọng văn lấy ở CONTENT/topics/tam-ly/ja.
+#
+#  Muốn thêm kênh: chép cả thư mục này, đổi tên thư mục thành mã kênh mới, rồi
+#  sửa chữ trong ba chỗ — tệp này, style.yaml, và thư mục prompt/.
+#  Không phải sửa code.
+#
+#  ⚠ KHÔNG BAO GIỜ ĐẶT KHOÁ API VÀO ĐÂY. Tiền của luồng AUTO đi qua đúng một
+#  cửa: ví ShopAPI mà tool đã đăng nhập. Tool có bộ quét, thấy khoá là chặn.
+# ============================================================================
+
+ma: TL1-T1
+ten: Tâm lý — Nhật Bản
+
+# ── Khán giả ────────────────────────────────────────────────────────────────
+ngon_ngu: ja
+giong_van: Japanese — natural, polite but conversational (ていねい体). Warm, intimate, curious.
+
+# ── Độ dài ──────────────────────────────────────────────────────────────────
+# ⚠ 341 chứ không phải ~900 như tiếng châu Âu. Tiếng Nhật viết bằng kanji nên
+# một ký tự chở nhiều âm hơn hẳn: 10 phút tiếng Tây Ban Nha cần 9.730 ký tự,
+# 10 phút tiếng Nhật chỉ cần 3.410. Lấy nhầm con số của tiếng khác là ra video
+# dài gấp ba. Số này đo từ chính các cặp kịch bản + giọng đọc thật của bạn.
+phut_muc_tieu: 10
+ky_tu_moi_phut: 341
+
+# ── Giọng đọc ───────────────────────────────────────────────────────────────
+voice_id: b34JylakFZPlGS0BnwyY
+
+# ── Hình ────────────────────────────────────────────────────────────────────
+# veo3 = mỗi cảnh tối đa 8 giây; seedance = 10 giây.
+engine: veo3
+
+# Số ảnh bìa sinh ra để bạn chọn.
+so_thumbnail: 3
+
+# ── AI viết ─────────────────────────────────────────────────────────────────
+mo_hinh: claude-sonnet-5
+
+# Tiếng Nhật KHÔNG có chữ hoa/thường, nên viết hoa chữ ảnh bìa là vô nghĩa —
+# `preserve` trong tool cũ, tức giữ nguyên như AI viết ra.
+chu_bia_hoa: false

@@ -56,6 +56,15 @@ _NHIP_MS = 150
 #: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
 #: xem `ui_qt/bang_viec.py` để biết vì sao.
 TRANG = (
+    # ═══ "TỰ ĐỘNG" ĐỨNG ĐẦU ═══
+    #
+    # Đây là đường chính của tool: một link vào, một video hoàn thiện ra. Mọi
+    # tab dưới nó là chỗ làm **từng khâu một** khi cần can thiệp tay.
+    #
+    # Thứ tự trong thanh bên là thứ tự tool tự giới thiệu mình, nên thứ làm
+    # được nhiều nhất phải đứng trước. Chủ dự án, 14/08/2026: *"mày để là tab
+    # đầu tiên nhá"*.
+    ("auto", "", "Tự động"),
     ("agent", "", "Agent xây tool"),
     ("skill", "", "Skill"),
     ("content", "", "Viết kịch bản"),
@@ -64,6 +73,10 @@ TRANG = (
     # khuôn dùng hai lần, mà thứ khách thật sự muốn — *ảnh này, rồi cho nó động
     # đậy* — thì không tab nào diễn đạt được vì nó nằm vắt qua cả hai.
     ("media", "", "Ảnh & Video"),
+    # Giọng đọc → phụ đề → prompt từng cảnh → Excel mở được bằng VE3_SUITE.
+    # Đứng ngay trước "Dựng video" vì đó là bước kế tiếp của cùng một dây
+    # chuyền: có prompt rồi mới đi tạo ảnh/clip rồi mới ghép.
+    ("prompt-visuals", "", "Prompt Visuals"),
     ("edit", "", "Dựng video"),
     ("wallet", "", "Tài khoản"),
 )
@@ -324,6 +337,8 @@ class CuaSoChinh(QWidget):
         from .trang_anh_video import TrangAnhVideo
         from .trang_content import TrangKichBan
         from .trang_edit import TrangDungVideo
+        from .trang_prompt_visuals import TrangPromptVisuals
+        from .trang_auto import TrangTuDong
         from .trang_skill import TrangSkill
         from .trang_tai_khoan import TrangTaiKhoan
         from .trang_voice import TrangGiongNoi
@@ -333,7 +348,9 @@ class CuaSoChinh(QWidget):
             "skill": lambda: TrangSkill(self),
             "content": lambda: TrangKichBan(self),
             "voice": lambda: TrangGiongNoi(self),
+            "auto": lambda: TrangTuDong(self),
             "media": lambda: TrangAnhVideo(self),
+            "prompt-visuals": lambda: TrangPromptVisuals(self),
             "edit": lambda: TrangDungVideo(self),
             "wallet": lambda: TrangTaiKhoan(self),
         }

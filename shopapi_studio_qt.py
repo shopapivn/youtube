@@ -161,6 +161,24 @@ def main() -> int:
     except Exception:  # noqa: BLE001 — nhật ký hỏng không được chặn tool
         pass
 
+    # ═══ MÁY ĐANG KHOÁ THÌ DỌN NGAY LÚC MỞ ═══
+    #
+    # Chặn từ giờ trở đi là chưa đủ với người vừa cập nhật lên bản này: khoá
+    # shopapi mà bản 2.11.x cắm vào `~/.claude/settings.json` vẫn nằm nguyên
+    # đó, và extension Claude trong VS Code vẫn bỏ gói Max mà đi qua nó — không
+    # có dấu hiệu gì trên màn hình.
+    #
+    # Chỉ chạy khi khách đã tự bật khoá cứng, và chỉ gỡ đúng những khoá Studio
+    # từng đặt (`go_khoi_may` trả lại cả khoá riêng đã cất tạm). Không đụng gì
+    # khác trong tệp.
+    try:
+        from core.claude_code import go_khoi_may, khong_duoc_cam_khoa
+
+        if khong_duoc_cam_khoa():
+            go_khoi_may()
+    except Exception:  # noqa: BLE001 — dọn hỏng không được chặn tool
+        pass
+
     # Khai TRƯỚC khi dựng QApplication. Windows chốt nhóm thanh tác vụ cho tiến
     # trình ở cửa sổ đầu tiên; khai sau đó thì nút dưới thanh tác vụ vẫn đeo
     # icon của `pythonw.exe`, dù cửa sổ đã mang logo của tool.

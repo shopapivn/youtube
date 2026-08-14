@@ -84,12 +84,32 @@ def bat_ghi(goc: str) -> str:
         _ghi(duong, "{0} {1:<6} {2:<10} {3}".format(
             time.strftime("%H:%M:%S"), kieu, an, _mo_ta(lenh)[:400]))
 
-    def popen_co_ghi(*a, **k):
-        try:
-            _chep("Popen", a[0] if a else k.get("args"), k)
-        except Exception:  # noqa: BLE001 — nhật ký không được làm chết tool
-            pass
-        return goc_popen(*a, **k)
+    # ═══ PHẢI LÀ LỚP CON, KHÔNG ĐƯỢC LÀ HÀM ═══
+    #
+    # `subprocess.Popen` là một **lớp**. Bản đầu thay nó bằng một hàm — chạy thì
+    # vẫn chạy, nên bài test "có ghi được dòng lệnh không" đạt hết, và cái sai
+    # nằm im hai tuần.
+    #
+    # Nó nổ ở chỗ không ai ngờ: `yt-dlp` khai `class Popen(subprocess.Popen)`.
+    # Kế thừa từ một **hàm** thì Python gọi `type(hàm)(tên, cha, thân)`, tức
+    # `FunctionType("Popen", …)`, và ném ra đúng câu:
+    #
+    #     function() argument 'code' must be code, not str
+    #
+    # Câu đó không có chữ nào dính tới YouTube hay tiến trình, nên nhìn vào
+    # không thể đoán ra. Nó chỉ hiện khi chạy trong tool, vì `core/youtube.py`
+    # cố ý nạp `yt-dlp` MUỘN — tức luôn nạp sau khi nhật ký đã bọc xong. Chạy
+    # thử ngoài tool thì không bao giờ tái hiện được.
+    #
+    # Lớp con giữ nguyên mọi thứ một lớp phải có: kế thừa được, `isinstance`
+    # đúng, `with` đúng.
+    class popen_co_ghi(goc_popen):  # noqa: N801 — tên theo lối trong tệp này
+        def __init__(self, *a, **k):
+            try:
+                _chep("Popen", a[0] if a else k.get("args"), k)
+            except Exception:  # noqa: BLE001 — nhật ký không được làm chết tool
+                pass
+            super().__init__(*a, **k)
 
     def run_co_ghi(*a, **k):
         try:

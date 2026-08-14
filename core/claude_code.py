@@ -437,6 +437,18 @@ def moi_truong(api_key: str, base_url: str,
     Ba biến, cùng một khoá shopapi cho hai biến khoá — xem ghi chú trong thân
     hàm về việc **ghi đè** `ANTHROPIC_API_KEY` thay vì xoá nó.
     """
+    # ═══ CÔNG TẮC CHẶN ĂN CẢ BIẾN MÔI TRƯỜNG ═══
+    #
+    # Trước 14/08/2026 cờ `TEN_CO_KHONG_CAM` chỉ chặn đường **ghi tệp**. Đường
+    # biến môi trường vẫn hở, và đó mới là đường làm mất gói Max: tool truyền
+    # ba biến này vào tiến trình VS Code nó tự mở, mà VS Code trên Windows chỉ
+    # có **một** tiến trình cho cả máy — nên mọi cửa sổ mở sau đó, kể cả cửa sổ
+    # của dự án khác, đều thừa hưởng khoá shopapi. Chủ dự án tả đúng cảnh ấy:
+    # *"all các session cùng dính 1 lúc"*.
+    #
+    # Cờ bật thì hàm này trả về môi trường sạch, không phải môi trường shopapi.
+    if khong_duoc_cam_khoa():
+        return moi_truong_max(nen)
     moi = dict(nen if nen is not None else os.environ)
     khoa = (api_key or "").strip()
     moi["ANTHROPIC_BASE_URL"] = (base_url or "https://api.shopapi.vn").rstrip("/")
@@ -997,12 +1009,16 @@ def moi_truong_max(nen: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     tao có claude max 20"*. Người đã trả 200 đô/tháng cho Anthropic mà bị tool
     bắt tiêu thêm ví shopapi là tool ăn cắp.
 
-    Việc ở đây là **gỡ tay ra**: xoá hai biến trỏ gateway. Để sót một trong hai
+    Việc ở đây là **gỡ tay ra**: xoá mọi biến Studio từng đặt. Để sót một biến
     là Claude Code vẫn gọi vào shopapi trong khi khách tưởng đang dùng Max —
     loại lỗi trừ tiền im lặng, không ai báo.
+
+    Bản trước chỉ xoá hai biến trỏ gateway và để `ANTHROPIC_API_KEY` nằm lại.
+    Sót đúng một biến ấy là đủ hỏng: Claude Code thấy có khoá thì dùng khoá,
+    không dùng phiên đăng nhập Max. Nay xoá cả `KHOA_QUAN_LY` lẫn chỗ cất tạm.
     """
     moi = dict(nen if nen is not None else os.environ)
-    for khoa in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"):
+    for khoa in KHOA_QUAN_LY + (KHOA_CAT_TAM,):
         moi.pop(khoa, None)
     # Khách dùng Max cũng cần tìm thấy `claude` y như khách dùng ví shopapi:
     # chỗ này chỉ đổi *tiền trả cho ai*, không đổi *chương trình nằm ở đâu*.
@@ -1145,24 +1161,33 @@ def mo_vscode(thu_muc: str, api_key: str = "", base_url: str = "", *,
     cũng là đường đúng. Vẫn giải tên trần thành đường đầy đủ bằng `tim_lenh` —
     đó là phần `lenh_chay_duoc` làm đúng và vẫn cần.
 
-    ═══ CẮM KHOÁ TRƯỚC KHI MỞ ═══
+    ═══ MỞ VS CODE THÌ KHÔNG ĐỘNG VÀO KHOÁ, KHÔNG ĐỘNG VÀO GÌ CẢ ═══
 
-    Extension VS Code đọc `~/.claude/settings.json` lúc khởi động, không reload
-    tự động. Nếu tool ghi settings SAU khi VS Code đã mở → extension giữ auth
-    cũ → bắt đăng nhập.
+    Bản 2.11.x làm hai việc ngay trong hàm này: ghi khoá shopapi vào
+    `~/.claude/settings.json` (cấp máy), và truyền khoá qua `env=` vào tiến
+    trình VS Code. Cả hai đều sai, và cái thứ hai sai nặng hơn.
 
-    Giải pháp: ghi settings.json TRƯỚC khi spawn VS Code. Khi ấy extension đọc
-    ngay settings đúng từ lần đầu, không cần reload.
+    VS Code trên Windows là **một tiến trình cho cả máy**. Cửa sổ đầu tiên mở
+    ra là tiến trình chính; mọi cửa sổ sau — dự án khác, thư mục khác — đều là
+    con của nó và thừa hưởng nguyên bộ biến môi trường. Nên chỉ cần tool mở VS
+    Code một lần lúc máy chưa có VS Code nào chạy, là extension Claude ở **mọi**
+    cửa sổ trên máy bỏ gói Max mà đi qua khoá shopapi. Chủ dự án, 14/08/2026:
+    *"all các session cùng dính 1 lúc"* — đúng cơ chế này, không phải cơ chế
+    nào khác.
 
-    `_mo_kem_moi_truong` vẫn truyền biến môi trường qua `env=` — đó dành cho
-    Claude Code CLI (nếu khách gọi từ terminal), nhưng VS Code extension chỉ
-    đọc settings.json.
+    Lý do cũ để truyền biến ("extension đọc settings lúc khởi động") không đứng
+    được: chính ghi chú bản cũ đã viết *"VS Code extension chỉ đọc
+    settings.json"*. Đã vậy thì biến môi trường không giúp gì cho extension —
+    nó chỉ rò ra ngoài.
+
+    Nay hàm này **chỉ mở VS Code**, với môi trường sạch. Khách muốn extension
+    tiêu ví ShopAPI thì bấm nút "Cắm khoá ShopAPI" ở tab Agent — đó là đường
+    duy nhất ghi khoá, và là đường khách nhìn thấy.
+
+    `api_key`, `base_url`, `dung_shopapi` giữ lại trong chữ ký để chỗ gọi cũ
+    không gãy, nhưng không còn tác dụng gì lên môi trường.
     """
     duong = duong_code or tim_lenh("code") or "code"
-    # Cắm khoá vào settings.json cấp máy TRƯỚC khi mở VS Code, để extension
-    # đọc ngay từ lúc khởi động. Chỉ ghi khi `dung_shopapi=True` — nếu khách
-    # chọn dùng Max thì không được đụng settings của họ.
-    if dung_shopapi and api_key:
-        cai_vao_may(api_key.strip(), base_url or "https://api.shopapi.vn")
-    return _mo_kem_moi_truong([duong, thu_muc], thu_muc, api_key, base_url,
-                              dung_shopapi, mo_tien_trinh)
+    return _mo_kem_moi_truong([duong, thu_muc], thu_muc, "", "",
+                              dung_shopapi=False,
+                              mo_tien_trinh=mo_tien_trinh)

@@ -144,6 +144,51 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Ảnh hoặc clip hỏng được hoàn tiền và chạy lại được.",
         ],
     },
+    "auto": {
+        "tieu_de": "Tự động",
+        "tom_tat": "Dán link tư liệu, bấm một nút, ra video hoàn thiện.",
+        "buoc": [
+            "Chọn kênh. Kênh quyết định tiếng nói, giọng đọc, nhân vật và "
+            "phong cách hình.",
+            "Dán link video tư liệu. Điền tiêu đề và chữ ảnh bìa nếu bạn đã "
+            "nghĩ sẵn — bỏ trống thì tôi tự đặt.",
+            "Bấm Chạy. Bảng tiến độ cho biết đang ở khâu nào.",
+        ],
+        "luu_y": [
+            "Tám khâu: kịch bản → giọng đọc → phụ đề → bảng cảnh → ảnh → clip "
+            "→ ảnh bìa → dựng. Sáu khâu gọi AI nên có tiêu ví; khâu phụ đề và "
+            "khâu dựng chạy trên máy bạn, miễn phí.",
+            "Bấm Dừng lúc nào cũng được. Phần đã làm giữ nguyên; bấm “Chạy "
+            "tiếp” là đi tiếp từ đúng chỗ đó, không trả tiền lại.",
+            "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "
+            "kịch bản thì phải “Làm lại từ khâu này” — giọng đọc cũ đang đọc "
+            "bản kịch bản không còn nữa.",
+            "Nút “Quản lý kênh” cho sửa cả bảy lời nhắc và phong cách hình "
+            "ngay trong tool, và nhân bản kênh để làm kênh tiếng khác.",
+            "Kết quả nằm ở PROJECTS/AUTO/<kênh>/<số>/ — có video, phụ đề, 3 "
+            "ảnh bìa và mọi tệp trung gian.",
+        ],
+    },
+    "prompt-visuals": {
+        "tieu_de": "Prompt Visuals",
+        "tom_tat": "Từ file giọng đọc ra file Excel chứa prompt của từng cảnh.",
+        "buoc": [
+            "Chọn một hay nhiều file giọng đọc (.mp3, .wav…).",
+            "Chọn engine bạn sẽ dùng để dựng video — Veo 3 hay Seedance. Cảnh "
+            "được cắt đúng theo độ dài clip của engine đó.",
+            "Bấm “Tạo prompt”. Mỗi file giọng đọc ra một file Excel.",
+        ],
+        "luu_y": [
+            "Lần đầu phải bấm “Tải bộ nghe” — khoảng 0,5 GB, tải một lần rồi "
+            "thôi. Việc nghe chạy trên máy bạn nên không tốn tiền.",
+            "Bước viết prompt có gọi AI nên CÓ tiêu ví ShopAPI, mỗi 20 cảnh "
+            "một lượt gọi.",
+            "File Excel đặt tên sheet đúng kiểu VE3 (scenes, characters…) nên "
+            "mở thẳng bằng VE3_SUITE được, không phải chép cột sang.",
+            "Chọn nhiều file thì chạy lần lượt; một file hỏng không làm hỏng "
+            "các file còn lại.",
+        ],
+    },
     "edit": {
         "tieu_de": "Dựng video",
         "tom_tat": "Ghép các clip và giọng đọc đã có thành video hoàn chỉnh.",
