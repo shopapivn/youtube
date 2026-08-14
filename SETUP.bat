@@ -245,6 +245,26 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+REM Do luon cac thu vien cua tab "Tu dong". Chung khong can de MO tool, nen
+REM thieu chung thi buoc kiem cu van bao OK - roi khach bam Chay o tab Tu dong,
+REM tool chay het ba khau dau (da TRA TIEN) moi chet o khau 4. Do o day thi
+REM khach biet ngay luc cai, chua mat dong nao.
+%PYEXE% -c "import openpyxl, faster_whisper, huggingface_hub, yaml; print('  - Tab Tu dong: OK')"
+if errorlevel 1 (
+  echo.
+  echo   !!! Thieu thu vien cho tab Tu dong.
+  echo   -^> Chay lai SETUP.bat khi may co mang. Cac tab khac van dung duoc.
+  echo.
+)
+REM FFmpeg: can cho khau dung video va khau tach phu de. Uu tien ban cai san
+REM tren may; khong co thi lay ban di kem imageio-ffmpeg.
+%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.dung_video import tim_ffmpeg; p = tim_ffmpeg(); print('  - FFmpeg:', p or 'KHONG THAY'); sys.exit(0 if p else 1)"
+if errorlevel 1 (
+  echo.
+  echo   !!! Khong tim thay FFmpeg. Khau dung video se khong chay duoc.
+  echo   -^> Chay lai SETUP.bat khi may co mang de cai imageio-ffmpeg.
+  echo.
+)
 REM Nhap "core" truoc: chinh no lo viec tim SDK. SDK shopapi CHUA len PyPI nen
 REM khong cai bang pip duoc - ban tai ve kem san SDK trong thu muc _sdk\, va
 REM core\__init__.py biet duong tim o do. Chay trong ma nguon du an thi no lay

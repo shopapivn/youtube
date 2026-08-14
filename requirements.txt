@@ -14,6 +14,8 @@
 #  pip doi moi (>=23) mac dinh UTF-8 nen khong dinh, nhung pip di kem Python
 #  3.9-3.11 thi dinh. Giai thich day du bang tieng Viet nam trong README.md.
 # ===========================================================================
+
+# --- Giao dien va ket noi ---------------------------------------------------
 #
 #   PyQt5         : CHINH CAI DUNG NEN CUA SO. Ban tkinter da xoa 12/08/2026,
 #                   nen thieu dong nay la tool khong mo len duoc mot cach nao.
@@ -21,13 +23,62 @@
 #                   bao "OK", khach nhay dup thi tool chet - vi buoc kiem cuoi
 #                   van do "import tkinter" (Python nao cung co san) nen khong
 #                   ai thay gi sai. Ai xoa dong nay hay chay thu tren may sach.
-#   pillow        : hien thi anh QR nap tien va icon
+#   pillow        : hien thi anh QR nap tien, icon, va anh nhan vat o tab Auto
 #   httpx         : SDK shopapi goi HTTP qua thu vien nay
-#   yt-dlp        : doc du lieu YouTube cong khai cho tab Nghien cuu doi thu.
-#                   Chay tren MAY KHACH, khong can khoa API cua Google.
-#                   Nen cap nhat vai thang mot lan: YouTube doi giao dien la ban
-#                   cu ngung lay duoc video (tool co san nut Cap nhat trong tab).
+#   cryptography  : cat giu khoa API tren may khach
+
+PyQt5>=5.15
+pillow>=10.0
+httpx>=0.27
+cryptography>=42.0
+
+# --- Lay du lieu YouTube ----------------------------------------------------
 #
+#   yt-dlp        : doc du lieu YouTube cong khai cho tab Nghien cuu doi thu va
+#                   khau lay tu lieu cua tab Tu dong. Chay tren MAY KHACH,
+#                   khong can khoa API cua Google. Nen cap nhat vai thang mot
+#                   lan: YouTube doi giao dien la ban cu ngung lay duoc video
+#                   (tool co san nut Cap nhat trong tab).
+#   youtube-transcript-api : duong DU PHONG khi yt-dlp bi chan tam. Nho nhung
+#                   cuu duoc nhung lan yt-dlp tra ve tay khong.
+
+yt-dlp>=2025.1.1
+youtube-transcript-api>=0.6
+
+# --- Tab Tu dong: bay khau con lai ------------------------------------------
+#
+#  Bon dong duoi day THEM ngay 14/08/2026 cung tab "Tu dong". Truoc do chung
+#  co san tren may dung de phat trien nen khong ai thay thieu - dung cai bay
+#  ma dong PyQt5 o tren da dinh mot lan. Tren may sach, thieu chung thi tool
+#  van mo len binh thuong roi chet giua chung:
+#
+#   openpyxl      : ghi bang canh ra .xlsx (khau 4). Thieu -> tab Tu dong chay
+#                   het ba khau dau roi chet, va khach da tra tien cho ba khau
+#                   do. Cung dung o tool-catalog/prompt.workbook.
+#   faster-whisper: ep kich ban khop vao giong doc de ra phu de (khau 3), va
+#                   duong du phong "may tu nghe" o Skill lay loi thoai. Chay
+#                   TREN MAY KHACH nen mien phi - do la ly do no dang bo cong
+#                   cai du no nang.
+#   huggingface-hub: tai bo nghe cua faster-whisper ve may (nut "Tai bo nghe").
+#   pyyaml        : doc kenh.yaml va style.yaml trong thu muc CHANNEL/.
+#                   core/kenh.py co san bo doc du phong neu thieu, nen day la
+#                   dong DE CHO CHAC chu khong phai bat buoc.
+#   imageio-ffmpeg: FFmpeg DI KEM SAN. Day la ly do khach KHONG phai tu di tai
+#                   FFmpeg roi sua bien PATH - viec ma nguoi khong biet may
+#                   tinh gan nhu chac chan se bo cuoc giua chung.
+#                   Goi nay keo theo mot file ffmpeg.exe ~88 MB (ban 7.1 day
+#                   du), va core/dung_video.tim_ffmpeg() uu tien ban cai san
+#                   tren may, khong co moi lay ban nay. Da do that: ban di kem
+#                   ma hoa va ghep tieng deu chay.
+#                   Thieu no VA may cung khong co FFmpeg rieng thi hai khau
+#                   chay tren may - tach phu de va dung video - deu dung.
+
+openpyxl>=3.1
+faster-whisper>=1.0
+huggingface-hub>=0.20
+pyyaml>=6.0
+imageio-ffmpeg>=0.4
+
 #  KHONG co dong "shopapi" o day. SDK shopapi CHUA phat hanh len PyPI, nen
 #  "pip install shopapi" luon that bai voi loi "No matching distribution found".
 #  Ban khach tai ve da kem san SDK trong thu muc  _sdk/  - xem dong-goi.py va
@@ -35,9 +86,3 @@
 #  "shopapi>=0.1.0" vao day va bo _sdk/ di.
 #
 # Cai: SETUP.bat  (hoac  python -m pip install -r requirements.txt)
-
-PyQt5>=5.15
-pillow>=10.0
-httpx>=0.27
-cryptography>=42.0
-yt-dlp>=2025.1.1
