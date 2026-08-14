@@ -159,3 +159,52 @@ def test_tran_khong_the_dat_qua_thap(gia):
     bc = BoiCanhGia(may, gia)
     assert _cho_job(bc, {"id": "job_x", "status": "queued"},
                     tran=0)["status"] == "succeeded"
+
+
+class TestJobHongNhungKhongTruTien:
+    """Máy chủ tự khai "không bị trừ tiền" thì đặt lại bằng khoá mới là miễn phí.
+
+    Xảy ra thật ở cảnh 112/112 (15/08/2026): `engine_unavailable` — *"Hệ thống
+    thử lại nhiều lần không thành công. Bạn không bị trừ tiền."* Nhà máy KHÔNG
+    tắt (111 cảnh trước vừa xong), chỉ là đúng job này không chen được chỗ.
+
+    Trước bản sửa, một cảnh chết làm dừng cả khâu: 111 clip đã trả tiền nằm đó
+    còn khách phải tự bấm Chạy tiếp.
+    """
+
+    LOI_THAT = {"code": "engine_unavailable",
+                "message": "Hệ thống thử lại nhiều lần không thành công. "
+                           "Bạn không bị trừ tiền.",
+                "retryable": False}
+
+    def test_engine_unavailable_thi_dat_lai_duoc(self, gia):
+        may = MayChuGia(["failed"])
+        may.retrieve = lambda _ma: {"id": "job_x", "status": "failed",
+                                    "error": self.LOI_THAT}
+        bc = BoiCanhGia(may, gia)
+        with pytest.raises(LoiKetJob):
+            _cho_job(bc, {"id": "job_x", "status": "queued"})
+
+    def test_hong_that_thi_van_nem_loi_thuong(self, gia):
+        """Không phải lỗi nào cũng đặt lại được — hỏng thật thì phải dừng."""
+        may = MayChuGia([])
+        may.retrieve = lambda _ma: {
+            "id": "job_x", "status": "failed",
+            "error": {"code": "invalid_prompt",
+                      "message": "Lời nhắc vi phạm quy định nội dung."}}
+        bc = BoiCanhGia(may, gia)
+        with pytest.raises(RuntimeError) as e:
+            _cho_job(bc, {"id": "job_x", "status": "queued"})
+        assert not isinstance(e.value, LoiKetJob), \
+            "lời nhắc sai thì đặt lại mấy lần cũng sai, chỉ tốn tiền"
+
+    def test_doc_cau_chu_chu_khong_doan_theo_ma_loi(self, gia):
+        """Mã lỗi thêm bớt theo từng bản; câu tiền nong thì ổn định."""
+        may = MayChuGia([])
+        may.retrieve = lambda _ma: {
+            "id": "job_x", "status": "failed",
+            "error": {"code": "ma_loi_chua_ai_thay_bao_gio",
+                      "message": "Có trục trặc. Bạn không bị trừ tiền."}}
+        bc = BoiCanhGia(may, gia)
+        with pytest.raises(LoiKetJob):
+            _cho_job(bc, {"id": "job_x", "status": "queued"})

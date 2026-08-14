@@ -382,6 +382,19 @@ KHOANG_KE_CHO = 90.0
 #: cho lúc nhà máy đông, đủ hẹp để cái kẹt lộ ra khi khách còn ngồi đó.
 TRAN_CHO_JOB = 12 * 60.0
 
+#: Dấu hiệu máy chủ tự khai "job này hỏng nhưng bạn KHÔNG bị trừ tiền".
+#:
+#: Đọc chính câu máy chủ nói chứ không đoán theo mã lỗi: câu tiền nong là thứ
+#: cổng nói rất rõ ràng và rất ổn định, còn mã lỗi thì thêm bớt theo từng bản.
+_KHONG_TRU_TIEN = ("không bị trừ tiền", "khong bi tru tien",
+                   "engine_unavailable", "not charged")
+
+
+def _khong_bi_tru_tien(loi_goi) -> bool:
+    """Máy chủ có tự nói là chưa trừ tiền cho job này không."""
+    chu = str(loi_goi).lower()
+    return any(d in chu for d in _KHONG_TRU_TIEN)
+
 
 def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
              ten_viec: str = "") -> Dict[str, Any]:
@@ -426,8 +439,24 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
         if trang_thai in ("succeeded", "completed"):
             return goi
         if trang_thai in ("failed", "cancelled", "canceled"):
-            raise RuntimeError("máy chủ báo job hỏng: {0}".format(
-                goi.get("error") or trang_thai))
+            loi_goi = goi.get("error") or trang_thai
+            # ═══ JOB HỎNG NHƯNG KHÔNG BỊ TRỪ TIỀN = ĐẶT LẠI ĐƯỢC ═══
+            #
+            # Xảy ra thật ở cảnh 112/112 (15/08/2026): `engine_unavailable` —
+            # *"Hệ thống thử lại nhiều lần không thành công. Bạn không bị trừ
+            # tiền."* Nhà máy KHÔNG tắt (111 cảnh trước vừa xong), chỉ là đúng
+            # job này không chen được chỗ.
+            #
+            # Chính máy chủ khẳng định chưa trừ tiền, nên đặt job mới bằng khoá
+            # mới không tốn thêm đồng nào — và đó là đường duy nhất, vì khoá cũ
+            # giờ đã dính vào một job `failed`.
+            #
+            # Trước đây chỗ này ném lỗi thường, và một cảnh chết làm dừng cả
+            # khâu: 111 clip đã trả tiền nằm đó, khách phải tự bấm Chạy tiếp.
+            if _khong_bi_tru_tien(loi_goi):
+                raise LoiKetJob("máy chủ bỏ dở job này (không bị trừ tiền): "
+                                "{0}".format(loi_goi))
+            raise RuntimeError("máy chủ báo job hỏng: {0}".format(loi_goi))
         # ═══ NÓI RA TRONG LÚC ĐỢI ═══
         #
         # Vòng này từng đợi trong im lặng tuyệt đối. Đã xảy ra thật
@@ -1451,6 +1480,18 @@ class ThamChieu:
             return list(self._url)
 
 
+#: Thiếu bao nhiêu phần trăm cảnh thì vẫn đi tiếp.
+#:
+#: 3% của 112 cảnh là 3 cảnh. Thiếu tới đó thì video vẫn xem được bình thường —
+#: khâu dựng giữ khung cuối của cảnh trước lâu thêm vài giây, đúng như người
+#: dựng tay để hình đứng yên lúc người đọc ngừng lấy hơi.
+#:
+#: Quá mức đó thì dừng: hỏng không còn là chuyện lẻ tẻ mà là hỏng có hệ thống
+#: (lời nhắc sai khuôn, ảnh tham chiếu chết, nhà máy chập chờn), và đi tiếp chỉ
+#: tốn thêm tiền cho một video vá chằng chịt.
+TY_LE_THIEU_CHO_PHEP = 0.03
+
+
 def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str) -> int:
     """Chạy `lam(mục)` cho cả danh sách, nhiều mục cùng lúc. Trả về số đã xong.
 
@@ -1526,7 +1567,27 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str) -> in
             "đây là phía máy chủ, không phải tool. Bật lại thì bấm Chạy tiếp, "
             "tool chỉ làm phần còn thiếu.".format(ten, xong, tong))
     if loi_dau:
-        raise loi_dau[0]
+        # ═══ MỘT CẢNH HỎNG KHÔNG ĐƯỢC CHÔN CẢ LƯỢT ═══
+        #
+        # Xảy ra thật hai lần liền (15/08/2026): cảnh 112/112 hỏng, và cả khâu
+        # dừng. 111 clip đã trả tiền nằm im, ảnh bìa không làm, video không
+        # dựng. Khách trả tiền cho 111 cảnh và nhận về **không có gì xem được**.
+        #
+        # Mà một cảnh thiếu thì khâu dựng chỉ giữ khung cuối của cảnh trước lâu
+        # thêm vài giây — hầu như không ai nhận ra. So với việc không có video
+        # thì đó là đổi chác quá hời.
+        #
+        # Nên: thiếu ít thì đi tiếp và NÓI RÕ thiếu cảnh nào, thiếu nhiều thì
+        # dừng — vì lúc đó hỏng không còn là chuyện lẻ tẻ mà là hỏng có hệ
+        # thống, và đi tiếp chỉ tốn thêm tiền cho một video vá chằng chịt.
+        thieu = tong - xong
+        if thieu > max(1, int(tong * TY_LE_THIEU_CHO_PHEP)):
+            raise loi_dau[0]
+        bc.ghi("  {0}: thiếu {1}/{2} — đi tiếp, phần thiếu sẽ giữ hình cảnh "
+               "trước lâu hơn một chút.".format(ten, thieu, tong))
+        bc.ghi("    lý do cảnh hỏng: {0}".format(str(loi_dau[0])[:160]))
+        bc.ghi("    muốn làm nốt thì bấm “Làm lại khâu này” — tool chỉ làm "
+               "phần còn thiếu, không tính tiền lại phần đã có.")
     if da_co:
         bc.ghi("  ({0}/{1} {2} đã có sẵn, không làm lại)".format(
             da_co, tong, ten))
@@ -1803,11 +1864,30 @@ def _khau_dung(bc: BoiCanh):
             raise RuntimeError("máy chưa có FFmpeg")
         canh = _doc_canh(luot)
         thu_muc_clip = os.path.join(d, "6-clip")
+        # ═══ THIẾU VÀI CLIP THÌ VẪN DỰNG, CẢNH TRƯỚC GIỮ HÌNH BÙ VÀO ═══
+        #
+        # Trước đây thiếu một clip là không dựng, chấm hết. Đã xảy ra thật hai
+        # lần liền (15/08/2026) với **đúng một** cảnh trong 112: khách trả tiền
+        # cho 111 cảnh rồi nhận về không có gì xem được.
+        #
+        # Bỏ cảnh thiếu ra khỏi danh sách thì cảnh liền trước tự động chiếm chỗ
+        # của nó — `giay[i]` tính bằng `srt_start` của cảnh kế **còn lại**, nên
+        # hình đứng yên thêm vài giây rồi đi tiếp. Tiếng và phụ đề không xê
+        # dịch một mi-li-giây nào, vì cả hai bám mốc thời gian tuyệt đối chứ
+        # không bám thứ tự clip.
+        con = [c for c in canh
+               if os.path.exists(os.path.join(
+                   thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))]
+        thieu = len(canh) - len(con)
+        if not con:
+            raise RuntimeError("chưa có clip nào, không dựng được")
+        if thieu:
+            bc.ghi("  thiếu {0}/{1} clip — dựng bằng {2} clip đang có, cảnh "
+                   "trước sẽ giữ hình bù vào chỗ trống.".format(
+                       thieu, len(canh), len(con)))
+        canh = con
         manh = [os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"])))
                 for c in canh]
-        thieu = [m for m in manh if not os.path.exists(m)]
-        if thieu:
-            raise RuntimeError("thiếu {0} clip, chưa dựng được".format(len(thieu)))
         mp3 = os.path.join(d, "2-giong-doc.mp3")
         srt = os.path.join(d, "3-phu-de.srt")
         # ═══ CẮT MỖI CLIP VỀ ĐÚNG ĐỘ DÀI CẢNH CỦA NÓ ═══
