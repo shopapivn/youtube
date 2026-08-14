@@ -147,8 +147,11 @@ def goi_van_ban(
             if not con_luot or loai not in (CHO_TIEP, TAM_NGHI):
                 raise
             loi_cuoi = loi
-            ghi("  {0} — làm lại bằng khoá mới (lần {1}).".format(
+            # Câu hiện lên màn hình chỉ nói tool đang làm gì. Chuyện ví tiền có
+            # tab Tài khoản lo — nhắc tiền ở mỗi dòng nhật ký chỉ làm người
+            # đang chờ thấy sốt ruột về một thứ họ không cần quyết lúc này.
+            ghi("  {0} — đặt lại từ đầu (lần {1}).".format(
                 "máy chủ chưa nhận được yêu cầu" if loai == TAM_NGHI
-                else "khoá việc có vẻ bị kẹt", luot + 1))
+                else "đợi lâu vẫn chưa xong", luot + 1))
 
     raise loi_cuoi or RuntimeError("không gọi được AI sau nhiều lần đổi khoá")

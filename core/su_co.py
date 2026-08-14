@@ -129,13 +129,22 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
 #: chủ nói *"nếu kéo dài quá vài phút hãy báo hỗ trợ"*, tức vài phút là bình
 #: thường. `CHAM_LAI` lùi mạnh nhất — gọi lại sớm là ăn 429 tiếp.
 _NHIP = {
-    # Bốn nhịp (~1 phút) rồi thôi — KHÔNG kiên nhẫn hơn. Máy chủ đang viết
-    # thật thì một phút là xong (đo: 46 giây cho lời nhắc nặng nhất). Còn quá
-    # một phút mà vẫn "đang xử lý" thì gần như chắc chắn **cái khoá bị kẹt**,
-    # và với khoá kẹt thì đợi thêm mười phút cũng vô ích — nơi gọi phải đổi
-    # khoá. Trước đây để mười một nhịp (~14 phút) nên mỗi lần kẹt là mất cả
-    # buổi chiều.
-    CHO_TIEP: (10, 15, 20, 30),
+    # ═══ LOẠI NÀY PHẢI KIÊN NHẪN, VÌ TIỀN ĐÃ TRỪ RỒI ═══
+    #
+    # `CHO_TIEP` nghĩa là máy chủ **đã nhận việc và đang làm**. Bỏ giữa chừng
+    # không lấy lại được đồng nào; nơi gọi đổi khoá là đặt việc mới, tức **trả
+    # tiền lần thứ hai** cho đúng một việc.
+    #
+    # Từng rút xuống bốn nhịp (75 giây) ngày 14/08/2026, lấy theo lời nhắc chia
+    # cảnh đo được 46 giây. Con số ấy sai cho cả họ nhà việc: khâu **viết kịch
+    # bản** đo được **769 giây**. Khách chạy lượt đầu tiên là dính ngay — máy
+    # chủ đang viết dở thì tool bỏ đi đặt lại, và trả tiền hai lần cho một bài.
+    #
+    # Nên lấy theo việc CHẬM NHẤT, không phải việc nhanh nhất: ~22 phút. Khoá
+    # kẹt thật thì đúng là phải đợi lâu hơn mới lộ ra — nhưng đợi lâu chỉ tốn
+    # thời gian, còn đổi khoá sớm thì tốn tiền, và tiền là thứ không lấy lại
+    # được. Mỗi nhịp đợi đều in ra màn hình nên khách vẫn thấy tool còn sống.
+    CHO_TIEP: (15, 30, 60, 90, 120, 180, 240, 300, 300),
     TAM_NGHI: (15, 30, 60, 60, 90, 120, 120, 180, 180),
     CHAM_LAI: (30, 60, 120, 180, 240, 300),
     NHA_MAY_NGHI: (60, 120, 180, 300, 300),

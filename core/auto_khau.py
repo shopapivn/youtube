@@ -454,8 +454,7 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
             # Trước đây chỗ này ném lỗi thường, và một cảnh chết làm dừng cả
             # khâu: 111 clip đã trả tiền nằm đó, khách phải tự bấm Chạy tiếp.
             if _khong_bi_tru_tien(loi_goi):
-                raise LoiKetJob("máy chủ bỏ dở job này (không bị trừ tiền): "
-                                "{0}".format(loi_goi))
+                raise LoiKetJob("máy chủ bỏ dở việc này: {0}".format(loi_goi))
             raise RuntimeError("máy chủ báo job hỏng: {0}".format(loi_goi))
         # ═══ NÓI RA TRONG LÚC ĐỢI ═══
         #
@@ -1587,7 +1586,7 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str) -> in
                "trước lâu hơn một chút.".format(ten, thieu, tong))
         bc.ghi("    lý do cảnh hỏng: {0}".format(str(loi_dau[0])[:160]))
         bc.ghi("    muốn làm nốt thì bấm “Làm lại khâu này” — tool chỉ làm "
-               "phần còn thiếu, không tính tiền lại phần đã có.")
+               "phần còn thiếu.")
     if da_co:
         bc.ghi("  ({0}/{1} {2} đã có sẵn, không làm lại)".format(
             da_co, tong, ten))

@@ -92,12 +92,35 @@ class TestKhoaViec:
 
     def test_khoa_ket_thi_doi_sau_khi_het_kien_nhan(self):
         """Đợi mãi vẫn "đang xử lý" = khoá kẹt. Đổi khoá mới thoát ra được."""
-        # 4 nhịp CHO_TIEP rồi mới hết kiên nhẫn -> 5 lần gọi cùng khoá gốc.
-        may = MayChuGia([DANG_LAM] * 5 + ["thoát được rồi"])
+        from core.su_co import CHO_TIEP, _NHIP
+
+        # Đếm theo bảng nhịp thật, không gõ cứng: bảng ấy được chỉnh theo thời
+        # gian đo được của khâu chậm nhất, và bài kiểm không nên gãy mỗi lần
+        # ai đó chỉnh lại nó cho đúng.
+        so_lan_giu_khoa = len(_NHIP[CHO_TIEP]) + 1
+        may = MayChuGia([DANG_LAM] * so_lan_giu_khoa + ["thoát được rồi"])
         assert goi_van_ban(may, [{"role": "user", "content": "x"}],
                            **KHONG_NGU, khoa="goc") == "thoát được rồi"
-        assert may.khoa_da_dung[:5] == ["goc"] * 5
-        assert may.khoa_da_dung[5] != "goc"
+        assert may.khoa_da_dung[:so_lan_giu_khoa] == ["goc"] * so_lan_giu_khoa
+        assert may.khoa_da_dung[so_lan_giu_khoa] != "goc"
+
+    def test_kien_nhan_du_cho_khau_viet_kich_ban(self):
+        """Đây là con số đã làm hỏng thật, nên nó phải có người canh.
+
+        "Đang làm dở việc này" nghĩa là máy chủ **đã nhận và đang làm**. Bỏ
+        giữa chừng rồi đặt lại là làm lại từ đầu một việc vốn đang chạy ngon.
+
+        Ngày 14/08/2026 bảng nhịp bị rút xuống 75 giây, lấy theo lời nhắc chia
+        cảnh đo được 46 giây. Sai cho cả họ nhà việc: khâu viết kịch bản đo
+        được **769 giây**, nên khách chạy lượt đầu tiên là dính ngay ở bước
+        đầu tiên.
+        """
+        from core.su_co import CHO_TIEP, _NHIP
+
+        assert sum(_NHIP[CHO_TIEP]) > 769, (
+            "kiên nhẫn {0} giây không đủ cho khâu viết kịch bản (769 giây đo "
+            "được) — tool sẽ bỏ dở việc đang chạy để đặt lại từ đầu"
+            .format(sum(_NHIP[CHO_TIEP])))
 
     def test_khoa_luot_dau_giu_nguyen_ban_goc(self):
         """Nơi gọi tự đặt khoá phải nhận lại đúng việc cũ sau khi mở lại tool."""
