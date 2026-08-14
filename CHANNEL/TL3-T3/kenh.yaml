@@ -28,3 +28,32 @@ engine: veo3
 so_thumbnail: 3
 mo_hinh: claude-sonnet-5
 chu_bia_hoa: true
+
+# ── Dựng video ──────────────────────────────────────────────────────────────
+#
+# Ba dòng này là "template dựng" của kênh: mọi video của kênh dựng giống nhau
+# nên cài một lần ở đây, không phải chọn lại mỗi lượt. Sửa được ngay trong
+# tool: tab Tự động -> Quản lý kênh -> thẻ "Dựng video".
+
+# Đốt phụ đề thẳng vào hình?
+#   true  — chữ nằm luôn trong hình. Hợp Facebook và TikTok, chỗ người xem
+#           lướt trong lúc tắt tiếng.
+#   false — hình sạch, bạn tải tệp .srt lên YouTube riêng. Người xem bật/tắt
+#           được, đổi cỡ chữ được, và YouTube ĐỌC ĐƯỢC nội dung để đem video
+#           đi đề xuất — chữ đốt vào hình thì nó mù.
+dot_phu_de: true
+
+# Nhạc nền. Đường dẫn tính từ thư mục kênh này. Để trống là không có nhạc.
+#
+# Cổng ShopAPI KHÔNG bán nhạc, nên đây phải là tệp bạn tự có: mua, lấy từ kho
+# miễn phí bản quyền, hoặc tự làm. Tool không đi tải nhạc ở đâu về hộ bạn —
+# nhạc dính bản quyền là kênh ăn gậy, và đó không phải thứ tool được quyền
+# quyết thay bạn.
+nhac_nen: ""
+
+# Nhạc còn bao nhiêu phần độ to so với giọng đọc. 0.12 = 12%.
+#
+# Nghe thì tưởng nhỏ quá, nhưng đây là mức người dựng phim hay dùng cho video
+# có người nói suốt: nhạc để LẤP KHOẢNG LẶNG, không phải để nghe. Quá 0.2 là
+# người xem bắt đầu phải căng tai nghe lời.
+am_luong_nhac: 0.12

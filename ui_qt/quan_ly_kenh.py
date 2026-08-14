@@ -23,8 +23,9 @@ from typing import Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QComboBox, QDialog, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QPlainTextEdit, QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QInputDialog,
+    QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QTabWidget, QVBoxLayout,
+    QWidget,
 )
 
 from core.kenh import (BUOC_PROMPT, TEP_KENH, TEP_STYLE, doc_kenh, duong_kenh,
@@ -100,10 +101,12 @@ class HopQuanLyKenh(QDialog):
         # Thẻ 1 — cấu hình chung, sửa thẳng trên tệp yaml.
         self._them_the_chu("Cấu hình", os.path.join(thu_muc, TEP_KENH),
                            "kenh.yaml")
-        # Thẻ 2 — style.
+        # Thẻ 2 — cách dựng video, có nút bấm thật thay vì gõ YAML.
+        self._the.addTab(self._the_dung_video(thu_muc), "Dựng video")
+        # Thẻ 3 — style.
         self._them_the_chu("Phong cách hình", os.path.join(thu_muc, TEP_STYLE),
                            "style.yaml")
-        # Thẻ 3 — nhân vật tham chiếu, chỉ xem.
+        # Thẻ 4 — nhân vật tham chiếu, chỉ xem.
         self._the.addTab(self._the_nhan_vat(ma), "Nhân vật")
         # Bảy thẻ lời nhắc.
         for ten, mo_ta in BUOC_PROMPT:
@@ -134,6 +137,121 @@ class HopQuanLyKenh(QDialog):
         v.addWidget(duong_hien)
         self._o_prompt[khoa] = (o, duong)
         self._the.addTab(khung, nhan_the)
+
+    # ── Thẻ "Dựng video" ─────────────────────────────────────────────────────
+    #
+    # Ba thứ này vốn sửa được rồi — thẻ "Cấu hình" cho gõ thẳng vào `kenh.yaml`.
+    # Nhưng "sửa được" và "biết mà sửa" là hai chuyện: người làm YouTube không
+    # đoán ra là có một khoá tên `am_luong_nhac` để mà gõ. Chủ dự án,
+    # 14/08/2026: *"đại khái là có thể tùy chỉnh giúp khách hàng dễ dàng sử
+    # dụng"*.
+    #
+    # Thẻ này KHÔNG tự ghi tệp. Nó sửa **ô chữ của thẻ Cấu hình**, rồi nút Lưu
+    # chung ghi xuống đĩa như mọi thẻ khác. Một nơi ghi, một nơi thôi — hai nơi
+    # cùng ghi một tệp là thứ chắc chắn có ngày ghi đè lên nhau.
+
+    def _the_dung_video(self, thu_muc: str) -> QWidget:
+        khung = QWidget()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(10, 10, 10, 10)
+        v.setSpacing(10)
+
+        cai = _doc_yaml_phang(_doc(os.path.join(thu_muc, TEP_KENH)))
+
+        mo = nhan("Mọi video của kênh này dựng theo cách bên dưới. Cài một lần, "
+                  "không phải chọn lại mỗi lượt.", "phu")
+        mo.setWordWrap(True)
+        mo.setMinimumWidth(1)
+        v.addWidget(mo)
+
+        self._o_dot_sub = QCheckBox("Đốt phụ đề thẳng vào hình")
+        self._o_dot_sub.setChecked(
+            str(cai.get("dot_phu_de", "true")).strip().lower() != "false")
+        self._o_dot_sub.setToolTip(
+            "Bật: chữ nằm luôn trong hình, hợp Facebook và TikTok — chỗ người "
+            "xem tắt tiếng.\n"
+            "Tắt: hình sạch, bạn tải tệp .srt lên YouTube riêng. Người xem "
+            "bật/tắt được, và YouTube đọc được nội dung để đề xuất video.")
+        self._o_dot_sub.stateChanged.connect(lambda _s: self._ghi_ve_yaml())
+        v.addWidget(self._o_dot_sub)
+
+        v.addWidget(nhan("Nhạc nền", "h2"))
+        nh = nhan("Cổng ShopAPI không bán nhạc, nên đây phải là tệp bạn tự có. "
+                  "Chọn tệp là tôi chép vào thư mục kênh.", "phu")
+        nh.setWordWrap(True)
+        nh.setMinimumWidth(1)
+        v.addWidget(nh)
+
+        hang = HangXuongDong()
+        self._o_nhac = QLineEdit(str(cai.get("nhac_nen", "") or ""))
+        self._o_nhac.setPlaceholderText("chưa có — video sẽ không có nhạc nền")
+        self._o_nhac.setMinimumWidth(220)
+        self._o_nhac.textChanged.connect(lambda _t: self._ghi_ve_yaml())
+        hang.addWidget(self._o_nhac)
+        hang.addWidget(nut_phu("Chọn tệp nhạc",
+                               lambda: self._chon_nhac(thu_muc), rong=150))
+        hang.addWidget(nut_phu("Bỏ nhạc", lambda: self._o_nhac.setText(""),
+                               rong=110))
+        v.addLayout(hang)
+
+        hang2 = HangXuongDong()
+        hang2.addWidget(nhan("Độ to của nhạc so với giọng đọc:", "phu"))
+        self._o_am = QSpinBox()
+        self._o_am.setRange(0, 100)
+        self._o_am.setSuffix("%")
+        self._o_am.setFixedWidth(90)
+        try:
+            phan_tram = int(round(float(cai.get("am_luong_nhac", 0.12)) * 100))
+        except (TypeError, ValueError):
+            phan_tram = 12
+        self._o_am.setValue(max(0, min(100, phan_tram)))
+        self._o_am.setToolTip(
+            "12% nghe thì tưởng nhỏ quá, nhưng đó là mức người dựng phim hay "
+            "dùng cho video có người nói suốt: nhạc để lấp khoảng lặng, không "
+            "để nghe. Quá 20% là người xem phải căng tai nghe lời.")
+        self._o_am.valueChanged.connect(lambda _v: self._ghi_ve_yaml())
+        hang2.addWidget(self._o_am)
+        v.addLayout(hang2)
+
+        v.addStretch(1)
+        nhac_nho = nhan("Sửa xong bấm “Lưu” ở dưới cùng.", "phu")
+        v.addWidget(nhac_nho)
+        return khung
+
+    def _chon_nhac(self, thu_muc: str) -> None:
+        duong, _ = QFileDialog.getOpenFileName(
+            self, "Chọn tệp nhạc nền", "",
+            "Nhạc (*.mp3 *.wav *.m4a);;Mọi loại file (*)")
+        if not duong:
+            return
+        # Chép vào thư mục kênh chứ không trỏ tới chỗ cũ: khách dọn Downloads
+        # là kênh mất nhạc, mà lúc đó khâu dựng chỉ lặng lẽ bỏ nhạc đi và họ
+        # không hiểu vì sao video hôm nay khác hôm qua.
+        kho = os.path.join(thu_muc, "nhac")
+        try:
+            os.makedirs(kho, exist_ok=True)
+            dich = os.path.join(kho, os.path.basename(duong))
+            if os.path.abspath(duong) != os.path.abspath(dich):
+                shutil.copy2(duong, dich)
+        except OSError as loi:
+            self._app.show_message("Không chép được tệp nhạc", str(loi))
+            return
+        self._o_nhac.setText("nhac/" + os.path.basename(duong))
+
+    def _ghi_ve_yaml(self) -> None:
+        """Đổ ba lựa chọn xuống ô chữ của thẻ Cấu hình."""
+        o_cau_hinh = (self._o_prompt.get("kenh.yaml") or (None, ""))[0]
+        if o_cau_hinh is None:
+            return
+        chu = o_cau_hinh.toPlainText()
+        for khoa, gia_tri in (
+            ("dot_phu_de", "true" if self._o_dot_sub.isChecked() else "false"),
+            ("nhac_nen", self._o_nhac.text().strip()),
+            ("am_luong_nhac", "{0:.2f}".format(self._o_am.value() / 100.0)),
+        ):
+            chu = _dat_khoa_yaml(chu, khoa, gia_tri)
+        if chu != o_cau_hinh.toPlainText():
+            o_cau_hinh.setPlainText(chu)
 
     def _the_nhan_vat(self, ma: str) -> QWidget:
         khung = QWidget()
@@ -252,3 +370,42 @@ def _doc(duong: str) -> str:
             return tep.read()
     except OSError:
         return ""
+
+
+def _doc_yaml_phang(chu: str) -> dict:
+    """Đọc các dòng `khoá: giá trị` ở mức ngoài cùng. Đủ dùng cho thẻ Dựng video.
+
+    Cố ý **không** gọi bộ đọc YAML thật: chỗ này chỉ cần ba khoá đơn giản, và
+    một tệp YAML người dùng đang gõ dở thì bộ đọc thật ném lỗi còn hàm này vẫn
+    lấy được những dòng lành.
+    """
+    ra = {}
+    for dong in (chu or "").splitlines():
+        if not dong[:1].isalpha() or ":" not in dong:
+            continue
+        khoa, gia_tri = dong.split(":", 1)
+        gia_tri = gia_tri.split(" #", 1)[0].strip().strip('"').strip("'")
+        ra[khoa.strip()] = gia_tri
+    return ra
+
+
+def _dat_khoa_yaml(chu: str, khoa: str, gia_tri: str) -> str:
+    """Đặt `khoa: gia_tri` trong tệp YAML, giữ nguyên mọi thứ còn lại.
+
+    Sửa **đúng dòng đó** thay vì đọc-rồi-ghi-lại cả tệp: ghi lại cả tệp là mất
+    sạch ghi chú và thứ tự dòng — mà ghi chú trong `kenh.yaml` chính là chỗ giải
+    thích cho người sau vì sao kênh này để `ky_tu_moi_phut: 341`.
+    """
+    dong_moi = "{0}: {1}".format(khoa, gia_tri) if gia_tri != "" else \
+        '{0}: ""'.format(khoa)
+    cac_dong = (chu or "").splitlines()
+    for i, dong in enumerate(cac_dong):
+        if dong.split(":", 1)[0].strip() == khoa and dong[:1].isalpha():
+            # Giữ lại ghi chú cuối dòng nếu có.
+            ghi_chu = ""
+            if " #" in dong:
+                ghi_chu = " #" + dong.split(" #", 1)[1]
+            cac_dong[i] = dong_moi + ghi_chu
+            return "\n".join(cac_dong) + ("\n" if chu.endswith("\n") else "")
+    cac_dong.append(dong_moi)
+    return "\n".join(cac_dong) + "\n"

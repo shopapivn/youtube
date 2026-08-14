@@ -101,6 +101,36 @@ class Kenh:
     #: (chân dung, cảnh kịch tính…) rồi người chọn tay — giữ nguyên nết đó.
     so_thumbnail: int = 3
 
+    # ── Cách dựng video, cài một lần cho cả kênh ─────────────────────────────
+    #
+    # Chủ dự án, 14/08/2026: *"các vấn đề về edit có thể có template"*.
+    #
+    # Đây là những thứ mọi video của một kênh làm giống hệt nhau, nên hỏi từng
+    # lượt là hỏi thừa. Cài ở kênh một lần rồi thôi.
+
+    #: Đốt phụ đề thẳng vào hình hay không.
+    #:
+    #: `True` hợp với kênh đăng lên Facebook/TikTok — chỗ người xem tắt tiếng
+    #: và phụ đề rời không hiện. `False` hợp với kênh chỉ đăng YouTube: tải tệp
+    #: `.srt` lên riêng thì người xem bật/tắt được, đổi cỡ chữ được, và YouTube
+    #: đọc được nội dung để đề xuất video — chữ đốt vào hình thì nó mù.
+    dot_phu_de: bool = True
+
+    #: Tệp nhạc nền, đường dẫn tính từ thư mục kênh (ví dụ `nhac/nen.mp3`).
+    #:
+    #: Rỗng = không có nhạc. Cổng ShopAPI **không bán nhạc**, nên đây phải là
+    #: tệp khách tự có — mua, tải từ kho miễn phí bản quyền, hoặc tự làm. Tool
+    #: không đi tải nhạc ở đâu về hộ: nhạc dính bản quyền là kênh ăn gậy, và
+    #: đó là thứ tool không được phép quyết thay người.
+    nhac_nen: str = ""
+
+    #: Nhạc nhỏ hơn giọng đọc bao nhiêu lần. 0.12 = nhạc còn 12% độ to.
+    #:
+    #: Nghe thì thấy nhỏ quá, nhưng đây là mức người dựng phim hay dùng cho
+    #: video có người nói suốt: nhạc để **lấp khoảng lặng**, không để nghe. To
+    #: hơn 0.2 là người xem bắt đầu phải căng tai nghe lời.
+    am_luong_nhac: float = 0.12
+
     #: Toàn bộ `style.yaml`, giữ nguyên để đưa thẳng cho bước viết lời nhắc.
     style: Dict[str, Any] = field(default_factory=dict)
     #: Đường dẫn ảnh nhân vật tham chiếu (thường là `nv/nv1.png`).
@@ -238,6 +268,11 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         mo_hinh=str(cai.get("mo_hinh") or "claude-sonnet-5"),
         chu_bia_hoa=bool(cai.get("chu_bia_hoa", True)),
         so_thumbnail=max(1, int(_so(cai.get("so_thumbnail"), 3))),
+        dot_phu_de=bool(cai.get("dot_phu_de", True)),
+        nhac_nen=str(cai.get("nhac_nen") or ""),
+        # Kẹp trong 0..1. Số âm làm FFmpeg đảo pha, số lớn hơn 1 làm nhạc át
+        # hẳn giọng đọc — cả hai đều là gõ nhầm chứ không ai cố ý.
+        am_luong_nhac=min(1.0, max(0.0, _so(cai.get("am_luong_nhac"), 0.12))),
         style=doc_yaml(os.path.join(thu_muc, TEP_STYLE)),
         duong=thu_muc,
     )

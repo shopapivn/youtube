@@ -1776,24 +1776,39 @@ def _khau_dung(bc: BoiCanh):
                 giay.append(max(0.1, moc[i + 1] - moc[i]))
             else:
                 giay.append(max(0.1, het[i] - moc[i]))
+        # Cách dựng lấy từ kênh, không hỏi lại từng lượt: mọi video của một
+        # kênh dựng giống hệt nhau. Xem `core/kenh.Kenh.dot_phu_de`.
+        dot = bool(getattr(bc.kenh, "dot_phu_de", True)) and os.path.exists(srt)
+        nhac = _duong_nhac(bc.kenh)
         bc.ghi("  ghép {0} clip (cắt theo độ dài từng cảnh: {1:.0f} giây hình "
-               "cho {2:.0f} giây tiếng) + phụ đề…".format(
-                   len(manh), sum(giay), sum(giay)))
-        _ghep_video(ffmpeg, manh, mp3, srt if os.path.exists(srt) else "", dich,
-                    giay=giay, ghi=bc.ghi)
-        return {"so_clip": len(manh), "giay_hinh": round(sum(giay))}
+               "cho {2:.0f} giây tiếng){3}{4}…".format(
+                   len(manh), sum(giay), sum(giay),
+                   " + phụ đề" if dot else "",
+                   " + nhạc nền" if nhac else ""))
+        _ghep_video(ffmpeg, manh, mp3, srt if dot else "", dich,
+                    giay=giay, ghi=bc.ghi, nhac=nhac,
+                    am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)))
+        return {"so_clip": len(manh), "giay_hinh": round(sum(giay)),
+                "phu_de_dot": dot, "nhac": os.path.basename(nhac) if nhac else ""}
 
     return lam
 
 
 def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 dich: str, giay: Optional[Sequence[float]] = None,
-                ghi: Optional[Callable[[str], None]] = None) -> None:
+                ghi: Optional[Callable[[str], None]] = None,
+                nhac: str = "", am_luong: float = 0.12) -> None:
     """Cắt từng clip về đúng độ dài cảnh, nối lại, gắn tiếng, đốt phụ đề.
 
     `giay[i]` là độ dài **cảnh thứ i** lấy từ bảng cảnh — không phải độ dài
     clip. Engine bán clip cố định (Veo3 8 giây), còn cảnh chia theo nội dung,
     nên phải cắt thì hình mới bám đúng lời. Xem ghi chú ở `_khau_dung`.
+
+    `srt` rỗng = không đốt phụ đề vào hình (kênh chỉ đăng YouTube thường muốn
+    thế: tải tệp `.srt` lên riêng thì người xem bật/tắt được).
+
+    `nhac` là tệp nhạc nền; rỗng = không có. `am_luong` là phần độ to còn lại
+    của nhạc so với giọng đọc.
     """
     thu_muc = os.path.dirname(dich) or "."
     tam = os.path.join(thu_muc, "_cat")
@@ -1834,16 +1849,42 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     _chay(ffmpeg, ["-y", "-hide_banner", "-nostats", "-f", "concat", "-safe",
                    "0", "-i", danh_sach, "-c", "copy", tam_noi])
 
+    co_tieng = os.path.exists(mp3)
+    co_nhac = bool(nhac) and os.path.exists(nhac) and co_tieng
+
     lenh = ["-y", "-hide_banner", "-nostats", "-i", tam_noi]
-    if os.path.exists(mp3):
+    if co_tieng:
         lenh += ["-i", mp3]
+    if co_nhac:
+        # `-stream_loop -1`: bài nhạc thường ngắn hơn video nhiều, cho nó lặp
+        # tới hết. `-shortest` ở dưới chốt điểm dừng nên lặp vô hạn không sao.
+        lenh += ["-stream_loop", "-1", "-i", nhac]
+
     if srt:
         loc = "subtitles='{0}'".format(
             os.path.abspath(srt).replace("\\", "/").replace(":", "\\:"))
         lenh += ["-vf", loc, "-c:v", "libx264", "-preset", "medium", "-crf", "20"]
     else:
         lenh += ["-c:v", "copy"]
-    if os.path.exists(mp3):
+
+    if co_nhac:
+        # ═══ TRỘN NHẠC DƯỚI GIỌNG ĐỌC ═══
+        #
+        # `volume` hạ nhạc xuống trước, rồi `amix` trộn. Thứ tự đó quan trọng:
+        # trộn trước rồi mới hạ là hạ cả giọng đọc.
+        #
+        # `duration=first` để độ dài lấy theo GIỌNG ĐỌC, không theo nhạc — nhạc
+        # đang lặp vô hạn nên lấy theo nó là video không bao giờ kết thúc.
+        #
+        # `dropout_transition=0`: mặc định `amix` tự kéo to phần còn lại khi
+        # một nguồn im. Với video có người nói suốt thì mỗi lần người đọc ngừng
+        # lấy hơi, nhạc lại vống lên rồi tụt xuống — nghe như âm thanh bị hỏng.
+        tron = ("[1:a]volume=1.0[v];[2:a]volume={0:.3f}[n];"
+                "[v][n]amix=inputs=2:duration=first:dropout_transition=0[ra]"
+                .format(max(0.0, min(1.0, float(am_luong)))))
+        lenh += ["-filter_complex", tron, "-map", "0:v:0", "-map", "[ra]",
+                 "-c:a", "aac", "-b:a", "192k", "-shortest"]
+    elif co_tieng:
         # `-shortest` để video kết thúc cùng lúc với giọng đọc: tổng clip
         # thường dài hơn tiếng vài giây vì mỗi cảnh làm tròn lên.
         lenh += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-b:a",
@@ -1884,6 +1925,21 @@ def dung_bo_viec(bc: BoiCanh) -> Dict[str, Callable]:
     }
 
 
-def tron_lenh_nhac(*_a, **_k):  # pragma: no cover — chỗ giữ cho nhạc nền
-    """Nhạc nền chưa nối. Giữ tên để `__all__` ổn định."""
+def _duong_nhac(kenh) -> str:
+    """Đường dẫn đầy đủ tới nhạc nền của kênh, hoặc chuỗi rỗng.
+
+    Tệp thiếu thì trả rỗng chứ **không ném lỗi**: dựng xong một video không
+    nhạc vẫn hơn hẳn hỏng cả khâu dựng vì một tệp nhạc đặt sai tên — nhất là
+    khi bảy khâu trước đã tiêu tiền rồi.
+    """
+    ten = str(getattr(kenh, "nhac_nen", "") or "").strip()
+    if not ten:
+        return ""
+    duong = ten if os.path.isabs(ten) else os.path.join(
+        str(getattr(kenh, "duong", "") or ""), ten)
+    return duong if os.path.isfile(duong) else ""
+
+
+def tron_lenh_nhac(*_a, **_k):  # pragma: no cover — tên cũ, giữ cho `__all__`
+    """Đã thay bằng `_duong_nhac` + phần trộn trong `_ghep_video`."""
     raise NotImplementedError
