@@ -110,7 +110,51 @@ def main(argv=None) -> int:
         kwargs = {"cwd": str(current)}
         if os.name == "nt":
             kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        subprocess.Popen(command, **kwargs)
+
+        # ═══ HỨNG LỜI TRĂN TRỐI CỦA TOOL VỪA MỞ LẠI ═══
+        #
+        # Khách báo 15/08/2026: cập nhật lên được nhưng tool không tự mở lại.
+        # Dựng lại đúng luồng trên máy dựng tool — kể cả với một tiến trình Qt
+        # thật — thì nó mở lại bình thường, tức lỗi nằm ở thứ chỉ máy đó có.
+        #
+        # Mà `DETACHED_PROCESS` nghĩa là tiến trình mới không còn chỗ nào để
+        # kêu: không cửa sổ, không màn hình đen, và launcher thì thoát ngay sau
+        # đó. Tool mới chết lúc nạp mô-đun là chết hoàn toàn câm.
+        #
+        # Nên hứng sẵn: mọi thứ nó in ra trước khi chết đều vào tệp này.
+        ra_loi = current / "workspace" / "mo-lai.log"
+        try:
+            ra_loi.parent.mkdir(parents=True, exist_ok=True)
+            om = open(str(ra_loi), "w", encoding="utf-8")
+            kwargs["stdout"] = om
+            kwargs["stderr"] = subprocess.STDOUT
+        except OSError:
+            om = None
+
+        con = subprocess.Popen(command, **kwargs)
+
+        # Đợi một nhịp rồi hỏi lại: mở lên được thật, hay bật lên rồi tắt ngay.
+        # Hai chuyện đó với khách nhìn giống hệt nhau — đều là "tool không mở
+        # lại" — nhưng nguyên nhân khác hẳn, và chỉ dòng này phân biệt được.
+        time.sleep(4.0)
+        con_song = con.poll() is None
+        if om is not None:
+            try:
+                om.close()
+            except OSError:
+                pass
+        if not con_song:
+            loi_khi_mo = ""
+            try:
+                loi_khi_mo = ra_loi.read_text("utf-8").strip()[-600:]
+            except OSError:
+                pass
+            log.write_text(
+                "Đã cập nhật xong, nhưng tool bật lên rồi tắt ngay "
+                "(mã {0}).\n\n{1}\n\nBạn mở tool bằng CHAY-QT.bat để xem lỗi "
+                "đầy đủ.\n".format(con.returncode, loi_khi_mo or "(không in gì)"),
+                "utf-8")
+            return 1
         # Dọn chỗ dựng sẵn. Khách nhìn thấy `ShopAPI-Studio-cap-nhat` nằm lại
         # cạnh thư mục tool rồi hỏi *"sao lại đẻ ra thư mục này"* — mà đúng là
         # nó chỉ nên tồn tại trong lúc cập nhật, xong việc thì không có lý do

@@ -305,3 +305,33 @@ class TestThuMucLaThiKhongDung:
         apply_tai_cho(moi, cai)
         assert (cai / "VERSION").read_text(encoding="utf-8").strip() == "2.12.1"
         assert (cai / "dau-vet.txt").read_text(encoding="utf-8") == "ban moi"
+
+
+class TestMoLaiSauCapNhat:
+    """Cập nhật xong tool phải tự mở lại — và nếu không thì phải nói được vì sao.
+
+    Khách báo 15/08/2026: *"lên được rồi nhưng nó không reset tool"*. Dựng lại
+    đúng luồng trên máy dựng tool, kể cả với một tiến trình Qt thật, thì nó mở
+    lại bình thường — tức lỗi nằm ở thứ chỉ máy đó có.
+
+    Mà `DETACHED_PROCESS` nghĩa là tiến trình mới không còn chỗ nào để kêu:
+    không cửa sổ, không màn hình đen, và launcher thoát ngay sau đó. Tool mới
+    chết lúc nạp mô-đun là chết hoàn toàn câm — với khách thì "bật lên rồi tắt
+    ngay" và "không bật lên" trông giống hệt nhau.
+    """
+
+    def test_launcher_hung_loi_cua_tool_vua_mo_lai(self):
+        chu = (Path(__file__).resolve().parent.parent / "cap-nhat.py").read_text(
+            encoding="utf-8")
+        assert "mo-lai.log" in chu, \
+            "phải hứng thứ tool mới in ra, nếu không nó chết câm"
+        assert "con.poll()" in chu, \
+            "phải hỏi lại xem nó còn sống, không chỉ bắn đi rồi thôi"
+
+    def test_launcher_mo_lai_dung_diem_vao_con_song(self):
+        """Bản trước gọi `shopapi_studio.py` — điểm vào của bản tkinter đã xoá."""
+        goc = Path(__file__).resolve().parent.parent
+        chu = (goc / "cap-nhat.py").read_text(encoding="utf-8")
+        assert "shopapi_studio_qt.py" in chu
+        assert (goc / "shopapi_studio_qt.py").exists(), \
+            "điểm vào launcher mở lại phải thật sự tồn tại"
