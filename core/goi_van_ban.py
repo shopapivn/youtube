@@ -25,24 +25,28 @@ Idempotency-Key sinh ra để việc thử lại **không bị trừ tiền hai 
 khoá thì máy chủ biết đây vẫn là việc cũ. Nên đổi khoá bừa là tự tay vứt cái
 bảo hiểm đó đi.
 
-Nhưng giữ khoá cũ trong MỌI trường hợp lại sinh ra một cái bẫy đã cắn thật
-(xem `core/su_co.py`): khi máy chủ nói *"chưa nhận được yêu cầu"* rồi ta gọi
-lại bằng **đúng khoá cũ**, máy chủ ghi nhận khoá đó, và từ đó mọi lần hỏi đều
-trả *"đang xử lý"* — đến vô tận. Việc không bao giờ xong, khoá kẹt vĩnh viễn.
+Nhưng giữ khoá cũ trong MỌI trường hợp thì hỏng theo kiểu khác, và chỗ này đã
+**đo được trên máy chủ thật** (15/08/2026) chứ không phải suy đoán:
 
-Nên luật là:
+    gửi lời nhắc ngắn kèm khoá mới   -> xong sau 3,5 giây, trả kết quả đàng hoàng
+    gửi lại ĐÚNG khoá ấy             -> "Idempotency-Key này đang được xử lý"
+    hỏi lại ở giây 3, 9, 19, 40,
+    70, 131, 252                     -> cả bảy lần đều đúng câu ấy
+
+Việc đã xong từ giây thứ 3,5 mà khoá vẫn kẹt sau hơn bốn phút. Cổng **không
+bao giờ phát lại kết quả cũ cho khoá cũ** — nên câu "đợi vài giây rồi kiểm tra
+lại kết quả" trong chính thông báo ấy là sai với hành vi thật của nó.
+
+Ba loại, ba cách xử khác hẳn nhau:
 
 | máy chủ nói | nghĩa là | làm gì |
 |---|---|---|
-| `CHO_TIEP` "đang làm dở" | nó **đã nhận** việc | đợi, hỏi lại **đúng khoá cũ** |
-| `TAM_NGHI` "chưa nhận được" | nó **chưa nhận**, chưa trừ tiền | **khoá mới** |
+| `CHO_TIEP` hết giờ chờ | nó **đang viết dở** | đợi, giữ **đúng khoá cũ** |
+| `TAM_NGHI` "chưa nhận được" | nó **chưa nhận** | **khoá mới** |
+| `KHOA_DA_DUNG` "khoá đang xử lý" | khoá **hỏng vĩnh viễn** | **khoá mới, ngay** |
 
-Và một trường hợp nữa: `CHO_TIEP` đợi hết kiên nhẫn (~75 giây) mà vẫn "đang
-xử lý". Đo thật: lời nhắc nặng nhất của tool viết xong trong 46 giây. Quá 75
-giây thì gần như chắc chắn khoá đã kẹt, nên cũng đổi khoá. Chỗ này có tốn thêm
-tiền không? Không hơn hiện trạng: đường còn lại là báo lỗi cho khách, khách bấm
-lại, và lần bấm đó cũng sinh khoá mới y hệt. Khác mỗi chỗ tool tự làm thay vì
-bắt khách ngồi nhìn.
+Chỗ dễ sai nhất là gộp hai dòng cuối vào dòng đầu — và tool đã sai đúng thế
+suốt hai ngày: nó ngồi đợi hàng chục phút cho một thứ không bao giờ tới.
 """
 
 from __future__ import annotations
@@ -52,8 +56,8 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .su_co import (
-    CHAM_LAI, CHO_TIEP, HET_KHO, NHA_MAY_NGHI, TAM_NGHI, goi_kien_nhan,
-    phan_loai,
+    CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, NHA_MAY_NGHI, TAM_NGHI,
+    goi_kien_nhan, phan_loai,
 )
 
 __all__ = ["goi_van_ban", "MO_HINH_MAC_DINH", "TOI_DA_TOKEN_MAC_DINH"]
@@ -73,7 +77,8 @@ _SO_LUOT_KHOA = 4
 #:
 #: Cố tình KHÔNG có `TAM_NGHI`: nó phải thoát ra ngoài để vòng ngoài đổi khoá,
 #: chứ đợi tại chỗ với khoá cũ chính là thứ làm khoá kẹt.
-_DOI_GIU_KHOA: Sequence[str] = (CHO_TIEP, CHAM_LAI, HET_KHO, NHA_MAY_NGHI)
+_DOI_GIU_KHOA: Sequence[str] = (CHO_TIEP, CHAM_LAI, HET_KHO, NHA_MAY_NGHI,
+                                KHOA_DA_DUNG)
 
 
 def _doc_chu(phan_hoi: Any) -> str:
@@ -144,14 +149,16 @@ def goi_van_ban(
             # Chỉ hai loại này đáng đổi khoá. Còn lại — hết tiền, hỏng thật,
             # nội dung sai — thì đổi khoá cũng ra đúng kết quả ấy, ném lên
             # để khách biết mà xử lý.
-            if not con_luot or loai not in (CHO_TIEP, TAM_NGHI):
+            if not con_luot or loai not in (CHO_TIEP, TAM_NGHI, KHOA_DA_DUNG):
                 raise
             loi_cuoi = loi
             # Câu hiện lên màn hình chỉ nói tool đang làm gì. Chuyện ví tiền có
             # tab Tài khoản lo — nhắc tiền ở mỗi dòng nhật ký chỉ làm người
             # đang chờ thấy sốt ruột về một thứ họ không cần quyết lúc này.
             ghi("  {0} — đặt lại từ đầu (lần {1}).".format(
-                "máy chủ chưa nhận được yêu cầu" if loai == TAM_NGHI
-                else "đợi lâu vẫn chưa xong", luot + 1))
+                {TAM_NGHI: "máy chủ chưa nhận được yêu cầu",
+                 KHOA_DA_DUNG: "máy chủ không nhận lại việc cũ"}.get(
+                     loai, "đợi lâu vẫn chưa xong"),
+                luot + 1))
 
     raise loi_cuoi or RuntimeError("không gọi được AI sau nhiều lần đổi khoá")

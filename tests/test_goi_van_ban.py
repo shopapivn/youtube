@@ -24,7 +24,14 @@ class LoiGia(Exception):
 
 CHUA_NHAN = LoiGia("Hệ thống đang tạm gián đoạn nên chưa nhận được yêu cầu này. "
                    "Bạn KHÔNG bị trừ tiền. Vui lòng thử lại sau khoảng 15 giây.")
-DANG_LAM = LoiGia("Việc này đang được xử lý, bạn đợi thêm một chút.")
+#: Câu THẬT cổng trả về khi gửi lại một khoá đã dùng. Đo 15/08/2026: việc xong
+#: sau 3,5 giây, nhưng khoá ấy kẹt mãi — hỏi lại ở giây 3, 9, 19, 40, 70, 131,
+#: 252 đều đúng câu này.
+KHOA_CU = LoiGia("Yêu cầu với Idempotency-Key này đang được xử lý. Vui lòng "
+                 "đợi vài giây rồi kiểm tra lại kết quả, đừng gửi lại.")
+
+#: Máy chủ đang viết dở thật — hết giờ chờ phía tool, không phải khoá kẹt.
+DANG_LAM = LoiGia("Read timeout khi đang đợi máy chủ viết.")
 HET_TIEN = LoiGia("Số dư không đủ để chạy việc này.")
 
 
@@ -90,13 +97,34 @@ class TestKhoaViec:
         assert may.khoa_da_dung[0] == "goc"
         assert may.khoa_da_dung[-1] != "goc", "phải sang khoá mới"
 
-    def test_khoa_ket_thi_doi_sau_khi_het_kien_nhan(self):
-        """Đợi mãi vẫn "đang xử lý" = khoá kẹt. Đổi khoá mới thoát ra được."""
+    def test_khoa_da_dung_thi_doi_ngay_chu_khong_ngoi_doi(self):
+        """Khoá đã dùng thì đợi vô ích — đổi khoá là đường duy nhất.
+
+        Đo trên máy chủ thật 15/08/2026: việc xong sau 3,5 giây, rồi gửi lại
+        đúng khoá ấy thì kẹt mãi. Hỏi lại ở giây 3, 9, 19, 40, 70, 131, 252 —
+        cả bảy lần đều "đang được xử lý". Ngồi đợi là đợi một thứ không tới.
+        """
+        from core.su_co import KHOA_DA_DUNG, _NHIP
+
+        so_lan_giu_khoa = len(_NHIP[KHOA_DA_DUNG]) + 1
+        may = MayChuGia([KHOA_CU] * so_lan_giu_khoa + ["thoát được rồi"])
+        assert goi_van_ban(may, [{"role": "user", "content": "x"}],
+                           **KHONG_NGU, khoa="goc") == "thoát được rồi"
+        assert may.khoa_da_dung[:so_lan_giu_khoa] == ["goc"] * so_lan_giu_khoa
+        assert may.khoa_da_dung[so_lan_giu_khoa] != "goc"
+
+    def test_khong_ngoi_doi_lau_cho_mot_khoa_da_ket(self):
+        """Nhịp đợi phải NGẮN: đo được là nó không bao giờ nhả ra."""
+        from core.su_co import KHOA_DA_DUNG, _NHIP
+
+        assert sum(_NHIP[KHOA_DA_DUNG]) <= 30, (
+            "đợi {0} giây cho một khoá đã kẹt là bắt khách ngồi nhìn một thứ "
+            "không tới".format(sum(_NHIP[KHOA_DA_DUNG])))
+
+    def test_may_chu_viet_do_that_thi_VAN_kien_nhan(self):
+        """Đừng vì sửa chuyện khoá kẹt mà thành bỏ dở việc đang chạy ngon."""
         from core.su_co import CHO_TIEP, _NHIP
 
-        # Đếm theo bảng nhịp thật, không gõ cứng: bảng ấy được chỉnh theo thời
-        # gian đo được của khâu chậm nhất, và bài kiểm không nên gãy mỗi lần
-        # ai đó chỉnh lại nó cho đúng.
         so_lan_giu_khoa = len(_NHIP[CHO_TIEP]) + 1
         may = MayChuGia([DANG_LAM] * so_lan_giu_khoa + ["thoát được rồi"])
         assert goi_van_ban(may, [{"role": "user", "content": "x"}],
