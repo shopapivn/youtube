@@ -79,9 +79,47 @@ class NutCapNhat:
         self.nut = nut_chinh("Đang kiểm tra…", self._bam)
         self.nut.setToolTip("Tool tự hỏi GitHub xem có bản mới không.")
 
+    def _bao_lan_truoc_hong(self) -> None:
+        """Lần cập nhật trước có hỏng không — và nếu có thì nói ra.
+
+        ═══ VÌ SAO ═══
+
+        Việc tráo bản mới do `cap-nhat.py` làm, **sau khi tool đã thoát**. Lúc
+        ấy không còn cửa sổ nào để báo, nên nó chỉ ghi một dòng vào tệp log
+        cạnh thư mục tool. Không ai nghĩ tới chuyện mở tệp đó.
+
+        Hậu quả đúng như khách gặp 15/08/2026: bấm Cập nhật, tool khởi động lại
+        vẫn ở bản cũ, **không một lời giải thích**. Họ chỉ biết là "hình như có
+        gì sai sai". Ba lần cập nhật hỏng liên tiếp mà không ai biết là hỏng.
+
+        Nên lần mở sau, tool tự đọc tệp đó và nói thẳng.
+        """
+        goc = os.path.abspath(self._app.base_dir)
+        log = os.path.join(os.path.dirname(goc),
+                           os.path.basename(goc) + "-cap-nhat.log")
+        try:
+            if not os.path.isfile(log):
+                return
+            chu = open(log, encoding="utf-8", errors="replace").read().strip()
+        except OSError:
+            return
+        # Đọc xong là xoá: không thì mỗi lần mở tool lại báo lại một chuyện cũ.
+        try:
+            os.remove(log)
+        except OSError:
+            pass
+        if not chu or chu.lower().startswith("cập nhật thành công"):
+            return
+        self._app.show_message(
+            "Lần cập nhật trước chưa xong",
+            "{0}\n\nTool vẫn đang chạy bản cũ. Bạn bấm “Cập nhật” lần nữa; "
+            "nếu vẫn vậy thì đóng hết cửa sổ Explorer đang mở thư mục tool rồi "
+            "thử lại.".format(chu))
+
     def do_ngam(self) -> None:
         """Hỏi GitHub ở luồng nền. Gọi lúc cửa sổ vừa dựng xong, và mỗi lần
         khách bấm nút lúc đang ở bản mới nhất."""
+        self._bao_lan_truoc_hong()
         dang_dung = doc_phien_ban(self._app.base_dir)
         if not dang_dung:
             self._khong_biet()
@@ -136,7 +174,15 @@ class NutCapNhat:
                 "--current", goc]
         try:
             co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
-            subprocess.Popen(lenh, creationflags=co, close_fds=True)
+            # `cwd` là thư mục CHA, không phải thư mục cài.
+            #
+            # Không đặt thì tiến trình tráo thừa hưởng thư mục làm việc của
+            # tool — tức đứng ngay bên trong thư mục nó sắp đổi tên — và
+            # Windows chặn bằng `WinError 32`. `cap-nhat.py` cũng tự `chdir`
+            # cho chắc, nhưng chặn ngay từ đây thì bản cũ của launcher còn nằm
+            # trên máy khách cũng chạy được.
+            subprocess.Popen(lenh, creationflags=co, close_fds=True,
+                             cwd=os.path.dirname(goc) or None)
         except OSError as loi:
             self._hong(loi)
             return

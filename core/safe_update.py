@@ -23,6 +23,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import tempfile
+import time
 from typing import Any, Callable, Mapping, Optional, Union
 import zipfile
 
@@ -89,6 +90,108 @@ def stage_update(archive: bytes, manifest: Mapping[str, Any], staging_root: Unio
         shutil.rmtree(temp, ignore_errors=True)
 
 
+def _doi_ten_kien_tri(nguon: Path, dich: Path, so_lan: int = 12) -> None:
+    """Đổi tên thư mục, thử lại vài lần khi Windows đang khoá.
+
+    Trên Windows, đổi tên một thư mục thất bại (`WinError 32`) khi có bất cứ
+    thứ gì đang giữ nó: phần mềm diệt virus vừa quét xong nhưng chưa nhả, một
+    cửa sổ Explorer đang mở đúng thư mục ấy, hoặc dịch vụ đánh chỉ mục của
+    Windows. Phần lớn những cái đó nhả ra sau một hai giây.
+
+    Đây **không** phải chỗ chữa cho lỗi thư mục làm việc — cái đó không bao giờ
+    tự nhả, và đã được chặn ở `cap-nhat.py` bằng `os.chdir` ra ngoài. Chỗ này
+    chỉ lo mấy khoá tạm thời.
+    """
+    for lan in range(so_lan):
+        try:
+            os.replace(str(nguon), str(dich))
+            return
+        except OSError:
+            if lan == so_lan - 1:
+                raise
+            time.sleep(0.5)
+
+
+def apply_tai_cho(staged: Union[str, Path], current: Union[str, Path], *,
+                  healthcheck: Optional[Callable[[Path], None]] = None) -> Path:
+    """Thay **ruột** thư mục cài, giữ nguyên chính thư mục ấy.
+
+    ═══ VÌ SAO KHÔNG ĐỔI TÊN THƯ MỤC NỮA ═══
+
+    Bản trước tráo bằng cách đổi tên: `cài` → `cài.rollback`, rồi `bản mới` →
+    `cài`. Nghe gọn, nhưng trên Windows nó hỏng vì một luật rất cứng: **không
+    đổi tên được thư mục nào có tiến trình đang đứng bên trong**. Mà tiến trình
+    đi tráo lại được tool khởi chạy, nên nó thừa hưởng đúng thư mục cài làm thư
+    mục làm việc — tự chặn mình ngay bước đầu, lần nào cũng vậy.
+
+    Chữa bằng `os.chdir` ra ngoài thì được, nhưng đó là bịt một lỗ trên một
+    thiết kế còn nhiều lỗ khác cùng loại: một cửa sổ Explorer đang mở thư mục
+    ấy, phần mềm diệt virus vừa quét, dịch vụ đánh chỉ mục của Windows — mỗi
+    thứ đều đủ để chặn một lần đổi tên, và khách thì không hiểu vì sao "cập
+    nhật lúc được lúc không".
+
+    Chủ dự án, 15/08/2026: *"giải quyết từ gốc rễ… thư mục gốc đúng tên luôn vì
+    tao làm việc thì thường cập nhật vào luôn thư mục gốc"*.
+
+    Nên: **không đụng vào thư mục cài**. Chỉ dọn ruột nó ra chỗ lùi rồi chép
+    ruột mới vào. Thư mục giữ nguyên đường dẫn, nên lối tắt ngoài màn hình,
+    `.claude/` và mọi thứ trỏ tới nó đều còn nguyên.
+
+    Đổi lại: không còn "tráo một nhát" nữa, giữa chừng hỏng là thư mục ở trạng
+    thái nửa vời. Nên có chỗ lùi: mọi thứ dọn ra đều nằm ở `<tên>.rollback`, và
+    hỏng thì chép ngược lại trước khi ném lỗi.
+    """
+    staged_path, current_path = Path(staged).resolve(), Path(current).resolve()
+    if not staged_path.is_dir() or not current_path.is_dir():
+        raise UpdateError("Thiếu thư mục bản mới hoặc bản hiện tại")
+    if current_path in staged_path.parents or staged_path == current_path:
+        raise UpdateError("Bản mới không được nằm bên trong thư mục đang cập nhật")
+    # Soi bản mới TRƯỚC khi động vào bản đang chạy. Dọn ruột ra rồi mới phát
+    # hiện bản mới thiếu tệp là lúc đã không còn gì để chạy.
+    (healthcheck or _healthcheck_tree)(staged_path)
+
+    lui = current_path.with_name(current_path.name + ".rollback")
+    if lui.exists():
+        shutil.rmtree(lui, ignore_errors=True)
+    lui.mkdir(parents=True, exist_ok=True)
+
+    da_don: list = []
+    try:
+        # 1. Dọn ruột cũ ra chỗ lùi. Đồ của khách (`PRESERVE`) để nguyên tại chỗ.
+        for muc in list(current_path.iterdir()):
+            if muc.name in PRESERVE or muc.name == lui.name:
+                continue
+            _doi_ten_kien_tri(muc, lui / muc.name)
+            da_don.append(muc.name)
+
+        # 2. Chép ruột mới vào. Bỏ qua tên nằm trong `PRESERVE` — bản tải về
+        #    cũng có `CHANNEL`, `workspace`… và đè lên là xoá đồ khách đã sửa.
+        for muc in list(staged_path.iterdir()):
+            if muc.name in PRESERVE and (current_path / muc.name).exists():
+                continue
+            dich = current_path / muc.name
+            if muc.is_dir():
+                shutil.copytree(muc, dich, dirs_exist_ok=True)
+            else:
+                shutil.copy2(muc, dich)
+
+        (healthcheck or _healthcheck_tree)(current_path)
+    except Exception as loi:
+        # 3. Hỏng thì trả lại nguyên trạng: bỏ thứ vừa chép, chép ngược đồ cũ.
+        for ten in da_don:
+            dich = current_path / ten
+            if dich.exists():
+                if dich.is_dir():
+                    shutil.rmtree(dich, ignore_errors=True)
+                else:
+                    dich.unlink(missing_ok=True)
+            nguon = lui / ten
+            if nguon.exists():
+                _doi_ten_kien_tri(nguon, dich)
+        raise UpdateError("Cập nhật lỗi; đã trả lại bản cũ") from loi
+    return lui
+
+
 def apply_staged(staged: Union[str, Path], current: Union[str, Path], *,
                  healthcheck: Optional[Callable[[Path], None]] = None) -> Path:
     """Atomic swap. Chi goi tu launcher sau khi Studio da thoat."""
@@ -110,9 +213,9 @@ def apply_staged(staged: Union[str, Path], current: Union[str, Path], *,
             else: destination.unlink()
         if source.is_dir(): shutil.copytree(source, destination)
         else: shutil.copy2(source, destination)
-    os.replace(str(current_path), str(backup))
+    _doi_ten_kien_tri(current_path, backup)
     try:
-        os.replace(str(staged_path), str(current_path))
+        _doi_ten_kien_tri(staged_path, current_path)
         (healthcheck or _healthcheck_tree)(current_path)
     except Exception as exc:
         if current_path.exists():
