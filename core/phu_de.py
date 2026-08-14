@@ -317,6 +317,23 @@ def tao_phu_de(
     try:
         tu = lam(duong_mp3, ngon_ngu=ngon_ngu, cancel=cancel) or []
     except Exception as loi:  # noqa: BLE001
+        # ═══ MÁY KHÔNG CHẠY NỔI BỘ NGHE THÌ VẪN PHẢI RA PHỤ ĐỀ ═══
+        #
+        # Bộ nghe là mã C++; máy CPU đời cũ hoặc thiếu RAM thì nó không chạy
+        # được, và đó là chuyện của cái máy chứ không phải chuyện sửa được.
+        #
+        # Nhưng bỏ cuộc ở đây là bỏ cả lượt: khâu phụ đề nằm thứ ba trên tám,
+        # nên khách vừa trả tiền cho kịch bản và giọng đọc rồi nhận về không có
+        # gì. Mà ta đang nắm sẵn hai thứ đủ để tự rải: **đúng chữ kịch bản** và
+        # **độ dài file tiếng**. Rải theo số ký tự từng câu là ra phụ đề chữ
+        # chuẩn 100%, mốc thời gian xê xích vài phần mười giây.
+        #
+        # Kém hơn ép khớp thật, nhưng khoảng cách giữa "hơi lệch" và "không có
+        # video" thì lớn hơn nhiều.
+        ghi("  máy này không chạy được bộ nghe ({0}).".format(str(loi)[:120]))
+        deu = _rai_deu(duong_mp3, kich_ban, ngon_ngu, ghi)
+        if deu.cau:
+            return deu
         ket.loi = "không nghe được file giọng đọc: {0}".format(str(loi)[:200])
         return ket
     if not tu:
@@ -369,6 +386,69 @@ def tao_phu_de(
     return ket
 
 
+def do_dai_tieng(duong_mp3: str) -> float:
+    """Độ dài file tiếng, tính bằng giây. Không đo được thì trả `0.0`.
+
+    Hỏi FFmpeg — nó vốn đã có sẵn trên máy (gói `imageio-ffmpeg` đi kèm tool),
+    và nó đọc được mọi thứ ta có thể gặp.
+    """
+    import subprocess  # noqa: PLC0415
+
+    from .dung_video import tim_ffmpeg  # noqa: PLC0415
+
+    ffmpeg = tim_ffmpeg()
+    if not ffmpeg or not os.path.isfile(duong_mp3):
+        return 0.0
+    try:
+        # `ffmpeg -i` không có tệp ra nên nó thoát với mã lỗi và in mọi thứ ta
+        # cần ra stderr. Đó là cách dùng bình thường, không phải mẹo.
+        tho = subprocess.run(
+            [ffmpeg, "-hide_banner", "-i", duong_mp3],
+            capture_output=True, text=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stderr or ""
+        chu = tho.split("Duration:", 1)[1].split(",", 1)[0].strip()
+        gio, phut, giay = chu.split(":")
+        return int(gio) * 3600 + int(phut) * 60 + float(giay)
+    except Exception:  # noqa: BLE001 — đo không được thì nơi gọi tự lo
+        return 0.0
+
+
+def _rai_deu(duong_mp3: str, kich_ban: str, ngon_ngu: str, ghi) -> KetPhuDe:
+    """Đường lui khi máy không chạy nổi bộ nghe: rải thời gian theo số ký tự.
+
+    Chữ lấy **nguyên từ kịch bản** nên chính tả đúng tuyệt đối — đó là phần
+    quan trọng hơn với người đọc phụ đề. Chỉ mốc thời gian là ước lượng: câu
+    dài chiếm nhiều giây, câu ngắn chiếm ít, cộng lại vừa đúng độ dài file
+    tiếng.
+
+    Sai số dồn ở chỗ người đọc ngừng lấy hơi — cách rải này không biết chỗ nào
+    có khoảng lặng. Đo trên giọng thật thì lệch vài phần mười giây mỗi câu,
+    người xem gần như không nhận ra; nhưng `dang_tin` vẫn để `False` để tool
+    nói thật với khách rằng nên đọc lại trước khi đăng.
+    """
+    tong = do_dai_tieng(duong_mp3)
+    manh = cat_cau(kich_ban, ngon_ngu=ngon_ngu)
+    if tong <= 0 or not manh:
+        return KetPhuDe()
+
+    do_dai = [max(1, len(_chuan_hoa(m))) for m in manh]
+    tong_ky_tu = float(sum(do_dai))
+    ket = KetPhuDe(da_rot_ve_nghe=True)
+    moc = 0.0
+    for i, (chu, so_ky_tu) in enumerate(zip(manh, do_dai), start=1):
+        chiem = tong * (so_ky_tu / tong_ky_tu)
+        # Gọi bằng TÊN trường, không theo thứ tự: `Cau` bắt đầu bằng `so` chứ
+        # không bắt đầu bằng `chu`, và truyền nhầm thứ tự thì mọi câu ra rỗng
+        # mà không có lỗi nào — đúng kiểu hỏng lặng lẽ nhất.
+        ket.cau.append(Cau(so=i, bat_dau=moc, ket_thuc=moc + chiem,
+                           chu=chu.strip()))
+        moc += chiem
+    ghi("  đã rải phụ đề theo độ dài từng câu ({0} câu trong {1:.0f} giây). "
+        "Chữ đúng nguyên kịch bản, mốc thời gian là ước lượng.".format(
+            len(ket.cau), tong))
+    return ket
+
+
 def _rot_ve_nghe(tu, ngon_ngu: str) -> KetPhuDe:
     """Đường lui: ghép thẳng thứ máy nghe được thành phụ đề.
 
@@ -400,7 +480,37 @@ def nghe_bang_whisper(duong_mp3: str, *, ngon_ngu: str = "",
                       thu_muc_model: str = ""):
     """Nghe file tiếng, trả mốc thời gian tới từng chữ. **Chạy trên máy.**
 
-    Dùng `faster-whisper`. Không gọi mạng, không tiêu ví.
+    Dùng `faster-whisper`, ở **một tiến trình riêng**. Không gọi mạng, không
+    tiêu ví.
+
+    ═══ VÌ SAO PHẢI TÁCH TIẾN TRÌNH ═══
+
+    Bên dưới `faster-whisper` là CTranslate2, **mã C++**. Mã C++ gặp chuyện thì
+    gọi thẳng `abort()`: không exception, không đi qua `sys.excepthook`, không
+    để lại một dòng nào. Nạp nó trong tiến trình tool nghĩa là một CPU đời cũ
+    hoặc một máy thiếu RAM sẽ làm **cả cửa sổ biến mất giữa chừng**.
+
+    Khách báo đúng như vậy, 15/08/2026: *"chạy tab auto và nó tự tắt"*. Khâu
+    này là khâu thứ ba trên tám, nên nó chết đúng vào phút thứ năm tới thứ
+    mười — vừa khớp một báo cáo khác cùng ngày.
+
+    Lý do đầy đủ nằm ở đầu `core/nghe_ngoai.py`.
+    """
+    from .nghe_ngoai import nghe_o_tien_trinh_rieng  # noqa: PLC0415
+
+    return nghe_o_tien_trinh_rieng(
+        duong_mp3, ngon_ngu=ngon_ngu, thu_muc_model=thu_muc_model,
+        cancel=cancel)
+
+
+def nghe_trong_tien_trinh_nay(duong_mp3: str, *, ngon_ngu: str = "",
+                              cancel: Optional[threading.Event] = None,
+                              thu_muc_model: str = ""):
+    """Nạp bộ nghe NGAY TRONG tiến trình đang chạy.
+
+    ⚠ Chỉ `core/nghe_ngoai.py` được gọi hàm này, và nó gọi ở **tiến trình con**.
+    Gọi từ tiến trình tool là đem cái `abort()` của C++ vào thẳng cửa sổ khách —
+    xem giải thích ở `nghe_bang_whisper`.
     """
     from faster_whisper import WhisperModel  # noqa: PLC0415
 
