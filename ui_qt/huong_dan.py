@@ -153,8 +153,15 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Dán link video tư liệu. Điền tiêu đề và chữ ảnh bìa nếu bạn đã "
             "nghĩ sẵn — bỏ trống thì tôi tự đặt.",
             "Bấm Chạy. Bảng tiến độ cho biết đang ở khâu nào.",
+            "Hôm sau mở tool lên, ô “Lượt” đã sẵn lượt gần nhất của kênh. "
+            "Chọn đúng lượt còn dở rồi bấm “Chạy tiếp”.",
         ],
         "luu_y": [
+            "Tắt tool không mất gì. Ô “Lượt” liệt kê mọi lần chạy đã có của "
+            "kênh, kèm chữ cho biết lượt đó xong hay còn dở tới khâu mấy.",
+            "Bấm “Chạy” là mở lượt MỚI và làm lại từ khâu 1 — tốn tiền lại cho "
+            "những khâu đã xong. Khi lượt gần nhất còn dở, tôi sẽ hỏi lại "
+            "trước; muốn đi tiếp việc cũ thì chọn “Chạy tiếp”.",
             "Tám khâu: kịch bản → giọng đọc → phụ đề → bảng cảnh → ảnh → clip "
             "→ ảnh bìa → dựng. Sáu khâu gọi AI nên có tiêu ví; khâu phụ đề và "
             "khâu dựng chạy trên máy bạn, miễn phí.",
@@ -163,6 +170,8 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "
             "kịch bản thì phải “Làm lại từ khâu này” — giọng đọc cũ đang đọc "
             "bản kịch bản không còn nữa.",
+            "Dải ảnh dưới bảng hiện từng cảnh ngay khi tạo xong — bấm đúp một "
+            "tấm là mở ảnh gốc, khỏi phải mở thư mục đi tìm.",
             "Nút “Quản lý kênh” cho sửa cả bảy lời nhắc và phong cách hình "
             "ngay trong tool, và nhân bản kênh để làm kênh tiếng khác.",
             "Kết quả nằm ở PROJECTS/AUTO/<kênh>/<số>/ — có video, phụ đề, 3 "

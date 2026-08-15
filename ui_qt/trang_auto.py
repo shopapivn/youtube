@@ -24,13 +24,14 @@ from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QFileDialog, QHeaderView, QLineEdit, QPlainTextEdit,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QFileDialog, QHeaderView, QLineEdit, QMessageBox,
+    QPlainTextEdit, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.auto import (BO_QUA, CHO, DANG, HONG, MA_KHAU, XONG, LuotChay,
                        chay, dat_lam_lai, doc_luot, ghi_luot, khau_tieu_tien,
-                       moi_luot, san_pham_khau, ten_khau, tom_tat)
+                       liet_ke_luot, moi_luot, san_pham_khau, ten_khau,
+                       tom_tat)
 from core.kenh import doc_kenh, kiem_kenh, liet_ke_kenh
 
 from . import theme
@@ -51,11 +52,54 @@ MAU_TRANG_THAI = {
 }
 
 
+def _dem_trong_khau(tt) -> str:
+    """“37/99 ảnh” — khâu này đang làm tới cái thứ mấy.
+
+    Hàm thuần, tách khỏi lớp giao diện để kiểm được mà không cần dựng cửa sổ.
+
+    Khâu ảnh và khâu clip chạy cả trăm cảnh trong một khâu. Không có dòng này
+    thì suốt bốn mươi phút cột trạng thái chỉ hiện đúng hai chữ "ĐANG CHẠY",
+    và người dùng không có cách nào phân biệt với tool treo.
+    """
+    if tt is None:
+        return ""
+    ghi = tt.ghi_chu or {}
+    if "tong" not in ghi:
+        return ""
+    try:
+        tong = int(ghi.get("tong") or 0)
+        xong = int(ghi.get("xong") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if tong <= 0:
+        return ""
+    viec = str(ghi.get("viec") or "").strip()
+    return "{0}/{1}{2}".format(xong, tong, " " + viec if viec else "")
+
+
 class TrangTuDong(QWidget):
+    # ═══ SỰ THẬT NẰM Ở ĐĨA, KHÔNG NẰM Ở ĐÂY ═══
+    #
+    # Trang này từng giữ cả lượt chạy trong một biến `self._luot`. Đóng tool là
+    # biến ấy mất, mà không có đường nào nạp lại — bảng trống trơn, "Chạy tiếp"
+    # báo "chưa có lượt nào", trong khi kịch bản, giọng đọc và 99 tấm ảnh vẫn
+    # nằm nguyên trong `PROJECTS/AUTO/`. Người dùng chỉ còn cách bấm "Chạy", và
+    # nút đó mở lượt MỚI: **trả tiền lần hai cho những khâu đã xong**.
+    #
+    # Nay trang chỉ giữ đúng một thứ: **đường dẫn** lượt đang xem. Mọi con số
+    # trên bảng đều đọc lại từ `trang-thai.json` mỗi lần vẽ. Không còn "bộ nhớ
+    # của giao diện" để mà lệch với sự thật, và tắt tool không mất gì.
+
     def __init__(self, app):
         super().__init__()
         self._app = app
-        self._luot: Optional[LuotChay] = None
+        #: Thư mục lượt đang xem. Rỗng = chưa chọn lượt nào.
+        self._duong = ""
+        #: Thư mục lượt đang chạy — khác `_duong` khi người dùng ngó sang lượt
+        #: khác giữa chừng. Dùng để biết chữ `dang` trên đĩa là thật hay là dấu
+        #: vết của một lần bị giết.
+        self._duong_chay = ""
+        self._ds_luot: List[LuotChay] = []
         self._huy: Optional[threading.Event] = None
         self._dang_chay = False
 
@@ -67,16 +111,34 @@ class TrangTuDong(QWidget):
         doc.addWidget(self._the_chay())
         doc.addWidget(self._the_tien_do(), 1)
 
+        hang_log = HangXuongDong()
+        hang_log.addWidget(nhan("Nhật ký", "h2"))
+        # Khe 96px là chỗ nhìn được đúng bốn dòng, trong khi một lượt chạy đẻ ra
+        # hàng trăm dòng. Cho phóng to tại chỗ thay vì mở thêm cửa sổ: người
+        # đang theo dõi một mẻ 99 cảnh không muốn có thêm cửa sổ để quản.
+        self._nut_log = nut_phu("Xem rộng", self._doi_co_log, rong=120)
+        hang_log.addWidget(self._nut_log)
+        doc.addLayout(hang_log)
+
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
-        self._log.setFixedHeight(96)
+        self._log.setFixedHeight(self.CAO_LOG_NHO)
         self._log.setStyleSheet(
             "background:{0}; border:1px solid {1}; border-radius:8px;"
             " color:{2}; font-size:12px;".format(theme.THE_MO, theme.VIEN,
                                                  theme.CHU_MO))
         doc.addWidget(self._log)
         self._nap_kenh()
-        self._ve_bang()
+
+    #: Hai nấc chiều cao ô nhật ký. Nấc nhỏ để bảng tiến độ còn chỗ; nấc lớn
+    #: vừa đủ ~18 dòng, đọc được một đoạn có đầu có đuôi.
+    CAO_LOG_NHO = 96
+    CAO_LOG_LON = 320
+
+    def _doi_co_log(self) -> None:
+        lon = self._log.height() < self.CAO_LOG_LON
+        self._log.setFixedHeight(self.CAO_LOG_LON if lon else self.CAO_LOG_NHO)
+        self._nut_log.setText("Thu gọn" if lon else "Xem rộng")
 
     # ── Khối 1: chạy ─────────────────────────────────────────────────────────
 
@@ -94,6 +156,23 @@ class TrangTuDong(QWidget):
         hang.addWidget(self._chon_kenh)
         hang.addWidget(nut_phu("Quản lý kênh", self._mo_quan_ly, rong=150))
         v.addLayout(hang)
+
+        # ═══ Ô CHỌN LƯỢT — ĐƯỜNG QUAY LẠI VIỆC DỞ ═══
+        #
+        # Không có ô này thì việc đang làm dở chỉ tồn tại chừng nào tool còn mở.
+        # Có nó rồi thì tắt máy đi ngủ, sáng mở lên chọn đúng lượt cũ và bấm
+        # "Chạy tiếp" — không khâu nào phải trả tiền lần thứ hai.
+        hang_luot = HangXuongDong()
+        hang_luot.addWidget(nhan("Lượt", "h2"))
+        self._chon_luot = QComboBox()
+        self._chon_luot.setMinimumWidth(230)
+        self._chon_luot.setToolTip(
+            "Những lần chạy đã có của kênh này, mới nhất ở trên. Chọn một lượt "
+            "là thấy lại đúng bảng tiến độ của nó.")
+        self._chon_luot.currentIndexChanged.connect(
+            lambda _i: self._chon_luot_doi())
+        hang_luot.addWidget(self._chon_luot)
+        v.addLayout(hang_luot)
 
         self._nhan_kenh = self._phu("")
         v.addWidget(self._nhan_kenh)
@@ -178,6 +257,8 @@ class TrangTuDong(QWidget):
         hang2.addWidget(nut_phu("Nạp file có sẵn", self._nap_san, rong=170))
         v.addLayout(hang2)
 
+        v.addWidget(self._dai_phim())
+
         v.addWidget(self._phu(
             "“Làm lại khâu này” chỉ chạy đúng khâu ấy — hợp khi vài tấm ảnh "
             "xấu. “Làm lại từ khâu này” chạy lại cả các khâu sau — bắt buộc khi "
@@ -188,6 +269,133 @@ class TrangTuDong(QWidget):
             "bấm “Nạp file có sẵn” — tool bỏ qua khâu đó, không tính tiền. Bảng "
             "cảnh cũng vậy: tải file mẫu về, điền, rồi nạp lên."))
         return khung
+
+    # ── Dải phim: thấy từng cảnh, không phải đoán ────────────────────────────
+    #
+    # Trước đây muốn xem khâu "Tạo ảnh từng cảnh" làm ra cái gì thì phải bấm
+    # "Xem kết quả khâu này", đợi Windows mở thư mục, rồi bấm từng tệp trong 99
+    # tấm. Thực tế là không ai làm thế — người ta ngồi nhìn chữ "ĐANG CHẠY".
+    #
+    # Đây **không phải icon giao diện** (thứ chủ dự án đã bảo bỏ hai lần) mà là
+    # chính sản phẩm của khách hiện ra để họ nhìn.
+    #
+    # Cẩn thận về tốc độ: 99 tấm PNG cỡ 4K nạp một lượt là cửa sổ đứng hình vài
+    # chục giây. Nên ảnh thu nhỏ được nạp **từng tấm một theo nhịp đồng hồ** —
+    # giữa hai nhịp cửa sổ vẫn vẽ và vẫn bấm được — và giải mã thẳng ở cỡ nhỏ
+    # (`QImageReader.setScaledSize`) chứ không giải mã cỡ thật rồi mới thu.
+
+    #: Cỡ ảnh thu nhỏ, giữ đúng khung hình 16:9 của video.
+    CO_ANH_NHO = (96, 54)
+
+    def _dai_phim(self) -> QWidget:
+        from PyQt5.QtCore import QSize, QTimer  # noqa: PLC0415
+        from PyQt5.QtWidgets import QListWidget  # noqa: PLC0415
+
+        khung = QWidget()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+        self._nhan_dai = self._phu("")
+        v.addWidget(self._nhan_dai)
+
+        rong, cao = self.CO_ANH_NHO
+        self._dai = QListWidget()
+        self._dai.setViewMode(QListWidget.IconMode)
+        self._dai.setIconSize(QSize(rong, cao))
+        self._dai.setGridSize(QSize(rong + 16, cao + 30))
+        self._dai.setResizeMode(QListWidget.Adjust)
+        self._dai.setMovement(QListWidget.Static)
+        self._dai.setSelectionMode(QListWidget.SingleSelection)
+        self._dai.setFixedHeight(2 * (cao + 30) + 12)
+        self._dai.setMinimumWidth(1)
+        self._dai.setStyleSheet(
+            "background:{0}; border:1px solid {1}; border-radius:8px;"
+            " color:{2}; font-size:11px;".format(theme.THE_MO, theme.VIEN,
+                                                 theme.CHU_MO))
+        self._dai.itemDoubleClicked.connect(self._mo_anh_canh)
+        v.addWidget(self._dai)
+
+        #: Thư mục ảnh đang hiện. Đổi lượt là dựng lại dải từ đầu.
+        self._dai_goc = ""
+        #: Số cảnh đã có thẻ trên dải — để lần vẽ sau chỉ thêm cái mới, không
+        #: dựng lại cả dải (dựng lại là mất hết ảnh thu nhỏ vừa nạp xong).
+        self._dai_da_co = set()
+        #: Thẻ còn chờ ảnh thu nhỏ.
+        self._dai_cho = []
+        self._dong_ho_anh = QTimer(self)
+        self._dong_ho_anh.setInterval(30)
+        self._dong_ho_anh.timeout.connect(self._nhip_anh_nho)
+        return khung
+
+    def _ve_dai_phim(self) -> None:
+        from PyQt5.QtWidgets import QListWidgetItem  # noqa: PLC0415
+
+        thu_muc = os.path.join(self._duong, "5-anh") if self._duong else ""
+        if thu_muc != self._dai_goc:
+            self._dai_goc = thu_muc
+            self._dai.clear()
+            self._dai_da_co = set()
+            self._dai_cho = []
+        try:
+            ten = os.listdir(thu_muc) if thu_muc else []
+        except OSError:
+            ten = []
+        moi = sorted(int(t[:-4]) for t in ten
+                     if t.lower().endswith(".png") and t[:-4].isdigit()
+                     and int(t[:-4]) not in self._dai_da_co)
+        for so in moi:
+            self._dai_da_co.add(so)
+            muc = QListWidgetItem("Cảnh {0}".format(so))
+            muc.setData(Qt.UserRole, os.path.join(thu_muc, "{0}.png".format(so)))
+            muc.setData(Qt.UserRole + 1, so)
+            muc.setTextAlignment(Qt.AlignHCenter | Qt.AlignBottom)
+            # Ảnh về không theo thứ tự (nhiều cảnh chạy cùng lúc), nên chèn
+            # đúng chỗ chứ không nối đuôi — dải phim đọc theo số cảnh.
+            self._chen_theo_so(so, muc)
+            self._dai_cho.append(muc)
+        co = bool(self._dai_da_co)
+        self._dai.setVisible(co)
+        self._nhan_dai.setText(
+            "Ảnh từng cảnh — bấm đúp để mở ảnh gốc ({0} tấm).".format(
+                len(self._dai_da_co)) if co else
+            "Khâu tạo ảnh chạy xong tới đâu, ảnh hiện ra tới đó.")
+        if self._dai_cho and not self._dong_ho_anh.isActive():
+            self._dong_ho_anh.start()
+
+    def _chen_theo_so(self, so: int, muc) -> None:
+        for i in range(self._dai.count()):
+            if (self._dai.item(i).data(Qt.UserRole + 1) or 0) > so:
+                self._dai.insertItem(i, muc)
+                return
+        self._dai.addItem(muc)
+
+    def _nhip_anh_nho(self) -> None:
+        """Nạp đúng MỘT ảnh thu nhỏ rồi nhả luồng vẽ ra."""
+        from PyQt5.QtCore import QSize  # noqa: PLC0415
+        from PyQt5.QtGui import QIcon, QImageReader, QPixmap  # noqa: PLC0415
+
+        if not self._dai_cho:
+            self._dong_ho_anh.stop()
+            return
+        muc = self._dai_cho.pop(0)
+        try:
+            duong = muc.data(Qt.UserRole)
+        except RuntimeError:      # thẻ đã bị xoá vì người dùng đổi lượt
+            return
+        doc = QImageReader(str(duong or ""))
+        rong, cao = self.CO_ANH_NHO
+        doc.setScaledSize(QSize(rong, cao))
+        anh = doc.read()
+        if not anh.isNull():
+            muc.setIcon(QIcon(QPixmap.fromImage(anh)))
+
+    def _mo_anh_canh(self, muc) -> None:
+        from PyQt5.QtCore import QUrl  # noqa: PLC0415
+        from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
+
+        duong = str(muc.data(Qt.UserRole) or "")
+        if duong and os.path.isfile(duong):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(duong))
 
     # ── Kênh ─────────────────────────────────────────────────────────────────
 
@@ -210,6 +418,7 @@ class TrangTuDong(QWidget):
             self._nhan_kenh.setText(
                 "Chưa có kênh nào trong thư mục CHANNEL/.")
             self._nhan_kenh.setStyleSheet("color:{0};".format(theme.VANG))
+            self._nap_luot()
             return
         k = doc_kenh(self._app.base_dir, ma)
         thieu = kiem_kenh(k)
@@ -223,6 +432,67 @@ class TrangTuDong(QWidget):
                     k.ky_tu_muc_tieu, k.engine))
             self._nhan_kenh.setStyleSheet("color:{0};".format(theme.CHU_MO))
         self._nut_chay.setEnabled(not thieu and not self._dang_chay)
+        self._nap_luot()
+
+    # ── Lượt chạy ────────────────────────────────────────────────────────────
+
+    def _nhan_luot(self, luot: LuotChay) -> str:
+        """Một dòng trong ô chọn lượt: mã lượt + việc còn dở tới đâu.
+
+        Nói thẳng "đang dở, tới khâu 6" chứ không chỉ ghi mã lượt: người mở tool
+        lên sau một đêm cần biết ngay nên bấm Chạy tiếp hay mở lượt mới.
+        """
+        if luot.xong_het:
+            return "{0} · xong".format(luot.ma_luot)
+        hong = luot.khau_dang_hong
+        if hong:
+            return "{0} · dừng ở khâu {1}".format(
+                luot.ma_luot, MA_KHAU.index(hong[0]) + 1)
+        xong = sum(1 for m in MA_KHAU
+                   if luot.tt(m).trang_thai in (XONG, BO_QUA))
+        return "{0} · đang dở, xong {1}/{2} khâu".format(
+            luot.ma_luot, xong, len(MA_KHAU))
+
+    def _nap_luot(self) -> None:
+        """Đổ lại danh sách lượt của kênh đang chọn, mới nhất trước.
+
+        Tự chọn lượt mới nhất khi chưa có lựa chọn nào — mở tool lên là thấy
+        ngay việc dở của mình, không phải đi tìm trong thư mục.
+        """
+        ma = self._chon_kenh.currentText().strip()
+        self._ds_luot = liet_ke_luot(self._app.base_dir, ma) if ma else []
+        self._chon_luot.blockSignals(True)
+        self._chon_luot.clear()
+        for luot in self._ds_luot:
+            self._chon_luot.addItem(self._nhan_luot(luot), luot.thu_muc)
+        if self._ds_luot:
+            i = self._chon_luot.findData(self._duong)
+            self._chon_luot.setCurrentIndex(i if i >= 0 else 0)
+            self._duong = self._chon_luot.currentData() or ""
+        else:
+            self._duong = ""
+        self._chon_luot.blockSignals(False)
+        self._chon_luot.setEnabled(bool(self._ds_luot))
+        self._ve_bang()
+
+    def _chon_luot_doi(self) -> None:
+        duong = self._chon_luot.currentData()
+        self._duong = duong or ""
+        self._ve_bang()
+
+    def _doc(self) -> Optional[LuotChay]:
+        """Trạng thái lượt đang xem — **đọc lại từ đĩa mỗi lần gọi**.
+
+        Đây là chỗ đảo ngược nguyên tắc cũ. Trước kia giao diện giữ bản của
+        riêng nó và đĩa chỉ là bản sao lưu; nay đĩa là bản chính. Nhờ vậy tắt
+        tool không mất gì, và bảng không bao giờ nói khác với thứ thật sự có
+        trong thư mục.
+        """
+        if not self._duong:
+            return None
+        return doc_luot(
+            self._duong,
+            dang_chay=self._dang_chay and self._duong == self._duong_chay)
 
     def _mo_quan_ly(self) -> None:
         from .quan_ly_kenh import HopQuanLyKenh  # noqa: PLC0415
@@ -242,10 +512,58 @@ class TrangTuDong(QWidget):
             da_co = []
         return "{0:04d}".format(max([int(t) for t in da_co] or [0]) + 1)
 
+    def luot_con_do(self) -> Optional[LuotChay]:
+        """Lượt mới nhất của kênh đang chọn, nếu nó chưa xong.
+
+        `None` khi kênh chưa có lượt nào hoặc lượt mới nhất đã xong cả tám khâu
+        — tức là mở lượt mới không giẫm lên tiền của ai.
+        """
+        moi_nhat = self._ds_luot[0] if self._ds_luot else None
+        if moi_nhat is None or moi_nhat.xong_het:
+            return None
+        return moi_nhat
+
+    def _hoi_truoc_khi_mo_luot_moi(self, do: LuotChay) -> str:
+        """Hỏi trước khi bấm Chạy đè lên một lượt còn dở. Trả `tiep`/`moi`/`""`.
+
+        Nút "Chạy" mở lượt MỚI và chạy lại từ khâu 1. Với người đã chạy tới khâu
+        6 thì đó là trả tiền lần hai cho kịch bản, giọng đọc, bảng cảnh và cả
+        trăm tấm ảnh đã nằm sẵn trên đĩa — nên phải hỏi, và phải nói ra bằng
+        tiền chứ không bằng chữ "ghi đè".
+        """
+        hop = QMessageBox(self)
+        hop.setIcon(QMessageBox.Warning)
+        hop.setWindowTitle("Lượt {0} còn dở".format(do.ma_luot))
+        hop.setText(
+            "Lượt {0} chưa xong: {1}\n\n"
+            "Bấm “Chạy” là mở một lượt mới và làm lại từ khâu 1 — những khâu "
+            "đã xong ở lượt {0} sẽ bị tính tiền lần nữa.\n\n"
+            "Bạn muốn chạy tiếp lượt {0}, hay mở lượt mới?".format(
+                do.ma_luot, tom_tat(do)))
+        nut_tiep = hop.addButton("Chạy tiếp", QMessageBox.AcceptRole)
+        nut_moi = hop.addButton("Mở lượt mới", QMessageBox.DestructiveRole)
+        hop.addButton("Thôi", QMessageBox.RejectRole)
+        hop.setDefaultButton(nut_tiep)
+        hop.exec_()
+        if hop.clickedButton() is nut_tiep:
+            return "tiep"
+        if hop.clickedButton() is nut_moi:
+            return "moi"
+        return ""
+
     def _chay(self) -> None:
         ma = self._chon_kenh.currentText().strip()
         if not ma:
             return
+        do = self.luot_con_do()
+        if do is not None:
+            chon = self._hoi_truoc_khi_mo_luot_moi(do)
+            if not chon:
+                return
+            if chon == "tiep":
+                self._duong = do.thu_muc
+                self._chay_tiep()
+                return
         link = self._o_link.text().strip()
         if not link:
             self._app.show_message(
@@ -261,14 +579,14 @@ class TrangTuDong(QWidget):
         self._bat_dau(luot)
 
     def _chay_tiep(self) -> None:
-        if self._luot is None:
+        luot = self._doc()
+        if luot is None:
             self._app.show_message(
                 "Chưa có lượt nào",
                 "Bấm “Chạy” để bắt đầu một lượt mới. “Chạy tiếp” dùng khi một "
                 "lượt đang dở.")
             return
-        moi = doc_luot(self._luot.thu_muc) or self._luot
-        self._bat_dau(moi)
+        self._bat_dau(luot)
 
     def _bat_dau(self, luot: LuotChay) -> None:
         if self._dang_chay:
@@ -278,7 +596,8 @@ class TrangTuDong(QWidget):
         if thieu:
             self._app.show_message("Kênh chưa đủ điều kiện", "\n".join(thieu))
             return
-        self._luot = luot
+        self._duong = luot.thu_muc
+        self._duong_chay = luot.thu_muc
         self._huy = threading.Event()
         self._dang_chay = True
         self._nut_chay.setEnabled(False)
@@ -287,7 +606,7 @@ class TrangTuDong(QWidget):
         self._nut_mo.setEnabled(True)
         self._ghi("[BẮT ĐẦU] lượt {0} của kênh {1}.".format(
             luot.ma_luot, luot.ma_kenh))
-        self._ve_bang()
+        self._nap_luot()
 
         huy = self._huy
 
@@ -299,7 +618,8 @@ class TrangTuDong(QWidget):
                 goi_chat=self._dung_goi_chat(),
                 client=self._app.client if hasattr(self._app, "client")
                 else self._dung_client(),
-                on_log=self._ghi_nen, cancel=huy)
+                on_log=self._ghi_nen, cancel=huy,
+                on_nhip=self._nhip_nen)
             return chay(luot, dung_bo_viec(bc), on_log=self._ghi_nen,
                         on_doi=self._doi_nen, cancel=huy)
 
@@ -357,7 +677,7 @@ class TrangTuDong(QWidget):
         self._ghi("Đã yêu cầu dừng — phần đã làm vẫn giữ nguyên.")
 
     def _xong(self, luot: LuotChay) -> None:
-        self._luot = luot
+        self._duong = luot.thu_muc
         self._ket_thuc()
         if luot.xong_het:
             self._ghi("[XONG] Video nằm ở 8-video.mp4.")
@@ -372,15 +692,23 @@ class TrangTuDong(QWidget):
 
     def _ket_thuc(self) -> None:
         self._dang_chay = False
+        self._duong_chay = ""
         self._nut_dung.setEnabled(False)
         self._nut_tiep.setEnabled(True)
+        # `_ve_kenh` kéo theo `_nap_luot` → `_ve_bang`, nên nhãn trong ô chọn
+        # lượt cũng cập nhật theo (“đang dở, xong 6/8” → “xong”).
         self._ve_kenh()
-        self._ve_bang()
 
     # ── Bảng ─────────────────────────────────────────────────────────────────
 
     def _ve_bang(self) -> None:
-        luot = self._luot
+        """Vẽ lại bảng **từ đĩa**, không từ bộ nhớ.
+
+        Bảng chỉ đọc: nó không giữ trạng thái riêng, nên không có bản nào để mà
+        lệch với thứ thật sự nằm trong thư mục lượt chạy.
+        """
+        luot = self._doc()
+        self._nut_mo.setEnabled(bool(self._duong))
         for hang, ma in enumerate(MA_KHAU):
             tt = luot.tt(ma) if luot is not None else None
             from PyQt5.QtGui import QColor  # noqa: PLC0415
@@ -400,6 +728,11 @@ class TrangTuDong(QWidget):
             # Cột cuối gộp thời gian + kết quả/lỗi: hai thứ người ta nhìn cùng
             # lúc, tách hai cột chỉ làm bảng rộng thêm mà không rõ hơn.
             chi_tiet = []
+            # Đếm tiến độ TRONG khâu lên trước mọi thứ khác: với khâu 99 cảnh
+            # thì "37/99 ảnh" là câu trả lời duy nhất cho "nó còn chạy không".
+            dem = _dem_trong_khau(tt)
+            if dem:
+                chi_tiet.append(dem)
             if tt and tt.giay:
                 chi_tiet.append("{0:.0f} giây".format(tt.giay))
             if tt and tt.so_lan > 1:
@@ -407,13 +740,21 @@ class TrangTuDong(QWidget):
             if tt and tt.loi:
                 chi_tiet.append(tt.loi)
             elif tt and tt.ghi_chu:
-                chi_tiet.append(", ".join(
-                    "{0} {1}".format(v, k.replace("_", " "))
-                    for k, v in tt.ghi_chu.items()))
+                # Bỏ mấy khoá đã được câu đếm nói rồi. `so_anh` với `xong` là
+                # cùng một con số, in cả hai thành "99/99 ảnh · 99 so anh".
+                bo = {"xong", "tong", "viec"}
+                if dem:
+                    bo |= {"so_anh", "so_clip", "so_thumbnail"}
+                con = {k: v for k, v in tt.ghi_chu.items() if k not in bo}
+                if con:
+                    chi_tiet.append(", ".join(
+                        "{0} {1}".format(v, k.replace("_", " "))
+                        for k, v in con.items()))
             self._bang.setItem(hang, 4,
                                QTableWidgetItem(" · ".join(chi_tiet)[:200]))
         self._tom_tat.setText(
             tom_tat(luot) if luot is not None else "Chưa chạy lượt nào.")
+        self._ve_dai_phim()
 
     def _khau_dang_chon(self) -> str:
         hang = self._bang.currentRow()
@@ -421,11 +762,12 @@ class TrangTuDong(QWidget):
 
     def _xem_khau(self) -> None:
         ma = self._khau_dang_chon()
-        if not ma or self._luot is None:
+        luot = self._doc()
+        if not ma or luot is None:
             self._app.show_message("Chưa chọn khâu",
                                    "Bấm vào một dòng trong bảng trước.")
             return
-        duong = self._luot.duong_san_pham(ma)
+        duong = luot.duong_san_pham(ma)
         if not duong or not os.path.exists(duong):
             self._app.show_message(
                 "Chưa có gì để xem",
@@ -441,7 +783,8 @@ class TrangTuDong(QWidget):
 
     def _lam_lai(self, *, ca_sau: bool) -> None:
         ma = self._khau_dang_chon()
-        if not ma or self._luot is None:
+        luot = self._doc()
+        if not ma or luot is None:
             self._app.show_message("Chưa chọn khâu",
                                    "Bấm vào một dòng trong bảng trước.")
             return
@@ -449,13 +792,13 @@ class TrangTuDong(QWidget):
             self._app.show_message("Đang chạy",
                                    "Bấm Dừng trước rồi hãy làm lại.")
             return
-        doi = dat_lam_lai(self._luot, ma, ca_sau=ca_sau)
+        doi = dat_lam_lai(luot, ma, ca_sau=ca_sau)
         if not doi:
             self._app.show_message(
                 "Không có gì để làm lại",
                 "Khâu “{0}” chưa từng chạy xong.".format(ten_khau(ma)))
             return
-        ghi_luot(self._luot)
+        ghi_luot(luot)
         # ═══ CHỈ ĐÁNH DẤU, KHÔNG XOÁ TỆP ═══
         #
         # Tệp cũ để nguyên trên đĩa. Khâu nào cũng nhìn đĩa trước, nên muốn nó
@@ -470,7 +813,7 @@ class TrangTuDong(QWidget):
             "Muốn làm mới hoàn toàn thì xoá tệp của khâu ấy đi (nút “Xem kết "
             "quả khâu này” mở đúng thư mục).".format(
                 ", ".join(ten_khau(m) for m in doi)))
-        self._ve_bang()
+        self._nap_luot()
 
     # ── Đưa đồ của bạn vào ───────────────────────────────────────────────────
     #
@@ -526,7 +869,8 @@ class TrangTuDong(QWidget):
         ma = self._chon_khau_cho("Nạp file có sẵn")
         if not ma:
             return
-        if self._luot is None:
+        luot = self._doc()
+        if luot is None:
             self._app.show_message(
                 "Chưa có lượt chạy nào",
                 "Bạn điền link rồi bấm “Chạy” một lần để tool mở lượt chạy, "
@@ -549,7 +893,7 @@ class TrangTuDong(QWidget):
             return
 
         try:
-            dich = nap_file(self._luot.thu_muc, ma, duong)
+            dich = nap_file(luot.thu_muc, ma, duong)
         except LoiNapSan as loi:
             # Nói rõ thiếu đúng cái gì. "File không hợp lệ" thì khách chỉ biết
             # ngồi nhìn; "thiếu cột srt_start" thì họ sửa được.
@@ -562,16 +906,16 @@ class TrangTuDong(QWidget):
         # Đánh dấu khâu đã xong. Các khâu sau vẫn ở nguyên trạng thái cũ — nạp
         # kịch bản mới mà giọng đọc cũ còn đó thì giọng đọc đang đọc một bản
         # kịch bản không còn tồn tại, nên phải bảo họ làm lại từ đây.
-        tt = self._luot.tt(ma)
+        tt = luot.tt(ma)
         tt.trang_thai = XONG
         tt.loi = ""
         tt.ghi_chu["nap_san"] = duong
-        ghi_luot(self._luot)
-        self._ve_bang()
+        ghi_luot(luot)
+        self._nap_luot()
         self._ghi("Đã nạp “{0}” từ {1}".format(ten_khau(ma), duong))
 
         sau = [ten_khau(m) for m in MA_KHAU[MA_KHAU.index(ma) + 1:]
-               if self._luot.tt(m).trang_thai == XONG]
+               if luot.tt(m).trang_thai == XONG]
         them = ("\n\nCác khâu sau đã chạy rồi: {0}.\nChúng đang dựa trên bản "
                 "cũ, nên bạn chọn dòng này rồi bấm “Làm lại từ khâu này”."
                 .format(", ".join(sau))) if sau else ""
@@ -582,8 +926,8 @@ class TrangTuDong(QWidget):
             .format(ten_khau(ma), dich, them))
 
     def _mo_ket_qua(self) -> None:
-        if self._luot is not None and os.path.isdir(self._luot.thu_muc):
-            mo_thu_muc(self._luot.thu_muc)
+        if self._duong and os.path.isdir(self._duong):
+            mo_thu_muc(self._duong)
 
     # ── Nhật ký ──────────────────────────────────────────────────────────────
 
@@ -594,6 +938,16 @@ class TrangTuDong(QWidget):
         self._app.goi_tren_luong_ve(lambda: self._ghi(dong))
 
     def _doi_nen(self, _luot: LuotChay) -> None:
+        self._app.goi_tren_luong_ve(self._ve_bang)
+
+    def _nhip_nen(self, luot: LuotChay) -> None:
+        """Một cảnh vừa xong giữa chừng: ghi ra đĩa rồi vẽ lại.
+
+        Phải ghi ở đây chứ không đợi hết khâu: đóng tool lúc đang chạy cảnh 60
+        mà chưa ghi thì lần sau mở lên vẫn thấy "0/99", trong khi 60 tấm ảnh
+        nằm sẵn trên đĩa.
+        """
+        ghi_luot(luot)
         self._app.goi_tren_luong_ve(self._ve_bang)
 
     def doi_du_an(self, _ten: str) -> None:

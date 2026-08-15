@@ -46,7 +46,7 @@ from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
                     phan_loai, xin_nhip)
 
 __all__ = [
-    "BoiCanh", "dung_bo_viec", "chia_doan_doc",
+    "BoiCanh", "dung_bo_viec", "chia_doan_doc", "dem_tien_do",
     "CHU_MOI_LUOT_DOC", "loc_json",
 ]
 
@@ -1708,6 +1708,7 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
             _so, san_co = ket
             xong += 1
             da_co += 1 if san_co else 0
+            bao_nhip()
             if xong % 10 == 0 or xong == tong:
                 bc.ghi("  {0}: {1}/{2} xong.".format(ten, xong, tong))
     bc.nha_may_tat = None
@@ -1813,7 +1814,8 @@ def _khau_anh(bc: BoiCanh):
             _tai_ket_qua(bc, goi, 0, tep)
             return so, False
 
-        xong = _chay_song_song(bc, canh, mot_canh, "ảnh")
+        xong = _chay_song_song(bc, canh, mot_canh, "ảnh",
+                               nhip=dem_tien_do(bc, luot, tt, "ảnh"))
         return {"so_anh": xong}
 
     return lam
@@ -1900,7 +1902,8 @@ def _khau_clip(bc: BoiCanh):
             _kiem_media(bc, tep)
             return so, False
 
-        xong = _chay_song_song(bc, canh, mot_canh, "clip")
+        xong = _chay_song_song(bc, canh, mot_canh, "clip",
+                               nhip=dem_tien_do(bc, luot, tt, "clip"))
         return {"so_clip": xong}
 
     return lam
@@ -2007,7 +2010,8 @@ def _khau_thumbnail(bc: BoiCanh):
             return so, False
 
         xong = _chay_song_song(
-            bc, list(enumerate(kieu, start=1)), mot_bia, "ảnh bìa")
+            bc, list(enumerate(kieu, start=1)), mot_bia, "ảnh bìa",
+            nhip=dem_tien_do(bc, luot, tt, "ảnh bìa"))
         return {"so_thumbnail": xong}
 
     return lam
