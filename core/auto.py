@@ -51,7 +51,7 @@ __all__ = [
     "KHAU", "MA_KHAU", "ten_khau", "khau_tieu_tien",
     "CHO", "DANG", "XONG", "HONG", "BO_QUA",
     "TrangThaiKhau", "LuotChay", "Cancelled",
-    "duong_luot", "moi_luot", "doc_luot", "ghi_luot",
+    "duong_luot", "moi_luot", "doc_luot", "ghi_luot", "liet_ke_luot",
     "dat_lam_lai", "chay", "tom_tat",
 ]
 
@@ -196,8 +196,14 @@ def moi_luot(goc: str, ma_kenh: str, ma_luot: str,
     return luot
 
 
-def doc_luot(thu_muc: str) -> Optional[LuotChay]:
-    """Đọc trạng thái từ đĩa. `None` nếu chưa có lượt nào ở đó."""
+def doc_luot(thu_muc: str, *, dang_chay: bool = False) -> Optional[LuotChay]:
+    """Đọc trạng thái từ đĩa. `None` nếu chưa có lượt nào ở đó.
+
+    `dang_chay=True` khi **chính tool này đang chạy đúng lượt đó ngay lúc gọi**.
+    Nó tắt đoạn "khâu dở = lần trước bị giết" ở dưới. Cần vì giao diện giờ vẽ
+    bảng bằng cách đọc lại đĩa: đọc giữa lúc đang chạy mà vẫn đổi `dang` thành
+    `hong` là khách nhìn thấy chữ HỎNG đỏ chót cho khâu đang chạy ngon lành.
+    """
     duong = os.path.join(thu_muc, TEP_TRANG_THAI)
     try:
         with open(duong, "r", encoding="utf-8") as tep:
@@ -233,11 +239,51 @@ def doc_luot(thu_muc: str) -> Optional[LuotChay]:
     # Không có tiến trình nào đang chạy mà trạng thái vẫn là `dang` thì chỉ có
     # một khả năng: lần trước mất điện, hoặc người dùng đóng tool giữa chừng.
     # Để nguyên `dang` là lần sau nhìn vào tưởng nó đang chạy và ngồi đợi mãi.
-    for m in MA_KHAU:
-        if luot.tt(m).trang_thai == DANG:
-            luot.tt(m).trang_thai = HONG
-            luot.tt(m).loi = "lần chạy trước bị dừng đột ngột"
+    if not dang_chay:
+        for m in MA_KHAU:
+            if luot.tt(m).trang_thai == DANG:
+                luot.tt(m).trang_thai = HONG
+                luot.tt(m).loi = "lần chạy trước bị dừng đột ngột"
     return luot
+
+
+def liet_ke_luot(goc: str, ma_kenh: str) -> List[LuotChay]:
+    """Mọi lượt đã có của một kênh, mới nhất trước. **Chỉ đọc, không sửa gì.**
+
+    Có mặt vì thiếu nó thì đóng tool là mất dấu lượt đang dở: mọi thứ vẫn nằm
+    nguyên trong `PROJECTS/AUTO/<kênh>/`, nhưng giao diện không có đường nào
+    quay lại — và bấm "Chạy" lúc ấy mở lượt mới, trả tiền lần hai cho những
+    khâu đã xong.
+
+    **Nhận lượt theo tệp trạng thái, không theo tên thư mục.** Bản thiết kế đề
+    xuất lọc `tên.isdigit()`, nhưng thư mục thật của khách đang có cả `L01…L14`
+    lẫn `M01…M10` bên cạnh `0001…0006` — lọc theo chữ số là giấu đi đúng những
+    lượt họ đang chạy. Thứ nói chắc "đây là một lượt" chỉ có một: đọc được
+    `trang-thai.json` trong đó.
+
+    Thư mục nào không đọc được thì bỏ qua — một lượt hỏng không được làm mất
+    dấu các lượt còn lại.
+    """
+    goc_kenh = os.path.join(goc, "PROJECTS", "AUTO", ma_kenh)
+    try:
+        ten = os.listdir(goc_kenh)
+    except OSError:
+        return []
+    ket: List[LuotChay] = []
+    for t in ten:
+        duong = os.path.join(goc_kenh, t)
+        if not os.path.isdir(duong):
+            continue
+        luot = doc_luot(duong)
+        if luot is not None:
+            # Thư mục có thể bị đổi tên bằng tay; tên thư mục mới là chỗ thật
+            # sự chứa tệp, nên nó thắng mã ghi trong tệp trạng thái.
+            luot.ma_luot = t
+            ket.append(luot)
+    # Mới nhất trước, theo **lúc tạo** chứ không theo tên: khách đặt tên lượt
+    # kiểu "L01", "M01" thì xếp theo tên là xếp nhầm thứ tự thời gian.
+    ket.sort(key=lambda l: (l.tao_luc, l.ma_luot), reverse=True)
+    return ket
 
 
 def ghi_luot(luot: LuotChay) -> None:

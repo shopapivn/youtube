@@ -138,10 +138,21 @@ class BoiCanh:
     ngu: Callable[[float], None] = time.sleep
     #: Chốt "cổng ngừng nhận loại việc này". Một luồng gạt, mọi luồng dừng.
     nha_may_tat: Optional[threading.Event] = None
+    #: "Trạng thái vừa đổi **giữa lúc một khâu còn đang chạy** — ghi ra đĩa và
+    #: vẽ lại đi."
+    #:
+    #: `core/auto.chay` chỉ báo đổi ở đầu và cuối mỗi khâu. Với khâu 99 cảnh thì
+    #: giữa hai mốc ấy là bốn mươi phút chỉ hiện đúng hai chữ "ĐANG CHẠY", và
+    #: không cách nào phân biệt "đang làm cảnh 87" với "tool treo".
+    on_nhip: Optional[Callable[[LuotChay], None]] = None
 
     def ghi(self, dong: str) -> None:
         if self.on_log is not None:
             self.on_log(dong)
+
+    def nhip(self, luot: LuotChay) -> None:
+        if self.on_nhip is not None:
+            self.on_nhip(luot)
 
     def kiem_dung(self) -> None:
         """Có phải dừng không — vì người bấm Dừng, HOẶC vì cổng đã ngừng nhận.
@@ -381,6 +392,14 @@ KHOANG_KE_CHO = 90.0
 #: 60 phút). 12 phút là gấp bốn lần thời gian thật của job chậm nhất — đủ rộng
 #: cho lúc nhà máy đông, đủ hẹp để cái kẹt lộ ra khi khách còn ngồi đó.
 TRAN_CHO_JOB = 12 * 60.0
+
+#: Riêng khâu đọc thành giọng đợi lâu hơn.
+#:
+#: Một đoạn kịch bản dài ba nghìn ký tự đọc ra vài phút tiếng, và máy chủ phải
+#: dựng xong cả đoạn mới trả. Đo 15/08/2026: để trần chung 12 phút thì hai
+#: lượt liền chết ở đúng khâu này — và chết ở đây là mất luôn kịch bản đã trả
+#: tiền của khâu trước.
+TRAN_CHO_TTS = 25 * 60.0
 
 #: Dấu hiệu máy chủ tự khai "job này hỏng nhưng bạn KHÔNG bị trừ tiền".
 #:
@@ -1065,12 +1084,28 @@ def _khau_giong_doc(bc: BoiCanh):
             if not os.path.exists(tep):
                 bc.ghi("  đọc đoạn {0}/{1} ({2} ký tự)…".format(
                     so, len(doan), len(chu)))
-                job = _tao_job(
-                    bc, bc.client.tts.create,
-                    text=chu, voice_id=bc.kenh.voice_id, format="mp3",
-                    idempotency_key=khoa_viec(luot, "tts", so, chu,
-                                              bc.kenh.voice_id))
-                _tai_ket_qua(bc, _cho_job(bc, job), 0, tep)
+                def doc(hau_to=""):
+                    job = _tao_job(
+                        bc, bc.client.tts.create,
+                        text=chu, voice_id=bc.kenh.voice_id, format="mp3",
+                        idempotency_key=khoa_viec(luot, "tts", so, chu,
+                                                  bc.kenh.voice_id) + hau_to)
+                    # Đọc một đoạn ba nghìn ký tự lâu hơn hẳn tạo một tấm ảnh,
+                    # nên trần chờ ở đây phải rộng hơn trần chung. Đo 15/08/2026:
+                    # để trần chung 12 phút thì M02 và M03 cùng chết ở khâu này,
+                    # mỗi lượt mất luôn cả kịch bản đã trả tiền.
+                    return _cho_job(bc, job, tran=TRAN_CHO_TTS,
+                                    ten_viec="đoạn {0}".format(so))
+
+                try:
+                    goi_tts = doc()
+                except LoiKetJob:
+                    # Máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá mới, đúng
+                    # như khâu ảnh và khâu clip vẫn làm.
+                    bc.ghi("    đoạn {0}: máy chủ nhận việc rồi bỏ đó — đặt "
+                           "lại bằng khoá mới.".format(so))
+                    goi_tts = doc(":k2")
+                _tai_ket_qua(bc, goi_tts, 0, tep)
             manh.append(tep)
 
         if not manh:
@@ -1403,6 +1438,24 @@ def _canh_lai(bc: BoiCanh, ds: List[Any], cue: List[Dict[str, Any]],
         b = max(a, min(b, cuoi))
         if a > cuoi:
             break
+        # ═══ CẢNH THIẾU LỜI NHẮC THÌ NHẬP VÀO CẢNH TRƯỚC ═══
+        #
+        # AI trả về gần trăm cảnh, và thỉnh thoảng sót lời nhắc ở đúng một
+        # cảnh. Bản trước ném lỗi cho cả khúc, khúc hỏng thì hỏi lại ba lần,
+        # ba lần đều sót một cảnh khác — và cả lượt chết vì **một** cảnh.
+        # Đo thật 15/08/2026 ở M01: *"1 cảnh thiếu lời nhắc ảnh hoặc clip"*,
+        # ba vòng, mất cả kịch bản và giọng đọc đã trả tiền.
+        #
+        # Nhập nó vào cảnh liền trước thì không mất gì: hình của cảnh trước
+        # đứng thêm vài giây, đúng như người dựng tay vẫn làm khi người đọc
+        # ngừng lấy hơi. Tiếng và phụ đề không xê dịch, vì chúng bám mốc thời
+        # gian tuyệt đối chứ không bám thứ tự cảnh.
+        thieu_nhac = (not str(m.get("img_prompt") or "").strip()
+                      or not str(m.get("video_prompt") or "").strip())
+        if thieu_nhac and ra:
+            ra[-1]["_den"] = b
+            ke_tiep = b + 1
+            continue
         ra.append(dict(m, _tu=a, _den=b))
         ke_tiep = b + 1
     if not ra:
@@ -1437,10 +1490,14 @@ def _canh_lai(bc: BoiCanh, ds: List[Any], cue: List[Dict[str, Any]],
                 "visual_anchor": str(m.get("visual_anchor") or ""),
                 "must_not_show": str(m.get("must_not_show") or ""),
             })
+    # Tới đây thì cảnh thiếu lời nhắc đã được nhập vào cảnh trước rồi. Còn sót
+    # thì nghĩa là **cảnh đầu tiên** thiếu — không có cảnh nào trước để nhập
+    # vào — hoặc AI trả về một đống rác. Cả hai đều đáng hỏi lại.
     thieu = [c for c in xong if not c["img_prompt"] or not c["video_prompt"]]
     if thieu:
-        raise LoiNoiDung("{0} cảnh thiếu lời nhắc ảnh hoặc clip".format(
-            len(thieu)))
+        raise LoiNoiDung(
+            "{0}/{1} cảnh thiếu lời nhắc ngay từ cảnh đầu".format(
+                len(thieu), len(xong)))
     return xong
 
 
@@ -1560,7 +1617,25 @@ class ThamChieu:
 TY_LE_THIEU_CHO_PHEP = 0.03
 
 
-def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str) -> int:
+def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str):
+    """Trả về hàm `(xong, tổng)` ghi tiến độ **trong** một khâu.
+
+    Ghi vào `tt.ghi_chu` chứ không vào một chỗ riêng: `ghi_chu` đã đi thẳng ra
+    `trang-thai.json`, nên đóng tool giữa chừng rồi mở lại vẫn thấy lần trước
+    dừng ở cảnh thứ mấy.
+    """
+
+    def bao(xong: int, tong: int) -> None:
+        tt.ghi_chu["xong"] = int(xong)
+        tt.ghi_chu["tong"] = int(tong)
+        tt.ghi_chu["viec"] = viec
+        bc.nhip(luot)
+
+    return bao
+
+
+def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
+                    nhip=None) -> int:
     """Chạy `lam(mục)` cho cả danh sách, nhiều mục cùng lúc. Trả về số đã xong.
 
     ═══ HAI LUẬT ═══
@@ -1584,6 +1659,12 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str) -> in
     da_co = 0
     loi_dau: List[BaseException] = []
     tong = len(con_lai)
+
+    def bao_nhip() -> None:
+        if nhip is not None:
+            nhip(xong, tong)
+
+    bao_nhip()
 
     # ═══ THỬ MỘT CÁI TRƯỚC, RỒI MỚI BUNG ═══
     #
@@ -1609,6 +1690,7 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str) -> in
     if dau_tien is not None:
         xong += 1
         da_co += 1 if dau_tien[1] else 0
+        bao_nhip()
     con_lai = con_lai[1:]
     if not con_lai:
         return xong
