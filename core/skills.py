@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 
 __all__ = ["Skill", "SKILL", "SKILL_CHO_BAT", "MA_NGHIEN_CUU", "MA_SCRIPT",
+    "MA_XOA_LOGO",
            "tim_skill", "skill_chu"]
 
 #: Skill chạy trên máy, có trang riêng thay vì ô nhập chữ.
@@ -34,6 +35,9 @@ MA_NGHIEN_CUU = "doi-thu"
 #: Cũng chạy trên máy, cũng có trang riêng. Tách khỏi `MA_NGHIEN_CUU` vì lấy lời
 #: thoại chậm hơn hẳn phần còn lại — xem đầu `ui_qt/trang_script.py`.
 MA_SCRIPT = "script"
+
+#: Xoá dấu nhà cung cấp ở góc ảnh. Chạy trên máy, xem `core/xoa_dau_anh.py`.
+MA_XOA_LOGO = "xoa-logo"
 
 
 @dataclass(frozen=True)
@@ -68,6 +72,16 @@ SKILL: Tuple[Skill, ...] = (
         mo_ta="Dán link video — hoặc cả một kênh — nhận về nguyên lời thoại, xuất "
               "CSV hay từng tệp .txt. Thử lần lượt bốn cách, kể cả cho máy bạn tự "
               "nghe khi video không có phụ đề. Chạy trên máy bạn — miễn phí.",
+        loai="may",
+    ),
+    Skill(
+        ma=MA_XOA_LOGO,
+        ten="Xoá logo cho ảnh",
+        bieu_tuong="🧽",
+        mo_ta="Chọn ảnh hoặc cả thư mục — xoá dấu nhà cung cấp ở góc phải dưới. "
+              "Tôi đo hình dạng dấu rồi trừ ngược ra khỏi ảnh, nên phần ảnh bên "
+              "dưới hiện lại đúng như ban đầu. Chạy trên máy bạn, 27 mili giây "
+              "một ảnh.",
         loai="may",
     ),
 )

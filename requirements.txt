@@ -73,6 +73,16 @@ youtube-transcript-api>=0.6
 #                   Thieu no VA may cung khong co FFmpeg rieng thi hai khau
 #                   chay tren may - tach phu de va dung video - deu dung.
 
+#   numpy         : XOA DAU nha cung cap o goc anh (core/xoa_dau_anh.py). Dau
+#                   con tren anh la no nam luon trong clip, vi anh cua canh nao
+#                   la khung dau cua clip canh ay - phat hien muon thi phai lam
+#                   lai ca tram clip vi mot cai dau o goc.
+#                   May dang co san numpy vi PyQt5 keo theo, nhung "dang co san"
+#                   khong phai "da khai" - va do dung la cai bay dong PyQt5 o
+#                   tren da dinh mot lan.
+#   pillow        : da khai o tren, dung chung cho ca viec nay.
+
+numpy>=1.24
 openpyxl>=3.1
 faster-whisper>=1.0
 huggingface-hub>=0.20

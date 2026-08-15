@@ -2168,6 +2168,29 @@ def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
                              "|".join(hop.lay())),
                    ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
     _tai_ket_qua(bc, goi, 0, tep)
+    _xoa_dau(bc, tep)
+
+
+def _xoa_dau(bc: BoiCanh, tep: str) -> None:
+    """Xoá dấu nhà cung cấp ngay khi ảnh vừa tải về.
+
+    ═══ VÌ SAO PHẢI Ở ĐÂY, KHÔNG PHẢI SAU ═══
+
+    Ảnh của cảnh nào là **khung đầu của clip cảnh ấy**. Dấu còn trên ảnh thì nó
+    nằm luôn trong clip, và tám giây clip nào cũng đeo nó. Phát hiện muộn thì
+    phải làm lại từ khâu clip — trả tiền lại cho cả trăm clip vì một cái dấu ở
+    góc.
+
+    Chạy trên máy khách, 27 mili giây một ảnh, không gọi mạng. Hỏng thì im
+    lặng giữ ảnh nguyên: ảnh còn dấu vẫn dùng được, còn làm hỏng cả khâu ảnh vì
+    một việc làm đẹp thì không.
+    """
+    try:
+        from .xoa_dau_anh import xoa_dau_tep  # noqa: PLC0415
+
+        xoa_dau_tep(tep)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _khau_anh(bc: BoiCanh):
@@ -2290,6 +2313,12 @@ def _khau_anh(bc: BoiCanh):
             san_co = os.path.exists(tep)
             if not san_co:
                 _lam_anh_canh(bc, luot, x, tep, hop, so=so)
+            else:
+                # Ảnh có sẵn trên đĩa từ lượt chạy trước — có thể là lượt chạy
+                # bằng bản tool chưa biết xoá dấu. Xoá lại ở đây thì lượt cũ
+                # chạy tiếp cũng ra clip sạch. Ảnh đã sạch rồi thì `xoa_dau`
+                # tự nhận ra và không đụng vào, nên gọi thừa không hại gì.
+                _xoa_dau(bc, tep)
             them("anh")
             bat_clip(x, tep)
             return so_canh, san_co
@@ -2463,6 +2492,7 @@ def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
                              "|".join(hop.lay())),
                    ten_hien="ảnh bìa {0}".format(so_bia), so=so)
     _tai_ket_qua(bc, goi, 0, tep)
+    _xoa_dau(bc, tep)
     return so_bia, False
 
 

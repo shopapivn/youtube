@@ -77,6 +77,10 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": [
             "“Lấy dữ liệu đối thủ” chạy hoàn toàn trên máy bạn — không cần tài "
             "khoản riêng của bạn.",
+            "“Xoá logo cho ảnh” gỡ dấu của nhà cung cấp ở góc phải dưới, chọn "
+            "được cả thư mục một lượt. Ảnh chạy từ tab Tự động đã được xoá sẵn "
+            "ngay lúc tải về, Skill này dành cho ảnh cũ hoặc ảnh lấy từ chỗ "
+            "khác. Ô “Giữ bản gốc” bật sẵn nên ảnh cũ không mất.",
             "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
             "mất khi cập nhật tool.",
         ],
