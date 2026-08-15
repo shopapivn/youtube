@@ -103,15 +103,69 @@ VONG_NAN_TOI_DA = 3
 #: video"*. Đúng — trần 60 lượt/phút là trần **số yêu cầu**, không phải trần
 #: số job chạy cùng lúc. Đứng đợi từng cái là tự trói mình.
 #:
-#: Hạ từ 12 xuống 6 sau khi đo thật ở khâu clip: mỗi cảnh cần tải ảnh khung
-#: đầu (3 yêu cầu) + tạo job + hỏi thăm tới lúc xong. 12 luồng là chạm trần
-#: ngay giây đầu, rồi cả mẻ ngồi chờ van — chậm hơn là đằng khác.
+#: Số luồng **khi chưa hỏi được máy chủ**. Con số thật lấy từ `GET /v1/me`.
 #:
-#: 6 luồng vì cái quyết định không phải số luồng mà là **bộ điều nhịp** ở
-#: `core/su_co.py`: mọi luồng chung một cái van 48 lượt/phút, nên thêm luồng
-#: chỉ lấp chỗ trống lúc đang đợi chứ không làm gọi dày hơn. 12 đủ để lấp kín
-#: mà không đẻ ra hàng trăm luồng ngồi không.
+#: ⚠ Ghi chú cũ ở đây giải thích rất kỹ vì sao 6 là đúng — và giải thích ấy
+#: dựng trên một tiền đề sai: rằng cổng chỉ cho 60 lượt gọi mỗi phút. Hỏi thẳng
+#: ngày 15/08/2026 thì cổng cho **600.000 lượt/phút**, **979 job ảnh** và
+#: **316 job clip** chạy cùng lúc, hàng chờ 100.000 job, và nói rõ *"gửi nhiều
+#: hơn KHÔNG bị từ chối — phần vượt nằm ở hàng chờ và tự chạy khi có chỗ"*.
+#:
+#: Cái giá: một video mười phút mất 38 phút tạo ảnh và 56 phút tạo clip, trong
+#: khi nhà máy làm được hàng chục nghìn ảnh mỗi giờ. Chủ dự án, 15/08/2026:
+#: *"hiệu suất nhà máy video và ảnh rất lớn… đôi khi tạo ảnh và video 5 phút là
+#: xong"* — đúng, và chỗ chậm là tool chứ không phải cổng.
 SONG_SONG_CANH = 6
+
+#: Trần luồng do MÁY KHÁCH đặt ra, không phải do cổng.
+#:
+#: Cổng cho 979 job ảnh cùng lúc, nhưng mở 979 luồng Python trên máy khách thì
+#: chính máy họ chết trước. Mỗi luồng ở đây phần lớn thời gian **nằm chờ mạng**
+#: nên rẻ, nhưng vẫn có giá: bộ nhớ, chỗ trong bảng luồng, và một cửa sổ Qt
+#: đang phải vẽ.
+#:
+#: 48 là chỗ dừng: gấp tám lần bản cũ, mà vẫn là con số một máy tính để bàn
+#: bình thường gánh được không nghĩ ngợi.
+TRAN_LUONG_MAY = 48
+
+#: Nhớ lại câu trả lời của `GET /v1/me` để không hỏi lại mỗi khâu.
+_HAN_MUC: Dict[str, Any] = {}
+_KHOA_HAN_MUC = threading.Lock()
+
+
+def han_muc_may_chu(bc: "BoiCanh") -> Dict[str, Any]:
+    """Hỏi cổng xem nó cho chạy bao nhiêu. Hỏi hỏng thì trả về `{}`.
+
+    Hỏi **một lần cho cả lượt chạy**: con số này đổi theo tải nhà máy, nhưng
+    không đổi từng phút, và hỏi lại ở mỗi khâu chỉ tốn thêm lượt gọi.
+    """
+    with _KHOA_HAN_MUC:
+        if _HAN_MUC:
+            return _HAN_MUC
+        try:
+            tra = bc.client.request("GET", "/v1/me")
+            goi = tra.to_dict() if hasattr(tra, "to_dict") else dict(tra)
+            _HAN_MUC.update(goi.get("limits") or {})
+        except Exception:  # noqa: BLE001 — hỏi không được thì dùng số an toàn
+            pass
+        return _HAN_MUC
+
+
+def _so_luong(bc: "BoiCanh", loai: str) -> int:
+    """Bao nhiêu luồng cho khâu này — theo con số máy chủ tự khai."""
+    from .su_co import dat_tran_moi_phut  # noqa: PLC0415
+
+    han = han_muc_may_chu(bc)
+    if not han:
+        return SONG_SONG_CANH
+    dat_tran_moi_phut(han.get("requests_per_minute") or 0)
+    try:
+        cua_loai = int((han.get("concurrent_jobs") or {}).get(loai) or 0)
+    except (TypeError, ValueError):
+        cua_loai = 0
+    if cua_loai <= 0:
+        return SONG_SONG_CANH
+    return max(1, min(cua_loai, TRAN_LUONG_MAY))
 
 
 @dataclass
@@ -428,14 +482,23 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
     # Hỏi thưa: clip mất vài phút mới xong, hỏi mỗi 3 giây là 20 lượt/phút cho
     # MỘT job — sáu job song song đã gấp đôi trần của cả tài khoản. Bắt đầu ở 8
     # giây, giãn tới 25 giây. Ảnh xong nhanh thì chậm nhất cũng chỉ trễ 8 giây.
-    cho = 8.0
+    # ═══ HỎI THĂM DÀY HƠN, VÌ NGÂN SÁCH GỌI RẤT RỘNG ═══
+    #
+    # Nhịp cũ bắt đầu ở 8 giây và giãn tới 25, chọn theo tiền đề "cổng chỉ cho
+    # 60 lượt/phút". Cổng cho **600.000**. Với ngân sách ấy thì hỏi thưa chỉ có
+    # một tác dụng: một tấm ảnh xong ở giây thứ 9 phải nằm chờ tới giây 20 mới
+    # được nhận ra — nhân với trăm cảnh là hàng chục phút chờ suông.
+    #
+    # Van chung ở `core/su_co.py` vẫn đứng đó phòng khi trần thật hẹp hơn lời
+    # khai; chỗ này chỉ thôi tự bóp thêm một lần nữa.
+    cho = 2.0
     bat_dau = time.time()
     het_han = bat_dau + max(60.0, float(tran))
     lan_ke = bat_dau + KHOANG_KE_CHO
     while time.time() < het_han:
         bc.kiem_dung()
         _ngu_ngat(bc, cho)
-        cho = min(25.0, cho * 1.5)
+        cho = min(10.0, cho * 1.4)
         xin_nhip(bc.on_log)
         moi = bc.client.jobs.retrieve(ma)
         goi = moi.to_dict() if hasattr(moi, "to_dict") else dict(moi or {})
@@ -1449,7 +1512,7 @@ def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str):
 
 
 def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
-                    nhip=None) -> int:
+                    nhip=None, loai_job: str = "") -> int:
     """Chạy `lam(mục)` cho cả danh sách, nhiều mục cùng lúc. Trả về số đã xong.
 
     ═══ HAI LUẬT ═══
@@ -1511,7 +1574,13 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
 
     nha_may_tat = threading.Event()
     bc.nha_may_tat = nha_may_tat
-    with ThreadPoolExecutor(max_workers=SONG_SONG_CANH) as bo:
+    # Số luồng theo con số MÁY CHỦ TỰ KHAI, không phải số gõ sẵn trong mã.
+    # Cổng cho 979 job ảnh cùng lúc; tool từng chạy 6 vì tin một trần 60
+    # lượt/phút vốn không có thật. Xem `_so_luong` và `SONG_SONG_CANH`.
+    so_luong = _so_luong(bc, loai_job) if loai_job else SONG_SONG_CANH
+    if so_luong > SONG_SONG_CANH:
+        bc.ghi("  chạy {0} việc cùng lúc (cổng cho phép).".format(so_luong))
+    with ThreadPoolExecutor(max_workers=so_luong) as bo:
         cho = {bo.submit(_boc(bc, lam, c, loi_dau, nha_may_tat)): c
                for c in con_lai}
         _ = cho
@@ -1628,7 +1697,7 @@ def _khau_anh(bc: BoiCanh):
             _tai_ket_qua(bc, goi, 0, tep)
             return so, False
 
-        xong = _chay_song_song(bc, canh, mot_canh, "ảnh",
+        xong = _chay_song_song(bc, canh, mot_canh, "ảnh", loai_job="image",
                                nhip=dem_tien_do(bc, luot, tt, "ảnh"))
         return {"so_anh": xong}
 
@@ -1716,7 +1785,7 @@ def _khau_clip(bc: BoiCanh):
             _kiem_media(bc, tep)
             return so, False
 
-        xong = _chay_song_song(bc, canh, mot_canh, "clip",
+        xong = _chay_song_song(bc, canh, mot_canh, "clip", loai_job="video",
                                nhip=dem_tien_do(bc, luot, tt, "clip"))
         return {"so_clip": xong}
 
@@ -1825,7 +1894,7 @@ def _khau_thumbnail(bc: BoiCanh):
 
         xong = _chay_song_song(
             bc, list(enumerate(kieu, start=1)), mot_bia, "ảnh bìa",
-            nhip=dem_tien_do(bc, luot, tt, "ảnh bìa"))
+            nhip=dem_tien_do(bc, luot, tt, "ảnh bìa"), loai_job="image")
         return {"so_thumbnail": xong}
 
     return lam

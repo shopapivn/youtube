@@ -42,6 +42,7 @@ __all__ = [
     "KHOA_DA_DUNG", "TAM_NGHI", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
     "CHET", "NHA_MAY_NGHI", "LoiNoiDung",
     "phan_loai", "nen_thu_lai", "nhip_cho", "mo_ta", "goi_kien_nhan",
+    "dat_tran_moi_phut",
 ]
 
 # ── Bảy loại sự cố ───────────────────────────────────────────────────────────
@@ -233,8 +234,18 @@ def mo_ta(loai: str) -> str:
 
 # ── Điều nhịp: đừng để chạm trần, thay vì chữa sau khi chạm ─────────────────
 
-#: Trần thật của cổng: **60 yêu cầu mỗi phút**. Tự đặt thấp hơn để chừa chỗ cho
-#: những lời gọi không đi qua đây (SDK tự thử lại, tab khác của tool đang chạy).
+#: Trần **khi chưa hỏi được máy chủ**. Chỉ là con số an toàn cho lúc mở màn.
+#:
+#: ⚠ ĐỪNG COI ĐÂY LÀ TRẦN THẬT. Ghi chú cũ ở đây viết *"trần thật của cổng: 60
+#: yêu cầu mỗi phút"* — lấy từ một câu báo lỗi bắt được hồi tháng Tám. Hỏi
+#: thẳng `GET /v1/me` ngày 15/08/2026 thì cổng trả **600.000 lượt mỗi phút**,
+#: tức con số phỏng đoán ấy nhỏ hơn sự thật **mười hai nghìn lần**.
+#:
+#: Cái giá của phỏng đoán đó: khâu tạo ảnh mất 38 phút và khâu clip mất 56 phút
+#: cho một video mười phút, trong khi nhà máy cho 979 job ảnh chạy cùng lúc.
+#: Tool tự ngồi xếp hàng trước một cánh cửa đang mở toang.
+#:
+#: Nên: **hỏi máy chủ**, đừng gõ số. Xem `dat_tran_moi_phut`.
 TRAN_MOI_PHUT = 48
 
 
@@ -287,6 +298,26 @@ class NhipGoi:
 
 #: Một cái van cho cả tool. Mọi lời gọi cổng ShopAPI đi qua đây.
 NHIP = NhipGoi()
+
+
+def dat_tran_moi_phut(moi_phut: int) -> int:
+    """Đặt lại trần cho cái van chung, theo con số **máy chủ tự khai**.
+
+    Gọi một lần lúc bắt đầu một khâu nặng, sau khi hỏi `GET /v1/me`. Trả về
+    trần đang dùng.
+
+    Vẫn chừa lại một phần: những lời gọi không đi qua van này vẫn tồn tại (SDK
+    tự thử lại, tab khác của tool đang chạy). Chừa 20% là đủ rộng mà không phải
+    nghĩ thêm.
+    """
+    try:
+        n = int(moi_phut)
+    except (TypeError, ValueError):
+        return NHIP.moi_phut
+    if n <= 0:
+        return NHIP.moi_phut
+    NHIP.moi_phut = max(TRAN_MOI_PHUT, int(n * 0.8))
+    return NHIP.moi_phut
 
 
 #: Một lần `uploads.upload_file` = 3 yêu cầu HTTP (xin vé, đẩy tệp, xác nhận).
