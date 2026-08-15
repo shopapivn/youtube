@@ -1108,6 +1108,36 @@ def _khau_phu_de(bc: BoiCanh):
 # ── Khâu 4: bảng cảnh ────────────────────────────────────────────────────────
 
 
+def _canh_dung_duoc(canh, bc: BoiCanh):
+    """Soi bảng cảnh lấy từ tệp cũ. Dùng được thì trả về, hỏng thì trả `None`.
+
+    ═══ VÌ SAO PHẢI SOI LẠI THỨ MÌNH TỰ GHI RA ═══
+
+    Mọi khâu đều nhìn đĩa trước và bỏ qua nếu đã có tệp — đó là thứ giữ cho
+    "Chạy tiếp" không trả tiền hai lần. Nhưng nó cũng nghĩa là **tệp do một bản
+    tool cũ ghi ra vẫn được tin tuyệt đối**, kể cả khi bản ấy có lỗi.
+
+    Xảy ra đúng thế ngày 15/08/2026. Một bản trước đó ghi ra bảng cảnh mà phần
+    lớn dòng không có lời nhắc — đo lại: 83/91, 50/90, 52/108 cảnh trống. Chốt
+    chặn được thêm vào sau đó nằm trong khâu cắt cảnh, mà khâu ấy thấy tệp có
+    sẵn nên bỏ qua, nên chốt không bao giờ được hỏi tới. Khâu ảnh cứ thế gửi
+    lời nhắc rỗng đi cho tới khi cổng từ chối — một lượt tiêu 48.000₫ ra 56 tấm
+    ảnh rồi chết.
+
+    Nên: tệp cũ vẫn dùng, nhưng phải qua cửa này trước. Hỏng thì làm lại khâu
+    cắt cảnh — một lượt gọi AI, rẻ hơn nhiều lần so với trả tiền cho ảnh hỏng.
+    """
+    if not isinstance(canh, list) or not canh:
+        return None
+    thieu = [c for c in canh
+             if not str((c or {}).get("img_prompt") or "").strip()]
+    if not thieu:
+        return canh
+    bc.ghi("  bảng cảnh cũ có {0}/{1} cảnh thiếu lời nhắc — bỏ, cắt lại từ "
+           "đầu.".format(len(thieu), len(canh)))
+    return None
+
+
 def _khau_bang_canh(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         from .srt_scenes import parse_srt  # noqa: PLC0415
@@ -1120,8 +1150,8 @@ def _khau_bang_canh(bc: BoiCanh):
             raise RuntimeError("chưa có phụ đề để cắt cảnh")
 
         if os.path.exists(goi_json):
-            canh = json.loads(_doc_chu(goi_json))
-        else:
+            canh = _canh_dung_duoc(json.loads(_doc_chu(goi_json)), bc)
+        if not os.path.exists(goi_json) or not canh:
             cue = parse_srt(srt)
             if not cue:
                 raise RuntimeError("phụ đề không đọc được dòng nào")
@@ -1643,6 +1673,19 @@ def _khau_anh(bc: BoiCanh):
             tep = os.path.join(thu_muc, "{0}.png".format(so))
             if os.path.exists(tep):
                 return so, True
+            # ═══ KHÔNG GỬI LỜI NHẮC RỖNG ═══
+            #
+            # Cổng từ chối bằng *"Bạn cần mô tả thứ muốn tạo — `prompt` đang
+            # rỗng"*, nhưng chỉ sau khi mẻ đã chạy được một đoạn. Đo thật
+            # 15/08/2026: một lượt trả tiền cho 56 tấm ảnh rồi mới chết, vì
+            # bảng cảnh có 52/108 dòng thiếu lời nhắc.
+            #
+            # Chặn ở đây là chặn trước khi gọi, tức trước khi mất gì.
+            if not str(c.get("img_prompt") or "").strip():
+                raise LoiNoiDung(
+                    "cảnh {0} không có lời nhắc ảnh — bảng cảnh hỏng, hãy "
+                    "chọn dòng “Cắt cảnh và viết lời nhắc” rồi bấm “Làm lại "
+                    "từ khâu này”".format(so))
             goi = _tao_anh(bc, luot, c["img_prompt"], hop,
                            khoa_viec(luot, "img", so, c["img_prompt"]),
                            ten_hien="ảnh cảnh {0}".format(so))

@@ -1,0 +1,116 @@
+"""Những nút gạt của tool — một chỗ duy nhất, một tệp duy nhất.
+
+═══ VÌ SAO TÁCH KHỎI `config.json` ═══
+
+`config.json` và `secrets.json` giữ **khoá API và tài khoản** của khách. Trộn
+mấy nút gạt giao diện vào đó nghĩa là mỗi lần khách bật/tắt một tuỳ chọn là một
+lần ghi đè lên tệp có khoá — và một lần ghi hỏng ở đó thì khách mất đường vào
+tài khoản, không phải mất một tuỳ chọn.
+
+Nên tuỳ chọn nằm riêng ở `workspace/cai-dat.json`. Mất tệp này thì tool quay về
+mặc định và chạy tiếp bình thường; đó là toàn bộ thiệt hại.
+
+═══ MẶC ĐỊNH LÀ THỨ 90% KHÁCH KHÔNG BAO GIỜ ĐỔI ═══
+
+Người dùng tool này không biết lập trình. Mỗi tuỳ chọn để họ tự quyết là một
+câu hỏi họ không có cơ sở để trả lời, nên mặc định phải là **thứ đúng cho phần
+đông**, còn nút gạt chỉ dành cho người có lý do riêng.
+
+`tu_cap_nhat` bật sẵn chính vì thế: cả một ngày sửa lỗi chỉ tới được máy khách
+khi họ bấm Cập nhật, mà phần lớn không bấm — họ không biết là có bản mới, và
+cũng không có lý do gì để đi tìm.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+from typing import Any, Dict
+
+__all__ = ["doc", "ghi", "dat", "MAC_DINH", "duong_tep"]
+
+TEN_TEP = "cai-dat.json"
+
+#: Mọi tuỳ chọn và giá trị mặc định của nó.
+MAC_DINH: Dict[str, Any] = {
+    # Mở tool lên là tự tải bản mới rồi khởi động lại, không hỏi.
+    #
+    # Bật sẵn vì bản vá chỉ có giá trị khi tới được máy khách. Cả một ngày sửa
+    # lỗi mà khách không bấm Cập nhật thì bằng không — và họ không bấm, vì họ
+    # không biết là có bản mới.
+    #
+    # Tắt được, dành cho người đang chạy dở một mẻ dài và không muốn tool tự
+    # khởi động lại giữa chừng.
+    "tu_cap_nhat": True,
+
+    # Hỏi GitHub xem có bản mới không, mỗi lần mở tool.
+    #
+    # Tắt cái này là tắt luôn cả `tu_cap_nhat` — không hỏi thì không biết có gì
+    # để cập nhật. Dành cho máy không nối mạng ra ngoài.
+    "hoi_ban_moi": True,
+
+    # Hiện hộp thoại khi tool gặp lỗi trong lúc chạy.
+    #
+    # Tắt thì lỗi vẫn được ghi vào `workspace/su-co.log`, chỉ là không hiện lên
+    # màn hình. Dành cho người để tool chạy qua đêm.
+    "bao_su_co": True,
+}
+
+_KHOA = threading.Lock()
+
+
+def duong_tep(goc: str) -> str:
+    return os.path.join(goc, "workspace", TEN_TEP)
+
+
+def doc(goc: str) -> Dict[str, Any]:
+    """Đọc cài đặt. Thiếu tệp hoặc tệp hỏng đều trả về mặc định.
+
+    **Không bao giờ ném lỗi.** Đây là thứ được hỏi lúc tool đang khởi động; một
+    tệp JSON gõ hỏng không được phép chặn tool mở lên.
+    """
+    ra = dict(MAC_DINH)
+    try:
+        with open(duong_tep(goc), "r", encoding="utf-8") as tep:
+            tren_dia = json.load(tep)
+    except (OSError, ValueError):
+        return ra
+    if isinstance(tren_dia, dict):
+        # Chỉ nhận những khoá tool biết, và chỉ khi đúng kiểu. Tệp do người sửa
+        # tay có thể có khoá lạ hoặc giá trị lạ; lấy bừa là lỗi nổ ở chỗ khác,
+        # xa chỗ gõ sai, và không ai lần ra.
+        for ten, mac_dinh in MAC_DINH.items():
+            gia_tri = tren_dia.get(ten, mac_dinh)
+            if isinstance(gia_tri, type(mac_dinh)):
+                ra[ten] = gia_tri
+    return ra
+
+
+def ghi(goc: str, cai: Dict[str, Any]) -> bool:
+    """Ghi cài đặt xuống đĩa. Trả về ghi được hay không.
+
+    Ghi qua tệp tạm rồi đổi tên: máy tắt giữa chừng thì còn bản cũ nguyên vẹn,
+    chứ không phải một tệp JSON cụt làm lần mở sau đọc không ra.
+    """
+    duong = duong_tep(goc)
+    goi = {ten: cai.get(ten, mac) for ten, mac in MAC_DINH.items()}
+    with _KHOA:
+        try:
+            os.makedirs(os.path.dirname(duong), exist_ok=True)
+            tam = duong + ".tam"
+            with open(tam, "w", encoding="utf-8") as tep:
+                json.dump(goi, tep, ensure_ascii=False, indent=2)
+            os.replace(tam, duong)
+            return True
+        except OSError:
+            return False
+
+
+def dat(goc: str, ten: str, gia_tri: Any) -> bool:
+    """Đổi đúng một tuỳ chọn."""
+    if ten not in MAC_DINH:
+        return False
+    cai = doc(goc)
+    cai[ten] = gia_tri
+    return ghi(goc, cai)

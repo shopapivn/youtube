@@ -79,6 +79,7 @@ TRANG = (
     ("prompt-visuals", "", "Prompt Visuals"),
     ("edit", "", "Dựng video"),
     ("wallet", "", "Tài khoản"),
+    ("cai-dat", "", "Cài đặt"),
 )
 
 
@@ -342,6 +343,7 @@ class CuaSoChinh(QWidget):
         from .trang_prompt_visuals import TrangPromptVisuals
         from .trang_auto import TrangTuDong
         from .trang_skill import TrangSkill
+        from .trang_cai_dat import TrangCaiDat
         from .trang_tai_khoan import TrangTaiKhoan
         from .trang_voice import TrangGiongNoi
 
@@ -355,6 +357,7 @@ class CuaSoChinh(QWidget):
             "prompt-visuals": lambda: TrangPromptVisuals(self),
             "edit": lambda: TrangDungVideo(self),
             "wallet": lambda: TrangTaiKhoan(self),
+            "cai-dat": lambda: TrangCaiDat(self),
         }
         # Xưởng của vỏ đặt SAU, để vỏ vận hành đè được lên trang cùng khoá nếu cần.
         xuong.update(self.trang_them())

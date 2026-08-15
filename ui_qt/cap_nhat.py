@@ -24,6 +24,7 @@ import sys
 from typing import Optional
 from urllib.request import Request, urlopen
 
+from core import cai_dat
 from core.cap_nhat_github import KHO, kiem_ban_moi, tai_ve_va_dung_san
 
 from .widgets import nut_chinh
@@ -160,6 +161,12 @@ class NutCapNhat:
         if not dang_dung:
             self._khong_biet()
             return
+        if not cai_dat.doc(self._app.base_dir).get("hoi_ban_moi", True):
+            # Khách tự tắt ở tab Cài đặt. Nút vẫn ở đó để bấm tay.
+            self.nut.setText("Kiểm tra bản mới")
+            self.nut.setToolTip(
+                "Tự hỏi đang tắt (tab Cài đặt). Bấm để hỏi một lần.")
+            return
         self.nut.setText("Đang kiểm tra…")
         self._app.run_bg(lambda: kiem_ban_moi(dang_dung, tai_https),
                          on_ok=self._co_ban_moi, on_err=lambda _loi: self._hong_mang())
@@ -185,6 +192,26 @@ class NutCapNhat:
             "Tải bản {0} từ github.com/{1} rồi khởi động lại tool.\n"
             "Khoá API, kết quả đã tạo, phiên viết và template của bạn được giữ "
             "nguyên.".format(ban_moi, KHO))
+
+        # ═══ TỰ CẬP NHẬT: BẬT SẴN ═══
+        #
+        # Chủ dự án, 15/08/2026: *"mặc định là khách mở lên tool sẽ tự động cập
+        # nhật xong thì reset cho khách, kiểu update xong thì mới dùng"*.
+        #
+        # Lý do đằng sau: bản vá chỉ có giá trị khi tới được máy khách. Riêng
+        # ngày 15/08 có tám bản sửa lỗi thật — `.bin`, tool tự tắt, mất kênh và
+        # lời nhắc, khoá việc kẹt — và không bản nào tới được người không bấm
+        # nút. Mà họ không bấm, vì họ không biết là có bản mới.
+        #
+        # Tắt được ở tab Cài đặt, cho người hay để tool chạy dở một mẻ dài.
+        if not cai_dat.doc(self._app.base_dir).get("tu_cap_nhat", True):
+            return
+        self.nut.setText("Đang cập nhật lên {0}…".format(ban_moi))
+        self._app.show_message(
+            "Đang cập nhật lên bản {0}".format(ban_moi),
+            "Tôi tải bản mới rồi tự mở lại, khoảng một phút.\n\n"
+            "Không muốn tự cập nhật nữa thì tắt ở tab Cài đặt.")
+        self._bam()
 
     def _bam(self) -> None:
         if not self._ban_moi:

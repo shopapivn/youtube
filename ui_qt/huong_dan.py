@@ -212,6 +212,23 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": ["Mọi con số về tiền trong tool đều gom về đây, các tab khác "
                   "chỉ lo phần việc."],
     },
+    "cai-dat": {
+        "tieu_de": "Cài đặt",
+        "tom_tat": "Những thứ bạn cài một lần rồi thôi. Mọi nút gạt của tool "
+                   "gom về đây, không phải đi tìm ở từng tab.",
+        "buoc": [
+            "Tự cập nhật: bật sẵn. Mở tool lên là tôi tự tải bản mới rồi khởi "
+            "động lại, xong mới đưa bạn dùng — bạn luôn chạy bản đã sửa lỗi "
+            "mới nhất mà không phải nhớ bấm gì.",
+            "Tắt tự cập nhật khi bạn hay để tool chạy dở một mẻ dài và không "
+            "muốn nó khởi động lại giữa chừng. Lúc đó tôi chỉ báo có bản mới.",
+            "Hiện thông báo khi gặp lỗi: tắt thì lỗi vẫn ghi đủ vào "
+            "workspace/su-co.log, chỉ là không hiện lên màn hình.",
+        ],
+        "luu_y": ["Cập nhật không bao giờ đụng vào PROJECTS, vào kênh, hay vào "
+                  "lời nhắc bạn đã sửa. Thứ gì bản mới không mang theo thì tôi "
+                  "không có quyền xoá."],
+    },
 }
 
 
