@@ -65,6 +65,8 @@ lại, và tự quyết nhịp hỏi — xem `_client_khong_tu_thu_lai`.
 
 from __future__ import annotations
 
+import json
+import re
 import threading
 import time
 import uuid
@@ -75,7 +77,8 @@ from .su_co import (
     goi_kien_nhan, phan_loai,
 )
 
-__all__ = ["goi_van_ban", "MO_HINH_MAC_DINH", "TOI_DA_TOKEN_MAC_DINH"]
+__all__ = ["goi_van_ban", "loc_json", "MO_HINH_MAC_DINH",
+           "TOI_DA_TOKEN_MAC_DINH"]
 
 #: Mô hình dùng cho mọi việc viết chữ trong tool.
 MO_HINH_MAC_DINH = "claude-sonnet-5"
@@ -230,3 +233,27 @@ def goi_van_ban(
                 luot + 1))
 
     raise loi_cuoi or RuntimeError("không gọi được AI sau nhiều lần đổi khoá")
+
+
+def loc_json(chu: str) -> Any:
+    """Bóc JSON ra khỏi câu trả lời của AI.
+
+    AI hay bọc JSON trong ```json ... ``` dù lời nhắc đã bảo đừng. Bóc trước rồi
+    mới `json.loads` — không bóc thì hỏng ngay lượt đầu và người dùng nhận một
+    câu lỗi kỹ thuật không liên quan gì tới việc họ đang làm.
+
+    Nằm cạnh `goi_van_ban` vì mọi nơi đòi AI trả JSON đều phải bóc kiểu này:
+    khâu chia cảnh, khâu viết lời nhắc, và tool `prompt.workbook`. Ba bản chép
+    tay là ba kiểu bóc hụt khác nhau.
+    """
+    tho = (chu or "").strip()
+    rao = re.search(r"```(?:json)?\s*(.+?)\s*```", tho, re.DOTALL | re.IGNORECASE)
+    if rao:
+        tho = rao.group(1).strip()
+    if not tho.startswith(("{", "[")):
+        # Có lúc AI nói một câu trước rồi mới tới JSON.
+        vi_tri = min([i for i in (tho.find("{"), tho.find("[")) if i >= 0]
+                     or [-1])
+        if vi_tri >= 0:
+            tho = tho[vi_tri:]
+    return json.loads(tho)

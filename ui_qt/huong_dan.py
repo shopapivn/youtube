@@ -131,17 +131,24 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "tieu_de": "Ảnh & Video → Hàng loạt",
         "tom_tat": "Một bảng cảnh, chạy hết một lượt, ảnh nối thẳng sang video.",
         "buoc": [
-            "Mỗi dòng một cảnh: cột trái là mô tả ảnh, cột phải là mô tả video.",
-            "Để trống cột video nếu cảnh đó chỉ cần ảnh.",
-            "Nạp nhanh bằng .txt: mỗi dòng một cảnh, ngăn hai phần bằng dấu |",
+            "Bấm “Tải file mẫu” để lấy file Excel, điền vào đó rồi bấm “Nạp "
+            "Excel”. Trong file có trang “huong-dan” giải nghĩa từng cột.",
+            "Mỗi dòng một cảnh: mô tả ảnh, mô tả clip, và ảnh tham chiếu.",
+            "Điền cả hai mô tả thì tôi tạo ảnh trước rồi cho nó động đậy. Chỉ "
+            "điền mô tả ảnh thì chỉ tạo ảnh.",
+            "Chỉ điền mô tả clip kèm ảnh tham chiếu thì tôi làm clip thẳng từ "
+            "ảnh bạn đưa, không tạo ảnh mới — hợp khi bạn đã có sẵn ảnh.",
             "Chọn tỉ lệ, engine, chỗ lưu rồi bấm “Chạy cả loạt”.",
         ],
         "luu_y": [
+            "Ảnh tham chiếu là thứ giữ cho nhân vật không đổi mặt giữa các "
+            "cảnh. Chọn một ảnh dùng chung cho cả loạt, hoặc điền riêng cho "
+            "từng dòng — dòng nào điền riêng thì dòng ấy thắng.",
+            "File Excel từ tab Prompt Visuals nạp thẳng sang đây được, không "
+            "phải sửa gì.",
             "Bật “Ảnh vừa tạo → đầu vào video” thì ảnh của cảnh nào thành khung "
-            "đầu cho clip của chính cảnh đó, nên nhân vật và bối cảnh không "
-            "nhảy giữa các cảnh.",
+            "đầu cho clip của chính cảnh đó.",
             "Hai cột trạng thái bên phải cho biết từng cảnh đang tới đâu.",
-            "Ảnh hoặc clip hỏng được hoàn tiền và chạy lại được.",
         ],
     },
     "auto": {

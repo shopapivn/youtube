@@ -69,14 +69,19 @@ TRANG = (
     ("skill", "", "Skill"),
     ("content", "", "Viết kịch bản"),
     ("voice", "", "Voice"),
-    # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026). Chúng vốn là MỘT
-    # khuôn dùng hai lần, mà thứ khách thật sự muốn — *ảnh này, rồi cho nó động
-    # đậy* — thì không tab nào diễn đạt được vì nó nằm vắt qua cả hai.
-    ("media", "", "Ảnh & Video"),
-    # Giọng đọc → phụ đề → prompt từng cảnh → Excel mở được bằng VE3_SUITE.
-    # Đứng ngay trước "Dựng video" vì đó là bước kế tiếp của cùng một dây
-    # chuyền: có prompt rồi mới đi tạo ảnh/clip rồi mới ghép.
+    # (Hai tab "Tạo ảnh" và "Tạo video" gộp làm một ngày 12/08/2026. Chúng vốn
+    # là MỘT khuôn dùng hai lần, mà thứ khách thật sự muốn — *ảnh này, rồi cho
+    # nó động đậy* — thì không tab nào diễn đạt được vì nó vắt qua cả hai.)
+    # Giọng đọc → phụ đề → prompt từng cảnh → Excel.
+    #
+    # Đứng TRƯỚC "Ảnh & Video" vì đó là thứ tự người ta làm thật: có bảng cảnh
+    # rồi mới đi tạo ảnh cho từng cảnh. Trước 15/08/2026 nó đứng sau, và ai đi
+    # từ trên xuống sẽ vào tab tạo ảnh khi chưa có gì để tạo. Excel tab này xuất
+    # ra nạp thẳng được sang tab kế bên — thứ tự đó giờ khớp cả trên màn hình.
     ("prompt-visuals", "", "Prompt Visuals"),
+    # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026) — xem ghi chú cũ ở
+    # dưới. Nhận thẳng Excel của tab trên, hoặc gõ tay từng dòng.
+    ("media", "", "Ảnh & Video"),
     ("edit", "", "Dựng video"),
     ("wallet", "", "Tài khoản"),
     ("cai-dat", "", "Cài đặt"),

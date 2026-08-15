@@ -8,7 +8,7 @@ cách gọi lại thứ MyTool đã có chứ không viết mới:
 | kịch bản | `core/script_video.py` (lấy tư liệu) + chuỗi 7 lời nhắc của kênh |
 | giọng đọc | `client.tts.create` — cùng cửa với tab Voice |
 | phụ đề | `core/phu_de.py` — ép khớp, chạy trên máy, miễn phí |
-| bảng cảnh | `core/srt_scenes.py` + `style.yaml` của kênh |
+| bảng cảnh | `core/chia_canh.py` — AI chia theo nghĩa, chung với Prompt Visuals |
 | ảnh | `client.images.create`, có `nv1.png` làm tham chiếu |
 | clip | `client.videos.create`, lấy chính ảnh cảnh đó làm khung đầu |
 | ảnh bìa | `client.images.create`, ba kiểu khác nhau |
@@ -41,6 +41,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .auto import LuotChay, TrangThaiKhau
+from .chia_canh import (bang_phu_de, chia_theo_nghia, dien_khuon,
+                        loi_nhac_chia)
+# `loc_json` chuyển sang ở cạnh `goi_van_ban` — nơi nào đòi AI trả JSON cũng
+# phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
+# vào đây vì `__all__` của tệp này đã hứa có nó.
+from .goi_van_ban import loc_json
 from .kenh import Kenh
 from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
                     phan_loai, xin_nhip)
@@ -245,33 +251,12 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
     raise RuntimeError("không gọi được AI sau 4 lần đổi khoá")
 
 
-def loc_json(chu: str) -> Any:
-    """Bóc JSON ra khỏi câu trả lời của AI.
-
-    AI hay bọc JSON trong ```json ... ``` dù lời nhắc đã bảo đừng. Bóc trước rồi
-    mới `json.loads` — không bóc thì hỏng ngay lượt đầu và người dùng nhận một
-    câu lỗi kỹ thuật không liên quan gì tới việc họ đang làm.
-    """
-    tho = (chu or "").strip()
-    rao = re.search(r"```(?:json)?\s*(.+?)\s*```", tho, re.DOTALL | re.IGNORECASE)
-    if rao:
-        tho = rao.group(1).strip()
-    if not tho.startswith(("{", "[")):
-        # Có lúc AI nói một câu trước rồi mới tới JSON.
-        vi_tri = min([i for i in (tho.find("{"), tho.find("[")) if i >= 0]
-                     or [-1])
-        if vi_tri >= 0:
-            tho = tho[vi_tri:]
-    return json.loads(tho)
-
-
-def _thay(khuon: str, gia_tri: Dict[str, Any]) -> str:
-    """Điền `<<TÊN>>` trong lời nhắc. Chỗ nào không có dữ liệu thì để trống."""
-    ra = khuon or ""
-    for khoa, val in gia_tri.items():
-        ra = ra.replace("<<{0}>>".format(khoa), "" if val is None else str(val))
-    # Dọn những chỗ còn sót để AI không nhìn thấy `<<ABC>>` rồi tưởng là chữ.
-    return re.sub(r"<<[A-Z_]+>>", "", ra)
+#: Điền `<<TÊN>>` trong lời nhắc.
+#:
+#: Việc này nằm ở `core/chia_canh.py` vì lời nhắc chia cảnh cũng cần nó, và
+#: `chia_canh` không được nhập ngược lại tệp này (vòng nhập). Một bản duy nhất,
+#: hai nơi gọi — tên cũ giữ nguyên để tám khâu bên dưới không phải sửa.
+_thay = dien_khuon
 
 
 def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
@@ -1241,112 +1226,37 @@ def _khau_bang_canh(bc: BoiCanh):
     return lam
 
 
-#: Cảnh ngắn nhất và số dòng phụ đề gửi cho AI mỗi khúc.
-#:
-#: Hai con số chép từ cấu hình dự án thật của VE3 (`claude_cli_min_scene: 3`,
-#: `claude_cli_chunk_parallel: 3`). Trần trên thì **không** cố định 8 mà lấy
-#: theo engine — Veo3 8 giây, Seedance 10.
-MIN_GIAY_CANH = 3.0
-
-#: Bao nhiêu dòng phụ đề gửi cho AI mỗi khúc.
-#:
-#: Hạ từ 60 xuống 30 sau khi đo thật: 60 dòng đẻ ra khoảng mười lăm tới hai
-#: mươi cảnh, mỗi cảnh hai lời nhắc tiếng Anh chi tiết — tức mười lăm nghìn
-#: chữ trả về cho **một** lời gọi. Máy chủ giữ hơn tám phút chưa xong, và
-#: càng dài thì càng dễ đứt giữa câu.
-#:
-#: 30 dòng cho ra khoảng bảy tám cảnh mỗi lượt: trả về nhanh hơn hẳn, ít đứt
-#: hơn, và vì các khúc chạy song song nên chia nhỏ **không** làm chậm tổng.
-CUE_MOI_KHUC = 30
-KHUC_SONG_SONG = 3
-
-
 def _chia_canh_theo_nghia(bc: BoiCanh, luot: LuotChay, cue: List[Dict[str, Any]],
                           khuon: str) -> List[Dict[str, Any]]:
     """Đưa phụ đề cho AI **tự chia cảnh theo nghĩa**, rồi dựng bảng cảnh.
 
-    ═══ VÌ SAO KHÔNG CẮT BẰNG MÁY NỮA ═══
-
-    Bản trước cắt cảnh bằng `core/srt_scenes.py`: gom các dòng phụ đề liền nhau
-    cho tới khi chạm trần thời gian. Máy làm việc ấy nhanh và không tốn tiền,
-    nhưng nó chỉ biết **đồng hồ**, không biết **nghĩa** — nên một ý bị cắt làm
-    đôi, hai ý rời bị nhét chung một cảnh, và ảnh sinh ra đúng phong cách mà
-    không bám nội dung.
-
-    Chủ dự án nhìn ra ngay khi xem video đầu, 14/08/2026: *"yếu tố minh hoạ đó
-    không giống các tool gốc"*.
-
-    Tool gốc (`claude_cli_engine.py` — đúng engine mà dự án thật dùng, xem
-    `excel_engine: claude_cli` trong cấu hình) làm ngược lại: đưa nguyên phụ đề
-    có đánh số cho AI và bảo *"chia thành cảnh theo NGHĨA"*, kèm sàn 3 giây và
-    trần theo engine. Cảnh cắt ở chỗ ý đổi, không ở chỗ đồng hồ điểm.
-
-    Phụ đề dài thì **chia khúc** rồi chạy song song — cũng theo tool gốc
-    (`chunk_parallel: 3`). Ghép lại theo đúng thứ tự khúc để danh sách cảnh
-    liền mạch với phụ đề.
-
-    Máy vẫn còn một việc: **canh lại** thứ AI trả về. AI bỏ sót dòng, chồng
-    lấn, hay trả cảnh dài quá trần là chuyện có thật — và một cảnh dài quá trần
-    thì engine từ chối, một dòng bị bỏ sót thì đoạn ấy không có hình.
+    Cách chia nằm ở `core/chia_canh.py` — chung với tab Prompt Visuals. Ở đây
+    chỉ còn phần riêng của tab Tự động: lời nhắc `7-canh.md` của kênh, và lời
+    gọi AI đi qua `BoiCanh.goi_chat` (có khoá idempotency theo lượt chạy, nên
+    chạy tiếp không trả tiền hai lần).
     """
-    from .srt_scenes import clock, max_seconds_for  # noqa: PLC0415
+    from .srt_scenes import max_seconds_for  # noqa: PLC0415
 
     tran = float(max_seconds_for(bc.kenh.engine))
-    khuc = [cue[i:i + CUE_MOI_KHUC] for i in range(0, len(cue), CUE_MOI_KHUC)]
-    bc.ghi("  {0} dòng phụ đề → {1} khúc, AI tự chia cảnh theo nghĩa "
-           "({2:.0f}–{3:.0f} giây/cảnh)…".format(
-               len(cue), len(khuc), MIN_GIAY_CANH, tran))
 
-    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+    def hoi(khuc, thu_tu, tong_khuc):
+        return _hoi_chia_canh(bc, luot, khuon, list(khuc), thu_tu, tong_khuc,
+                              tran)
 
-    ket: List[Optional[List[Dict[str, Any]]]] = [None] * len(khuc)
-
-    def lam_khuc(i: int):
-        bc.kiem_dung()
-        ket[i] = _hoi_chia_canh(bc, luot, khuon, khuc[i], i, len(khuc), tran)
-
-    with ThreadPoolExecutor(max_workers=min(KHUC_SONG_SONG, len(khuc))) as bo:
-        for _ in bo.map(lam_khuc, range(len(khuc))):
-            pass
-    thieu = [i for i, k in enumerate(ket) if not k]
-    if thieu:
-        raise RuntimeError(
-            "khúc {0} không chia được cảnh — Excel sẽ thiếu dữ liệu, dừng ở "
-            "đây thay vì ra bảng cụt".format(thieu[0] + 1))
-
-    # Ghép theo đúng thứ tự khúc, rồi đánh số lại từ 1.
-    canh: List[Dict[str, Any]] = []
-    for phan in ket:
-        canh.extend(phan or [])
-    for so, c in enumerate(canh, start=1):
-        c["scene_id"] = so
-        c["srt_start"] = clock(c["_bat_dau"])
-        c["srt_end"] = clock(c["_ket_thuc"])
-        c["duration"] = round(c["_ket_thuc"] - c["_bat_dau"], 2)
-        c.setdefault("characters_used", "nv1")
-        c.setdefault("location_used", "")
-        c["status_img"] = "pending"
-        c["status_vid"] = "pending"
-        c.pop("_bat_dau", None)
-        c.pop("_ket_thuc", None)
-    dai = [c["duration"] for c in canh]
-    bc.ghi("  chia được {0} cảnh — ngắn nhất {1:.1f}s, dài nhất {2:.1f}s, "
-           "trung bình {3:.1f}s.".format(
-               len(canh), min(dai), max(dai), sum(dai) / max(1, len(dai))))
-    return canh
+    return chia_theo_nghia(cue, hoi, tran=tran, nhan_vat_mac_dinh="nv1",
+                           ghi=bc.ghi, kiem_dung=bc.kiem_dung)
 
 
 def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
                    cue: List[Dict[str, Any]], thu_tu: int, tong_khuc: int,
                    tran: float) -> List[Dict[str, Any]]:
-    """Hỏi AI chia một khúc phụ đề, rồi **canh lại** thứ nó trả về."""
+    """Hỏi AI chia một khúc phụ đề. Trả về nguyên thứ nó đưa ra.
+
+    Canh lại là việc của `core.chia_canh.canh_lai`, không phải của chỗ này.
+    """
     st = bc.kenh.style
-    dong = "\n".join(
-        "{0} | {1:.2f} → {2:.2f} | {3}".format(
-            c["index"], float(c["start"]), float(c["end"]),
-            " ".join(str(c["text"]).split()))
-        for c in cue)
-    loi_nhac = _thay(khuon, {
+    dong = bang_phu_de(cue)
+    loi_nhac = loi_nhac_chia(khuon, cue, tran, {
         "IMAGE_STYLE": st.get("image_style", ""),
         "VIDEO_STYLE": st.get("video_style", ""),
         "PALETTE": st.get("palette", ""),
@@ -1356,9 +1266,6 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
         "AUDIENCE_CULTURE_NOTE": st.get("audience_culture_note", ""),
         "CULTURAL_PROPS": st.get("cultural_props", ""),
         "CULTURAL_METAPHORS": st.get("cultural_metaphors", ""),
-        "SRT": dong,
-        "MIN_SEC": "{0:.0f}".format(MIN_GIAY_CANH),
-        "MAX_SEC": "{0:.0f}".format(tran),
     })
     bc.ghi("  khúc {0}/{1}: {2} dòng ({3}–{4})…".format(
         thu_tu + 1, tong_khuc, len(cue), cue[0]["index"], cue[-1]["index"]))
@@ -1405,100 +1312,7 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
                 raise
             bc.ghi("  khúc {0} chưa xong ({1}) — hỏi lại bằng khoá mới.".format(
                 thu_tu + 1, str(loi)[:70]))
-    return _canh_lai(bc, ds or [], cue, tran, thu_tu)
-
-
-def _canh_lai(bc: BoiCanh, ds: List[Any], cue: List[Dict[str, Any]],
-              tran: float, thu_tu: int) -> List[Dict[str, Any]]:
-    """Canh lại kết quả AI: phủ hết dòng, không chồng lấn, không quá trần.
-
-    AI chia theo nghĩa rất tốt, nhưng nó **không đếm giỏi**. Ba lỗi hay gặp và
-    đều làm hỏng video theo cách khác nhau:
-
-    * **bỏ sót dòng** → đoạn ấy không có hình, video hụt mất mấy giây;
-    * **chồng lấn** → hai cảnh cùng một đoạn tiếng, hình nhảy;
-    * **cảnh dài quá trần** → engine từ chối, cả khâu clip gãy.
-
-    Nên máy canh lại — không sửa *nghĩa* của cách chia, chỉ vá chỗ đếm sai.
-    """
-    theo_so = {int(c["index"]): c for c in cue}
-    dau, cuoi = cue[0]["index"], cue[-1]["index"]
-    ra: List[Dict[str, Any]] = []
-    ke_tiep = dau
-    for m in ds:
-        if not isinstance(m, dict):
-            continue
-        try:
-            a = int(m.get("srt_from"))
-            b = int(m.get("srt_to"))
-        except (TypeError, ValueError):
-            continue
-        # Ép về trong khúc và nối liền cảnh trước — vá chỗ hở và chỗ chồng.
-        a = max(ke_tiep, min(a, cuoi))
-        b = max(a, min(b, cuoi))
-        if a > cuoi:
-            break
-        # ═══ CẢNH THIẾU LỜI NHẮC THÌ NHẬP VÀO CẢNH TRƯỚC ═══
-        #
-        # AI trả về gần trăm cảnh, và thỉnh thoảng sót lời nhắc ở đúng một
-        # cảnh. Bản trước ném lỗi cho cả khúc, khúc hỏng thì hỏi lại ba lần,
-        # ba lần đều sót một cảnh khác — và cả lượt chết vì **một** cảnh.
-        # Đo thật 15/08/2026 ở M01: *"1 cảnh thiếu lời nhắc ảnh hoặc clip"*,
-        # ba vòng, mất cả kịch bản và giọng đọc đã trả tiền.
-        #
-        # Nhập nó vào cảnh liền trước thì không mất gì: hình của cảnh trước
-        # đứng thêm vài giây, đúng như người dựng tay vẫn làm khi người đọc
-        # ngừng lấy hơi. Tiếng và phụ đề không xê dịch, vì chúng bám mốc thời
-        # gian tuyệt đối chứ không bám thứ tự cảnh.
-        thieu_nhac = (not str(m.get("img_prompt") or "").strip()
-                      or not str(m.get("video_prompt") or "").strip())
-        if thieu_nhac and ra:
-            ra[-1]["_den"] = b
-            ke_tiep = b + 1
-            continue
-        ra.append(dict(m, _tu=a, _den=b))
-        ke_tiep = b + 1
-    if not ra:
-        raise LoiNoiDung("AI chia cảnh không dùng được dòng nào")
-    # Còn sót đuôi thì nhập vào cảnh cuối, đừng để mất tiếng.
-    if ke_tiep <= cuoi:
-        ra[-1]["_den"] = cuoi
-
-    xong: List[Dict[str, Any]] = []
-    for m in ra:
-        a, b = m["_tu"], m["_den"]
-        cac = [theo_so[i] for i in range(a, b + 1) if i in theo_so]
-        if not cac:
-            continue
-        t0 = float(cac[0]["start"])
-        t1 = float(cac[-1]["end"])
-        chu = " ".join(" ".join(str(c["text"]).split()) for c in cac)
-        # Quá trần thì cắt đều — engine từ chối cảnh dài hơn trần.
-        so_phan = max(1, int(-(-(t1 - t0) // tran)))
-        buoc = (t1 - t0) / so_phan
-        for k in range(so_phan):
-            xong.append({
-                "_bat_dau": t0 + buoc * k,
-                "_ket_thuc": t0 + buoc * (k + 1),
-                "srt_text": chu if so_phan == 1 else "{0} ({1}/{2})".format(
-                    chu, k + 1, so_phan),
-                "img_prompt": str(m.get("img_prompt") or ""),
-                "video_prompt": str(m.get("video_prompt") or ""),
-                "characters_used": str(m.get("characters_used") or "nv1"),
-                "primary_subject": str(m.get("primary_subject") or ""),
-                "primary_action": str(m.get("primary_action") or ""),
-                "visual_anchor": str(m.get("visual_anchor") or ""),
-                "must_not_show": str(m.get("must_not_show") or ""),
-            })
-    # Tới đây thì cảnh thiếu lời nhắc đã được nhập vào cảnh trước rồi. Còn sót
-    # thì nghĩa là **cảnh đầu tiên** thiếu — không có cảnh nào trước để nhập
-    # vào — hoặc AI trả về một đống rác. Cả hai đều đáng hỏi lại.
-    thieu = [c for c in xong if not c["img_prompt"] or not c["video_prompt"]]
-    if thieu:
-        raise LoiNoiDung(
-            "{0}/{1} cảnh thiếu lời nhắc ngay từ cảnh đầu".format(
-                len(thieu), len(xong)))
-    return xong
+    return ds or []
 
 
 #: Cột của sheet `scenes` — **giữ đúng tên và thứ tự này**, đây là khuôn mà

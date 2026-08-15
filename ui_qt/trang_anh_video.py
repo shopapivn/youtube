@@ -358,9 +358,9 @@ class TabThuCong(QWidget):
 class _CotBang:
     """Chỉ số cột — gõ số trần vào code là chỗ hỏng im lặng khi thêm cột."""
 
-    STT, ANH, VIDEO, TT_ANH, TT_VIDEO = range(5)
+    STT, ANH, VIDEO, THAM_CHIEU, TT_ANH, TT_VIDEO = range(6)
     TIEU_DE = ("#", "Mô tả ảnh", "Mô tả video (để trống = không làm video)",
-               "Ảnh", "Video")
+               "Ảnh tham chiếu", "Ảnh", "Video")
 
 
 class TabHangLoat(QWidget):
@@ -436,11 +436,75 @@ class TabHangLoat(QWidget):
         doc.setSpacing(8)
         doc.addWidget(nhan("Bảng cảnh", "h2"))
         hang = HangXuongDong()
-        hang.addWidget(nut_phu("Nạp .txt", self.nap_txt, rong=112))
+        hang.addWidget(nut_phu("Tải file mẫu", self.tai_mau, rong=140))
+        hang.addWidget(nut_phu("Nạp Excel", self.nap_excel, rong=112))
+        hang.addWidget(nut_phu("Nạp .txt", self.nap_txt, rong=104))
         hang.addWidget(nut_phu("Thêm dòng", self.them_dong, rong=104))
         hang.addWidget(nut_phu("Xoá hết", self.xoa_het, rong=104))
         doc.addLayout(hang)
+
+        # ═══ ẢNH THAM CHIẾU CHO CẢ LOẠT ═══
+        #
+        # Tab này từng gõ cứng `reference_images=None`, nên **mọi ảnh tạo hàng
+        # loạt đều không bám nhân vật nào** — mỗi cảnh ra một người khác nhau,
+        # đúng thứ `nv1.png` sinh ra để chặn. Chủ dự án, 15/08/2026: *"tạo ảnh
+        # và video đều cần tham chiếu"*.
+        #
+        # Ô này là ảnh dùng chung; dòng nào điền cột "Ảnh tham chiếu" riêng thì
+        # dòng ấy thắng (xem `_anh_cua_dong`).
+        self.anh_vao = AnhThamChieu("Ảnh tham chiếu cho cả loạt:")
+        self.anh_vao.setToolTip(
+            "Dùng cho mọi dòng chưa điền cột “Ảnh tham chiếu” riêng. Đây là "
+            "thứ giữ cho nhân vật không đổi mặt giữa các cảnh.")
+        doc.addWidget(self.anh_vao)
         return khung
+
+    def tai_mau(self) -> None:
+        from core.bang_canh_excel import LoiBangCanh, viet_mau  # noqa: PLC0415
+
+        duong, _ = QFileDialog.getSaveFileName(
+            self, "Lưu file mẫu",
+            os.path.join(os.path.expanduser("~"), "mau-bang-canh.xlsx"))
+        if not duong:
+            return
+        try:
+            viet_mau(duong)
+        except (LoiBangCanh, OSError) as loi:
+            self._app.show_message("Không lưu được file mẫu", str(loi))
+            return
+        self._app.show_message(
+            "Đã lưu file mẫu",
+            "{0}\n\nBạn mở ra điền, lưu lại, rồi bấm “Nạp Excel”.\n\n"
+            "Trong file có trang “huong-dan” giải nghĩa từng cột."
+            .format(duong))
+
+    def nap_excel(self) -> None:
+        from core.bang_canh_excel import LoiBangCanh, doc_excel  # noqa: PLC0415
+
+        duong, _ = QFileDialog.getOpenFileName(
+            self, "Chọn file Excel bảng cảnh", "",
+            "Bảng cảnh (*.xlsx);;Mọi loại file (*)")
+        if not duong:
+            return
+        try:
+            dong = doc_excel(duong)
+        except LoiBangCanh as loi:
+            # Nói rõ thiếu cột nào. "File không hợp lệ" thì khách chỉ biết ngồi
+            # nhìn; "thiếu cột img_prompt" thì họ sửa được.
+            self._app.show_message("File này chưa dùng được", str(loi))
+            return
+        self.xoa_het()
+        self.bang.setRowCount(0)
+        for m in dong:
+            self.them_dong(m["anh"], m["video"], m["tham_chieu"])
+        chi_clip = sum(1 for m in dong if not m["anh"] and m["video"])
+        them = ("\n\n{0} dòng chỉ có mô tả clip — mấy dòng ấy sẽ làm clip "
+                "thẳng từ ảnh tham chiếu bạn đưa, không tạo ảnh mới."
+                .format(chi_clip)) if chi_clip else ""
+        self._app.show_message(
+            "Đã nạp bảng cảnh",
+            "{0} dòng từ {1}.{2}".format(len(dong), os.path.basename(duong),
+                                         them))
 
     def _thanh_chay(self) -> QWidget:
         khung = the()
@@ -473,7 +537,8 @@ class TabHangLoat(QWidget):
 
     # ── Bảng ─────────────────────────────────────────────────────────────────
 
-    def them_dong(self, mo_ta_anh: str = "", mo_ta_video: str = "") -> int:
+    def them_dong(self, mo_ta_anh: str = "", mo_ta_video: str = "",
+                  tham_chieu: str = "") -> int:
         dong = self.bang.rowCount()
         self.bang.insertRow(dong)
         stt = QTableWidgetItem(str(dong + 1))
@@ -481,6 +546,10 @@ class TabHangLoat(QWidget):
         self.bang.setItem(dong, _CotBang.STT, stt)
         self.bang.setItem(dong, _CotBang.ANH, QTableWidgetItem(mo_ta_anh))
         self.bang.setItem(dong, _CotBang.VIDEO, QTableWidgetItem(mo_ta_video))
+        # Ảnh tham chiếu RIÊNG của dòng này. Bỏ trống thì dùng ảnh chọn chung
+        # cho cả loạt — xem `_anh_cua_dong`.
+        self.bang.setItem(dong, _CotBang.THAM_CHIEU,
+                          QTableWidgetItem(tham_chieu))
         for cot in (_CotBang.TT_ANH, _CotBang.TT_VIDEO):
             o = QTableWidgetItem("")
             o.setFlags(Qt.ItemIsEnabled)
@@ -506,13 +575,26 @@ class TabHangLoat(QWidget):
             o.setText(chu)
 
     def canh(self):
-        """Các dòng có mô tả ảnh: `(dòng, mô tả ảnh, mô tả video)`."""
+        """Các dòng có việc để làm: `(dòng, mô tả ảnh, mô tả video)`.
+
+        Nhận cả dòng **chỉ có mô tả clip**: khách đã có sẵn ảnh và chỉ muốn cho
+        nó động đậy. Dòng ấy bỏ qua khâu tạo ảnh, lấy thẳng ảnh tham chiếu làm
+        khung đầu cho clip. Trước 15/08/2026 bảng chỉ nhận dòng có mô tả ảnh,
+        nên đường đó không đi được.
+        """
         ra = []
         for dong in range(self.bang.rowCount()):
             anh = self._chu(dong, _CotBang.ANH)
-            if anh:
-                ra.append((dong, anh, self._chu(dong, _CotBang.VIDEO)))
+            video = self._chu(dong, _CotBang.VIDEO)
+            if anh or video:
+                ra.append((dong, anh, video))
         return ra
+
+    def _anh_cua_dong(self, dong: int):
+        """Ảnh tham chiếu của dòng này: điền riêng thì dùng riêng, không thì
+        dùng ảnh chọn chung cho cả loạt."""
+        rieng = self._chu(dong, _CotBang.THAM_CHIEU)
+        return [rieng] if rieng else list(self.anh_vao.duong_dan)
 
     def nap_txt(self) -> None:
         duong_dan, _ = QFileDialog.getOpenFileName(
@@ -579,9 +661,22 @@ class TabHangLoat(QWidget):
         self._gui_mot_canh(dong, mo_ta)
 
     def _gui_mot_canh(self, dong: int, mo_ta: str) -> None:
+        # Ảnh tham chiếu của đúng dòng này. Làm lại một cảnh lẻ mà bỏ tham
+        # chiếu đi thì tấm ảnh mới ra một nhân vật khác hẳn 99 tấm còn lại.
+        duong = [d for d in self._anh_cua_dong(dong) if d]
+        if duong and self._app.client is not None:
+            self._app.run_bg(
+                lambda: self._tai_tham_chieu(duong),
+                on_ok=lambda kho: self._gui_mot_canh_that(
+                    dong, mo_ta, [kho[d] for d in duong if d in kho]),
+                on_err=self._app.show_error)
+            return
+        self._gui_mot_canh_that(dong, mo_ta, [])
+
+    def _gui_mot_canh_that(self, dong: int, mo_ta: str, urls) -> None:
         ty_le = self.ty_le.currentText()
         van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
-                             reference_images=[])
+                             reference_images=urls)
         if van_de:
             self._app.show_message("Cần sửa cảnh {0}".format(dong + 1),
                                    "\n".join("• " + v for v in van_de))
@@ -589,7 +684,8 @@ class TabHangLoat(QWidget):
         thu_muc = self._thu_muc.value
         spec = JobSpec(
             kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80], index=dong + 1,
-            params={"n": 1, "aspect_ratio": ty_le, "reference_images": None},
+            params={"n": 1, "aspect_ratio": ty_le,
+                    "reference_images": list(urls) or None},
             out_dir=thu_muc,
             estimate_micro=hold_for_image(1, self._app.prices))
         self._dong_cua_anh[spec.idempotency_key] = dong
@@ -638,8 +734,36 @@ class TabHangLoat(QWidget):
         canh = self.canh()
         if not canh:
             self._app.show_message("Bảng còn trống",
-                                   "Nhập ít nhất một mô tả ảnh rồi bấm chạy.")
+                                   "Nhập ít nhất một mô tả rồi bấm chạy.")
             return
+        # ═══ TẢI ẢNH THAM CHIẾU MỘT LẦN CHO CẢ LOẠT ═══
+        #
+        # Cổng nhận URL, không nhận đường dẫn trên máy. Tải ở **luồng nền** —
+        # làm ở luồng vẽ thì cửa sổ đứng hình đúng lúc khách vừa bấm — và tải
+        # mỗi tệp **đúng một lần** dù bốn mươi dòng cùng dùng chung một ảnh.
+        can = []
+        for dong, _a, _v in canh:
+            for d in self._anh_cua_dong(dong):
+                if d and d not in can:
+                    can.append(d)
+        if can and self._app.client is not None:
+            self._app.run_bg(lambda: self._tai_tham_chieu(can),
+                             on_ok=lambda kho: self._chay_that(canh, kho),
+                             on_err=self._app.show_error)
+            return
+        self._chay_that(canh, {})
+
+    def _tai_tham_chieu(self, duong_dan) -> Dict[str, str]:
+        """Tải từng ảnh lên, trả `{đường dẫn: URL}`. **Chạy ở luồng nền.**"""
+        kho: Dict[str, str] = {}
+        for d in duong_dan:
+            try:
+                kho[d] = str(self._app.client.uploads.upload_file(d))
+            except Exception:  # noqa: BLE001 — một ảnh hỏng không dừng cả loạt
+                pass
+        return kho
+
+    def _chay_that(self, canh, kho_url: Dict[str, str]) -> None:
         thu_muc = self._thu_muc.value
         ty_le = self.ty_le.currentText()
         specs: List[JobSpec] = []
@@ -647,21 +771,42 @@ class TabHangLoat(QWidget):
         self._dong_cua_video.clear()
         self._cho_noi.clear()
         self._ep_noi.clear()
-        for thu_tu, (dong, mo_ta, _mo_ta_video) in enumerate(canh, 1):
+        for thu_tu, (dong, mo_ta, mo_ta_video) in enumerate(canh, 1):
+            urls = [kho_url[d] for d in self._anh_cua_dong(dong)
+                    if d in kho_url]
+            # ═══ DÒNG CHỈ CÓ MÔ TẢ CLIP ═══
+            #
+            # Khách đã có sẵn ảnh và chỉ muốn cho nó động đậy. Bỏ qua khâu tạo
+            # ảnh, lấy thẳng ảnh tham chiếu làm khung đầu cho clip. Trước
+            # 15/08/2026 bảng chỉ nhận dòng có mô tả ảnh nên đường này không đi
+            # được, và người có sẵn ảnh không dùng nổi tab hàng loạt.
+            if not mo_ta:
+                if not urls:
+                    self._app.show_message(
+                        "Cảnh {0} thiếu ảnh".format(thu_tu),
+                        "Dòng này chỉ có mô tả clip nên cần một ảnh tham chiếu "
+                        "làm khung đầu. Bạn điền cột “Ảnh tham chiếu” cho dòng "
+                        "đó, hoặc chọn ảnh dùng chung cho cả loạt.")
+                    return
+                self._gui_video(dong, mo_ta_video, urls[0])
+                continue
             van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
-                                 reference_images=[])
+                                 reference_images=urls)
             if van_de:
                 self._app.show_message("Cần sửa cảnh {0}".format(thu_tu),
                                        "\n".join("• " + v for v in van_de))
                 return
             spec = JobSpec(
                 kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80], index=thu_tu,
-                params={"n": 1, "aspect_ratio": ty_le, "reference_images": None},
+                params={"n": 1, "aspect_ratio": ty_le,
+                        "reference_images": urls or None},
                 out_dir=thu_muc,
                 estimate_micro=hold_for_image(1, self._app.prices))
             self._dong_cua_anh[spec.idempotency_key] = dong
             self._dat_trang_thai(dong, _CotBang.TT_ANH, "đang chờ")
             specs.append(spec)
+        if not specs:
+            return
         # Dọn lưới TRƯỚC khi gửi, không phải sau: lô cũ còn nằm đó thì dòng
         # "12/40 xong" đếm lẫn hai lô và chẳng nói lên điều gì.
         self.thu_vien.xoa_het()
