@@ -37,20 +37,25 @@ Việc đã xong từ giây thứ 3,5 mà khoá vẫn kẹt sau hơn bốn phút
 bao giờ phát lại kết quả cũ cho khoá cũ** — nên câu "đợi vài giây rồi kiểm tra
 lại kết quả" trong chính thông báo ấy là sai với hành vi thật của nó.
 
-Ba loại, ba cách xử khác hẳn nhau:
+Bên máy chủ sửa lần một (15/08/2026 chiều) và **kiểu hỏng đổi chứ chưa hết**:
+gửi lại khoá cũ giờ không báo lỗi nữa mà **treo hẳn** — đo tới 480 giây vẫn
+không trả lời. Với tool thì kiểu mới TỆ HƠN: trước còn có câu lỗi để nhận ra
+mà đổi khoá, giờ nó im nên tool tưởng máy chủ đang viết dở.
 
-| máy chủ nói | nghĩa là | làm gì |
-|---|---|---|
-| `CHO_TIEP` hết giờ chờ | nó **đang viết dở** | đợi, giữ **đúng khoá cũ** |
-| `TAM_NGHI` "chưa nhận được" | nó **chưa nhận** | **khoá mới** |
-| `KHOA_DA_DUNG` "khoá đang xử lý" | khoá **hỏng vĩnh viễn** | **khoá mới, ngay** |
+Kết luận rút ra, và nó chi phối cả tệp này: **ở đường viết chữ, một khoá chỉ
+dùng được đúng một lần.** Gửi lại là hoặc ăn lỗi, hoặc treo — không bao giờ
+nhận lại được bài cũ. Nên mọi lần thử lại đều phải mang **khoá mới**, và tool
+không được để SDK tự thử lại bằng khoá cũ sau lưng mình (xem
+`_client_khong_tu_thu_lai`).
 
-Chỗ dễ sai nhất là gộp hai dòng cuối vào dòng đầu — và tool đã sai đúng thế
-suốt hai ngày: nó ngồi đợi hàng chục phút cho một thứ không bao giờ tới.
+Việc giữ khoá cũ vẫn đúng và vẫn quý ở **đường tạo job** (ảnh, clip, giọng
+đọc): đo được là gửi lại đúng khoá thì nhận lại đúng job cũ. Hai đường, hai
+luật — đừng đem luật của đường này áp cho đường kia.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence
@@ -75,10 +80,60 @@ _SO_LUOT_KHOA = 4
 
 #: Những sự cố **đáng đợi mà vẫn giữ khoá cũ**.
 #:
-#: Cố tình KHÔNG có `TAM_NGHI`: nó phải thoát ra ngoài để vòng ngoài đổi khoá,
-#: chứ đợi tại chỗ với khoá cũ chính là thứ làm khoá kẹt.
-_DOI_GIU_KHOA: Sequence[str] = (CHO_TIEP, CHAM_LAI, HET_KHO, NHA_MAY_NGHI,
-                                KHOA_DA_DUNG)
+#: Cố tình KHÔNG có `TAM_NGHI`, `KHOA_DA_DUNG` và `CHO_TIEP`: cả ba đều phải
+#: thoát ra ngoài để vòng ngoài đổi khoá.
+#:
+#: `CHO_TIEP` (hết giờ chờ) từng nằm trong đây, và đó là lỗi. Lý do giữ khoá cũ
+#: khi hết giờ là *"máy chủ có thể vẫn đang viết, hỏi lại đúng khoá thì nhận
+#: được bài ấy"*. Đo ra thì tiền đề đó sai: cổng **không bao giờ** phát lại kết
+#: quả cho một khoá đã dùng ở đường viết chữ. Giữ khoá cũ nghĩa là hỏi lại một
+#: thứ chắc chắn không tới.
+_DOI_GIU_KHOA: Sequence[str] = (CHAM_LAI, HET_KHO, NHA_MAY_NGHI)
+
+
+#: Client riêng cho đường viết chữ, **không tự thử lại**. Khoá theo `id` client gốc.
+_KHO_CLIENT: Dict[int, Any] = {}
+_KHOA_KHO = threading.Lock()
+
+
+def _client_khong_tu_thu_lai(goc: Any) -> Any:
+    """Client anh em của `goc`, nhưng `max_retries = 0`.
+
+    ═══ VÌ SAO PHẢI CÓ CÁI NÀY ═══
+
+    SDK tự thử lại **3 lần bằng đúng khoá cũ** khi hết giờ chờ hoặc đứt mạng.
+    Với đường tạo job thì đó là hành vi đúng và quý: gửi lại đúng khoá thì nhận
+    lại đúng job cũ, không đẻ job trùng, không trả tiền hai lần — đã đo được.
+
+    Với đường **viết chữ** thì ngược hẳn. Đo trên máy chủ thật (15/08/2026):
+    gửi lại một khoá đã dùng thì cổng **treo, không trả lời**, tới 480 giây vẫn
+    im. Nhân với thời gian chờ 900 giây của tab Tự động và 3 lần thử lại của
+    SDK: **một cú treo ngốn tới 60 phút** trước khi mã của tool kịp nhìn thấy
+    lỗi. Khách chỉ thấy tool đứng im cả tiếng.
+
+    Nên đường viết chữ tự lo việc thử lại, và mỗi lần thử là một **khoá mới**.
+
+    Không sửa `max_retries` trên client gốc: tab Tự động dùng chung một client
+    cho cả sáu luồng tạo ảnh và clip chạy song song, sửa thuộc tính của nó là
+    đụng vào việc của luồng khác giữa chừng.
+    """
+    with _KHOA_KHO:
+        san = _KHO_CLIENT.get(id(goc))
+        if san is not None:
+            return san
+        try:
+            from shopapi import ShopAPI  # noqa: PLC0415
+
+            em = ShopAPI(api_key=goc.api_key, base_url=goc.base_url,
+                         max_retries=0)
+            try:
+                em._http.timeout = goc._http.timeout  # noqa: SLF001
+            except Exception:  # noqa: BLE001 — SDK đổi cấu trúc thì bỏ qua
+                pass
+        except Exception:  # noqa: BLE001 — dựng không được thì dùng client gốc
+            em = goc
+        _KHO_CLIENT[id(goc)] = em
+        return em
 
 
 def _doc_chu(phan_hoi: Any) -> str:
@@ -133,8 +188,10 @@ def goi_van_ban(
         # đúng việc cũ của mình sau khi đóng tool giữa chừng.
         khoa_luot = goc if luot == 0 else "{0}:k{1}".format(goc, luot)
 
+        goi_bang = _client_khong_tu_thu_lai(client)
+
         def mot_lan(_khoa: str = khoa_luot) -> str:
-            return _doc_chu(client.request(
+            return _doc_chu(goi_bang.request(
                 "POST", "/v1/chat/completions",
                 json={"model": mo_hinh, "stream": False,
                       "max_tokens": int(toi_da_token), "messages": tin_nhan},

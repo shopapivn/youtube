@@ -84,11 +84,18 @@ class TestKienNhan:
 class TestKhoaViec:
     """Khoá việc là tiền. Đổi sai chỗ là trừ hai lần, giữ sai chỗ là kẹt mãi."""
 
-    def test_dang_lam_do_thi_GIU_NGUYEN_khoa(self):
-        """Máy chủ đã nhận việc rồi — hỏi lại bằng khoá khác là trả tiền hai lần."""
+    def test_moi_lan_thu_lai_deu_mang_KHOA_MOI(self):
+        """Ở đường viết chữ, một khoá chỉ dùng được đúng một lần.
+
+        Đo trên máy chủ thật: gửi lại khoá cũ thì hoặc ăn lỗi xung đột, hoặc
+        treo tới 480 giây — không bao giờ nhận lại được bài cũ. Nên giữ khoá
+        cũ là hỏi lại một thứ chắc chắn không tới.
+        """
         may = MayChuGia([DANG_LAM, DANG_LAM, "xong"])
-        goi_van_ban(may, [{"role": "user", "content": "x"}], **KHONG_NGU, khoa="khoa-cua-toi")
-        assert may.khoa_da_dung == ["khoa-cua-toi"] * 3
+        goi_van_ban(may, [{"role": "user", "content": "x"}], **KHONG_NGU,
+                    khoa="khoa-cua-toi")
+        assert may.khoa_da_dung[0] == "khoa-cua-toi"
+        assert len(set(may.khoa_da_dung)) == len(may.khoa_da_dung),             "không được gửi lại cùng một khoá lần nào"
 
     def test_chua_nhan_duoc_thi_DOI_khoa(self):
         """Chưa nhận thì chưa trừ tiền — và giữ khoá cũ chính là thứ làm kẹt."""
@@ -106,12 +113,11 @@ class TestKhoaViec:
         """
         from core.su_co import KHOA_DA_DUNG, _NHIP
 
-        so_lan_giu_khoa = len(_NHIP[KHOA_DA_DUNG]) + 1
-        may = MayChuGia([KHOA_CU] * so_lan_giu_khoa + ["thoát được rồi"])
+        may = MayChuGia([KHOA_CU, "thoát được rồi"])
         assert goi_van_ban(may, [{"role": "user", "content": "x"}],
                            **KHONG_NGU, khoa="goc") == "thoát được rồi"
-        assert may.khoa_da_dung[:so_lan_giu_khoa] == ["goc"] * so_lan_giu_khoa
-        assert may.khoa_da_dung[so_lan_giu_khoa] != "goc"
+        assert may.khoa_da_dung[0] == "goc"
+        assert may.khoa_da_dung[1] != "goc", "phải đổi khoá NGAY, không đợi"
 
     def test_khong_ngoi_doi_lau_cho_mot_khoa_da_ket(self):
         """Nhịp đợi phải NGẮN: đo được là nó không bao giờ nhả ra."""
@@ -121,33 +127,24 @@ class TestKhoaViec:
             "đợi {0} giây cho một khoá đã kẹt là bắt khách ngồi nhìn một thứ "
             "không tới".format(sum(_NHIP[KHOA_DA_DUNG])))
 
-    def test_may_chu_viet_do_that_thi_VAN_kien_nhan(self):
-        """Đừng vì sửa chuyện khoá kẹt mà thành bỏ dở việc đang chạy ngon."""
-        from core.su_co import CHO_TIEP, _NHIP
-
-        so_lan_giu_khoa = len(_NHIP[CHO_TIEP]) + 1
-        may = MayChuGia([DANG_LAM] * so_lan_giu_khoa + ["thoát được rồi"])
+    def test_het_gio_cho_thi_cung_doi_khoa_ngay(self):
+        """Hết giờ chờ cũng phải đổi khoá — bài cũ không lấy lại được nữa."""
+        may = MayChuGia([DANG_LAM, "thoát được rồi"])
         assert goi_van_ban(may, [{"role": "user", "content": "x"}],
                            **KHONG_NGU, khoa="goc") == "thoát được rồi"
-        assert may.khoa_da_dung[:so_lan_giu_khoa] == ["goc"] * so_lan_giu_khoa
-        assert may.khoa_da_dung[so_lan_giu_khoa] != "goc"
+        assert may.khoa_da_dung[1] != "goc"
 
-    def test_kien_nhan_du_cho_khau_viet_kich_ban(self):
-        """Đây là con số đã làm hỏng thật, nên nó phải có người canh.
+    def test_duong_tao_job_van_kien_nhan_nhu_cu(self):
+        """Hai đường, hai luật — đừng đem luật đường này áp cho đường kia.
 
-        "Đang làm dở việc này" nghĩa là máy chủ **đã nhận và đang làm**. Bỏ
-        giữa chừng rồi đặt lại là làm lại từ đầu một việc vốn đang chạy ngon.
-
-        Ngày 14/08/2026 bảng nhịp bị rút xuống 75 giây, lấy theo lời nhắc chia
-        cảnh đo được 46 giây. Sai cho cả họ nhà việc: khâu viết kịch bản đo
-        được **769 giây**, nên khách chạy lượt đầu tiên là dính ngay ở bước
-        đầu tiên.
+        `CHO_TIEP` vẫn được `_cho_job` dùng để đợi job ảnh/clip, và ở đó giữ
+        khoá cũ là ĐÚNG: đo được là gửi lại đúng khoá thì nhận lại đúng job cũ.
+        Bài này canh cho bảng nhịp ấy không bị rút ngắn theo đường viết chữ.
         """
         from core.su_co import CHO_TIEP, _NHIP
 
         assert sum(_NHIP[CHO_TIEP]) > 769, (
-            "kiên nhẫn {0} giây không đủ cho khâu viết kịch bản (769 giây đo "
-            "được) — tool sẽ bỏ dở việc đang chạy để đặt lại từ đầu"
+            "kiên nhẫn {0} giây không đủ cho việc chậm nhất đo được (769 giây)"
             .format(sum(_NHIP[CHO_TIEP])))
 
     def test_khoa_luot_dau_giu_nguyen_ban_goc(self):
