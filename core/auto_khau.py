@@ -1642,6 +1642,22 @@ def _khau_bang_canh(bc: BoiCanh):
         _viet_xlsx(dich, canh, bc.kenh)
         return {"so_canh": len(canh)}
 
+    def soi_lai(luot: LuotChay) -> bool:
+        """Bảng cảnh đã ghi ra còn dùng được không — hỏi TRƯỚC khi bỏ qua khâu.
+
+        Cửa `_canh_dung_duoc` ở trên chỉ chạy khi khâu này chạy. Một bản tool cũ
+        ghi ra bảng cảnh thiếu lời nhắc rồi đánh dấu xong thì khâu không chạy
+        nữa, và cửa ấy nằm im trong khi khâu ảnh phía sau cứ thế tiêu tiền cho
+        tới lúc gặp dòng trống đầu tiên. Xem `core.auto._con_dung_duoc`.
+        """
+        goi_json = os.path.join(luot.thu_muc, "4-canh.json")
+        if not os.path.exists(goi_json):
+            # Chưa có tệp thì không phải việc của cửa này: khâu ảnh sẽ báo
+            # thiếu bảng cảnh bằng câu của nó, rõ hơn câu ở đây.
+            return True
+        return _canh_dung_duoc(json.loads(_doc_chu(goi_json)), bc) is not None
+
+    lam.soi_lai = soi_lai
     return lam
 
 

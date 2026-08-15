@@ -80,10 +80,19 @@ from __future__ import annotations
 
 import math
 import threading
+import logging
 import time
 from collections import deque
 from datetime import datetime
 from typing import Any, Deque, Optional
+
+from ._nho_nhip import BoNhoNhip
+
+#: Nhật ký nhịp. Trước 14/08/2026 mô-đun này **câm hoàn toàn**: bảng của tool
+#: nói "nghẽn ở PHÍA TOOL — xem logs/ve3-*.log", mà `grep` cả 44.311 dòng log
+#: ra 0 kết quả về nhịp. Nó chỉ người đọc tới một cuốn sổ trắng, và chỗ nghẽn
+#: phải suy luận từ mã nguồn thay vì đọc số.
+_LOG = logging.getLogger("shopapi.nhip")
 
 __all__ = ["NhipDo", "cho_hang_doi_cua"]
 
@@ -143,6 +152,30 @@ NHO_MAU = 20
 #: Chờ mặc định khi máy chủ báo nhà máy dừng mà không kèm ``Retry-After``.
 CHO_KHI_DUNG = 30.0
 
+#: Bao nhiêu mẫu độ trễ vọt LIÊN TIẾP mới coi là nghẽn thật.
+#:
+#: Độ trễ hàng chờ là phép SUY LUẬN, không phải lời máy chủ nói (``429`` thì
+#: khác — nó không đi qua cửa này và vẫn giảm ngay). Một mẫu lẻ vọt lên là
+#: chuyện thường: job rơi đúng ranh giới một nhịp `claim` của worker (2 giây)
+#: là đủ vượt ngưỡng khi nền đang thấp.
+#:
+#: Đo bằng chính lớp này, 3.000 job, trần máy chủ 979: chỉ cần **0,2%** số job
+#: vọt độ trễ là nhịp ổn định tụt từ 979 xuống 23. Đòi hai mẫu liên tiếp cắt
+#: sạch loại nhiễu ấy mà vẫn bắt được nghẽn thật — nghẽn thật thì mẫu nào cũng
+#: vọt, không phải một mẫu rồi thôi.
+XAC_NHAN_TRE = 2
+
+#: Nới bao nhiêu phần trăm sau mỗi cửa sổ chạy mượt (pha dò từng bước).
+#:
+#: Thay cho luật "+1 mỗi cửa sổ" của TCP. Lý do đổi nằm ở ĐƠN VỊ THỜI GIAN: một
+#: cửa sổ ở TCP dài một RTT (~50ms), ở đây dài một job (~60 giây). Giữ +1 thì
+#: leo từ 12 lên 700 mất ~11 giờ — dài hơn cả ngày làm việc của khách.
+#:
+#: 25% là chỗ đứng giữa đã tính: đủ để bắt kịp một nhà máy đang rỗng trong
+#: ~19 cửa sổ, đủ xa cách nhân đôi để không bắn vọt. Xem khối chú thích ở
+#: `xong()` về vì sao tăng-nhân ở đây KHÔNG phạm lý lẽ công bằng của TCP.
+HE_SO_TANG = 0.25
+
 
 class NhipDo:
     """Máy trạng thái AIMD. **Thuần tuý, không tự gọi mạng, không tự ngủ.**
@@ -177,12 +210,39 @@ class NhipDo:
         nguong_tre: float = NGUONG_TRE,
         tre_toi_thieu: float = TRE_TOI_THIEU,
         nho_mau: int = NHO_MAU,
+        nho_khoa: Optional[str] = None,
+        nho: Optional["BoNhoNhip"] = None,
         _dong_ho=time.monotonic,
     ) -> None:
         self._san = max(1, int(san))
         self._nhip = float(max(self._san, int(bat_dau)))
+
+        # ═══ NHỚ NHỊP QUA CÁC LẦN CHẠY — 14/08/2026 ═══
+        #
+        # Bên VE3_SUITE mỗi "mã" là một TIẾN TRÌNH RIÊNG, nên mỗi mã dựng một
+        # `NhipDo` mới bắt đầu lại từ 1. Nhân đôi mỗi vòng, một vòng bằng một
+        # job (~60 giây với video) thì chạm 64 mất 6 phút — mã ngắn xong trước
+        # đó, tiến trình chết mang theo cả bài học, mã sau leo lại từ chân.
+        #
+        # Đo được trên bảng của tool: `video: xin 64 → chạy 2`, trong khi máy
+        # chủ cùng lúc mời ~288 chỗ video và hàng chờ chỉ 1–2 giây.
+        #
+        # Bộ nhớ chỉ đề nghị chỗ BẮT ĐẦU (đã lùi một bậc, có hạn dùng). Trần
+        # máy chủ đọc mỗi lô qua `dat_tran()` vẫn là mức chặn trên.
+        self._nho_khoa = None if nho_khoa is None else str(nho_khoa)
+        self._nho = nho
+        if self._nho_khoa and self._nho is None:
+            self._nho = BoNhoNhip()
+        if self._nho_khoa and self._nho is not None:
+            goi_y = self._nho.bat_dau_tu(self._nho_khoa, self._san)
+            if goi_y is not None and goi_y > self._nhip:
+                _LOG.info("nhip[%s]: vao lai o %.0f (nho tu lan chay truoc), thay vi %.0f",
+                          self._nho_khoa, goi_y, self._nhip)
+                self._nhip = float(goi_y)
         #: Còn trong pha LEO NHANH — chưa gặp tín hiệu nghẽn nào. Xem `xong()`.
         self._leo_nhanh = True
+        #: Số mẫu độ trễ vọt LIÊN TIẾP. Xem `XAC_NHAN_TRE`.
+        self._tre_lien_tiep = 0
         self._tran: Optional[int] = None if tran is None else max(0, int(tran))
         self._nguong_tre = float(nguong_tre)
         self._tre_toi_thieu = float(tre_toi_thieu)
@@ -291,11 +351,36 @@ class NhipDo:
             if cho_hang_doi is not None:
                 cho_hang_doi = max(0.0, float(cho_hang_doi))
                 if self._tre_vot(cho_hang_doi):
-                    # Nghẽn nhìn thấy TRƯỚC khi máy chủ phải nói ``429``.
+                    # ═══ MỘT MẪU LẺ KHÔNG PHẢI LÀ NGHẼN — 16/08/2026 ═══
+                    #
+                    # Độ trễ hàng chờ là một phép SUY LUẬN, khác hẳn ``429`` (máy
+                    # chủ nói thẳng). Nền so sánh lại là ``min`` của 20 mẫu gần
+                    # nhất, nên khi hệ đang chạy nhanh (nền ~0,3s) thì ngưỡng chỉ
+                    # còn ~6 giây — và 6 giây là quãng BÌNH THƯỜNG của một job rơi
+                    # đúng ranh giới một nhịp `claim` (worker hỏi việc mỗi 2 giây).
+                    #
+                    # Đo bằng chính lớp này, 3.000 job, nhà máy trần 979:
+                    #
+                    #     tỉ lệ job chờ lâu    nhịp ổn định
+                    #             0%              979
+                    #           0,2%               23      ← hai job trên một nghìn
+                    #           1,0%               12
+                    #           5,0%                6
+                    #
+                    # Hai job lỗi nhịp trên một nghìn kéo tool từ 979 xuống 23.
+                    # Đó không phải điều khiển tắc nghẽn, đó là nhiễu điều khiển
+                    # cả hệ. Nên: đòi XÁC NHẬN. Hai mẫu vọt liên tiếp mới là nghẽn;
+                    # một mẫu lẻ thì ghi nhận và ĐỨNG YÊN (không tăng, không giảm).
+                    #
+                    # ``429``/``503`` KHÔNG đi qua cửa này — chúng là lời máy chủ
+                    # nói ra, vẫn giảm ngay lập tức như cũ.
                     self._mau_cho.append(cho_hang_doi)
-                    self._giam()
+                    self._tre_lien_tiep += 1
+                    if self._tre_lien_tiep >= XAC_NHAN_TRE:
+                        self._giam()
                     return
                 self._mau_cho.append(cho_hang_doi)
+                self._tre_lien_tiep = 0
 
             # ═══ LEO NHANH TRƯỚC, LEO CHẬM SAU (slow-start) — 13/08/2026 ═══
             #
@@ -326,15 +411,50 @@ class NhipDo:
                     moi = min(moi, float(max(self._tran, self._san)))
                 self._nhip = moi
                 self._chuoi = 0
+                self._ghi_nho(moi)          # ghi thưa — xem GIAN_GHI_GIAY
                 return
 
             self._chuoi += 1
-            if self._chuoi >= max(1, math.ceil(self._nhip)):
-                self._chuoi = 0
-                moi = self._nhip + 1.0
-                if self._tran is not None:
-                    moi = min(moi, float(max(self._tran, self._san)))
-                self._nhip = moi
+            if self._chuoi < max(1, math.ceil(self._nhip)):
+                return
+
+            # ═══ TRỌN MỘT CỬA SỔ MƯỢT — TĂNG THEO PHẦN TRĂM, KHÔNG PHẢI +1 ═══
+            #
+            # Luật cũ là "+1 mỗi cửa sổ", lấy thẳng từ TCP. Ở TCP nó đúng vì một
+            # cửa sổ dài một RTT ≈ 50 mili-giây. Ở đây một cửa sổ là `nhịp` job
+            # chạy SONG SONG, nên nó dài đúng MỘT JOB ≈ 60 giây — chậm hơn một
+            # nghìn lần. Cùng một luật, hậu quả khác hẳn:
+            #
+            #     từ nhịp 12 lên 700  =  688 cửa sổ  =  ~11 GIỜ
+            #
+            # Mẻ 500 ảnh của khách xong từ lâu trước khi vòng dò kịp leo tới chỗ
+            # nhà máy đang mời. Đo 13/08/2026: nhịp bò quanh 1–20 suốt buổi trong
+            # khi máy chủ công bố trần 979 — và đó là lý do nâng trần bao nhiêu
+            # cũng vô nghĩa.
+            #
+            # ═══ VÀ VÌ SAO TĂNG-NHÂN Ở ĐÂY KHÔNG PHẠM LÝ LẼ Ở ĐẦU TỆP ═══
+            #
+            # Khối chú thích đầu tệp bác bỏ tăng-nhân bằng lý lẽ CÔNG BẰNG: cả
+            # trăm tool cùng vọt lên thì cùng ăn `429`, hệ dao động, không ai hội
+            # tụ. Lý lẽ ấy đúng cho TCP, nơi **không có ai đứng ra chia phần**.
+            #
+            # Ở đây thì có: `dat_tran()` đọc `GET /v1/me`, và con số đó CHÍNH LÀ
+            # phần chia đều — máy chủ lấy sức chứa còn trống chia cho số khách
+            # đang chờ, tính lại mỗi 3 giây (`ConcurrencyService`). Công bằng đã
+            # được cưỡng chế ở phía máy chủ, bằng dữ liệu mà không tool nào nhìn
+            # thấy. Việc của tool không phải là tự đoán phần của mình cho khiêm
+            # tốn, mà là **dùng cho hết phần đã được chia** — và lùi ngay khi
+            # engine phía sau kêu (`429`/`503`/độ trễ hàng chờ vọt).
+            #
+            # 25% mỗi cửa sổ: từ 12 lên 700 mất 19 cửa sổ (~19 phút) thay vì 11
+            # giờ, mà mỗi bước chỉ nới một phần tư — vẫn xa cách nhân đôi. Sàn
+            # `+1` giữ cho nhịp nhỏ vẫn nhích được (25% của 2 là 0,5).
+            self._chuoi = 0
+            moi = self._nhip + max(1.0, self._nhip * HE_SO_TANG)
+            if self._tran is not None:
+                moi = min(moi, float(max(self._tran, self._san)))
+            self._nhip = moi
+            self._ghi_nho(moi)
 
     def bi_chan(self, cho: Optional[float] = None) -> None:
         """Ăn ``429`` — tín hiệu GIẢM MẠNH: **chia đôi**, không phải trừ 1.
@@ -391,10 +511,30 @@ class NhipDo:
 
     def _giam(self) -> None:
         # Chạm nghẽn = đã tìm thấy mép. Hết pha leo nhanh cho tới hết mẻ; từ
-        # đây dò từng bước quanh mức máy chủ chịu được. Xem .
+        # đây dò từng bước quanh mức máy chủ chịu được.
+        cu = self._nhip
         self._leo_nhanh = False
+        # Đếm lại từ đầu: chuỗi mẫu vọt đã hoàn thành nhiệm vụ của nó (gây ra
+        # chính lần giảm này), giữ lại là để nó gây thêm một lần giảm nữa ngay
+        # ở mẫu vọt kế tiếp — tức chia bốn cho một cơn nghẽn.
+        self._tre_lien_tiep = 0
         self._nhip = max(float(self._san), self._nhip / 2.0)
         self._chuoi = 0
+        # Ghi ÉP mức vừa chạm nghẽn: đây là con số đáng giữ nhất trong cả mẻ —
+        # nó là mép thật của nhà máy lúc này, chứ không phải một bậc bất kỳ
+        # trên đường leo. Mã sau vào lại ở nửa mức này (xem `_nho_nhip.py`).
+        self._ghi_nho(cu, ep=True)
+        _LOG.info("nhip[%s]: GIAM %.0f -> %.0f (cham nghen)",
+                  self._nho_khoa or "-", cu, self._nhip)
+
+    def _ghi_nho(self, nhip: float, *, ep: bool = False) -> None:
+        """Cất nhịp cho lần chạy sau. Hỏng thì im — bộ nhớ không được cản việc."""
+        if not self._nho_khoa or self._nho is None:
+            return
+        try:
+            self._nho.ghi(self._nho_khoa, nhip, ep=ep)
+        except Exception:       # noqa: BLE001 — đĩa/quyền/đua ghi, không cản mẻ
+            pass
 
     def _nha_may_dung(self, cho: float) -> None:
         self._nhip = float(self._san)

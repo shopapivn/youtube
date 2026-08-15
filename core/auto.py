@@ -340,6 +340,41 @@ def dat_lam_lai(luot: LuotChay, ma: str, *, ca_sau: bool = True) -> List[str]:
 # ── Chạy ─────────────────────────────────────────────────────────────────────
 
 
+def _con_dung_duoc(lam, luot: LuotChay,
+                   ghi: Callable[[str], None]) -> bool:
+    """Kết quả cũ của khâu này còn dùng được không, trước khi bỏ qua nó.
+
+    ═══ VÌ SAO CẦN, ĐO NGÀY 16/08/2026 ═══
+
+    "Khâu đã xong thì bỏ qua" là thứ giữ cho *Chạy tiếp* khỏi trả tiền hai lần.
+    Nhưng nó cũng nghĩa là **một dấu "xong" sai thì không gì gỡ ra được**: khâu
+    không chạy, nên chốt chặn nằm bên trong khâu không bao giờ được hỏi tới.
+
+    Xảy ra đúng thế. Một bản tool cũ ghi ra bảng cảnh mà phần lớn dòng không có
+    lời nhắc rồi đánh dấu khâu ấy là xong — đo trên ba lượt thật: 83/91, 50/90,
+    52/108 cảnh trống. Khâu bảng cảnh **đã có** cửa soi (`_canh_dung_duoc`) bắt
+    đúng chuyện này, nhưng cửa ấy nằm trong thân khâu nên nằm im. Lượt L03 chạy
+    21,7 phút, tiêu tiền cho 8 tấm ảnh, rồi chết ở cảnh 9 với một câu bảo khách
+    tự vào bấm "Làm lại từ khâu này".
+
+    Nên hỏi trước khi bỏ qua. Khâu nào muốn được hỏi thì gắn `soi_lai` vào hàm
+    làm việc của mình (xem `core/auto_khau.py`). Khâu không gắn thì giữ nguyên
+    nếp cũ — bỏ qua thẳng, không đọc thêm tệp nào.
+
+    Cửa này chỉ được **đọc**, và hỏng thì phải trả lời "còn dùng được": một lỗi
+    trong lúc soi mà làm khâu chạy lại là đốt tiền của khách vì một việc soi.
+    """
+    soi = getattr(lam, "soi_lai", None)
+    if soi is None:
+        return True
+    try:
+        return bool(soi(luot))
+    except Exception as loi:  # noqa: BLE001
+        ghi("   (không soi lại được kết quả cũ: {0}) — cứ dùng.".format(
+            str(loi)[:80]))
+        return True
+
+
 def chay(
     luot: LuotChay,
     viec: Dict[str, Callable[..., Any]],
@@ -391,8 +426,15 @@ def chay(
     for ma in MA_KHAU:
         tt = luot.tt(ma)
         if tt.trang_thai in (XONG, BO_QUA):
-            ghi("   {0} — đã có, bỏ qua.".format(ten_khau(ma)))
-            continue
+            if _con_dung_duoc(viec.get(ma), luot, ghi):
+                ghi("   {0} — đã có, bỏ qua.".format(ten_khau(ma)))
+                continue
+            # Kết quả cũ hỏng. Làm lại khâu này — và bỏ dấu giờ của lần trước,
+            # kẻo bảng trạng thái hiện một khoảng thời gian vô nghĩa.
+            ghi("   {0} — kết quả cũ không dùng được, làm lại.".format(
+                ten_khau(ma)))
+            tt.bat_dau = 0.0
+            tt.ket_thuc = 0.0
         lam = viec.get(ma)
         if lam is None:
             tt.trang_thai = BO_QUA
