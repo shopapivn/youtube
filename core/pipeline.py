@@ -71,6 +71,7 @@ from .project import (
     Scene,
     StageState,
 )
+from .xoa_dau_anh import xoa_dau_neu_la_anh as _xoa_dau
 
 __all__ = [
     "STAGE_NEEDS",
@@ -719,6 +720,11 @@ class ProjectRunner:
                 )
                 self._emit()
                 return False
+            # Xoá dấu nhà cung cấp ngay khi tệp chạm đĩa — cùng lý do và cùng
+            # cách làm với `core/jobs.py`. Hai tệp này là hai bản của một việc
+            # nên thứ gì thêm vào bên kia cũng phải thêm vào đây, bằng không
+            # ngày ai đó bật lại đường này thì ảnh lại đeo dấu.
+            _xoa_dau(dest)
             saved.append(dest)
 
         state.files = saved

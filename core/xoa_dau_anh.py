@@ -11,6 +11,21 @@ clip cảnh ấy**. Dấu còn trên ảnh thì nó nằm luôn trong clip, và 
 nào cũng đeo nó. Xoá sau khi đã dựng video thì phải làm lại từ khâu clip — tức
 trả tiền lại cho cả trăm clip. Nên phải xoá **ngay khi ảnh vừa tải về**.
 
+═══ KHI NÀO DẤU XUẤT HIỆN ═══
+
+Đo trên cổng thật, 16/08/2026, ba lượt tạo ảnh cùng một cổng `images.create`:
+
+    không có ảnh tham chiếu  →  SẠCH, không dấu
+    có ảnh tham chiếu        →  CÓ DẤU, độ mờ 0,30
+
+Tức dấu chỉ đến ở lối **sửa ảnh từ ảnh**. Đó là lý do 9 ảnh của tab Tự động
+tấm nào cũng dính — cảnh nào cũng lấy `nv1.png` làm tham chiếu để nhân vật khỏi
+mỗi cảnh một người — còn ảnh gõ tay ở tab Ảnh & Video thì thường sạch.
+
+Đừng nhân đó mà chỉ xoá cho ảnh có tham chiếu. Nhà cung cấp đổi cách dán lúc
+nào không ai báo, và bước xoá này tự biết ảnh nào không có dấu để bỏ qua, nên
+cứ cho mọi ảnh đi qua là chắc nhất.
+
 ═══ CÁCH LÀM ═══
 
 Dấu được dán lên theo phép trộn alpha thông thường:
@@ -66,8 +81,12 @@ import os
 import threading
 from typing import Any, Optional, Tuple
 
-__all__ = ["xoa_dau", "xoa_dau_tep", "co_dung_duoc", "TEP_DAU",
-           "NGUONG_CO_DAU"]
+__all__ = ["xoa_dau", "xoa_dau_tep", "xoa_dau_neu_la_anh", "la_anh",
+           "co_dung_duoc", "TEP_DAU", "NGUONG_CO_DAU", "DUOI_ANH"]
+
+#: Đuôi tệp coi là ảnh. Đúng những đuôi cổng trả về, cộng vài đuôi thường gặp
+#: ở ảnh khách tự mang từ chỗ khác về.
+DUOI_ANH = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 
 #: Dữ liệu hình dạng dấu, đi kèm mã. **Đừng sửa tệp này.**
 TEP_DAU = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -163,6 +182,27 @@ def xoa_dau(im: Any, tra_alpha: bool = False):
         return (ra, float(am)) if tra_alpha else ra
     except Exception:  # noqa: BLE001 — làm đẹp hỏng không được làm hỏng cả mẻ
         return (im, 0.0) if tra_alpha else im
+
+
+def la_anh(duong: str) -> bool:
+    """Tệp này có phải ảnh không, nhìn theo đuôi."""
+    return os.path.splitext(str(duong))[1].lower() in DUOI_ANH
+
+
+def xoa_dau_neu_la_anh(duong: str) -> bool:
+    """Cửa vào cho **mọi chỗ tool tải tệp kết quả về máy**.
+
+    Chủ dự án, 16/08/2026: *"khách tải về thì tao muốn tạo ảnh sẽ luôn xoá
+    logo, có thể họ tạo ở tab Auto, có thể ở tab Ảnh & Video, thủ công hàng
+    loạt"*. Nên đừng đặt bước này ở từng tab: đặt ở chỗ tệp chạm đĩa, thì tab
+    nào ra ảnh cũng sạch, kể cả tab viết sau này.
+
+    Lọc theo đuôi trước rồi mới mở tệp: hàng đợi việc tải về cả clip lẫn tiếng
+    nói, và mở một tệp mp4 trăm mê-ga bằng thư viện ảnh là phí công vô ích.
+    """
+    if not la_anh(duong):
+        return False
+    return xoa_dau_tep(duong)
 
 
 def xoa_dau_tep(duong: str) -> bool:

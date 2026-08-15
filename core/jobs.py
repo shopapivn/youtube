@@ -68,6 +68,34 @@ __all__ = [
     "ACTIVE_STATUSES",
 ]
 
+def _xoa_dau(duong: str) -> None:
+    """Xoá dấu nhà cung cấp ngay khi tệp vừa chạm đĩa.
+
+    ═══ VÌ SAO ĐẶT Ở ĐÂY, KHÔNG PHẢI Ở TỪNG TAB ═══
+
+    Chủ dự án, 16/08/2026: *"khách tải về thì tao muốn tạo ảnh sẽ luôn xoá
+    logo, có thể họ tạo ở tab Auto, có thể ở tab Ảnh & Video, thủ công hàng
+    loạt"*.
+
+    Đây là **chỗ duy nhất** hàng đợi việc ghi tệp kết quả xuống máy khách: tab
+    Ảnh & Video cả hai lối thủ công lẫn hàng loạt, tab Skill, và mọi tab viết
+    về sau đều đi qua đúng dòng này. Đặt bước xoá dấu ở đây thì không tab nào
+    sót được, kể cả tab chưa ai viết. Đặt ở từng tab thì sót là chuyện sớm
+    muộn — tab Tự động có đường tải riêng và đã từng là chỗ duy nhất nhớ làm.
+
+    Tệp không phải ảnh thì đi thẳng qua, ảnh vốn không có dấu cũng vậy — xem
+    `core/xoa_dau_anh.py`. Hỏng thì im lặng để nguyên: ảnh còn dấu vẫn dùng
+    được, còn đánh hỏng một việc khách đã trả tiền vì một bước làm đẹp thì
+    không.
+    """
+    try:
+        from .xoa_dau_anh import xoa_dau_neu_la_anh  # noqa: PLC0415
+
+        xoa_dau_neu_la_anh(duong)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 # ── Trạng thái trong tool (khác trạng thái job của máy chủ) ────────────────────
 
 STATUS_WAITING = "cho"
@@ -996,6 +1024,7 @@ class JobManager:
                 record.advice = describe(exc)
                 self._finish(record, STATUS_FAILED, str(exc))
                 return
+            _xoa_dau(dest)
             saved.append(dest)
 
         record.files = saved
