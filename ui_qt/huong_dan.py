@@ -172,6 +172,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Tám khâu: kịch bản → giọng đọc → phụ đề → bảng cảnh → ảnh → clip "
             "→ ảnh bìa → dựng. Khâu phụ đề và khâu dựng chạy ngay trên máy "
             "bạn.",
+            "Ở khâu ảnh, tôi gửi hết cả trăm cảnh cùng một lúc, và ảnh của "
+            "cảnh nào xong thì làm clip của cảnh đó ngay — nên hàng “clip” và "
+            "hàng “ảnh bìa” có thể chạy số trước khi tới lượt chúng.",
             "Bấm Dừng lúc nào cũng được. Phần đã làm giữ nguyên; bấm “Chạy "
             "tiếp” là đi tiếp từ đúng chỗ đó.",
             "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "

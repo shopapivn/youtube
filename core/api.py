@@ -21,6 +21,21 @@ _MAX_RETRIES = 3
 #: 60 giây mỗi request là dư cho mọi endpoint (job chạy nền, không chờ trong request).
 _TIMEOUT = 60.0
 
+#: Nhiều nhất bấy nhiêu kết nối HTTP mở cùng lúc.
+#:
+#: ═══ VÌ SAO PHẢI NỚI, VÀ VÌ SAO CON SỐ NÀY ═══
+#:
+#: `httpx` mặc định cho 100 kết nối. Khâu ảnh của tab Tự động bắn cả trăm việc
+#: một lượt (xem `core/auto_khau._khau_anh`), và nhà máy làm song song thật —
+#: nên **cả trăm tấm ảnh xong gần như cùng một giây**, rồi cả trăm luồng cùng
+#: quay ra tải tệp về. Chạm trần 100 thì phần thừa nằm xếp hàng, và xếp quá 60
+#: giây là `PoolTimeout` — một lỗi mạng cho một tấm ảnh **đã trả tiền xong**.
+#:
+#: 256 rộng hơn hẳn trần luồng của tool (`TRAN_LUONG_MAY`), nên hàng đợi kết
+#: nối không bao giờ là chỗ thắt. Kết nối rảnh thì `httpx` tự đóng bớt, nên số
+#: này không phải là số kết nối lúc nào cũng mở.
+_MAX_CONNECTIONS = 256
+
 
 def build_client(config: Config) -> ShopAPI:
     """Tạo `ShopAPI` từ `config.json`.
@@ -28,13 +43,24 @@ def build_client(config: Config) -> ShopAPI:
     `httpx.Client` bên dưới **an toàn với đa luồng**, nên cả tool dùng chung đúng
     một client: giữ được kết nối, đỡ bắt tay TLS lại từ đầu cho mỗi job.
     """
-    return ShopAPI(
+    import httpx  # noqa: PLC0415
+
+    client = ShopAPI(
         api_key=config.api_key,
         base_url=config.base_url,
         timeout=_TIMEOUT,
         max_retries=_MAX_RETRIES,
         default_headers={"X-ShopAPI-Client": "shopapi-studio"},
+        http_client=httpx.Client(
+            timeout=httpx.Timeout(_TIMEOUT), follow_redirects=True,
+            limits=httpx.Limits(max_connections=_MAX_CONNECTIONS,
+                                max_keepalive_connections=32)),
     )
+    # SDK cho rằng client HTTP truyền từ ngoài vào là của người khác nên không
+    # đóng nó. Ở đây chính chúng ta vừa tạo nó, nên chúng ta sở hữu nó — nói rõ
+    # để `client.close()` lúc tắt tool vẫn đóng hết kết nối như trước.
+    client._owns_http = True  # noqa: SLF001
+    return client
 
 
 def wallet_micro(balance: Optional[Mapping[str, Any]]) -> int:

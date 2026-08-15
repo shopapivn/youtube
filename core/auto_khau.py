@@ -61,6 +61,32 @@ __all__ = [
 #: cắt giữa câu là chỗ nối nghe rõ một nhịp hụt.
 CHU_MOI_LUOT_DOC = 2500
 
+#: Cắt kịch bản thành khoảng ngần này đoạn đọc.
+#:
+#: ═══ VÌ SAO CẮT NHỎ RA MỚI NHANH ═══
+#:
+#: Cổng chỉ cho **3 job đọc chạy cùng lúc** (nhà máy giọng nói chỉ có một máy
+#: online), khác hẳn ảnh (979) và clip (172–316). Trần ấy không sửa được, nên
+#: chỗ duy nhất còn nắn được là **kích thước một đoạn**.
+#:
+#: Trần 2.500 ký tự chia một kịch bản mười phút thành đúng **hai** đoạn dài.
+#: Hai đoạn thì ba suất chạy song song chẳng dùng được suất nào: đo 15/08/2026
+#: là **11,3 phút** cho một lượt, gần bằng chạy tuần tự.
+#:
+#: Chia mười đoạn thì ba luồng chạy 3–4 đợt, mà mỗi đoạn ngắn hơn năm lần nên
+#: mỗi đợt cũng nhanh hơn hẳn. Vẫn cắt ở ranh giới câu — chỗ nối phải liền
+#: mạch, đó là điều kiện không được đổi.
+SO_DOAN_DOC = 10
+
+#: Đoạn ngắn nhất chấp nhận được. Kịch bản ngắn mà vẫn chia mười phần thì mỗi
+#: phần vài chục chữ: tốn mười lượt gọi cho một việc mà hai lượt là xong, và
+#: chỗ nối càng nhiều thì càng dễ nghe thấy.
+CHU_IT_NHAT_MOT_DOAN = 400
+
+#: Mấy đoạn đọc cùng lúc **khi chưa hỏi được máy chủ**. Con số thật lấy từ
+#: `GET /v1/me` (`concurrent_jobs.tts`), đo được là 3.
+SONG_SONG_DOC = 3
+
 #: Số cảnh gửi cho AI trong một lượt viết lời nhắc.
 #:
 #: `tool-catalog/prompt.workbook` để 20, và tôi chép theo. Lượt chạy thật đầu
@@ -117,16 +143,45 @@ VONG_NAN_TOI_DA = 3
 #: xong"* — đúng, và chỗ chậm là tool chứ không phải cổng.
 SONG_SONG_CANH = 6
 
-#: Trần luồng do MÁY KHÁCH đặt ra, không phải do cổng.
+#: Nhiều nhất bao nhiêu job cùng lúc cho một khâu.
 #:
-#: Cổng cho 979 job ảnh cùng lúc, nhưng mở 979 luồng Python trên máy khách thì
-#: chính máy họ chết trước. Mỗi luồng ở đây phần lớn thời gian **nằm chờ mạng**
-#: nên rẻ, nhưng vẫn có giá: bộ nhớ, chỗ trong bảng luồng, và một cửa sổ Qt
-#: đang phải vẽ.
+#: ═══ ĐO ĐƯỢC 15/08/2026 — NHIỀU HƠN KHÔNG PHẢI LÚC NÀO CŨNG NHANH HƠN ═══
 #:
-#: 48 là chỗ dừng: gấp tám lần bản cũ, mà vẫn là con số một máy tính để bàn
-#: bình thường gánh được không nghĩ ngợi.
+#: Cổng khai cho **979 job ảnh** cùng lúc, nên bản đầu bắn thẳng cả 117 việc
+#: một lượt. Đo trên cùng một lượt, cùng bảng cảnh 114 cảnh:
+#:
+#:     48 job cùng lúc   ->  khâu ảnh  5,9 phút
+#:    117 job cùng lúc   ->  khâu ảnh 22,3 phút   (chậm gấp bốn)
+#:
+#: Vài cảnh nằm "đang xử lý" tới 12 phút rồi phải đặt lại bằng khoá mới. Cổng
+#: khai 979 chỗ nhưng `workers_online` là **1** — con số ấy là chỗ *nhận việc*,
+#: không phải chỗ *làm việc*. Nhồi quá thì hàng chờ dài ra chứ sản lượng không
+#: tăng, và độ trễ từng cái thì tăng thật.
+#:
+#: 48 là mức đo được là tốt. Đừng nâng vì thấy cổng khai số lớn — hãy đo lại.
 TRAN_LUONG_MAY = 48
+
+#: Bao lâu hỏi cả sổ job một lượt.
+#:
+#: 2 giây, vì một lượt hỏi là **một** lời gọi cho cả trăm job — 30 lượt/phút
+#: trên ngân sách 600.000. Hỏi thưa hơn chỉ để tấm ảnh xong ở giây 31 nằm chờ.
+NHIP_HOI_CHUNG = 2.0
+
+#: Mỗi trang lấy nhiều nhất bao nhiêu job, và lật nhiều nhất mấy trang.
+#:
+#: 114 tấm ảnh xong gần như cùng lúc, mà một trang chỉ chứa 100 — nên phải lật
+#: tiếp, nếu không job xong nằm ở trang hai phải đợi lượt hỏi sau. Năm trang là
+#: 500 job, rộng hơn hẳn mẻ lớn nhất tool từng chạy.
+SO_MOI_TRANG = 100
+TRANG_MOI_LUOT = 5
+
+#: Bao lâu thì hỏi riêng một job mà sổ chung chưa thấy tăm hơi.
+#:
+#: Đây là lưới an toàn cho ba chỗ hụt của sổ chung: job hỏng theo kiểu không
+#: nằm trong danh sách nào ta hỏi, job xong từ lâu nên đã trôi khỏi năm trang
+#: đầu, và cổng cũ chưa có `GET /v1/jobs`. Thưa (45 giây) vì bình thường nó
+#: không bao giờ phải chạy.
+NHIP_HOI_RIENG = 45.0
 
 #: Nhớ lại câu trả lời của `GET /v1/me` để không hỏi lại mỗi khâu.
 _HAN_MUC: Dict[str, Any] = {}
@@ -151,21 +206,28 @@ def han_muc_may_chu(bc: "BoiCanh") -> Dict[str, Any]:
         return _HAN_MUC
 
 
-def _so_luong(bc: "BoiCanh", loai: str) -> int:
-    """Bao nhiêu luồng cho khâu này — theo con số máy chủ tự khai."""
+def _so_luong(bc: "BoiCanh", loai: str, mac_dinh: int = SONG_SONG_CANH,
+              can: int = 0) -> int:
+    """Bao nhiêu luồng cho khâu này — theo con số máy chủ tự khai.
+
+    `can` là số việc thật sự phải làm: mở 128 luồng cho 3 tấm ảnh bìa chỉ tổ
+    tốn chỗ. `mac_dinh` là đường lui khi không hỏi được máy chủ.
+    """
     from .su_co import dat_tran_moi_phut  # noqa: PLC0415
 
     han = han_muc_may_chu(bc)
     if not han:
-        return SONG_SONG_CANH
-    dat_tran_moi_phut(han.get("requests_per_minute") or 0)
-    try:
-        cua_loai = int((han.get("concurrent_jobs") or {}).get(loai) or 0)
-    except (TypeError, ValueError):
-        cua_loai = 0
-    if cua_loai <= 0:
-        return SONG_SONG_CANH
-    return max(1, min(cua_loai, TRAN_LUONG_MAY))
+        ra = mac_dinh
+    else:
+        dat_tran_moi_phut(han.get("requests_per_minute") or 0)
+        try:
+            cua_loai = int((han.get("concurrent_jobs") or {}).get(loai) or 0)
+        except (TypeError, ValueError):
+            cua_loai = 0
+        ra = min(cua_loai, TRAN_LUONG_MAY) if cua_loai > 0 else mac_dinh
+    if can > 0:
+        ra = min(ra, can)
+    return max(1, ra)
 
 
 @dataclass
@@ -196,6 +258,9 @@ class BoiCanh:
     #: Hàm ngủ. Tách ra để bài kiểm chạy được các nhịp chờ dài mà không phải
     #: ngồi đợi thật mười sáu phút.
     ngu: Callable[[float], None] = time.sleep
+    #: Mấy giây một lượt hỏi cả sổ job (`SoTheoDoi`). Tách ra cùng lý do với
+    #: `ngu`: bài kiểm không phải ngồi đợi hai giây cho mỗi nhịp giả.
+    nhip_hoi: float = NHIP_HOI_CHUNG
     #: Chốt "cổng ngừng nhận loại việc này". Một luồng gạt, mọi luồng dừng.
     nha_may_tat: Optional[threading.Event] = None
     #: "Trạng thái vừa đổi **giữa lúc một khâu còn đang chạy** — ghi ra đĩa và
@@ -313,11 +378,31 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
 _thay = dien_khuon
 
 
-def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
-    """Cắt kịch bản thành các đoạn vừa một lượt đọc, **cắt ở ranh giới câu**."""
+def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC,
+                  so_doan: int = SO_DOAN_DOC) -> List[str]:
+    """Cắt kịch bản thành các đoạn vừa một lượt đọc, **cắt ở ranh giới câu**.
+
+    ═══ TRẦN KHÔNG PHẢI LÀ MỤC TIÊU ═══
+
+    `tran` là chỗ **không được vượt** (giới hạn của cổng TTS). Nhắm đúng vào
+    trần là chia kịch bản mười phút thành hai đoạn dài — mà cổng cho ba job đọc
+    chạy cùng lúc, nên hai đoạn thì suất thứ ba nằm không và cả khâu chạy gần
+    như tuần tự. Đo 15/08/2026: **11,3 phút** cho một lượt.
+
+    Nên nhắm vào `so_doan` đoạn: ba luồng chạy vài đợt, mỗi đoạn ngắn hơn nên
+    mỗi đợt cũng nhanh hơn. Chỗ cắt vẫn là **ranh giới câu** — giọng đọc nối
+    lại phải liền mạch, đó là điều kiện không đổi được.
+    """
     tho = (kich_ban or "").strip()
     if not tho:
         return []
+    # Nhắm `so_doan` phần đều nhau, nhưng không bao giờ vượt trần của cổng và
+    # không bao giờ vụn hơn `CHU_IT_NHAT_MOT_DOAN` (kịch bản ngắn thì chia nhỏ
+    # chỉ tốn thêm lượt gọi và thêm chỗ nối để nghe thấy).
+    dat = max(1, int(so_doan))
+    tran = max(1, int(tran))
+    muc_tieu = max(CHU_IT_NHAT_MOT_DOAN, (len(tho) + dat - 1) // dat)
+    tran = min(tran, muc_tieu)
     cau = re.split(r"(?<=[.!?。．！？…\n])", tho)
     ra: List[str] = []
     dem = ""
@@ -454,9 +539,254 @@ def _khong_bi_tru_tien(loi_goi) -> bool:
     return any(d in chu for d in _KHONG_TRU_TIEN)
 
 
+#: Những trạng thái nghĩa là "job này chấm hết rồi, đừng hỏi nữa".
+_XONG_HAN = ("succeeded", "completed", "failed", "cancelled", "canceled",
+             "rejected")
+
+
+def _goi_dict(x) -> Dict[str, Any]:
+    """Đổi thứ SDK trả về (`Model`) thành `dict` thường."""
+    if hasattr(x, "to_dict"):
+        return x.to_dict()
+    try:
+        return dict(x or {})
+    except (TypeError, ValueError):
+        return {}
+
+
+def _xong_han(trang_thai: str) -> bool:
+    return str(trang_thai or "") in _XONG_HAN
+
+
+def _ket_job(goi: Dict[str, Any]) -> Dict[str, Any]:
+    """Job đã chấm hết: trả về gói nếu xong, ném lỗi đúng loại nếu hỏng.
+
+    Tách riêng vì có **hai** đường đợi job (hỏi từng cái, và hỏi cả lượt bằng
+    `SoTheoDoi`), mà cách phân xử lúc job hỏng thì phải giống hệt nhau — nhất
+    là chỗ `LoiKetJob`, thứ quyết định có được đặt lại bằng khoá mới hay không.
+    """
+    trang_thai = str(goi.get("status") or "")
+    if trang_thai in ("succeeded", "completed"):
+        return goi
+    loi_goi = goi.get("error") or trang_thai
+    # Xem ghi chú dài ở `_cho_job`: máy chủ tự khai chưa trừ tiền thì đặt lại
+    # bằng khoá mới không tốn thêm đồng nào.
+    if _khong_bi_tru_tien(loi_goi):
+        raise LoiKetJob("máy chủ bỏ dở việc này: {0}".format(loi_goi))
+    raise RuntimeError("máy chủ báo job hỏng: {0}".format(loi_goi))
+
+
+class SoTheoDoi:
+    """Một chỗ hỏi chung cho cả trăm job — thay cho mỗi job một luồng ngồi canh.
+
+    ═══ VÌ SAO PHẢI GOM VIỆC HỎI LẠI ═══
+
+    Bản cũ để **mỗi job một luồng** tự gọi `jobs.retrieve` theo nhịp giãn dần
+    2 → 10 giây. Hai cái giá, và cái thứ hai mới đắt:
+
+    1. Muốn theo dõi 114 job thì phải mở 114 luồng. Không mở nổi thì phải chạy
+       theo đợt — mà chờ theo đợt là tự dựng lại đúng hàng rào ta đang gỡ.
+    2. Một tấm ảnh nhà máy làm xong ở giây 31 thì tới tận ~giây 40 tool mới
+       biết, vì nhịp hỏi lúc ấy đã giãn ra 9–10 giây. Nhân với trăm tấm là hàng
+       chục phút chờ suông, mà việc thì đã xong từ lâu.
+
+    SDK có sẵn thứ cần: `client.jobs.list(status="succeeded")` — **một** lời gọi
+    trả về cả trăm job. Nên: một luồng duy nhất quét danh sách mỗi 2 giây, đối
+    chiếu với sổ những mã đang chờ, thấy cái nào xong thì gạt `Event` của cái
+    ấy. Luồng đang chờ chỉ nằm im trên `Event`: không tốn CPU, không tốn một
+    lượt gọi nào, và tỉnh dậy trong nửa giây kể từ lúc việc xong.
+
+    Ba lưới an toàn giữ nguyên tính chất cũ:
+
+    * hỏi cả `succeeded` lẫn `failed`, nên job hỏng vẫn báo về đúng chỗ;
+    * job nào sổ chung chưa thấy sau 45 giây thì **hỏi riêng** một cái;
+    * `GET /v1/jobs` mà hỏng hai lượt liền thì tự quay hẳn về lối hỏi từng
+      cái — tool vẫn chạy, chỉ chậm như bản cũ.
+    """
+
+    def __init__(self, bc: BoiCanh, nhip: float = NHIP_HOI_CHUNG) -> None:
+        self._bc = bc
+        self._nhip = max(0.1, float(nhip))
+        self._khoa = threading.Lock()
+        self._so: Dict[str, Dict[str, Any]] = {}
+        self._thoat = threading.Event()
+        self._luong: Optional[threading.Thread] = None
+        #: Còn tin `GET /v1/jobs` không. Hỏng hai lượt liền thì thôi.
+        self.hoi_ca_luot = True
+        self._hong_lien = 0
+
+    # ── Ghi tên vào sổ ───────────────────────────────────────────────────────
+
+    def dat(self, ma: str) -> None:
+        """Ghi một mã job vào sổ chờ, và mở luồng quét nếu chưa có."""
+        if not ma:
+            return
+        mo = None
+        with self._khoa:
+            if ma not in self._so:
+                self._so[ma] = {"co": threading.Event(), "goi": None}
+            if self._luong is None and not self._thoat.is_set():
+                self._luong = threading.Thread(target=self._vong, daemon=True,
+                                               name="so-theo-doi-job")
+                mo = self._luong
+        if mo is not None:
+            mo.start()
+
+    def bo(self, ma: str) -> None:
+        with self._khoa:
+            self._so.pop(ma, None)
+
+    def dong(self) -> None:
+        """Đóng sổ. Gọi trong `finally` để luồng quét không sống dai hơn khâu."""
+        self._thoat.set()
+        luong = self._luong
+        if luong is not None and luong.is_alive():
+            luong.join(timeout=3.0)
+
+    # ── Đợi một job ──────────────────────────────────────────────────────────
+
+    def cho(self, ma: str, tran: float = TRAN_CHO_JOB,
+            ten_viec: str = "") -> Dict[str, Any]:
+        """Đợi job `ma` xong. Cùng giao kèo với `_cho_job`, kể cả `LoiKetJob`."""
+        self.dat(ma)
+        bat_dau = time.time()
+        het_han = bat_dau + max(60.0, float(tran))
+        lan_ke = bat_dau + KHOANG_KE_CHO
+        cho_rieng = 2.0
+        moc_rieng = bat_dau + (NHIP_HOI_RIENG if self.hoi_ca_luot else cho_rieng)
+        try:
+            while True:
+                self._bc.kiem_dung()
+                goi = self._lay(ma)
+                if goi is not None:
+                    return _ket_job(goi)
+                bay_gio = time.time()
+                if bay_gio >= het_han:
+                    break
+                # Nằm trên `Event` chứ không hỏi máy chủ: nửa giây một nhịp là
+                # đủ để nút Dừng ăn ngay, mà không tốn lượt gọi nào.
+                self._nam_cho(ma, min(0.5, het_han - bay_gio))
+                bay_gio = time.time()
+                # Sổ chung vừa hỏng giữa lúc đang chờ: kéo mốc hỏi riêng về
+                # ngay, đừng ngồi đợi hết 45 giây của lối cũ.
+                if not self.hoi_ca_luot and moc_rieng > bay_gio + cho_rieng:
+                    moc_rieng = bay_gio + cho_rieng
+                if bay_gio >= moc_rieng:
+                    if self.hoi_ca_luot:
+                        moc_rieng = bay_gio + NHIP_HOI_RIENG
+                    else:
+                        # Sổ chung hỏng thì đây là đường duy nhất — nhịp giãn
+                        # dần đúng như bản cũ.
+                        moc_rieng = bay_gio + cho_rieng
+                        cho_rieng = min(10.0, cho_rieng * 1.4)
+                    goi = self._hoi_rieng(ma)
+                    if goi is not None:
+                        return _ket_job(goi)
+                if bay_gio >= lan_ke:
+                    lan_ke = bay_gio + KHOANG_KE_CHO
+                    self._bc.ghi(
+                        "    {0}: máy chủ vẫn đang làm, đã đợi {1:.0f} phút…"
+                        .format(ten_viec or ma[:16], (bay_gio - bat_dau) / 60.0))
+        finally:
+            self.bo(ma)
+        raise LoiKetJob(
+            "đợi {0:.0f} phút mà máy chủ vẫn chưa trả kết quả".format(
+                (time.time() - bat_dau) / 60.0))
+
+    # ── Bên trong ────────────────────────────────────────────────────────────
+
+    def _lay(self, ma: str) -> Optional[Dict[str, Any]]:
+        with self._khoa:
+            muc = self._so.get(ma)
+            return dict(muc["goi"]) if muc and muc.get("goi") else None
+
+    def _nam_cho(self, ma: str, giay: float) -> None:
+        with self._khoa:
+            muc = self._so.get(ma)
+        co = muc.get("co") if muc else None
+        if co is None:
+            time.sleep(max(0.0, giay))
+        else:
+            co.wait(max(0.0, giay))
+
+    def _nhan(self, ma: str, goi: Dict[str, Any]) -> None:
+        with self._khoa:
+            muc = self._so.get(ma)
+            if muc is None:
+                return
+            muc["goi"] = goi
+            muc["co"].set()
+
+    def _con_cho(self) -> List[str]:
+        with self._khoa:
+            return [m for m, v in self._so.items() if not v.get("goi")]
+
+    def _hoi_rieng(self, ma: str) -> Optional[Dict[str, Any]]:
+        """Hỏi riêng đúng một job. Hỏng thì im lặng — trần chờ sẽ lo phần còn lại.
+
+        Nuốt lỗi ở đây là cố ý: một cú rớt mạng lúc *hỏi thăm* không được giết
+        một job **đã trả tiền** và vẫn đang chạy ngon lành trên máy chủ.
+        """
+        try:
+            xin_nhip(self._bc.on_log)
+            goi = _goi_dict(self._bc.client.jobs.retrieve(ma))
+        except Exception:  # noqa: BLE001
+            return None
+        if _xong_han(goi.get("status")):
+            self._nhan(ma, goi)
+            return goi
+        return None
+
+    def _vong(self) -> None:
+        """Luồng quét: mỗi `nhip` giây hỏi một lượt cho cả sổ."""
+        while not self._thoat.wait(self._nhip):
+            try:
+                self._mot_luot()
+            except Exception:  # noqa: BLE001 — sổ hỏng không được giết cả mẻ
+                pass
+
+    def _mot_luot(self) -> None:
+        if not self.hoi_ca_luot:
+            return
+        con = set(self._con_cho())
+        if not con:
+            return
+        try:
+            for trang_thai in ("succeeded", "failed"):
+                con_tro = None
+                for _ in range(TRANG_MOI_LUOT):
+                    if not con:
+                        return
+                    xin_nhip(self._bc.on_log)
+                    trang = _goi_dict(self._bc.client.jobs.list(
+                        status=trang_thai, limit=SO_MOI_TRANG, cursor=con_tro))
+                    for m in (trang.get("data") or []):
+                        goi = _goi_dict(m)
+                        ma = _ma_job(goi)
+                        if ma in con:
+                            con.discard(ma)
+                            self._nhan(ma, goi)
+                    con_tro = trang.get("next_cursor")
+                    if not trang.get("has_more") or not con_tro:
+                        break
+        except Exception as loi:  # noqa: BLE001
+            self._hong_lien += 1
+            if self._hong_lien >= 2:
+                self.hoi_ca_luot = False
+                self._bc.ghi("  (không hỏi được cả lượt job — quay về hỏi từng "
+                             "cái, chậm hơn nhưng vẫn chạy: {0})".format(
+                                 str(loi)[:70]))
+            return
+        self._hong_lien = 0
+
+
 def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
-             ten_viec: str = "") -> Dict[str, Any]:
+             ten_viec: str = "", so: Optional[SoTheoDoi] = None) -> Dict[str, Any]:
     """Đợi một job của cổng ShopAPI xong, vẫn bấm Dừng được.
+
+    `so` là **sổ theo dõi chung**: có nó thì việc hỏi thăm gom về một luồng duy
+    nhất (xem `SoTheoDoi`) và hàm này chỉ còn nằm chờ. Không có thì rơi về lối
+    cũ ngay dưới đây — mỗi job tự hỏi lấy, dùng cho những chỗ chỉ có một job.
 
     Không dùng `client.jobs.wait()`: nó ngủ trong luồng và không nhả ra, nên nút
     Dừng mất tác dụng — đúng lý do `core/jobs.py` cũng tự chờ lấy.
@@ -471,6 +801,8 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
     trang_thai = str(goi.get("status") or "")
     if not ma or trang_thai in ("succeeded", "completed", "failed"):
         return goi
+    if so is not None:
+        return so.cho(ma, tran=tran, ten_viec=ten_viec)
     # ═══ HỎI THƯA DẦN, KHÔNG HỎI ĐỀU MỖI 2 GIÂY ═══
     #
     # Hỏi mỗi 2 giây là **30 lượt/phút cho một job**. Chạy hai lượt song song là
@@ -749,7 +1081,8 @@ _ANH_THAM_CHIEU_HONG = ("ảnh tham chiếu tải không được",
 
 
 def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
-             hop: "ThamChieu", khoa: str, ten_hien: str = ""):
+             hop: "ThamChieu", khoa: str, ten_hien: str = "",
+             so: Optional[SoTheoDoi] = None):
     """Tạo một tấm ảnh. Chữ ký ảnh tham chiếu hết hạn thì **tự tải lại**.
 
     ═══ VÌ SAO CẦN TỰ CHỮA, KHÔNG CHỈ CẦN NHỚ ĐÚNG HẠN ═══
@@ -774,7 +1107,7 @@ def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
                        prompt=loi_nhac, n=1, aspect_ratio="16:9",
                        reference_images=anh_tc or None,
                        idempotency_key=khoa + hau_to)
-        return _cho_job(bc, job, ten_viec=ten_hien)
+        return _cho_job(bc, job, ten_viec=ten_hien, so=so)
 
     dang_dung = hop.lay()
     try:
@@ -1123,41 +1456,64 @@ def _khau_giong_doc(bc: BoiCanh):
             raise RuntimeError("kênh chưa chọn giọng — điền voice_id vào kenh.yaml")
 
         doan = chia_doan_doc(kich_ban)
+        if not doan:
+            raise RuntimeError("kịch bản rỗng, không có gì để đọc")
         thu_muc_doan = os.path.join(d, "2-doan")
         os.makedirs(thu_muc_doan, exist_ok=True)
-        manh: List[str] = []
-        for so, chu in enumerate(doan, start=1):
-            bc.kiem_dung()
-            tep = os.path.join(thu_muc_doan, "{0:03d}.mp3".format(so))
-            if not os.path.exists(tep):
-                bc.ghi("  đọc đoạn {0}/{1} ({2} ký tự)…".format(
-                    so, len(doan), len(chu)))
-                def doc(hau_to=""):
-                    job = _tao_job(
-                        bc, bc.client.tts.create,
-                        text=chu, voice_id=bc.kenh.voice_id, format="mp3",
-                        idempotency_key=khoa_viec(luot, "tts", so, chu,
-                                                  bc.kenh.voice_id) + hau_to)
-                    # Đọc một đoạn ba nghìn ký tự lâu hơn hẳn tạo một tấm ảnh,
-                    # nên trần chờ ở đây phải rộng hơn trần chung. Đo 15/08/2026:
-                    # để trần chung 12 phút thì M02 và M03 cùng chết ở khâu này,
-                    # mỗi lượt mất luôn cả kịch bản đã trả tiền.
-                    return _cho_job(bc, job, tran=TRAN_CHO_TTS,
-                                    ten_viec="đoạn {0}".format(so))
+        manh = [os.path.join(thu_muc_doan, "{0:03d}.mp3".format(so))
+                for so in range(1, len(doan) + 1)]
+        # Ba đoạn chạy cùng lúc thì cũng nên hỏi chung một lượt: mỗi đoạn tự
+        # hỏi lấy là ba lần chờ hết nhịp 2 giây đầu tiên cho mỗi đợt.
+        theo_doi = SoTheoDoi(bc, nhip=bc.nhip_hoi)
 
-                try:
-                    goi_tts = doc()
-                except LoiKetJob:
-                    # Máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá mới, đúng
-                    # như khâu ảnh và khâu clip vẫn làm.
-                    bc.ghi("    đoạn {0}: máy chủ nhận việc rồi bỏ đó — đặt "
-                           "lại bằng khoá mới.".format(so))
-                    goi_tts = doc(":k2")
-                _tai_ket_qua(bc, goi_tts, 0, tep)
-            manh.append(tep)
+        def mot_doan(muc):
+            so, chu = muc
+            tep = manh[so - 1]
+            if os.path.exists(tep):
+                return so, True
+            bc.ghi("  đọc đoạn {0}/{1} ({2} ký tự)…".format(
+                so, len(doan), len(chu)))
 
-        if not manh:
-            raise RuntimeError("kịch bản rỗng, không có gì để đọc")
+            def doc(hau_to=""):
+                job = _tao_job(
+                    bc, bc.client.tts.create,
+                    text=chu, voice_id=bc.kenh.voice_id, format="mp3",
+                    idempotency_key=khoa_viec(luot, "tts", so, chu,
+                                              bc.kenh.voice_id) + hau_to)
+                # Đọc một đoạn lâu hơn hẳn tạo một tấm ảnh, nên trần chờ ở đây
+                # phải rộng hơn trần chung. Đo 15/08/2026: để trần chung 12
+                # phút thì M02 và M03 cùng chết ở khâu này, mỗi lượt mất luôn
+                # cả kịch bản đã trả tiền.
+                return _cho_job(bc, job, tran=TRAN_CHO_TTS,
+                                ten_viec="đoạn {0}".format(so), so=theo_doi)
+
+            try:
+                goi_tts = doc()
+            except LoiKetJob:
+                # Máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá mới, đúng
+                # như khâu ảnh và khâu clip vẫn làm.
+                bc.ghi("    đoạn {0}: máy chủ nhận việc rồi bỏ đó — đặt "
+                       "lại bằng khoá mới.".format(so))
+                goi_tts = doc(":k2")
+            _tai_ket_qua(bc, goi_tts, 0, tep)
+            return so, False
+
+        # ═══ ĐỌC SONG SONG, VÀ THIẾU MỘT ĐOẠN LÀ HỎNG CẢ KHÂU ═══
+        #
+        # Cổng cho 3 job đọc cùng lúc. Bản trước chạy tuần tự nên chỉ dùng một
+        # suất trong ba, lại còn cắt kịch bản thành hai đoạn dài — đo được 11,3
+        # phút. Giờ chia nhỏ (xem `SO_DOAN_DOC`) và bắn ba đoạn một lượt.
+        #
+        # `chiu_thieu=False` vì giọng đọc khác ảnh: thiếu một cảnh thì khâu
+        # dựng giữ hình cảnh trước bù vào, còn thiếu một đoạn đọc là **mất hẳn
+        # một khúc lời** giữa bài, mà mọi mốc thời gian phía sau (phụ đề, cảnh)
+        # đều bám vào file này.
+        try:
+            _chay_song_song(bc, list(enumerate(doan, start=1)), mot_doan,
+                            "đoạn đọc", loai_job="tts", mac_dinh=SONG_SONG_DOC,
+                            chiu_thieu=False)
+        finally:
+            theo_doi.dong()
         _noi_mp3(bc, manh, dich)
         return {"so_doan": len(manh)}
 
@@ -1494,26 +1850,49 @@ class ThamChieu:
 TY_LE_THIEU_CHO_PHEP = 0.03
 
 
-def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str):
+#: Giữa hai lần ghi tiến độ ra đĩa, ít nhất bấy nhiêu giây.
+#:
+#: Cần từ lúc cả mẻ bắn một lượt: 114 tấm ảnh giờ xong **trong cùng một hai
+#: giây**, và mỗi tấm xong là một lần ghi `trang-thai.json` cộng một lần vẽ lại
+#: bảng trên luồng giao diện. Trăm lần như thế dồn vào hai giây là cửa sổ khựng
+#: — đúng thứ mà việc chạy nền sinh ra để tránh.
+#:
+#: Con số trong bộ nhớ vẫn cập nhật từng cái một; chỗ này chỉ thưa bớt **lần
+#: ghi**. Mốc cuối (`xong == tổng`) luôn được ghi, và `core/auto.chay` còn ghi
+#: lại lần nữa khi khâu kết thúc.
+NHIP_GHI_TIEN_DO = 0.4
+
+
+def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str,
+                giu_nhip: float = 0.0):
     """Trả về hàm `(xong, tổng)` ghi tiến độ **trong** một khâu.
 
     Ghi vào `tt.ghi_chu` chứ không vào một chỗ riêng: `ghi_chu` đã đi thẳng ra
     `trang-thai.json`, nên đóng tool giữa chừng rồi mở lại vẫn thấy lần trước
     dừng ở cảnh thứ mấy.
+
+    `giu_nhip` là số giây tối thiểu giữa hai lần **ghi ra đĩa** — xem
+    `NHIP_GHI_TIEN_DO`.
     """
+    moc = [0.0]
 
     def bao(xong: int, tong: int) -> None:
         tt.ghi_chu["xong"] = int(xong)
         tt.ghi_chu["tong"] = int(tong)
         tt.ghi_chu["viec"] = viec
+        bay_gio = time.time()
+        if giu_nhip and xong < tong and bay_gio - moc[0] < float(giu_nhip):
+            return
+        moc[0] = bay_gio
         bc.nhip(luot)
 
     return bao
 
 
 def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
-                    nhip=None, loai_job: str = "") -> int:
-    """Chạy `lam(mục)` cho cả danh sách, nhiều mục cùng lúc. Trả về số đã xong.
+                    nhip=None, loai_job: str = "", mac_dinh: int = 0,
+                    chiu_thieu: bool = True) -> int:
+    """Chạy `lam(mục)` cho cả danh sách, **bắn hết một lượt**. Trả về số đã xong.
 
     ═══ HAI LUẬT ═══
 
@@ -1524,8 +1903,21 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
     **Bấm Dừng là dừng.** Đặt cờ rồi thì các luồng đang chạy tự thoát ở lần
     `kiem_dung()` kế tiếp, không đợi hết mẻ.
 
-    Nhịp gọi không do số luồng quyết định mà do cái van chung ở
-    `core/su_co.py` — nên thêm luồng chỉ lấp chỗ trống lúc đang đợi máy chủ.
+    `chiu_thieu=False` cho những khâu mà thiếu một mảnh là hỏng cả: giọng đọc
+    thiếu một đoạn giữa bài thì video mất hẳn một khúc lời, không như ảnh thiếu
+    một cảnh (khâu dựng giữ hình cảnh trước bù vào).
+
+    ═══ VÌ SAO KHÔNG CÒN "THĂM DÒ MỘT CÁI TRƯỚC" ═══
+
+    Bản trước làm **cái đầu tiên một mình**, xong xuôi mới bung luồng, để bắt
+    sớm cảnh nhà máy đang tắt. Ý tốt, giá đắt: một tấm ảnh mất 30,8 giây ở nhà
+    máy, nên mỗi khâu phải đứng yên **nửa phút** trước khi mở luồng nào — và
+    khâu ảnh với khâu clip đều trả cái giá ấy.
+
+    Mà nó cũng không mua được gì thật: gặp nhà máy tắt thì chính lượt thăm dò
+    cũng ngồi đợi qua cả thang thử lại của `goi_kien_nhan` (~16 phút) rồi mới
+    kêu. Cái chốt `nha_may_tat` dưới đây mới là thứ chặn được sớm — luồng nào
+    thấy nhà máy tắt thì gạt chốt, các luồng còn lại thôi nhận việc mới.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed  # noqa: PLC0415
 
@@ -1543,59 +1935,49 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
 
     bao_nhip()
 
-    # ═══ THỬ MỘT CÁI TRƯỚC, RỒI MỚI BUNG ═══
-    #
-    # Nếu cả nhà máy bên cổng đang tắt thì mười hai luồng cùng ngồi đợi hàng
-    # chục phút cho một thứ chắc chắn không xong — vừa vô ích, vừa làm màn hình
-    # đầy chữ giống hệt nhau, vừa khiến người dùng tưởng tool treo.
-    #
-    # Cái đầu tiên vừa là thăm dò vừa là việc thật, nên không tốn thêm gì. Nó
-    # cũng bắt sớm mấy thứ hỏng-là-hỏng-cả-mẻ: ảnh tham chiếu chết, lời nhắc
-    # sai khuôn, ví hết tiền.
-    from .su_co import NHA_MAY_NGHI, phan_loai as _phan  # noqa: PLC0415
-
-    try:
-        bc.kiem_dung()
-        dau_tien = lam(con_lai[0])
-    except Exception as loi:  # noqa: BLE001
-        if _phan(loi) == NHA_MAY_NGHI:
-            raise RuntimeError(
-                "cổng ShopAPI đang không có máy chạy {0}. Đây là phía máy chủ, "
-                "không phải tool — mọi thứ đã làm vẫn giữ nguyên, bật lại là "
-                "bấm Chạy tiếp.".format(ten)) from loi
-        raise
-    if dau_tien is not None:
-        xong += 1
-        da_co += 1 if dau_tien[1] else 0
-        bao_nhip()
-    con_lai = con_lai[1:]
-    if not con_lai:
-        return xong
-
     nha_may_tat = threading.Event()
     bc.nha_may_tat = nha_may_tat
     # Số luồng theo con số MÁY CHỦ TỰ KHAI, không phải số gõ sẵn trong mã.
     # Cổng cho 979 job ảnh cùng lúc; tool từng chạy 6 vì tin một trần 60
     # lượt/phút vốn không có thật. Xem `_so_luong` và `SONG_SONG_CANH`.
-    so_luong = _so_luong(bc, loai_job) if loai_job else SONG_SONG_CANH
+    so_luong = (_so_luong(bc, loai_job, mac_dinh or SONG_SONG_CANH, can=tong)
+                if loai_job else min(mac_dinh or SONG_SONG_CANH, tong))
     if so_luong > SONG_SONG_CANH:
-        bc.ghi("  chạy {0} việc cùng lúc (cổng cho phép).".format(so_luong))
-    with ThreadPoolExecutor(max_workers=so_luong) as bo:
-        cho = {bo.submit(_boc(bc, lam, c, loi_dau, nha_may_tat)): c
-               for c in con_lai}
-        _ = cho
-        for xong_roi in as_completed(cho):
-            ket = xong_roi.result()
-            if ket is None:
-                continue
-            _so, san_co = ket
-            xong += 1
-            da_co += 1 if san_co else 0
-            bao_nhip()
-            if xong % 10 == 0 or xong == tong:
-                bc.ghi("  {0}: {1}/{2} xong.".format(ten, xong, tong))
-    bc.nha_may_tat = None
+        bc.ghi("  bắn {0} việc cùng lúc (cổng cho phép).".format(so_luong))
+    try:
+        with ThreadPoolExecutor(max_workers=so_luong) as bo:
+            cho = {bo.submit(_boc(bc, lam, c, loi_dau, nha_may_tat)): c
+                   for c in con_lai}
+            for xong_roi in as_completed(cho):
+                ket = xong_roi.result()
+                if ket is None:
+                    continue
+                _so, san_co = ket
+                xong += 1
+                da_co += 1 if san_co else 0
+                bao_nhip()
+                if xong % 10 == 0 or xong == tong:
+                    bc.ghi("  {0}: {1}/{2} xong.".format(ten, xong, tong))
+    finally:
+        bc.nha_may_tat = None
+    # ═══ BẤM DỪNG THÌ PHẢI BÁO ĐÚNG LÀ ĐÃ DỪNG ═══
+    #
+    # `_boc` nuốt mọi lỗi vào `loi_dau` để một cảnh hỏng không chôn cả mẻ — kể
+    # cả `Cancelled`. Nhưng `core/auto.chay` đối xử với `Cancelled` khác hẳn
+    # lỗi thường: nó giữ nguyên mọi thứ và không đốt lượt thử lại nào. Nên phải
+    # lôi nó ra trước, đừng để một lỗi cảnh nào đó nói thay.
+    from .auto import Cancelled  # noqa: PLC0415
+
+    for _l in loi_dau:
+        if isinstance(_l, Cancelled):
+            raise _l
     if nha_may_tat.is_set():
+        from .su_co import HET_TIEN, phan_loai as _phan  # noqa: PLC0415
+
+        # Ví hết tiền cũng gạt chốt này, nhưng câu báo của nó đã đúng sẵn rồi
+        # ("ví hết tiền, nạp thêm") — đừng đắp lên trên một câu nói về nhà máy.
+        if any(_phan(l) == HET_TIEN for l in loi_dau):
+            raise loi_dau[0]
         raise RuntimeError(
             "cổng ShopAPI ngừng nhận việc {0} giữa chừng. Đã giữ {1}/{2} — "
             "đây là phía máy chủ, không phải tool. Bật lại thì bấm Chạy tiếp, "
@@ -1615,7 +1997,7 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
         # dừng — vì lúc đó hỏng không còn là chuyện lẻ tẻ mà là hỏng có hệ
         # thống, và đi tiếp chỉ tốn thêm tiền cho một video vá chằng chịt.
         thieu = tong - xong
-        if thieu > max(1, int(tong * TY_LE_THIEU_CHO_PHEP)):
+        if not chiu_thieu or thieu > max(1, int(tong * TY_LE_THIEU_CHO_PHEP)):
             raise loi_dau[0]
         bc.ghi("  {0}: thiếu {1}/{2} — đi tiếp, phần thiếu sẽ giữ hình cảnh "
                "trước lâu hơn một chút.".format(ten, thieu, tong))
@@ -1647,7 +2029,7 @@ def _boc(bc: BoiCanh, lam, c, loi_dau: List[BaseException],
     Dừng sớm ở đây **không mất gì**: ảnh đã tải về vẫn nằm trên đĩa, và khâu
     nào cũng nhìn đĩa trước.
     """
-    from .su_co import NHA_MAY_NGHI, phan_loai as _phan  # noqa: PLC0415
+    from .su_co import HET_TIEN, NHA_MAY_NGHI, phan_loai as _phan  # noqa: PLC0415
 
     def chay_mot():
         if nha_may_tat is not None and nha_may_tat.is_set():
@@ -1656,7 +2038,15 @@ def _boc(bc: BoiCanh, lam, c, loi_dau: List[BaseException],
             bc.kiem_dung()
             return lam(c)
         except Exception as loi:  # noqa: BLE001
-            if _phan(loi) == NHA_MAY_NGHI and nha_may_tat is not None:
+            # ═══ VÍ HẾT TIỀN CŨNG LÀ LÝ DO DỪNG CẢ MẺ ═══
+            #
+            # Trước đây chỗ này chỉ chặn khi nhà máy tắt, còn "ví hết tiền" thì
+            # bắt được nhờ lượt thăm dò chạy một mình. Lượt thăm dò đã bỏ (nó
+            # tốn nửa phút mỗi khâu), nên lý do ấy phải chuyển vào đây: hết tiền
+            # thì 113 lời gọi còn lại chắc chắn cũng hết tiền, gửi tiếp chỉ làm
+            # màn hình đầy chữ giống hệt nhau.
+            loai = _phan(loi)
+            if loai in (NHA_MAY_NGHI, HET_TIEN) and nha_may_tat is not None:
                 nha_may_tat.set()
             loi_dau.append(loi)
             return None
@@ -1664,129 +2054,294 @@ def _boc(bc: BoiCanh, lam, c, loi_dau: List[BaseException],
     return chay_mot
 
 
+def _giay_clip(bc: BoiCanh) -> int:
+    """Một clip dài bao nhiêu giây, theo engine của kênh.
+
+    ═══ THỜI LƯỢNG LÀ CỐ ĐỊNH THEO ENGINE, KHÔNG PHẢI THEO CẢNH ═══
+
+    Veo3 bán **đúng** clip 8 giây, Seedance **đúng** 10 — không có số nào khác.
+    Bản đầu tôi gửi độ dài của chính cảnh, làm tròn: cảnh 7,3 giây thành 7, và
+    cổng trả *"Engine veo3 chỉ nhận video 8 giây, bạn đang chọn 7 giây"*.
+
+    Lỗi này lẩn rất kỹ: cảnh nào tình cờ tròn 8 giây thì qua, nên mẻ thật ra
+    được 18/99 clip rồi mới chết — nhìn vào tưởng chập chờn.
+
+    `core/srt_scenes.py` đã ép trần cảnh theo đúng engine từ khâu cắt cảnh, nên
+    lấy thẳng số cố định là an toàn: cảnh không bao giờ dài hơn trần, và phần
+    hình thừa ra ở cảnh ngắn thì khâu dựng cắt.
+
+    Lấy từ chính bảng của SDK, không tự đoán: thêm engine mới mà quên sửa chỗ
+    này là cả khâu clip hỏng, và hỏng kiểu chập chờn.
+    """
+    try:
+        from shopapi._constants import (  # noqa: PLC0415
+            DEFAULT_VIDEO_DURATION_BY_ENGINE as _DL)
+        return int(_DL.get(bc.kenh.engine, 8))
+    except Exception:  # noqa: BLE001
+        return 8 if bc.kenh.engine == "veo3" else 10
+
+
+def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
+              dich: str, giay: int, so: Optional[SoTheoDoi] = None) -> None:
+    """Tạo clip cho một cảnh, tải về, mở thử bằng FFmpeg.
+
+    Tách ra khỏi khâu clip vì giờ có **hai** nơi gọi: dây chuyền ở khâu ảnh
+    (ảnh nào xong là bắn clip của nó ngay) và khâu clip (làm nốt phần còn
+    thiếu). Cùng một mã, nên hai đường không bao giờ lệch nhau về khoá
+    idempotency — thứ giữ cho chạy tiếp không trả tiền hai lần.
+    """
+    so_canh = int(c["scene_id"])
+    # Ảnh của chính cảnh này làm khung đầu — đây là thứ giữ cho nhân vật không
+    # đổi mặt giữa các cảnh. Cổng nhận URL, không nhận đường dẫn máy — xem
+    # `_url_anh_canh`.
+    url_anh = (_url_anh_canh(bc, luot, so_canh, anh)
+               if os.path.exists(anh) else "")
+
+    def goi_clip(dia_chi, hau_to=""):
+        job = _tao_job(
+            bc, bc.client.videos.create,
+            prompt=c["video_prompt"], engine=bc.kenh.engine,
+            duration=giay, aspect_ratio="16:9",
+            image_url=dia_chi or None,
+            idempotency_key=khoa_viec(luot, "vid", so_canh,
+                                      c["video_prompt"], dia_chi,
+                                      giay) + hau_to)
+        return _cho_job(bc, job, ten_viec="cảnh {0}".format(so_canh), so=so)
+
+    try:
+        goi = goi_clip(url_anh)
+    except LoiKetJob:
+        # ═══ JOB KẸT: ĐẶT LẠI BẰNG KHOÁ MỚI ═══
+        #
+        # Máy chủ đã nhận việc nhưng mười hai phút vẫn "đang xử lý", với một
+        # clip lẽ ra mất 1–3 phút. Gọi lại y nguyên là rơi vào đúng job kẹt đó,
+        # mãi mãi. Chỉ khoá mới mới thoát ra.
+        #
+        # Có tốn thêm tiền không? Có thể — nếu job cũ rốt cuộc vẫn chạy xong.
+        # Đổi lại là cả lượt chạy không đứng hình. Đã đo thật 14/08/2026: chín
+        # clip cuối kẹt, sáu luồng cùng ngồi đợi, cả mẻ 112 cảnh không nhích
+        # suốt mười hai phút. Đường còn lại — bỏ cả lượt — đắt hơn nhiều lần.
+        bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá "
+               "mới.".format(so_canh))
+        goi = goi_clip(url_anh, ":k2")
+    except Exception as loi:  # noqa: BLE001
+        chu = str(loi).lower()
+        if not url_anh or not any(d in chu for d in _ANH_THAM_CHIEU_HONG):
+            raise
+        # Chữ ký ảnh khung đầu hết hạn giữa mẻ — tải lại đúng tấm ấy.
+        url_anh = _url_anh_canh(bc, luot, so_canh, anh, bo_qua_nho=True)
+        goi = goi_clip(url_anh, ":tc2")
+    _tai_ket_qua(bc, goi, 0, dich)
+    _kiem_media(bc, dich)
+
+
+def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
+                  hop: "ThamChieu", so: Optional[SoTheoDoi] = None) -> None:
+    """Tạo ảnh cho một cảnh rồi tải về."""
+    so_canh = int(c["scene_id"])
+    # ═══ KHÔNG GỬI LỜI NHẮC RỖNG ═══
+    #
+    # Cổng từ chối bằng *"Bạn cần mô tả thứ muốn tạo — `prompt` đang rỗng"*,
+    # nhưng chỉ sau khi mẻ đã chạy được một đoạn. Đo thật 15/08/2026: một lượt
+    # trả tiền cho 56 tấm ảnh rồi mới chết, vì bảng cảnh có 52/108 dòng thiếu
+    # lời nhắc.
+    #
+    # Chặn ở đây là chặn trước khi gọi, tức trước khi mất gì.
+    if not str(c.get("img_prompt") or "").strip():
+        raise LoiNoiDung(
+            "cảnh {0} không có lời nhắc ảnh — bảng cảnh hỏng, hãy chọn dòng "
+            "“Cắt cảnh và viết lời nhắc” rồi bấm “Làm lại từ khâu này”".format(
+                so_canh))
+    # ═══ KHOÁ PHẢI PHỦ CẢ ẢNH THAM CHIẾU ═══
+    #
+    # Thân yêu cầu gồm lời nhắc **và** URL ảnh tham chiếu. URL ấy là link ký
+    # hạn: hết hạn thì tool tải lại và nhận một URL khác. Khoá chỉ đúc từ lời
+    # nhắc nên nó không đổi theo — và cổng từ chối thẳng:
+    #
+    #     "Idempotency-Key này đã được dùng cho một yêu cầu có nội dung khác."
+    #
+    # Đo được 15/08/2026: chạy lại khâu ảnh của một lượt cũ là hỏng 100% ngay
+    # lượt gọi đầu. Khâu clip đã đưa `dia_chi` vào khoá từ trước; khâu ảnh và
+    # khâu ảnh bìa thì quên — cùng một bài học, sót hai chỗ.
+    goi = _tao_anh(bc, luot, c["img_prompt"], hop,
+                   khoa_viec(luot, "img", so_canh, c["img_prompt"],
+                             "|".join(hop.lay())),
+                   ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
+    _tai_ket_qua(bc, goi, 0, tep)
+
+
 def _khau_anh(bc: BoiCanh):
+    """Khâu ảnh — và thật ra là **cả dây chuyền ảnh → clip**.
+
+    ═══ VÌ SAO BA KHÂU GỘP LÀM MỘT MẺ ═══
+
+    Đo trên máy chủ thật, 15/08/2026: một tấm ảnh mất 30,8 giây ở nhà máy,
+    nhưng **ba mươi tấm bắn cùng lúc thì xong hết trong 38,2 giây** — nhà máy
+    chạy song song thật, 30 tấm gần như không đắt hơn 1 tấm. Cổng cho 979 job
+    ảnh và 172–316 job clip chạy cùng lúc, hàng chờ 100.000, và nói rõ *"gửi
+    nhiều hơn KHÔNG bị từ chối"*.
+
+    Vậy mà tool mất 5,9 phút cho 114 ảnh, 14,8 phút cho 114 clip, và **3,3 phút
+    cho đúng 3 tấm ảnh bìa** — vì ba việc ấy là ba hàng rào nối đuôi nhau: ảnh
+    bìa đợi clip, clip đợi **đủ** 114 ảnh.
+
+    Không có hàng rào nào trong đó là thật:
+
+    * ảnh bìa chẳng cần clip nào — nó chỉ cần tiêu đề, có từ khâu 1;
+    * clip của cảnh 7 chỉ cần **ảnh của cảnh 7**, không cần 113 ảnh kia.
+
+    Nên mẻ này bắn **hết một lượt**: 114 ảnh cảnh cộng 3 ảnh bìa. Ảnh nào về
+    thì tải xuống rồi bắn clip của chính nó ngay, không đợi ai.
+
+    Hai khâu sau (`clip`, `thumbnail`) vẫn còn nguyên và vẫn chạy — chúng nhìn
+    đĩa trước, thấy đủ tệp thì đi qua trong một nháy, thiếu cái nào thì làm nốt
+    cái ấy. Nhờ vậy mọi thứ giữ nguyên: bảng trạng thái tám khâu, "Làm lại khâu
+    này", và **chạy tiếp nhặt đúng chỗ đứt**.
+    """
+
     def lam(luot: LuotChay, tt: TrangThaiKhau):
+        from .auto import Cancelled  # noqa: PLC0415
+        from .su_co import NHA_MAY_NGHI, phan_loai as _phan  # noqa: PLC0415
+
         canh = _doc_canh(luot)
         thu_muc = os.path.join(luot.thu_muc, "5-anh")
+        thu_muc_clip = os.path.join(luot.thu_muc, "6-clip")
         os.makedirs(thu_muc, exist_ok=True)
-        # Lấy URL tham chiếu TRƯỚC khi bung luồng: để trong luồng thì mười hai
+        os.makedirs(thu_muc_clip, exist_ok=True)
+        # Lấy URL tham chiếu TRƯỚC khi bung luồng: để trong luồng thì cả trăm
         # luồng cùng thấy chưa có rồi cùng tải một tệp lên.
         hop = ThamChieu(bc)
+        thu_muc_bia, muc_bia, _thieu_bia, ta_bia, tieu_de, chu_bia = \
+            _chuan_bi_bia(bc, luot)
+        giay = _giay_clip(bc)
+        so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
 
-        def mot_canh(c):
-            so = int(c["scene_id"])
-            tep = os.path.join(thu_muc, "{0}.png".format(so))
-            if os.path.exists(tep):
-                return so, True
-            # ═══ KHÔNG GỬI LỜI NHẮC RỖNG ═══
-            #
-            # Cổng từ chối bằng *"Bạn cần mô tả thứ muốn tạo — `prompt` đang
-            # rỗng"*, nhưng chỉ sau khi mẻ đã chạy được một đoạn. Đo thật
-            # 15/08/2026: một lượt trả tiền cho 56 tấm ảnh rồi mới chết, vì
-            # bảng cảnh có 52/108 dòng thiếu lời nhắc.
-            #
-            # Chặn ở đây là chặn trước khi gọi, tức trước khi mất gì.
-            if not str(c.get("img_prompt") or "").strip():
-                raise LoiNoiDung(
-                    "cảnh {0} không có lời nhắc ảnh — bảng cảnh hỏng, hãy "
-                    "chọn dòng “Cắt cảnh và viết lời nhắc” rồi bấm “Làm lại "
-                    "từ khâu này”".format(so))
-            goi = _tao_anh(bc, luot, c["img_prompt"], hop,
-                           khoa_viec(luot, "img", so, c["img_prompt"]),
-                           ten_hien="ảnh cảnh {0}".format(so))
-            _tai_ket_qua(bc, goi, 0, tep)
-            return so, False
+        # ═══ MỘT KHOÁ CHO CẢ BA BỘ ĐẾM ═══
+        #
+        # `dem_tien_do` ghi thẳng ra `trang-thai.json`. Trước đây chỉ luồng
+        # chính gọi nó; giờ mỗi luồng tự báo khi việc của mình xong, mà hai
+        # luồng cùng ghi một tệp qua đường tệp tạm thì bản này đè bản kia —
+        # trên Windows còn ném hẳn lỗi giữa mẻ.
+        khoa_dem = threading.Lock()
+        dem = {"anh": 0, "clip": 0, "bia": 0}
+        tong = {"anh": len(canh), "clip": len(canh), "bia": len(muc_bia)}
+        bao = {
+            "anh": dem_tien_do(bc, luot, tt, "ảnh", NHIP_GHI_TIEN_DO),
+            "clip": dem_tien_do(bc, luot, luot.tt("clip"), "clip",
+                                NHIP_GHI_TIEN_DO),
+            "bia": dem_tien_do(bc, luot, luot.tt("thumbnail"), "ảnh bìa",
+                               NHIP_GHI_TIEN_DO),
+        }
+        for loai in ("anh", "clip", "bia"):
+            bao[loai](0, tong[loai])
 
-        xong = _chay_song_song(bc, canh, mot_canh, "ảnh", loai_job="image",
-                               nhip=dem_tien_do(bc, luot, tt, "ảnh"))
-        return {"so_anh": xong}
+        def them(loai: str) -> None:
+            with khoa_dem:
+                dem[loai] += 1
+                bao[loai](dem[loai], tong[loai])
+
+        #: Nhà máy clip tắt thì thôi bắn clip, nhưng **vẫn làm nốt ảnh**: ảnh đã
+        #: có trên đĩa là tiền đã tiêu không mất, và khi nhà máy clip bật lại
+        #: thì khâu clip chỉ còn việc bắn.
+        clip_tat = threading.Event()
+
+        def bat_clip(c, tep_anh: str) -> None:
+            """Ảnh vừa về thì bắn clip của chính nó — không đợi các cảnh khác."""
+            so_canh = int(c["scene_id"])
+            dich = os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))
+            if os.path.exists(dich):
+                them("clip")
+                return
+            if clip_tat.is_set() or not os.path.exists(tep_anh):
+                return
+            if not str(c.get("video_prompt") or "").strip():
+                return
+            try:
+                _lam_clip(bc, luot, c, tep_anh, dich, giay, so=so)
+            except Cancelled:
+                raise
+            except Exception as loi:  # noqa: BLE001
+                # ═══ CLIP HỎNG KHÔNG ĐƯỢC LÀM HỎNG KHÂU ẢNH ═══
+                #
+                # Ở đây clip là việc **làm thêm cho sớm**. Nó hỏng thì phần ảnh
+                # vẫn đúng và vẫn phải được ghi nhận là xong — khâu clip ngay
+                # sau đó sẽ làm nốt, và nếu vẫn hỏng thì nó mới là chỗ báo lỗi.
+                # Ném lên từ đây là đổ tội cho khâu ảnh một việc không phải của
+                # nó, rồi bảng trạng thái chỉ vào sai chỗ.
+                if _phan(loi) == NHA_MAY_NGHI:
+                    clip_tat.set()
+                    bc.ghi("  nhà máy clip đang tắt — làm nốt ảnh đã, phần "
+                           "clip để khâu sau.")
+                else:
+                    bc.ghi("    cảnh {0}: chưa ra clip ({1}) — khâu clip sẽ "
+                           "làm nốt.".format(so_canh, str(loi)[:80]))
+                return
+            them("clip")
+
+        def mot_muc(m):
+            loai, x = m
+            if loai == "bia":
+                ket = _lam_bia(bc, luot, hop, thu_muc_bia, x, ta_bia,
+                               tieu_de, chu_bia, so=so)
+                them("bia")
+                return ket
+            so_canh = int(x["scene_id"])
+            tep = os.path.join(thu_muc, "{0}.png".format(so_canh))
+            san_co = os.path.exists(tep)
+            if not san_co:
+                _lam_anh_canh(bc, luot, x, tep, hop, so=so)
+            them("anh")
+            bat_clip(x, tep)
+            return so_canh, san_co
+
+        # Ảnh bìa đứng đầu hàng: chỉ có ba tấm, và trước đây chúng là cái đuôi
+        # 3,3 phút chạy sau cùng khi mọi thứ khác đã xong.
+        muc = [("bia", m) for m in muc_bia] + [("canh", c) for c in canh]
+        try:
+            _chay_song_song(bc, muc, mot_muc, "ảnh", loai_job="image")
+        finally:
+            so.dong()
+        if dem["clip"] < tong["clip"]:
+            bc.ghi("  còn {0}/{1} clip chưa xong — khâu clip làm nốt.".format(
+                tong["clip"] - dem["clip"], tong["clip"]))
+        return {"so_anh": dem["anh"], "so_clip": dem["clip"],
+                "so_thumbnail": dem["bia"]}
 
     return lam
 
 
 def _khau_clip(bc: BoiCanh):
+    """Làm nốt những clip dây chuyền ở khâu ảnh chưa kịp ra.
+
+    Bình thường khâu này chỉ còn việc nhìn đĩa rồi đi qua — clip đã được bắn từ
+    lúc ảnh của nó vừa về. Nó vẫn phải đứng đây vì hai lý do: người dùng có
+    quyền bấm "Làm lại khâu này" cho riêng clip, và nếu nhà máy clip tắt giữa
+    chừng thì đây là chỗ làm lại phần còn thiếu.
+    """
+
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         canh = _doc_canh(luot)
         thu_muc = os.path.join(luot.thu_muc, "6-clip")
         thu_muc_anh = os.path.join(luot.thu_muc, "5-anh")
         os.makedirs(thu_muc, exist_ok=True)
-        # Lấy từ chính bảng của SDK, không tự đoán: thêm engine mới mà quên
-        # sửa chỗ này là cả khâu clip hỏng, và hỏng kiểu chập chờn.
-        try:
-            from shopapi._constants import (  # noqa: PLC0415
-                DEFAULT_VIDEO_DURATION_BY_ENGINE as _DL)
-            tran = int(_DL.get(bc.kenh.engine, 8))
-        except Exception:  # noqa: BLE001
-            tran = 8 if bc.kenh.engine == "veo3" else 10
+        giay = _giay_clip(bc)
+        so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
 
         def mot_canh(c):
-            so = int(c["scene_id"])
-            tep = os.path.join(thu_muc, "{0}.mp4".format(so))
+            so_canh = int(c["scene_id"])
+            tep = os.path.join(thu_muc, "{0}.mp4".format(so_canh))
             if os.path.exists(tep):
-                return so, True
-            # Ảnh của chính cảnh này làm khung đầu — đây là thứ giữ cho nhân vật
-            # không đổi mặt giữa các cảnh.
-            anh = os.path.join(thu_muc_anh, "{0}.png".format(so))
-            # Cổng nhận URL, không nhận đường dẫn máy — xem `_url_anh_canh`.
-            url_anh = (_url_anh_canh(bc, luot, so, anh)
-                       if os.path.exists(anh) else "")
-            # ═══ THỜI LƯỢNG LÀ CỐ ĐỊNH THEO ENGINE, KHÔNG PHẢI THEO CẢNH ═══
-            #
-            # Veo3 bán **đúng** clip 8 giây, Seedance **đúng** 10 — không có số
-            # nào khác. Bản đầu tôi gửi độ dài của chính cảnh, làm tròn: cảnh
-            # 7,3 giây thành 7, và cổng trả *"Engine veo3 chỉ nhận video 8
-            # giây, bạn đang chọn 7 giây"*.
-            #
-            # Lỗi này lẩn rất kỹ: cảnh nào tình cờ tròn 8 giây thì qua, nên mẻ
-            # thật ra được 18/99 clip rồi mới chết — nhìn vào tưởng chập chờn.
-            #
-            # `core/srt_scenes.py` đã ép trần cảnh theo đúng engine từ khâu cắt
-            # cảnh, nên lấy thẳng số cố định là an toàn: cảnh không bao giờ dài
-            # hơn trần, và phần hình thừa ra ở cảnh ngắn thì khâu dựng cắt.
-            giay = tran
+                return so_canh, True
+            anh = os.path.join(thu_muc_anh, "{0}.png".format(so_canh))
+            _lam_clip(bc, luot, c, anh, tep, giay, so=so)
+            return so_canh, False
 
-            def goi_clip(dia_chi, hau_to=""):
-                job = _tao_job(
-                    bc, bc.client.videos.create,
-                    prompt=c["video_prompt"], engine=bc.kenh.engine,
-                    duration=giay, aspect_ratio="16:9",
-                    image_url=dia_chi or None,
-                    idempotency_key=khoa_viec(luot, "vid", so,
-                                              c["video_prompt"], dia_chi,
-                                              giay) + hau_to)
-                return _cho_job(bc, job, ten_viec="cảnh {0}".format(so))
-
-            try:
-                goi = goi_clip(url_anh)
-            except LoiKetJob:
-                # ═══ JOB KẸT: ĐẶT LẠI BẰNG KHOÁ MỚI ═══
-                #
-                # Máy chủ đã nhận việc nhưng mười hai phút vẫn "đang xử lý", với
-                # một clip lẽ ra mất 1–3 phút. Gọi lại y nguyên là rơi vào đúng
-                # job kẹt đó, mãi mãi. Chỉ khoá mới mới thoát ra.
-                #
-                # Có tốn thêm tiền không? Có thể — 300₫ cho cảnh này, nếu job cũ
-                # rốt cuộc vẫn chạy xong. Đổi lại là cả lượt chạy không đứng
-                # hình. Đã đo thật 14/08/2026: chín clip cuối kẹt, sáu luồng
-                # cùng ngồi đợi, cả mẻ 112 cảnh không nhích suốt mười hai phút.
-                # Đường còn lại — bỏ cả lượt — đắt hơn nhiều lần.
-                bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó — đặt lại "
-                       "bằng khoá mới.".format(so))
-                goi = goi_clip(url_anh, ":k2")
-            except Exception as loi:  # noqa: BLE001
-                chu = str(loi).lower()
-                if not url_anh or not any(d in chu
-                                          for d in _ANH_THAM_CHIEU_HONG):
-                    raise
-                # Chữ ký ảnh khung đầu hết hạn giữa mẻ — tải lại đúng tấm ấy.
-                url_anh = _url_anh_canh(bc, luot, so, anh, bo_qua_nho=True)
-                goi = goi_clip(url_anh, ":tc2")
-            _tai_ket_qua(bc, goi, 0, tep)
-            _kiem_media(bc, tep)
-            return so, False
-
-        xong = _chay_song_song(bc, canh, mot_canh, "clip", loai_job="video",
-                               nhip=dem_tien_do(bc, luot, tt, "clip"))
+        try:
+            xong = _chay_song_song(
+                bc, canh, mot_canh, "clip", loai_job="video",
+                nhip=dem_tien_do(bc, luot, tt, "clip", NHIP_GHI_TIEN_DO))
+        finally:
+            so.dong()
         return {"so_clip": xong}
 
     return lam
@@ -1855,46 +2410,89 @@ def _bia_du_phong(st: Dict[str, Any], tieu_de: str, chu_bia: str,
                 st.get("negative_prompt", "")))
 
 
+def _tep_bia(thu_muc: str, so: int) -> str:
+    return os.path.join(thu_muc, "thumb_{0:03d}.png".format(so))
+
+
+def _chuan_bi_bia(bc: BoiCanh, luot: LuotChay):
+    """Dọn sẵn mọi thứ để tạo ảnh bìa. Trả về `(thư mục, mục, thiếu, lời nhắc,
+    tiêu đề, chữ bìa)`.
+
+    ═══ LỜI NHẮC ẢNH BÌA DO AI VIẾT, KHÔNG PHẢI CHUỖI GHÉP CỨNG ═══
+
+    Bản trước ghép chuỗi ngay trong code: style + một câu tả kiểu + tiêu đề. Ra
+    ảnh đúng phong cách nhưng **không có chữ hook** và không bám nội dung —
+    trong khi ảnh bìa là thứ duy nhất quyết định người ta có bấm vào hay không.
+
+    Tool gốc để AI viết ba lời nhắc, ba ý cảm xúc khác nhau, và ảnh bìa thì
+    **CÓ chữ** (khác hẳn các cảnh trong video vốn không có chữ nào). Nay cũng
+    vậy, và lời nhắc nằm ở `prompt/8-thumbnail.md` của kênh nên người dùng sửa
+    được.
+
+    **Chỉ hỏi AI khi còn thiếu tấm nào.** Bản trước hỏi mỗi lần chạy, kể cả khi
+    ba tấm đã nằm sẵn trên đĩa — chạy tiếp một lượt dở là trả tiền cho một lời
+    nhắc không ai dùng.
+    """
+    thu_muc = os.path.join(luot.thu_muc, "7-thumbnail")
+    os.makedirs(thu_muc, exist_ok=True)
+    kieu = list(KIEU_THUMB[:max(1, bc.kenh.so_thumbnail)])
+    muc = list(enumerate(kieu, start=1))
+    thieu = [m for m in muc if not os.path.exists(_tep_bia(thu_muc, m[0]))]
+    tieu_de, chu_bia = _doc_tieu_de(
+        _doc_chu(os.path.join(luot.thu_muc, "1-tieu-de.txt")))
+    ta_bia: Dict[str, str] = {}
+    if thieu:
+        ta_bia = _loi_nhac_bia(bc, luot, bc.kenh.prompt.get("8-thumbnail.md", ""),
+                               tieu_de, chu_bia, kieu)
+    return thu_muc, muc, thieu, ta_bia, tieu_de, chu_bia
+
+
+def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
+             muc, ta_bia: Dict[str, str], tieu_de: str, chu_bia: str,
+             so: Optional[SoTheoDoi] = None):
+    """Tạo một tấm ảnh bìa. Đã có trên đĩa thì bỏ qua."""
+    so_bia, (ten_kieu, mac_dinh) = muc
+    tep = _tep_bia(thu_muc, so_bia)
+    if os.path.exists(tep):
+        return so_bia, True
+    loi_nhac = ta_bia.get(ten_kieu) or _bia_du_phong(bc.kenh.style, tieu_de,
+                                                    chu_bia, mac_dinh)
+    # Khoá phủ cả ảnh tham chiếu — xem ghi chú ở `_lam_anh_canh`.
+    goi = _tao_anh(bc, luot, loi_nhac, hop,
+                   khoa_viec(luot, "thumb", so_bia, loi_nhac,
+                             "|".join(hop.lay())),
+                   ten_hien="ảnh bìa {0}".format(so_bia), so=so)
+    _tai_ket_qua(bc, goi, 0, tep)
+    return so_bia, False
+
+
 def _khau_thumbnail(bc: BoiCanh):
+    """Làm nốt ảnh bìa dây chuyền ở khâu ảnh chưa kịp ra.
+
+    Ba tấm này đã được bắn cùng mẻ với 114 ảnh cảnh, nên bình thường khâu này
+    chỉ nhìn đĩa rồi đi qua. Vẫn đứng đây cho "Làm lại khâu này" và cho lúc mẻ
+    trước hụt mất một tấm.
+    """
+
     def lam(luot: LuotChay, tt: TrangThaiKhau):
-        st = bc.kenh.style
-        thu_muc = os.path.join(luot.thu_muc, "7-thumbnail")
-        os.makedirs(thu_muc, exist_ok=True)
-        tieu_de, chu_bia = _doc_tieu_de(
-            _doc_chu(os.path.join(luot.thu_muc, "1-tieu-de.txt")))
-        hop = ThamChieu(bc)
-        kieu = list(KIEU_THUMB[:max(1, bc.kenh.so_thumbnail)])
+        thu_muc, muc, thieu, ta_bia, tieu_de, chu_bia = _chuan_bi_bia(bc, luot)
+        # Đủ ba tấm rồi thì đừng dựng `ThamChieu`: nó có thể phải tải lại ảnh
+        # nhân vật lên, tốn chỗ trong kho tạm 500 MB cho một việc không có.
+        hop = ThamChieu(bc) if thieu else None
+        so = SoTheoDoi(bc, nhip=bc.nhip_hoi) if thieu else None
 
-        # ═══ LỜI NHẮC ẢNH BÌA DO AI VIẾT, KHÔNG PHẢI CHUỖI GHÉP CỨNG ═══
-        #
-        # Bản trước ghép chuỗi ngay trong code: style + một câu tả kiểu + tiêu
-        # đề. Ra ảnh đúng phong cách nhưng **không có chữ hook** và không bám
-        # nội dung — trong khi ảnh bìa là thứ duy nhất quyết định người ta có
-        # bấm vào hay không.
-        #
-        # Tool gốc để AI viết ba lời nhắc, ba ý cảm xúc khác nhau, và ảnh bìa
-        # thì **CÓ chữ** (khác hẳn các cảnh trong video vốn không có chữ nào).
-        # Nay cũng vậy, và lời nhắc nằm ở `prompt/8-thumbnail.md` của kênh nên
-        # người dùng sửa được.
-        khuon_bia = bc.kenh.prompt.get("8-thumbnail.md", "")
-        ta_bia = _loi_nhac_bia(bc, luot, khuon_bia, tieu_de, chu_bia, kieu)
+        def mot_bia(m):
+            return _lam_bia(bc, luot, hop, thu_muc, m, ta_bia, tieu_de,
+                            chu_bia, so=so)
 
-        def mot_bia(muc):
-            so, (ten_kieu, _mac_dinh) = muc
-            tep = os.path.join(thu_muc, "thumb_{0:03d}.png".format(so))
-            if os.path.exists(tep):
-                return so, True
-            loi_nhac = ta_bia.get(ten_kieu) or _bia_du_phong(st, tieu_de,
-                                                            chu_bia, _mac_dinh)
-            goi = _tao_anh(bc, luot, loi_nhac, hop,
-                           khoa_viec(luot, "thumb", so, loi_nhac),
-                           ten_hien="ảnh bìa {0}".format(so))
-            _tai_ket_qua(bc, goi, 0, tep)
-            return so, False
-
-        xong = _chay_song_song(
-            bc, list(enumerate(kieu, start=1)), mot_bia, "ảnh bìa",
-            nhip=dem_tien_do(bc, luot, tt, "ảnh bìa"), loai_job="image")
+        try:
+            xong = _chay_song_song(
+                bc, muc, mot_bia, "ảnh bìa",
+                nhip=dem_tien_do(bc, luot, tt, "ảnh bìa", NHIP_GHI_TIEN_DO),
+                loai_job="image")
+        finally:
+            if so is not None:
+                so.dong()
         return {"so_thumbnail": xong}
 
     return lam
