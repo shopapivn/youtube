@@ -12,6 +12,11 @@ lần hai cho sáu khâu đã xong**.
 Mọi bài dưới đây chạy trên thư mục tạm, không gọi mạng, không tốn một đồng nào.
 """
 
+# Bảng tiến độ có bốn cột: 0 "#", 1 "Khâu", 2 "Trạng thái", 3 "Chi tiết".
+# Cột "Tiền" bị bỏ ngày 15/08/2026 — chủ dự án: *"về vấn đề tiền tao không muốn
+# nhắc nhiều vì chỉ cần ở tab tài khoản có số liệu là được"*. Ai thêm/bớt cột
+# thì phải sửa mấy chỉ số dưới đây.
+
 from __future__ import annotations
 
 import json
@@ -233,8 +238,8 @@ def test_mo_tab_len_la_chon_san_luot_do_moi_nhat(qt_app, tmp_path):
     assert luot is not None, "mở tool lên mà không nạp lại lượt nào là lỗi cũ"
     assert luot.ma_luot == "0003"
     # Bảng phải nói đúng sáu khâu đã xong, không phải bảng trống.
-    assert trang._bang.item(0, 3).text() == "xong"
-    assert trang._bang.item(6, 3).text() == "chờ"
+    assert trang._bang.item(0, 2).text() == "xong"
+    assert trang._bang.item(6, 2).text() == "chờ"
 
 
 def test_luot_con_do_de_hoi_truoc_khi_mo_luot_moi(qt_app, tmp_path):
@@ -277,7 +282,7 @@ def test_bang_ve_lai_tu_dia_chu_khong_tu_bo_nho(qt_app, tmp_path):
     _dung_kenh(goc, "TL1")
     luot = _dung_luot(goc, "TL1", "0001", xong_toi=1)
     trang = _dung_trang(goc)
-    assert trang._bang.item(1, 3).text() == "chờ"
+    assert trang._bang.item(1, 2).text() == "chờ"
 
     duong = os.path.join(luot.thu_muc, TEP_TRANG_THAI)
     with open(duong, "r", encoding="utf-8") as t:
@@ -288,7 +293,7 @@ def test_bang_ve_lai_tu_dia_chu_khong_tu_bo_nho(qt_app, tmp_path):
 
     trang._ve_bang()
 
-    assert trang._bang.item(1, 3).text() == "xong"
+    assert trang._bang.item(1, 2).text() == "xong"
 
 
 def test_doi_kenh_thi_doi_luon_danh_sach_luot(qt_app, tmp_path):
@@ -394,4 +399,4 @@ def test_cot_chi_tiet_hien_dem_trong_khau(qt_app, tmp_path):
 
     trang = _dung_trang(goc)
 
-    assert "37/99 ảnh" in trang._bang.item(MA_KHAU.index("anh"), 4).text()
+    assert "37/99 ảnh" in trang._bang.item(MA_KHAU.index("anh"), 3).text()

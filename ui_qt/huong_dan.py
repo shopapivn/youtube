@@ -76,7 +76,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
         "luu_y": [
             "“Lấy dữ liệu đối thủ” chạy hoàn toàn trên máy bạn — không cần tài "
-            "khoản, không tốn tiền.",
+            "khoản riêng của bạn.",
             "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
             "mất khi cập nhật tool.",
         ],
@@ -159,14 +159,14 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": [
             "Tắt tool không mất gì. Ô “Lượt” liệt kê mọi lần chạy đã có của "
             "kênh, kèm chữ cho biết lượt đó xong hay còn dở tới khâu mấy.",
-            "Bấm “Chạy” là mở lượt MỚI và làm lại từ khâu 1 — tốn tiền lại cho "
+            "Bấm “Chạy” là mở lượt MỚI và làm lại từ khâu 1, kể cả "
             "những khâu đã xong. Khi lượt gần nhất còn dở, tôi sẽ hỏi lại "
             "trước; muốn đi tiếp việc cũ thì chọn “Chạy tiếp”.",
             "Tám khâu: kịch bản → giọng đọc → phụ đề → bảng cảnh → ảnh → clip "
-            "→ ảnh bìa → dựng. Sáu khâu gọi AI nên có tiêu ví; khâu phụ đề và "
-            "khâu dựng chạy trên máy bạn, miễn phí.",
+            "→ ảnh bìa → dựng. Khâu phụ đề và khâu dựng chạy ngay trên máy "
+            "bạn.",
             "Bấm Dừng lúc nào cũng được. Phần đã làm giữ nguyên; bấm “Chạy "
-            "tiếp” là đi tiếp từ đúng chỗ đó, không trả tiền lại.",
+            "tiếp” là đi tiếp từ đúng chỗ đó.",
             "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "
             "kịch bản thì phải “Làm lại từ khâu này” — giọng đọc cũ đang đọc "
             "bản kịch bản không còn nữa.",
@@ -189,8 +189,8 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
         "luu_y": [
             "Lần đầu phải bấm “Tải bộ nghe” — khoảng 0,5 GB, tải một lần rồi "
-            "thôi. Việc nghe chạy trên máy bạn nên không tốn tiền.",
-            "Bước viết prompt có gọi AI nên CÓ tiêu ví ShopAPI, mỗi 20 cảnh "
+            "thôi. Việc nghe chạy ngay trên máy bạn.",
+            "Bước viết prompt có gọi AI, mỗi 20 cảnh "
             "một lượt gọi.",
             "File Excel đặt tên sheet đúng kiểu VE3 (scenes, characters…) nên "
             "mở thẳng bằng VE3_SUITE được, không phải chép cột sang.",
@@ -206,7 +206,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Bấm dựng và chờ.",
         ],
         "luu_y": [
-            "Chạy bằng FFmpeg trên máy bạn — không tốn tiền, không cần mạng.",
+            "Chạy bằng FFmpeg ngay trên máy bạn — không cần mạng.",
             "Tool KHÔNG bao giờ xoá file gốc của bạn.",
         ],
     },

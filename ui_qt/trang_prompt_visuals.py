@@ -118,7 +118,7 @@ class TrangPromptVisuals(QWidget):
         # trước cái nào là cái nào.
         v.addWidget(self._chu_phu(
             "Bước nghe chạy trên máy bạn, miễn phí. Bước viết prompt gọi AI nên "
-            "có tiêu ví ShopAPI — mỗi 20 cảnh một lượt gọi."))
+            "gọi AI — mỗi 20 cảnh một lượt gọi."))
 
         self._canh_bao = self._chu_phu("")
         self._canh_bao.setStyleSheet("color:{0};".format(theme.VANG))
@@ -135,7 +135,7 @@ class TrangPromptVisuals(QWidget):
         self._nut_tai = nut_phu("Tải bộ nghe", self._tai_model, rong=160)
         self._nut_tai.setToolTip(
             "Tải bộ nghe tiếng ({0}) về máy — khoảng 0,5 GB, chỉ một lần. "
-            "Không tiêu ví ShopAPI.".format(MA_MODEL_NGHE))
+            "Chạy ngay trên máy bạn.".format(MA_MODEL_NGHE))
         hang.addWidget(self._nut_tai)
         self._nut_mo = nut_phu("Mở kết quả",
                                lambda: mo_thu_muc(self._thu_muc_da_xuat),

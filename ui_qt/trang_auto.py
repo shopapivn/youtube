@@ -206,8 +206,8 @@ class TrangTuDong(QWidget):
         v.addLayout(nut)
 
         v.addWidget(self._phu(
-            "Sáu khâu gọi AI nên CÓ tiêu ví ShopAPI; khâu phụ đề và khâu dựng "
-            "chạy trên máy bạn, miễn phí. Bấm Dừng lúc nào cũng được — phần đã "
+            "Tám khâu chạy lần lượt; khâu phụ đề và khâu dựng chạy ngay trên "
+            "máy bạn. Bấm Dừng lúc nào cũng được — phần đã "
             "làm giữ nguyên, bấm “Chạy tiếp” là đi tiếp từ đúng chỗ đó."))
         return khung
 
@@ -228,17 +228,26 @@ class TrangTuDong(QWidget):
         self._tom_tat = self._phu("Chưa chạy lượt nào.")
         v.addWidget(self._tom_tat)
 
-        self._bang = QTableWidget(len(MA_KHAU), 5)
+        # ═══ KHÔNG CÓ CỘT TIỀN ═══
+        #
+        # Bảng này từng có một cột "Tiền" ghi "có / miễn phí" cho từng khâu, và
+        # khách nhìn nó suốt cả lượt chạy bốn mươi phút. Chủ dự án, 15/08/2026:
+        # *"về vấn đề tiền tao không muốn nhắc nhiều vì chỉ cần ở tab tài khoản
+        # có số liệu là được… chi phí rẻ nên đừng làm khách khó chịu"*.
+        #
+        # Người đang chờ một video không cần được nhắc về ví ở mỗi dòng. Số dư
+        # và lịch sử nằm trọn ở tab Tài khoản, nơi họ chủ động vào xem khi muốn.
+        self._bang = QTableWidget(len(MA_KHAU), 4)
         self._bang.setHorizontalHeaderLabels(
-            ["#", "Khâu", "Tiền", "Trạng thái", "Chi tiết"])
+            ["#", "Khâu", "Trạng thái", "Chi tiết"])
         self._bang.verticalHeader().setVisible(False)
         self._bang.setEditTriggers(QTableWidget.NoEditTriggers)
         self._bang.setSelectionBehavior(QTableWidget.SelectRows)
         self._bang.setSelectionMode(QTableWidget.SingleSelection)
         dau = self._bang.horizontalHeader()
-        for i in range(4):
+        for i in range(3):
             dau.setSectionResizeMode(i, QHeaderView.ResizeToContents)
-        dau.setSectionResizeMode(4, QHeaderView.Stretch)
+        dau.setSectionResizeMode(3, QHeaderView.Stretch)
         self._bang.setMinimumHeight(220)
         v.addWidget(self._bang, 1)
 
@@ -266,7 +275,7 @@ class TrangTuDong(QWidget):
             "nữa."))
         v.addWidget(self._phu(
             "Đã có sẵn kịch bản viết ở chỗ khác? Chọn dòng “Viết kịch bản” rồi "
-            "bấm “Nạp file có sẵn” — tool bỏ qua khâu đó, không tính tiền. Bảng "
+            "bấm “Nạp file có sẵn” — tool bỏ qua khâu đó luôn. Bảng "
             "cảnh cũng vậy: tải file mẫu về, điền, rồi nạp lên."))
         return khung
 
@@ -536,8 +545,8 @@ class TrangTuDong(QWidget):
         hop.setWindowTitle("Lượt {0} còn dở".format(do.ma_luot))
         hop.setText(
             "Lượt {0} chưa xong: {1}\n\n"
-            "Bấm “Chạy” là mở một lượt mới và làm lại từ khâu 1 — những khâu "
-            "đã xong ở lượt {0} sẽ bị tính tiền lần nữa.\n\n"
+            "Mở lượt mới là làm lại từ khâu 1, kể cả những khâu lượt {0} đã "
+            "làm xong.\n\n"
             "Bạn muốn chạy tiếp lượt {0}, hay mở lượt mới?".format(
                 do.ma_luot, tom_tat(do)))
         nut_tiep = hop.addButton("Chạy tiếp", QMessageBox.AcceptRole)
@@ -715,16 +724,12 @@ class TrangTuDong(QWidget):
 
             self._bang.setItem(hang, 0, QTableWidgetItem(str(hang + 1)))
             self._bang.setItem(hang, 1, QTableWidgetItem(ten_khau(ma)))
-            # Cột "Tiền" bằng CHỮ, không phải biểu tượng: nhìn cột này là biết
-            # bấm Chạy tiếp sẽ tiêu vào những khâu nào.
-            self._bang.setItem(hang, 2, QTableWidgetItem(
-                "có" if khau_tieu_tien(ma) else "miễn phí"))
             trang_thai = tt.trang_thai if tt else CHO
             o = QTableWidgetItem(CHU_TRANG_THAI.get(trang_thai, trang_thai))
             mau = MAU_TRANG_THAI.get(trang_thai)
             if mau:
                 o.setForeground(QColor(mau))
-            self._bang.setItem(hang, 3, o)
+            self._bang.setItem(hang, 2, o)
             # Cột cuối gộp thời gian + kết quả/lỗi: hai thứ người ta nhìn cùng
             # lúc, tách hai cột chỉ làm bảng rộng thêm mà không rõ hơn.
             chi_tiet = []
@@ -750,7 +755,7 @@ class TrangTuDong(QWidget):
                     chi_tiet.append(", ".join(
                         "{0} {1}".format(v, k.replace("_", " "))
                         for k, v in con.items()))
-            self._bang.setItem(hang, 4,
+            self._bang.setItem(hang, 3,
                                QTableWidgetItem(" · ".join(chi_tiet)[:200]))
         self._tom_tat.setText(
             tom_tat(luot) if luot is not None else "Chưa chạy lượt nào.")
@@ -809,7 +814,7 @@ class TrangTuDong(QWidget):
         self._app.show_message(
             "Đã đánh dấu làm lại",
             "Sẽ làm lại: {0}.\n\nBấm “Chạy tiếp” để chạy.\n\nLưu ý: khâu nào "
-            "đã có sẵn tệp kết quả thì vẫn dùng lại tệp đó cho khỏi tốn tiền. "
+            "đã có sẵn tệp kết quả thì vẫn dùng lại tệp đó. "
             "Muốn làm mới hoàn toàn thì xoá tệp của khâu ấy đi (nút “Xem kết "
             "quả khâu này” mở đúng thư mục).".format(
                 ", ".join(ten_khau(m) for m in doi)))
@@ -922,7 +927,7 @@ class TrangTuDong(QWidget):
         self._app.show_message(
             "Đã nạp xong",
             "Khâu “{0}” giờ dùng file của bạn:\n{1}\n\nTool sẽ bỏ qua khâu này "
-            "và không tính tiền cho nó. Bấm “Chạy tiếp” để đi tiếp.{2}"
+            "Bấm “Chạy tiếp” để đi tiếp.{2}"
             .format(ten_khau(ma), dich, them))
 
     def _mo_ket_qua(self) -> None:
