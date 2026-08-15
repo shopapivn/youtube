@@ -80,15 +80,16 @@ _SO_LUOT_KHOA = 4
 
 #: Những sự cố **đáng đợi mà vẫn giữ khoá cũ**.
 #:
-#: Cố tình KHÔNG có `TAM_NGHI`, `KHOA_DA_DUNG` và `CHO_TIEP`: cả ba đều phải
-#: thoát ra ngoài để vòng ngoài đổi khoá.
+#: Cố tình KHÔNG có `TAM_NGHI`: cổng nói thẳng là chưa nhận việc, nên giữ khoá
+#: cũ chẳng lấy lại được gì — khoá mới là đúng.
 #:
-#: `CHO_TIEP` (hết giờ chờ) từng nằm trong đây, và đó là lỗi. Lý do giữ khoá cũ
-#: khi hết giờ là *"máy chủ có thể vẫn đang viết, hỏi lại đúng khoá thì nhận
-#: được bài ấy"*. Đo ra thì tiền đề đó sai: cổng **không bao giờ** phát lại kết
-#: quả cho một khoá đã dùng ở đường viết chữ. Giữ khoá cũ nghĩa là hỏi lại một
-#: thứ chắc chắn không tới.
-_DOI_GIU_KHOA: Sequence[str] = (CHAM_LAI, HET_KHO, NHA_MAY_NGHI)
+#: `CHO_TIEP` và `KHOA_DA_DUNG` thì PHẢI nằm trong đây, và đây là chỗ đã lật đi
+#: lật lại hai lần trong một ngày. Từ chiều 15/08/2026, cổng phát lại đúng phản
+#: hồi đã lưu cho khoá cũ (đo: 0,23 giây, giống hệt từng chữ). Nên hỏi lại bằng
+#: **đúng khoá cũ** chính là cách lấy lại bài đã trả tiền khi mất phản hồi giữa
+#: chừng. Đổi khoá ở đây là vứt bài ấy đi rồi viết lại từ đầu.
+_DOI_GIU_KHOA: Sequence[str] = (CHO_TIEP, CHAM_LAI, HET_KHO, NHA_MAY_NGHI,
+                                KHOA_DA_DUNG)
 
 
 #: Client riêng cho đường viết chữ, **không tự thử lại**. Khoá theo `id` client gốc.

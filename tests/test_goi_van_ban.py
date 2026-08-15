@@ -84,18 +84,19 @@ class TestKienNhan:
 class TestKhoaViec:
     """Khoá việc là tiền. Đổi sai chỗ là trừ hai lần, giữ sai chỗ là kẹt mãi."""
 
-    def test_moi_lan_thu_lai_deu_mang_KHOA_MOI(self):
-        """Ở đường viết chữ, một khoá chỉ dùng được đúng một lần.
+    def test_mat_phan_hoi_thi_GIU_KHOA_de_lay_lai_bai(self):
+        """Hỏi lại đúng khoá cũ là cách lấy lại bài đã trả tiền.
 
-        Đo trên máy chủ thật: gửi lại khoá cũ thì hoặc ăn lỗi xung đột, hoặc
-        treo tới 480 giây — không bao giờ nhận lại được bài cũ. Nên giữ khoá
-        cũ là hỏi lại một thứ chắc chắn không tới.
+        Đo trên máy chủ thật (chiều 15/08/2026): A gửi một bài dài, B hỏi lại
+        đúng khoá ấy — nhận 409 suốt lúc A đang viết, rồi A xong là B lấy được
+        ĐÚNG BÀI CỦA A trong 0,23 giây.
+
+        Đổi khoá ở đây là vứt bài ấy đi rồi viết lại từ đầu.
         """
         may = MayChuGia([DANG_LAM, DANG_LAM, "xong"])
         goi_van_ban(may, [{"role": "user", "content": "x"}], **KHONG_NGU,
                     khoa="khoa-cua-toi")
-        assert may.khoa_da_dung[0] == "khoa-cua-toi"
-        assert len(set(may.khoa_da_dung)) == len(may.khoa_da_dung),             "không được gửi lại cùng một khoá lần nào"
+        assert may.khoa_da_dung == ["khoa-cua-toi"] * 3
 
     def test_chua_nhan_duoc_thi_DOI_khoa(self):
         """Chưa nhận thì chưa trừ tiền — và giữ khoá cũ chính là thứ làm kẹt."""
@@ -104,34 +105,31 @@ class TestKhoaViec:
         assert may.khoa_da_dung[0] == "goc"
         assert may.khoa_da_dung[-1] != "goc", "phải sang khoá mới"
 
-    def test_khoa_da_dung_thi_doi_ngay_chu_khong_ngoi_doi(self):
-        """Khoá đã dùng thì đợi vô ích — đổi khoá là đường duy nhất.
+    def test_409_thi_doi_va_GIU_khoa_de_nhan_lai_bai(self):
+        """`409` nghĩa là việc đang chạy thật — đợi rồi hỏi lại đúng khoá ấy."""
+        from core.su_co import KHOA_DA_DUNG, _NHIP
 
-        Đo trên máy chủ thật 15/08/2026: việc xong sau 3,5 giây, rồi gửi lại
-        đúng khoá ấy thì kẹt mãi. Hỏi lại ở giây 3, 9, 19, 40, 70, 131, 252 —
-        cả bảy lần đều "đang được xử lý". Ngồi đợi là đợi một thứ không tới.
+        may = MayChuGia([KHOA_CU, KHOA_CU, "bài của lượt trước"])
+        assert goi_van_ban(may, [{"role": "user", "content": "x"}],
+                           **KHONG_NGU, khoa="goc") == "bài của lượt trước"
+        assert may.khoa_da_dung == ["goc"] * 3,             "409 nghĩa là việc đang chạy — giữ khoá mới lấy lại được bài"
+
+    def test_doi_du_lau_de_vuot_qua_bai_dai_nhat(self):
+        """Rút ngắn nhịp này là quay về đúng cái bẫy cũ, chỉ đổi mặt.
+
+        Ngắn quá thì tool bỏ dở một bài đang viết rồi đặt lại từ đầu — đúng
+        thứ khách gặp sáng nay ở khâu viết kịch bản (769 giây).
         """
         from core.su_co import KHOA_DA_DUNG, _NHIP
 
-        may = MayChuGia([KHOA_CU, "thoát được rồi"])
-        assert goi_van_ban(may, [{"role": "user", "content": "x"}],
-                           **KHONG_NGU, khoa="goc") == "thoát được rồi"
-        assert may.khoa_da_dung[0] == "goc"
-        assert may.khoa_da_dung[1] != "goc", "phải đổi khoá NGAY, không đợi"
+        assert sum(_NHIP[KHOA_DA_DUNG]) > 769, (
+            "đợi {0} giây không đủ vượt khâu chậm nhất (769 giây đo được)"
+            .format(sum(_NHIP[KHOA_DA_DUNG])))
 
-    def test_khong_ngoi_doi_lau_cho_mot_khoa_da_ket(self):
-        """Nhịp đợi phải NGẮN: đo được là nó không bao giờ nhả ra."""
-        from core.su_co import KHOA_DA_DUNG, _NHIP
-
-        assert sum(_NHIP[KHOA_DA_DUNG]) <= 30, (
-            "đợi {0} giây cho một khoá đã kẹt là bắt khách ngồi nhìn một thứ "
-            "không tới".format(sum(_NHIP[KHOA_DA_DUNG])))
-
-    def test_het_gio_cho_thi_cung_doi_khoa_ngay(self):
-        """Hết giờ chờ cũng phải đổi khoá — bài cũ không lấy lại được nữa."""
-        may = MayChuGia([DANG_LAM, "thoát được rồi"])
-        assert goi_van_ban(may, [{"role": "user", "content": "x"}],
-                           **KHONG_NGU, khoa="goc") == "thoát được rồi"
+    def test_van_doi_khoa_khi_may_chu_chua_nhan_viec(self):
+        """`TAM_NGHI` thì giữ khoá cũ chẳng lấy lại được gì — khoá mới là đúng."""
+        may = MayChuGia([CHUA_NHAN, "xong"])
+        goi_van_ban(may, [{"role": "user", "content": "x"}], **KHONG_NGU, khoa="goc")
         assert may.khoa_da_dung[1] != "goc"
 
     def test_duong_tao_job_van_kien_nhan_nhu_cu(self):

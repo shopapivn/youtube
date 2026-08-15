@@ -49,27 +49,29 @@ __all__ = [
 #: Máy chủ **vẫn đang làm** việc ta vừa giao. Đợi rồi hỏi lại ĐÚNG KHOÁ CŨ.
 CHO_TIEP = "cho-tiep"
 
-#: Khoá việc này **đã dùng rồi**. Đợi vô ích — phải gửi lại bằng khoá mới.
+#: Khoá này **đang có một việc chạy dở**. Đợi rồi hỏi lại ĐÚNG KHOÁ CŨ.
 #:
-#: ═══ ĐO ĐƯỢC TRÊN MÁY CHỦ THẬT, 15/08/2026 ═══
+#: ═══ LOẠI NÀY TỪNG CÓ NGHĨA NGƯỢC LẠI — ĐỌC KỸ TRƯỚC KHI SỬA ═══
 #:
-#: Gửi một lời nhắc ngắn kèm khoá mới tinh: **xong sau 3,5 giây**, trả về kết
-#: quả đàng hoàng. Gửi lại **đúng khoá ấy**: cổng trả *"Yêu cầu với
-#: Idempotency-Key này đang được xử lý. Vui lòng đợi vài giây rồi kiểm tra lại
-#: kết quả, đừng gửi lại."*
+#: Sáng 15/08/2026, cổng **không phát lại** kết quả cho khoá đã dùng: gửi lại
+#: là kẹt vĩnh viễn (đo: hỏi ở giây 3, 9, 19, 40, 70, 131, 252 đều "đang xử
+#: lý", trong khi việc đã xong từ giây 3,5). Lúc ấy loại này nghĩa là "khoá
+#: hỏng, đổi ngay", và tool được sửa theo hướng đó.
 #:
-#: Đợi thật thì sao: hỏi lại ở giây thứ 3, 9, 19, 40, 70, 131, 252 — **cả bảy
-#: lần đều đúng câu ấy**. Việc đã xong từ giây thứ 3,5 mà khoá vẫn kẹt sau hơn
-#: bốn phút.
+#: Chiều cùng ngày bên cổng sửa xong. Đo lại:
 #:
-#: Nên câu "đợi vài giây rồi kiểm tra lại" là **sai với chính hành vi của
-#: cổng**: nó không bao giờ trả lại kết quả cũ cho khoá cũ. Tin câu đó mà ngồi
-#: đợi là đợi một thứ không tới. Tách khỏi `CHO_TIEP` vì cách xử ngược hẳn
-#: nhau: `CHO_TIEP` thì đợi và giữ khoá, còn loại này thì **đổi khoá ngay**.
+#:     A gửi một bài dài, B hỏi lại đúng khoá ấy
+#:       giây 4, 8, 12, 16, 20, 25  -> 409, đúng: A đang viết thật
+#:       A xong ở giây 28,5
+#:       B hỏi tiếp                 -> 200, ĐÚNG BÀI CỦA A, trong 0,23 giây
 #:
-#: (Đây là chuyện phía cổng chứ không phải phía tool: đúng ra khoá lặp lại phải
-#: **phát lại kết quả đã lưu**. Chừng nào cổng còn xử như hiện tại thì tool
-#: phải sống chung với nó.)
+#: Nên bây giờ `409` nghĩa đúng như tên nó: **việc đang chạy, quay lại sau**.
+#: Và hỏi lại đúng khoá là cách **lấy lại bài đã trả tiền** khi mất phản hồi
+#: giữa chừng — đúng mục đích của idempotency.
+#:
+#: Vì vậy nhịp đợi của nó phải đủ dài để vượt qua việc chậm nhất (khâu viết
+#: kịch bản đo được 769 giây). Rút ngắn là quay về đúng cái bẫy cũ, chỉ đổi
+#: mặt: bỏ dở một bài đang viết rồi đặt lại từ đầu.
 KHOA_DA_DUNG = "khoa-da-dung"
 
 #: Máy chủ trục trặc tạm, chưa nhận được việc. Chưa trừ tiền. Đợi rồi thử lại.
@@ -169,10 +171,10 @@ _NHIP = {
     # thời gian, còn đổi khoá sớm thì tốn tiền, và tiền là thứ không lấy lại
     # được. Mỗi nhịp đợi đều in ra màn hình nên khách vẫn thấy tool còn sống.
     CHO_TIEP: (15, 30, 60, 90, 120, 180, 240, 300, 300),
-    # Hai nhịp ngắn rồi thôi — đo được là khoá đã dùng thì kẹt vĩnh viễn, nên
-    # đợi lâu chỉ là bắt khách ngồi nhìn. Vẫn thử hai lần vì có thể có endpoint
-    # khác xử tử tế hơn, và hai lần thì chỉ tốn tám giây.
-    KHOA_DA_DUNG: (3, 5),
+    # Đợi kiểu "hỏi thăm": dày ở đầu để bắt kịp việc ngắn, thưa dần cho việc
+    # dài. Tổng ~22 phút, đủ vượt khâu chậm nhất đo được (769 giây). Đây là
+    # đường LẤY LẠI bài đã trả tiền, nên kiên nhẫn ở đây đáng giá.
+    KHOA_DA_DUNG: (4, 6, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 300, 300),
     TAM_NGHI: (15, 30, 60, 60, 90, 120, 120, 180, 180),
     CHAM_LAI: (30, 60, 120, 180, 240, 300),
     NHA_MAY_NGHI: (60, 120, 180, 300, 300),
@@ -184,7 +186,7 @@ _NHIP = {
 
 _MO_TA = {
     CHO_TIEP: "máy chủ đang làm dở việc này",
-    KHOA_DA_DUNG: "máy chủ không nhận lại việc cũ — phải gửi lại lượt mới",
+    KHOA_DA_DUNG: "việc này đang chạy dở, đang đợi lấy lại kết quả",
     TAM_NGHI: "máy chủ trục trặc tạm — chưa bị trừ tiền",
     CHAM_LAI: "đang gọi quá dày, phải chậm lại",
     NOI_DUNG: "máy chủ trả về nội dung không dùng được",
