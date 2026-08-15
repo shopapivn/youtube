@@ -21,7 +21,7 @@ tải* vẫn giữ nguyên, và chúng mới là thứ chặn thiệt hại th�
 * giải nén có kiểm đường dẫn thoát (`..`, đường tuyệt đối), có trần số file và
   trần dung lượng bung — chặn zip bomb;
 * bản mới phải qua `_healthcheck_tree` trước khi được tráo vào;
-* tráo xong mà hỏng thì **tự khôi phục bản cũ** (`apply_staged`);
+* thay xong mà hỏng thì **tự trả lại bản cũ** (`apply_tai_cho`);
 * dữ liệu của khách được giữ lại theo `safe_update.PRESERVE`.
 
 ═══ SO PHIÊN BẢN Ở ĐÂU ═══

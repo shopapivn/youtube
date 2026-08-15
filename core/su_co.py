@@ -123,7 +123,8 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
     # Kho tệp tạm đầy.
     (HET_KHO, ("vượt hạn mức lưu trữ", "hạn mức lưu trữ", "storage quota",
                "quota exceeded")),
-    # Khoá việc đã dùng rồi — đợi mấy cũng vô ích, phải đổi khoá.
+    # Khoá này đang có một việc chạy dở. Đợi rồi hỏi lại ĐÚNG khoá ấy là lấy
+    # được kết quả — xem ghi chú dài ở `KHOA_DA_DUNG`.
     (KHOA_DA_DUNG, ("idempotency-key", "idempotency key", "idempotencyconflict",
                     "đang được xử lý", "already in progress", "đừng gửi lại")),
     # Gọi quá dày. Câu thật của cổng ShopAPI là *"Bạn gửi quá nhanh (giới hạn

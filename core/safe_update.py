@@ -30,9 +30,18 @@ import zipfile
 
 #: Những thứ THUỘC VỀ KHÁCH — cập nhật là thay mã, không được đụng tới chúng.
 #:
-#: Cập nhật hoạt động bằng cách tráo cả thư mục cài đặt (`apply_staged`), nên
-#: thứ gì không có tên ở đây là **mất vĩnh viễn** sau một lần bấm Cập nhật.
-#: Không có thùng rác, không có hỏi lại.
+#: Danh sách này **không còn là tấm chắn duy nhất** kể từ 15/08/2026, nhưng vẫn
+#: là tấm chắn đáng tin nhất — hãy đọc kỹ trước khi bỏ tên nào ra.
+#:
+#: Trước đó cập nhật tráo cả thư mục cài, nên thứ gì không có tên ở đây là mất
+#: vĩnh viễn sau một lần bấm Cập nhật: không thùng rác, không hỏi lại. Danh
+#: sách đã quên bốn lần và cả bốn đều là đồ khách (xem đoạn dưới, và `CHANNEL`
+#: trong `HOA_NHAP`).
+#:
+#: `apply_tai_cho` giờ có thêm một luật **không cần ai nhớ**: thứ gì bản mới
+#: không mang theo thì không đụng vào. Nhờ vậy thư mục lạ do khách tạo tự động
+#: an toàn. Nhưng danh sách này vẫn cần, vì nó che những cái tên **có** trong
+#: bản mới mà bản của khách phải thắng — `config.json`, `.claude`, `workspace`.
 #:
 #: `ket-qua`, `phien-viet`, `mau-kich-ban` thêm ngày 12/08/2026: ba thư mục này
 #: sinh ra sau khi danh sách được viết, và tới lúc thêm thì chúng đang nằm ngoài

@@ -19,3 +19,6 @@ viec-dang-lam.json
 
 __pycache__/
 *.pyc
+
+# Kho GitHub tai ve de doc tham khao - khong phai ma cua tool.
+THAM-KHAO/

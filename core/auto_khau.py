@@ -46,7 +46,7 @@ from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
                     phan_loai, xin_nhip)
 
 __all__ = [
-    "BoiCanh", "dung_bo_viec", "chia_doan_doc", "tron_lenh_nhac",
+    "BoiCanh", "dung_bo_viec", "chia_doan_doc",
     "CHU_MOI_LUOT_DOC", "loc_json",
 ]
 
@@ -2089,6 +2089,3 @@ def _duong_nhac(kenh) -> str:
     return duong if os.path.isfile(duong) else ""
 
 
-def tron_lenh_nhac(*_a, **_k):  # pragma: no cover — tên cũ, giữ cho `__all__`
-    """Đã thay bằng `_duong_nhac` + phần trộn trong `_ghep_video`."""
-    raise NotImplementedError

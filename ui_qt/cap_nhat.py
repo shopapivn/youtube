@@ -1,13 +1,12 @@
 """Nút cập nhật ở thanh bên: tự dò bản mới, tải, rồi khởi động lại.
 
-═══ VÌ SAO NÓ IM LẶNG CHO TỚI KHI CÓ VIỆC ═══
+═══ NÚT LUÔN Ở ĐÓ ═══
 
-Tool tự hỏi GitHub một lần lúc khởi động. **Không có bản mới thì không hiện gì
-cả** — một nút "Đã là bản mới nhất" nằm im mãi trong thanh bên chỉ là một dòng
-chữ khách đọc một lần rồi thôi, và thanh bên là chỗ đắt nhất màn hình.
+Tool tự hỏi GitHub một lần lúc khởi động, rồi nút đổi chữ theo kết quả. Nó
+**không tự ẩn** khi đã ở bản mới nhất — xem `NutCapNhat` để biết vì sao (tóm
+tắt: bản ẩn khiến khách không có chỗ nào để bấm hỏi lại).
 
-Có bản mới thì mọc ra một nút xanh dưới thanh bên. Bấm là xong: tải, dựng sẵn,
-tool tự thoát và tự mở lại ở bản mới.
+Bấm là xong: tải, dựng sẵn, tool tự thoát và tự mở lại ở bản mới.
 
 ═══ HAI ĐIỀU KHÔNG ĐƯỢC LÀM ═══
 
@@ -195,8 +194,9 @@ class NutCapNhat:
         self.nut.setEnabled(False)
         self.nut.setText("Đang tải bản {0}…".format(self._ban_moi))
         ban_moi, goc = self._ban_moi, self._app.base_dir
-        # Chỗ dựng sẵn nằm CẠNH thư mục cài, không nằm trong: `apply_staged` từ
-        # chối tráo khi bản dựng sẵn nằm bên trong thư mục sắp bị thay.
+        # Chỗ dựng sẵn nằm CẠNH thư mục cài, không nằm trong: `apply_tai_cho`
+        # từ chối thay khi bản mới nằm bên trong thư mục sắp bị thay — nó sẽ
+        # tự dọn mất chính mình giữa chừng.
         cho_dung = os.path.join(os.path.dirname(os.path.abspath(goc)),
                                 "ShopAPI-Studio-cap-nhat")
         self._app.run_bg(

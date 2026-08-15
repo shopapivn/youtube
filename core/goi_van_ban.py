@@ -19,38 +19,48 @@ cú đó lúc bên vận hành đang dựng bản API mới — đợi rồi g�
 Bốn bản chép tay nghĩa là mỗi lần sửa phải nhớ sửa bốn chỗ, và lần nào cũng
 sót. Nên còn đúng một bản, ở đây.
 
-═══ ĐỔI KHOÁ LÚC NÀO — CHỖ NÀY LIÊN QUAN TRỰC TIẾP TỚI TIỀN ═══
+═══ KHI NÀO GIỮ KHOÁ CŨ, KHI NÀO ĐỔI KHOÁ MỚI ═══
 
-Idempotency-Key sinh ra để việc thử lại **không bị trừ tiền hai lần**: cùng một
-khoá thì máy chủ biết đây vẫn là việc cũ. Nên đổi khoá bừa là tự tay vứt cái
-bảo hiểm đó đi.
+Idempotency-Key sinh ra để mất phản hồi giữa chừng thì **hỏi lại là lấy được
+kết quả cũ**, không phải làm lại từ đầu. Nên giữ khoá cũ là đường đúng, và đổi
+khoá là vứt đi thứ đã làm xong.
 
-Nhưng giữ khoá cũ trong MỌI trường hợp thì hỏng theo kiểu khác, và chỗ này đã
-**đo được trên máy chủ thật** (15/08/2026) chứ không phải suy đoán:
+Ngày 15/08/2026 chỗ này lật ba lần trong một ngày, vì hành vi của cổng đổi ba
+lần. Chép lại đủ, vì ai đọc mã này về sau sẽ gặp một trong ba trạng thái ấy
+tuỳ lúc, và đoán sai thì hỏng theo kiểu rất khó tìm:
 
-    gửi lời nhắc ngắn kèm khoá mới   -> xong sau 3,5 giây, trả kết quả đàng hoàng
-    gửi lại ĐÚNG khoá ấy             -> "Idempotency-Key này đang được xử lý"
-    hỏi lại ở giây 3, 9, 19, 40,
-    70, 131, 252                     -> cả bảy lần đều đúng câu ấy
+    sáng      gửi lại khoá cũ -> "đang được xử lý", mãi mãi
+              (đo: hỏi ở giây 3, 9, 19, 40, 70, 131, 252 đều đúng câu ấy,
+               trong khi việc đã xong từ giây 3,5)
 
-Việc đã xong từ giây thứ 3,5 mà khoá vẫn kẹt sau hơn bốn phút. Cổng **không
-bao giờ phát lại kết quả cũ cho khoá cũ** — nên câu "đợi vài giây rồi kiểm tra
-lại kết quả" trong chính thông báo ấy là sai với hành vi thật của nó.
+    trưa      cổng sửa lần một -> gửi lại khoá cũ thì TREO, không trả lời
+              (đo tới 480 giây). Tệ hơn: không có mã lỗi nào để nhận ra,
+              nên phía gọi ngồi chờ hết timeout rồi mới biết.
 
-Bên máy chủ sửa lần một (15/08/2026 chiều) và **kiểu hỏng đổi chứ chưa hết**:
-gửi lại khoá cũ giờ không báo lỗi nữa mà **treo hẳn** — đo tới 480 giây vẫn
-không trả lời. Với tool thì kiểu mới TỆ HƠN: trước còn có câu lỗi để nhận ra
-mà đổi khoá, giờ nó im nên tool tưởng máy chủ đang viết dở.
+    chiều     cổng sửa xong. Đo lại:
+                A gửi một bài dài, B hỏi lại đúng khoá ấy
+                  giây 4…25  -> 409, đúng: A đang viết thật
+                  A xong ở giây 28,5
+                  B hỏi tiếp -> 200, ĐÚNG BÀI CỦA A, trong 0,23 giây
 
-Kết luận rút ra, và nó chi phối cả tệp này: **ở đường viết chữ, một khoá chỉ
-dùng được đúng một lần.** Gửi lại là hoặc ăn lỗi, hoặc treo — không bao giờ
-nhận lại được bài cũ. Nên mọi lần thử lại đều phải mang **khoá mới**, và tool
-không được để SDK tự thử lại bằng khoá cũ sau lưng mình (xem
-`_client_khong_tu_thu_lai`).
+**Luật hiện tại**, theo đúng trạng thái buổi chiều:
 
-Việc giữ khoá cũ vẫn đúng và vẫn quý ở **đường tạo job** (ảnh, clip, giọng
-đọc): đo được là gửi lại đúng khoá thì nhận lại đúng job cũ. Hai đường, hai
-luật — đừng đem luật của đường này áp cho đường kia.
+| máy chủ nói | nghĩa là | làm gì |
+|---|---|---|
+| `409` khoá đang xử lý | việc **đang chạy thật** | đợi, **giữ khoá cũ** |
+| hết giờ chờ | có thể vẫn đang viết | đợi, **giữ khoá cũ** |
+| "chưa nhận được yêu cầu" | nó **chưa nhận** việc | **khoá mới** |
+
+Hai dòng đầu giữ khoá vì đó chính là cách lấy lại bài. Dòng cuối đổi khoá vì
+cổng nói thẳng là chưa nhận — giữ khoá cũ chẳng có gì để lấy.
+
+Đổi khoá vẫn còn, nhưng lùi xuống làm **đường cùng**: hết kiên nhẫn mà vẫn
+không lấy được thì mới đặt lại từ đầu.
+
+Một chỗ tool vẫn phải tự lo: SDK tự thử lại bằng khoá cũ **sau lưng** mình, mỗi
+lần chờ tới 900 giây. Hồi cổng còn treo thì một cú như thế ngốn 60 phút trước
+khi mã của tool kịp nhìn thấy gì. Nên đường này dùng client riêng không tự thử
+lại, và tự quyết nhịp hỏi — xem `_client_khong_tu_thu_lai`.
 """
 
 from __future__ import annotations
