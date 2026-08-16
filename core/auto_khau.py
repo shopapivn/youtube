@@ -1528,6 +1528,8 @@ def _khau_kich_ban(bc: BoiCanh):
             except Exception as loi:  # noqa: BLE001
                 bc.ghi("  (bỏ qua SEO: {0})".format(str(loi)[:100]))
 
+        _lam_sach_ket_qua(bc, duong_kb, duong_seo,
+                          os.path.join(d, "1-tieu-de.txt"))
         return {"so_ky_tu": len(ban_nhap), "lech": round(lech, 3),
                 "tieu_de": tieu_de, "chu_bia": chu_bia}
 
@@ -1681,6 +1683,7 @@ def _khau_giong_doc(bc: BoiCanh):
         finally:
             theo_doi.dong()
         _noi_mp3(bc, manh, dich)
+        _lam_sach_ket_qua(bc, dich)
         return {"so_doan": len(manh)}
 
     return lam
@@ -1743,6 +1746,7 @@ def _khau_phu_de(bc: BoiCanh):
         if not ket.dang_tin:
             bc.ghi("  LƯU Ý: phụ đề dựa trên thứ máy nghe được, không phải kịch bản "
                    "gốc — nên đọc lại trước khi đăng.")
+        _lam_sach_ket_qua(bc, dich)
         return {"so_cau": len(ket.cau), "khop": round(ket.ty_le_khop, 3),
                 "dang_tin": ket.dang_tin}
 
@@ -2403,6 +2407,39 @@ def _lam_sach_anh(bc: BoiCanh, tep: str) -> None:
         from .lam_sach import lam_sach_anh  # noqa: PLC0415
 
         lam_sach_anh(tep)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _lam_sach_ket_qua(bc: BoiCanh, *tep: str) -> None:
+    """Bỏ dấu nguồn gốc AI khỏi kết quả của một khâu, nếu khách đã bật.
+
+    Gọi ở **cuối mỗi khâu có tệp giao cho khách**: chữ (kịch bản, SEO, tiêu
+    đề), giọng đọc, phụ đề, ảnh, video. Chủ dự án, 16/08/2026: *"cần bỏ dấu vân
+    tay AI cho tất cả content, voice, ảnh, video"*.
+
+    Nói thẳng cho người đọc mã sau này khỏi kỳ vọng nhầm: **phần lớn mấy tệp
+    này vốn đã sạch**. Đo trên kết quả thật cùng ngày — chữ không có ký tự ẩn
+    nào, giọng đọc và video cuối chỉ mang thẻ của FFmpeg. Chỗ hở thật chỉ có
+    ảnh bìa. Gọi cho cả bốn loại là để **không phải nhớ** loại nào cần, và để
+    còn đúng khi nhà cung cấp đổi cách gắn thẻ mà không báo ai.
+
+    Không ném lỗi ra ngoài: đây là việc vệ sinh, không đáng làm hỏng một khâu
+    khách đã trả tiền.
+    """
+    if not tep:
+        return
+    try:
+        if not _bat_lam_sach(bc):
+            return
+        from .lam_sach import lam_sach_tep  # noqa: PLC0415
+
+        ffmpeg = bc.ffmpeg or _tim_ffmpeg()
+        for t in tep:
+            try:
+                lam_sach_tep(t, ffmpeg)
+            except Exception:  # noqa: BLE001 — một tệp hỏng không dừng cả khâu
+                pass
     except Exception:  # noqa: BLE001
         pass
 

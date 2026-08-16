@@ -55,6 +55,25 @@ MUC = (
     ("bao_su_co", "Hiện thông báo khi tool gặp lỗi",
      "Tắt thì lỗi vẫn được ghi lại đầy đủ vào workspace/su-co.log, chỉ là "
      "không hiện lên màn hình. Hợp khi bạn để tool chạy qua đêm."),
+    # Nhãn phải ngắn: chữ trong ô đánh dấu không tự xuống dòng, nên một nhãn
+    # dài kéo cả trang rộng quá mép cửa sổ. Đã đo: thêm hai chữ "(tắt sẵn)" là
+    # tab này cần 793px, quá mức 760px, và `test_bo_cuc` đỏ ngay.
+    # Trạng thái tắt/bật thì nhìn chính ô đánh dấu là biết.
+    ("lam_sach_dau_ai", "Xoá dấu nguồn gốc AI trong tệp",
+     "Tắt sẵn. Bật thì trước khi giao, tôi bỏ mấy thẻ dữ liệu ẩn khỏi cả bốn "
+     "loại kết "
+     "quả — chữ, giọng đọc, ảnh, video. Thẻ đó là “Made with Google AI” và "
+     "C2PA, do nhà cung cấp gắn vào. Ảnh KHÔNG bị nén lại nên không mất nét, "
+     "video chỉ chép lại nên không mất giây nào.\n"
+     "Tôi đo trên kết quả thật của bạn rồi, và phải nói thẳng: kịch bản, giọng "
+     "đọc và video cuối VỐN ĐÃ sạch. Chỗ duy nhất còn thẻ là ẢNH BÌA — nó cũng "
+     "lên YouTube mà lại gần như nguyên vẹn từ nhà cung cấp.\n"
+     "Và nó KHÔNG xoá được SynthID: dấu đó nằm trong chính điểm ảnh, không nằm "
+     "trong thẻ. Không công cụ xoá thẻ nào làm được việc đó.\n"
+     "Quan trọng nhất: nó KHÔNG thay bạn khai báo với YouTube. Nhãn “nội dung "
+     "tổng hợp” là ô bạn tự tích trong Studio, YouTube không đọc thẻ tệp để "
+     "quyết. YouTube nói tích ô đó không giảm hiển thị hay tiền — còn KHÔNG "
+     "khai mới là thứ khoá kiếm tiền 90 ngày rồi gỡ kênh khỏi YPP."),
 )
 
 

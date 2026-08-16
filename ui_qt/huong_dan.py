@@ -269,6 +269,15 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "đồ thì bước này không tốn giây nào.",
             "Lần tự cài lỡ hỏng (mất mạng giữa chừng chẳng hạn) thì bấm “Kiểm "
             "tra và cài phần thiếu” ở thẻ Thư viện phía dưới.",
+            "“Xoá dấu nguồn gốc AI” tắt sẵn. Tôi đã đo trên kết quả thật của "
+            "bạn: kịch bản, giọng đọc và video cuối VỐN ĐÃ sạch — chỗ duy nhất "
+            "còn thẻ là ảnh bìa. Bật lên thì tôi bỏ thẻ khỏi cả bốn loại, ảnh "
+            "không bị nén lại nên không mất nét.",
+            "Nói thẳng để bạn không tin nhầm: xoá thẻ KHÔNG xoá được SynthID "
+            "(dấu đó nằm trong chính điểm ảnh), và KHÔNG thay bạn tích ô “nội "
+            "dung tổng hợp” trong YouTube Studio. YouTube nói tích ô đó không "
+            "giảm hiển thị hay tiền; còn không khai mới là thứ khoá kiếm tiền "
+            "90 ngày rồi gỡ kênh khỏi YPP.",
         ],
     },
 }

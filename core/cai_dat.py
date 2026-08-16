@@ -56,6 +56,31 @@ MAC_DINH: Dict[str, Any] = {
     # màn hình. Dành cho người để tool chạy qua đêm.
     "bao_su_co": True,
 
+    # Xoá dấu nguồn gốc AI trong phần thông tin của tệp trước khi giao.
+    # Phủ cả bốn loại kết quả: chữ, giọng đọc, ảnh, video.
+    #
+    # ═══ VÌ SAO TẮT SẴN ═══
+    #
+    # Chủ dự án chốt 16/08/2026: *"mặc định sẽ là tắt nhé"*. Và đó là mặc định
+    # đúng, vì hai lẽ:
+    #
+    # Một, C2PA là **chuẩn minh bạch nguồn gốc**, không phải thứ nhà cung cấp
+    # cài để làm khó ai. Bỏ nó đi là một lựa chọn, và lựa chọn thì nên do người
+    # dùng bấm chứ không nên là thứ tool tự làm sau lưng họ.
+    #
+    # Hai, nó **làm được ít hơn cái tên nghe thấy**, nên bật sẵn là để khách
+    # tin vào một thứ bảo hộ không có thật. Đo 16/08/2026 trên kết quả thật:
+    # video cuối và giọng đọc vốn đã sạch (khâu dựng mã hoá lại nên thẻ mất
+    # hết), chữ cũng sạch. Chỗ hở thật **chỉ có ảnh bìa** — nó cũng lên YouTube
+    # mà lại gần như nguyên vẹn từ nhà cung cấp.
+    #
+    # Và nó **không** xoá được SynthID: dấu ấy nằm trong chính điểm ảnh, không
+    # nằm trong thẻ. Xoá thẻ chỉ bỏ đi lời khai rằng có SynthID.
+    #
+    # Xem `core/lam_sach.py` để biết vì sao nó không gỡ được hạn chế của
+    # YouTube, và vì sao tin nhầm chỗ đó thì mất kênh chứ không mất công.
+    "lam_sach_dau_ai": False,
+
     # Độ phân giải video ra của tab Tự động: "4K", "1440p", "1080p" hay
     # "Giữ nguyên". Kênh nào khai riêng trong `kenh.yaml` thì lấy theo kênh.
     #
