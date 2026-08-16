@@ -72,6 +72,7 @@ class TrangCaiDat(QWidget):
         doc.addWidget(self._the_cap_nhat())
         doc.addWidget(self._the_video())
         doc.addWidget(self._the_thu_muc())
+        doc.addWidget(self._the_thu_vien())
         doc.addStretch(1)
 
     def _phu(self, chu: str):
@@ -157,6 +158,50 @@ class TrangCaiDat(QWidget):
         hang.addWidget(nut_phu("Xem nhật ký sự cố", self._mo_su_co, rong=180))
         v.addLayout(hang)
         return khung
+
+    def _the_thu_vien(self) -> QWidget:
+        # Bình thường tool tự lo phần này lúc khởi động (xem `core/tu_du.py`).
+        # Nút đây là đường sửa tay cho lúc lần tự cài hỏng — mất mạng giữa
+        # chừng, ổ đầy — mà bảo khách đi tìm `SETUP.bat` thì họ không tìm.
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 16, 20, 18)
+        v.setSpacing(8)
+        v.addWidget(nhan("Thư viện", "h2"))
+        self._nhan_tv = nhan("", "phu")
+        self._nhan_tv.setWordWrap(True)
+        self._nhan_tv.setMinimumWidth(1)
+        v.addWidget(self._nhan_tv)
+        hang = HangXuongDong()
+        hang.addWidget(nut_phu("Kiểm tra và cài phần thiếu", self._cai_thieu,
+                               rong=230))
+        v.addLayout(hang)
+        self._xem_thu_vien()
+        return khung
+
+    def _xem_thu_vien(self) -> None:
+        try:
+            from core import tu_du
+
+            ly_do = tu_du.can_cai(self._app.base_dir)
+        except Exception as loi:  # noqa: BLE001
+            self._nhan_tv.setText("Không kiểm được: {0}".format(loi))
+            return
+        self._nhan_tv.setText(
+            "Máy đã đủ thư viện, không cần làm gì." if not ly_do else
+            "Cần cài thêm: {0}. Bấm nút dưới là tôi cài luôn.".format(ly_do))
+
+    def _cai_thieu(self) -> None:
+        from core import tu_du
+
+        from .cua_so_tu_du import HopTuDu
+
+        ly_do = tu_du.can_cai(self._app.base_dir) or "bạn bấm kiểm tra lại"
+        hop = HopTuDu(self._app.base_dir, ly_do, tu_du.cai, self)
+        hop.exec_()
+        if hop.duoc:
+            tu_du.ghi_nhan(self._app.base_dir, tu_du.dau_van(self._app.base_dir))
+        self._xem_thu_vien()
 
     # ── Việc ─────────────────────────────────────────────────────────────────
 

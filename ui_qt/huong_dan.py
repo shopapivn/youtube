@@ -257,10 +257,19 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "muốn nó khởi động lại giữa chừng. Lúc đó tôi chỉ báo có bản mới.",
             "Hiện thông báo khi gặp lỗi: tắt thì lỗi vẫn ghi đủ vào "
             "workspace/su-co.log, chỉ là không hiện lên màn hình.",
+            "Video ra: nhà cung cấp trả clip 1280×720, nhỏ hơn cả 1080p. Tôi "
+            "phóng lên cỡ bạn chọn ở bước dựng cuối. Mặc định 4K.",
         ],
-        "luu_y": ["Cập nhật không bao giờ đụng vào PROJECTS, vào kênh, hay vào "
-                  "lời nhắc bạn đã sửa. Thứ gì bản mới không mang theo thì tôi "
-                  "không có quyền xoá."],
+        "luu_y": [
+            "Cập nhật không bao giờ đụng vào PROJECTS, vào kênh, hay vào lời "
+            "nhắc bạn đã sửa. Thứ gì bản mới không mang theo thì tôi không có "
+            "quyền xoá.",
+            "Bản mới cần thêm thư viện thì tôi tự cài lúc mở tool, có cửa sổ "
+            "báo tiến trình — bạn không phải đi chạy SETUP.bat nữa. Máy đã đủ "
+            "đồ thì bước này không tốn giây nào.",
+            "Lần tự cài lỡ hỏng (mất mạng giữa chừng chẳng hạn) thì bấm “Kiểm "
+            "tra và cài phần thiếu” ở thẻ Thư viện phía dưới.",
+        ],
     },
 }
 

@@ -133,6 +133,29 @@ def main() -> int:
              "    python -m pip install PyQt5")
         return 1
 
+    # ═══ THIẾU GÌ THÌ CÀI, TRƯỚC KHI NHẬP THỨ CẦN NÓ ═══
+    #
+    # Đường cập nhật chỉ tráo thư mục rồi mở lại tool — nó không chạy `pip` một
+    # lần nào. Nên bản nào cần thêm thư viện thì khách bấm Cập nhật xong nhận
+    # về một tool **không mở lên được**, kèm một hộp thoại bảo họ đi nhấp đúp
+    # `SETUP.bat` — thứ họ chạy đúng một lần lúc mới cài và không nhớ nữa.
+    #
+    # Chủ dự án, 16/08/2026: *"có cách nào update mà cài luôn cho khách không,
+    # để khách mở là dùng được"*.
+    #
+    # Chỗ cắm phải là **đúng đây**, không sớm hơn không muộn hơn:
+    #   - sau khi `PyQt5` nhập được, vì cửa sổ tiến trình vẽ bằng Qt;
+    #   - trước khi nhập `core`/`ui_qt`, vì đó chính là chỗ sẽ nổ nếu thiếu.
+    #
+    # Máy đã đủ đồ thì hàm này chỉ đọc một tệp rồi băm một lần — vài phần
+    # nghìn giây, và đó là đường chạy của gần như mọi lần mở tool.
+    try:
+        from ui_qt.cua_so_tu_du import bao_dam_du
+
+        bao_dam_du(BASE_DIR)
+    except Exception:  # noqa: BLE001 — tự cài hỏng không được chặn tool
+        pass
+
     try:
         import core  # noqa: F401 — tự tìm SDK shopapi
 
