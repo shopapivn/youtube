@@ -50,6 +50,7 @@ from .chia_canh import (bang_phu_de, chia_theo_nghia, dien_khuon,
 from .goi_van_ban import loc_json
 from .kenh import Kenh, ten_khung
 from .nang_anh import KHUNG
+from .the_cam_xuc import TEP_CO_THE, chen_the
 from .tron_tieng import co_ne_giong, loc_tron_nhac
 from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
                     phan_loai, xin_nhip)
@@ -428,11 +429,39 @@ def _cho_cat_tot_nhat(chu: str, tran: int) -> int:
 
     vi_tri = cua_so.rfind(" ")
     if vi_tri > san:
-        return vi_tri + 1
+        return _ne_giua_the(chu, vi_tri + 1)
 
     # Không có lấy một khoảng trắng — cắt cứng. Gần như không xảy ra với chữ
     # tiếng Việt, nhưng thiếu nhánh này thì hàm quay vòng vô tận.
-    return tran
+    return _ne_giua_the(chu, tran)
+
+
+def _ne_giua_the(chu: str, cat: int) -> int:
+    """Kéo chỗ cắt lùi lại nếu nó rơi vào giữa một thẻ cảm xúc.
+
+    ═══ VÌ SAO CẦN ═══
+
+    Thẻ ElevenLabs v3 có loại **chứa khoảng trắng**: `[laughs harder]`,
+    `[short pause]`, `[clears throat]`. Mà hàm cắt ở trên được phép cắt tại
+    khoảng trắng — nên nó có thể cắt đúng giữa thẻ, thành `…[laughs` ở đoạn này
+    và `harder]…` ở đoạn sau.
+
+    Hai mảnh ấy không còn là thẻ nữa. Model không hiểu, và cái nó làm với chữ
+    không hiểu thì tài liệu **không nói** — có thể bỏ qua, mà cũng có thể đọc
+    to lên giữa video.
+
+    Kéo lùi về trước dấu `[` là xong: thẻ đi trọn vẹn sang đoạn sau, còn đoạn
+    này kết thúc sớm hơn vài chữ.
+    """
+    mo = chu.rfind("[", 0, cat)
+    if mo < 0:
+        return cat
+    dong = chu.find("]", mo)
+    if dong < 0 or dong < cat:
+        return cat              # thẻ đã đóng trước chỗ cắt — không sao
+    # Lùi về trước dấu `[`. Nếu lùi tới 0 thì cả đoạn chỉ có mỗi cái thẻ dở
+    # dang — giữ nguyên chỗ cắt cũ, không thì hàm gọi quay vòng vô tận.
+    return mo if mo > 0 else cat
 
 
 def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
@@ -1528,10 +1557,11 @@ def _khau_kich_ban(bc: BoiCanh):
             except Exception as loi:  # noqa: BLE001
                 bc.ghi("  (bỏ qua SEO: {0})".format(str(loi)[:100]))
 
+        so_the = _chen_the_cam_xuc(bc, luot, ban_nhap)
         _lam_sach_ket_qua(bc, duong_kb, duong_seo,
                           os.path.join(d, "1-tieu-de.txt"))
         return {"so_ky_tu": len(ban_nhap), "lech": round(lech, 3),
-                "tieu_de": tieu_de, "chu_bia": chu_bia}
+                "tieu_de": tieu_de, "chu_bia": chu_bia, "the_cam_xuc": so_the}
 
     return lam
 
@@ -1614,7 +1644,19 @@ def _khau_giong_doc(bc: BoiCanh):
         dich = os.path.join(d, "2-giong-doc.mp3")
         if os.path.exists(dich):
             return {"da_co": True}
-        kich_ban = _doc_chu(os.path.join(d, "1-kich-ban.txt")).strip()
+        # ═══ ƯU TIÊN BẢN CÓ THẺ CẢM XÚC ═══
+        #
+        # Chỉ khâu này được đọc bản có thẻ. Khâu phụ đề vẫn ép **bản sạch** lên
+        # giọng đọc, nên thẻ không bao giờ hiện lên màn hình. Xem
+        # `_chen_the_cam_xuc` và `core/the_cam_xuc.py`.
+        #
+        # Chèn thẻ ở khâu 1 chứ không ở đây là có chủ ý: thẻ tính vào trần
+        # 1.000 ký tự của cổng, nên nó phải có mặt **trước** lúc cắt đoạn. Cắt
+        # trước rồi chèn sau là đoạn phình quá trần và cổng từ chối.
+        co_the = _doc_chu(os.path.join(d, TEP_CO_THE)).strip()
+        kich_ban = co_the or _doc_chu(os.path.join(d, "1-kich-ban.txt")).strip()
+        if co_the:
+            bc.ghi("  đọc bản có thẻ cảm xúc.")
         if not kich_ban:
             raise RuntimeError("chưa có kịch bản để đọc")
         if not bc.kenh.voice_id:
@@ -2410,6 +2452,49 @@ def _lam_sach_anh(bc: BoiCanh, tep: str) -> None:
         lam_sach_anh(tep)
     except Exception:  # noqa: BLE001
         pass
+
+
+def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> int:
+    """Ghi ra bản kịch bản có thẻ cảm xúc. Trả về số thẻ chèn được.
+
+    ═══ GHI RA TỆP RIÊNG, KHÔNG ĐÈ LÊN KỊCH BẢN ═══
+
+    `1-kich-ban.txt` còn được khâu phụ đề và khâu ảnh bìa đọc. Khâu phụ đề **ép
+    chính chữ ấy lên giọng đọc**, nên thẻ lọt vào đó là `[whispers]` hiện lên
+    màn hình cho người xem đọc. Bản có thẻ phải nằm riêng.
+
+    Không có tệp riêng ấy thì mọi thứ chạy y như trước — đó là đường lui của cả
+    tính năng này, và nó là đường lui **không cần viết thêm dòng nào**.
+
+    Đã có tệp thì thôi: chèn thẻ là một lượt gọi AI, và "Chạy tiếp" một lượt cũ
+    không nên trả tiền lại cho việc đã làm.
+    """
+    tep = os.path.join(luot.thu_muc, TEP_CO_THE)
+    if os.path.exists(tep):
+        return 0
+    try:
+        from . import cai_dat  # noqa: PLC0415
+
+        if not cai_dat.doc(bc.goc).get("the_cam_xuc", True):
+            return 0
+    except Exception:  # noqa: BLE001
+        return 0
+    try:
+        bc.ghi("  chèn thẻ cảm xúc cho giọng đọc…")
+
+        def goi(loi_nhac: str) -> str:
+            return _goi(bc, loi_nhac,
+                        "{0}:chat:the-cam-xuc".format(luot.ma_luot))
+
+        co_the = chen_the(kich_ban, goi, giong_van=bc.kenh.giong_van,
+                          ngon_ngu=bc.kenh.ngon_ngu, ghi=bc.ghi)
+    except Exception as loi:  # noqa: BLE001 — thẻ là việc làm đẹp, không bắt buộc
+        bc.ghi("  (bỏ qua thẻ cảm xúc: {0})".format(str(loi)[:100]))
+        return 0
+    if not co_the:
+        return 0
+    _ghi_chu(tep, co_the)
+    return co_the.count("[")
 
 
 def _doi_cao_do_giong(bc: BoiCanh, mp3: str) -> bool:

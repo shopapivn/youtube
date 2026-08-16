@@ -81,6 +81,22 @@ MAC_DINH: Dict[str, Any] = {
     # YouTube, và vì sao tin nhầm chỗ đó thì mất kênh chứ không mất công.
     "lam_sach_dau_ai": False,
 
+    # Chèn thẻ cảm xúc ElevenLabs v3 vào kịch bản trước khi đem đi đọc.
+    #
+    # ═══ BẬT SẴN, KHÁC HAI NÚT DƯỚI ═══
+    #
+    # Chủ dự án chốt 16/08/2026: *"để ở setting mặc định là bật"*. Và nó khác
+    # hẳn hai nút xoá dấu ở dưới: mấy nút kia **bỏ đi** một thứ, còn nút này
+    # **thêm vào** một thứ làm sản phẩm hay hơn. Thêm cái tốt thì bật sẵn.
+    #
+    # Tốn thêm **một lượt gọi AI viết chữ** cho mỗi lượt chạy — cùng loại với
+    # bước nắn độ dài, không phải loại đắt như ảnh hay clip.
+    #
+    # Ba lớp chặn cho một luật "AI không được đổi chữ": nói trong lời nhắc, lọc
+    # thẻ lạ, rồi gỡ hết thẻ ra so lại với bản gốc. Sai một chữ là vứt, đọc bản
+    # sạch. Xem `core/the_cam_xuc.py`.
+    "the_cam_xuc": True,
+
     # Đổi nhẹ cao độ giọng đọc (60 cent, hơn nửa nốt nhạc).
     #
     # Công tắc RIÊNG, không gộp với `lam_sach_dau_ai`, vì nó khác hẳn về mức

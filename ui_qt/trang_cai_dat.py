@@ -74,6 +74,19 @@ MUC = (
      "tổng hợp” là ô bạn tự tích trong Studio, YouTube không đọc thẻ tệp để "
      "quyết. YouTube nói tích ô đó không giảm hiển thị hay tiền — còn KHÔNG "
      "khai mới là thứ khoá kiếm tiền 90 ngày rồi gỡ kênh khỏi YPP."),
+    ("the_cam_xuc", "Chèn thẻ cảm xúc vào kịch bản",
+     "BẬT SẴN. Viết kịch bản xong, tôi nhờ AI đọc lại rồi cài thẻ cảm xúc vào "
+     "những chỗ đáng — chỗ chuyển giọng, chỗ có câu lật, chỗ đáng thở dài. "
+     "Giọng đọc nghe như người thật kể chuyện, không như máy đọc đều đều.\n"
+     "Cổng giọng nói chạy model eleven_v3, đúng loại hiểu được mấy thẻ này.\n"
+     "Chèn THƯA, khoảng một thẻ cho 4–6 câu. Đầy thẻ thì nghe như diễn kịch.\n"
+     "AI chỉ được CHÈN, cấm sửa chữ. Tôi gỡ hết thẻ ra so lại với bản gốc — "
+     "sai một chữ là tôi vứt, đọc bản gốc. Kịch bản của bạn không bao giờ bị "
+     "viết lại sau lưng.\n"
+     "Thẻ chỉ nằm trong bản đem đi đọc. Phụ đề vẫn là bản sạch, người xem "
+     "không thấy cái ngoặc vuông nào.\n"
+     "Tốn thêm một lượt gọi AI viết chữ mỗi lượt chạy — loại rẻ, không phải "
+     "loại đắt như ảnh hay clip."),
     ("doi_cao_do_giong", "Đổi nhẹ cao độ giọng đọc",
      "Tắt sẵn. Đây là nút DUY NHẤT trong nhóm này đụng vào chính nội dung, chứ "
      "không chỉ vào thẻ dữ liệu — nên nó tách riêng.\n"
