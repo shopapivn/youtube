@@ -14,7 +14,7 @@ __all__ = ["poll_delays", "DEFAULT_WAIT_TIMEOUT", "MAX_POLL_INTERVAL"]
 DEFAULT_WAIT_TIMEOUT = 600.0
 
 #: ═══════════════════════════════════════════════════════════════════════════
-#:  5 → 20 GIÂY NGÀY 16/08/2026: HỎI DÀY KHÔNG LÀM JOB XONG SỚM HƠN
+#:  5 → 30 GIÂY NGÀY 16/08/2026: HỎI DÀY KHÔNG LÀM JOB XONG SỚM HƠN
 #: ═══════════════════════════════════════════════════════════════════════════
 #:
 #: Trần cũ là 5 giây, và nó áp cho MỌI loại job. Nhưng thời gian thật của một
@@ -37,13 +37,18 @@ DEFAULT_WAIT_TIMEOUT = 600.0
 #: Tức nhịp hỏi dày không chỉ tốn băng thông — nó cướp CPU của chính khâu kết
 #: sổ tiền cho những job mà nó đang chờ.
 #:
-#: ═══ 20 GIÂY ĐỔI ĐƯỢC GÌ ═══
+#: ═══ VÌ SAO ĐÚNG 30 GIÂY ═══
 #:
-#: Chậm nhất là biết kết quả muộn hơn 20 giây so với lúc job thật sự xong —
-#: trên một việc vốn mất 30–120 giây. Đổi lại tải hỏi giảm 4 lần. Ai cần biết
+#: Chủ dự án chốt con số này, và lý lẽ rất gọn: *"nhanh nhất 1 job cũng là 30
+#: giây"*. Job nhanh nhất của cả ba nhà máy đều ≥30 giây, nên mọi lần hỏi cách
+#: nhau dưới 30 giây là **chắc chắn** rơi vào lúc job chưa thể xong — không
+#: phải "có khả năng lãng phí" mà là lãng phí có thể chứng minh trước.
+#:
+#: Chậm nhất là biết kết quả muộn hơn 30 giây so với lúc job thật sự xong.
+#: Đổi lại tải hỏi giảm 6 lần. Ai cần biết
 #: NGAY thì đã có hai đường tốt hơn hẳn và không tốn một lời hỏi nào: webhook,
 #: hoặc SSE (`client.jobs.stream`).
-MAX_POLL_INTERVAL = 20.0
+MAX_POLL_INTERVAL = 30.0
 
 #: Lần hỏi ĐẦU TIÊN nên rơi vào khoảng job sắp xong, không phải ngay sau khi gửi.
 #:
@@ -69,7 +74,7 @@ def poll_delays(
 
     1. Có `estimated_seconds` → ngủ `estimated * 0.8` (tối đa 60 giây) trước lần
        hỏi ĐẦU. Không có thì ngủ 2 giây.
-    2. Sau đó mỗi vòng `interval = min(interval * 1.5, 20s)`, bắt đầu từ `2s`.
+    2. Sau đó mỗi vòng `interval = min(interval * 1.5, 30s)`, bắt đầu từ `2s`.
 
     Truyền `poll_interval` để cố định khoảng cách — hữu ích khi bạn tự điều khiển
     nhịp hỏi hoặc khi viết test.

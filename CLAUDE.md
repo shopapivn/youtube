@@ -44,7 +44,7 @@ Bốn luật, cả bốn đều là tiền thật của họ:
      không tốn một lời hỏi nào.
    - Buộc phải tự hỏi: dùng `poll_delays(estimated_seconds=...)` của SDK. Nó đợi
      gần hết quãng máy chủ dự tính rồi mới hỏi lần đầu, và không bao giờ hỏi dày
-     hơn 20 giây một lần.
+     hơn 30 giây một lần — mốc chốt vì job nhanh nhất cũng đã 30 giây.
    - **Không bao giờ** viết `while True: sleep(2); jobs.list()`. Hỏi `jobs.list()`
      tốn gấp ~200 lần `jobs.get(id)` ở phía máy chủ vì nó trả về cả trăm job kèm
      toàn bộ file kết quả. Chờ MỘT job thì hỏi ĐÚNG job đó.
