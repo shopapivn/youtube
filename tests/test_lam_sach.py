@@ -407,6 +407,31 @@ class TestVideo:
                         "-i", tep, "-c", "copy", "-f", "h264", ra2], check=True)
         assert os.path.getsize(ra2) == truoc, "video bị mã hoá lại"
 
+    def test_chay_duoc_tren_ca_tieng_lan_hinh(self, tmp_path):
+        """`-movflags +faststart` là cờ của mp4 — nhưng hàm này chạy cả cho mp3.
+
+        FFmpeg bỏ qua cờ thừa chứ không báo lỗi, nhưng đó là điều **phải kiểm**
+        chứ không phải điều được phép đoán: giọng đọc đi qua đúng đường này, và
+        nó là tệp đắt nhất cả lượt chạy.
+        """
+        for duoi, nguon in (("mp3", "sine=frequency=300:duration=1"),
+                            ("wav", "sine=frequency=300:duration=1"),
+                            ("m4a", "sine=frequency=300:duration=1"),
+                            ("mp4", None)):
+            tep = str(tmp_path / ("a." + duoi))
+            lenh = [FFMPEG, "-y", "-hide_banner", "-loglevel", "error", "-f",
+                    "lavfi"]
+            if nguon:
+                lenh += ["-i", nguon]
+            else:
+                lenh += ["-i", "testsrc=size=64x64:rate=10:duration=1",
+                         "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+            subprocess.run(lenh + ["-metadata", "comment=Made with Google AI",
+                                   tep], check=True)
+            assert lam_sach_tep(tep, FFMPEG), duoi
+            assert os.path.isfile(tep) and os.path.getsize(tep) > 0, duoi
+            assert "Made with Google AI" not in self._the(tep), duoi
+
     def test_hong_thi_giu_nguyen_video_cu(self, tmp_path):
         tep = str(tmp_path / "khong-phai-video.mp4")
         with open(tep, "w", encoding="utf-8") as ghi:
