@@ -48,6 +48,30 @@ Bốn luật, cả bốn đều là tiền thật của họ:
    - **Không bao giờ** viết `while True: sleep(2); jobs.list()`. Hỏi `jobs.list()`
      tốn gấp ~200 lần `jobs.get(id)` ở phía máy chủ vì nó trả về cả trăm job kèm
      toàn bộ file kết quả. Chờ MỘT job thì hỏi ĐÚNG job đó.
+   - **Đừng kẹp lại nhịp mà SDK đã tính.** Ngày 16/08/2026 tìm ra `core/jobs.py`
+     viết `min(next(delays), 5.0)` — ghì `poll_delays` (đã giãn tới 30 giây)
+     xuống lại đúng nhịp dày mà nó sinh ra để tránh. Muốn nút Dừng nhạy thì
+     dùng `Event.wait(giây)`, nó tỉnh ngay bất kể ngủ bao lâu; đừng ngủ ngắn
+     rồi hỏi lại.
+
+5. **Nhịp hỏi dày còn giành mất ĐƯỜNG TRUYỀN, không chỉ CPU.** Máy chạy tool
+   cũng là máy chạy worker. Đo ngày 16/08/2026 trên máy thật:
+
+   ```
+   tool bắn      1.212 lượt GET /v1/jobs / 5 phút  (~4 lần/giây)
+   tool đẩy lên    463 ảnh (178 MB) / 5 phút       → kín đường lên
+   worker tải về    23 KB/giây                     → 516 lượt hết giờ giữa chừng
+   ```
+
+   Đường lên kín thì tín hiệu báo nhận của đường xuống cũng nghẹt. Kết quả:
+   15–25% job của khách hỏng, kèm câu báo lỗi đổ tại "địa chỉ ảnh của bạn" —
+   ta đổ lỗi cho khách vì đường truyền của chính ta.
+
+   Vì thế ảnh tải lên được **để lại một bản ngay trên đĩa máy này**
+   (`shopapi_common.luu_ban_cuc_bo` / `core/auto_khau._luu_ban_cuc_bo`), và
+   worker tra bản đó trước khi nghĩ tới việc gọi ra Internet. Sửa một trong hai
+   đầu thì phải sửa cả đầu kia — đường dẫn và cách rút mã `upl_...` phải khớp,
+   lệch nhau thì lối tắt im lặng ngừng chạy và triệu chứng duy nhất là job chậm.
 
 ## Thư mục
 

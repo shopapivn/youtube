@@ -6,6 +6,55 @@ Hai việc tách rời. Việc 5 (xoá dấu) làm được ngay. Việc 6 (nân
 
 ---
 
+> ## ĐÃ LÀM XONG — 16/08/2026
+>
+> Giữ lại bản nghiên cứu bên dưới vì phần đo đạc vẫn đúng. Nhưng **một kết luận
+> chính của nó sai**, và ai đọc lại phải biết trước:
+>
+> ### Chỗ bản này đoán sai
+>
+> Nó dặn cắm bước nâng ảnh vào *"sau khâu 5, trước khâu 6"*. **Chỗ đó không ăn
+> thua gì.** Đo trên bảy lượt chạy thật:
+>
+> ```
+> ảnh nhà cung cấp trả về  →  1376×768
+> clip nhà cung cấp trả về →  1280×720   ← mọi clip, mọi lượt
+> video cuối               →  1280×720
+> ```
+>
+> Ảnh chỉ là **khung đầu** cho nhà máy clip. Nhà máy trả 720p dù đưa vào ảnh to
+> bao nhiêu, và `videos.create` không có tham số xin bản to hơn. Nên nâng ảnh
+> nguồn là tốn thời gian mà không đổi một điểm ảnh nào của video.
+>
+> Đường 4K thật nằm ở **lần mã hoá cuối** (`core/auto_khau._ghep_video`):
+> `scale` + `flags=lanczos`. Nâng từng khung hình của clip thì không khả thi —
+> video 10 phút là ~14.400 khung, khoảng sáu tiếng trên GTX 1660 SUPER.
+>
+> ### Trạng thái từng mục
+>
+> | # | Việc | Trạng thái |
+> |---|---|---|
+> | A | `flags=lanczos` khi phóng | **Xong** — cả `dung_video.py` và `auto_khau.py` |
+> | B | Bỏ `veryfast`, hạ CRF | **Xong**, có sửa lại: xem dưới |
+> | C | Đảo alpha xoá dấu | **Xong** từ 2.18.0 (`core/xoa_dau_anh.py`) |
+> | D | Cắt bớt làm đường lui | Không làm — đảo alpha chạy tốt, chưa cần |
+> | E | Nâng ảnh 4x | **Xong** (`core/nang_anh.py`), nhưng chỉ cho **ảnh tĩnh** |
+> | F | Gộp còn một lần mã hoá | Không làm — mất khả năng chạy tiếp từng clip |
+> | G | Vá bằng LaMa | Không làm — chưa gặp ca nào cần |
+>
+> **Mục B có một chỗ bản này chưa tính tới:** khi kênh *không* đốt phụ đề và
+> *không* đổi độ phân giải, bước sau dùng `-c:v copy`, tức bản cắt trung gian
+> **chính là video giao cho khách**. Để `crf 14` cho nó như bản này dặn là giao
+> một tệp phình gấp mấy lần vô ích. Nên tách hai đường: `medium/14` khi còn mã
+> lại, `slow/18` khi đó là bản cuối.
+>
+> **Thêm ngoài kế hoạch:** ô chọn độ phân giải ở tab Cài đặt (mặc định 4K) —
+> trước đó tab Tự động không hề có bước đổi độ phân giải nào.
+>
+> Chi tiết trong commit `2.20.0`.
+
+---
+
 ## Trước hết: một chỗ dễ hiểu nhầm
 
 Khách nhắc kho `guillaumemeyer/watermarks-remover` (9.306 sao). **Kho đó làm việc

@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -149,9 +150,29 @@ TRAN_LUONG_MAY = 48
 
 #: Bao lâu hỏi cả sổ job một lượt.
 #:
-#: 2 giây, vì một lượt hỏi là **một** lời gọi cho cả trăm job — 30 lượt/phút
-#: trên ngân sách 600.000. Hỏi thưa hơn chỉ để tấm ảnh xong ở giây 31 nằm chờ.
-NHIP_HOI_CHUNG = 2.0
+#: ═══ 2,0 → 30,0 NGÀY 16/08/2026 ═══
+#:
+#: Lý lẽ cũ ghi ở đây — "một lượt hỏi là **một** lời gọi cho cả trăm job" — sai
+#: ở hai chỗ, và cả hai đều đo được:
+#:
+#: 1. Không phải một lời gọi. `_mot_luot` lật tới `TRANG_MOI_LUOT` trang cho
+#:    MỖI trạng thái trong ("succeeded", "failed"), tức tối đa 5 × 2 = 10 lời
+#:    gọi mỗi vòng. Ở nhịp 2 giây là **5 lời gọi/giây**.
+#: 2. `GET /v1/jobs?limit=100` không rẻ: nó trả về cả trăm job KÈM toàn bộ
+#:    output, tốn gấp ~200 lần `jobs.get(id)` ở phía máy chủ.
+#:
+#: Đo trên nginx của máy chủ ngày 16/08/2026: 1.212 lượt `GET /v1/jobs` trong 5
+#: phút từ đúng máy này. Cùng lúc đó worker chạy trên chính máy ấy tải ảnh tham
+#: chiếu từ CDN về chỉ đạt 23 KB/s — 516 lượt tải hết giờ giữa chừng, kéo theo
+#: 15–25% job của khách hỏng với câu báo lỗi đổ tại "địa chỉ ảnh của bạn".
+#:
+#: Nhịp hỏi không làm job xong sớm hơn một giây nào. Nó chỉ giành đường truyền
+#: và CPU của đúng cái máy chủ đang kết sổ tiền cho job ta đang chờ.
+#:
+#: 30 giây là mốc chủ dự án chốt, vì job nhanh nhất của cả ba nhà máy — ảnh —
+#: cũng đã 30 giây. Giá phải trả cao nhất là một tấm ảnh xong ở giây 31 nằm chờ
+#: thêm một nhịp; đổi lại là 15 lời gọi/phút thay vì 300.
+NHIP_HOI_CHUNG = 30.0
 
 #: Mỗi trang lấy nhiều nhất bao nhiêu job, và lật nhiều nhất mấy trang.
 #:
@@ -955,6 +976,97 @@ def _han_cua_url(url: str) -> float:
     return float(GIO_DUNG_LAI)
 
 
+#: Nơi để lại bản sao ảnh vừa đẩy lên, cho worker trên CÙNG máy dùng thẳng.
+#:
+#: Phải khớp `SHOPAPI_ANH_CUC_BO` mà worker đọc (`shopapi_worker.url_guard`).
+#: Đặt biến môi trường thì theo biến; không thì theo mặc định dưới đây, và hai
+#: bên tự khớp nhau mà không cần ai cấu hình gì.
+KHO_ANH_CUC_BO = os.environ.get("SHOPAPI_ANH_CUC_BO") or os.path.join(
+    os.environ.get("ProgramData", os.path.expanduser("~")), "ShopAPI", "anh-cuc-bo"
+)
+
+#: Giữ bản sao bao lâu rồi dọn (giây). 6 giờ — rộng hơn hẳn đời một mẻ chạy.
+HAN_ANH_CUC_BO = 6 * 3600.0
+
+#: Bao lâu mới quét dọn một lượt (giây). Dọn mỗi lần đẩy ảnh là phí; kho này chỉ
+#: cần không phình vô hạn chứ không cần sạch từng phút.
+NHIP_DON_ANH_CUC_BO = 600.0
+
+_LAN_DON_CUOI = 0.0
+_KHOA_DON = threading.Lock()
+
+
+def _luu_ban_cuc_bo(duong: str, url: str) -> None:
+    """Để lại một bản ảnh vừa đẩy lên, ngay trên đĩa máy này.
+
+    ═══ VÌ SAO ═══
+
+    Tool này và worker chạy trên CÙNG một máy. Trước bản này, tool đẩy ảnh lên
+    kho ở Singapore rồi worker trên đúng máy ấy tải chính tấm ảnh đó ngược về —
+    một tấm ảnh đi Việt Nam → Singapore → Việt Nam.
+
+    Đo ngày 16/08/2026: tool đẩy 463 ảnh (178 MB) mỗi 5 phút, kín đường lên của
+    mạng nhà. Đường lên kín thì tín hiệu báo nhận của đường xuống cũng nghẹt,
+    nên chặng về chỉ còn 23 KB/s — 516 lượt tải hết hạn 30 giây giữa chừng, kéo
+    15–25% job hỏng.
+
+    Chặng đẩy lên vẫn phải giữ (máy chủ cần URL để nhận job), nhưng chặng về thì
+    bỏ được, và nó đúng là chặng đang chết.
+
+    ═══ HỎNG THÌ IM LẶNG ═══
+
+    Mọi lỗi ở đây đều nuốt. Đây thuần tuý là một lối tắt: không có bản sao thì
+    worker tải mạng như cũ, job vẫn chạy. Ném lỗi ở đây là làm hỏng một khâu
+    đang chạy được để đổi lấy một thứ chỉ có tác dụng tăng tốc.
+    """
+    try:
+        ma = _ma_upload(url)
+        if not ma:
+            return
+        os.makedirs(KHO_ANH_CUC_BO, exist_ok=True)
+        dich = os.path.join(KHO_ANH_CUC_BO, ma)
+        # Ghi ra tên tạm rồi mới đổi tên: worker có thể đọc bất cứ lúc nào, và
+        # một file đang ghi dở là một tấm ảnh cụt — thứ hỏng âm thầm tận nhà máy.
+        tam = dich + ".dang-ghi"
+        shutil.copyfile(duong, tam)
+        os.replace(tam, dich)
+    except Exception:  # noqa: BLE001 — xem khối "HỎNG THÌ IM LẶNG" ở trên
+        return
+    _don_kho_cuc_bo()
+
+
+def _ma_upload(url: str) -> str:
+    """Rút mã `upl_...` khỏi URL trả về của máy chủ."""
+    try:
+        from urllib.parse import urlsplit  # noqa: PLC0415
+
+        ten = urlsplit(url).path.rsplit("/", 1)[-1]
+    except Exception:  # noqa: BLE001
+        return ""
+    ma = ten.split(".", 1)[0]
+    return ma if re.fullmatch(r"upl_[a-z0-9]{1,64}", ma) else ""
+
+
+def _don_kho_cuc_bo() -> None:
+    """Xoá bản sao quá hạn. Không dọn thì kho phình ~1,6 GB mỗi giờ."""
+    global _LAN_DON_CUOI
+    bay_gio = time.time()
+    with _KHOA_DON:
+        if bay_gio - _LAN_DON_CUOI < NHIP_DON_ANH_CUC_BO:
+            return
+        _LAN_DON_CUOI = bay_gio
+    try:
+        for ten in os.listdir(KHO_ANH_CUC_BO):
+            duong = os.path.join(KHO_ANH_CUC_BO, ten)
+            try:
+                if bay_gio - os.path.getmtime(duong) > HAN_ANH_CUC_BO:
+                    os.remove(duong)
+            except OSError:
+                continue
+    except OSError:
+        return
+
+
 def _url_tham_chieu(bc: BoiCanh, bo_qua_nho: bool = False) -> List[str]:
     """URL ảnh nhân vật tham chiếu. **Tải lên một lần, dùng lại mãi.**
 
@@ -1011,6 +1123,7 @@ def _url_tham_chieu(bc: BoiCanh, bo_qua_nho: bool = False) -> List[str]:
     # gặp chặn ở đây thì cả khâu ảnh gãy — mẻ chạy thật dính đúng vậy.
     url = goi_kien_nhan(tai, on_log=bc.on_log, kiem_dung=bc.kiem_dung,
                         ngu=bc.ngu)
+    _luu_ban_cuc_bo(duong, str(url))
     goi = goi if isinstance(goi, dict) else {}
     goi[dau_vet] = {"url": str(url), "luc": time.time()}
     _ghi_chu(kho, json.dumps(goi, ensure_ascii=False, indent=1))
@@ -1102,6 +1215,7 @@ def _url_anh_canh(bc: BoiCanh, luot: LuotChay, so: int, duong: str,
 
     url = goi_kien_nhan(tai, on_log=bc.on_log, kiem_dung=bc.kiem_dung,
                         ngu=bc.ngu)
+    _luu_ban_cuc_bo(duong, str(url))
     with _KHOA_URL_ANH:
         goi = {}
         try:

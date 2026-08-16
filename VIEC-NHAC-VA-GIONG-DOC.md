@@ -7,6 +7,38 @@ Nghiên cứu và đo đạc làm ngày 15/08/2026. **Chưa sửa dòng mã nào
 
 ---
 
+> ## TRẠNG THÁI — 16/08/2026
+>
+> **Việc 3 (nhạc né giọng): XONG.** Chuỗi lọc đề xuất chạy đúng như đo. Gộp cả
+> hai chỗ trộn về một mô-đun chung `core/tron_tieng.py` để chúng không lệch
+> nhau nữa. Đo lại trên đường nhạc riêng sau khi sửa:
+>
+> ```
+> không có giọng -28,0 dB | có giọng -41,4 dB  →  né 13,4 dB, lên lại đủ
+> ```
+>
+> Mức nhạc lúc không có lời nâng lên `0.45`. Hai hằng số cũ (`0.12` / `0.18`)
+> chỉ còn dùng cho đường lui khi bản FFmpeg thiếu `sidechaincompress`.
+> Xem commit `2.20.0`.
+>
+> **Việc 4 (chỉ đạo cách đọc): CHƯA LÀM — chủ dự án để nghiên cứu sau.**
+>
+> Nhưng câu hỏi chặn đã có câu trả lời, và nó thu hẹp việc lại nhiều:
+> **cổng không nhận chỉ đạo giọng.** `_sdk/shopapi/resources/tts.py` chỉ nhận
+> `text`, `voice_id`, `speed`, `format` — không có `instructions`, không có
+> SSML. Và `speed` thì `validate_speed` **luôn ném lỗi**, tức nó có trong chữ ký
+> nhưng không dùng được.
+>
+> Nên phần làm được chỉ còn ở tầng văn bản: chèn dấu ngắt, chia câu. Vẫn có ích,
+> nhưng nhỏ hơn hẳn thứ bản này hình dung — đừng hứa với khách nhiều hơn thế.
+>
+> **Một việc ngoài kế hoạch, phát hiện khi chạy thật:** khâu đọc đang cắt kịch
+> bản vụn gấp gần ba lần mức cần (2.726 chữ thành **tám** đoạn ~390, trong khi
+> ba đoạn ~909 là đủ). Mỗi đoạn là một lượt gọi riêng nên mỗi chỗ nối là một chỗ
+> **đổi tông giọng** — nghe ra được. Đã sửa trong `2.20.0`.
+
+---
+
 # VIỆC 3 — Nhạc nền tự né giọng đọc
 
 ## Lời nhắc để dán

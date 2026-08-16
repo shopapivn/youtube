@@ -23,6 +23,7 @@ from core import cai_dat
 from core.auto_khau import _ghep_video, chon_do_phan_giai
 from core.dung_video import tim_ffmpeg
 from core.kenh import GIU_NGUYEN, ten_khung
+from core import nang_anh
 from core.nang_anh import KHUNG, MODEL, MODEL_MAC_DINH, nang_anh_tep
 
 FFMPEG = tim_ffmpeg()
@@ -226,6 +227,107 @@ class TestNangAnh:
 
     def test_model_mac_dinh_co_that_trong_bang(self):
         assert MODEL_MAC_DINH in MODEL
+
+    def test_nho_ket_qua_tim_thay_chu_khong_nho_ket_qua_khong_thay(self, tmp_path):
+        """Nhớ "chưa có" là khách tải công cụ về xong tool vẫn bảo chưa có.
+
+        Không có gì trên màn hình nói cho họ biết phải tắt tool mở lại, nên họ
+        sẽ bấm nút tải thêm vài lần nữa rồi kết luận là hỏng.
+        """
+        goc = str(tmp_path)
+        assert nang_anh.tim_nang_anh(goc) == ""
+        thu = tmp_path / nang_anh.THU_MUC_CONG_CU
+        thu.mkdir(parents=True)
+        (thu / nang_anh.ten_chay()).write_bytes(b"gia vo la tep chay")
+        assert nang_anh.tim_nang_anh(goc), "nhớ nhầm kết quả 'chưa có'"
+
+
+class TestTaiCongCu:
+    """Tải một tệp chạy được về máy khách — phải kiểm kỹ, và phải do khách bấm."""
+
+    def _goi_zip(self, tmp_path, ten_trong=None) -> bytes:
+        import io
+        import zipfile
+
+        bo_nho = io.BytesIO()
+        with zipfile.ZipFile(bo_nho, "w") as kho:
+            for ten in (ten_trong or ["realesrgan/" + nang_anh.ten_chay(),
+                                      "realesrgan/models/x4.bin"]):
+                kho.writestr(ten, b"noi dung gia")
+        return bo_nho.getvalue()
+
+    def test_tai_va_giai_nen_dat_dung_cho(self, tmp_path):
+        goi = self._goi_zip(tmp_path)
+        duoc, _ = nang_anh.tai_cong_cu(str(tmp_path), tai=lambda _u: goi)
+        if os.name != "nt":
+            return                      # bản dựng sẵn chỉ có cho Windows
+        assert duoc
+        assert nang_anh.co_nang_that(str(tmp_path))
+        # Model phải đi cùng, thiếu là tệp chạy có cũng vô dụng.
+        assert os.path.isfile(os.path.join(
+            str(tmp_path), nang_anh.THU_MUC_CONG_CU, "models", "x4.bin"))
+
+    @pytest.mark.skipif(os.name != "nt", reason="chỉ tải bản Windows")
+    def test_chan_duong_dan_thoat_ra_ngoai(self, tmp_path):
+        """"Zip-slip": một mục tên `../..` ghi đè tệp bất kỳ ngoài thư mục đích."""
+        goi = self._goi_zip(tmp_path, ["../../bi-ghi-de.txt"])
+        duoc, loi_nhan = nang_anh.tai_cong_cu(str(tmp_path), tai=lambda _u: goi)
+        assert not duoc and "không an toàn" in loi_nhan
+        assert not (tmp_path.parent.parent / "bi-ghi-de.txt").exists()
+
+    @pytest.mark.skipif(os.name != "nt", reason="chỉ tải bản Windows")
+    def test_chan_goi_to_bat_thuong(self, tmp_path):
+        to = b"x" * (nang_anh.TRAN_TAI + 1)
+        duoc, loi_nhan = nang_anh.tai_cong_cu(str(tmp_path), tai=lambda _u: to)
+        assert not duoc and "lớn bất thường" in loi_nhan
+
+    @pytest.mark.skipif(os.name != "nt", reason="chỉ tải bản Windows")
+    def test_goi_khong_co_tep_chay_thi_khong_de_lai_rac(self, tmp_path):
+        goi = self._goi_zip(tmp_path, ["doc-toi-di.txt"])
+        duoc, loi_nhan = nang_anh.tai_cong_cu(str(tmp_path), tai=lambda _u: goi)
+        assert not duoc and "không có tệp chạy" in loi_nhan
+        assert not nang_anh.co_nang_that(str(tmp_path))
+        con_lai = [t for t in os.listdir(str(tmp_path))
+                   if t.startswith("_nang-anh-tai-")]
+        assert con_lai == [], "để lại thư mục tạm: {0}".format(con_lai)
+
+    def test_mat_mang_thi_bao_that_chu_khong_ne_loi(self, tmp_path):
+        def dut(_u):
+            raise OSError("mang dut giua chung")
+
+        duoc, loi_nhan = nang_anh.tai_cong_cu(str(tmp_path), tai=dut)
+        assert not duoc and loi_nhan
+
+    def test_dia_chi_ghim_cung_vao_kho_chinh_chu(self):
+        """Hàm tải nhận địa chỉ tuỳ ý là hàm tải bất cứ thứ gì về máy khách."""
+        assert nang_anh.DIA_CHI.startswith(
+            "https://github.com/xinntao/Real-ESRGAN/releases/download/")
+
+    def test_noi_that_dang_dung_cach_nao(self, tmp_path):
+        """Bảo "đã nâng bằng AI" trong khi chỉ phóng thường là hứa thứ không có."""
+        goc = str(tmp_path)
+        chua_co = nang_anh.mo_ta_cong_cu(goc)
+        assert "chưa có" in chua_co and "không nét thêm" in chua_co, chua_co
+
+        thu = tmp_path / nang_anh.THU_MUC_CONG_CU
+        thu.mkdir(parents=True)
+        (thu / nang_anh.ten_chay()).write_bytes(b"gia vo")
+        assert "đã có" in nang_anh.mo_ta_cong_cu(goc)
+
+    def test_khong_nhanh_nao_trong_tool_tu_goi_tai(self):
+        """Chỉ được tải khi khách bấm nút, không phải lúc chạy một mẻ ảnh."""
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        goi_o = []
+        for thu_muc in ("core", "ui_qt"):
+            for ten in os.listdir(os.path.join(goc, thu_muc)):
+                if not ten.endswith(".py") or ten == "nang_anh.py":
+                    continue
+                duong = os.path.join(goc, thu_muc, ten)
+                with open(duong, encoding="utf-8") as tep:
+                    if "tai_cong_cu(" in tep.read():
+                        goi_o.append("{0}/{1}".format(thu_muc, ten))
+        assert goi_o == ["ui_qt/trang_cai_dat.py"], (
+            "chỉ nút bấm ở tab Cài đặt được gọi; đang gọi ở: {0}".format(goi_o))
 
     def test_nang_duoc_anh_nam_khac_o_dia_voi_thu_muc_temp(self):
         """Bug thật, 16/08/2026 — và bài kiểm dùng `tmp_path` KHÔNG bắt được.

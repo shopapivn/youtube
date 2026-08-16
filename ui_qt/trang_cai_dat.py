@@ -176,8 +176,41 @@ class TrangCaiDat(QWidget):
         hang.addWidget(nut_phu("Kiểm tra và cài phần thiếu", self._cai_thieu,
                                rong=230))
         v.addLayout(hang)
+
+        # Công cụ nâng ảnh là một tệp chạy được tải từ mạng về, nên nó phải là
+        # một nút bấm chứ không phải một bước tự động. Xem `core/nang_anh.py`.
+        self._nhan_na = nhan("", "phu")
+        self._nhan_na.setWordWrap(True)
+        self._nhan_na.setMinimumWidth(1)
+        self._nhan_na.setContentsMargins(0, 10, 0, 0)
+        v.addWidget(self._nhan_na)
+        hang2 = HangXuongDong()
+        self._nut_na = nut_phu("Tải công cụ nâng ảnh", self._tai_nang_anh,
+                               rong=210)
+        hang2.addWidget(self._nut_na)
+        v.addLayout(hang2)
+
         self._xem_thu_vien()
         return khung
+
+    def _tai_nang_anh(self) -> None:
+        from core import nang_anh
+
+        self._nut_na.setEnabled(False)
+        self._nhan_na.setText("Đang tải…")
+        try:
+            duoc, loi_nhan = nang_anh.tai_cong_cu(
+                self._app.base_dir, ghi=self._nhan_na.setText)
+        except Exception as loi:  # noqa: BLE001
+            duoc, loi_nhan = False, str(loi)
+        if not duoc:
+            self._app.show_message(
+                "Chưa tải được công cụ nâng ảnh",
+                "{0}.\n\nKhông sao — tool vẫn phóng ảnh bằng phép thường, chỉ "
+                "là không nét bằng. Bạn thử lại lúc mạng khoẻ hơn.".format(
+                    loi_nhan))
+        self._nut_na.setEnabled(True)
+        self._xem_thu_vien()
 
     def _xem_thu_vien(self) -> None:
         try:
@@ -190,6 +223,14 @@ class TrangCaiDat(QWidget):
         self._nhan_tv.setText(
             "Máy đã đủ thư viện, không cần làm gì." if not ly_do else
             "Cần cài thêm: {0}. Bấm nút dưới là tôi cài luôn.".format(ly_do))
+        try:
+            from core import nang_anh
+
+            co = nang_anh.co_nang_that(self._app.base_dir)
+        except Exception:  # noqa: BLE001
+            return
+        self._nut_na.setEnabled(not co)
+        self._nhan_na.setText(nang_anh.mo_ta_cong_cu(self._app.base_dir))
 
     def _cai_thieu(self) -> None:
         from core import tu_du

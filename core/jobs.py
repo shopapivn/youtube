@@ -954,7 +954,22 @@ class JobManager:
                 )
                 return None
 
-            if self._sleep(min(next(delays), 5.0)):
+            # ═══ BỎ KẸP 5 GIÂY NGÀY 16/08/2026 ═══
+            #
+            # Dòng cũ là `min(next(delays), 5.0)`. Nó ghì `poll_delays` — thứ đã
+            # được sửa để giãn tới 30 giây — xuống lại đúng nhịp dày mà bản sửa
+            # ấy sinh ra để tránh. Trần 30 giây là mốc chốt vì job nhanh nhất
+            # của cả ba nhà máy cũng đã 30 giây; hỏi ở giây thứ 5 là hỏi năm
+            # lần để nhận cùng một câu "đang chạy".
+            #
+            # Kẹp này KHÔNG bảo vệ nút Dừng: `_sleep` là `Event.wait(seconds)`,
+            # tỉnh ngay khi cờ dừng được bật, ngủ 5 giây hay 30 giây đều thế.
+            #
+            # Đo trên nginx của máy chủ ngày 16/08/2026: máy chạy tool bắn
+            # 1.212 lượt `GET /v1/jobs` trong 5 phút (~4 lần/giây). Cùng lúc đó
+            # worker trên chính máy ấy tải ảnh tham chiếu về chỉ được 23 KB/s vì
+            # đường truyền đã kín — 516 lượt tải hết giờ giữa chừng.
+            if self._sleep(next(delays)):
                 self._cancel_on_server(record)
                 return None
 
