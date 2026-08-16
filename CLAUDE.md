@@ -9,7 +9,7 @@ Họ mở tab "Agent xây tool" rồi nhờ bạn sửa chính công cụ này c
 Sửa mã trong thư mục này để công cụ làm được thứ họ vừa nói. Thêm tab mới, đổi
 tab sẵn có, viết Skill riêng — tuỳ yêu cầu.
 
-Ba luật, cả ba đều là tiền thật của họ:
+Bốn luật, cả bốn đều là tiền thật của họ:
 
 1. **Không đụng vào thư mục kết quả.** `PROJECTS/` là sản phẩm họ đã trả tiền để
    tạo ra. Không xoá, không dọn, không đổi tên "cho gọn".
@@ -17,6 +17,37 @@ Ba luật, cả ba đều là tiền thật của họ:
    của họ. Sửa hỏng là họ mất đường vào tài khoản.
 3. **Mỗi lần gọi API là một lần trừ tiền.** Đừng viết vòng lặp gọi thử. Muốn
    kiểm tra thì chạy `python -m pytest tests/` — bộ test không gọi mạng.
+4. **ĐỪNG HỎI DÀY khi chờ job.** Không việc nào ở đây xong dưới 30 giây:
+
+   | loại | thời gian thật |
+   |---|---|
+   | ảnh | ~30 giây (nhanh nhất) |
+   | video | ~2 phút |
+   | giọng nói | vài chục giây tới vài phút, theo độ dài văn bản |
+
+   Hỏi lại mỗi 2–5 giây **không làm job xong sớm hơn một giây nào**. Nó chỉ lấy
+   CPU của máy chủ — và máy chủ dùng đúng CPU đó để kết sổ tiền cho chính job
+   bạn đang chờ.
+
+   Đo trên máy chủ thật ngày 16/08/2026, một khách hỏi 10 lần/giây:
+
+   ```
+   GET /v1/jobs      3.146 lần / 5 phút  →  ~2,6 trên 4 lõi CPU của VPS
+   POST .../complete 471 lỗi / 124 thành công  =  79% lượt quyết toán HỎNG
+   ```
+
+   Tức khách đó tự làm hỏng 79% lượt kết sổ tiền của chính mình, chỉ vì hỏi quá dày.
+
+   **Cách đúng, theo thứ tự ưu tiên:**
+   - Dùng `app.start_batch(...)` có sẵn — nó đã tự lo nhịp hỏi.
+   - Cần biết ngay khi xong: **webhook** hoặc **SSE** (`client.jobs.stream`) —
+     không tốn một lời hỏi nào.
+   - Buộc phải tự hỏi: dùng `poll_delays(estimated_seconds=...)` của SDK. Nó đợi
+     gần hết quãng máy chủ dự tính rồi mới hỏi lần đầu, và không bao giờ hỏi dày
+     hơn 20 giây một lần.
+   - **Không bao giờ** viết `while True: sleep(2); jobs.list()`. Hỏi `jobs.list()`
+     tốn gấp ~200 lần `jobs.get(id)` ở phía máy chủ vì nó trả về cả trăm job kèm
+     toàn bộ file kết quả. Chờ MỘT job thì hỏi ĐÚNG job đó.
 
 ## Thư mục
 
