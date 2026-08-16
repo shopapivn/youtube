@@ -1683,8 +1683,9 @@ def _khau_giong_doc(bc: BoiCanh):
         finally:
             theo_doi.dong()
         _noi_mp3(bc, manh, dich)
+        doi = _doi_cao_do_giong(bc, dich)
         _lam_sach_ket_qua(bc, dich)
-        return {"so_doan": len(manh)}
+        return {"so_doan": len(manh), "doi_cao_do": doi}
 
     return lam
 
@@ -2409,6 +2410,46 @@ def _lam_sach_anh(bc: BoiCanh, tep: str) -> None:
         lam_sach_anh(tep)
     except Exception:  # noqa: BLE001
         pass
+
+
+def _doi_cao_do_giong(bc: BoiCanh, mp3: str) -> bool:
+    """Dịch nhẹ cao độ giọng đọc, nếu khách bật ở Cài đặt.
+
+    ═══ PHẢI LÀM Ở ĐÂY, TRƯỚC KHÂU PHỤ ĐỀ ═══
+
+    Khâu phụ đề nghe chính tệp này để ra mốc thời gian, và bảng cảnh bám theo
+    những mốc ấy. Dịch cao độ **sau** khi đã có phụ đề thì phụ đề mô tả một tệp
+    không còn tồn tại nữa.
+
+    Phép dịch giữ nguyên độ dài (xem `loc_doi_cao_do`), nên kể cả làm đúng thứ
+    tự thì mốc thời gian cũng không xê dịch. Nhưng đặt đúng chỗ vẫn hơn dựa vào
+    một tính chất có thể đổi.
+
+    Hỏng thì giữ nguyên giọng cũ và **nói ra** — khác với mấy bước vệ sinh im
+    lặng ở trên. Khách bật nút này là họ đang chờ một thứ cụ thể; im lặng bỏ
+    qua là để họ tin nhầm là đã làm.
+    """
+    try:
+        from . import cai_dat  # noqa: PLC0415
+
+        if not cai_dat.doc(bc.goc).get("doi_cao_do_giong", False):
+            return False
+        from .lam_sach import CENT_DOI, doi_cao_do  # noqa: PLC0415
+
+        ffmpeg = bc.ffmpeg or _tim_ffmpeg()
+        if not ffmpeg:
+            bc.ghi("  (không đổi được cao độ: máy chưa có FFmpeg)")
+            return False
+        bc.ghi("  đổi nhẹ cao độ giọng ({0} cent)…".format(CENT_DOI))
+        if doi_cao_do(ffmpeg, mp3):
+            return True
+        bc.ghi("  (đổi cao độ không thành — giữ nguyên giọng gốc)")
+    except Exception as loi:  # noqa: BLE001
+        try:
+            bc.ghi("  (đổi cao độ không thành: {0})".format(str(loi)[:80]))
+        except Exception:  # noqa: BLE001
+            pass
+    return False
 
 
 def _lam_sach_ket_qua(bc: BoiCanh, *tep: str) -> None:

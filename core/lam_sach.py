@@ -52,11 +52,12 @@ from __future__ import annotations
 import os
 import subprocess
 import unicodedata
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 __all__ = [
     "DAU_AI", "KY_TU_AN", "dau_ai_trong", "lam_sach_anh", "lam_sach_video",
     "lam_sach_chu", "lam_sach_tep",
+    "CENT_DOI", "co_doi_cao_do", "loc_doi_cao_do", "doi_cao_do",
 ]
 
 #: Chuỗi nhận dạng dấu nguồn gốc AI, dò thẳng trên byte thô của tệp.
@@ -270,6 +271,139 @@ def lam_sach_video(ffmpeg: str, tep: str) -> bool:
         if xong.returncode != 0 or not os.path.isfile(tam) \
                 or os.path.getsize(tam) <= 0:
             raise RuntimeError("ffmpeg không tạo được tệp sạch")
+        os.replace(tam, tep)
+        return True
+    except Exception:  # noqa: BLE001
+        try:
+            os.remove(tam)
+        except OSError:
+            pass
+        return False
+
+
+# ── Đổi nhẹ cao độ giọng đọc ─────────────────────────────────────────────────
+#
+# ═══ ĐÂY LÀ THỨ KHÁC HẲN PHẦN TRÊN ═══
+#
+# Mọi thứ phía trên chỉ bỏ **thẻ dữ liệu** — vỏ tệp. Phần này đụng vào chính
+# **âm thanh**, nên nó có một cái công tắc riêng và mặc định cũng tắt.
+#
+# ═══ VÌ SAO LÀM ĐƯỢC ═══
+#
+# Cổng giọng nói chạy trên ElevenLabs (xem khuôn `voice_id` mà SDK kiểm), mà
+# ElevenLabs đã bắt tay Google DeepMind nhúng **SynthID vào âm thanh**, phủ dần
+# ra mọi gói trong tháng 7/2026.
+#
+# SynthID audio đổi sóng thành **ảnh phổ**, nhúng dấu vào ảnh phổ đó, rồi dựng
+# lại sóng. Nên thứ phá được nó là thứ làm méo ảnh phổ.
+#
+# Nghiên cứu hệ thống (SoK, arXiv 2503.19176) kết luận: *mọi* hệ watermark âm
+# thanh đều gãy trước phép **dịch cao độ**, độ chính xác nhận dạng tụt dưới
+# 0.6 — mà vẫn giữ được chất lượng nghe. Bài về tấn công lệch đồng bộ đo được
+# một phép dịch **55 cent** đã đẩy tỉ lệ lỗi bit lên 50%.
+#
+# ═══ NHƯNG CHƯA AI Ở ĐÂY KIỂM CHỨNG ĐƯỢC ═══
+#
+# Máy dò SynthID không công khai, nên tool **không tự kiểm được** là dấu đã mất
+# hay chưa. Mọi con số trên là của người khác đo. Đừng viết vào giao diện một
+# lời hứa chắc chắn — ElevenLabs có Audio Detector công khai, để khách tự kiểm
+# rồi tự quyết.
+
+#: Dịch bao nhiêu **cent** (1 nốt nhạc = 100 cent).
+#:
+#: 60 cent là hơn nửa nốt một chút — nằm trong vùng mà nghiên cứu đo được là
+#: đủ phá dấu, mà với giọng kể chuyện thì không ai nghe ra. Nhạc công mới phân
+#: biệt được nửa nốt; người nghe kể chuyện thì không có gì để so.
+CENT_DOI = 60
+
+#: Hạ trước bao nhiêu dB để chừa chỗ.
+#:
+#: **Đừng bỏ.** Đo thật 16/08/2026 trên giọng của kênh: dịch cao độ đẩy đỉnh
+#: tiếng từ -1,3 dB lên **0,0 dB — tức vỡ tiếng** ở những chỗ đọc to. Dịch cao
+#: độ dồn năng lượng sang tần số khác, và chỗ dồn vào có thể tràn.
+CHUA_CHO_DB = 2.0
+
+_NHO_RB: Dict[str, bool] = {}
+
+
+def co_doi_cao_do(ffmpeg: str) -> bool:
+    """Bản FFmpeg này có `rubberband` không.
+
+    `rubberband` phải được biên dịch vào lúc dựng FFmpeg, nên hai bản cùng số
+    hiệu vẫn có thể một bản có một bản không. Bản đi kèm `imageio-ffmpeg` thì
+    có (đã kiểm), nhưng `tim_ffmpeg` **ưu tiên bản khách tự cài** — mà bản ấy
+    thì không đoán được.
+
+    Thiếu thì vẫn dịch được bằng đường lui, chỉ kém hơn — xem `doi_cao_do`.
+    """
+    if not ffmpeg:
+        return False
+    if ffmpeg in _NHO_RB:
+        return _NHO_RB[ffmpeg]
+    co = False
+    try:
+        xong = subprocess.run([ffmpeg, "-hide_banner", "-filters"],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              text=True, encoding="utf-8", errors="replace",
+                              check=False, timeout=30)
+        co = " rubberband " in (xong.stdout or "")
+    except (OSError, subprocess.SubprocessError):
+        co = False
+    _NHO_RB[ffmpeg] = co
+    return co
+
+
+def loc_doi_cao_do(cent: int = CENT_DOI, *, co_rubberband: bool = True) -> str:
+    """Chuỗi lọc FFmpeg dịch cao độ mà **giữ nguyên độ dài**.
+
+    Giữ nguyên độ dài là điều kiện không đổi được: phụ đề và bảng cảnh đều bám
+    mốc thời gian tuyệt đối của tệp tiếng này. Dài ra một giây là mọi cảnh phía
+    sau lệch một giây.
+
+    Thuần tính toán — dựng chuỗi chữ, không chạy gì, nên test kiểm được.
+
+    Đường lui khi thiếu `rubberband`: đổi tốc độ phát (`asetrate`) để kéo cao
+    độ lên, rồi `atempo` kéo tốc độ về cũ. Cách kinh điển, có ở mọi bản FFmpeg,
+    nghe kém hơn `rubberband` một chút nhưng vẫn dùng được.
+    """
+    ti_le = 2.0 ** (float(cent) / 1200.0)
+    chua = "volume=-{0:.1f}dB".format(CHUA_CHO_DB)
+    # `alimiter` chặn đỉnh ở -1 dBFS. Chừa chỗ trước rồi chặn đỉnh sau: chỉ
+    # chừa chỗ thì chỗ dồn năng lượng vẫn có thể tràn.
+    chan = "alimiter=limit=0.891"
+    if co_rubberband:
+        return "{0},rubberband=pitch={1:.6f},{2}".format(chua, ti_le, chan)
+    # Chốt về 44.1 kHz trước để `asetrate` tính được: nó cần một con số cụ thể,
+    # mà tệp vào có thể ở tần số nào cũng được.
+    return ("{0},aformat=sample_rates=44100,asetrate={1},aresample=44100,"
+            "atempo={2:.6f},{3}".format(
+                chua, int(round(44100 * ti_le)), 1.0 / ti_le, chan))
+
+
+def doi_cao_do(ffmpeg: str, tep: str, cent: int = CENT_DOI) -> bool:
+    """Dịch nhẹ cao độ một tệp tiếng, ghi đè tại chỗ.
+
+    Đây là **phép mã hoá lại có mất mát** — khác hẳn mọi hàm khác trong tệp
+    này. Không tránh được: đổi âm thanh thì phải dựng lại tệp. Dùng 192 kbps,
+    cao hơn bản gốc nhà cung cấp trả về, để lần nén này không thấy được.
+
+    Hỏng thì giữ nguyên tệp cũ. Giọng đọc là thứ đắt nhất trong cả lượt chạy —
+    thà không dịch còn hơn mất.
+    """
+    if not ffmpeg or not os.path.isfile(tep):
+        return False
+    goc, duoi = os.path.splitext(tep)
+    tam = goc + ".caodo" + (duoi or ".mp3")
+    loc = loc_doi_cao_do(cent, co_rubberband=co_doi_cao_do(ffmpeg))
+    try:
+        xong = subprocess.run(
+            [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", tep,
+             "-af", loc, "-b:a", "192k", tam],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+            timeout=1800)
+        if xong.returncode != 0 or not os.path.isfile(tam) \
+                or os.path.getsize(tam) <= 0:
+            raise RuntimeError("ffmpeg không dịch được cao độ")
         os.replace(tam, tep)
         return True
     except Exception:  # noqa: BLE001

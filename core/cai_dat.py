@@ -81,6 +81,18 @@ MAC_DINH: Dict[str, Any] = {
     # YouTube, và vì sao tin nhầm chỗ đó thì mất kênh chứ không mất công.
     "lam_sach_dau_ai": False,
 
+    # Đổi nhẹ cao độ giọng đọc (60 cent, hơn nửa nốt nhạc).
+    #
+    # Công tắc RIÊNG, không gộp với `lam_sach_dau_ai`, vì nó khác hẳn về mức
+    # độ: cái kia chỉ bỏ thẻ ở vỏ tệp, cái này đụng vào **chính âm thanh** và
+    # phải mã hoá lại tệp giọng đọc. Hai mức rủi ro khác nhau thì phải hai nút.
+    #
+    # Tắt sẵn, cùng lý do: đây là thứ đổi sản phẩm của khách, phải do họ bấm.
+    #
+    # Xem `core/lam_sach.py` mục "Đổi nhẹ cao độ giọng đọc" — trong đó có cả
+    # phần nói rõ tool KHÔNG tự kiểm chứng được là dấu đã mất hay chưa.
+    "doi_cao_do_giong": False,
+
     # Độ phân giải video ra của tab Tự động: "4K", "1440p", "1080p" hay
     # "Giữ nguyên". Kênh nào khai riêng trong `kenh.yaml` thì lấy theo kênh.
     #

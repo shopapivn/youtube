@@ -74,6 +74,18 @@ MUC = (
      "tổng hợp” là ô bạn tự tích trong Studio, YouTube không đọc thẻ tệp để "
      "quyết. YouTube nói tích ô đó không giảm hiển thị hay tiền — còn KHÔNG "
      "khai mới là thứ khoá kiếm tiền 90 ngày rồi gỡ kênh khỏi YPP."),
+    ("doi_cao_do_giong", "Đổi nhẹ cao độ giọng đọc",
+     "Tắt sẵn. Đây là nút DUY NHẤT trong nhóm này đụng vào chính nội dung, chứ "
+     "không chỉ vào thẻ dữ liệu — nên nó tách riêng.\n"
+     "Cổng giọng nói chạy trên ElevenLabs, mà ElevenLabs nhúng dấu chìm "
+     "SynthID vào âm thanh. Dấu đó nằm trong sóng tiếng nên xoá thẻ không tới "
+     "được. Nghiên cứu cho thấy dịch cao độ làm gãy dấu này.\n"
+     "Tôi dịch 60 cent — hơn nửa nốt nhạc. Nhạc công mới phân biệt được, người "
+     "nghe kể chuyện thì không. Độ dài giữ nguyên tuyệt đối nên phụ đề và cảnh "
+     "không xê dịch một mi-li-giây nào.\n"
+     "PHẢI NÓI THẬT: tôi KHÔNG tự kiểm được là dấu đã mất hay chưa — máy dò "
+     "của Google không công khai. Bạn tự kiểm miễn phí bằng Audio Detector của "
+     "ElevenLabs: tải lên bản trước và sau rồi so."),
 )
 
 

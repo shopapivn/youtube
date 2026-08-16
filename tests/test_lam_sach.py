@@ -19,7 +19,7 @@ import pytest
 
 from core.dung_video import tim_ffmpeg
 from core.lam_sach import (DAU_AI, dau_ai_trong, lam_sach_anh, lam_sach_chu,
-                           lam_sach_tep, lam_sach_video)
+                           lam_sach_tep, lam_sach_video, loc_doi_cao_do)
 
 FFMPEG = tim_ffmpeg()
 
@@ -211,6 +211,146 @@ class TestMacDinhVaPhamVi:
         finally:
             cai_dat.doc = that
         assert dem["n"] == 1, "hỏi cài đặt {0} lần".format(dem["n"])
+
+
+class TestDoiCaoDo:
+    """Dịch cao độ giọng đọc — nút DUY NHẤT đụng vào chính nội dung."""
+
+    def test_mac_dinh_la_TAT(self):
+        from core import cai_dat
+
+        assert cai_dat.MAC_DINH["doi_cao_do_giong"] is False
+
+    def test_cong_tac_rieng_khong_gop_voi_xoa_the(self):
+        """Đụng vào âm thanh và chỉ bỏ thẻ là hai mức rủi ro khác nhau."""
+        from core import cai_dat
+
+        assert "doi_cao_do_giong" in cai_dat.MAC_DINH
+        assert "lam_sach_dau_ai" in cai_dat.MAC_DINH
+
+    def test_chua_cho_truoc_khi_dich(self):
+        """Đo thật: dịch cao độ đẩy đỉnh từ -1,3 dB lên 0,0 dB — vỡ tiếng."""
+        loc = loc_doi_cao_do(60)
+        assert loc.startswith("volume=-"), loc
+        assert "alimiter" in loc, "không chặn đỉnh thì chỗ dồn năng lượng tràn"
+
+    def test_dung_rubberband_khi_co(self):
+        assert "rubberband=pitch=" in loc_doi_cao_do(60, co_rubberband=True)
+
+    def test_duong_lui_khi_khong_co_rubberband(self):
+        """`tim_ffmpeg` ưu tiên bản khách tự cài — bản ấy không đoán được."""
+        loc = loc_doi_cao_do(60, co_rubberband=False)
+        assert "rubberband" not in loc
+        assert "asetrate=" in loc and "atempo=" in loc
+
+    def test_duong_lui_keo_toc_do_ve_dung_cu(self):
+        """`asetrate` kéo cao độ lên thì `atempo` phải kéo tốc độ về, không thì
+        giọng đọc ngắn lại và mọi mốc phụ đề lệch."""
+        import re
+
+        loc = loc_doi_cao_do(60, co_rubberband=False)
+        tan_so = int(re.search(r"asetrate=(\d+)", loc).group(1))
+        nhip = float(re.search(r"atempo=([\d.]+)", loc).group(1))
+        # Hai phép phải triệt tiêu nhau: 44100*R rồi phát chậm lại 1/R.
+        assert abs(tan_so * nhip - 44100) < 2, (tan_so, nhip)
+
+    def test_dich_len_chu_khong_xuong(self):
+        ti_le = 2.0 ** (60 / 1200.0)
+        assert "pitch={0:.6f}".format(ti_le) in loc_doi_cao_do(60)
+        assert ti_le > 1.0
+
+    def test_cent_nam_trong_vung_nghien_cuu_do_duoc(self):
+        """55 cent là mốc bài nghiên cứu đo được đẩy tỉ lệ lỗi bit lên 50%."""
+        from core.lam_sach import CENT_DOI
+
+        assert 40 <= CENT_DOI <= 100, (
+            "quá nhỏ thì không phá được dấu, quá lớn thì nghe ra")
+
+    def test_thieu_tep_thi_khong_ne_loi(self, tmp_path):
+        from core.lam_sach import doi_cao_do
+
+        assert not doi_cao_do("ffmpeg", str(tmp_path / "khong-co.mp3"))
+
+    def test_tep_hong_thi_giu_nguyen_giong_cu(self, tmp_path):
+        """Giọng đọc là thứ đắt nhất cả lượt — thà không dịch còn hơn mất."""
+        from core.lam_sach import doi_cao_do
+
+        tep = str(tmp_path / "khong-phai-tieng.mp3")
+        with open(tep, "w", encoding="utf-8") as ghi:
+            ghi.write("day khong phai tieng")
+        if FFMPEG:
+            assert not doi_cao_do(FFMPEG, tep)
+        assert os.path.isfile(tep)
+        assert not [t for t in os.listdir(str(tmp_path)) if ".caodo" in t]
+
+
+@pytest.mark.skipif(not FFMPEG, reason="máy này không có FFmpeg")
+class TestDoiCaoDoChayThat:
+    """Đọc chuỗi lọc rồi bảo "trông đúng" là bài kiểm xanh mà giọng ra hỏng."""
+
+    def _tieng(self, tmp_path, giay=4):
+        tep = str(tmp_path / "g.mp3")
+        subprocess.run(
+            [FFMPEG, "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+             "-i", "sine=frequency=220:duration={0}".format(giay),
+             "-b:a", "192k", tep], check=True)
+        return tep
+
+    def _soi(self, tep):
+        import re
+
+        ket = subprocess.run(
+            [FFMPEG, "-hide_banner", "-i", tep, "-af", "volumedetect",
+             "-f", "null", "-"], capture_output=True, text=True)
+        tho = ket.stderr or ""
+        d = re.search(r"Duration:\s*(\d+):(\d\d):(\d\d\.\d+)", tho)
+        giay = (int(d.group(1)) * 3600 + int(d.group(2)) * 60
+                + float(d.group(3))) if d else 0.0
+        dinh = re.search(r"max_volume:\s*(-?[\d.]+)", tho)
+        return giay, (float(dinh.group(1)) if dinh else 0.0)
+
+    def test_giu_nguyen_do_dai(self, tmp_path):
+        """Dài ra một giây là mọi cảnh phía sau lệch một giây."""
+        from core.lam_sach import doi_cao_do
+
+        tep = self._tieng(tmp_path)
+        truoc, _ = self._soi(tep)
+        assert doi_cao_do(FFMPEG, tep)
+        sau, _ = self._soi(tep)
+        assert abs(sau - truoc) < 0.05, (
+            "dài {0:.2f}s thành {1:.2f}s".format(truoc, sau))
+
+    def test_khong_vo_tieng(self, tmp_path):
+        """Đo thật trên giọng của kênh: không chừa chỗ là đỉnh chạm 0,0 dB."""
+        from core.lam_sach import doi_cao_do
+
+        tep = self._tieng(tmp_path)
+        assert doi_cao_do(FFMPEG, tep)
+        _, dinh = self._soi(tep)
+        assert dinh <= -0.3, "đỉnh {0:.1f} dB — vỡ tiếng".format(dinh)
+
+    def test_cao_do_that_su_doi(self, tmp_path):
+        """Không đổi cao độ thì cả tính năng vô nghĩa mà bài kiểm vẫn xanh."""
+        import wave
+
+        from core.lam_sach import doi_cao_do
+
+        tep = self._tieng(tmp_path)
+        assert doi_cao_do(FFMPEG, tep)
+        ra = str(tmp_path / "ra.wav")
+        subprocess.run([FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", tep, "-ac", "1", "-ar", "8000", ra], check=True)
+        with wave.open(ra) as w:
+            import array
+
+            mau = array.array("h", w.readframes(w.getnframes()))
+            tan_so_mau = w.getframerate()
+        # Đếm số lần sóng cắt qua 0 -> ước lượng tần số. Sine 220 Hz dịch lên
+        # 60 cent phải thành ~227,8 Hz.
+        cat = sum(1 for i in range(1, len(mau))
+                  if (mau[i - 1] < 0) != (mau[i] < 0))
+        do_duoc = cat * tan_so_mau / (2.0 * max(1, len(mau)))
+        assert 222 < do_duoc < 234, "đo được {0:.1f} Hz".format(do_duoc)
 
 
 class TestChonDungCach:
