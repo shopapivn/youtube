@@ -50,7 +50,7 @@ from .chia_canh import (bang_phu_de, chia_theo_nghia, dien_khuon,
 from .goi_van_ban import loc_json
 from .kenh import Kenh, ten_khung
 from .nang_anh import KHUNG
-from .the_cam_xuc import TEP_CO_THE, chen_the
+from .the_cam_xuc import TEP_CO_THE, chen_the, kiem_the
 from .tron_tieng import co_ne_giong, loc_tron_nhac
 from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
                     phan_loai, xin_nhip)
@@ -1557,11 +1557,14 @@ def _khau_kich_ban(bc: BoiCanh):
             except Exception as loi:  # noqa: BLE001
                 bc.ghi("  (bỏ qua SEO: {0})".format(str(loi)[:100]))
 
-        so_the = _chen_the_cam_xuc(bc, luot, ban_nhap)
+        # Thẻ cảm xúc **không** làm ở đây. Chủ dự án, 16/08/2026: *"sẽ tách ra
+        # khỏi khâu content mà thay vào đó ở khâu voice thì sẽ hợp lý hơn"* —
+        # và đúng vậy: thẻ là chỉ đạo cho người đọc, không phải một phần của
+        # nội dung. Xem `_chen_the_cam_xuc`, gọi từ khâu giọng đọc.
         _lam_sach_ket_qua(bc, duong_kb, duong_seo,
                           os.path.join(d, "1-tieu-de.txt"))
         return {"so_ky_tu": len(ban_nhap), "lech": round(lech, 3),
-                "tieu_de": tieu_de, "chu_bia": chu_bia, "the_cam_xuc": so_the}
+                "tieu_de": tieu_de, "chu_bia": chu_bia}
 
     return lam
 
@@ -1644,21 +1647,19 @@ def _khau_giong_doc(bc: BoiCanh):
         dich = os.path.join(d, "2-giong-doc.mp3")
         if os.path.exists(dich):
             return {"da_co": True}
-        # ═══ ƯU TIÊN BẢN CÓ THẺ CẢM XÚC ═══
-        #
-        # Chỉ khâu này được đọc bản có thẻ. Khâu phụ đề vẫn ép **bản sạch** lên
-        # giọng đọc, nên thẻ không bao giờ hiện lên màn hình. Xem
-        # `_chen_the_cam_xuc` và `core/the_cam_xuc.py`.
-        #
-        # Chèn thẻ ở khâu 1 chứ không ở đây là có chủ ý: thẻ tính vào trần
-        # 1.000 ký tự của cổng, nên nó phải có mặt **trước** lúc cắt đoạn. Cắt
-        # trước rồi chèn sau là đoạn phình quá trần và cổng từ chối.
-        co_the = _doc_chu(os.path.join(d, TEP_CO_THE)).strip()
-        kich_ban = co_the or _doc_chu(os.path.join(d, "1-kich-ban.txt")).strip()
-        if co_the:
-            bc.ghi("  đọc bản có thẻ cảm xúc.")
+        kich_ban = _doc_chu(os.path.join(d, "1-kich-ban.txt")).strip()
         if not kich_ban:
             raise RuntimeError("chưa có kịch bản để đọc")
+        # ═══ CHÈN THẺ CẢM XÚC — ĐÚNG CHỖ NÀY, KHÔNG SỚM HƠN KHÔNG MUỘN HƠN ═══
+        #
+        # Trước khâu cắt đoạn: thẻ tính vào trần 1.000 ký tự của cổng, nên nó
+        # phải có mặt **trước** lúc chia. Cắt trước rồi chèn sau là đoạn phình
+        # quá trần và cổng từ chối — cùng bài học ghi trong tool gốc
+        # `D:\11lab_vm`: *"thêm break tags TRƯỚC khi split"*.
+        #
+        # Và chỉ khâu này thấy bản có thẻ. Khâu phụ đề vẫn ép **bản sạch** lên
+        # giọng đọc, nên `[whispers]` không bao giờ hiện lên màn hình.
+        kich_ban = _chen_the_cam_xuc(bc, luot, kich_ban)
         if not bc.kenh.voice_id:
             raise RuntimeError("kênh chưa chọn giọng — điền voice_id vào kenh.yaml")
 
@@ -2454,8 +2455,8 @@ def _lam_sach_anh(bc: BoiCanh, tep: str) -> None:
         pass
 
 
-def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> int:
-    """Ghi ra bản kịch bản có thẻ cảm xúc. Trả về số thẻ chèn được.
+def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> str:
+    """Trả về chữ sẽ đem đi đọc — có thẻ cảm xúc nếu khách bật, không thì y cũ.
 
     ═══ GHI RA TỆP RIÊNG, KHÔNG ĐÈ LÊN KỊCH BẢN ═══
 
@@ -2466,19 +2467,27 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> int:
     Không có tệp riêng ấy thì mọi thứ chạy y như trước — đó là đường lui của cả
     tính năng này, và nó là đường lui **không cần viết thêm dòng nào**.
 
-    Đã có tệp thì thôi: chèn thẻ là một lượt gọi AI, và "Chạy tiếp" một lượt cũ
-    không nên trả tiền lại cho việc đã làm.
+    Đã có tệp thì dùng lại: chèn thẻ tốn mấy lượt gọi AI, và "Chạy tiếp" một
+    lượt cũ không nên trả tiền lại cho việc đã làm.
     """
     tep = os.path.join(luot.thu_muc, TEP_CO_THE)
-    if os.path.exists(tep):
-        return 0
+    da_co = _doc_chu(tep).strip()
     try:
         from . import cai_dat  # noqa: PLC0415
 
-        if not cai_dat.doc(bc.goc).get("the_cam_xuc", True):
-            return 0
+        bat = bool(cai_dat.doc(bc.goc).get("the_cam_xuc", False))
     except Exception:  # noqa: BLE001
-        return 0
+        bat = False
+    if not bat:
+        return kich_ban
+    if da_co:
+        # Kiểm lại bản cũ: tệp có thể do một bản tool cũ ghi ra, hoặc khách sửa
+        # tay. Không khớp kịch bản hiện tại là bỏ, đọc bản sạch — cùng nết với
+        # `_canh_dung_duoc` ở khâu bảng cảnh.
+        if kiem_the(kich_ban, da_co):
+            bc.ghi("  dùng lại bản đã chèn thẻ của lượt trước.")
+            return da_co
+        bc.ghi("  (bản chèn thẻ cũ không khớp kịch bản — bỏ, chèn lại)")
     try:
         bc.ghi("  chèn thẻ cảm xúc cho giọng đọc…")
 
@@ -2490,11 +2499,11 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> int:
                           ngon_ngu=bc.kenh.ngon_ngu, ghi=bc.ghi)
     except Exception as loi:  # noqa: BLE001 — thẻ là việc làm đẹp, không bắt buộc
         bc.ghi("  (bỏ qua thẻ cảm xúc: {0})".format(str(loi)[:100]))
-        return 0
+        return kich_ban
     if not co_the:
-        return 0
+        return kich_ban
     _ghi_chu(tep, co_the)
-    return co_the.count("[")
+    return co_the
 
 
 def _doi_cao_do_giong(bc: BoiCanh, mp3: str) -> bool:

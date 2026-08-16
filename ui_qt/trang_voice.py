@@ -836,6 +836,59 @@ class TrangGiongNoi(QWidget):
                 "\n".join("• " + t for t in da_co[:12]))
         self.bang.dat_thu_muc(thu_muc)
         self._dang_lo = True
+        self._chay_voi_the(specs, thu_muc)
+
+    # ── Thẻ cảm xúc ──────────────────────────────────────────────────────────
+
+    def _chay_voi_the(self, specs: List[JobSpec], thu_muc: str) -> None:
+        """Chèn thẻ cảm xúc (nếu khách bật) rồi mới bắn việc đi.
+
+        ═══ PHẢI CHẠY Ở LUỒNG NỀN ═══
+
+        Chèn thẻ là **gọi mạng**, mỗi khúc 2.000 chữ một lượt. Gọi thẳng ở đây
+        là cửa sổ đứng hình cho tới khi xong — với một tệp dài thì đó là cả
+        phút, và khách sẽ tưởng tool treo rồi tắt đi.
+
+        Tắt tính năng thì đi thẳng, không tốn một nhịp nào.
+        """
+        from core import cai_dat  # noqa: PLC0415
+
+        try:
+            bat = bool(cai_dat.doc(self._app.base_dir).get("the_cam_xuc", False))
+        except Exception:  # noqa: BLE001
+            bat = False
+        if not bat:
+            self._app.start_batch(specs, folder=thu_muc)
+            self._cap_nhat_nut_dung()
+            return
+        self._app.run_bg(
+            lambda: self._chen_the(specs),
+            on_ok=lambda ket: self._sau_khi_chen(ket, thu_muc),
+            on_err=lambda loi: self._sau_khi_chen(specs, thu_muc))
+
+    def _chen_the(self, specs: List[JobSpec]) -> List[JobSpec]:
+        """**Chạy ở luồng nền.** Trả về danh sách việc đã chèn thẻ.
+
+        Việc nào chèn hỏng thì giữ nguyên chữ cũ của việc ấy — một tệp hỏng
+        không kéo cả mẻ xuống.
+        """
+        from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+        from core.the_cam_xuc import chen_the  # noqa: PLC0415
+
+        def goi(loi_nhac: str) -> str:
+            return goi_van_ban(self._app.client,
+                               [{"role": "user", "content": loi_nhac}])
+
+        for sp in specs:
+            try:
+                co_the = chen_the(sp.content, goi)
+            except Exception:  # noqa: BLE001
+                co_the = None
+            if co_the:
+                sp.content = co_the
+        return specs
+
+    def _sau_khi_chen(self, specs: List[JobSpec], thu_muc: str) -> None:
         self._app.start_batch(specs, folder=thu_muc)
         self._cap_nhat_nut_dung()
 

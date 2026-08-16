@@ -194,20 +194,34 @@ class TestCatDoanKhongCatGiuaThe:
 
 
 class TestNoiVaoDayChuyen:
-    def test_mac_dinh_la_BAT(self):
-        """Chủ dự án chốt: "để ở setting mặc định là bật"."""
+    def test_mac_dinh_la_TAT(self):
+        """Chủ dự án chốt lại: "sẽ cài ở setting để mặc định là tắt"."""
         from core import cai_dat
 
-        assert cai_dat.MAC_DINH["the_cam_xuc"] is True
+        assert cai_dat.MAC_DINH["the_cam_xuc"] is False
 
-    def test_khau_giong_doc_uu_tien_ban_co_the(self):
-        """Đọc sai tệp là cả tính năng thành vô hình."""
+    def test_chen_o_khau_VOICE_chu_khong_o_khau_content(self):
+        """Chủ dự án: "tách ra khỏi khâu content, ở khâu voice hợp lý hơn".
+
+        Thẻ là chỉ đạo cho người đọc, không phải một phần của nội dung. Và nó
+        phải nằm **trước** bước cắt đoạn, vì thẻ tính vào trần 1.000 ký tự.
+        """
         goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         with open(os.path.join(goc, "core", "auto_khau.py"),
                   encoding="utf-8") as tep:
             chu = tep.read()
-        assert "TEP_CO_THE" in chu
-        assert "co_the or _doc_chu" in chu, "phải ưu tiên bản có thẻ"
+
+        khuc_giong = chu[chu.index("def _khau_giong_doc"):]
+        khuc_giong = khuc_giong[:khuc_giong.index("def _khau_phu_de")]
+        assert "_chen_the_cam_xuc" in khuc_giong, "khâu voice phải chèn thẻ"
+        assert khuc_giong.index("_chen_the_cam_xuc") < \
+            khuc_giong.index("chia_doan_doc"), \
+            "phải chèn TRƯỚC khi cắt đoạn, không thì đoạn phình quá trần"
+
+        khuc_kb = chu[chu.index("def _khau_kich_ban"):]
+        khuc_kb = khuc_kb[:khuc_kb.index("def _lech")]
+        assert "_chen_the_cam_xuc(" not in khuc_kb, \
+            "khâu content không được chèn thẻ nữa"
 
     def test_khau_phu_de_van_dung_ban_SACH(self):
         """Thẻ lọt vào phụ đề là “[whispers]” hiện lên cho người xem đọc."""

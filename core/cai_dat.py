@@ -83,11 +83,13 @@ MAC_DINH: Dict[str, Any] = {
 
     # Chèn thẻ cảm xúc ElevenLabs v3 vào kịch bản trước khi đem đi đọc.
     #
-    # ═══ BẬT SẴN, KHÁC HAI NÚT DƯỚI ═══
+    # ═══ TẮT SẴN ═══
     #
-    # Chủ dự án chốt 16/08/2026: *"để ở setting mặc định là bật"*. Và nó khác
-    # hẳn hai nút xoá dấu ở dưới: mấy nút kia **bỏ đi** một thứ, còn nút này
-    # **thêm vào** một thứ làm sản phẩm hay hơn. Thêm cái tốt thì bật sẵn.
+    # Chủ dự án chốt lại 16/08/2026: *"sẽ cài ở setting để mặc định là tắt"*.
+    # Đúng: tài liệu ElevenLabs KHÔNG nói gì về thẻ cảm xúc với tiếng không
+    # phải tiếng Anh, mà kênh đang chạy viết tiếng Nhật. Bật sẵn một thứ chưa
+    # ai kiểm được trên đúng thứ tiếng khách dùng là bắt họ làm chuột bạch mà
+    # không hỏi.
     #
     # Tốn thêm **một lượt gọi AI viết chữ** cho mỗi lượt chạy — cùng loại với
     # bước nắn độ dài, không phải loại đắt như ảnh hay clip.
@@ -95,7 +97,7 @@ MAC_DINH: Dict[str, Any] = {
     # Ba lớp chặn cho một luật "AI không được đổi chữ": nói trong lời nhắc, lọc
     # thẻ lạ, rồi gỡ hết thẻ ra so lại với bản gốc. Sai một chữ là vứt, đọc bản
     # sạch. Xem `core/the_cam_xuc.py`.
-    "the_cam_xuc": True,
+    "the_cam_xuc": False,
 
     # Đổi nhẹ cao độ giọng đọc (60 cent, hơn nửa nốt nhạc).
     #

@@ -53,8 +53,8 @@ import re
 from typing import List, Optional, Set, Tuple
 
 __all__ = [
-    "THE_CHO_PHEP", "TEP_CO_THE", "bo_the", "loc_the_la", "kiem_the",
-    "loi_nhac_chen_the", "chen_the",
+    "THE_CHO_PHEP", "TEP_CO_THE", "CHU_MOI_LUOT_CHEN", "bo_the", "loc_the_la",
+    "kiem_the", "loi_nhac_chen_the", "chia_de_chen", "chen_the",
 ]
 
 #: Tên tệp giữ bản kịch bản đã chèn thẻ.
@@ -218,14 +218,90 @@ def loi_nhac_chen_the(kich_ban: str, giong_van: str = "",
     )
 
 
+#: Mỗi lượt gọi AI chèn thẻ cho tối đa ngần này ký tự.
+#:
+#: ═══ VÌ SAO CHIA NHỎ THAY VÌ ĐƯA CẢ BÀI ═══
+#:
+#: Chủ dự án, 16/08/2026: *"để chất lượng chèn thẻ ok mày cần phải có logic để
+#: chia ra chèn"*.
+#:
+#: Đưa cả kịch bản mười phút (15.000 chữ) vào một lời nhắc thì AI chèn kỹ ở
+#: đoạn đầu rồi thưa dần — nó phải vừa giữ trong đầu cả bài vừa chép lại từng
+#: chữ không sai. Chia nhỏ thì mỗi lượt nó chỉ lo một khúc, chèn đều tay hơn.
+#:
+#: Và chia nhỏ còn **cứu được phần hỏng**: một khúc bị AI sửa chữ thì chỉ khúc
+#: ấy quay về bản sạch, chứ không vứt cả bài như trước.
+#:
+#: 2.000 chữ là khoảng 15–20 câu — đủ dài để AI thấy được mạch cảm xúc, đủ ngắn
+#: để nó chép lại không sai.
+CHU_MOI_LUOT_CHEN = 2000
+
+
+def chia_de_chen(kich_ban: str, tran: int = CHU_MOI_LUOT_CHEN) -> List[str]:
+    """Cắt kịch bản thành khúc vừa một lượt gọi AI, **cắt ở ranh giới câu**.
+
+    Bất biến bắt buộc: ghép các khúc lại phải ra **đúng từng ký tự** bản gốc.
+    Nhờ đó ghép các khúc đã chèn thẻ lại cũng gỡ thẻ ra đúng bản gốc — đó là
+    điều kiện để `kiem_the` còn nghĩa lý.
+
+    Nhận cả dấu câu tiếng Nhật (`。！？`) — kịch bản của kênh viết tiếng Nhật,
+    và cắt theo mỗi dấu chấm kiểu Âu là cả bài thành một khúc.
+    """
+    tho = kich_ban or ""
+    if not tho:
+        return []
+    tran = max(1, int(tran))
+    if len(tho) <= tran:
+        return [tho]
+    # Giữ nguyên dấu câu ở cuối mỗi mảnh, và không bỏ rơi ký tự nào.
+    manh = re.split(r"(?<=[。．！？!?\.\n])", tho)
+    ra: List[str] = []
+    dem = ""
+    for m in manh:
+        if dem and len(dem) + len(m) > tran:
+            ra.append(dem)
+            dem = m
+        else:
+            dem += m
+    if dem:
+        ra.append(dem)
+    return [k for k in ra if k]
+
+
+def _chen_mot_khuc(khuc: str, goi_ai, giong_van: str, ngon_ngu: str,
+                   noi) -> Tuple[str, bool]:
+    """Chèn thẻ cho một khúc. Trả `(chữ dùng được, có chèn được không)`.
+
+    Hỏng ở bất cứ bước nào cũng trả về **chính khúc gốc** — khúc ấy đọc không
+    có thẻ, những khúc khác vẫn có. Đó là chỗ chia nhỏ ăn tiền: hỏng một khúc
+    không kéo cả bài xuống.
+    """
+    try:
+        tra_ve = goi_ai(loi_nhac_chen_the(khuc, giong_van, ngon_ngu))
+    except Exception as loi:  # noqa: BLE001
+        noi("    (một khúc không chèn được: {0})".format(str(loi)[:80]))
+        return khuc, False
+
+    co_the, da_bo = loc_the_la(str(tra_ve or "").strip())
+    if da_bo:
+        noi("    bỏ thẻ không dùng được: {0}".format(
+            ", ".join(sorted(set(da_bo))[:5])))
+    if not kiem_the(khuc, co_the):
+        noi("    (một khúc bị AI sửa chữ — khúc đó đọc bản gốc)")
+        return khuc, False
+    if not _MOT_THE.search(co_the):
+        return khuc, False
+    return co_the, True
+
+
 def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
-             ghi=None) -> Optional[str]:
-    """Nhờ AI chèn thẻ, rồi **kiểm lại** trước khi nhận.
+             ghi=None, tran_khuc: int = CHU_MOI_LUOT_CHEN) -> Optional[str]:
+    """Nhờ AI chèn thẻ theo từng khúc, rồi **kiểm lại** trước khi nhận.
 
     `goi_ai` là hàm `(lời nhắc) -> chữ trả về`; tách ra để test không cần mạng.
 
-    Trả về bản có thẻ, hoặc `None` khi không dùng được. `None` nghĩa là *"cứ
-    đọc bản sạch"* — mất một tính năng làm đẹp, không mất gì khác.
+    Trả về bản có thẻ, hoặc `None` khi không khúc nào chèn được. `None` nghĩa
+    là *"cứ đọc bản sạch"* — mất một tính năng làm đẹp, không mất gì khác.
 
     Kịch bản vốn đã có dấu `[` thì **bỏ qua ngay**: lúc ấy không phân biệt được
     ngoặc của nội dung với ngoặc của thẻ, nên `kiem_the` mất khả năng kiểm. Thà
@@ -245,22 +321,24 @@ def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
         noi("  (kịch bản có sẵn dấu ngoặc vuông — bỏ qua bước chèn thẻ cho chắc)")
         return None
 
-    try:
-        tra_ve = goi_ai(loi_nhac_chen_the(goc, giong_van, ngon_ngu))
-    except Exception as loi:  # noqa: BLE001
-        noi("  (không chèn được thẻ cảm xúc: {0})".format(str(loi)[:100]))
-        return None
+    khuc = chia_de_chen(goc, tran_khuc)
+    ra: List[str] = []
+    duoc = 0
+    for i, k in enumerate(khuc, start=1):
+        if len(khuc) > 1:
+            noi("  chèn thẻ khúc {0}/{1}…".format(i, len(khuc)))
+        chu, ok = _chen_mot_khuc(k, goi_ai, giong_van, ngon_ngu, noi)
+        ra.append(chu)
+        duoc += 1 if ok else 0
 
-    co_the, da_bo = loc_the_la(str(tra_ve or "").strip())
-    if da_bo:
-        noi("  bỏ {0} thẻ không dùng được: {1}".format(
-            len(da_bo), ", ".join(sorted(set(da_bo))[:5])))
+    co_the = "".join(ra)
+    if not duoc:
+        noi("  (không khúc nào chèn được thẻ — dùng kịch bản gốc)")
+        return None
+    # Chốt lần cuối trên bản đã ghép: từng khúc đúng mà ghép sai thì vẫn hỏng.
     if not kiem_the(goc, co_the):
-        noi("  (AI sửa cả chữ chứ không chỉ chèn thẻ — bỏ, dùng kịch bản gốc)")
+        noi("  (bản ghép lại không khớp kịch bản gốc — bỏ, dùng bản gốc)")
         return None
-    so_the = len(_MOT_THE.findall(co_the))
-    if not so_the:
-        noi("  (AI không chèn thẻ nào — dùng kịch bản gốc)")
-        return None
-    noi("  đã chèn {0} thẻ cảm xúc.".format(so_the))
+    noi("  đã chèn {0} thẻ cảm xúc ({1}/{2} khúc).".format(
+        len(_MOT_THE.findall(co_the)), duoc, len(khuc)))
     return co_the

@@ -417,9 +417,21 @@ class TestDayChuyen:
         assert max(anh) < min(clip), (
             "tấm ảnh cuối cùng phải được bắn TRƯỚC khi clip đầu tiên ra đời — "
             "nếu không thì lại là chờ theo đợt")
-        assert max(anh) - min(anh) < 0.5, (
-            "bắn 23 job mất {0:.1f} giây; mỗi lời gọi tạo job chỉ ~0,1 giây, "
-            "chậm hơn thế là đang chờ nhau".format(max(anh) - min(anh)))
+        # ═══ NGƯỠNG PHẢI PHÂN BIỆT ĐƯỢC HAI TRẠNG THÁI, KHÔNG PHẢI ĐO TỐC ĐỘ MÁY ═══
+        #
+        # Bản trước chốt 0,5 giây. Nó **đỏ ngẫu nhiên 1/3 lần** trên máy đang
+        # bận — mà một bài kiểm báo động giả thì tệ hơn không có: lần sau đỏ
+        # thật cũng không ai tin.
+        #
+        # Con số này chỉ cần tách được hai trạng thái, và hai trạng thái ấy
+        # cách nhau rất xa:
+        #     bắn một lượt (đúng)  : dưới 0,2 giây
+        #     chờ theo đợt (sai)   : 23 job / 3 suất × 0,6 giây ≈ 4,6 giây
+        # Lấy 2,0 giây là dư mười lần biên về cả hai phía, mà vẫn bắt được
+        # ngay nếu ai đó dựng lại hàng rào chờ theo đợt.
+        assert max(anh) - min(anh) < 2.0, (
+            "bắn 23 job mất {0:.1f} giây — chờ theo đợt chứ không bắn một "
+            "lượt".format(max(anh) - min(anh)))
 
     def test_anh_xong_la_ban_clip_ngay_khong_doi_ca_me(self, tmp_path):
         """Hàng rào cũ: khâu clip đợi ĐỦ 114 ảnh. Một cảnh chậm là cả mẻ đứng."""
