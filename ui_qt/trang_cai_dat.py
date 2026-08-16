@@ -87,6 +87,10 @@ MUC = (
      "Thẻ chỉ nằm trong bản đem đi đọc. Phụ đề vẫn là bản sạch — tôi đã thử "
      "thật với cả tiếng Nhật lẫn tiếng Anh: giọng đọc KHÔNG đọc to tên thẻ "
      "lên, và phụ đề không dính ngoặc vuông nào.\n"
+     "LƯU Ý QUAN TRỌNG: thẻ làm giọng đọc DÀI RA. Đo thật: tiếng Nhật dài thêm "
+     "5%, tiếng Anh dài thêm tới 32%. Kịch bản vốn đã nắn cho khớp độ dài "
+     "video bạn nhắm tới, nên bật cái này rồi thì hãy đo lại video ĐẦU TIÊN "
+     "trước khi cho chạy hàng loạt.\n"
      "Tốn thêm vài lượt gọi AI viết chữ mỗi lượt chạy — loại rẻ, không phải "
      "loại đắt như ảnh hay clip."),
     ("doi_cao_do_giong", "Đổi nhẹ cao độ giọng đọc",

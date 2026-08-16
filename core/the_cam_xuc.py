@@ -32,6 +32,44 @@ Chèn thẻ thẳng vào tệp ấy thì **phụ đề hiện `[whispers]` lên 
 nhắc ảnh bìa cũng dính. Nên bản có thẻ nằm ở tệp riêng `1-kich-ban-the.txt`, và
 chỉ khâu giọng đọc mới nhìn tới. Không có tệp ấy thì mọi thứ chạy y như cũ.
 
+═══ ĐÃ THỬ THẬT — HAI CÂU HỎI, HAI CÂU TRẢ LỜI ═══
+
+Gửi thật lên cổng ngày 16/08/2026, hai thứ tiếng, tải tiếng về rồi **nghe lại
+bằng chính bộ nghe của tool**.
+
+**Câu 1 — thẻ có bị đọc to lên, có dính vào phụ đề không?** Không, cả hai thứ
+tiếng. Nghe ra đúng câu, không một chữ `whispers`/`excited`/`sighs` nào, không
+một dấu ngoặc vuông nào.
+
+**Câu 2 — thẻ có tác dụng gì không?** Phép đo đầu vô dụng: chênh độ to giữa
+khúc `[whispers]` và khúc `[excited]` chỉ 1,6 dB, tưởng thẻ bị nuốt. Phải có
+**bản đối chứng** — đúng câu ấy, đúng giọng ấy, bỏ thẻ đi:
+
+                            tiếng Nhật          tiếng Anh
+                        có thẻ / không thẻ   có thẻ / không thẻ
+    độ dài               10,0s  /  9,5s       9,8s  /  7,4s
+    chênh cao độ giữa
+    khúc 1 và khúc 2    +48,2Hz /  +0,4Hz   +59,6Hz /  +3,0Hz
+
+Dòng cuối là câu trả lời. Không thẻ thì hai khúc **giống hệt nhau** về cao độ
+(0,4 và 3,0 Hz — nhiễu đo). Có thẻ thì khúc "phấn khích" cao hơn khúc "thì
+thầm" gần 50–60 Hz.
+
+Thẻ **có** tác dụng, và nó tác động vào **cao độ và nhịp**, không vào độ to.
+Đó là lý do phép đo to/nhỏ không thấy gì — đo sai chiều.
+
+═══ CẢNH BÁO: THẺ LÀM GIỌNG ĐỌC DÀI RA ═══
+
+Đọc lại bảng trên: tiếng Anh dài thêm **2,4 giây trên 7,4** — tức **+32%**.
+Tiếng Nhật chỉ +5%.
+
+Kịch bản đã qua khâu nắn độ dài để khớp `phut_muc_tieu`. Bật thẻ cho một kênh
+tiếng Anh là video dài hơn nhắm tới cỡ một phần ba — đủ để lệch hẳn khỏi mục
+tiêu. Kênh tiếng Nhật thì không đáng kể.
+
+Đây là lý do nữa để tính năng này **tắt sẵn**, và để ai bật nó lên nên đo lại
+độ dài video đầu tiên trước khi cho chạy hàng loạt.
+
 ═══ CẤM ĐỔI CHỮ, VÀ PHẢI KIỂM ═══
 
 AI được giao đúng một việc: **chèn thẻ**. Không sửa câu, không đổi từ, không
