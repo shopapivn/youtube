@@ -2373,6 +2373,62 @@ def _xoa_dau(bc: BoiCanh, tep: str) -> None:
         xoa_dau_tep(tep)
     except Exception:  # noqa: BLE001
         pass
+    _lam_sach_anh(bc, tep)
+
+
+def _lam_sach_anh(bc: BoiCanh, tep: str) -> None:
+    """Bỏ thẻ nguồn gốc AI khỏi ảnh vừa tải về, nếu khách bật ở Cài đặt.
+
+    ═══ CHỖ THẬT SỰ ĂN THUA LÀ ẢNH BÌA ═══
+
+    Đo 16/08/2026 trên kết quả thật: ảnh nhà cung cấp trả về mang đủ `c2pa`,
+    `"Made with Google AI"` và lời khai `"Applied imperceptible SynthID
+    watermark."`. Nhưng **video cuối thì vốn đã sạch** — khâu dựng mã hoá lại
+    nên thẻ mất hết.
+
+    Còn **ảnh bìa cũng lên YouTube**, mà nó là tệp nhà cung cấp trả về gần như
+    nguyên vẹn. Đó là chỗ duy nhất bước này đổi được điều gì.
+
+    Vẫn chạy cho cả ảnh cảnh, dù chúng không được tải lên đâu: cùng một chỗ
+    móc, mất chừng vài phần trăm giây một tấm, và đỡ phải nhớ tấm nào cần tấm
+    nào không. Ảnh **không bị nén lại** nên không mất một chút nét nào — xem
+    `core/lam_sach.lam_sach_anh`.
+
+    Hỏng thì im lặng để nguyên: đây là việc vệ sinh, không đáng làm hỏng một
+    tấm ảnh đã trả tiền để tạo ra.
+    """
+    try:
+        if not _bat_lam_sach(bc):
+            return
+        from .lam_sach import lam_sach_anh  # noqa: PLC0415
+
+        lam_sach_anh(tep)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _bat_lam_sach(bc: BoiCanh) -> bool:
+    """Khách có bật xoá dấu nguồn gốc không. **Hỏi một lần cho cả lượt chạy.**
+
+    Hàm gọi nó chạy cho từng tấm ảnh, mà một lượt có hơn trăm tấm — đọc lại
+    `workspace/cai-dat.json` cả trăm lần cho một câu trả lời không đổi là việc
+    thừa, và nó nằm ngay trong luồng chạy song song của khâu ảnh, tức đúng chỗ
+    không nên thêm việc.
+
+    Đọc một lần cũng **đúng hơn**: khách gạt nút giữa chừng thì cả lượt vẫn xử
+    như nhau, chứ không nửa số ảnh một kiểu.
+    """
+    da = getattr(bc, "_nho_lam_sach", None)
+    if da is not None:
+        return bool(da)
+    from . import cai_dat  # noqa: PLC0415
+
+    bat = bool(cai_dat.doc(bc.goc).get("lam_sach_dau_ai", True))
+    try:
+        bc._nho_lam_sach = bat  # noqa: SLF001 — nhớ trên chính bối cảnh lượt này
+    except Exception:  # noqa: BLE001 — không gán được thì đọc lại, vẫn đúng
+        pass
+    return bat
 
 
 def _khau_anh(bc: BoiCanh):
@@ -2808,6 +2864,17 @@ def _khau_dung(bc: BoiCanh):
                     giay=giay, ghi=bc.ghi, nhac=nhac,
                     am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)),
                     khung=khung)
+        # Video dựng xong vốn đã sạch thẻ — FFmpeg mã hoá lại là thẻ của tệp
+        # nguồn mất hết. Vẫn chạy một lượt cho chắc: nó chỉ chép luồng sang tệp
+        # mới, mất vài giây cho cả video mười phút, và nó bảo hiểm cho ngày nào
+        # đó bản FFmpeg mới giữ lại thẻ mà không ai để ý.
+        try:
+            if _bat_lam_sach(bc):
+                from .lam_sach import lam_sach_video  # noqa: PLC0415
+
+                lam_sach_video(ffmpeg, dich)
+        except Exception:  # noqa: BLE001 — vệ sinh hỏng không được hỏng video
+            pass
         return {"so_clip": len(manh), "giay_hinh": round(sum(giay)),
                 "phu_de_dot": dot, "nhac": os.path.basename(nhac) if nhac else "",
                 "do_phan_giai": ten_dpg}
