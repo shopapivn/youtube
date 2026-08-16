@@ -188,6 +188,16 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "tấm là mở ảnh gốc, khỏi phải mở thư mục đi tìm.",
             "Nút “Quản lý kênh” cho sửa cả bảy lời nhắc và phong cách hình "
             "ngay trong tool, và nhân bản kênh để làm kênh tiếng khác.",
+            "Nhà cung cấp trả clip 1280×720, và trước đây video ra đúng cỡ đó. "
+            "Muốn to hơn thì vào “Quản lý kênh” → thẻ “Dựng video” → chọn "
+            "1080p, 1440p hay 4K. Không tốn thêm đồng nào, chỉ tốn thời gian "
+            "máy bạn chạy: chọn 4K thì khâu dựng lâu hơn khoảng bốn lần và tệp "
+            "to hơn khoảng năm lần.",
+            "Nói thật về 4K: phóng 720p lên 4K KHÔNG tạo thêm chi tiết có "
+            "thật — phần nét thêm ra là máy đoán. Cái được thật là YouTube "
+            "dùng bộ mã hoá tốt hơn cho video 4K, nên người xem ở 1080p vẫn "
+            "thấy sạch hơn. Đó là cách YouTube đang làm, không phải lời hứa "
+            "của họ.",
             "Kết quả nằm ở PROJECTS/AUTO/<kênh>/<số>/ — có video, phụ đề, 3 "
             "ảnh bìa và mọi tệp trung gian.",
         ],

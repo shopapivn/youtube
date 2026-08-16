@@ -47,7 +47,9 @@ from .chia_canh import (bang_phu_de, chia_theo_nghia, dien_khuon,
 # phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
 # vào đây vì `__all__` của tệp này đã hứa có nó.
 from .goi_van_ban import loc_json
-from .kenh import Kenh
+from .kenh import Kenh, ten_khung
+from .nang_anh import KHUNG
+from .tron_tieng import co_ne_giong, loc_tron_nhac
 from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
                     phan_loai, xin_nhip)
 
@@ -56,32 +58,16 @@ __all__ = [
     "CHU_MOI_LUOT_DOC", "loc_json",
 ]
 
-#: Số ký tự tối đa gửi cho một lượt đọc. Kịch bản 10 phút vượt xa giới hạn của
-#: mọi cổng TTS, nên phải cắt. Cắt ở ranh giới câu chứ không cắt giữa chừng:
-#: cắt giữa câu là chỗ nối nghe rõ một nhịp hụt.
-CHU_MOI_LUOT_DOC = 2500
-
-#: Cắt kịch bản thành khoảng ngần này đoạn đọc.
+#: Số ký tự tối đa gửi cho một lượt đọc — **trần cứng của cổng, đã đo**.
 #:
-#: ═══ VÌ SAO CẮT NHỎ RA MỚI NHANH ═══
+#: Cùng con số với tool gốc `D:\11lab_vm` (`ANON_MAX_CHARS = 1000`, ghi rõ
+#: "giới hạn cứng của endpoint, đã đo"). Đằng sau cả hai là một nhà máy giọng
+#: nói, nên trần giống nhau là phải.
 #:
-#: Cổng chỉ cho **3 job đọc chạy cùng lúc** (nhà máy giọng nói chỉ có một máy
-#: online), khác hẳn ảnh (979) và clip (172–316). Trần ấy không sửa được, nên
-#: chỗ duy nhất còn nắn được là **kích thước một đoạn**.
-#:
-#: Trần 2.500 ký tự chia một kịch bản mười phút thành đúng **hai** đoạn dài.
-#: Hai đoạn thì ba suất chạy song song chẳng dùng được suất nào: đo 15/08/2026
-#: là **11,3 phút** cho một lượt, gần bằng chạy tuần tự.
-#:
-#: Chia mười đoạn thì ba luồng chạy 3–4 đợt, mà mỗi đoạn ngắn hơn năm lần nên
-#: mỗi đợt cũng nhanh hơn hẳn. Vẫn cắt ở ranh giới câu — chỗ nối phải liền
-#: mạch, đó là điều kiện không được đổi.
-SO_DOAN_DOC = 10
-
-#: Đoạn ngắn nhất chấp nhận được. Kịch bản ngắn mà vẫn chia mười phần thì mỗi
-#: phần vài chục chữ: tốn mười lượt gọi cho một việc mà hai lượt là xong, và
-#: chỗ nối càng nhiều thì càng dễ nghe thấy.
-CHU_IT_NHAT_MOT_DOAN = 400
+#: Bản trước để 2.500 — con số đoán, không đo. Nó không làm hỏng lượt nào chỉ
+#: vì `SO_DOAN_DOC` cắt vụn xuống dưới trần trước khi chạm tới; bỏ cái cắt vụn
+#: ấy đi mà giữ 2.500 là cổng từ chối ngay.
+CHU_MOI_LUOT_DOC = 1000
 
 #: Mấy đoạn đọc cùng lúc **khi chưa hỏi được máy chủ**. Con số thật lấy từ
 #: `GET /v1/me` (`concurrent_jobs.tts`), đo được là 3.
@@ -378,42 +364,105 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
 _thay = dien_khuon
 
 
-def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC,
-                  so_doan: int = SO_DOAN_DOC) -> List[str]:
-    """Cắt kịch bản thành các đoạn vừa một lượt đọc, **cắt ở ranh giới câu**.
+#: Chỗ cắt tốt dần từ trên xuống. Mỗi mục là (mẫu tìm, số ký tự ăn thêm).
+#:
+#: Thứ tự này là thứ tự **chỗ nghỉ tự nhiên của người đọc**: hết đoạn văn nghỉ
+#: dài nhất, hết câu nghỉ vừa, giữa câu nghỉ ngắn. Cắt đúng chỗ người ta vốn đã
+#: nghỉ thì chỗ nối không nghe ra; cắt giữa câu thì nghe rõ một nhịp hụt.
+_CHO_CAT = (
+    ("\n\n", 2),   # hết đoạn văn — tự nhiên nhất
+    ("\n", 1),     # hết dòng
+)
+#: Hết câu: dấu chấm/hỏi/than rồi tới khoảng trắng.
+_HET_CAU = re.compile(r"[.!?。．！？…][\"'”’)\]]?\s")
+#: Giữa câu — dùng khi cả một khúc dài không có lấy một dấu chấm.
+_GIUA_CAU = ("; ", ", ", ": ", "；", "，", "、")
 
-    ═══ TRẦN KHÔNG PHẢI LÀ MỤC TIÊU ═══
 
-    `tran` là chỗ **không được vượt** (giới hạn của cổng TTS). Nhắm đúng vào
-    trần là chia kịch bản mười phút thành hai đoạn dài — mà cổng cho ba job đọc
-    chạy cùng lúc, nên hai đoạn thì suất thứ ba nằm không và cả khâu chạy gần
-    như tuần tự. Đo 15/08/2026: **11,3 phút** cho một lượt.
+def _cho_cat_tot_nhat(chu: str, tran: int) -> int:
+    """Vị trí cắt tốt nhất trong `chu[:tran]`, tính theo thứ tự `_CHO_CAT`.
 
-    Nên nhắm vào `so_doan` đoạn: ba luồng chạy vài đợt, mỗi đoạn ngắn hơn nên
-    mỗi đợt cũng nhanh hơn. Chỗ cắt vẫn là **ranh giới câu** — giọng đọc nối
-    lại phải liền mạch, đó là điều kiện không đổi được.
+    Luôn lấy chỗ **gần `tran` nhất** trong hạng tốt nhất tìm được: cắt sớm là
+    thừa ra một đoạn nữa, mà mỗi đoạn thừa là một chỗ đổi tông.
+
+    Sàn 30%: chỗ cắt quá gần đầu thì thà xuống hạng kém hơn mà lấy được đoạn
+    dài, còn hơn sinh ra một mẩu vài chục chữ.
+    """
+    cua_so = chu[:tran]
+    san = tran * 0.3
+
+    for dau, an_them in _CHO_CAT:
+        vi_tri = cua_so.rfind(dau)
+        if vi_tri > san:
+            return vi_tri + an_them
+
+    khop = list(_HET_CAU.finditer(cua_so))
+    if khop and khop[-1].end() > san:
+        return khop[-1].end()
+
+    for dau in _GIUA_CAU:
+        vi_tri = cua_so.rfind(dau)
+        if vi_tri > san:
+            return vi_tri + len(dau)
+
+    vi_tri = cua_so.rfind(" ")
+    if vi_tri > san:
+        return vi_tri + 1
+
+    # Không có lấy một khoảng trắng — cắt cứng. Gần như không xảy ra với chữ
+    # tiếng Việt, nhưng thiếu nhánh này thì hàm quay vòng vô tận.
+    return tran
+
+
+def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
+    """Cắt kịch bản thành các đoạn vừa một lượt đọc.
+
+    ═══ ÍT ĐOẠN NHẤT CÓ THỂ, VÀ CÁC ĐOẠN ĐỀU NHAU ═══
+
+    Mỗi đoạn là **một lượt gọi riêng tới nhà máy giọng nói**, và nhà máy không
+    nhớ nó vừa đọc gì ở lượt trước. Nên mỗi chỗ nối giữa hai đoạn là một chỗ
+    **tông giọng đổi** — nghe ra được, và càng nhiều chỗ nối thì càng lộ.
+
+    Vì vậy luật ở đây là: **ít đoạn nhất có thể**. Số đoạn ít nhất là
+    `⌈độ dài ÷ trần⌉`, không cách nào ít hơn — trần là giới hạn cứng của cổng.
+
+    Bản trước làm ngược lại: nó **cố tình cắt vụn** ra mười đoạn để ba suất
+    chạy song song của cổng có việc mà làm. Nhanh hơn thật, nhưng đổi bằng đúng
+    thứ người xem nghe thấy. Chủ dự án chỉ ra 16/08/2026 khi thấy kịch bản
+    2.726 chữ bị chia **tám** đoạn ~390 chữ, trong khi ba đoạn ~909 chữ là đủ.
+
+    Mà thực ra cũng chẳng mất mấy phần nhanh: kịch bản mười phút dài khoảng
+    15.000 chữ, chia theo trần 1.000 vẫn ra mười lăm đoạn — thừa việc cho cả ba
+    suất. Chỉ những kịch bản ngắn mới ra ít hơn ba đoạn, và với chúng thì chia
+    vụn cũng chẳng nhanh thêm được bao nhiêu.
+
+    Chia **đều** chứ không nhồi đầy từng đoạn: 2.726 chữ nhồi đầy ra
+    1.000+1.000+726, chia đều ra 909+909+908. Cùng ba đoạn, nhưng đoạn đều nhau
+    thì tông giọng giữa chúng cũng gần nhau hơn.
     """
     tho = (kich_ban or "").strip()
     if not tho:
         return []
-    # Nhắm `so_doan` phần đều nhau, nhưng không bao giờ vượt trần của cổng và
-    # không bao giờ vụn hơn `CHU_IT_NHAT_MOT_DOAN` (kịch bản ngắn thì chia nhỏ
-    # chỉ tốn thêm lượt gọi và thêm chỗ nối để nghe thấy).
-    dat = max(1, int(so_doan))
     tran = max(1, int(tran))
-    muc_tieu = max(CHU_IT_NHAT_MOT_DOAN, (len(tho) + dat - 1) // dat)
-    tran = min(tran, muc_tieu)
-    cau = re.split(r"(?<=[.!?。．！？…\n])", tho)
+
     ra: List[str] = []
-    dem = ""
-    for c in cau:
-        if dem and len(dem) + len(c) > tran:
-            ra.append(dem.strip())
-            dem = c
-        else:
-            dem += c
-    if dem.strip():
-        ra.append(dem.strip())
+    con_lai = tho
+    while con_lai:
+        con_lai = con_lai.strip()
+        if not con_lai:
+            break
+        if len(con_lai) <= tran:
+            ra.append(con_lai)
+            break
+        # Tính lại mỗi vòng: đoạn vừa cắt ra ngắn hơn dự tính thì phần còn lại
+        # tự san lại cho đều, khỏi dồn hết chỗ hụt vào đoạn cuối.
+        so_doan_con = (len(con_lai) + tran - 1) // tran
+        deu = (len(con_lai) + so_doan_con - 1) // so_doan_con
+        cat = _cho_cat_tot_nhat(con_lai, min(tran, deu))
+        khuc = con_lai[:cat].strip()
+        if khuc:
+            ra.append(khuc)
+        con_lai = con_lai[cat:]
     return [m for m in ra if m]
 
 
@@ -1501,8 +1550,11 @@ def _khau_giong_doc(bc: BoiCanh):
         # ═══ ĐỌC SONG SONG, VÀ THIẾU MỘT ĐOẠN LÀ HỎNG CẢ KHÂU ═══
         #
         # Cổng cho 3 job đọc cùng lúc. Bản trước chạy tuần tự nên chỉ dùng một
-        # suất trong ba, lại còn cắt kịch bản thành hai đoạn dài — đo được 11,3
-        # phút. Giờ chia nhỏ (xem `SO_DOAN_DOC`) và bắn ba đoạn một lượt.
+        # suất trong ba — đo được 11,3 phút. Giờ bắn ba đoạn một lượt.
+        #
+        # Số đoạn thì **không** nắn theo chỗ này: `chia_doan_doc` cắt ít đoạn
+        # nhất có thể vì mỗi chỗ nối là một chỗ đổi tông giọng. Muốn nhanh thì
+        # tăng suất song song, đừng cắt vụn kịch bản ra — xem ghi chú ở đó.
         #
         # `chiu_thieu=False` vì giọng đọc khác ảnh: thiếu một cảnh thì khâu
         # dựng giữ hình cảnh trước bù vào, còn thiếu một đoạn đọc là **mất hẳn
@@ -2624,24 +2676,57 @@ def _khau_dung(bc: BoiCanh):
         # kênh dựng giống hệt nhau. Xem `core/kenh.Kenh.dot_phu_de`.
         dot = bool(getattr(bc.kenh, "dot_phu_de", True)) and os.path.exists(srt)
         nhac = _duong_nhac(bc.kenh)
+        ten_dpg = chon_do_phan_giai(bc.goc, bc.kenh)
+        khung = KHUNG.get(ten_dpg)
         bc.ghi("  ghép {0} clip (cắt theo độ dài từng cảnh: {1:.0f} giây hình "
-               "cho {2:.0f} giây tiếng){3}{4}…".format(
+               "cho {2:.0f} giây tiếng){3}{4}{5}…".format(
                    len(manh), sum(giay), sum(giay),
                    " + phụ đề" if dot else "",
-                   " + nhạc nền" if nhac else ""))
+                   " + nhạc nền" if nhac else "",
+                   " + phóng lên {0}".format(ten_dpg) if khung else ""))
+        if khung:
+            # Nói thật ngay lúc chạy: phóng lên thì lâu hơn hẳn, và khách đang
+            # ngồi nhìn dòng nhật ký này chứ không đọc tài liệu.
+            bc.ghi("    (phóng {0}×{1} — khâu này lâu hơn giữ nguyên khoảng "
+                   "bốn lần; phần nét thêm ra là máy đoán, không phải chi "
+                   "tiết có thật. Đổi ở Cài đặt.)".format(khung[0], khung[1]))
         _ghep_video(ffmpeg, manh, mp3, srt if dot else "", dich,
                     giay=giay, ghi=bc.ghi, nhac=nhac,
-                    am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)))
+                    am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)),
+                    khung=khung)
         return {"so_clip": len(manh), "giay_hinh": round(sum(giay)),
-                "phu_de_dot": dot, "nhac": os.path.basename(nhac) if nhac else ""}
+                "phu_de_dot": dot, "nhac": os.path.basename(nhac) if nhac else "",
+                "do_phan_giai": ten_dpg}
 
     return lam
+
+
+def chon_do_phan_giai(goc: str, kenh) -> str:
+    """Độ phân giải video ra, gộp hai tầng cài đặt lại thành một câu trả lời.
+
+    Thứ tự: **kênh khai gì thì theo kênh**, không khai thì theo cài đặt chung
+    của tool, hỏng cả hai thì `"4K"`.
+
+    Hai tầng chứ không một, vì hai câu hỏi khác nhau: *"nhà tôi làm video kiểu
+    gì"* hỏi một lần ở Cài đặt, còn *"riêng kênh này khác"* mới hỏi ở kênh. Bắt
+    khai lại cho từng kênh là bắt trả lời cùng một câu mười lần.
+
+    Kênh khai một chữ tool không hiểu thì rơi về cài đặt chung chứ không lặng
+    lẽ tắt tính năng — xem `core.kenh.ten_khung`.
+    """
+    from . import cai_dat  # noqa: PLC0415 — tránh vòng nhập lúc khởi động
+
+    rieng = ten_khung(getattr(kenh, "do_phan_giai", ""))
+    if rieng:
+        return rieng
+    return ten_khung(cai_dat.doc(goc).get("do_phan_giai")) or "4K"
 
 
 def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 dich: str, giay: Optional[Sequence[float]] = None,
                 ghi: Optional[Callable[[str], None]] = None,
-                nhac: str = "", am_luong: float = 0.12) -> None:
+                nhac: str = "", am_luong: float = 0.12,
+                khung: Optional[Sequence[int]] = None) -> None:
     """Cắt từng clip về đúng độ dài cảnh, nối lại, gắn tiếng, đốt phụ đề.
 
     `giay[i]` là độ dài **cảnh thứ i** lấy từ bảng cảnh — không phải độ dài
@@ -2653,10 +2738,38 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
 
     `nhac` là tệp nhạc nền; rỗng = không có. `am_luong` là phần độ to còn lại
     của nhạc so với giọng đọc.
+
+    `khung` là (rộng, cao) muốn xuất ra; `None` = giữ đúng cỡ nhà cung cấp trả
+    về. Xem `Kenh.do_phan_giai` để biết vì sao cần và cái được thật là gì.
     """
     thu_muc = os.path.dirname(dich) or "."
     tam = os.path.join(thu_muc, "_cat")
     os.makedirs(tam, exist_ok=True)
+
+    # Lần cuối có phải mã lại hình không. Đốt phụ đề phải mã lại; đổi độ phân
+    # giải cũng vậy — `-c:v copy` chỉ sao chép nguyên si, không phóng được.
+    ma_lai = bool(srt) or bool(khung)
+
+    # ═══ NÉN HAI LẦN THÌ LẦN ĐẦU PHẢI GẦN NHƯ KHÔNG MẤT GÌ ═══
+    #
+    # Có đốt phụ đề thì hình đi qua **hai** vòng H.264: cắt từng clip ở đây,
+    # rồi mã lại lần nữa lúc đốt chữ. H.264 là nén mất dữ liệu, nên lần hai nén
+    # lên cái đã hỏng của lần một — hỏng chồng hỏng.
+    #
+    # Bản trước để `veryfast -crf 20` cho lần một. `veryfast` là mức nhanh thứ
+    # nhì của x264: cùng một CRF nó cho ảnh xấu hơn hẳn `medium`. Mà đây lại là
+    # **bản gốc cho lần mã hoá thứ hai** — hỏng từ đầu thì lần sau không cứu
+    # được.
+    #
+    # KHÔNG mã lại thì ngược hẳn: bước sau dùng `-c:v copy`, nên bản cắt ở đây
+    # **chính là video giao cho khách**. Để `crf 14` cho nó là giao một tệp to
+    # gấp mấy lần cần thiết, tải lên YouTube lâu mà YouTube vẫn nén lại hết.
+    # Nên hai đường phải khác nhau, không dùng chung một con số.
+    if ma_lai:
+        preset_cat, crf_cat = "medium", "14"   # bản trung gian, xoá sau khi xong
+    else:
+        preset_cat, crf_cat = "slow", "18"     # đây là bản cuối, đừng làm nó phình
+
     dung = []
     for i, m in enumerate(clip):
         if giay is None:
@@ -2679,8 +2792,8 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
             # và 99 lần lệch cộng dồn là hình lại trôi khỏi tiếng.
             _chay(ffmpeg, ["-y", "-hide_banner", "-nostats", "-i", m,
                            "-vf", loc, "-t", "{0:.3f}".format(can),
-                           "-c:v", "libx264", "-preset", "veryfast",
-                           "-crf", "20", "-pix_fmt", "yuv420p", "-an", ra])
+                           "-c:v", "libx264", "-preset", preset_cat,
+                           "-crf", crf_cat, "-pix_fmt", "yuv420p", "-an", ra])
         dung.append(ra)
         if ghi is not None and (i + 1) % 20 == 0:
             ghi("    cắt {0}/{1} clip…".format(i + 1, len(clip)))
@@ -2704,28 +2817,43 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
         # tới hết. `-shortest` ở dưới chốt điểm dừng nên lặp vô hạn không sao.
         lenh += ["-stream_loop", "-1", "-i", nhac]
 
-    if srt:
-        loc = "subtitles='{0}'".format(
-            os.path.abspath(srt).replace("\\", "/").replace(":", "\\:"))
-        lenh += ["-vf", loc, "-c:v", "libx264", "-preset", "medium", "-crf", "20"]
+    if ma_lai:
+        # ═══ PHÓNG TRƯỚC, ĐỐT CHỮ SAU — THỨ TỰ NÀY KHÔNG ĐƯỢC ĐẢO ═══
+        #
+        # Đốt phụ đề ở 720p rồi mới phóng lên 4K là phóng luôn cả chữ: nét chữ
+        # bị kéo giãn, viền răng cưa, nhìn ra ngay. Phóng hình trước rồi mới vẽ
+        # chữ thì chữ được vẽ thẳng ở cỡ 4K — sắc nét đúng bằng cỡ xuất ra.
+        #
+        # `flags=lanczos`: mặc định của FFmpeg là `bicubic`, mềm. Đây là chỗ
+        # phóng gấp ba (1280 → 3840) nên chọn phép nào thấy rõ nhất.
+        #
+        # Không thêm `unsharp` ở đây, dù làm nét sau khi phóng thì đẹp hơn trên
+        # máy. Lý do: làm nét sinh viền sáng quanh mép, và bộ mã hoá của
+        # YouTube khuếch đại đúng loại viền đó thành vệt bẩn. Nét vừa phải
+        # trước khi tải lên cho kết quả đẹp hơn nét gắt.
+        buoc = []
+        if khung:
+            buoc.append(
+                "scale={0}:{1}:force_original_aspect_ratio=decrease:"
+                "flags=lanczos,pad={0}:{1}:(ow-iw)/2:(oh-ih)/2,setsar=1".format(
+                    int(khung[0]), int(khung[1])))
+        if srt:
+            buoc.append("subtitles='{0}'".format(
+                os.path.abspath(srt).replace("\\", "/").replace(":", "\\:")))
+        # Lần nén cuối: `slow -crf 18` thay cho `medium -crf 20`. Đây là bản
+        # giao cho YouTube, mà việc của mình là đưa cho nó **bản gốc sạch** —
+        # YouTube mã hoá lại hết, nên nén tiếc ở đây chỉ tổ mất nét hai lần.
+        lenh += ["-vf", ",".join(buoc), "-c:v", "libx264",
+                 "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p"]
     else:
         lenh += ["-c:v", "copy"]
 
     if co_nhac:
-        # ═══ TRỘN NHẠC DƯỚI GIỌNG ĐỌC ═══
-        #
-        # `volume` hạ nhạc xuống trước, rồi `amix` trộn. Thứ tự đó quan trọng:
-        # trộn trước rồi mới hạ là hạ cả giọng đọc.
-        #
-        # `duration=first` để độ dài lấy theo GIỌNG ĐỌC, không theo nhạc — nhạc
-        # đang lặp vô hạn nên lấy theo nó là video không bao giờ kết thúc.
-        #
-        # `dropout_transition=0`: mặc định `amix` tự kéo to phần còn lại khi
-        # một nguồn im. Với video có người nói suốt thì mỗi lần người đọc ngừng
-        # lấy hơi, nhạc lại vống lên rồi tụt xuống — nghe như âm thanh bị hỏng.
-        tron = ("[1:a]volume=1.0[v];[2:a]volume={0:.3f}[n];"
-                "[v][n]amix=inputs=2:duration=first:dropout_transition=0[ra]"
-                .format(max(0.0, min(1.0, float(am_luong)))))
+        # Nhạc tự lùi khi có giọng, tự lên lại khi giọng ngừng. Cả lời giải
+        # thích lẫn số đo nằm ở `core/tron_tieng.py` — cùng một chuỗi lọc với
+        # tab Dựng video thủ công, để hai tab ra tiếng giống nhau.
+        tron = loc_tron_nhac("1:a", "2:a", "ra", am_luong_deu=am_luong,
+                             ne_giong=co_ne_giong(ffmpeg))
         lenh += ["-filter_complex", tron, "-map", "0:v:0", "-map", "[ra]",
                  "-c:a", "aac", "-b:a", "192k", "-shortest"]
     elif co_tieng:
@@ -2733,7 +2861,10 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
         # thường dài hơn tiếng vài giây vì mỗi cảnh làm tròn lên.
         lenh += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-b:a",
                  "192k", "-shortest"]
-    lenh += [dich]
+    # `+faststart` đẩy bảng mục lục của tệp lên đầu. Không có nó thì trình phát
+    # phải tải hết tệp mới bắt đầu phát được — xem lại bản dựng trên máy là
+    # phải chờ. Tab Dựng video thủ công vốn đã có, đường Tự động thì chưa.
+    lenh += ["-movflags", "+faststart", dich]
     _chay(ffmpeg, lenh)
     import shutil as _sh  # noqa: PLC0415
     for tep in (danh_sach, tam_noi):

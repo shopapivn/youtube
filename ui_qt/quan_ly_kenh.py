@@ -28,13 +28,16 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from core.kenh import (BUOC_PROMPT, TEP_KENH, TEP_STYLE, doc_kenh, duong_kenh,
-                       kiem_kenh, liet_ke_kenh)
+from core.kenh import (BUOC_PROMPT, GIU_NGUYEN, TEP_KENH, TEP_STYLE, ten_khung,
+                       doc_kenh, duong_kenh, kiem_kenh, liet_ke_kenh)
 
 from . import theme
 from .widgets import HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu
 
 __all__ = ["HopQuanLyKenh"]
+
+#: Lựa chọn "kênh này không có ý kiến riêng, lấy theo tab Cài đặt".
+THEO_CHUNG = "Theo cài đặt chung"
 
 
 class HopQuanLyKenh(QDialog):
@@ -213,6 +216,31 @@ class HopQuanLyKenh(QDialog):
         hang2.addWidget(self._o_am)
         v.addLayout(hang2)
 
+        v.addWidget(nhan("Độ phân giải video ra", "h2"))
+        dpg = nhan("Bình thường để “Theo cài đặt chung” — cỡ video cài một lần "
+                   "ở tab Cài đặt cho mọi kênh. Chỉ đổi ở đây khi riêng kênh "
+                   "này cần khác cả nhà.", "phu")
+        dpg.setWordWrap(True)
+        dpg.setMinimumWidth(1)
+        v.addWidget(dpg)
+
+        hang3 = HangXuongDong()
+        self._o_dpg = QComboBox()
+        self._o_dpg.addItems([THEO_CHUNG, "4K", "1440p", "1080p", GIU_NGUYEN])
+        self._o_dpg.setFixedWidth(180)
+        # Rỗng = chưa khai gì = theo cài đặt chung. Xem `core.kenh.ten_khung`.
+        hien = ten_khung(cai.get("do_phan_giai")) or THEO_CHUNG
+        self._o_dpg.setCurrentIndex(max(0, self._o_dpg.findText(hien)))
+        self._o_dpg.setToolTip(
+            "Giữ nguyên: nhanh nhất, video ra 1280×720 đúng như nhà cung cấp "
+            "trả về.\n"
+            "4K: dựng lâu hơn khoảng bốn lần, tệp to hơn khoảng năm lần.\n"
+            "Đổi ô này không tốn thêm một đồng gọi API nào — chỉ tốn thời gian "
+            "máy bạn chạy.")
+        self._o_dpg.currentIndexChanged.connect(lambda _i: self._ghi_ve_yaml())
+        hang3.addWidget(self._o_dpg)
+        v.addLayout(hang3)
+
         v.addStretch(1)
         nhac_nho = nhan("Sửa xong bấm “Lưu” ở dưới cùng.", "phu")
         v.addWidget(nhac_nho)
@@ -248,6 +276,10 @@ class HopQuanLyKenh(QDialog):
             ("dot_phu_de", "true" if self._o_dot_sub.isChecked() else "false"),
             ("nhac_nen", self._o_nhac.text().strip()),
             ("am_luong_nhac", "{0:.2f}".format(self._o_am.value() / 100.0)),
+            # Ghi rỗng khi khách chọn "theo cài đặt chung": khoá rỗng trong
+            # `kenh.yaml` là cách nói "kênh này không có ý kiến riêng".
+            ("do_phan_giai", "" if self._o_dpg.currentText() == THEO_CHUNG
+             else self._o_dpg.currentText()),
         ):
             chu = _dat_khoa_yaml(chu, khoa, gia_tri)
         if chu != o_cau_hinh.toPlainText():

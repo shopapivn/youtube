@@ -23,13 +23,25 @@ from __future__ import annotations
 import os
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QCheckBox, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QCheckBox, QComboBox, QVBoxLayout, QWidget
 
 from core import cai_dat
+from core.kenh import GIU_NGUYEN
 
 from .widgets import HangXuongDong, mo_thu_muc, nhan, nut_phu, the, tieu_de_trang
 
 __all__ = ["TrangCaiDat"]
+
+#: Các cỡ video chọn được, xếp từ nét nhất xuống nhanh nhất.
+DO_PHAN_GIAI = ("4K", "1440p", "1080p", GIU_NGUYEN)
+
+#: Tuỳ chọn **không phải ô đánh dấu**, nên không nằm trong `MUC` mà có ô riêng.
+#:
+#: Có danh sách này để bài kiểm vẫn chốt được luật gốc: thêm một tuỳ chọn vào
+#: `cai_dat.MAC_DINH` mà quên dựng ô cho nó thì bài kiểm đỏ. Thiếu chốt ấy thì
+#: một ngày nào đó có tuỳ chọn chỉ sửa được bằng cách mở tệp JSON — đúng thứ
+#: tab này sinh ra để dẹp.
+MUC_RIENG = ("do_phan_giai",)
 
 #: `(khoá, nhãn, câu giải thích)`. Thứ tự trên màn hình theo đúng thứ tự này.
 MUC = (
@@ -58,6 +70,7 @@ class TrangCaiDat(QWidget):
         doc.addWidget(tieu_de_trang(
             "Cài đặt", "Những thứ bạn cài một lần rồi thôi."))
         doc.addWidget(self._the_cap_nhat())
+        doc.addWidget(self._the_video())
         doc.addWidget(self._the_thu_muc())
         doc.addStretch(1)
 
@@ -86,6 +99,47 @@ class TrangCaiDat(QWidget):
             v.addWidget(mo)
             self._o[khoa] = o
         return khung
+
+    def _the_video(self) -> QWidget:
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 16, 20, 18)
+        v.setSpacing(6)
+        v.addWidget(nhan("Video ra", "h2"))
+        v.addWidget(self._phu(
+            "Nhà cung cấp trả clip 1280×720, nhỏ hơn cả 1080p. Tôi phóng lên "
+            "cỡ bạn chọn ở bước dựng cuối."))
+
+        hang = HangXuongDong()
+        hang.addWidget(nhan("Độ phân giải:", "phu"))
+        self._o_dpg = QComboBox()
+        self._o_dpg.addItems(DO_PHAN_GIAI)
+        dang = cai_dat.doc(self._app.base_dir).get("do_phan_giai", "4K")
+        self._o_dpg.setCurrentIndex(max(0, self._o_dpg.findText(str(dang))))
+        self._o_dpg.setFixedWidth(150)
+        self._o_dpg.currentTextChanged.connect(self._doi_dpg)
+        hang.addWidget(self._o_dpg)
+        v.addLayout(hang)
+
+        # Nói cả cái được lẫn cái mất, bằng số đo được. Chỉ nói "4K nét hơn" là
+        # bán một thứ không đúng: phóng lên không tạo thêm chi tiết có thật.
+        v.addWidget(self._phu(
+            "4K dựng lâu hơn khoảng bốn lần và tệp to hơn khoảng năm lần so "
+            "với Giữ nguyên, nhưng KHÔNG tốn thêm đồng nào — đây là thời gian "
+            "máy bạn chạy, không phải tiền gọi API.\n"
+            "Nói thật: phóng lên không tạo thêm chi tiết có thật, phần nét "
+            "thêm ra là máy đoán. Cái được thật là YouTube dùng bộ mã hoá tốt "
+            "hơn cho video 4K, nên người xem ở 1080p vẫn thấy sạch hơn.\n"
+            "Kênh nào cần khác thì khai riêng trong Quản lý kênh → Dựng "
+            "video; khai ở đó thì kênh ấy không theo ô này nữa."))
+        return khung
+
+    def _doi_dpg(self, ten: str) -> None:
+        if not cai_dat.dat(self._app.base_dir, "do_phan_giai", ten):
+            self._app.show_message(
+                "Không lưu được cài đặt",
+                "Tôi không ghi được vào thư mục workspace. Bạn kiểm tra xem ổ "
+                "đĩa còn chỗ trống không.")
 
     def _the_thu_muc(self) -> QWidget:
         khung = the()

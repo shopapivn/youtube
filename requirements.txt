@@ -80,7 +80,12 @@ youtube-transcript-api>=0.6
 #                   May dang co san numpy vi PyQt5 keo theo, nhung "dang co san"
 #                   khong phai "da khai" - va do dung la cai bay dong PyQt5 o
 #                   tren da dinh mot lan.
-#   pillow        : da khai o tren, dung chung cho ca viec nay.
+#   pillow        : da khai o tren, dung chung cho ca viec nay - va cho ca
+#                   NANG ANH (core/nang_anh.py). Nang anh khong doi them thu
+#                   vien nao: phep phong lanczos nam san trong pillow. Cong cu
+#                   nang bang AI (realesrgan-ncnn-vulkan) la mot file .exe roi,
+#                   KHONG phai goi python, nen no khong thuoc file nay - thieu
+#                   no thi tool tu phong bang lanczos va noi ro dieu do ra.
 
 numpy>=1.24
 openpyxl>=3.1

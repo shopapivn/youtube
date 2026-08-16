@@ -55,6 +55,26 @@ MAC_DINH: Dict[str, Any] = {
     # Tắt thì lỗi vẫn được ghi vào `workspace/su-co.log`, chỉ là không hiện lên
     # màn hình. Dành cho người để tool chạy qua đêm.
     "bao_su_co": True,
+
+    # Độ phân giải video ra của tab Tự động: "4K", "1440p", "1080p" hay
+    # "Giữ nguyên". Kênh nào khai riêng trong `kenh.yaml` thì lấy theo kênh.
+    #
+    # ═══ VÌ SAO MẶC ĐỊNH LÀ 4K ═══
+    #
+    # Đo 16/08/2026 trên bảy lượt chạy thật: mọi clip nhà cung cấp trả về đều
+    # **1280×720**, và đường dựng cũ không có bước đổi độ phân giải nào — nên
+    # video giao cho khách chưa tới cả 1080p mà không ai biết. Đó là mặc định
+    # tệ nhất trong bốn lựa chọn, và nó tệ một cách âm thầm.
+    #
+    # 4K không tạo thêm chi tiết có thật — phần nét thêm ra là máy đoán. Cái
+    # được thật: YouTube cấp bộ mã hoá tốt hơn cho video tải lên ở 2160p, nên
+    # người xem ở 1080p vẫn thấy sạch hơn.
+    #
+    # Cái mất: khâu dựng lâu hơn khoảng bốn lần (đo trên clip thật: 8 giây
+    # video mất 3 giây ở 720p, 12 giây ở 4K) và tệp to hơn khoảng năm lần. Cả
+    # hai đều là thời gian máy khách, **không tốn thêm đồng API nào** — nên
+    # đánh đổi này nghiêng hẳn về phía nên bật.
+    "do_phan_giai": "4K",
 }
 
 _KHOA = threading.Lock()

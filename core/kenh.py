@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional
 __all__ = [
     "THU_MUC_KENH", "TEP_KENH", "TEP_STYLE", "BUOC_PROMPT",
     "Kenh", "duong_kenh", "liet_ke_kenh", "doc_kenh", "kiem_kenh",
-    "doc_yaml", "co_mui_khoa",
+    "doc_yaml", "co_mui_khoa", "GIU_NGUYEN", "ten_khung",
 ]
 
 #: Thư mục chứa mọi kênh, nằm cạnh `shopapi_studio_qt.py`.
@@ -116,6 +116,31 @@ class Kenh:
     #: đọc được nội dung để đề xuất video — chữ đốt vào hình thì nó mù.
     dot_phu_de: bool = True
 
+    #: Độ phân giải video ra: `"Giữ nguyên"`, `"1080p"`, `"1440p"` hay `"4K"`.
+    #:
+    #: ═══ VÌ SAO PHẢI CÓ Ô NÀY ═══
+    #:
+    #: Đường dựng của tab Tự động trước đây **không có bước đổi độ phân giải
+    #: nào**, nên video ra đúng bằng độ phân giải nhà cung cấp trả về. Đo
+    #: 16/08/2026 trên bảy lượt thật: mọi clip và mọi video đều **1280×720** —
+    #: chưa tới 1080p, trong khi khách vẫn tải lên YouTube như video thường.
+    #:
+    #: `videos.create` không có tham số xin bản to hơn, nên chỗ duy nhất nắn
+    #: được là lúc mã hoá lần cuối.
+    #:
+    #: ═══ NÓI THẬT VỀ CÁI ĐƯỢC ═══
+    #:
+    #: Phóng 720p lên 4K **không tạo thêm chi tiết thật** — phần nét thêm ra là
+    #: máy đoán. Cái được thật nằm ở chỗ khác: YouTube cấp bộ mã hoá tốt hơn
+    #: cho video tải lên ở 2160p, nên người xem ở 1080p vẫn thấy sạch hơn.
+    #: Đó là hành vi YouTube có quyền đổi bất cứ lúc nào.
+    #:
+    #: **Rỗng là mặc định**, nghĩa là *"lấy theo cài đặt chung của tool"*
+    #: (`core/cai_dat.py`, khoá `do_phan_giai`, đang để `"4K"`). Khai ở đây chỉ
+    #: khi kênh này cần khác cả nhà — ví dụ kênh làm nhanh lấy số lượng thì để
+    #: `"Giữ nguyên"` cho khâu dựng đỡ lâu.
+    do_phan_giai: str = ""
+
     #: Tệp nhạc nền, đường dẫn tính từ thư mục kênh (ví dụ `nhac/nen.mp3`).
     #:
     #: Rỗng = không có nhạc. Cổng ShopAPI **không bán nhạc**, nên đây phải là
@@ -126,9 +151,17 @@ class Kenh:
 
     #: Nhạc nhỏ hơn giọng đọc bao nhiêu lần. 0.12 = nhạc còn 12% độ to.
     #:
-    #: Nghe thì thấy nhỏ quá, nhưng đây là mức người dựng phim hay dùng cho
-    #: video có người nói suốt: nhạc để **lấp khoảng lặng**, không để nghe. To
-    #: hơn 0.2 là người xem bắt đầu phải căng tai nghe lời.
+    #: ═══ CHỈ CÒN DÙNG CHO ĐƯỜNG LUI ═══
+    #:
+    #: Từ 16/08/2026 nhạc **tự lùi khi có giọng đọc và tự lên lại khi giọng
+    #: ngừng** (`core/tron_tieng.py`), nên độ to nhạc lúc không có lời lấy theo
+    #: `tron_tieng.AM_LUONG_NE` chứ không lấy theo số này nữa.
+    #:
+    #: Số này chỉ còn được dùng khi bản FFmpeg trong máy thiếu bộ lọc
+    #: `sidechaincompress` và phải quay về cách cũ — hạ nhạc đều suốt cả video.
+    #: Với cách cũ thì 0.12 vẫn đúng, và lý do cũ vẫn đúng: nhạc để **lấp
+    #: khoảng lặng**, không để nghe. To hơn 0.2 là người xem phải căng tai nghe
+    #: lời, vì hạ đều thì nhạc không biết đường tránh chỗ nào.
     am_luong_nhac: float = 0.12
 
     #: Toàn bộ `style.yaml`, giữ nguyên để đưa thẳng cho bước viết lời nhắc.
@@ -269,6 +302,9 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         chu_bia_hoa=bool(cai.get("chu_bia_hoa", True)),
         so_thumbnail=max(1, int(_so(cai.get("so_thumbnail"), 3))),
         dot_phu_de=bool(cai.get("dot_phu_de", True)),
+        # Gõ sai tên độ phân giải thì quay về "Giữ nguyên" chứ không ném lỗi:
+        # một chữ gõ nhầm trong `kenh.yaml` không đáng làm chết cả lượt chạy.
+        do_phan_giai=ten_khung(cai.get("do_phan_giai")),
         nhac_nen=str(cai.get("nhac_nen") or ""),
         # Kẹp trong 0..1. Số âm làm FFmpeg đảo pha, số lớn hơn 1 làm nhạc át
         # hẳn giọng đọc — cả hai đều là gõ nhầm chứ không ai cố ý.
@@ -286,6 +322,42 @@ def _so(gia_tri, mac_dinh: float) -> float:
         return float(gia_tri)
     except (TypeError, ValueError):
         return mac_dinh
+
+
+#: Tên độ phân giải giữ nguyên cỡ nhà cung cấp trả về.
+GIU_NGUYEN = "Giữ nguyên"
+
+
+def ten_khung(gia_tri) -> str:
+    """Nắn tên độ phân giải khách gõ về một trong các tên tool hiểu.
+
+    Nhận cả `4k`, `4K`, `2160p`, `2160` — người ta gọi cùng một thứ bằng nhiều
+    tên, và bắt gõ đúng một kiểu là bắt nhầm người.
+
+    Trả về **chuỗi rỗng** khi không khai gì, hoặc khai một thứ tool không hiểu.
+    Rỗng nghĩa là *"chưa nói gì, lấy theo cài đặt chung"* — khác hẳn
+    `"Giữ nguyên"`, vốn là một lựa chọn có chủ ý.
+
+    Phân biệt hai cái đó là điều kiện để có hai tầng cài đặt mà không rối: gõ
+    sai một chữ trong `kenh.yaml` thì rơi về cài đặt chung của tool, chứ không
+    lặng lẽ tắt mất tính năng.
+    """
+    chu = str(gia_tri or "").strip().lower().replace(" ", "")
+    if not chu:
+        return ""
+    # Cả bản có dấu lẫn bản không dấu. Chính tool ghi xuống `kenh.yaml` bản có
+    # dấu ("Giữ nguyên"), còn người gõ tay thì hay gõ không dấu — thiếu một
+    # trong hai là ô chọn của chính mình lưu xong đọc lại không ra.
+    if chu in ("giữnguyên", "giunguyen", "gốc", "goc",
+               "không", "khong", "none", "nguyên", "nguyen"):
+        return GIU_NGUYEN
+    if chu in ("4k", "2160p", "2160", "uhd"):
+        return "4K"
+    if chu in ("1440p", "1440", "2k", "qhd"):
+        return "1440p"
+    if chu in ("1080p", "1080", "fullhd", "fhd"):
+        return "1080p"
+    return ""
 
 
 def _anh_trong(thu_muc: str) -> List[str]:

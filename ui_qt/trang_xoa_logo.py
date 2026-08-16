@@ -24,7 +24,7 @@ import threading
 from typing import List
 
 from PyQt5.QtWidgets import (
-    QCheckBox, QFileDialog, QPlainTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFileDialog, QPlainTextEdit, QVBoxLayout, QWidget,
 )
 
 from . import theme
@@ -86,6 +86,24 @@ class TrangXoaLogo(QWidget):
             "còn nguyên.")
         self._giu_goc.setStyleSheet("color:{0};".format(theme.CHU_MO))
         v.addWidget(self._giu_goc)
+
+        # Nâng ảnh phải chạy SAU khi xoá dấu, không phải trước: nâng trước thì
+        # cái dấu cũng bị nâng theo và biến dạng, phép đảo alpha đo hình ngôi
+        # sao theo cỡ cố định nên không đảo được nữa. Xem `core/nang_anh.py`.
+        hang_nang = HangXuongDong()
+        self._o_nang = QCheckBox("Nâng ảnh lên")
+        self._o_nang.setToolTip(
+            "Phóng ảnh lên cỡ lớn hơn sau khi đã xoá logo.\n"
+            "Nói thật: phần nét thêm ra là máy đoán, không phải chi tiết có "
+            "thật trong ảnh. Ảnh đã đủ to rồi thì tôi không đụng vào.")
+        self._o_nang.setStyleSheet("color:{0};".format(theme.CHU_MO))
+        hang_nang.addWidget(self._o_nang)
+        self._o_co = QComboBox()
+        self._o_co.addItems(["1080p", "1440p", "4K"])
+        self._o_co.setCurrentText("4K")
+        self._o_co.setFixedWidth(110)
+        hang_nang.addWidget(self._o_co)
+        v.addLayout(hang_nang)
 
         nut = HangXuongDong()
         self._nut_chay = nut_chinh("Xoá logo", self._chay)
@@ -174,16 +192,19 @@ class TrangXoaLogo(QWidget):
         self._ghi("Đang xoá logo cho {0} ảnh…".format(len(self._duong)))
         duong = list(self._duong)
         giu = self._giu_goc.isChecked()
+        nang = self._o_co.currentText() if self._o_nang.isChecked() else ""
         # Ở luồng nền: 100 ảnh mất chừng ba giây, đủ để cửa sổ đứng hình nếu
         # làm ngay trên luồng vẽ.
-        self._app.run_bg(lambda: self._lam(duong, giu),
+        self._app.run_bg(lambda: self._lam(duong, giu, nang),
                          on_ok=self._xong, on_err=self._hong)
 
-    def _lam(self, duong: List[str], giu_goc: bool) -> dict:
+    def _lam(self, duong: List[str], giu_goc: bool, nang: str = "") -> dict:
         """**Chạy ở luồng nền.** Trả về số đếm."""
+        from core.nang_anh import KHUNG, nang_anh_tep  # noqa: PLC0415
         from core.xoa_dau_anh import xoa_dau_tep  # noqa: PLC0415
 
-        da, bo_qua, hong = 0, 0, 0
+        khung = KHUNG.get(nang)
+        da, bo_qua, hong, da_nang = 0, 0, 0, 0
         for p in duong:
             try:
                 if giu_goc:
@@ -198,7 +219,22 @@ class TrangXoaLogo(QWidget):
                     bo_qua += 1
             except Exception:  # noqa: BLE001 — một ảnh hỏng không dừng cả mẻ
                 hong += 1
-        return {"da": da, "bo_qua": bo_qua, "hong": hong, "tong": len(duong)}
+                continue
+            # Nâng SAU khi xoá dấu. Thứ tự này bắt buộc, xem ghi chú ở chỗ dựng
+            # ô đánh dấu.
+            #
+            # `try` riêng, không gộp với ở trên: xoá logo xong mà nâng ảnh hỏng
+            # thì tấm ảnh ấy **vẫn sạch logo**. Đếm nó vào "không đọc được" là
+            # báo sai — khách đi mở tệp ra thấy nó ngon lành.
+            if not khung:
+                continue
+            try:
+                if nang_anh_tep(p, khung) != "bo_qua":
+                    da_nang += 1
+            except Exception:  # noqa: BLE001
+                pass
+        return {"da": da, "bo_qua": bo_qua, "hong": hong, "tong": len(duong),
+                "nang": da_nang, "co_nang": nang}
 
     def _xong(self, dem: dict) -> None:
         self._dang_chay = False
@@ -210,6 +246,16 @@ class TrangXoaLogo(QWidget):
                       "nên tôi không đụng vào.".format(dem["bo_qua"]))
         if dem["hong"]:
             self._ghi("  {0} ảnh không đọc được.".format(dem["hong"]))
+        if dem.get("co_nang"):
+            from core.nang_anh import co_nang_that  # noqa: PLC0415
+
+            self._ghi("  {0} ảnh đã nâng lên {1}.".format(
+                dem.get("nang", 0), dem["co_nang"]))
+            if not co_nang_that():
+                # Nói thật là đang dùng cách nào. Bảo "đã nâng 4K" trong khi
+                # chỉ phóng thường là hứa thứ không có.
+                self._ghi("    (phóng bằng phép lanczos — máy chưa có công cụ "
+                          "nâng bằng AI, ảnh to đúng cỡ nhưng không nét thêm)")
         if self._giu_goc.isChecked() and dem["da"]:
             self._ghi("  Bản gốc nằm cạnh, tên có thêm “.goc”.")
 

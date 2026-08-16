@@ -83,10 +83,15 @@ class TestTrangCaiDat:
 
     def test_moi_tuy_chon_deu_co_cau_giai_thich(self):
         """Tên kỹ thuật không giúp người không biết code quyết được gì."""
-        from ui_qt.trang_cai_dat import MUC
+        from ui_qt.trang_cai_dat import MUC, MUC_RIENG
 
-        assert {k for k, _n, _g in MUC} == set(cai_dat.MAC_DINH), \
+        # `MUC` là các ô đánh dấu; `MUC_RIENG` là tuỳ chọn có ô riêng (ô chọn,
+        # ô số…). Hai cái cộng lại phải phủ hết — thêm tuỳ chọn vào core mà
+        # quên dựng ô là bài kiểm này đỏ.
+        assert {k for k, _n, _g in MUC} | set(MUC_RIENG) == set(cai_dat.MAC_DINH), \
             "mỗi tuỳ chọn trong core phải có một dòng trên màn hình"
+        assert not ({k for k, _n, _g in MUC} & set(MUC_RIENG)), \
+            "một tuỳ chọn không được vừa là ô đánh dấu vừa có ô riêng"
         for khoa, nhan_o, giai_thich in MUC:
             assert len(giai_thich) > 60, \
                 "{0}: phải nói rõ tắt đi thì sao".format(khoa)

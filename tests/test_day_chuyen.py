@@ -31,7 +31,7 @@ from contextlib import contextmanager
 import pytest
 
 from core.auto import moi_luot
-from core.auto_khau import (SO_DOAN_DOC, BoiCanh, LoiKetJob, SoTheoDoi,
+from core.auto_khau import (CHU_MOI_LUOT_DOC, BoiCanh, LoiKetJob, SoTheoDoi,
                             chia_doan_doc, dung_bo_viec)
 
 # ── Máy chủ giả ──────────────────────────────────────────────────────────────
@@ -219,15 +219,29 @@ def _boi_canh(goc: str, may: MayChuGia, cancel=None):
 
 
 class TestChiaDoanDoc:
-    """Cổng chỉ cho 3 job đọc cùng lúc — hai đoạn dài là bỏ không một suất."""
+    """Mỗi đoạn là một lượt gọi riêng — mỗi chỗ nối là một chỗ đổi tông giọng.
+
+    Nên luật ở đây là **ít đoạn nhất có thể**, không phải "cắt vụn cho ba suất
+    song song có việc". Xem ghi chú dài ở `chia_doan_doc`.
+    """
 
     KICH_BAN = ("Câu thứ nhất kể chuyện. " * 40 + "Câu cuối cùng. ") * 4
 
-    def test_kich_ban_dai_thanh_muoi_doan_chu_khong_phai_hai(self):
-        doan = chia_doan_doc(self.KICH_BAN)
-        assert 8 <= len(doan) <= 14, (
-            "chia {0} đoạn: hai đoạn dài thì ba luồng chỉ dùng được một, "
-            "còn quá vụn thì chỗ nối nghe thấy".format(len(doan)))
+    def test_cat_it_doan_nhat_co_the(self):
+        """Đúng con số chủ dự án chỉ ra 16/08/2026: 2.726 chữ phải ra 3 đoạn."""
+        bai = "Một câu kể chuyện dài vừa phải. " * 87   # ~2.784 chữ
+        doan = chia_doan_doc(bai)
+        it_nhat = -(-len(bai.strip()) // CHU_MOI_LUOT_DOC)
+        assert len(doan) == it_nhat == 3, (
+            "chia {0} đoạn trong khi {1} là đủ — thừa {2} chỗ đổi tông "
+            "giọng".format(len(doan), it_nhat, len(doan) - it_nhat))
+
+    def test_cac_doan_deu_nhau(self):
+        """Nhồi đầy thì đoạn cuối cụt lủn, tông giọng của nó lệch hẳn."""
+        doan = chia_doan_doc("Một câu kể chuyện dài vừa phải. " * 87)
+        ngan, dai = min(len(d) for d in doan), max(len(d) for d in doan)
+        assert dai - ngan < 0.25 * dai, (
+            "đoạn ngắn nhất {0} chữ, dài nhất {1} chữ".format(ngan, dai))
 
     def test_ghep_lai_khong_mat_mot_chu_nao(self):
         """Mất chữ ở đây là mất hẳn một khúc lời giữa video."""
@@ -241,16 +255,69 @@ class TestChiaDoanDoc:
             assert d.rstrip()[-1] in ".!?…", (
                 "đoạn kết thúc giữa câu: “…{0}”".format(d[-30:]))
 
+    def test_uu_tien_cat_o_cho_xuong_dong(self):
+        """Hết đoạn văn là chỗ người đọc nghỉ dài nhất — cắt ở đó lộ ít nhất."""
+        bai = ("Câu mở đầu của đoạn văn này. " * 20).strip() + "\n\n" + \
+              ("Câu mở đầu của đoạn văn kia. " * 20).strip()
+        doan = chia_doan_doc(bai)
+        assert len(doan) == 2
+        assert doan[0].endswith("đoạn văn này.")
+
     def test_kich_ban_ngan_khong_bi_bam_vun(self):
         ngan = "Một câu ngắn thôi. Hai câu là hết bài."
         assert len(chia_doan_doc(ngan)) == 1
 
-    def test_khong_bao_gio_vuot_tran_cua_cong(self):
-        for d in chia_doan_doc("Câu dài dòng và lặp lại. " * 2000):
-            assert len(d) <= 2500
+    def test_vua_dung_tran_thi_van_la_mot_doan(self):
+        """Cắt đôi một bài đã vừa trần là thừa ra một chỗ đổi tông vô ích."""
+        assert len(chia_doan_doc("a" * CHU_MOI_LUOT_DOC)) == 1
 
-    def test_so_doan_dat_muc_tieu_hop_ly(self):
-        assert 9 <= SO_DOAN_DOC <= 12
+    def test_khong_bao_gio_vuot_tran_cua_cong(self):
+        """Vượt trần là cổng từ chối — mất cả khâu, không phải chỉ xấu tiếng."""
+        for d in chia_doan_doc("Câu dài dòng và lặp lại. " * 2000):
+            assert len(d) <= CHU_MOI_LUOT_DOC
+
+    def test_khuc_dai_khong_co_dau_cham_van_cat_duoc(self):
+        """Không có nhánh cắt cứng thì hàm quay vòng vô tận ở đây."""
+        doan = chia_doan_doc("a" * 3000)
+        assert doan and all(len(d) <= CHU_MOI_LUOT_DOC for d in doan)
+
+    def test_tran_dung_bang_tran_da_do_cua_cong(self):
+        """Tool gốc `D:\\11lab_vm` đo được 1.000 — cùng một nhà máy giọng nói."""
+        assert CHU_MOI_LUOT_DOC == 1000
+
+    def test_hai_bat_bien_dung_voi_moi_kieu_kich_ban(self):
+        """Ném đủ kiểu văn bản vào, hai điều sau không được sai lần nào.
+
+        Kịch bản thật muôn hình vạn trạng: câu dài câu ngắn, xuống dòng loạn
+        xạ, đoạn dài không có lấy một dấu chấm. Bài kiểm viết tay chỉ phủ được
+        vài hình dạng mình nghĩ ra — mà bug nằm ở hình dạng mình không nghĩ ra.
+
+        Hai điều phải luôn đúng:
+          1. Không đoạn nào vượt trần (vượt là cổng từ chối, mất cả khâu).
+          2. Ghép lại không mất một chữ nào (mất là mất hẳn một khúc lời).
+        """
+        import random
+
+        ngau = random.Random(20260816)      # cố định hạt: đỏ là dựng lại được
+        manh = ["Câu ngắn. ", "Một câu dài hơn hẳn để thử chỗ cắt. ",
+                "\n", "\n\n", "Không-có-dấu-chấm-gì-cả-suốt-một-khúc-dài ",
+                "Hỏi gì thế? ", "Trời ơi! ", "a", " ", "Ngừng một chút… "]
+        for lan in range(300):
+            bai = "".join(ngau.choice(manh)
+                          for _ in range(ngau.randint(1, 400)))
+            doan = chia_doan_doc(bai)
+            for d in doan:
+                assert len(d) <= CHU_MOI_LUOT_DOC, \
+                    "lần {0}: đoạn {1} chữ, vượt trần".format(lan, len(d))
+            goc = "".join(bai.split())
+            assert "".join("".join(d.split()) for d in doan) == goc, \
+                "lần {0}: ghép lại không khớp bản gốc".format(lan)
+
+    def test_khong_quay_vong_vo_tan_voi_tran_be_xiu(self):
+        """Trần nhỏ là chỗ mọi nhánh "cắt ở dấu" đều trượt xuống cắt cứng."""
+        for tran in (1, 2, 3, 5):
+            doan = chia_doan_doc("Một câu thử. Hai câu thử.", tran=tran)
+            assert doan and all(len(d) <= tran for d in doan)
 
 
 # ── Sổ theo dõi job ─────────────────────────────────────────────────────────

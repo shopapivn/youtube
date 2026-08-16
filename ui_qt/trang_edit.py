@@ -38,6 +38,7 @@ from core.dung_video import (
     DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_thoi_luong,
     lenh_ffmpeg, quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
 )
+from core.tron_tieng import co_ne_giong
 
 from . import theme
 from .widgets import (
@@ -292,6 +293,9 @@ class TrangDungVideo(QWidget):
             # `dong` gom lại rồi trả về một lần: đây là LUỒNG NỀN, chạm widget
             # từ đây là Qt sập không đoán trước.
             dong: List[str] = []
+            # Hỏi một lần cho cả mẻ: `co_ne_giong` nhớ kết quả lại, nhưng lần
+            # hỏi đầu vẫn mất cả trăm mili-giây.
+            ne = co_ne_giong(ffmpeg)
             xong = loi = 0
             for du_an in can_lam:
                 if self._xin_dung.is_set():
@@ -302,7 +306,8 @@ class TrangDungVideo(QWidget):
                 giay = doc_thoi_luong(ffmpeg, du_an.tieng)
                 moi_anh = thoi_luong_moi_anh(giay, len(du_an.hinh))
                 try:
-                    lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich, giay_moi_anh=moi_anh)
+                    lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich,
+                                       giay_moi_anh=moi_anh, ne_giong=ne)
                 except ValueError as van_de:
                     dong.append("{0}: {1}".format(du_an.ten, van_de))
                     loi += 1

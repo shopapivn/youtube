@@ -37,6 +37,8 @@ import shutil
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .tron_tieng import loc_tron_nhac
+
 __all__ = [
     "DuAn", "CaiDatDung", "DUOI_ANH", "DUOI_CLIP", "DUOI_TIENG", "DO_PHAN_GIAI",
     "MAU_CHU", "VI_TRI_PHU_DE", "tim_ffmpeg", "doc_du_an", "quet_thu_muc",
@@ -66,6 +68,10 @@ MAU_CHU = {
 VI_TRI_PHU_DE = {"Dưới": 2, "Giữa": 5, "Trên": 8}
 
 #: Nhạc nền nhỏ hơn lời đọc nhiều — đây là video kể chuyện, không phải MV.
+#:
+#: Chỉ còn dùng cho **đường lui**, khi bản FFmpeg trong máy thiếu bộ lọc
+#: `sidechaincompress`. Bình thường nhạc tự né giọng và độ to lúc không có lời
+#: lấy theo `core.tron_tieng.AM_LUONG_NE`.
 AM_LUONG_NHAC = 0.18
 
 
@@ -273,11 +279,16 @@ def doc_thoi_luong(ffmpeg: str, duong_dan: str) -> float:
 
 
 def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
-                giay_moi_anh: float = 4.0) -> List[str]:
+                giay_moi_anh: float = 4.0, ne_giong: bool = True) -> List[str]:
     """Dựng danh sách tham số FFmpeg. Thuần tính toán — không chạy gì.
 
     Tách rời như vậy để test kiểm được nội dung lệnh mà không cần cài FFmpeg
     trong máy chạy test.
+
+    `ne_giong` là **câu trả lời**, không phải câu hỏi: người gọi tự hỏi FFmpeg
+    bằng `core.tron_tieng.co_ne_giong` rồi đưa kết quả xuống đây. Hỏi ngay tại
+    đây thì hàm này hết thuần tính toán, và bài kiểm phải cài FFmpeg mới chạy
+    được.
 
     Dùng **bộ lọc `concat`** chứ không dùng concat demuxer: demuxer đòi mọi đầu
     vào cùng codec, cùng khổ, cùng fps — ảnh PNG chụp màn hình lẫn với clip mp4
@@ -307,7 +318,12 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
 
     # Nắn mỗi đầu vào về đúng khổ. Dùng `pad` chứ không `crop`: cắt cho vừa
     # khung là cắt mất đầu nhân vật ở ảnh dọc.
-    khuon = ("scale={0}:{1}:force_original_aspect_ratio=decrease,"
+    #
+    # `flags=lanczos`: không ghi gì thì FFmpeg dùng `bicubic` — mềm. Ảnh của
+    # kênh thường nhỏ hơn khung đích (nhà cung cấp trả 1408 chiều ngang, khung
+    # 1080p là 1920) nên gần như tấm nào cũng bị phóng lên, và phóng bằng
+    # lanczos nét hơn thấy được. Không tốn thêm thời gian đáng kể.
+    khuon = ("scale={0}:{1}:force_original_aspect_ratio=decrease:flags=lanczos,"
              "pad={0}:{1}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={2},format=yuv420p")
     phan = ["[{0}:v]{1}[v{0}]".format(i, khuon.format(rong, cao, cai.fps))
             for i in range(so_hinh)]
@@ -319,8 +335,9 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
             _thoat_loc(du_an.phu_de), loc_srt_style(cai)))
         nhan_v = "[vsub]"
     if co_nhac:
-        phan.append("[{0}:a]volume={1}[nen]".format(chi_so_tieng + 1, cai.am_luong_nhac))
-        phan.append("[{0}:a][nen]amix=inputs=2:duration=first[aout]".format(chi_so_tieng))
+        phan.append(loc_tron_nhac(
+            "{0}:a".format(chi_so_tieng), "{0}:a".format(chi_so_tieng + 1),
+            "aout", am_luong_deu=cai.am_luong_nhac, ne_giong=ne_giong))
         nhan_a = "[aout]"
     else:
         nhan_a = "{0}:a:0".format(chi_so_tieng)
