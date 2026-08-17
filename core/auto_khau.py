@@ -1472,12 +1472,28 @@ def _khau_kich_ban(bc: BoiCanh):
         # một lượt gọi vừa làm hỏng ý họ.
         tieu_de = str(luot.dau_vao.get("tieu_de") or "").strip()
         chu_bia = str(luot.dau_vao.get("chu_bia") or "").strip()
+        khuon_tieu_de = k.prompt.get("1-tieu-de.md", "")
         if tieu_de and chu_bia:
             bc.ghi("  dùng tiêu đề và chữ bìa bạn đã đưa — bỏ qua bước đặt tên.")
+        elif not khuon_tieu_de.strip():
+            # ═══ THIẾU LỜI NHẮC THÌ BỎ QUA, ĐỪNG GỬI LỜI NHẮC RỖNG ═══
+            #
+            # Mọi bước không bắt buộc khác đều có cửa này (`3-sua`, `4-do-dai`,
+            # `5-hoan-thien`, `6-seo`) — riêng bước đặt tên thì quên. Kênh nào
+            # dùng bộ lời nhắc gọn, bỏ tệp này đi, là tool gửi một lời nhắc
+            # RỖNG lên cổng: trả tiền cho một lượt gọi vô nghĩa rồi nhận về
+            # một tiêu đề bịa không liên quan gì tới video.
+            #
+            # Lấy tạm câu mở đầu tư liệu làm tiêu đề. Xấu, nhưng thật — và
+            # khách sửa được ở ô nhập trước khi chạy.
+            tieu_de = tieu_de or (tu_lieu.strip().splitlines() or [""])[0][:80]
+            chu_bia = chu_bia or tieu_de[:20]
+            bc.ghi("  (kênh không có lời nhắc đặt tên — tạm lấy câu đầu tư "
+                   "liệu, bạn sửa lại ở ô Tiêu đề khi chạy)")
         else:
             bc.kiem_dung()
             bc.ghi("  đang đặt tiêu đề…")
-            tra = _goi(bc, _thay(k.prompt.get("1-tieu-de.md", ""), dict(
+            tra = _goi(bc, _thay(khuon_tieu_de, dict(
                 chung, COMPETITOR_TITLE=luot.dau_vao.get("tieu_de_doi_thu", ""))),
                 "{0}:chat:tieu-de".format(luot.ma_luot))
             t, b = _doc_tieu_de(tra)
@@ -2002,6 +2018,20 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
         "AUDIENCE_CULTURE_NOTE": st.get("audience_culture_note", ""),
         "CULTURAL_PROPS": st.get("cultural_props", ""),
         "CULTURAL_METAPHORS": st.get("cultural_metaphors", ""),
+        # ═══ LỜI NHẮC PHẢI BIẾT NÓ ĐANG Ở KHÚC MẤY ═══
+        #
+        # Video ở đây **dài và ngang**, chia thành nhiều khúc, mỗi khúc một lượt
+        # gọi riêng — khác hẳn tool `D:\AFFILIATE` vốn làm video dọc ngắn xong
+        # trong một lượt.
+        #
+        # Khác biệt ấy đổi hẳn vài luật. "Cảnh đầu là cú hook" chỉ đúng với
+        # khúc 1; bê nguyên sang khúc 5 là mỗi khúc lại dựng một cú mở màn, và
+        # video thành năm lần mở bài. Nên đưa vị trí khúc vào để lời nhắc tự
+        # biết đường xử.
+        "KHUC_THU": thu_tu + 1,
+        "TONG_KHUC": tong_khuc,
+        "LA_KHUC_DAU": "yes" if thu_tu == 0 else "no",
+        "TY_LE_KHUNG": st.get("aspect_ratio", "16:9 horizontal"),
     })
     bc.ghi("  khúc {0}/{1}: {2} dòng ({3}–{4})…".format(
         thu_tu + 1, tong_khuc, len(cue), cue[0]["index"], cue[-1]["index"]))

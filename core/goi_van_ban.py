@@ -276,4 +276,80 @@ def loc_json(chu: str) -> Any:
                      or [-1])
         if vi_tri >= 0:
             tho = tho[vi_tri:]
-    return json.loads(tho)
+    try:
+        return json.loads(tho)
+    except ValueError:
+        va = _va_json_dut(tho)
+        if va is None:
+            raise
+        return va
+
+
+def _va_json_dut(tho: str) -> Any:
+    """Cứu một JSON bị đứt giữa chừng. Trả `None` nếu không cứu được.
+
+    ═══ KHÁCH BÁO HỎNG 17/08/2026 ═══
+
+    Khâu *"Cắt cảnh và viết lời nhắc"* dừng sau **2.320 giây và ba lần thử**
+    với đúng một câu:
+
+        Unterminated string starting at: line 17 column 21 (char 1469)
+
+    Nghĩa là AI mở một chuỗi rồi không đóng — bản trả về đứt ngang. Char 1469
+    là rất sớm so với trần 16k token, nên đây không phải chuyện thiếu chỗ; máy
+    chủ hoặc nguồn cắt ngang giữa dòng.
+
+    Bản trước ném thẳng `ValueError`. Cả khúc bị vứt, thử lại ba lần, mỗi lần
+    một lượt gọi 16k token — và lần nào cũng có thể đứt tiếp. Khách ngồi hơn ba
+    mươi tám phút rồi nhận về một câu lỗi kỹ thuật.
+
+    ═══ GIỮ LẠI PHẦN ĐÃ XONG ═══
+
+    Điều quan trọng: một bản đứt ở cảnh thứ sáu vẫn có **năm cảnh hoàn chỉnh**.
+    Vứt cả là vứt luôn năm cảnh đã trả tiền. Nên hàm này cắt tại ranh giới phần
+    tử hoàn chỉnh cuối cùng rồi đóng ngoặc lại.
+
+    Khâu cắt cảnh có sẵn cửa kiểm phía sau (`_canh_dung_duoc`) bắt cảnh thiếu
+    lời nhắc, nên phần cứu về vẫn phải qua cửa ấy mới được dùng.
+    """
+    if not tho:
+        return None
+
+    # Quét một lượt, nhớ vị trí NGAY SAU mỗi phần tử hoàn chỉnh ở mọi độ sâu.
+    # Phải tự quét chứ không đếm ngoặc bằng `count`: dấu ngoặc nằm trong chuỗi
+    # (`"a { b"`) đếm vào là lệch, mà lời nhắc ảnh thì đầy dấu ngoặc.
+    trong_chuoi = False
+    thoat = False
+    ngan = []          # ngăn xếp ngoặc đang mở
+    moc = []           # (vị trí sau phần tử, bản sao ngăn xếp lúc đó)
+    for i, c in enumerate(tho):
+        if trong_chuoi:
+            if thoat:
+                thoat = False
+            elif c == "\\":
+                thoat = True
+            elif c == '"':
+                trong_chuoi = False
+                if ngan:
+                    moc.append((i + 1, list(ngan)))
+            continue
+        if c == '"':
+            trong_chuoi = True
+        elif c in "{[":
+            ngan.append("}" if c == "{" else "]")
+        elif c in "}]":
+            if not ngan or ngan[-1] != c:
+                return None          # ngoặc lệch — không đoán bừa
+            ngan.pop()
+            if ngan:
+                moc.append((i + 1, list(ngan)))
+
+    # Thử từ mốc muộn nhất trở về trước: cắt ở đó rồi đóng nốt ngoặc còn mở.
+    for vi_tri, con_lai in reversed(moc):
+        thu = tho[:vi_tri].rstrip().rstrip(",")
+        thu += "".join(reversed(con_lai))
+        try:
+            return json.loads(thu)
+        except ValueError:
+            continue
+    return None
