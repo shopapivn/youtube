@@ -385,7 +385,7 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
     #
     # `core/su_co.py` vốn đã có bảng nhịp lùi tính sẵn cho từng loại sự cố.
     # Chỗ này chỉ việc dùng nó.
-    from .su_co import (TAM_NGHI, nhip_cho,  # noqa: PLC0415
+    from .su_co import (TAM_NGHI, dau_vet, nhip_cho,  # noqa: PLC0415
                         phan_loai as _phan)
 
     for lan in range(4):
@@ -398,9 +398,12 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
             if lan == 3:
                 raise
             loai = _phan(loi)
-            bc.ghi("  {0} — làm lại bằng khoá mới (lần {1}).".format(
+            # Ghi kèm `request_id` — không có nó thì bên vận hành không tra
+            # được, và cả lượt chạy hỏng thành một câu than vô ích.
+            bc.ghi("  {0} — làm lại bằng khoá mới (lần {1}).{2}".format(
                 "máy chủ chưa nhận được yêu cầu"
-                if loai == TAM_NGHI else str(loi)[:60], lan + 1))
+                if loai == TAM_NGHI else str(loi)[:60], lan + 1,
+                dau_vet(loi)))
             cho = nhip_cho(loai, lan)
             if cho > 0:
                 bc.ghi("    đợi {0:.0f} giây cho máy chủ thở.".format(cho))

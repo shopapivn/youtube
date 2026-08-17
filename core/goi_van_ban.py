@@ -74,7 +74,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .su_co import (
     CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, NHA_MAY_NGHI, TAM_NGHI,
-    goi_kien_nhan, phan_loai,
+    dau_vet, goi_kien_nhan, nhip_cho, phan_loai,
 )
 
 __all__ = ["goi_van_ban", "loc_json", "MO_HINH_MAC_DINH",
@@ -226,11 +226,31 @@ def goi_van_ban(
             # Câu hiện lên màn hình chỉ nói tool đang làm gì. Chuyện ví tiền có
             # tab Tài khoản lo — nhắc tiền ở mỗi dòng nhật ký chỉ làm người
             # đang chờ thấy sốt ruột về một thứ họ không cần quyết lúc này.
-            ghi("  {0} — đặt lại từ đầu (lần {1}).".format(
+            ghi("  {0} — đặt lại từ đầu (lần {1}).{2}".format(
                 {TAM_NGHI: "máy chủ chưa nhận được yêu cầu",
                  KHOA_DA_DUNG: "máy chủ không nhận lại việc cũ"}.get(
                      loai, "đợi lâu vẫn chưa xong"),
-                luot + 1))
+                luot + 1, dau_vet(loi)))
+            # ═══ ĐỔI KHOÁ RỒI PHẢI ĐỢI, KHÔNG ĐƯỢC BẮN NGAY ═══
+            #
+            # `goi_kien_nhan` ở trên có nhịp đợi riêng, nhưng chỉ cho những
+            # loại nó chịu đợi (`_DOI_GIU_KHOA`). Rơi xuống tới đây là nó đã
+            # bỏ cuộc, và vòng lặp này **bắn lại tức thì**.
+            #
+            # Đo trên lượt chạy thật 17/08/2026, khâu cắt cảnh, lúc máy chủ báo
+            # quá tải: ba lần "đặt lại từ đầu" nằm gọn trong **cùng một giây**.
+            # Nhân với vòng đổi khoá ở `auto_khau._goi` và vòng thử lại từng
+            # khúc, một khúc nã tới ba mươi sáu lời gọi trong vài giây — vào
+            # đúng một máy chủ vừa nói nó đang nghẹt.
+            #
+            # Đây là tầng trong cùng của ba tầng thử lại lồng nhau, và là tầng
+            # nã dày nhất.
+            cho = nhip_cho(loai, luot)
+            if cho > 0:
+                ghi("    đợi {0:.0f} giây trước khi đặt lại.".format(cho))
+                ngu(cho)
+                if kiem_dung is not None:
+                    kiem_dung()
 
     raise loi_cuoi or RuntimeError("không gọi được AI sau nhiều lần đổi khoá")
 

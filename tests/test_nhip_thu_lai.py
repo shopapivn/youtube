@@ -121,3 +121,45 @@ class TestBangNhipVanDungNhuCu:
     def test_may_chu_qua_tai_co_nhip_cho_that(self):
         for loai in (TAM_NGHI, CHAM_LAI, NHA_MAY_NGHI):
             assert nhip_cho(loai, 0) > 0, loai
+
+
+class TestGhiMaTraCuu:
+    """`request_id` là thứ duy nhất bên vận hành tra được — đừng vứt nó đi.
+
+    Lượt chạy thật 17/08/2026 hỏng vì máy chủ quá tải, và tool **không giữ lấy
+    một mã nào**: nhật ký chỉ có `str(loi)[:60]`. Cả một giờ rưỡi chạy mà manh
+    mối quan trọng nhất thì bị chính tool bỏ đi.
+    """
+
+    def test_lay_duoc_ma_tu_loi_cua_SDK(self):
+        from core.su_co import dau_vet
+
+        class LoiGia(Exception):
+            request_id = "req_abc123"
+            status = 503
+            code = "overloaded"
+
+        ra = dau_vet(LoiGia("qua tai"))
+        assert "req_abc123" in ra and "503" in ra and "overloaded" in ra
+
+    def test_loi_khong_co_ma_thi_khong_ghi_bua(self):
+        from core.su_co import dau_vet
+
+        assert dau_vet(RuntimeError("mang dut")) == ""
+
+    def test_nhat_ky_khi_thu_lai_co_kem_ma(self):
+        """Ghi mã đúng lúc hỏng, không phải bắt khách đi mò lại."""
+        dong = []
+
+        class LoiGia(Exception):
+            request_id = "req_xyz789"
+            status = 503
+
+        def goi_chat(*_a, **_k):
+            raise LoiGia("Hệ thống đang quá tải")
+
+        bc = BoiCanh(goc=".", kenh=_KenhGia(), goi_chat=goi_chat,
+                     on_log=dong.append, ngu=lambda _g: None)
+        with pytest.raises(Exception):
+            _goi(bc, "loi nhac", "khoa")
+        assert any("req_xyz789" in d for d in dong), dong

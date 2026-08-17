@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence, Tuple
 
 __all__ = [
+    "dau_vet",
     "CHO_TIEP",
     "KHOA_DA_DUNG", "TAM_NGHI", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
     "CHET", "NHA_MAY_NGHI", "LoiNoiDung",
@@ -240,6 +241,34 @@ def nhip_cho(loai: str, lan: int) -> float:
     if not nhip:
         return 0.0
     return float(nhip[min(lan, len(nhip) - 1)])
+
+
+def dau_vet(loi: BaseException) -> str:
+    """Mã tra cứu của một sự cố, dạng `" [request_id=… status=… code=…]"`.
+
+    Rỗng nếu lỗi không mang mã nào (lỗi mạng thuần, lỗi tự tool ném ra).
+
+    ═══ VÌ SAO CẦN ═══
+
+    Khi tool hỏng vì máy chủ, câu hỏi đầu tiên bên vận hành hỏi là *"cho xin
+    request_id"*. Chính SDK cũng dặn thế: *"gửi mã request_id cho hỗ trợ để tra
+    cứu nhanh"*.
+
+    Mà SDK **có** mã ấy trên đối tượng lỗi, còn tool thì ghi nhật ký bằng
+    `str(loi)[:60]` — cắt cụt và vứt luôn mã đi. Lượt chạy thật 17/08/2026 hỏng
+    ở khâu cắt cảnh vì máy chủ quá tải, và **không có lấy một mã nào** để đưa
+    bên vận hành tra. Cả một giờ rưỡi chạy mà manh mối quan trọng nhất thì bị
+    chính tool bỏ đi.
+
+    Đây là thứ chỉ tốn một dòng nhật ký, và là thứ duy nhất biến "tool báo hỏng"
+    thành "tra được hỏng ở đâu".
+    """
+    phan = []
+    for ten in ("request_id", "status", "code"):
+        gia_tri = getattr(loi, ten, None)
+        if gia_tri:
+            phan.append("{0}={1}".format(ten, gia_tri))
+    return " [{0}]".format(" ".join(phan)) if phan else ""
 
 
 def mo_ta(loai: str) -> str:
