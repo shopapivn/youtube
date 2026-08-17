@@ -30,6 +30,34 @@ Visual metaphors already established for this channel: <<CULTURAL_METAPHORS>>
 ## SRT (each line is `index | start → end | text`)
 <<SRT>>
 
+## RETENTION — the rule that decides whether anyone watches
+
+Every second has to earn the next one. A prompt that describes a room while the
+narration lands a point is a wasted scene.
+
+R1. **Scene 1 is the HOOK** — the single most arresting, curiosity-triggering
+    image of the whole video.
+
+R2. **Every scene needs ONE clear visual hook**: a transformation, a reveal, or
+    an exaggerated **visual METAPHOR of what is being said** — swirling clocks,
+    cracking glass, tangled threads, a shadow growing, drowning in letters, a
+    door closing on light. **NEVER the character merely sitting or standing
+    while the narration plays.** If your prompt would still make sense with a
+    different line of narration, it is the wrong prompt.
+
+R3. **Vary shot size and angle hard** between consecutive scenes: extreme
+    close-up on eyes → wide → top-down → over-the-shoulder. Never two similar
+    framings in a row.
+
+R4. **Video prompt = a change from the start of the clip to its end**, clearly
+    visible. Something moves, turns, opens, breaks, fills, empties, or the
+    camera travels. **Forbidden words: `subtle`, `slight`, `gentle`, `slowly`,
+    `barely`.** Calm is a matter of *pace*, not of *nothing happening*: a slow
+    push-in that ends somewhere new is calm; a static shot is dead air.
+
+R5. **Exaggerate the emotion** the way a good animated short does — readable
+    posture, readable face, readable gesture.
+
 ## Rules
 
 1. **Each prompt sticks closely to the exact words of that scene's narration.**
@@ -46,8 +74,9 @@ Visual metaphors already established for this channel: <<CULTURAL_METAPHORS>>
 5. **Image prompt (English):** the setting, then `nv1 (nv1.png)` with a specific
    pose and expression, then the props that carry the meaning. Concrete, not
    abstract. No text anywhere in the image.
-6. **Video prompt (English):** motion only — what moves, how slowly, in what
-   direction. This channel is calm; nothing snaps or whips.
+6. **Video prompt (English):** motion only — what moves, in what direction, and
+   **what is different by the end of the clip**. Obey R4: this channel is calm,
+   so nothing snaps or whips — but something must actually happen.
 7. Every image prompt and every video prompt must be **unique**. No copy-paste
    between scenes.
 

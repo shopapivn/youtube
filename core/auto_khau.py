@@ -1614,26 +1614,67 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
 
     Trả về bản tốt nhất đo được — kể cả khi hết vòng mà vẫn chưa đạt, vì một
     bản hụt 9% vẫn dùng được, còn ném lỗi ở đây là vứt cả kịch bản đã trả tiền.
+
+    ═══ TAM SAO THẤT BẢN — VÌ SAO LUÔN NẮN TỪ BẢN GỐC ═══
+
+    Chủ dự án, 17/08/2026: *"kịch bản đang không hay"*. Nguyên nhân nằm ở đây.
+
+    Bản trước đưa **bản vừa viết lại** vào viết lại tiếp:
+
+        moi = _goi(... DRAFT=tot_nhat ...)
+        tot_nhat = moi          # vòng sau lại lấy chính nó
+
+    Ba vòng như vậy là bản sao của bản sao của bản sao. Mỗi lần viết lại, AI
+    làm mượt đi một chút, mất một chi tiết cụ thể, thay một câu sắc bằng một
+    câu tròn. Kịch bản không hỏng ở vòng nào cả — nó **nhạt dần**, và không có
+    dòng nhật ký nào báo điều đó.
+
+    Tool gốc `D:\\CONTENT` ghi thẳng lý do trong mã, và đó là bài học mua bằng
+    kinh nghiệm: *"Lượt 1-3: nén từ BẢN GỐC (đủ chất liệu, tránh tam sao thất
+    bản)."* Bản gốc là bản có nhiều chất liệu nhất; mọi bản sau đều nghèo hơn.
+
+    Nên vòng phản hồi ở đây tác động vào **con số mình khai với AI**, không vào
+    bản chữ. Khai 3.400 mà ra 2.700 thì lần sau khai cao hơn — bản gốc vẫn
+    nguyên vẹn để nắn lại từ đầu.
     """
     khuon = k.prompt.get("4-do-dai.md", "")
     if not khuon.strip():
         return ban_nhap
-    tot_nhat = ban_nhap
+
+    dich = k.ky_tu_muc_tieu
+    duoi, tren = dich * (1 - CHENH_CHO_PHEP), dich * (1 + CHENH_CHO_PHEP)
+    khai = dich                       # lượt đầu khai đúng mục tiêu
+    tot_nhat, cach_nhat = ban_nhap, abs(len(ban_nhap) - dich)
+
     for vong in range(1, VONG_NAN_TOI_DA + 1):
-        lech = _lech(tot_nhat, k)
-        if lech <= CHENH_CHO_PHEP:
+        if duoi <= len(tot_nhat) <= tren:
             bc.ghi("  độ dài đạt: {0} ký tự (lệch {1:.0%}).".format(
-                len(tot_nhat), lech))
+                len(tot_nhat), _lech(tot_nhat, k)))
             return tot_nhat
-        thieu = k.ky_tu_muc_tieu - len(tot_nhat)
+
+        # ═══ LUÔN NẮN TỪ BẢN GỐC ═══
+        #
+        # Trừ đúng một ca ở dưới. Đây là chỗ quan trọng nhất của cả hàm.
+        nguon = ban_nhap
+        ghi_chu = ""
+        if vong >= VONG_NAN_TOI_DA and tot_nhat is not ban_nhap \
+                and len(tot_nhat) > tren:
+            # Vòng cuối, và bản tốt nhất đang DÀI hơn trần: rút gọn từ chính
+            # nó. Cắt 5.000 xuống 3.400 dễ hơn nhiều so với nén 18.000 xuống
+            # 3.400, và tới đây thì đã hết lượt để thử lại từ đầu.
+            nguon = tot_nhat
+            khai = dich
+            ghi_chu = " (rút từ bản gần nhất)"
+
+        thieu = dich - len(nguon)
         viec = ("THÊM khoảng {0} ký tự nữa".format(thieu) if thieu > 0
                 else "CẮT bớt khoảng {0} ký tự".format(-thieu))
-        bc.ghi("  nắn độ dài vòng {0}: đang {1}, cần {2} → {3}…".format(
-            vong, len(tot_nhat), k.ky_tu_muc_tieu, viec))
+        bc.ghi("  nắn độ dài vòng {0}: khai {1} ký tự{2}…".format(
+            vong, khai, ghi_chu))
         try:
             moi = _goi(bc, _thay(khuon, dict(
-                chung, DRAFT=tot_nhat,
-                CHARS_NOW=len(tot_nhat), CHARS_DELTA=thieu,
+                chung, DRAFT=nguon, CHARS=khai,
+                CHARS_NOW=len(nguon), CHARS_DELTA=thieu,
                 LENGTH_TASK=viec)),
                 "{0}:chat:4-do-dai.md:v{1}".format(luot.ma_luot, vong)).strip()
         except Exception as loi:  # noqa: BLE001 — nắn hỏng thì giữ bản đang có
@@ -1642,14 +1683,26 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             return tot_nhat
         if not moi:
             return tot_nhat
-        # Chỉ nhận bản mới khi nó THẬT SỰ gần mục tiêu hơn. AI đôi khi viết lại
-        # hay hơn nhưng vẫn đúng độ dài cũ; nhận bừa là quay vòng vô ích.
-        if _lech(moi, k) < lech:
-            tot_nhat = moi
-        else:
-            bc.ghi("  vòng {0} không kéo gần hơn ({1} ký tự) — dừng nắn."
-                   .format(vong, len(moi)))
-            break
+
+        n = len(moi)
+        bc.ghi("    → {0} ký tự (nhắm {1}).".format(n, dich))
+        if abs(n - dich) < cach_nhat:
+            tot_nhat, cach_nhat = moi, abs(n - dich)
+        if duoi <= n <= tren:
+            return moi
+
+        # ═══ CHỈNH CON SỐ KHAI, KHÔNG CHỈNH BẢN CHỮ ═══
+        #
+        # AI không đếm được ký tự lúc viết, và nó vượt/hụt số khai theo một tỉ
+        # lệ dao động. Nên vòng phản hồi tác động vào **con số mình khai**, chứ
+        # không vào bản chữ: khai 3.400 mà ra 2.700 thì lần sau khai cao hơn.
+        #
+        # Mũ 0.6 là giảm chấn. Chỉnh thẳng theo tỉ lệ thì số khai nhảy vọt qua
+        # lại (tool gốc đo được một cú nhảy 17k → 5k) vì lượng chữ ra tăng
+        # nhanh hơn tuyến tính theo số khai.
+        he_so = (dich / max(1, n)) ** 0.6
+        khai = int(max(dich * 0.3, min(dich * 1.5, khai * he_so)))
+
     bc.ghi("  độ dài cuối: {0} ký tự (lệch {1:.0%}).".format(
         len(tot_nhat), _lech(tot_nhat, k)))
     return tot_nhat
