@@ -82,9 +82,13 @@ SONG_SONG_DOC = 3
 #: tiếng Anh chi tiết, hai mươi cảnh vượt trần chữ trả về và JSON **đứt giữa
 #: câu** — `Unterminated string ... (char 20748)`.
 #:
-#: 8 cảnh một lượt, và trần chữ nâng lên; hụt nữa thì `_viet_loi_nhac` tự chia
-#: đôi lô mà làm lại.
-CANH_MOI_LUOT = 8
+#: Cách chữa **bây giờ nằm ở chỗ khác**, và hằng số cũ ở đây đã chết:
+#: `CANH_MOI_LUOT = 8` không còn nơi nào dùng, và ghi chú của nó trỏ tới một
+#: hàm `_viet_loi_nhac` **không còn tồn tại**. Đã bỏ cả hai 17/08/2026.
+#:
+#: Chỗ chia lô thật: `core/chia_canh.CUE_MOI_KHUC` (30 dòng phụ đề một khúc),
+#: chạy `KHUC_SONG_SONG = 3` khúc cùng lúc. Giữ đoạn ghi chú phía trên vì bài
+#: học đo được của nó vẫn đúng — chỉ con số và tên hàm là cũ.
 
 #: Trần chữ cho lượt viết lời nhắc cảnh. Cao hơn hẳn mặc định vì đây là lời gọi
 #: đẻ ra nhiều chữ nhất trong cả dây chuyền.
@@ -361,7 +365,28 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
     #
     # Nên: gặp "chưa nhận được" thì **đổi khoá**. An toàn tuyệt đối, vì chính
     # máy chủ đã nói chưa trừ tiền và chưa tạo việc gì.
-    from .su_co import TAM_NGHI, phan_loai as _phan  # noqa: PLC0415
+    # ═══ ĐỔI KHOÁ RỒI THÌ PHẢI ĐỢI, KHÔNG ĐƯỢC HỎI NGAY ═══
+    #
+    # Bản trước gọi lại **tức thì** sau mỗi lần hỏng. `xin_nhip` ở đầu vòng lặp
+    # trông như một nhịp nghỉ nhưng không phải: nó là bộ giữ **hạn mức gọi mỗi
+    # phút**, chưa chạm trần thì trả về ngay.
+    #
+    # Đo được trên lượt chạy thật 17/08/2026, khâu cắt cảnh, đúng lúc máy chủ
+    # báo *"Hệ thống đang quá tải… vui lòng thử lại sau ít phút"*:
+    #
+    #     [5313s] thử lại lần 1, 2, 3      ← cùng một giây
+    #     [5314s] thử lại lần 1, 2, 3      ← cùng một giây
+    #     [5315s] thử lại lần 1, 2
+    #
+    # Khoảng **mười lăm lời gọi trong hai giây**, ném vào một máy chủ vừa nói
+    # nó đang quá tải. Đó đúng là thứ `CLAUDE.md` cấm: hỏi dày không làm việc
+    # xong sớm hơn một giây nào, nó chỉ lấy thêm CPU của chính máy chủ đang
+    # nghẹt — và làm cả bốn lần thử đều hỏng vì cùng một lý do.
+    #
+    # `core/su_co.py` vốn đã có bảng nhịp lùi tính sẵn cho từng loại sự cố.
+    # Chỗ này chỉ việc dùng nó.
+    from .su_co import (TAM_NGHI, nhip_cho,  # noqa: PLC0415
+                        phan_loai as _phan)
 
     for lan in range(4):
         xin_nhip(bc.on_log, so_suat=2)
@@ -372,9 +397,15 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
         except Exception as loi:  # noqa: BLE001
             if lan == 3:
                 raise
+            loai = _phan(loi)
             bc.ghi("  {0} — làm lại bằng khoá mới (lần {1}).".format(
                 "máy chủ chưa nhận được yêu cầu"
-                if _phan(loi) == TAM_NGHI else str(loi)[:60], lan + 1))
+                if loai == TAM_NGHI else str(loi)[:60], lan + 1))
+            cho = nhip_cho(loai, lan)
+            if cho > 0:
+                bc.ghi("    đợi {0:.0f} giây cho máy chủ thở.".format(cho))
+                bc.ngu(cho)
+                bc.kiem_dung()
     raise RuntimeError("không gọi được AI sau 4 lần đổi khoá")
 
 

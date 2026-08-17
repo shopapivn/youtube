@@ -132,8 +132,22 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
     # 60 yêu cầu mỗi 1 phút)"* — không có chữ "429" nào trong đó, nên bảng chỉ
     # bắt mã số thôi là trượt. Đây đúng là kiểu ca mà bảng này sinh ra để đỡ:
     # thêm một dòng, không phải đi sửa bốn nơi.
+    # "quá tải" / "overload": cả hệ thống đang nghẹt, khác với riêng mình gọi
+    # quá dày — nhưng cách xử giống hệt nhau, và đây là nhóm lùi mạnh nhất.
+    #
+    # Thêm 17/08/2026 sau một lượt chạy thật. Câu đầy đủ của cổng là *"Hệ thống
+    # đang quá tải, chưa xử lý được yêu cầu này. Bạn không bị trừ tiền. Vui
+    # lòng thử lại sau ít phút."* — nó phân loại đúng, nhưng **chỉ nhờ chữ
+    # "không bị trừ tiền"** ở giữa câu, tức nhờ may.
+    #
+    # Bỏ nửa câu ấy đi thì "Hệ thống đang quá tải" không khớp dấu hiệu nào và
+    # rơi thẳng vào `CHET` — tool bỏ cuộc ngay lập tức trước một sự cố mà chính
+    # máy chủ vừa bảo là **tạm thời và không mất tiền**. Máy chủ đổi câu chữ là
+    # chuyện xảy ra hoài; đừng để cách xử phụ thuộc vào nửa câu không nói về
+    # nguyên nhân.
     (CHAM_LAI, ("429", "quá nhiều yêu cầu", "rate limit", "too many requests",
-                "chậm lại", "gửi quá nhanh", "giới hạn", "yêu cầu mỗi")),
+                "chậm lại", "gửi quá nhanh", "giới hạn", "yêu cầu mỗi",
+                "quá tải", "overload")),
     # Cả nhà máy đang tắt. Phải đứng TRƯỚC `TAM_NGHI`: câu này cũng có chữ
     # "KHÔNG bị trừ tiền", xếp sau là nó rơi nhầm vào nhóm trục trặc thoáng qua
     # rồi tool đợi kiểu sai.
