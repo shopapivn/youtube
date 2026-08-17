@@ -233,3 +233,63 @@ class TestNoiVaoDayChuyen:
         khuc = khuc[:khuc.index("def _khau_bang_canh")]
         assert "1-kich-ban.txt" in khuc
         assert "TEP_CO_THE" not in khuc, "khâu phụ đề không được đọc bản có thẻ"
+
+
+class TestKhongGiuCaLuotLamConTin:
+    """Chèn thẻ là việc LÀM ĐẸP — hỏng hay chậm đều không được chặn lượt chạy.
+
+    Đo 17/08/2026 trên lượt thử T02: khâu giọng đọc đứng im **hơn hai mươi lăm
+    phút** mà chưa tạo nổi thư mục đoạn, trong khi hàng đợi của cổng trống
+    rỗng. Nó kẹt ở đúng bước này — mỗi khúc leo thang bốn lần thử kèm nhịp lùi
+    30–120 giây, nhân với ba lần đổi khoá bên trong.
+    """
+
+    def test_het_gio_thi_bo_cac_khuc_con_lai(self):
+        from core.the_cam_xuc import chen_the
+
+        dong = [0.0]
+
+        def dong_ho():
+            return dong[0]
+
+        def ai_cham(_l):
+            dong[0] += 100.0          # mỗi lượt gọi "mất" 100 giây
+            return "[sighs] " + _l.split("KỊCH BẢN:\n", 1)[-1]
+
+        bai = "".join("Câu số {0} kể chuyện dài vừa phải. ".format(i)
+                      for i in range(1, 200))       # nhiều khúc
+        ra = chen_the(bai, ai_cham, tran_giay=250, dong_ho=dong_ho)
+        # Hết giờ ở khoảng khúc thứ ba, phần còn lại phải là bản gốc.
+        from core.the_cam_xuc import kiem_the
+
+        assert ra is None or kiem_the(bai, ra), "phần bỏ dở làm hỏng kịch bản"
+
+    def test_khuc_da_chen_duoc_thi_van_giu(self):
+        """Bỏ luôn cả phần đã chèn là phí lượt gọi đã trả tiền."""
+        from core.the_cam_xuc import chen_the, kiem_the
+
+        dong = [0.0]
+        bai = "".join("Câu số {0} kể chuyện dài vừa phải. ".format(i)
+                      for i in range(1, 200))
+
+        def ai(loi_nhac):
+            dong[0] += 100.0
+            return "[sighs] " + loi_nhac.split("KỊCH BẢN:\n", 1)[-1]
+
+        ra = chen_the(bai, ai, tran_giay=250, dong_ho=lambda: dong[0])
+        if ra:
+            assert "[sighs]" in ra and kiem_the(bai, ra)
+
+    def test_KHONG_dung_thang_thu_lai_cua__goi(self):
+        """Dùng `_goi` là kiên nhẫn hàng chục phút cho một việc bỏ qua được."""
+        import os
+
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(goc, "core", "auto_khau.py"),
+                  encoding="utf-8") as tep:
+            chu = tep.read()
+        khuc = chu[chu.index("def _chen_the_cam_xuc"):]
+        khuc = khuc[:khuc.index("def _doi_cao_do_giong")]
+        assert "bc.goi_chat(" in khuc, "phải gọi thẳng, một lượt"
+        assert "_goi(bc," not in khuc, (
+            "đang dùng thang thử lại — bước làm đẹp không được kiên nhẫn thế")

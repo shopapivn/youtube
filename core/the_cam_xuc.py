@@ -366,8 +366,28 @@ def chen_the_hang_loat(muc, goi_ai, ghi=None) -> int:
     return duoc
 
 
+#: Cả bước chèn thẻ không được tốn quá ngần này giây.
+#:
+#: ═══ VIỆC LÀM ĐẸP KHÔNG ĐƯỢC GIỮ CẢ LƯỢT CHẠY LÀM CON TIN ═══
+#:
+#: Đo 17/08/2026 trên lượt chạy thử T02: khâu giọng đọc đứng im **hơn hai mươi
+#: lăm phút** mà chưa tạo nổi thư mục đoạn, trong khi hàng đợi của cổng trống
+#: rỗng. Nó kẹt ở đúng bước này.
+#:
+#: Vì sao kẹt lâu được: mỗi khúc gọi AI qua `_goi`, mà `_goi` có bốn lần thử,
+#: mỗi lần lại có nhịp lùi 30–120 giây, và bên trong `goi_van_ban` còn ba lần
+#: đổi khoá nữa. Nhân lên là hàng chục phút cho **một** khúc — với một bước mà
+#: bỏ qua cũng chẳng mất gì ngoài mấy cái thẻ.
+#:
+#: Nhịp lùi ấy là đúng (xem `core/su_co.py`), nhưng nó đúng cho những việc
+#: **phải làm cho bằng được**: viết kịch bản, đọc thành giọng. Chèn thẻ thì
+#: không. Hết giờ là bỏ, đọc bản sạch, chạy tiếp.
+TRAN_GIAY_CHEN = 240.0
+
+
 def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
-             ghi=None, tran_khuc: int = CHU_MOI_LUOT_CHEN) -> Optional[str]:
+             ghi=None, tran_khuc: int = CHU_MOI_LUOT_CHEN,
+             tran_giay: float = TRAN_GIAY_CHEN, dong_ho=None) -> Optional[str]:
     """Nhờ AI chèn thẻ theo từng khúc, rồi **kiểm lại** trước khi nhận.
 
     `goi_ai` là hàm `(lời nhắc) -> chữ trả về`; tách ra để test không cần mạng.
@@ -393,10 +413,22 @@ def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
         noi("  (kịch bản có sẵn dấu ngoặc vuông — bỏ qua bước chèn thẻ cho chắc)")
         return None
 
+    import time as _tg  # noqa: PLC0415
+
+    dong_ho = dong_ho or _tg.monotonic
+    han = dong_ho() + max(1.0, float(tran_giay))
+
     khuc = chia_de_chen(goc, tran_khuc)
     ra: List[str] = []
     duoc = 0
     for i, k in enumerate(khuc, start=1):
+        if dong_ho() >= han:
+            # Hết giờ: mọi khúc còn lại giữ nguyên bản gốc. Khúc đã chèn được
+            # thì vẫn giữ — bỏ chúng đi là phí lượt gọi đã trả tiền.
+            noi("  (chèn thẻ quá {0:.0f} giây — {1} khúc còn lại đọc bản gốc)"
+                .format(tran_giay, len(khuc) - i + 1))
+            ra.extend(khuc[i - 1:])
+            break
         if len(khuc) > 1:
             noi("  chèn thẻ khúc {0}/{1}…".format(i, len(khuc)))
         chu, ok = _chen_mot_khuc(k, goi_ai, giong_van, ngon_ngu, noi)

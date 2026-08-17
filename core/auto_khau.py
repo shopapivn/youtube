@@ -2608,9 +2608,22 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> str:
     try:
         bc.ghi("  chèn thẻ cảm xúc cho giọng đọc…")
 
+        # ═══ MỘT LƯỢT GỌI, KHÔNG LEO THANG THỬ LẠI ═══
+        #
+        # Cố ý **không** dùng `_goi`. `_goi` là thang bốn lần thử kèm nhịp lùi
+        # 30–120 giây, và bên trong `goi_van_ban` còn ba lần đổi khoá nữa —
+        # đúng như những việc phải làm cho bằng được cần.
+        #
+        # Chèn thẻ thì không phải loại việc ấy. Bỏ qua nó chỉ mất mấy cái thẻ,
+        # còn kiên nhẫn với nó thì mất cả lượt chạy: đo 17/08/2026, khâu giọng
+        # đọc đứng im hơn hai mươi lăm phút ở đúng đây, trong khi hàng đợi của
+        # cổng trống rỗng.
+        #
+        # Một lượt, hỏng thì thôi. `chen_the` tự lo phần quay về bản sạch.
         def goi(loi_nhac: str) -> str:
-            return _goi(bc, loi_nhac,
-                        "{0}:chat:the-cam-xuc".format(luot.ma_luot))
+            return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
+                               khoa="{0}:chat:the-cam-xuc:{1}".format(
+                                   luot.ma_luot, len(loi_nhac)))
 
         co_the = chen_the(kich_ban, goi, giong_van=bc.kenh.giong_van,
                           ngon_ngu=bc.kenh.ngon_ngu, ghi=bc.ghi)
