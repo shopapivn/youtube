@@ -332,6 +332,40 @@ def _chen_mot_khuc(khuc: str, goi_ai, giong_van: str, ngon_ngu: str,
     return co_the, True
 
 
+def chen_the_hang_loat(muc, goi_ai, ghi=None) -> int:
+    """Chèn thẻ cho **một mẻ việc đọc**, sửa tại chỗ. Trả về số việc chèn được.
+
+    `muc` là danh sách đối tượng có thuộc tính `content` — chính là `JobSpec`
+    của tab Voice, nhưng hàm này không cần biết điều đó.
+
+    ═══ VÌ SAO NẰM Ở ĐÂY CHỨ KHÔNG NẰM TRONG WIDGET ═══
+
+    Trước đó vòng lặp này viết thẳng trong `ui_qt/trang_voice.py`. Muốn kiểm nó
+    thì phải dựng cả một cửa sổ Qt lên — mà dựng Qt trong bài kiểm thì **chết
+    câm**: pytest không in nổi một dòng, mã thoát 0. Đã dính đúng cái đó một
+    lần hôm nay ở tab Cài đặt.
+
+    Tách ra thì bài kiểm gọi thẳng hàm, không cần màn hình. Và widget gọn lại
+    còn đúng việc của nó: vẽ và bấm.
+
+    Một việc hỏng **không kéo cả mẻ xuống** — việc ấy đọc bản gốc, việc khác
+    vẫn có thẻ.
+    """
+    duoc = 0
+    for viec in muc or ():
+        chu = getattr(viec, "content", "") or ""
+        if not chu.strip():
+            continue
+        try:
+            co_the = chen_the(chu, goi_ai, ghi=ghi)
+        except Exception:  # noqa: BLE001 — một việc hỏng không dừng cả mẻ
+            co_the = None
+        if co_the:
+            viec.content = co_the
+            duoc += 1
+    return duoc
+
+
 def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
              ghi=None, tran_khuc: int = CHU_MOI_LUOT_CHEN) -> Optional[str]:
     """Nhờ AI chèn thẻ theo từng khúc, rồi **kiểm lại** trước khi nhận.

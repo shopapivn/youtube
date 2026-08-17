@@ -869,23 +869,18 @@ class TrangGiongNoi(QWidget):
     def _chen_the(self, specs: List[JobSpec]) -> List[JobSpec]:
         """**Chạy ở luồng nền.** Trả về danh sách việc đã chèn thẻ.
 
-        Việc nào chèn hỏng thì giữ nguyên chữ cũ của việc ấy — một tệp hỏng
-        không kéo cả mẻ xuống.
+        Vòng lặp thật nằm ở `core.the_cam_xuc.chen_the_hang_loat` — ở đây chỉ
+        còn việc dựng hàm gọi AI. Tách ra vì kiểm một hàm thì dễ, còn kiểm một
+        widget Qt thì bài kiểm chết câm.
         """
         from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
-        from core.the_cam_xuc import chen_the  # noqa: PLC0415
+        from core.the_cam_xuc import chen_the_hang_loat  # noqa: PLC0415
 
         def goi(loi_nhac: str) -> str:
             return goi_van_ban(self._app.client,
                                [{"role": "user", "content": loi_nhac}])
 
-        for sp in specs:
-            try:
-                co_the = chen_the(sp.content, goi)
-            except Exception:  # noqa: BLE001
-                co_the = None
-            if co_the:
-                sp.content = co_the
+        chen_the_hang_loat(specs, goi)
         return specs
 
     def _sau_khi_chen(self, specs: List[JobSpec], thu_muc: str) -> None:
