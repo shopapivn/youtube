@@ -48,13 +48,17 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
    betrayal, tarnished gold for lost power, teal for drifting, amber for
    accusation. Write it into the prompt as `… with <colour> accent`. This is
    what stops a long video from turning into one flat wash.
-5. **Video prompt = a visible change from the start of the clip to its end**,
-   and it opens with the camera: `Camera pushes in fast as…`, `Camera orbits
-   around…`, `Camera spins with the current as…`. Something moves, turns, opens,
-   breaks, fills, empties. **Forbidden words: `subtle`, `slight`, `gentle`,
-   `slowly`, `barely`.** Calm is a matter of pace, not of nothing happening.
+5. **Video prompt = something is measurably DIFFERENT at the end of the clip
+   than at its start.** Name that difference. A hand that was open is now
+   closed; a room that was empty now has someone in it; light that was cold is
+   now warm; the camera that was far is now close.
+   The failure to avoid is **a clip where nothing has changed** — not a clip
+   that is calm. Calm is a matter of pace, and this channel's pace is its
+   identity: a slow push-in on a face that slowly turns away is a fine clip; a
+   face just sitting there for seven seconds is not.
+   Say what changes **first**, then how fast it changes.
 6. **Exaggerate the emotion** the way a good animated short does: readable
-   posture, readable face, readable gesture.
+   posture, readable face, readable gesture — within this channel's register.
 
 ## STYLE — for scene, background and props, NOT the main character's body
 
@@ -63,13 +67,17 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
 Palette: <<PALETTE>>
 Motion: <<VIDEO_STYLE>>
 
-**Append this tail to EVERY prompt, image and video alike**, after your own
-sentence — one scene that forgets it is one scene that looks like it came from a
-different video:
+**Every prompt ends with a style tail** — one scene that forgets it is one
+scene that looks like it came from a different video. The two tails are NOT the
+same: an image has no motion, so never put motion words in an image prompt.
 
-> `, <<IMAGE_STYLE>>, <<PALETTE>> with <this scene's accent> accent,
-> <<TY_LE_KHUNG>> composition, <<NEGATIVE_PROMPT>>, no text, no letters,
-> no numbers, no watermark`
+- image prompt tail:
+  `, <<IMAGE_STYLE>>, <<PALETTE>> with <this scene's accent> accent,
+  <<TY_LE_KHUNG>> composition, <<NEGATIVE_PROMPT>>, no text, no letters,
+  no numbers, no watermark`
+- video prompt tail:
+  `, <<VIDEO_STYLE>>, <<TY_LE_KHUNG>>, no text, no letters, no numbers,
+  no watermark`
 
 Absolutely NO TEXT anywhere in image or video.
 

@@ -83,12 +83,38 @@ class TestLoiNhacCanh:
         chu = self._canh()
         assert "NEVER the character merely sitting or standing" in chu
 
-    def test_cam_cac_tu_lam_clip_chet_song(self):
+    def test_doi_clip_phai_CO_GI_DO_KHAC_DI(self):
         """Bộ cũ có dòng "how slowly" — nó dạy AI làm clip đứng yên."""
-        chu = self._canh()
-        for tu in ("subtle", "slight", "gentle", "slowly", "barely"):
-            assert "`{0}`".format(tu) in chu, tu
+        chu = " ".join(self._canh().split())
+        assert "measurably DIFFERENT at the end of the clip" in chu
         assert "how slowly" not in chu
+
+    def test_khong_cam_nhung_tu_ma_chinh_kenh_dang_dung(self):
+        r"""Bản 18/08/2026 từng cấm `gentle`, `slow`, `subtle`, `slight`.
+
+        Luật ấy bê từ D:\AFFILIATE — một kênh video ngắn nhịp nhanh. Đo trên
+        lượt chạy thật R04 thì nó phản tác dụng: từ bị cấm TĂNG từ 116 lên 169,
+        vì `style.yaml` của kênh này viết thẳng *"gentle slow calming motion"*,
+        *"gentle hand-drawn ink outline"*, *"subtle relaxed posture"*.
+
+        Bản sắc của kênh tâm lý Nhật CHÍNH LÀ sự tĩnh (ma 間). Cấm nó "gentle"
+        là bắt nó đánh nhau với thương hiệu của chính nó. Thứ đáng cấm là clip
+        KHÔNG CÓ GÌ ĐỔI, không phải tính từ êm ả.
+        """
+        chu = self._canh()
+        for tu in ("subtle", "slight", "gentle", "barely"):
+            assert "`{0}`".format(tu) not in chu, tu
+        assert "nothing has changed" in chu
+
+    def test_duoi_anh_va_duoi_video_KHAC_NHAU(self):
+        """Dán `<<IMAGE_STYLE>>` vào lời nhắc video là tự nhét chữ tả NÉT VẼ
+        vào một thứ không có nét vẽ — và ở kênh này, `image_style` chứa đúng
+        chữ mà luật chuyển động vừa cấm. Đó là cách bản trước tự mâu thuẫn."""
+        chu = " ".join(self._canh().split())
+        assert "image prompt tail" in chu and "video prompt tail" in chu
+        dau = chu.index("video prompt tail")
+        assert "<<IMAGE_STYLE>>" not in chu[dau:]
+        assert "<<VIDEO_STYLE>>" in chu[dau:]
 
     def test_co_phep_thu_prompt_co_bam_noi_dung_khong(self):
         chu = " ".join(self._canh().split())
