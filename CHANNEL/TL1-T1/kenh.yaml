@@ -21,12 +21,24 @@ ngon_ngu: ja
 giong_van: Japanese — natural, polite but conversational (ていねい体). Warm, intimate, curious.
 
 # ── Độ dài ──────────────────────────────────────────────────────────────────
-# ⚠ 341 chứ không phải ~900 như tiếng châu Âu. Tiếng Nhật viết bằng kanji nên
+# ⚠ ~298 chứ không phải ~900 như tiếng châu Âu. Tiếng Nhật viết bằng kanji nên
 # một ký tự chở nhiều âm hơn hẳn: 10 phút tiếng Tây Ban Nha cần 9.730 ký tự,
-# 10 phút tiếng Nhật chỉ cần 3.410. Lấy nhầm con số của tiếng khác là ra video
-# dài gấp ba. Số này đo từ chính các cặp kịch bản + giọng đọc thật của bạn.
+# 10 phút tiếng Nhật chỉ cần chừng 2.980. Lấy nhầm con số của tiếng khác là ra
+# video dài gấp ba.
+#
+# ĐO LẠI 18/08/2026 trên BẢY video thật của chính kênh này — lấy số ký tự kịch
+# bản chia cho độ dài tệp mp3, không phải ước lượng:
+#
+#     Q01 302   Q02 300   R03 290   R04 288   R05 308   S01 294   S02 306
+#     trung bình 298 ký tự/phút, trải 288–308
+#
+# Con số cũ là 341, tức khai giọng đọc nhanh hơn thực tế 14%. Hậu quả: mục tiêu
+# "10 phút" luôn cho ra video ~11,4 phút, trước cả chuyện kịch bản viết lệch
+# dài. Bảy phép đo nằm sát nhau nên đây là sai số hệ thống, không phải may rủi.
+#
+# Đổi giọng đọc thì phải đo lại — mỗi giọng một tốc độ.
 phut_muc_tieu: 10
-ky_tu_moi_phut: 341
+ky_tu_moi_phut: 298
 
 # ── Giọng đọc ───────────────────────────────────────────────────────────────
 voice_id: b34JylakFZPlGS0BnwyY

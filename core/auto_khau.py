@@ -2093,6 +2093,25 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
         ds = goi.get("scenes") if isinstance(goi, dict) else goi
         if not isinstance(ds, list) or not ds:
             raise LoiNoiDung("AI không trả về danh sách `scenes`")
+        # ═══ KIỂM LỜI NHẮC NGAY Ở ĐÂY, ĐỪNG ĐỂ `canh_lai` KIỂM HỘ ═══
+        #
+        # `canh_lai` cũng kiểm, nhưng nó chạy **sau** vòng hỏi lại này — nên
+        # một khúc trả về đủ `scenes` mà rỗng lời nhắc sẽ lọt qua đây, rồi làm
+        # gãy cả khâu ở tầng trên.
+        #
+        # Lượt chạy thật S03 ngày 18/08/2026: `11/11 cảnh thiếu lời nhắc`, và
+        # vì hỏng ở tầng trên nên `core/auto.chay` làm lại **cả 18 khúc** —
+        # ba lần, mất 11 phút, mỗi lần lại hỏng đúng ở đó.
+        #
+        # Kiểm ở đây thì đúng một khúc được hỏi lại, bằng một khoá khác, và
+        # 17 khúc kia giữ nguyên.
+        rong = [c for c in ds if isinstance(c, dict)
+                and not (str(c.get("img_prompt") or "").strip()
+                         and str(c.get("video_prompt") or "").strip())]
+        if rong:
+            raise LoiNoiDung(
+                "khúc {0}/{1}: {2}/{3} cảnh thiếu lời nhắc".format(
+                    thu_tu + 1, tong_khuc, len(rong), len(ds)))
         return ds
 
     ds = None

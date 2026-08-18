@@ -236,7 +236,7 @@ def _nhip_may_cho_phan(loi_nhac: str, phan: int, tong: int) -> str:
 
 
 def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
-             tran: float) -> List[Dict[str, Any]]:
+             tran: float, ten_khuc: str = "") -> List[Dict[str, Any]]:
     """Canh lại kết quả AI: phủ hết dòng, không chồng lấn, không quá trần.
 
     AI chia theo nghĩa rất tốt, nhưng nó **không đếm giỏi**. Ba lỗi hay gặp và
@@ -343,8 +343,12 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
     # vào — hoặc AI trả về một đống rác. Cả hai đều đáng hỏi lại.
     thieu = [c for c in xong if not c["img_prompt"] or not c["video_prompt"]]
     if thieu:
+        # Nói rõ KHÚC NÀO. Một lượt dài chia 18 khúc chạy 9 luồng song song;
+        # câu báo không có số khúc thì không tra được vào đâu — đã mất một lượt
+        # chạy 47 phút vì đúng chuyện đó (S03, 18/08/2026).
         raise LoiNoiDung(
-            "{0}/{1} cảnh thiếu lời nhắc ngay từ cảnh đầu".format(
+            "{0}{1}/{2} cảnh thiếu lời nhắc ngay từ cảnh đầu".format(
+                "{0}: ".format(ten_khuc) if ten_khuc else "",
                 len(thieu), len(xong)))
     return xong
 
@@ -380,7 +384,8 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
     def lam_khuc(i: int) -> None:
         if kiem_dung is not None:
             kiem_dung()
-        ket[i] = canh_lai(hoi(khuc[i], i, len(khuc)), khuc[i], float(tran))
+        ket[i] = canh_lai(hoi(khuc[i], i, len(khuc)), khuc[i], float(tran),
+                          "khúc {0}/{1}".format(i + 1, len(khuc)))
 
     with ThreadPoolExecutor(
             max_workers=max(1, min(int(song_song), len(khuc)))) as bo:
