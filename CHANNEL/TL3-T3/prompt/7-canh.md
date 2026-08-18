@@ -33,14 +33,27 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
    **NEVER the character merely sitting or standing while the narration plays.**
    Test: if your prompt would still make sense under a DIFFERENT line of
    narration, it is the wrong prompt — rewrite it.
-2. **Vary shot size and angle hard** between consecutive scenes: extreme
-   close-up on eyes → wide → top-down → over-the-shoulder. Never two similar
-   framings in a row.
-3. **Video prompt = a visible change from the start of the clip to its end.**
-   Something moves, turns, opens, breaks, fills, empties — or the camera
-   travels. **Forbidden words: `subtle`, `slight`, `gentle`, `slowly`,
-   `barely`.** Calm is a matter of pace, not of nothing happening.
-4. **Exaggerate the emotion** the way a good animated short does: readable
+2. **The character does not have to be in every scene.** The strongest scenes
+   are often the metaphor alone with no one in it: a palace hall collapsing, a
+   river shaped like a chessboard sweeping the pieces sideways, a book bursting
+   open. Put `nv1` in a scene when the narration is about *them*; leave the
+   frame to the metaphor when it is about an *idea*.
+3. **Vary shot size and angle hard** between consecutive scenes. Open the image
+   prompt with the shot itself — `Extreme close-up of…`, `Wide shot of…`,
+   `Top-down view of…`, `Over-the-shoulder shot of…`, `Low angle looking up at…`
+   — and never use the same opening twice in a row.
+4. **Give each scene ONE accent colour, and change it from scene to scene.**
+   The palette below stays fixed for the whole video; the accent is the single
+   saturated colour inside it that carries this scene's feeling — deep red for
+   betrayal, tarnished gold for lost power, teal for drifting, amber for
+   accusation. Write it into the prompt as `… with <colour> accent`. This is
+   what stops a long video from turning into one flat wash.
+5. **Video prompt = a visible change from the start of the clip to its end**,
+   and it opens with the camera: `Camera pushes in fast as…`, `Camera orbits
+   around…`, `Camera spins with the current as…`. Something moves, turns, opens,
+   breaks, fills, empties. **Forbidden words: `subtle`, `slight`, `gentle`,
+   `slowly`, `barely`.** Calm is a matter of pace, not of nothing happening.
+6. **Exaggerate the emotion** the way a good animated short does: readable
    posture, readable face, readable gesture.
 
 ## STYLE — for scene, background and props, NOT the main character's body
@@ -49,7 +62,15 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
 
 Palette: <<PALETTE>>
 Motion: <<VIDEO_STYLE>>
-Never include: <<NEGATIVE_PROMPT>>
+
+**Append this tail to EVERY prompt, image and video alike**, after your own
+sentence — one scene that forgets it is one scene that looks like it came from a
+different video:
+
+> `, <<IMAGE_STYLE>>, <<PALETTE>> with <this scene's accent> accent,
+> <<TY_LE_KHUNG>> composition, <<NEGATIVE_PROMPT>>, no text, no letters,
+> no numbers, no watermark`
+
 Absolutely NO TEXT anywhere in image or video.
 
 ## SCENE DIVISION — use the SRT indices
