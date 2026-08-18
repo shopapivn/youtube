@@ -1,20 +1,20 @@
-# EVALUATE AND FIX SCRIPT
+Hãy đánh giá kịch bản vừa viết so với kịch bản gốc đã viral, theo nguyên tắc:
+giống **cấu trúc, nội dung, văn phong, cảm xúc** nhưng KHÔNG copy.
 
-Compare this rewritten script to the competitor original. If it misses something
-important or falls short, fix it directly in **<<LANGUAGE>>** — keep it faithful,
-natural, and emotionally alive. If it's already good, leave it.
+**Đã đạt chưa?** Chỗ nào chưa đạt thì sửa ngay trong bản trả về.
 
-Faithful means the ideas, structure and emotion — NOT the original country's context.
-Money, prices, institutions, and everyday situations must stay localized for this
-audience; if any slipped through from the source country, convert them.
+Xuất ra dạng văn bản để chạy voice ElevenLabs:
 
-**Output the script only. No notes or commentary of any kind.**
+- có cảm xúc, KHÔNG đều đều
+- các câu KHÔNG liền nhau — xuống dòng giữa các ý, để dấu chấm câu làm chỗ nghỉ
+- KHÔNG dính chữ, không dính dấu
 
-## Competitor original
+Chỉ trả về kịch bản đã sửa. Không nhận xét, không mở đầu, không đóng khung.
+
+## Kịch bản đối thủ (bản đã viral)
+
 <<COMPETITOR_TRANSCRIPT>>
 
-## Draft script
-<<DRAFT>>
+## Kịch bản vừa viết
 
-## Channel voice
-<<CHANNEL>>
+<<DRAFT>>

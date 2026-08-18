@@ -1,91 +1,83 @@
-# DIVIDE THE SRT INTO SCENES BY MEANING, THEN WRITE PROMPTS
+You are a storyboard director. Split the narration SRT below into scenes and
+write one image prompt + one video prompt per scene.
 
-Read the SRT below, **divide it into scenes by MEANING**, and write an image
-prompt and a video prompt for each scene.
+## THE REFERENCE CHARACTER — read this first
 
-Do not cut on a fixed clock. Cut where the thought changes. One scene = one
-idea the narrator is landing.
+There is ONE recurring main character. Its reference image (`nv1.png`) is
+attached at image-generation time and locks its identity and art look. Refer to
+it ONLY as `nv1 (nv1.png)`. **NEVER describe its face, hair, skin, body,
+clothing or colours** — describing them is what makes the character drift from
+one scene to the next. Describe only pose, gesture, expression, action, and
+position in frame.
 
-## Channel style — applies to scene, background, props, and any secondary figure
-<<IMAGE_STYLE>>
+## WHERE YOU ARE — this is a LONG video, cut into pieces
 
-Palette: <<PALETTE>>
-Motion style: <<VIDEO_STYLE>>
-Never include: <<NEGATIVE_PROMPT>>
+You are writing piece **<<KHUC_THU>> of <<TONG_KHUC>>** of one long horizontal
+video. Each piece is a separate request; you cannot see the others.
 
-## The main character
-The reference image is the ONE fixed identity of this channel. In **every**
-prompt, refer to the character only as `nv1 (nv1.png)` — never re-describe their
-face, hair, clothes or colour. Re-describing is how the character drifts.
+- Is this the FIRST piece? **<<LA_KHUC_DAU>>**
+- If **yes**: your very first scene is the video's opening — make it the hook.
+- If **no**: the video is already running. **Do NOT open a new video.** No
+  establishing shot of the whole setting, no re-introduction of the character,
+  no "meanwhile". Continue as if the previous shot just ended.
 
-Identity lock: <<REFERENCE_LOCK>>
-
-## Audience
-Language of the narration: <<AUDIENCE_LANGUAGE>>
-<<AUDIENCE_CULTURE_NOTE>>
-
-Preferred props: <<CULTURAL_PROPS>>
-Visual metaphors already established for this channel: <<CULTURAL_METAPHORS>>
-
-## SRT (each line is `index | start → end | text`)
-<<SRT>>
+Frame: **<<TY_LE_KHUNG>>**. Compose for a wide horizontal frame — room to the
+sides, subject off-centre, depth front-to-back. This is not a phone video.
 
 ## RETENTION — the rule that decides whether anyone watches
 
-Every second has to earn the next one. A prompt that describes a room while the
-narration lands a point is a wasted scene.
+1. **Every scene has ONE clear visual hook** — a transformation, a reveal, or an
+   exaggerated **visual METAPHOR of what the narration is saying**: swirling
+   clocks, cracking glass, tangled threads, a shadow growing, drowning in
+   letters, a door closing on light.
+   **NEVER the character merely sitting or standing while the narration plays.**
+   Test: if your prompt would still make sense under a DIFFERENT line of
+   narration, it is the wrong prompt — rewrite it.
+2. **Vary shot size and angle hard** between consecutive scenes: extreme
+   close-up on eyes → wide → top-down → over-the-shoulder. Never two similar
+   framings in a row.
+3. **Video prompt = a visible change from the start of the clip to its end.**
+   Something moves, turns, opens, breaks, fills, empties — or the camera
+   travels. **Forbidden words: `subtle`, `slight`, `gentle`, `slowly`,
+   `barely`.** Calm is a matter of pace, not of nothing happening.
+4. **Exaggerate the emotion** the way a good animated short does: readable
+   posture, readable face, readable gesture.
 
-R1. **Scene 1 is the HOOK** — the single most arresting, curiosity-triggering
-    image of the whole video.
+## STYLE — for scene, background and props, NOT the main character's body
 
-R2. **Every scene needs ONE clear visual hook**: a transformation, a reveal, or
-    an exaggerated **visual METAPHOR of what is being said** — swirling clocks,
-    cracking glass, tangled threads, a shadow growing, drowning in letters, a
-    door closing on light. **NEVER the character merely sitting or standing
-    while the narration plays.** If your prompt would still make sense with a
-    different line of narration, it is the wrong prompt.
+<<IMAGE_STYLE>>
 
-R3. **Vary shot size and angle hard** between consecutive scenes: extreme
-    close-up on eyes → wide → top-down → over-the-shoulder. Never two similar
-    framings in a row.
+Palette: <<PALETTE>>
+Motion: <<VIDEO_STYLE>>
+Never include: <<NEGATIVE_PROMPT>>
+Absolutely NO TEXT anywhere in image or video.
 
-R4. **Video prompt = a change from the start of the clip to its end**, clearly
-    visible. Something moves, turns, opens, breaks, fills, empties, or the
-    camera travels. **Forbidden words: `subtle`, `slight`, `gentle`, `slowly`,
-    `barely`.** Calm is a matter of *pace*, not of *nothing happening*: a slow
-    push-in that ends somewhere new is calm; a static shot is dead air.
+## SCENE DIVISION — use the SRT indices
 
-R5. **Exaggerate the emotion** the way a good animated short does — readable
-    posture, readable face, readable gesture.
+- Divide by **complete meaning**; never cut mid-sentence.
+- Target **<<MIN_SEC>>–<<MAX_SEC>> seconds** per scene, derived from the SRT
+  timestamps — not a fixed clock.
+- Scenes are contiguous and cover **every** index with no gaps and no overlaps:
+  each scene starts at the previous scene's last index + 1.
 
-## Rules
+## AUDIENCE
 
-1. **Each prompt sticks closely to the exact words of that scene's narration.**
-   If the line is about a phone call that never came, the image shows that —
-   not a generic mood shot.
-2. Every scene lasts between **<<MIN_SEC>> and <<MAX_SEC>> seconds**. Merge
-   short neighbouring lines that belong to one thought; split a long line where
-   the thought turns.
-3. Cover **every** SRT line exactly once, in order. No gaps, no overlaps.
-   `srt_from` of a scene = `srt_to` of the previous scene + 1.
-4. Let the content drive a **varied** setting. Consecutive scenes must not
-   repeat the same room, pose and framing — vary distance (close / medium /
-   wide), angle, and location as the story moves.
-5. **Image prompt (English):** the setting, then `nv1 (nv1.png)` with a specific
-   pose and expression, then the props that carry the meaning. Concrete, not
-   abstract. No text anywhere in the image.
-6. **Video prompt (English):** motion only — what moves, in what direction, and
-   **what is different by the end of the clip**. Obey R4: this channel is calm,
-   so nothing snaps or whips — but something must actually happen.
-7. Every image prompt and every video prompt must be **unique**. No copy-paste
-   between scenes.
+Narration language: <<AUDIENCE_LANGUAGE>>
+<<AUDIENCE_CULTURE_NOTE>>
+Preferred props: <<CULTURAL_PROPS>>
+Established metaphors for this channel: <<CULTURAL_METAPHORS>>
 
-## Return JSON only, no commentary
+## SRT — each line is `index | start → end | text`
+
+<<SRT>>
+
+## OUTPUT — one JSON object and nothing else
 
 ```json
 {"scenes": [
   {"srt_from": 1, "srt_to": 3,
-   "img_prompt": "...", "video_prompt": "...",
+   "img_prompt": "<English image prompt>",
+   "video_prompt": "<English motion prompt>",
    "characters_used": "nv1",
    "primary_subject": "...", "primary_action": "...",
    "visual_anchor": "...", "must_not_show": ""}

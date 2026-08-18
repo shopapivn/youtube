@@ -1,17 +1,18 @@
-# WRITE VOICEOVER SCRIPT — FULL
+Đây là kịch bản đã viral. Hãy viết lại cho tôi một kịch bản MỚI tương tự về
+**cấu trúc, nội dung, văn phong, cảm xúc** — nhưng KHÔNG được sao chép.
 
-This is a viral script. Rewrite it in **<<LANGUAGE>>** matching: structure, content, tone, emotion — do not copy — video title: **<<TITLE>>**
+Tiêu đề video: **<<TITLE>>**
+Viết bằng: **<<LANGUAGE>>**
 
-## Competitor script
+Bản địa hoá cho người xem của thứ tiếng đó — không phải dịch từng chữ. Tiền
+bạc, giá cả, cơ quan, chuyện đời thường phải là thứ người nghe đang sống cùng.
+
+Chỉ trả về lời đọc, không ghi chú.
+
+## Kịch bản đối thủ
+
 <<COMPETITOR_TRANSCRIPT>>
 
-## Channel voice
+## Kênh
+
 <<CHANNEL>>
-
----
-
-Localize for that country's audience — not a literal translation. Money, prices, institutions, and everyday situations must be the ones this audience actually lives with — convert them to local equivalents the listener instantly recognizes; never leave the source country's reality in place.
-
-Reminder: match **structure, content, tone, emotion** — do not copy — language: **<<LANGUAGE>>**.
-
-Output the voiceover lines only.

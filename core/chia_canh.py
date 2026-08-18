@@ -64,8 +64,32 @@ MIN_GIAY_CANH = 3.0
 #: hơn, và vì các khúc chạy song song nên chia nhỏ **không** làm chậm tổng.
 CUE_MOI_KHUC = 30
 
-#: Mấy khúc chạy cùng lúc. Theo tool gốc (`chunk_parallel: 3`).
-KHUC_SONG_SONG = 3
+#: Mấy khúc chạy cùng lúc.
+#:
+#: ═══ ĐO 17/08/2026: ĐÂY LÀ KHÂU CHẬM THỨ NHÌ CỦA CẢ DÂY CHUYỀN ═══
+#:
+#: Lượt chạy thật, kịch bản 3.410 chữ → 265 dòng phụ đề → 9 khúc:
+#:
+#:     khâu cắt cảnh          2.638 giây  (44 phút)
+#:     khâu tạo ảnh + clip    1.409 giây  (23 phút, 131 ảnh VÀ 131 clip)
+#:
+#: Tức khâu **viết chữ** tốn gần gấp đôi khâu **tạo ảnh và clip** — nghe thì
+#: vô lý, nhưng đúng: 9 khúc chia 3 đợt, mỗi lượt gọi sinh vài nghìn chữ tiếng
+#: Anh nên mất hàng phút.
+#:
+#: Con số 3 chép từ tool gốc (`chunk_parallel: 3`) mà chưa hỏi vì sao. Tool gốc
+#: gọi thẳng nhà cung cấp và phải tự giữ nhịp. Cổng ShopAPI thì khác hẳn: lời
+#: gọi **viết chữ** không nằm trong `concurrent_jobs` của `/v1/me` (chỉ có tts,
+#: image, video), và trần yêu cầu là 600.000/phút. Nghĩa là chỗ này chưa bao
+#: giờ là trần thật, chỉ là con số chép theo.
+#:
+#: Nâng lên 9: một kịch bản mười phút chia khoảng 9-15 khúc, nên phần lớn lượt
+#: chạy gói gọn trong một tới hai đợt thay vì ba tới năm.
+#:
+#: Không nâng vô hạn: mỗi lượt gọi trả về vài nghìn chữ, bắn cả trăm cùng lúc
+#: là dồn tải lên đúng cái cổng mà `core/su_co.py` vừa dạy tool phải nhẹ tay —
+#: và circuit breaker phía máy chủ mở sau 3 lần hỏng liên tiếp.
+KHUC_SONG_SONG = 9
 
 #: Lời nhắc dùng khi nơi gọi **không có** lời nhắc riêng.
 #:
