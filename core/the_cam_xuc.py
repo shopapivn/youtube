@@ -366,28 +366,43 @@ def chen_the_hang_loat(muc, goi_ai, ghi=None) -> int:
     return duoc
 
 
-#: Cả bước chèn thẻ không được tốn quá ngần này giây.
+#: Trần thời gian cho **mỗi khúc**, tính bằng giây.
 #:
-#: ═══ VIỆC LÀM ĐẸP KHÔNG ĐƯỢC GIỮ CẢ LƯỢT CHẠY LÀM CON TIN ═══
+#: ═══ ĐO THẬT RỒI MỚI ĐẶT SỐ ═══
 #:
-#: Đo 17/08/2026 trên lượt chạy thử T02: khâu giọng đọc đứng im **hơn hai mươi
-#: lăm phút** mà chưa tạo nổi thư mục đoạn, trong khi hàng đợi của cổng trống
-#: rỗng. Nó kẹt ở đúng bước này.
+#: Bản đầu đặt 240 giây cho **cả bước**, và con số ấy sai vì tôi chưa đo. Đo
+#: 17/08/2026 trên kịch bản thật 3.410 chữ của kênh:
 #:
-#: Vì sao kẹt lâu được: mỗi khúc gọi AI qua `_goi`, mà `_goi` có bốn lần thử,
-#: mỗi lần lại có nhịp lùi 30–120 giây, và bên trong `goi_van_ban` còn ba lần
-#: đổi khoá nữa. Nhân lên là hàng chục phút cho **một** khúc — với một bước mà
-#: bỏ qua cũng chẳng mất gì ngoài mấy cái thẻ.
+#:     khúc 1 (1.986 chữ)  →  203 giây
+#:     khúc 2 (1.424 chữ)  →  169 giây
+#:     tổng                →  372 giây
 #:
-#: Nhịp lùi ấy là đúng (xem `core/su_co.py`), nhưng nó đúng cho những việc
-#: **phải làm cho bằng được**: viết kịch bản, đọc thành giọng. Chèn thẻ thì
-#: không. Hết giờ là bỏ, đọc bản sạch, chạy tiếp.
-TRAN_GIAY_CHEN = 240.0
+#: Tức trần 240 giây **không đủ cho nổi hai khúc**, trong khi bản thân việc
+#: chèn thẻ chạy hoàn hảo: 22 thẻ, không thẻ nào bịa, gỡ thẻ ra khớp từng ký tự
+#: bản gốc.
+#:
+#: Vì sao mỗi lượt lâu tới thế: AI phải **chép lại nguyên văn** cả khúc rồi mới
+#: rắc thẻ vào. Sinh 2.000 chữ tiếng Nhật thì lâu, và không có cách nào nhanh
+#: hơn — đó là cái giá của luật "cấm đổi một chữ nào".
+#:
+#: Nên trần tính **theo khúc**, không theo cả bước: kịch bản dài thì đương
+#: nhiên lâu hơn, chặn theo tổng là kịch bản càng dài càng chắc chắn mất thẻ.
+#:
+#: ═══ NHƯNG VẪN PHẢI CÓ TRẦN ═══
+#:
+#: Đây là việc **làm đẹp**. Bỏ qua nó chỉ mất mấy cái thẻ; để nó giữ cả lượt
+#: chạy làm con tin thì mất cả buổi. 300 giây một khúc là rộng gấp rưỡi số đo
+#: thật — quá thế là có gì đó không ổn, không phải chậm bình thường.
+TRAN_GIAY_MOI_KHUC = 300.0
+
+#: Trần cho cả bước, dù kịch bản dài tới đâu. Kịch bản mười phút chia tám khúc
+#: là bốn mươi phút chỉ để rắc thẻ — quá đắt cho một thứ làm đẹp.
+TRAN_GIAY_CA_BUOC = 1200.0
 
 
 def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
              ghi=None, tran_khuc: int = CHU_MOI_LUOT_CHEN,
-             tran_giay: float = TRAN_GIAY_CHEN, dong_ho=None) -> Optional[str]:
+             tran_giay: float = 0.0, dong_ho=None) -> Optional[str]:
     """Nhờ AI chèn thẻ theo từng khúc, rồi **kiểm lại** trước khi nhận.
 
     `goi_ai` là hàm `(lời nhắc) -> chữ trả về`; tách ra để test không cần mạng.
@@ -416,9 +431,13 @@ def chen_the(kich_ban: str, goi_ai, giong_van: str = "", ngon_ngu: str = "",
     import time as _tg  # noqa: PLC0415
 
     dong_ho = dong_ho or _tg.monotonic
-    han = dong_ho() + max(1.0, float(tran_giay))
-
     khuc = chia_de_chen(goc, tran_khuc)
+    # Trần theo SỐ KHÚC, không theo cả bước — kịch bản dài đương nhiên lâu hơn.
+    # Chặn theo tổng cố định là kịch bản càng dài càng chắc chắn mất thẻ.
+    if tran_giay <= 0:
+        tran_giay = min(TRAN_GIAY_CA_BUOC,
+                        TRAN_GIAY_MOI_KHUC * max(1, len(khuc)))
+    han = dong_ho() + max(1.0, float(tran_giay))
     ra: List[str] = []
     duoc = 0
     for i, k in enumerate(khuc, start=1):

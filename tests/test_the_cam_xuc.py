@@ -293,3 +293,51 @@ class TestKhongGiuCaLuotLamConTin:
         assert "bc.goi_chat(" in khuc, "phải gọi thẳng, một lượt"
         assert "_goi(bc," not in khuc, (
             "đang dùng thang thử lại — bước làm đẹp không được kiên nhẫn thế")
+
+
+class TestTranTinhTheoSoKhuc:
+    """Trần phải theo SỐ KHÚC — chặn theo tổng là kịch bản dài luôn mất thẻ.
+
+    Đo thật 17/08/2026 trên kịch bản 3.410 chữ của kênh:
+        khúc 1 (1.986 chữ) → 203 giây
+        khúc 2 (1.424 chữ) → 169 giây
+    Trần 240 giây cho cả bước **không đủ cho nổi hai khúc**, trong khi việc chèn
+    thẻ chạy hoàn hảo (22 thẻ, gỡ ra khớp từng ký tự).
+    """
+
+    def test_tran_moi_khuc_rong_hon_so_do_that(self):
+        from core.the_cam_xuc import TRAN_GIAY_MOI_KHUC
+
+        assert TRAN_GIAY_MOI_KHUC >= 250, (
+            "đo được 203 giây một khúc — đặt sát quá là mất thẻ oan")
+
+    def test_kich_ban_dai_duoc_nhieu_gio_hon(self):
+        """Hai khúc phải được nhiều thời gian hơn một khúc."""
+        from core.the_cam_xuc import (TRAN_GIAY_CA_BUOC, TRAN_GIAY_MOI_KHUC,
+                                      chia_de_chen)
+
+        ngan = "Một câu ngắn thôi. "
+        dai = "Một câu kể chuyện dài vừa phải. " * 200
+        assert len(chia_de_chen(dai)) > len(chia_de_chen(ngan))
+        assert TRAN_GIAY_CA_BUOC > TRAN_GIAY_MOI_KHUC
+
+    def test_van_co_tran_cho_ca_buoc(self):
+        """Kịch bản mười phút chia tám khúc là 40 phút chỉ để rắc thẻ."""
+        from core.the_cam_xuc import TRAN_GIAY_CA_BUOC
+
+        assert TRAN_GIAY_CA_BUOC <= 1800
+
+    def test_hai_khuc_du_gio_voi_toc_do_do_duoc(self):
+        """Đúng ca đã hỏng: 2 khúc × ~200 giây phải lọt."""
+        from core.the_cam_xuc import chen_the, kiem_the
+
+        dong = [0.0]
+        bai = "Một câu kể chuyện dài vừa phải. " * 120   # ~2 khúc
+
+        def ai(loi_nhac):
+            dong[0] += 200.0
+            return "[sighs] " + loi_nhac.split("KỊCH BẢN:\n", 1)[-1]
+
+        ra = chen_the(bai, ai, dong_ho=lambda: dong[0])
+        assert ra and kiem_the(bai, ra)
+        assert ra.count("[sighs]") >= 2, "khúc thứ hai bị cắt vì hết giờ"
