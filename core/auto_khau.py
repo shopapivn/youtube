@@ -3236,6 +3236,7 @@ def _khau_dung(bc: BoiCanh):
                 giay.append(max(0.1, moc[i + 1] - moc[i]))
             else:
                 giay.append(max(0.1, het[i] - moc[i]))
+        _keo_canh_cuoi_cho_du_tieng(giay, mp3, bc.ghi)
         # Cách dựng lấy từ kênh, không hỏi lại từng lượt: mọi video của một
         # kênh dựng giống hệt nhau. Xem `core/kenh.Kenh.dot_phu_de`.
         dot = bool(getattr(bc.kenh, "dot_phu_de", True)) and os.path.exists(srt)
@@ -3295,6 +3296,55 @@ def chon_do_phan_giai(goc: str, kenh) -> str:
     if rieng:
         return rieng
     return ten_khung(cai_dat.doc(goc).get("do_phan_giai")) or "4K"
+
+
+#: Hình ngắn hơn tiếng bao nhiêu giây thì mới đáng kéo dài cảnh cuối.
+#:
+#: Dưới mức này là sai số làm tròn của mốc phụ đề (đo trên hai video thật:
+#: lệch 0,027 và 0,026 giây) — kéo thêm chỉ tổ đẻ ra một khung hình thừa.
+KE_HO_TIENG_BO_QUA = 0.35
+
+
+def _keo_canh_cuoi_cho_du_tieng(giay: List[float], mp3: str,
+                                ghi: Callable[[str], None]) -> None:
+    """Hình ngắn hơn tiếng thì cho cảnh cuối giữ hình bù, đừng cắt lời đọc.
+
+    ═══ `-shortest` CHỈ AN TOÀN MỘT CHIỀU ═══
+
+    Lệnh ghép dùng `-shortest`, kèm ghi chú *"tổng clip thường dài hơn tiếng
+    vài giây vì mỗi cảnh làm tròn lên"*. Giả định ấy đúng gần như mọi lúc — và
+    `-shortest` khi ấy cắt phần ĐUÔI HÌNH thừa, hoàn toàn vô hại.
+
+    Nhưng khi nó sai thì `-shortest` cắt phần kia: **lời đọc**. Đo trên lượt
+    chạy thật R01 ngày 18/08/2026:
+
+        tiếng 11,76 giây  ·  video 9,13 giây  →  mất 2,6 giây cuối
+
+    Người xem nghe câu cuối đứt ngang giữa chừng. Trong khi hai video khác cùng
+    ngày lệch có 0,03 giây, nên chuyện này không lộ ra nếu chỉ nhìn lướt.
+
+    ═══ VÌ SAO KÉO CẢNH CUỐI, KHÔNG PHẢI BỎ `-shortest` ═══
+
+    Bỏ `-shortest` thì gặp ca ngược lại — hình dài hơn tiếng — video sẽ có một
+    đoạn đuôi câm. Giữ `-shortest` và kéo cảnh cuối cho đủ thì cả hai chiều đều
+    đúng, và cách xử này giống hệt điều dây chuyền vẫn làm cho cảnh thiếu: giữ
+    khung cuối lâu thêm vài giây, đúng như người dựng tay vẫn làm khi người đọc
+    còn nói mà hình đã hết.
+
+    Mất mấy giây cuối của lời đọc là hỏng nội dung. Giữ thêm một khung hình vài
+    giây thì gần như không ai nhận ra.
+    """
+    from .phu_de import do_dai_tieng  # noqa: PLC0415 — cùng gói, dùng lại
+
+    if not giay:
+        return
+    dai_tieng = do_dai_tieng(mp3)
+    thieu = dai_tieng - sum(giay)
+    if dai_tieng <= 0 or thieu <= KE_HO_TIENG_BO_QUA:
+        return
+    giay[-1] += thieu
+    ghi("    (hình ngắn hơn tiếng {0:.1f} giây — giữ hình cảnh cuối thêm bấy "
+        "nhiêu để không cắt mất câu cuối)".format(thieu))
 
 
 def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,

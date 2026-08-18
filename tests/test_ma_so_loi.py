@@ -18,8 +18,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.su_co import (  # noqa: E402
-    CHAM_LAI, CHET, CHO_TIEP, NHA_MAY_NGHI, NOI_DUNG, TAM_NGHI, LoiTaiVe,
-    nen_thu_lai, nhip_cho, phan_loai,
+    CHAM_LAI, CHET, CHO_TIEP, HET_TIEN, NHA_MAY_NGHI, NOI_DUNG, TAM_NGHI,
+    LoiTaiVe, mo_ta, nen_thu_lai, nhip_cho, phan_loai,
 )
 
 
@@ -101,3 +101,57 @@ def test_loi_tai_ve_van_la_runtime_error():
     assert isinstance(LoiTaiVe("x", 500), RuntimeError)
     assert LoiTaiVe("x", 500).status == 500
     assert LoiTaiVe("x").status == 0
+
+
+# ── `code` của cổng nói thẳng nguyên nhân — tin nó trước câu chữ ─────────────
+
+
+class _CoCode(RuntimeError):
+    def __init__(self, thong_diep: str, code: str = "", status: int = 0):
+        super().__init__(thong_diep)
+        self.code = code
+        self.status = status
+
+
+#: Câu thật của cổng, kèm `code=engine_unavailable`.
+QUA_TAI = ("Hệ thống đang quá tải, chưa xử lý được yêu cầu này. "
+           "Bạn không bị trừ tiền. Vui lòng thử lại sau ít phút.")
+
+
+def test_khong_do_loi_cho_khach_khi_nguon_phia_tren_hong():
+    """Đo 18/08/2026: nhật ký máy chủ cho thấy ba nhà cung cấp LLM cùng hỏng
+    (digishop aborted, tamark 530, hhtech 503). Khách không gọi dày chút nào.
+
+    Nhưng câu ấy có chữ "quá tải" nên rơi vào `CHAM_LAI`, và tool hiện lên
+    "đang gọi quá dày, phải chậm lại" — sai sự thật, và vô ích: chậm bao nhiêu
+    cũng không làm nguồn sống lại.
+    """
+    loi = _CoCode(QUA_TAI, code="engine_unavailable", status=503)
+    assert phan_loai(loi) == TAM_NGHI
+    assert "quá dày" not in mo_ta(phan_loai(loi))
+
+
+def test_khong_co_code_thi_van_theo_cau_chu_nhu_cu():
+    """Cổng cũ không gửi `code` — đừng làm hỏng đường đó."""
+    assert phan_loai(_CoCode(QUA_TAI, status=503)) == CHAM_LAI
+
+
+def test_code_thang_ca_cau_chu_lan_ma_so():
+    """`status` mơ hồ nên đứng sau câu chữ; `code` không mơ hồ nên đứng trước."""
+    loi = _CoCode("nhà máy này đang dừng, không nhận việc",
+                  code="engine_unavailable", status=503)
+    assert phan_loai(loi) == TAM_NGHI
+
+
+def test_cac_ma_code_khac():
+    assert phan_loai(_CoCode("x", code="rate_limited")) == CHAM_LAI
+    assert phan_loai(_CoCode("x", code="insufficient_balance")) == HET_TIEN
+
+
+def test_code_la_rong_hoac_khong_biet_thi_bo_qua():
+    assert phan_loai(_CoCode(QUA_TAI, code="")) == CHAM_LAI
+    assert phan_loai(_CoCode(QUA_TAI, code="chuyen_gi_do_moi")) == CHAM_LAI
+
+
+def test_code_viet_hoa_hay_thua_khoang_trang_van_nhan_ra():
+    assert phan_loai(_CoCode("x", code="  ENGINE_UNAVAILABLE ")) == TAM_NGHI

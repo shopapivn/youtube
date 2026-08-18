@@ -236,11 +236,54 @@ def phan_loai(loi: BaseException) -> str:
         # `json.loads` hỏng là `ValueError`. Đây là hỏng NỘI DUNG, không phải
         # hỏng đường truyền — phân nhầm là hỏi lại cùng khoá rồi nhận lại rác.
         return NOI_DUNG
+    ma_code = str(getattr(loi, "code", "") or "").strip().lower()
+    if ma_code in _MA_CODE:
+        return _MA_CODE[ma_code]
     chu = str(loi).lower()
     for loai, dau_hieu in _BANG:
         if any(d.lower() in chu for d in dau_hieu):
             return loai
     return _theo_ma_so(loi)
+
+
+#: Mã `code` của cổng nói thẳng chuyện gì đang xảy ra — tin nó trước câu chữ.
+#:
+#: ═══ VÌ SAO `code` ĐỨNG TRƯỚC `_BANG`, CÒN `status` ĐỨNG SAU ═══
+#:
+#: `status` thì mơ hồ: một `503` có thể là nhà máy tắt hẳn hoặc chỉ là nghẽn
+#: thoáng qua, nên phải để câu chữ phân xử trước. `code` thì không mơ hồ — nó là
+#: **lời khai của chính máy chủ** về nguyên nhân, chính xác hơn mọi phép dò chữ.
+#:
+#: ═══ MỘT CÂU BÁO SAI SỰ THẬT, ĐO 18/08/2026 ═══
+#:
+#: Cổng trả về, kèm `code=engine_unavailable`:
+#:
+#:     "Hệ thống đang quá tải, chưa xử lý được yêu cầu này. Bạn không bị trừ
+#:      tiền. Vui lòng thử lại sau ít phút."
+#:
+#: Câu ấy có chữ "quá tải" nên rơi vào `CHAM_LAI`, và tool hiện lên màn hình:
+#: **"đang gọi quá dày, phải chậm lại"**. Tức đổ lỗi cho khách.
+#:
+#: Nhật ký máy chủ cùng lúc đó cho thấy sự thật khác hẳn — ba nhà cung cấp LLM
+#: cùng hỏng cho `claude-sonnet-5`:
+#:
+#:     digishop  This operation was aborted
+#:     tamark    HTTP 530
+#:     hhtech    HTTP 503
+#:
+#: Khách không gọi dày chút nào. Đây là sự cố của nguồn phía trên, và bảo họ
+#: "chậm lại" vừa sai vừa vô ích — chậm bao nhiêu cũng không làm nguồn sống lại.
+#:
+#: `TAM_NGHI` mới đúng: *"máy chủ trục trặc tạm — chưa bị trừ tiền"*. Đúng sự
+#: thật, và thang đợi của nó bắt đầu sớm hơn (15 giây thay vì 30) — hợp với một
+#: sự cố tự khỏi sau ít phút.
+_MA_CODE = {
+    "engine_unavailable": TAM_NGHI,
+    "service_unavailable": TAM_NGHI,
+    "rate_limited": CHAM_LAI,
+    "too_many_requests": CHAM_LAI,
+    "insufficient_balance": HET_TIEN,
+}
 
 
 #: Mã HTTP nào thuộc loại nào, khi câu chữ không nói lên điều gì.
