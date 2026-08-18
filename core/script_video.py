@@ -36,6 +36,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -351,6 +353,72 @@ def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str) -> None:
         ydl.download([url])
 
 
+#: Bộ nghe chạy trong tiến trình con, và đây là mã của nó.
+#:
+#: Viết thành chuỗi rồi chạy bằng `python -c` chứ không tách ra một tệp riêng:
+#: một tệp mới trong thư mục cài đặt là một thứ nữa phải nhớ đóng gói khi phát
+#: hành, và quên là khách nhận về một tool thiếu tệp.
+_MA_NGHE = r"""
+import json, sys
+from faster_whisper import WhisperModel
+tep, ten, chi_may = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+may = WhisperModel(ten, device="cpu", compute_type="int8",
+                   local_files_only=chi_may)
+doan, tin = may.transcribe(tep, vad_filter=True, beam_size=1)
+chu = " ".join(" ".join(m.text.strip() for m in doan).split())
+sys.stdout.write(json.dumps({"chu": chu,
+                             "ngon_ngu": str(getattr(tin, "language", "") or "")}))
+"""
+
+
+def _nghe_o_tien_trinh_rieng(tep: str, ten_model: str, chi_may: bool,
+                             ghi: Callable[[str], None]):
+    """Nghe tệp tiếng ở **tiến trình riêng**. Trả về `(chữ, mã ngôn ngữ, lỗi)`.
+
+    ═══ VÌ SAO KHÔNG CHẠY THẲNG TRONG TOOL ═══
+
+    Khách báo ngày 18/08/2026: thấy dòng *"đang nghe bằng máy của bạn (tải
+    ~0,5 GB)"* rồi **tool thoát luôn** — không hộp lỗi, không dòng nhật ký nào.
+
+    `faster-whisper` chạy trên `ctranslate2`, một thư viện **mã máy**. Nó chết
+    theo kiểu mà Python không bắt được: CPU thiếu chỉ thị AVX2, hoặc hệ điều
+    hành giết tiến trình vì hết RAM. Cả hai đều không sinh ra ngoại lệ — chúng
+    giết thẳng tiến trình. `try/except` bao quanh bao nhiêu cũng vô ích, vì
+    không còn ai sống để chạy `except`.
+
+    Đẩy nó sang tiến trình con thì cái chết ấy chỉ là một mã thoát khác 0. Tool
+    đọc mã ấy, nói cho khách biết, và **giữ nguyên mọi thứ đã làm** — thay vì
+    biến mất giữa chừng.
+
+    Tiến trình con cũng là chỗ RAM được trả lại sạch sẽ khi xong: bộ nghe ngốn
+    khoảng một gigabyte, và tool thì còn phải sống tiếp cả tiếng nữa.
+    """
+    try:
+        ket = subprocess.run(
+            [sys.executable, "-c", _MA_NGHE, tep, ten_model,
+             "1" if chi_may else "0"],
+            capture_output=True, timeout=3600)
+    except subprocess.TimeoutExpired:
+        return "", "", "máy nghe lâu quá (hơn một tiếng) — đã dừng"
+    except Exception as loi:  # noqa: BLE001
+        return "", "", "không chạy được bộ nghe ({0})".format(str(loi)[:100])
+
+    if ket.returncode != 0:
+        cuoi = (ket.stderr or b"").decode("utf-8", "replace").strip()
+        cuoi = cuoi.splitlines()[-1][:150] if cuoi else ""
+        return "", "", (
+            "bộ nghe trên máy bạn dừng giữa chừng (mã {0}){1}. Máy này có thể "
+            "thiếu bộ nhớ, hoặc CPU đời cũ không chạy được bộ nghe. Cách vòng "
+            "qua: chọn video tư liệu CÓ phụ đề — tool lấy phụ đề thì nhanh hơn "
+            "và không cần tải gì.".format(
+                ket.returncode, " — " + cuoi if cuoi else ""))
+    try:
+        goi = json.loads((ket.stdout or b"").decode("utf-8", "replace"))
+    except ValueError:
+        return "", "", "bộ nghe trả về thứ không đọc được"
+    return str(goi.get("chu") or ""), str(goi.get("ngon_ngu") or ""), ""
+
+
 def _tu_nghe(url: str, ghi: Callable[[str], None],
              cancel: Optional[threading.Event] = None):
     """Tải tiếng của video rồi phiên âm bằng `faster-whisper`. **Chạy trên máy.**
@@ -385,17 +453,15 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
         # sau lấy trong bộ nhớ đệm.
         san = os.environ.get("WHISPER_MODEL_DIR", "").strip()
         ten_model = san if san and os.path.isdir(san) else "small"
-        ghi("    đang nghe bằng máy của bạn (lần đầu phải tải bộ nghe ~0,5 GB)…")
-        try:
-            may = WhisperModel(ten_model, device="cpu", compute_type="int8",
-                               local_files_only=bool(san and os.path.isdir(san)))
-            doan, tin = may.transcribe(tep[0], vad_filter=True, beam_size=1)
-            chu = " ".join(" ".join(m.text.strip() for m in doan).split())
-        except Exception as loi:  # noqa: BLE001
-            return "", "", "máy nghe không xong ({0})".format(str(loi)[:120])
+        ghi("    đang nghe bằng máy của bạn (lần đầu phải tải bộ nghe ~0,5 GB —"
+            " chỉ tải một lần, các lượt sau dùng lại)…")
+        chu, ma, loi = _nghe_o_tien_trinh_rieng(
+            tep[0], ten_model, bool(san and os.path.isdir(san)), ghi)
+        if loi:
+            return "", "", loi
         if not chu:
             return "", "", "nghe xong nhưng video không có tiếng nói nào"
-        return chu, str(getattr(tin, "language", "") or ""), ""
+        return chu, ma, ""
     finally:
         shutil.rmtree(thu_muc, ignore_errors=True)
 
