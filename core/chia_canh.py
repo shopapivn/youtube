@@ -188,6 +188,53 @@ def loi_nhac_chia(khuon: str, cue: Sequence[Mapping[str, Any]], tran: float,
     return dien_khuon(khuon, gia_tri)
 
 
+#: Nhịp máy quay cho phần thứ 2, 3, 4… của một cảnh bị cắt.
+#:
+#: Chỉ số 0 để trống vì phần đầu giữ nguyên lời nhắc AI viết. Từ phần hai trở
+#: đi là chỗ **phải khác**, và ba câu này khác nhau theo kiểu tiếp diễn — đi
+#: tiếp, đi sâu hơn, rồi lùi ra — chứ không phải ba chuyện rời nhau, vì chúng
+#: vẫn đang minh hoạ **một câu nói liền mạch**.
+_NHIP_PHAN_SAU = (
+    "",
+    "Continuing the very same shot without a cut: the camera keeps travelling "
+    "in the same direction it already had, pushing past its earlier framing, "
+    "and the action carries on into its next beat.",
+    "Still the same unbroken shot: the camera presses in closer than before "
+    "onto the single most important detail, which now fills much more of the "
+    "frame than it did.",
+    "Same unbroken shot, now reversing: the camera pulls back and rises, "
+    "opening the frame to reveal how much more there is around what we were "
+    "just looking at.",
+)
+
+
+def _nhip_may_cho_phan(loi_nhac: str, phan: int, tong: int) -> str:
+    """Lời nhắc chuyển động cho phần thứ `phan` của một cảnh bị cắt làm `tong`.
+
+    ═══ VÌ SAO KHÔNG SAO Y ═══
+
+    Engine từ chối clip dài quá trần, nên một cảnh dài phải cắt ra nhiều phần.
+    Bản trước sao y **cùng một** `video_prompt` cho mọi phần — nên khán giả xem
+    đúng một chuyển động hai lần liền nhau, mỗi lần bảy giây.
+
+    Đo trên một video thật ngày 18/08/2026 (133 cảnh): **25 cảnh trùng y hệt
+    cảnh ngay trước nó** — gần một phần năm video là hình chiếu lại. Đây chính
+    là cái "video nhìn phẳng, không thể hiện được nội dung".
+
+    Không hỏi lại AI ở đây: các phần này là **cùng một câu nói** bị cắt vì lý do
+    kỹ thuật, không phải hai ý khác nhau. Thứ cần khác chỉ là **nhịp máy quay**,
+    mà nhịp máy thì suy ra được — và suy ra thì không tốn thêm một lượt gọi nào.
+
+    Nhiều phần hơn số câu có sẵn thì quay vòng: một cảnh dài tới mức cắt năm
+    phần là chuyện hiếm, và lặp lại ở phần thứ tư vẫn hơn hẳn lặp ngay từ phần
+    thứ hai.
+    """
+    if tong <= 1 or phan <= 1 or not loi_nhac.strip():
+        return loi_nhac
+    them = _NHIP_PHAN_SAU[1 + (phan - 2) % (len(_NHIP_PHAN_SAU) - 1)]
+    return "{0}. {1}".format(loi_nhac.rstrip().rstrip("."), them).strip()
+
+
 def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
              tran: float) -> List[Dict[str, Any]]:
     """Canh lại kết quả AI: phủ hết dòng, không chồng lấn, không quá trần.
@@ -283,7 +330,8 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
                 "srt_text": chu if so_phan == 1 else "{0} ({1}/{2})".format(
                     chu, k + 1, so_phan),
                 "img_prompt": str(m.get("img_prompt") or ""),
-                "video_prompt": str(m.get("video_prompt") or ""),
+                "video_prompt": _nhip_may_cho_phan(
+                    str(m.get("video_prompt") or ""), k + 1, so_phan),
                 "characters_used": str(m.get("characters_used") or ""),
                 "primary_subject": str(m.get("primary_subject") or ""),
                 "primary_action": str(m.get("primary_action") or ""),
