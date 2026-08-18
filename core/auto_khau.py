@@ -2542,43 +2542,6 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
     _kiem_media(bc, dich)
 
 
-def ban_do_anh_chung(canh: Sequence[Dict[str, Any]]) -> Dict[int, int]:
-    """`số cảnh → số cảnh giữ tấm ảnh`. Chỉ chứa những cảnh **đi mượn**.
-
-    ═══ VÌ SAO CÓ CẢNH DÙNG CHUNG ẢNH ═══
-
-    Engine từ chối clip dài quá trần, nên một cảnh dài bị cắt làm nhiều phần.
-    Các phần ấy là **cùng một khoảnh khắc** trong lời đọc, nên `chia_canh` giao
-    cho chúng cùng một `img_prompt` — và cùng một `segment_id`.
-
-    Trước 18/08/2026 mỗi phần vẫn tự gọi tạo một tấm ảnh riêng. Đo trên năm
-    video thật, số tấm sinh đôi:
-
-        Q01  25/133   Q02  26/115   R03  38/124   R04  30/87   R05  30/122
-
-    Tức khoảng **một phần ba tiền tạo ảnh** đổ vào những tấm giống hệt nhau.
-
-    ═══ VÌ SAO ĐỐI CHIẾU CẢ LỜI NHẮC, KHÔNG CHỈ `segment_id` ═══
-
-    `segment_id` nói chúng cùng một khoảng, nhưng thứ quyết định hai tấm ảnh có
-    giống nhau hay không là **lời nhắc**. Ngày nào đó có người cho mỗi phần một
-    lời nhắc riêng — đúng như `_nhip_may_cho_phan` đã làm với lời nhắc video —
-    thì hàm này phải tự thôi gộp, không cần ai nhớ ra mà sửa.
-    """
-    ra: Dict[int, int] = {}
-    truoc: Optional[Dict[str, Any]] = None
-    for c in canh:
-        seg = str(c.get("segment_id") or "")
-        loi = str(c.get("img_prompt") or "").strip()
-        if (truoc is not None and seg
-                and seg == str(truoc.get("segment_id") or "")
-                and loi and loi == str(truoc.get("img_prompt") or "").strip()):
-            cu_so = int(truoc["scene_id"])
-            ra[int(c["scene_id"])] = ra.get(cu_so, cu_so)
-        truoc = c
-    return ra
-
-
 def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
                   hop: "ThamChieu", so: Optional[SoTheoDoi] = None) -> None:
     """Tạo ảnh cho một cảnh rồi tải về."""
@@ -2940,12 +2903,6 @@ def _khau_anh(bc: BoiCanh):
             _chuan_bi_bia(bc, luot)
         giay = _giay_clip(bc)
         so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
-        chung_anh = ban_do_anh_chung(canh)
-        khoa_anh: Dict[int, threading.Lock] = collections.defaultdict(
-            threading.Lock)
-        if chung_anh:
-            bc.ghi("  {0}/{1} cảnh là phần cắt ra của cảnh trước — dùng chung "
-                   "ảnh, khỏi tạo lại.".format(len(chung_anh), len(canh)))
 
         # ═══ MỘT KHOÁ CHO CẢ BA BỘ ĐẾM ═══
         #
@@ -3017,16 +2974,11 @@ def _khau_anh(bc: BoiCanh):
                 them("bia")
                 return ket
             so_canh = int(x["scene_id"])
-            # Các phần của cùng một cảnh dùng CHUNG một tấm ảnh — xem
-            # `ban_do_anh_chung`. Khoá theo tấm ảnh, không theo cảnh: phần nào
-            # chạy trước thì tạo, phần kia đợi rồi dùng lại.
-            giu = chung_anh.get(so_canh, so_canh)
-            tep = os.path.join(thu_muc, "{0}.png".format(giu))
-            with khoa_anh[giu]:
-                san_co = os.path.exists(tep)
-                if not san_co:
-                    _lam_anh_canh(bc, luot, x, tep, hop, so=so)
-            if san_co:
+            tep = os.path.join(thu_muc, "{0}.png".format(so_canh))
+            san_co = os.path.exists(tep)
+            if not san_co:
+                _lam_anh_canh(bc, luot, x, tep, hop, so=so)
+            else:
                 # Ảnh có sẵn trên đĩa từ lượt chạy trước — có thể là lượt chạy
                 # bằng bản tool chưa biết xoá dấu. Xoá lại ở đây thì lượt cũ
                 # chạy tiếp cũng ra clip sạch. Ảnh đã sạch rồi thì `xoa_dau`
@@ -3068,18 +3020,12 @@ def _khau_clip(bc: BoiCanh):
         os.makedirs(thu_muc, exist_ok=True)
         giay = _giay_clip(bc)
         so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
-        # Cùng bản đồ mà khâu ảnh đã dùng. Thiếu dòng này thì phần đi mượn ảnh
-        # tìm `5-anh/<số cảnh>.png` không thấy, và clip của nó không bao giờ ra
-        # — một lỗi chỉ lộ khi người dùng bấm “Làm lại khâu clip”.
-        chung_anh = ban_do_anh_chung(canh)
-
         def mot_canh(c):
             so_canh = int(c["scene_id"])
             tep = os.path.join(thu_muc, "{0}.mp4".format(so_canh))
             if os.path.exists(tep):
                 return so_canh, True
-            anh = os.path.join(thu_muc_anh, "{0}.png".format(
-                chung_anh.get(so_canh, so_canh)))
+            anh = os.path.join(thu_muc_anh, "{0}.png".format(so_canh))
             _lam_clip(bc, luot, c, anh, tep, giay, so=so)
             return so_canh, False
 

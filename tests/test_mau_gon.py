@@ -154,7 +154,23 @@ class TestLoiNhacCanh:
     def test_do_dai_canh_suy_tu_SRT_khong_co_dinh(self):
         chu = self._canh()
         assert "<<MIN_SEC>>" in chu and "<<MAX_SEC>>" in chu
-        assert "not a fixed clock" in chu
+        assert "from the SRT timestamps" in chu
+
+    def test_tran_do_dai_la_TRAN_CUNG_va_noi_ro_hau_qua(self):
+        """Đo trên năm video thật ngày 18/08/2026: AI vượt trần liên tục.
+
+            R03  AI 85 cảnh  -> máy cắt thành 124
+            R04  AI 57 cảnh  -> máy cắt thành  87
+            S01  AI 40 cảnh  -> máy cắt thành 131, có khoảng thành 12 mảnh
+
+        Bản cũ chỉ nói "Target 3–8 seconds" — một lời khuyên, và AI đối xử với
+        nó đúng như một lời khuyên. Nó cũng không hề biết hậu quả: vượt trần thì
+        máy tự chặt cảnh ấy ra, và người xem nhìn một khung suốt cả đoạn.
+        """
+        chu = " ".join(self._canh().split())
+        assert "HARD CEILING" in chu
+        assert "twelve identical shots" in chu
+        assert "split it into several scenes yourself" in chu
 
 
 class TestDayChuyenChiuDuocBoGon:

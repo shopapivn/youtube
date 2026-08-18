@@ -188,6 +188,49 @@ def loi_nhac_chia(khuon: str, cue: Sequence[Mapping[str, Any]], tran: float,
     return dien_khuon(khuon, gia_tri)
 
 
+#: Cách DỰNG HÌNH lại cho phần thứ 2, 3, 4… của một cảnh bị cắt.
+#:
+#: ═══ VÌ SAO ĐỔI CẢ ẢNH, KHÔNG CHỈ ĐỔI NHỊP MÁY ═══
+#:
+#: Bản 18/08/2026 cho các phần dùng CHUNG một tấm ảnh và chỉ đổi nhịp máy quay.
+#: Lý lẽ khi ấy: chúng là cùng một khoảnh khắc nên phải cùng một khung hình.
+#:
+#: Chủ dự án bác lại, và đúng: *"sao không làm đơn giản hơn là prompt tạo ảnh
+#: khác, kiểu cách thể hiện khác, hoặc góc máy khác… tao không tiếc tiền tao
+#: cần logic đúng"*. Người dựng phim thật gặp một câu nói dài thì **cắt sang
+#: góc khác**, không để máy lia mãi trên một khung. Hai cảnh tám giây nhìn từ
+#: hai góc giữ mắt tốt hơn một khung mười sáu giây.
+#:
+#: Nên mỗi phần giờ có ảnh riêng và nhịp riêng. Tốn thêm tiền tạo ảnh — và đó
+#: là cái giá đã được chủ dự án chọn.
+_GOC_MAY_PHAN_SAU = (
+    "",
+    "IMPORTANT — re-frame this same moment from a clearly different camera "
+    "position than described above: move much closer in on the single most "
+    "important detail, so it fills most of the frame.",
+    "IMPORTANT — re-frame this same moment from a clearly different camera "
+    "position than described above: pull far back and shoot wide, so the "
+    "surrounding space dwarfs the subject.",
+    "IMPORTANT — re-frame this same moment from a clearly different camera "
+    "position than described above: shoot from directly overhead, looking "
+    "straight down.",
+    "IMPORTANT — re-frame this same moment from a clearly different camera "
+    "position than described above: shoot low from near the ground, looking up.",
+)
+
+
+def _goc_may_cho_phan(loi_nhac: str, phan: int, tong: int) -> str:
+    """Lời nhắc ẢNH cho phần thứ `phan` của một cảnh bị cắt làm `tong`.
+
+    Phần đầu giữ nguyên lời AI viết; từ phần hai trở đi nối thêm một câu bắt
+    dựng lại khung từ một chỗ đứng máy khác hẳn. Xem `_GOC_MAY_PHAN_SAU`.
+    """
+    if tong <= 1 or phan <= 1 or not loi_nhac.strip():
+        return loi_nhac
+    them = _GOC_MAY_PHAN_SAU[1 + (phan - 2) % (len(_GOC_MAY_PHAN_SAU) - 1)]
+    return "{0}. {1}".format(loi_nhac.rstrip().rstrip("."), them).strip()
+
+
 #: Nhịp máy quay cho phần thứ 2, 3, 4… của một cảnh bị cắt.
 #:
 #: Chỉ số 0 để trống vì phần đầu giữ nguyên lời nhắc AI viết. Từ phần hai trở
@@ -329,7 +372,8 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
                 "_tong_phan": so_phan,
                 "srt_text": chu if so_phan == 1 else "{0} ({1}/{2})".format(
                     chu, k + 1, so_phan),
-                "img_prompt": str(m.get("img_prompt") or ""),
+                "img_prompt": _goc_may_cho_phan(
+                    str(m.get("img_prompt") or ""), k + 1, so_phan),
                 "video_prompt": _nhip_may_cho_phan(
                     str(m.get("video_prompt") or ""), k + 1, so_phan),
                 "characters_used": str(m.get("characters_used") or ""),

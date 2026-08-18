@@ -20,7 +20,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.chia_canh import _NHIP_PHAN_SAU, _nhip_may_cho_phan  # noqa: E402
+from core.chia_canh import (  # noqa: E402
+    _GOC_MAY_PHAN_SAU, _NHIP_PHAN_SAU, _goc_may_cho_phan, _nhip_may_cho_phan,
+)
 
 GOC = "Camera pushes in fast as the mask cracks apart."
 
@@ -114,3 +116,58 @@ def test_canh_vua_tran_thi_khong_bi_them_gi():
                   cues, 8.0)
     assert len(ra) == 1
     assert ra[0]["video_prompt"] == "Camera pushes in."
+
+
+# ── và ẢNH cũng phải khác, không chỉ nhịp máy ────────────────────────────────
+
+
+class TestMoiPhanMotGocMay:
+    """Chủ dự án, 18/08/2026: *"sao không làm đơn giản hơn là prompt tạo ảnh
+    khác, kiểu cách thể hiện khác, hoặc góc máy khác… tao không tiếc tiền tao
+    cần logic đúng"*.
+
+    Bản trước cho các phần dùng CHUNG một tấm ảnh, lý lẽ là chúng cùng một
+    khoảnh khắc. Nhưng người dựng phim thật gặp câu nói dài thì **cắt sang góc
+    khác**, không để máy lia mãi trên một khung.
+    """
+
+    ANH = "Medium shot from side angle of nv1 on a park bench."
+
+    def test_phan_dau_giu_nguyen(self):
+        assert _goc_may_cho_phan(self.ANH, 1, 3) == self.ANH
+        assert _goc_may_cho_phan(self.ANH, 1, 1) == self.ANH
+
+    def test_cac_phan_sau_deu_khac_nhau(self):
+        ra = [_goc_may_cho_phan(self.ANH, k, 5) for k in range(1, 6)]
+        assert len(set(ra)) == 5
+
+    def test_van_giu_canh_ma_AI_da_ta(self):
+        """Chỉ đổi CHỖ ĐỨNG MÁY, không đổi cảnh — vẫn là một khoảnh khắc."""
+        for k in (2, 3, 4):
+            assert _goc_may_cho_phan(self.ANH, k, 4).startswith(
+                self.ANH.rstrip("."))
+
+    def test_moi_cau_deu_noi_ro_LA_CUNG_MOT_KHOANH_KHAC(self):
+        for cau in _GOC_MAY_PHAN_SAU[1:]:
+            assert "same moment" in cau
+            assert "re-frame" in cau
+
+    def test_moi_cau_deu_neu_mot_cho_dung_may_CU_THE(self):
+        """Bảo "khác đi" mà không nói khác thế nào thì máy vẽ lại y hệt."""
+        cu_the = ("closer", "pull far back", "overhead", "low from near")
+        for cau in _GOC_MAY_PHAN_SAU[1:]:
+            assert any(t in cau for t in cu_the), cau
+
+    def test_loi_nhac_rong_thi_khong_che_them_gi(self):
+        assert _goc_may_cho_phan("", 2, 3) == ""
+
+
+def test_canh_lai_cho_moi_phan_mot_anh_RIENG():
+    """Đi qua đường thật: 20 giây, trần 8 → ba phần, ba ảnh khác nhau."""
+    cues = [_cue(i) for i in range(1, 11)]
+    ra = canh_lai([{"srt_from": 1, "srt_to": 10,
+                    "img_prompt": "Medium shot of nv1 on a bench.",
+                    "video_prompt": "Leaves drift down."}], cues, 8.0)
+    assert len(ra) == 3
+    assert len({c["img_prompt"] for c in ra}) == 3, "ba ảnh phải khác nhau"
+    assert len({c["video_prompt"] for c in ra}) == 3, "ba clip phải khác nhau"

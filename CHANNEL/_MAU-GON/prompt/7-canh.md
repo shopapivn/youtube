@@ -83,9 +83,17 @@ Absolutely NO TEXT anywhere in image or video.
 
 ## SCENE DIVISION — use the SRT indices
 
+- **<<MAX_SEC>> seconds is a HARD CEILING, not a target.** Work out each scene's
+  length from the SRT timestamps (`srt_to` end minus `srt_from` start) and check
+  it before you move on. A scene longer than <<MAX_SEC>> seconds cannot be
+  filmed: the machine will chop it into equal pieces and give every piece THE
+  SAME PICTURE, so the viewer stares at one frame for the whole stretch. One
+  24-second scene became twelve identical shots in a row on a real video.
+  If a stretch of narration runs long, **split it into several scenes yourself**
+  — you are the only one here who can give each piece its own picture.
+- Below **<<MIN_SEC>> seconds** is too short to read; merge such a line into its
+  neighbour.
 - Divide by **complete meaning**; never cut mid-sentence.
-- Target **<<MIN_SEC>>–<<MAX_SEC>> seconds** per scene, derived from the SRT
-  timestamps — not a fixed clock.
 - Scenes are contiguous and cover **every** index with no gaps and no overlaps:
   each scene starts at the previous scene's last index + 1.
 
