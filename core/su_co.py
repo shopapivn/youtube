@@ -480,8 +480,18 @@ def goi_kien_nhan(
                 raise
             cho = nhip_cho(loai, lan)
             lan += 1
-            ghi("  {0} — đợi {1:.0f} giây rồi thử lại (lần {2}).".format(
-                mo_ta(loai), cho, lan))
+            # In cả câu lỗi THẬT và mã tra cứu, không chỉ tên nhóm.
+            #
+            # Bản trước chỉ in `mo_ta(loai)` — nghĩa là mọi sự cố khác nhau đều
+            # hiện lên một câu y hệt: "máy chủ trục trặc tạm". Lượt chạy thật
+            # 18/08/2026 có **34 dòng như thế dồn trong 20 giây** và không dòng
+            # nào cho biết đó là 502, 503, hay engine nào đang tắt.
+            #
+            # Khách gửi ảnh chụp màn hình cho hỗ trợ thì đó là toàn bộ manh mối
+            # họ có. Một câu lặp 34 lần không tra được gì; câu lỗi kèm
+            # `request_id` thì tra được ngay.
+            ghi("  {0} — đợi {1:.0f} giây rồi thử lại (lần {2}). {3}{4}".format(
+                mo_ta(loai), cho, lan, str(loi)[:100], dau_vet(loi)))
             _ngu_ngat_duoc(ngu, cho, kiem_dung)
 
 
