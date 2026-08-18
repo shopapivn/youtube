@@ -52,7 +52,7 @@ from .kenh import Kenh, ten_khung
 from .nang_anh import KHUNG
 from .the_cam_xuc import TEP_CO_THE, chen_the, kiem_the
 from .tron_tieng import co_ne_giong, loc_tron_nhac
-from .su_co import (SUAT_TAI_TEP, LoiNoiDung, goi_kien_nhan,
+from .su_co import (SUAT_TAI_TEP, LoiNoiDung, LoiTaiVe, goi_kien_nhan,
                     phan_loai, xin_nhip)
 
 __all__ = [
@@ -1397,8 +1397,8 @@ def _tai_ket_qua(bc: BoiCanh, goi: Dict[str, Any], chi_so: int,
     with bc.client._http.stream("GET", dia_chi, headers=dau) as ph:  # noqa: SLF001
         if ph.status_code >= 400:
             ph.read()
-            raise RuntimeError("tải kết quả hỏng ({0}) cho job {1}".format(
-                ph.status_code, ma))
+            raise LoiTaiVe("tải kết quả hỏng ({0}) cho job {1}".format(
+                ph.status_code, ma), ph.status_code)
         khai = ph.headers.get("Content-Length")
         with open(tam, "wb") as tep:
             for khuc in ph.iter_bytes(1 << 16):

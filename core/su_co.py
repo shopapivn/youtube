@@ -41,7 +41,7 @@ __all__ = [
     "dau_vet",
     "CHO_TIEP",
     "KHOA_DA_DUNG", "TAM_NGHI", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
-    "CHET", "NHA_MAY_NGHI", "LoiNoiDung",
+    "CHET", "NHA_MAY_NGHI", "LoiNoiDung", "LoiTaiVe",
     "phan_loai", "nen_thu_lai", "nhip_cho", "mo_ta", "goi_kien_nhan",
     "dat_tran_moi_phut",
 ]
@@ -215,6 +215,19 @@ _MO_TA = {
 }
 
 
+class LoiTaiVe(RuntimeError):
+    """Tải tệp kết quả về không xong, **kèm mã HTTP** máy chủ đã trả.
+
+    Mang theo `status` chứ không chỉ nhét con số vào câu chữ: `phan_loai` đọc
+    được mã số là phân loại đúng ngay, không phải dò chuỗi và không bắt nhầm
+    những câu vô can có chứa cùng dãy số.
+    """
+
+    def __init__(self, thong_diep: str, status: int = 0):
+        super().__init__(thong_diep)
+        self.status = int(status or 0)
+
+
 def phan_loai(loi: BaseException) -> str:
     """Sự cố này thuộc loại nào."""
     if isinstance(loi, LoiNoiDung):
@@ -227,6 +240,54 @@ def phan_loai(loi: BaseException) -> str:
     for loai, dau_hieu in _BANG:
         if any(d.lower() in chu for d in dau_hieu):
             return loai
+    return _theo_ma_so(loi)
+
+
+#: Mã HTTP nào thuộc loại nào, khi câu chữ không nói lên điều gì.
+#:
+#: Đây là lưới đỡ CUỐI, chạy sau `_BANG` chứ không trước. Thứ tự ấy quan trọng:
+#: một `503` có thể là "nhà máy đang tắt" (`NHA_MAY_NGHI`, đợi hàng phút) hoặc
+#: chỉ là cổng nghẹt thoáng qua (`TAM_NGHI`). Câu chữ phân biệt được hai thứ đó,
+#: còn mã số thì không — nên câu chữ phải được hỏi trước.
+_MA_SO = {
+    408: CHO_TIEP,
+    429: CHAM_LAI,
+    500: TAM_NGHI,
+    502: TAM_NGHI,
+    503: TAM_NGHI,
+    504: TAM_NGHI,
+}
+
+
+def _theo_ma_so(loi: BaseException) -> str:
+    """Không đoán được qua câu chữ thì hỏi mã HTTP, trước khi kết luận `CHET`.
+
+    ═══ VÌ SAO CẦN — MỘT LƯỢT CHẠY THẬT ĐÃ CHẾT VÌ THIẾU NÓ ═══
+
+    Ngày 18/08/2026, khâu tạo ảnh dừng ở **71 trên 133 ảnh**:
+
+        tải kết quả hỏng (500) cho job job_nxp81dgsdzkwu801w4ijaeat
+
+    Job ấy `status: succeeded`, ảnh nằm sẵn trên kho, và gọi lại đúng đường ấy
+    ít phút sau trả về **200 kèm đủ tệp**. Tức 500 ở đây là trục trặc thoáng
+    qua, đúng nghĩa đen.
+
+    Nhưng `_BANG` liệt kê 502/503/504 mà **bỏ sót 500** — mã hay gặp nhất trong
+    cả nhóm. Nên nó rơi xuống `CHET`: nhịp đợi rỗng, thử lại ba lần liên tiếp
+    không nghỉ một giây, cả ba đều rơi đúng vào khoảnh khắc hỏng ấy, rồi kéo
+    sập cả khâu 133 ảnh.
+
+    Không vá bằng cách thêm chuỗi `"500"` vào `_BANG`: ghép chuỗi trần sẽ bắt
+    nhầm mọi câu có `"5000 ký tự"`. Mã số là thứ có sẵn và không mơ hồ —
+    `APIStatusError.status` của SDK, và `LoiTaiVe.status` bên dưới.
+
+    Chính SDK đã coi 500 là đáng thử lại (`RETRYABLE_STATUS_CODES` gồm 408, 429,
+    500, 502, 503, 504); bảng này chỉ là chỗ tool cuối cùng cũng đồng ý.
+    """
+    for ten in ("status", "status_code"):
+        ma = getattr(loi, ten, None)
+        if isinstance(ma, int) and ma in _MA_SO:
+            return _MA_SO[ma]
     return CHET
 
 
