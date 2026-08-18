@@ -1619,6 +1619,7 @@ def _khau_kich_ban(bc: BoiCanh):
         lech = abs(len(ban_nhap) - k.ky_tu_muc_tieu) / max(1, k.ky_tu_muc_tieu)
         bc.ghi("  kịch bản: {0} ký tự (nhắm {1}, lệch {2:.0%}).".format(
             len(ban_nhap), k.ky_tu_muc_tieu, lech))
+        _kiem_kich_ban_dung_duoc(len(ban_nhap), k.ky_tu_muc_tieu, duong_kb)
 
         # SEO — thiếu cũng vẫn ra được video, nên hỏng thì chỉ ghi nhật ký.
         duong_seo = os.path.join(d, "1-seo.txt")
@@ -2700,6 +2701,71 @@ def _doi_cao_do_giong(bc: BoiCanh, mp3: str) -> bool:
         except Exception:  # noqa: BLE001
             pass
     return False
+
+
+#: Kịch bản ngắn hơn bấy nhiêu phần của mục tiêu thì coi như không dùng được.
+#:
+#: `_nan_do_dai` đã cố nắn cho vừa; con số này là **sàn cuối**, chỗ nói "cố
+#: không nổi thì dừng" thay vì đi tiếp.
+#:
+#: 0,45 chứ không phải 0,8: một kịch bản hụt 30-40% vẫn là kịch bản thật, chỉ
+#: là video ngắn hơn ý muốn — dừng ở đó là cướp của khách một bài dùng được.
+#: Còn hụt quá nửa thì nó không còn là "hơi ngắn", nó là một thứ khác hẳn.
+SAN_DO_DAI_KICH_BAN = 0.45
+
+
+def _kiem_kich_ban_dung_duoc(so_ky_tu: int, muc_tieu: int,
+                             duong_kb: str = "") -> None:
+    """Kịch bản ngắn tới mức vô lý thì dừng NGAY, đừng đem đi đọc.
+
+    ═══ MỘT LƯỢT CHẠY THẬT, 18/08/2026 ═══
+
+    Tệp `1-kich-ban.txt` của lượt R01 chứa nguyên văn:
+
+        "Bạn gửi tôi một kịch bản bằng tiếng Nhật, nhưng yêu cầu đánh giá so với
+         kịch bản tiếng Việt đã viral. Tôi cần **kịch bản tiếng Việt** mà bạn
+         vừa viết để đánh giá và sửa. Bạn có thể gửi lại không?"
+
+    Đó là AI **hỏi lại**, không phải kịch bản. Tool ghi câu ấy vào tệp kịch bản,
+    in ra `lệch 94%`, rồi báo khâu **XONG** và đem 218 ký tự ấy đi tạo giọng
+    nói. Nếu không ai để ý, nó sẽ chạy tiếp qua phụ đề, cắt cảnh, và hàng trăm
+    lượt tạo ảnh — tất cả dựng từ một câu hỏi.
+
+    ═══ VÌ SAO ĐO ĐỘ DÀI, KHÔNG ĐI DÒ CÂU HỎI ═══
+
+    Bắt "AI đang hỏi lại" bằng cách dò chữ là việc bạc: kịch bản tiếng Việt gọi
+    khán giả là "bạn" ở gần như mọi câu, và câu hỏi tu từ là một lối viết hay
+    dùng. Dò kiểu ấy sẽ giết những bài hoàn toàn tốt.
+
+    Nhưng **mọi** kiểu hỏng ở khâu này đều để lại một dấu vết chung: bản ra
+    ngắn. AI hỏi lại thì ngắn. AI từ chối thì ngắn. Trả về rỗng thì ngắn. Bị cắt
+    giữa chừng thì ngắn. Một phép đo bắt được cả bốn, và không nhầm với văn hay.
+    """
+    san = int(muc_tieu * SAN_DO_DAI_KICH_BAN)
+    if muc_tieu <= 0 or so_ky_tu >= san:
+        return
+    # ═══ DỜI BẢN HỎNG SANG MỘT BÊN, ĐỪNG ĐỂ NÓ CHẶN LƯỢT SAU ═══
+    #
+    # Khâu này mở đầu bằng `if not ban_nhap:` — có tệp kịch bản rồi thì nó bỏ
+    # qua cả phần viết. Nên nếu để nguyên bản hỏng, ba lượt thử lại của
+    # `core/auto.chay` đều đọc lại đúng câu ấy và hỏng y hệt, còn người dùng
+    # bấm “Chạy tiếp” bao nhiêu lần cũng vậy.
+    #
+    # ĐỔI TÊN chứ không xoá: đây vẫn là thứ khách trả tiền để tạo ra, và nó là
+    # bằng chứng duy nhất cho biết máy đã trả về cái gì.
+    if duong_kb and os.path.exists(duong_kb):
+        goc, duoi = os.path.splitext(duong_kb)
+        try:
+            os.replace(duong_kb, goc + "-KHONG-DUNG-DUOC" + duoi)
+        except OSError:
+            pass
+    raise LoiNoiDung(
+        "kịch bản chỉ có {0} ký tự trong khi cần khoảng {1} — ngắn tới mức này "
+        "thì thường không phải bài viết, mà là câu AI hỏi lại hoặc trả về dở. "
+        "Dừng ở đây thay vì đem nó đi tạo giọng nói và hàng trăm tấm ảnh. "
+        "Bản hỏng đã dời sang 1-kich-ban-KHONG-DUNG-DUOC.txt để bạn xem máy đã "
+        "trả về gì; bấm Chạy tiếp là tool viết lại từ đầu."
+        .format(so_ky_tu, muc_tieu))
 
 
 def _lam_sach_ket_qua(bc: BoiCanh, *tep: str) -> None:
