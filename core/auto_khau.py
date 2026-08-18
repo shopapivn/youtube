@@ -1360,9 +1360,35 @@ def _ma_job(goi: Dict[str, Any]) -> str:
     return str((goi or {}).get("id") or (goi or {}).get("job_id") or "")
 
 
-def _tai_ket_qua(bc: BoiCanh, goi: Dict[str, Any], chi_so: int,
-                 dich: str) -> str:
-    """Tải file kết quả của một job về `dich`.
+def _tai_ket_qua(bc: BoiCanh, goi: Dict[str, Any], chi_so: int, dich: str,
+                 ngu: Callable[[float], None] = time.sleep) -> str:
+    """Tải file kết quả của một job về `dich`, **kiên nhẫn qua trục trặc tạm**.
+
+    ═══ VÌ SAO PHẢI KIÊN NHẪN NGAY Ở ĐÂY ═══
+
+    Trước 18/08/2026 hàm này gọi thẳng một lần rồi ném lỗi lên. Lỗi ấy đi lên
+    tận `core/auto.chay`, nơi chỉ có **ba lượt thử cho CẢ KHÂU** — nên một tệp
+    tải trượt là bỏ luôn cả mẻ 133 ảnh, và ba lượt thử của khâu chỉ tổ tạo lại
+    y hệt tình huống cũ.
+
+    Đo trên hai lượt chạy thật cùng ngày: chết ở ảnh 71/133 và 87/115. Mỗi lượt
+    là hàng chục ảnh **đã trả tiền** mà không dùng được.
+
+    Tải về là việc **không tốn tiền và không đổi trạng thái** — một `GET` thuần.
+    Nên chỗ này là chỗ rẻ nhất trong cả dây chuyền để kiên nhẫn: đợi vài chục
+    giây ở đây rẻ hơn bỏ cả mẻ đúng một trăm lần.
+
+    `goi_kien_nhan` chỉ đợi những loại đáng đợi; `CHET` và `NOI_DUNG` vẫn ném
+    lên ngay như cũ.
+    """
+    return goi_kien_nhan(
+        lambda: _tai_ket_qua_mot_lan(bc, goi, chi_so, dich),
+        on_log=bc.ghi, kiem_dung=bc.kiem_dung, ngu=ngu)
+
+
+def _tai_ket_qua_mot_lan(bc: BoiCanh, goi: Dict[str, Any], chi_so: int,
+                         dich: str) -> str:
+    """Một lượt tải, không thử lại. Chỗ gọi là `_tai_ket_qua`.
 
     ═══ VÌ SAO ĐI QUA `/v1/jobs/{id}/download` CHỨ KHÔNG DÙNG `output.url` ═══
 
