@@ -253,11 +253,30 @@ def describe(exc: BaseException) -> ErrorAdvice:
 #: `http.client.RemoteDisconnected` là con của `ConnectionResetError` trên vài
 #: bản Python nhưng không phải mọi bản, và `urllib.error.URLError` bọc đủ thứ
 #: bên trong. Danh sách tên bao được cả những chỗ cây thừa kế không giúp gì.
+#: Tên lớp ngoại lệ nào là "chuyện mạng".
+#:
+#: Danh sách này là **nguồn sự thật duy nhất** cho cả hai câu hỏi: câu hiện lên
+#: màn hình (`describe`) và việc có thử lại hay không (`su_co.phan_loai`). Thêm
+#: một tên ở đây là cả hai nơi cùng đổi.
+#:
+#: Đo ngày 18/08/2026 trên mười ba loại ngoại lệ mạng thật: ba loại dưới đây
+#: vắng mặt, nên tool bỏ cuộc ngay lần đầu thay vì đợi rồi thử lại.
+#:
+#:   WriteError    httpx — đứt lúc đang GỬI (bản cũ chỉ có `ReadError`)
+#:   PoolTimeout   httpx — hết chỗ trong bể kết nối, tự khỏi sau ít giây
+#:   gaierror      socket — hỏng DNS, kiểu hỏng mạng hay gặp nhất ở nhà
+#:
+#: ⚠ Cố tình KHÔNG gộp cả `OSError` vào đây dù `describe` có làm vậy: `OSError`
+#: gồm cả `FileNotFoundError` và `PermissionError`. Câu báo gọi chúng là lỗi
+#: mạng thì chỉ hơi sai, nhưng ĐỢI LẠI 14 phút cho một tệp không tồn tại thì là
+#: treo tool mà không bao giờ xong.
 _TEN_LOI_MANG = frozenset({
     "RemoteDisconnected", "IncompleteRead", "URLError", "ConnectionResetError",
     "ConnectionAbortedError", "ConnectionRefusedError", "BadStatusLine",
     "ProtocolError", "ReadTimeout", "ConnectTimeout", "ReadError",
     "ConnectError", "RemoteProtocolError", "SSLError", "SSLEOFError",
+    "WriteError", "WriteTimeout", "PoolTimeout", "NetworkError",
+    "gaierror", "herror", "SSLZeroReturnError", "SSLSyscallError",
 })
 
 

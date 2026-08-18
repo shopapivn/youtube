@@ -236,6 +236,8 @@ def phan_loai(loi: BaseException) -> str:
         # `json.loads` hỏng là `ValueError`. Đây là hỏng NỘI DUNG, không phải
         # hỏng đường truyền — phân nhầm là hỏi lại cùng khoá rồi nhận lại rác.
         return NOI_DUNG
+    if _la_loi_mang(loi):
+        return TAM_NGHI
     ma_code = str(getattr(loi, "code", "") or "").strip().lower()
     if ma_code in _MA_CODE:
         return _MA_CODE[ma_code]
@@ -244,6 +246,48 @@ def phan_loai(loi: BaseException) -> str:
         if any(d.lower() in chu for d in dau_hieu):
             return loai
     return _theo_ma_so(loi)
+
+
+def _la_loi_mang(loi: BaseException) -> bool:
+    """Ngoại lệ này có phải chuyện mạng không — hỏi theo LOẠI, không dò chữ.
+
+    ═══ HAI NƠI TỪNG TRẢ LỜI KHÁC NHAU CHO CÙNG MỘT LỖI ═══
+
+    `core/errors.py` (thứ dựng câu hiện lên màn hình) nhận ra lỗi mạng bằng
+    **tên lớp ngoại lệ**, và nó báo đúng: *"Mạng bị gián đoạn… Thử lại giúp
+    mình"*, `retryable=True`.
+
+    Còn `phan_loai` ở đây thì dò chữ trong câu lỗi. Đo ngày 18/08/2026 trên
+    mười ba loại ngoại lệ mạng thật, **bảy loại rơi thẳng vào `CHET`** — tức
+    nhịp đợi rỗng, không thử lại lần nào:
+
+        httpx.ConnectError        chet    (không nối được máy chủ)
+        httpx.ReadError           chet
+        httpx.RemoteProtocolError chet    (máy chủ ngắt giữa chừng)
+        httpx.WriteError          chet
+        httpx.PoolTimeout         chet
+        socket.gaierror           chet    (hỏng DNS)
+        ssl.SSLEOFError           chet
+
+    Vì sao dò chữ trượt: `httpx.ReadError('')` có câu lỗi **rỗng** — không có gì
+    để dò. `socket.gaierror` nói "getaddrinfo failed", không chứa chữ nào trong
+    bảng. `httpx.RemoteProtocolError` nói "Server disconnected without sending a
+    response" — cũng không khớp "remote end closed".
+
+    Nên màn hình bảo khách *"thử lại giúp mình"* trong khi bộ thử lại đã bỏ cuộc
+    từ lâu. Khách gửi ảnh đúng màn hình ấy ngày 18/08/2026.
+
+    Giờ chỉ còn MỘT nguồn sự thật: `errors._la_loi_mang`. Sửa danh sách ở đó là
+    cả hai nơi cùng đổi.
+    """
+    try:
+        from .errors import _la_loi_mang as hoi  # noqa: PLC0415 — tránh vòng
+    except Exception:  # noqa: BLE001 — thiếu module thì giữ nếp cũ
+        return False
+    try:
+        return bool(hoi(loi))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 #: Mã `code` của cổng nói thẳng chuyện gì đang xảy ra — tin nó trước câu chữ.
