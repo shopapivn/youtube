@@ -38,8 +38,10 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 __all__ = [
@@ -189,18 +191,71 @@ def _doc_vtt(chu: str) -> str:
     return " ".join(" ".join(ra).split())
 
 
-def _tai_chu(dia_chi: str, mo_url=None) -> str:
-    """Tải một tệp phụ đề về rồi gộp thành đoạn văn. Rỗng nếu hỏng."""
+#: Mã lỗi HTTP có nghĩa "lúc này thì không, lát nữa thì được" — chờ rồi hỏi lại.
+#: 429 đứng đầu danh sách vì nó là mã hay gặp nhất ở đây, và nó **không** có
+#: nghĩa video thiếu phụ đề.
+_CHAN_TAM = (429, 500, 502, 503, 504)
+
+#: Đợi bao lâu giữa các lần tải lại một tệp phụ đề, tính bằng giây.
+#:
+#: Đo ngày 18/08/2026 trên `35dI4o0LTWc`: cùng một địa chỉ, cùng một dòng lệnh,
+#: lần thì 429 lần thì 200 kèm 186 KB chữ. Tức 429 ở đây là chặn tạm theo nhịp
+#: hỏi, không phải video thiếu phụ đề.
+#:
+#: Bỏ cuộc ngay sau một lần 429 là cái giá đắt nhất trong cả tệp này: video vẫn
+#: còn nguyên phụ đề tự động 157 thứ tiếng, nhưng tool tụt xuống đường 4 — tải
+#: 19 MB tiếng về rồi bắt máy khách nghe hết cả video, mất vài phút cho một thứ
+#: lẽ ra tải xong trong hai giây.
+CHO_TAI_LAI = (4.0, 12.0, 30.0)
+
+
+def _cho_theo_dau(loi: HTTPError, mac_dinh: float) -> float:
+    """Máy chủ bảo đợi bao lâu thì đợi bấy lâu, không thì theo bảng."""
+    try:
+        giay = float(str(loi.headers.get("Retry-After") or "").strip())
+    except (AttributeError, TypeError, ValueError):
+        return mac_dinh
+    # Chặn trên 60 giây: một tệp phụ đề không đáng để treo người dùng lâu hơn
+    # thế, còn đường 3 và đường 4 vẫn đang đợi lượt.
+    return min(60.0, max(mac_dinh, giay))
+
+
+def _tai_chu(dia_chi: str, mo_url=None,
+             ngu: Callable[[float], None] = time.sleep) -> Tuple[str, str]:
+    """Tải một tệp phụ đề về rồi gộp thành đoạn văn.
+
+    Trả về `(chữ, lý do hỏng)` — **hai thứ, không phải một**. Bản cũ chỉ trả về
+    chữ, nên chỗ gọi không phân biệt được "video này không có phụ đề" với
+    "YouTube vừa chặn nhịp hỏi", và báo lên màn hình câu sai sự thật.
+
+    Lỗi chặn tạm thì chờ rồi hỏi lại theo `CHO_TAI_LAI`; lỗi khác thì thôi ngay,
+    vì đằng sau còn hai đường nữa đang đợi lượt.
+    """
     mo = mo_url or urlopen
-    try:
-        with mo(dia_chi, timeout=30) as phan_hoi:
-            tho = phan_hoi.read().decode("utf-8", "replace")
-    except Exception:  # noqa: BLE001 — mạng hỏng thì để đường sau thử tiếp
-        return ""
-    try:
-        return _doc_json3(tho) if tho.lstrip().startswith("{") else _doc_vtt(tho)
-    except Exception:  # noqa: BLE001 — định dạng lạ thì bỏ, đường sau thử tiếp
-        return ""
+    cho_lan_sau = 0.0
+    ly_do = "không tải được tệp phụ đề"
+    for lan in range(len(CHO_TAI_LAI) + 1):
+        if cho_lan_sau:
+            ngu(cho_lan_sau)
+        try:
+            with mo(dia_chi, timeout=30) as phan_hoi:
+                tho = phan_hoi.read().decode("utf-8", "replace")
+        except HTTPError as loi:
+            ly_do = "YouTube chặn tải phụ đề (lỗi {0})".format(loi.code)
+            if loi.code not in _CHAN_TAM or lan == len(CHO_TAI_LAI):
+                return "", ly_do
+            # Máy chủ dặn đợi lâu hơn bảng thì nghe nó — nó biết rõ hơn.
+            cho_lan_sau = _cho_theo_dau(loi, CHO_TAI_LAI[lan])
+            continue
+        except Exception as loi:  # noqa: BLE001 — mạng hỏng thì để đường sau thử
+            return "", "không tải được tệp phụ đề ({0})".format(str(loi)[:60])
+        try:
+            chu = (_doc_json3(tho) if tho.lstrip().startswith("{")
+                   else _doc_vtt(tho))
+        except Exception:  # noqa: BLE001 — định dạng lạ thì bỏ, đường sau thử
+            return "", "tệp phụ đề đọc không ra"
+        return chu, "" if chu else "tệp phụ đề tải về nhưng rỗng"
+    return "", ly_do
 
 
 # ── Đường 3: thư viện khác, đi đường khác ────────────────────────────────────
@@ -237,6 +292,64 @@ def _tu_thu_vien(video_id: str):
 
 # ── Đường 4: tải tiếng về rồi tự nghe ────────────────────────────────────────
 
+#: yt-dlp giả làm ứng dụng YouTube nào khi xin đường tải tiếng.
+#:
+#: Đo ngày 18/08/2026 trên `35dI4o0LTWc` — cùng lúc, cùng máy, cùng bản yt-dlp
+#: mới nhất (2026.07.04):
+#:
+#:     (mặc định)   403 Forbidden
+#:     android      tải xong 18,98 MB trong 6 giây
+#:     android_vr   403 Forbidden
+#:     ios          không có định dạng nào
+#:     tv           "trang cần tải lại"
+#:
+#: Nên đây không phải lỗi yt-dlp cũ — nâng cấp không cứu được. YouTube chặn theo
+#: **ứng dụng đang xin**, và cái mặc định là cái bị chặn. Thử lần lượt là cách
+#: duy nhất qua được, vì cái nào sống thì tuỳ ngày và tuỳ video.
+#:
+#: `android` đứng đầu vì đó là cái đang chạy được; ô rỗng ở giữa là để mặc định
+#: yt-dlp tự chọn — nó tự đổi theo từng bản, nên vẫn phải cho nó một lượt.
+KHACH_YOUTUBE = ("android", "", "ios", "tv", "mweb")
+
+
+def _tai_tieng(url: str, thu_muc: str, tai=None) -> str:
+    """Tải tiếng của video về `thu_muc`. Trả về câu lỗi, rỗng nghĩa là xong.
+
+    Thử lần lượt từng ứng dụng trong `KHACH_YOUTUBE` cho tới khi có tệp. Không
+    chờ giữa các lần: đây không phải bị chặn theo nhịp hỏi mà là bị từ chối
+    thẳng, đợi bao lâu cũng thế — phải đổi cách hỏi chứ không phải hỏi chậm lại.
+    """
+    from .youtube import _ydl_class  # noqa: PLC0415 — cùng gói, dùng lại
+
+    lam = tai or _tai_mot_khach
+    ly_do = "không tải được tiếng của video"
+    for khach in KHACH_YOUTUBE:
+        try:
+            lam(_ydl_class(), url, thu_muc, khach)
+        except Exception as loi:  # noqa: BLE001 — cái này hỏng thì thử cái sau
+            ly_do = "không tải được tiếng của video ({0})".format(str(loi)[:120])
+            continue
+        if glob.glob(os.path.join(thu_muc, "tieng.*")):
+            return ""
+    return ly_do
+
+
+def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str) -> None:
+    """Một lượt tải bằng đúng một ứng dụng giả. Tách ra để test thay được."""
+    # `noprogress` chứ không chỉ `quiet`: thanh tiến trình đi đường riêng, không
+    # theo `quiet`, và nó bắn ra hàng trăm dòng "[download] 12.3% of 18.98MiB"
+    # lấp kín ô nhật ký của người dùng.
+    tuy = {
+        "quiet": True, "no_warnings": True, "noprogress": True,
+        "skip_download": False,
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
+        "outtmpl": os.path.join(thu_muc, "tieng.%(ext)s"),
+    }
+    if khach:
+        tuy["extractor_args"] = {"youtube": {"player_client": [khach]}}
+    with YoutubeDL(tuy) as ydl:
+        ydl.download([url])
+
 
 def _tu_nghe(url: str, ghi: Callable[[str], None],
              cancel: Optional[threading.Event] = None):
@@ -254,22 +367,12 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
     except ImportError:
         return "", "", "máy chưa có faster-whisper (phần tự nghe)"
 
-    from .youtube import _ydl_class  # noqa: PLC0415 — cùng gói, dùng lại
-
     thu_muc = tempfile.mkdtemp(prefix="shopapi-script-")
     try:
         ghi("    đang tải tiếng của video…")
-        try:
-            YoutubeDL = _ydl_class()
-            with YoutubeDL({
-                "quiet": True, "no_warnings": True, "skip_download": False,
-                "format": "bestaudio[ext=m4a]/bestaudio/best",
-                "outtmpl": os.path.join(thu_muc, "tieng.%(ext)s"),
-            }) as ydl:
-                ydl.download([url])
-        except Exception as loi:  # noqa: BLE001
-            return "", "", "không tải được tiếng của video ({0})".format(
-                str(loi)[:120])
+        loi_tai = _tai_tieng(url, thu_muc)
+        if loi_tai:
+            return "", "", loi_tai
 
         tep = glob.glob(os.path.join(thu_muc, "tieng.*"))
         if not tep:
@@ -335,6 +438,11 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
                        if len(ngay) == 8 and ngay.isdigit() else "")
 
     # Đường 1 & 2 — phụ đề đi kèm, không tốn thêm lượt gọi yt-dlp nào.
+    #
+    # `co_phu_de` ghi lại: video **có** phụ đề nhưng tải không về. Không có nó
+    # thì hai chuyện khác hẳn nhau — "video này chưa ai làm phụ đề" và "YouTube
+    # vừa chặn nhịp hỏi của bạn" — cùng hiện lên một câu, và câu ấy sai một nửa.
+    co_phu_de = ""
     for tu_lam, ten_nguon in ((True, "phu-de-tay"), (False, "phu-de-may")):
         if cancel is not None and cancel.is_set():
             ket.loi = "đã dừng"
@@ -342,10 +450,11 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
         dia_chi, ma = _chon_phu_de(thong_tin, tu_lam)
         if not dia_chi:
             continue
-        chu = _tai_chu(dia_chi)
+        chu, vi_sao = _tai_chu(dia_chi)
         if chu:
             ket.text, ket.nguon, ket.ngon_ngu = chu[:MAX_SCRIPT], ten_nguon, ma
             return ket
+        co_phu_de = vi_sao or co_phu_de
 
     # Đường 3 — thư viện khác, đường mạng khác.
     if ket.video_id:
@@ -359,13 +468,16 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
 
     # Đường 4 — chỉ khi người dùng tự bật, vì nó chậm hơn hẳn.
     if not cho_phep_nghe:
-        ket.loi = ("video không có phụ đề — bật “Tự nghe khi không có phụ đề” "
+        ket.loi = (co_phu_de + " — bật “Tự nghe khi không có phụ đề” để máy bạn "
+                   "nghe hộ" if co_phu_de else
+                   "video không có phụ đề — bật “Tự nghe khi không có phụ đề” "
                    "để máy bạn nghe hộ")
         return ket
     if cancel is not None and cancel.is_set():
         ket.loi = "đã dừng"
         return ket
-    ghi("    không có phụ đề — chuyển sang cho máy tự nghe.")
+    ghi("    {0} — chuyển sang cho máy tự nghe.".format(
+        co_phu_de or "không có phụ đề"))
     chu, ma, loi = _tu_nghe(url, ghi, cancel=cancel)
     if chu:
         ket.text, ket.nguon, ket.ngon_ngu = chu[:MAX_SCRIPT], "tu-nghe", ma
