@@ -548,6 +548,47 @@ def dong_ho(giay: float) -> str:
     return "{0:02d}:{1:02d}:{2:02d},{3:03d}".format(gio, phut, giay_, mili)
 
 
+#: Một dòng phụ đề ngắn nhất được phép dài bao nhiêu giây.
+#:
+#: Không phải con số thẩm mỹ — `GIAY_TOI_THIEU` ở trên mới là thứ lo chuyện đọc
+#: kịp. Đây chỉ là mức tối thiểu để tệp **hợp lệ**, đủ hiện ra sau khi làm tròn
+#: về mili giây.
+GIAY_NGAN_NHAT_HOP_LE = 0.05
+
+
+def _ket_thuc_hop_le(c: Cau, bat_dau_ke: Optional[float]) -> float:
+    """Thời điểm kết thúc, bảo đảm **sau** thời điểm bắt đầu.
+
+    ═══ TOOL TỪNG GHI RA TỆP MÀ CHÍNH NÓ KHÔNG ĐỌC ĐƯỢC ═══
+
+    Lượt chạy thật R02, ngày 18/08/2026. Khâu phụ đề ghi ra 103 dòng, trong đó
+    hai dòng có `bắt đầu == kết thúc`:
+
+        dòng 48   00:02:40,500 --> 00:02:40,500
+        dòng 88   00:04:41,940 --> 00:04:41,940
+
+    Rồi khâu cắt cảnh đọc lại chính tệp ấy và từ chối:
+
+        Dong phu de co thoi diem ket thuc khong sau thoi diem bat dau
+
+    Cả lượt chạy 42 phút dừng ở đó — sau khi đã trả tiền cho giọng đọc.
+
+    Dòng dài 0 giây sinh ra khi phải lùi về dùng thứ máy nghe được: `whisper`
+    thỉnh thoảng trả về một đoạn có hai mốc trùng nhau. Chỗ này là **cửa duy
+    nhất** mà mọi đường đều đi qua để thành tệp, nên chặn ở đây là chặn được cả.
+
+    Không nới sang tận `GIAY_TOI_THIEU` (0,7 giây): làm thế thì dòng ấy đè lên
+    dòng sau và cả bảng giờ xô lệch. Chỉ đẩy vừa đủ để hợp lệ, và không bao giờ
+    vượt quá lúc dòng kế tiếp bắt đầu.
+    """
+    if c.ket_thuc > c.bat_dau:
+        return c.ket_thuc
+    dai = c.bat_dau + GIAY_NGAN_NHAT_HOP_LE
+    if bat_dau_ke is not None and bat_dau_ke > c.bat_dau:
+        return min(dai, bat_dau_ke)
+    return dai
+
+
 def viet_srt(duong: str, cau: Sequence[Cau]) -> str:
     """Ghi tệp .srt. Trả về chính đường dẫn.
 
@@ -555,9 +596,10 @@ def viet_srt(duong: str, cau: Sequence[Cau]) -> str:
     chứ không phải một tệp cụt mà khâu dựng từ chối đọc.
     """
     khoi = []
-    for c in cau:
+    for i, c in enumerate(cau):
+        ke = cau[i + 1].bat_dau if i + 1 < len(cau) else None
         khoi.append("{0}\n{1} --> {2}\n{3}\n".format(
-            c.so, dong_ho(c.bat_dau), dong_ho(c.ket_thuc), c.chu))
+            c.so, dong_ho(c.bat_dau), dong_ho(_ket_thuc_hop_le(c, ke)), c.chu))
     thu_muc = os.path.dirname(duong)
     if thu_muc:
         os.makedirs(thu_muc, exist_ok=True)
