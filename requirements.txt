@@ -101,3 +101,4 @@ imageio-ffmpeg>=0.4
 #  "shopapi>=0.1.0" vao day va bo _sdk/ di.
 #
 # Cai: SETUP.bat  (hoac  python -m pip install -r requirements.txt)
+trendspy

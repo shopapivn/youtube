@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 
 __all__ = ["Skill", "SKILL", "SKILL_CHO_BAT", "MA_NGHIEN_CUU", "MA_SCRIPT",
-    "MA_XOA_LOGO",
+    "MA_XOA_LOGO", "MA_TU_KHOA",
            "tim_skill", "skill_chu"]
 
 #: Skill chạy trên máy, có trang riêng thay vì ô nhập chữ.
@@ -38,6 +38,10 @@ MA_SCRIPT = "script"
 
 #: Xoá dấu nhà cung cấp ở góc ảnh. Chạy trên máy, xem `core/xoa_dau_anh.py`.
 MA_XOA_LOGO = "xoa-logo"
+
+#: Đo lượt tìm từ khoá **trên chính YouTube**. Chạy trên máy qua `trendspy`,
+#: xem `core/tu_khoa_youtube.py`.
+MA_TU_KHOA = "tu-khoa"
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,16 @@ SKILL: Tuple[Skill, ...] = (
               "Tôi đo hình dạng dấu rồi trừ ngược ra khỏi ảnh, nên phần ảnh bên "
               "dưới hiện lại đúng như ban đầu. Chạy trên máy bạn, 27 mili giây "
               "một ảnh.",
+        loai="may",
+    ),
+    Skill(
+        ma=MA_TU_KHOA,
+        ten="Đo từ khoá YouTube",
+        bieu_tuong="🔎",
+        mo_ta="Gõ các từ khoá cách nhau bằng dấu phẩy — nhận về mức tìm 30 ngày "
+              "gần nhất NGAY TRÊN YOUTUBE, không phải trên Google. Xem cái nào "
+              "đông hơn, cái nào đang lên, rồi copy cả bảng sang trang tính. "
+              "Chạy trên máy bạn — miễn phí, không cần đăng nhập.",
         loai="may",
     ),
 )

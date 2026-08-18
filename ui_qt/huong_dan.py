@@ -81,6 +81,17 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "được cả thư mục một lượt. Ảnh chạy từ tab Tự động đã được xoá sẵn "
             "ngay lúc tải về, Skill này dành cho ảnh cũ hoặc ảnh lấy từ chỗ "
             "khác. Ô “Giữ bản gốc” bật sẵn nên ảnh cũ không mất.",
+            "“Đo từ khoá YouTube” cho biết từ khoá nào đang được tìm nhiều "
+            "hơn NGAY TRÊN YOUTUBE — khác với lượt tìm trên Google, vì người "
+            "ta lên Google để đọc còn lên YouTube để xem. Gõ các từ khoá cách "
+            "nhau bằng dấu phẩy, xong bấm “Copy cả bảng” là dán thẳng sang "
+            "Google Sheets.",
+            "Con số trong bảng ấy KHÔNG phải số lượt tìm — Google không cho ai "
+            "con số thật. Nó là mức so sánh giữa chính các từ khoá bạn nhập, "
+            "và gấp đôi nghĩa là được tìm nhiều gấp đôi. Đo thật ở Việt Nam: "
+            "“cô đơn” ra 454 trong khi “chữa lành” ra 72 — tức gấp sáu lần. "
+            "Muốn so hai nhóm từ khoá thì để chung một lần đo, đừng đo hai lần "
+            "rồi so hai bảng với nhau.",
             "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
             "mất khi cập nhật tool.",
         ],
