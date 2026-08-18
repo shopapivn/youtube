@@ -294,3 +294,37 @@ class TestMotAnhMotCanh:
         chu = " ".join(self._canh().split())
         assert "side by side inside one room" in chu
         assert "single space together" in chu
+
+
+class TestKhongChuTrongAnh:
+    """`no text` ở đuôi là một lệnh CẤM, và máy vẽ ảnh nghe lệnh dựng hơn.
+
+    Đo trên 1.120 cảnh thật: **7,2%** lời nhắc tự tả một vật mang chữ — trang
+    sách đang mở, màn hình có tin nhắn, *"shifting text blocks being erased and
+    rewritten"*. Ảnh ra có chữ đọc được: lượt U02 có hẳn dòng 深い処理 viết
+    trên trang giấy.
+
+    Viết "scribbled marks, **not readable text**" cũng không cứu được — máy vẽ
+    không hiểu chữ "not".
+    """
+
+    def _canh(self):
+        with open(os.path.join(MAU, "prompt", "7-canh.md"),
+                  encoding="utf-8") as t:
+            return t.read()
+
+    def test_cam_vat_mang_chu_ngay_trong_luat(self):
+        chu = " ".join(self._canh().split())
+        assert "NOTHING IN THE FRAME MAY CARRY WRITING" in chu
+
+    def test_noi_ro_vi_sao_cam_o_duoi_khong_du(self):
+        """Không nói lý do thì lần sau lại có người bỏ luật đi cho gọn."""
+        chu = " ".join(self._canh().split())
+        assert "negative" in chu
+        assert "does not parse the" in chu
+
+    def test_chi_duong_thay_the_chu_khong_chi_cam(self):
+        """Cấm suông thì AI kẹt; phải cho nó cách khác để diễn cùng một ý."""
+        chu = " ".join(self._canh().split())
+        assert "shape and gesture" in chu
+        assert "held shut" in chu or "glowing blank" in chu

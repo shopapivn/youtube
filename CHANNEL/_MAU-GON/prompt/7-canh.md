@@ -81,6 +81,25 @@ same: an image has no motion, so never put motion words in an image prompt.
 
 Absolutely NO TEXT anywhere in image or video.
 
+## NOTHING IN THE FRAME MAY CARRY WRITING
+
+Do not put an object in the scene whose whole point is the words on it: an open
+book showing its page, a screen showing a message, a sign, a label, a note, a
+letter, a headline, "text blocks being rewritten".
+
+The `no text` at the end of every prompt is a **negative**, and an image model
+weighs a thing you asked for far more heavily than a thing you asked against.
+Measured on 1.120 real scenes: 7,2% of prompts described something bearing
+writing, and the pictures came back with readable words on them.
+
+Writing it as "scribbled marks, **not readable text**" does not help either —
+the model does not parse the "not".
+
+Show the same idea through **shape and gesture** instead: a book held shut
+against the chest, a screen glowing blank, a hand hovering over a phone that
+never lights, a page torn in half. Every one of those reads instantly and none
+of them needs a single letter.
+
 ## ONE PICTURE PER SCENE — never a grid
 
 Each scene is **one single continuous image that then moves**, not a layout.
