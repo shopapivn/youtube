@@ -256,3 +256,41 @@ class TestKhongThieuBuocNao:
         Thêm thì phải cân nhắc, nên để nó ở đây cho thấy rõ số lượng.
         """
         assert BO_QUA_DUOC == {"5-hoan-thien.md"}
+
+
+class TestMotAnhMotCanh:
+    """Lưới ô kiểu truyện tranh là hai lỗi trong một, đo trên 1.120 cảnh thật.
+
+    2,1% số cảnh (24/1120 — khoảng hai đến ba cảnh mỗi video) yêu cầu bố cục
+    nhiều ô: `panels`, `manga page`, `four separate vignette`.
+
+    Lượt U01 cảnh 25 nguyên văn: *"Wide shot of four separate vignette panels
+    arranged like a manga page — panel 1: clock… panel 2: message bubble…"*
+
+    Ảnh ra có chữ số **1. 2. 3. 4.** hiện rõ, dù cuối lời nhắc có `no text, no
+    letters, no numbers` — một lệnh dựng khẳng định luôn thắng một lệnh cấm.
+    Và lưới thì tĩnh, nên clip làm từ nó đứng im giữa một video đang chạy.
+    """
+
+    def _canh(self):
+        with open(os.path.join(MAU, "prompt", "7-canh.md"),
+                  encoding="utf-8") as t:
+            return t.read()
+
+    def test_cam_bo_cuc_luoi(self):
+        chu = " ".join(self._canh().split())
+        assert "ONE PICTURE PER SCENE" in chu
+        for tu in ("panels", "manga", "split-screen", "collage"):
+            assert tu in chu, tu
+
+    def test_noi_ro_CA_HAI_ly_do(self):
+        """Nêu một lý do thì AI còn cãi được; nêu cả hai thì không."""
+        chu = " ".join(self._canh().split())
+        assert "static" in chu
+        assert "numbers" in chu
+
+    def test_van_cho_phep_nhieu_vat_trong_MOT_khung(self):
+        """Cấm quá tay thì mất luôn những cảnh hai người ngồi cạnh nhau."""
+        chu = " ".join(self._canh().split())
+        assert "side by side inside one room" in chu
+        assert "single space together" in chu

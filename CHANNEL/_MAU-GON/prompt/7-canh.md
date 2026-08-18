@@ -81,6 +81,27 @@ same: an image has no motion, so never put motion words in an image prompt.
 
 Absolutely NO TEXT anywhere in image or video.
 
+## ONE PICTURE PER SCENE — never a grid
+
+Each scene is **one single continuous image that then moves**, not a layout.
+
+Never ask for panels, a manga or comic page, split-screen, a diptych or
+triptych, a collage, a storyboard sheet, or "four separate vignettes". Two
+things being *side by side inside one room* is fine — a frame divided into
+boxes is not.
+
+Two reasons, and both were measured on real videos:
+
+- A grid is **static**. The clip made from it cannot move, so the viewer gets a
+  still slide in the middle of a moving video.
+- Panels come with **numbers and borders**. The image model draws "panel 1",
+  "panel 2" as visible digits, straight past the `no text, no numbers` rule at
+  the end of the prompt — a positive instruction always beats a negative one.
+
+If a line of narration really names several things, pick the ONE that carries
+the feeling and show that; or place them in a single space together — objects
+scattered on one desk, figures standing in one street.
+
 ## SCENE DIVISION — use the SRT indices
 
 - **<<MAX_SEC>> seconds is a HARD CEILING, not a target.** Work out each scene's
