@@ -1683,6 +1683,19 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     """
     khuon = k.prompt.get("4-do-dai.md", "")
     if not khuon.strip():
+        # ═══ THIẾU TỆP LỜI NHẮC THÌ PHẢI NÓI, ĐỪNG TẮT TRONG IM LẶNG ═══
+        #
+        # Bản 2.31.0 xoá `4-do-dai.md` khỏi bộ lời nhắc gọn, và dòng `return`
+        # này lặng lẽ vô hiệu hoá cả bước nắn độ dài. Không ai biết, cho tới khi
+        # hai lượt chạy thật ra kịch bản **dài 38% và 84%** so với mục tiêu —
+        # tức video 14 và 18 phút thay vì 10.
+        #
+        # Kiểm tra ngay nếu đọc dòng này khi đang đi tìm lỗi: bước nắn CHỈ chạy
+        # khi kênh có tệp `prompt/4-do-dai.md`.
+        if abs(len(ban_nhap) - k.ky_tu_muc_tieu) > k.ky_tu_muc_tieu * CHENH_CHO_PHEP:
+            bc.ghi("  (kênh thiếu prompt/4-do-dai.md nên không nắn độ dài "
+                   "được — bài đang {0} ký tự, nhắm {1})".format(
+                       len(ban_nhap), k.ky_tu_muc_tieu))
         return ban_nhap
 
     dich = k.ky_tu_muc_tieu

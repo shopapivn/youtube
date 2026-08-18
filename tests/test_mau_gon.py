@@ -24,10 +24,17 @@ class TestBoMauCoDu:
             assert os.path.isfile(p), ten
             assert os.path.getsize(p) > 200, ten
 
-    def test_KHONG_co_hai_buoc_da_bo(self):
-        """Giữ lại là bộ gọn không còn gọn — và kịch bản lại nhạt dần."""
-        for ten in ("4-do-dai.md", "5-hoan-thien.md"):
-            assert not os.path.isfile(os.path.join(MAU, "prompt", ten)), ten
+    def test_KHONG_co_buoc_doc_lai_lan_cuoi(self):
+        """Giữ lại là bộ gọn không còn gọn — và kịch bản lại nhạt dần.
+
+        `5-hoan-thien.md` là một lượt đọc lại cho mượt. Bỏ nó thì dây chuyền
+        chỉ **bỏ qua một bước tô điểm**, không mất phép kiểm nào.
+
+        Khác hẳn `4-do-dai.md`: bỏ tệp ấy là tắt luôn phép nắn độ dài, và điều
+        đó đã xảy ra thật — xem `TestKhongThieuBuocNao`.
+        """
+        assert not os.path.isfile(os.path.join(MAU, "prompt",
+                                               "5-hoan-thien.md"))
 
     def test_co_du_buoc_bat_buoc_cua_day_chuyen(self):
         from core.kenh import BUOC_BAT_BUOC
@@ -159,3 +166,58 @@ class TestDayChuyenChiuDuocBoGon:
         bc = BoiCanh(goc=".", kenh=KenhGia(), goi_chat=khong_duoc_goi,
                      on_log=lambda _d: None)
         assert _nan_do_dai(bc, None, KenhGia(), {}, "abc") == "abc"
+
+
+#: Những lời nhắc mà thiếu cũng KHÔNG tắt mất phép kiểm nào — chỉ bỏ qua một
+#: bước tô điểm. Danh sách này phải ngắn, và mỗi tên trong đó phải nêu được lý
+#: do vì sao thiếu nó là an toàn.
+#:
+#: `5-hoan-thien.md`: một lượt đọc lại cho mượt, và kết quả của nó chỉ được
+#: nhận nếu không làm độ dài tệ đi. Bỏ qua thì bài vẫn đủ và đúng tầm.
+BO_QUA_DUOC = {"5-hoan-thien.md"}
+
+
+class TestKhongThieuBuocNao:
+    """Thiếu một tệp lời nhắc thì một bước tắt trong im lặng — đã xảy ra thật.
+
+    Bản 2.31.0 xoá `4-do-dai.md` khỏi bộ gọn. `_nan_do_dai` mở đầu bằng:
+
+        khuon = k.prompt.get("4-do-dai.md", "")
+        if not khuon.strip():
+            return ban_nhap
+
+    Không ai biết cả bước nắn độ dài đã ngừng chạy, cho tới khi hai lượt chạy
+    thật ra kịch bản dài **38% và 84%** so với mục tiêu — video 14 và 18 phút
+    thay vì 10.
+    """
+
+    def _bo(self):
+        import os
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        d = os.path.join(goc, "CHANNEL", "_MAU-GON", "prompt")
+        return {t for t in os.listdir(d) if t.endswith(".md")}
+
+    def test_co_buoc_nan_do_dai(self):
+        assert "4-do-dai.md" in self._bo()
+
+    def test_co_du_cac_buoc_ma_ma_nguon_doi_hoi(self):
+        """Mỗi tên tệp mà `auto_khau` đi tìm đều phải có mặt trong bộ gọn."""
+        import os
+        import re
+
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(goc, "core", "auto_khau.py"),
+                  encoding="utf-8") as t:
+            ma = t.read()
+        # Chỉ những tệp mã lấy ra để CHẠY, không tính tên nằm trong chú thích.
+        can = set(re.findall(r'k\.prompt\.get\(\s*"([0-9][^"]+\.md)"', ma))
+        can |= set(re.findall(r'k\.prompt\[\s*"([0-9][^"]+\.md)"\s*\]', ma))
+        thieu = {t for t in can if t not in self._bo()} - BO_QUA_DUOC
+        assert not thieu, "bộ gọn thiếu: {0}".format(sorted(thieu))
+
+    def test_danh_sach_bo_qua_khong_phinh_ra(self):
+        """Mỗi tên thêm vào `BO_QUA_DUOC` là một bước có thể tắt trong im lặng.
+
+        Thêm thì phải cân nhắc, nên để nó ở đây cho thấy rõ số lượng.
+        """
+        assert BO_QUA_DUOC == {"5-hoan-thien.md"}
