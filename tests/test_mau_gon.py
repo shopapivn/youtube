@@ -328,3 +328,32 @@ class TestKhongChuTrongAnh:
         chu = " ".join(self._canh().split())
         assert "shape and gesture" in chu
         assert "held shut" in chu or "glowing blank" in chu
+
+
+class TestGiuMauNenSuotClip:
+    """Máy dựng clip trôi màu nền ra khỏi bản sắc kênh.
+
+    So ảnh gốc với khung CUỐI của clip trên hai video thật: ảnh về đúng nền kem
+    ấm của kênh, còn tới cuối clip thì nền đã thành xám xanh (cảnh 21), nâu đen
+    (cảnh 52), ô liu sẫm (cảnh 18) — ở phần lớn số clip.
+
+    `<<VIDEO_STYLE>>` vốn đã ghi *"warm cream paper grain texture"*, nhưng nó
+    đọc như một lời TẢ dáng vẻ chứ không phải lệnh GIỮ nguyên dáng vẻ ấy.
+    """
+
+    def _canh(self):
+        with open(os.path.join(MAU, "prompt", "7-canh.md"),
+                  encoding="utf-8") as t:
+            return t.read()
+
+    def test_duoi_video_bat_giu_nen(self):
+        chu = " ".join(self._canh().split())
+        assert "background keeps its original colour" in chu
+        assert "must not darken" in chu
+
+    def test_chi_dan_o_DUOI_VIDEO_chu_khong_phai_duoi_anh(self):
+        """Ảnh chỉ có một khung, không có gì để 'giữ suốt clip'."""
+        chu = " ".join(self._canh().split())
+        a = chu.index("image prompt tail")
+        b = chu.index("video prompt tail")
+        assert "background keeps its original colour" not in chu[a:b]

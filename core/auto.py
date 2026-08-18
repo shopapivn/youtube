@@ -76,6 +76,25 @@ KHAU: Sequence[tuple] = (
     ("dung", "Dựng video hoàn thiện", False, "8-video.mp4"),
 )
 
+#: Khâu nào hỏng thì **vẫn đi tiếp**, không chặn các khâu sau.
+#:
+#: ═══ MỘT ẢNH KHÁCH GỬI, 18/08/2026 ═══
+#:
+#: Sáu khâu đầu xong hết — 96 ảnh, 96 clip, tất cả đã trả tiền. Khâu 7 gặp mạng
+#: chập. Và vì khâu nào hỏng cũng dừng cả lượt, khâu 8 không bao giờ chạy:
+#: khách có đủ nguyên liệu cho một video mười phút mà **không có video nào**.
+#:
+#: Ảnh bìa là thứ để đăng lên YouTube, không phải một phần của video. Khâu dựng
+#: chỉ cần clip, tiếng và phụ đề — nó chưa từng đọc tới thư mục `7-thumbnail`.
+#: Không có lý gì để ba tấm ảnh bìa giữ cả cuốn phim làm con tin.
+#:
+#: ⚠ Đừng thêm khâu vào đây cho "đỡ phiền". Mọi khâu còn lại đều là ĐẦU VÀO của
+#: khâu sau: thiếu giọng đọc thì không có mốc phụ đề, thiếu phụ đề thì không
+#: cắt được cảnh, thiếu ảnh thì clip mất nhân vật. Đi tiếp trong những ca ấy là
+#: đốt tiền để dựng ra một thứ hỏng.
+KHAU_KHONG_CHAN: Sequence[str] = ("thumbnail",)
+
+
 MA_KHAU: Sequence[str] = tuple(k[0] for k in KHAU)
 _BANG = {k[0]: k for k in KHAU}
 
@@ -502,9 +521,15 @@ def chay(
             tt.loi = loi_cuoi
             tt.ket_thuc = time.time()
             bao_doi()
-            ghi("[HỎNG] Dừng ở “{0}”. Mọi thứ đã làm vẫn còn — sửa xong bấm Chạy "
-                "tiếp là nhặt đúng chỗ này.".format(ten_khau(ma)))
-            return luot
+            if ma in KHAU_KHONG_CHAN:
+                ghi("[BỎ QUA] “{0}” chưa xong, nhưng nó không chặn đường — đi "
+                    "tiếp. Xong xuôi bấm “Làm lại khâu này” là có."
+                    .format(ten_khau(ma)))
+                loi_cuoi = ""
+            else:
+                ghi("[HỎNG] Dừng ở “{0}”. Mọi thứ đã làm vẫn còn — sửa xong bấm "
+                    "Chạy tiếp là nhặt đúng chỗ này.".format(ten_khau(ma)))
+                return luot
         bao_doi()
         if dung_sau and ma == dung_sau:
             ghi("[DỪNG] Dừng sau “{0}” theo yêu cầu. Các khâu sau vẫn ở trạng thái "
@@ -513,6 +538,11 @@ def chay(
 
     if luot.xong_het:
         ghi("Xong cả tám khâu.")
+    else:
+        bo_dở = [m for m in luot.khau_dang_hong if m in KHAU_KHONG_CHAN]
+        if bo_dở and luot.tt("dung").trang_thai == XONG:
+            ghi("Video đã dựng xong. Còn “{0}” chưa được — bấm “Làm lại khâu "
+                "này” lúc nào cũng được.".format(ten_khau(bo_dở[0])))
     return luot
 
 
@@ -538,10 +568,15 @@ def _ngu_ngat_duoc(ngu: Callable[[float], None], giay: float,
 def tom_tat(luot: LuotChay) -> str:
     """Một câu nói lượt này đang ở đâu."""
     xong = sum(1 for m in MA_KHAU if luot.tt(m).trang_thai == XONG)
-    hong = luot.khau_dang_hong
+    # Khâu không chặn hỏng thì lượt chạy VẪN ĐI TIẾP, nên đừng nói "Dừng ở đó".
+    # Chỉ nói vậy khi nó là thứ thật sự đã chặn đường.
+    hong = [m for m in luot.khau_dang_hong if m not in KHAU_KHONG_CHAN]
+    bo_dở = [m for m in luot.khau_dang_hong if m in KHAU_KHONG_CHAN]
     if hong:
         return "Dừng ở “{0}”: {1}".format(
             ten_khau(hong[0]), luot.tt(hong[0]).loi or "không rõ lý do")
+    if bo_dở and luot.tt("dung").trang_thai == XONG:
+        return "Video đã dựng xong, riêng “{0}” chưa được — bấm “Làm lại khâu "                "này”.".format(ten_khau(bo_dở[0]))
     if luot.xong_het:
         return "Xong cả {0} khâu.".format(len(MA_KHAU))
     dang = [m for m in MA_KHAU if luot.tt(m).trang_thai == DANG]

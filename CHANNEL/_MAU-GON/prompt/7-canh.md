@@ -76,8 +76,16 @@ same: an image has no motion, so never put motion words in an image prompt.
   <<TY_LE_KHUNG>> composition, <<NEGATIVE_PROMPT>>, no text, no letters,
   no numbers, no watermark`
 - video prompt tail:
-  `, <<VIDEO_STYLE>>, <<TY_LE_KHUNG>>, no text, no letters, no numbers,
-  no watermark`
+  `, the background keeps its original colour and paper texture for the whole
+  clip and must not darken, grey out or shift hue, <<VIDEO_STYLE>>,
+  <<TY_LE_KHUNG>>, no text, no letters, no numbers, no watermark`
+
+  The hold-the-background clause is not decoration. Measured on two real videos:
+  the still image comes back in the channel's warm cream, and by the end of the
+  clip the engine has drifted the background to grey-blue, dark olive or near
+  black — in a majority of clips. `<<VIDEO_STYLE>>` already names the paper
+  texture and it is not enough on its own, because it reads as a description of
+  the look rather than an instruction to **hold** it.
 
 Absolutely NO TEXT anywhere in image or video.
 
