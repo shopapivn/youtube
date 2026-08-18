@@ -66,14 +66,33 @@ class TestLoiNhacViet:
             assert x in chu, x
 
     def test_buoc_sua_tu_cham_diem(self):
-        assert "Đã đạt chưa?" in self._doc("3-sua.md")
+        assert "ĐÃ ĐẠT CHƯA?" in self._doc("3-sua.md")
 
     def test_buoc_sua_nan_cho_hop_giong_doc(self):
-        """Giọng đọc đều đều và dính chữ là thứ người nghe nhận ra ngay."""
+        """Giọng đọc đều đều và dính chữ là thứ người nghe nhận ra ngay.
+
+        Câu chữ ở đây là NGUYÊN VĂN của chủ dự án, chép từ lời nhắc họ vẫn
+        dùng — đừng "viết lại cho hay hơn". Bản 18/08/2026 từng nới nó ra thành
+        mấy đoạn giải thích, và chủ dự án nói thẳng: *"làm đơn giản như dạng 2
+        prompt này đôi khi sẽ giúp kịch bản ok"*.
+        """
         chu = self._doc("3-sua.md")
-        for x in ("ElevenLabs", "KHÔNG đều đều", "KHÔNG liền nhau",
-                  "KHÔNG dính chữ"):
+        for x in ("ElevenLabs", "không bị đều đều", "KHÔNG liền nhau",
+                  "KHÔNG BỊ dính chữ"):
             assert x in chu, x
+
+    def test_buoc_sua_van_gon(self):
+        """Lời nhắc phình ra là đi ngược ý đã chốt. Ngưỡng để nhắc, không phải
+        để cấm — vượt thì đọc lại xem có thật cần không."""
+        assert len(self._doc("3-sua.md")) < 1200
+
+    def test_buoc_sua_van_chan_duoc_ca_AI_HOI_LAI(self):
+        """Giữ đúng MỘT dòng cho lỗi đã xảy ra thật (lượt R01, 18/08/2026):
+        tư liệu tiếng Việt + bản nháp tiếng Nhật khiến AI tưởng bị gửi nhầm và
+        hỏi lại, rồi tool đem câu hỏi ấy đi làm video 9 giây."""
+        chu = self._doc("3-sua.md")
+        assert "<<LANGUAGE>>" in chu
+        assert "khác tiếng" in chu and "Đừng hỏi lại" in chu
 
     def test_co_cho_dien_kich_ban_doi_thu(self):
         for ten in ("2-viet.md", "3-sua.md"):
