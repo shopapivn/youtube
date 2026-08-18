@@ -2498,11 +2498,32 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
     idempotency — thứ giữ cho chạy tiếp không trả tiền hai lần.
     """
     so_canh = int(c["scene_id"])
+    # ═══ KHÔNG CÓ ẢNH THÌ KHÔNG LÀM CLIP ═══
+    #
+    # Bản trước để `url_anh = ""` rồi vẫn bắn — tức sinh clip **không có ảnh
+    # tham chiếu nào**, không nhân vật, không phong cách kênh.
+    #
+    # Đo trên lượt chạy thật U01 ngày 18/08/2026: ảnh cảnh 18 bị cổng từ chối
+    # (`content_rejected`), nhưng clip 18 vẫn ra. Mở ba khung hình liền nhau
+    # xem thì cảnh 17 và 19 đúng phong cách kênh, còn cảnh 18 có một nhân vật
+    # **không có mặt** — đầu trống trơn, không mắt không miệng — trên nền xám
+    # nhợt thay vì kem ấm. Một clip lạc hẳn, ghép giữa hai cảnh đúng.
+    #
+    # Thiếu clip thì khâu dựng giữ khung của cảnh trước lâu thêm vài giây, gần
+    # như không ai nhận ra. Một clip sai phong cách thì ai cũng thấy. Nên thà
+    # thiếu còn hơn sai.
+    #
+    # Chặn ở ĐÂY chứ không ở nơi gọi: có hai nơi gọi, và `bat_clip` ở khâu ảnh
+    # vốn đã tự kiểm — chỉ khâu clip chạy riêng là quên. Đặt phép kiểm vào chỗ
+    # chung thì không nơi nào quên được nữa.
+    if not os.path.exists(anh):
+        raise LoiNoiDung(
+            "cảnh {0} chưa có ảnh nên chưa làm clip được — làm lại khâu ảnh "
+            "trước đã".format(so_canh))
     # Ảnh của chính cảnh này làm khung đầu — đây là thứ giữ cho nhân vật không
     # đổi mặt giữa các cảnh. Cổng nhận URL, không nhận đường dẫn máy — xem
     # `_url_anh_canh`.
-    url_anh = (_url_anh_canh(bc, luot, so_canh, anh)
-               if os.path.exists(anh) else "")
+    url_anh = _url_anh_canh(bc, luot, so_canh, anh)
 
     def goi_clip(dia_chi, hau_to=""):
         job = _tao_job(
