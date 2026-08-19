@@ -136,3 +136,68 @@ def test_moi_tab_deu_co_bai_huong_dan(cua_so):
 
     thieu = [k for k, _bt, _nh in TRANG if not co_bai(k)]
     assert not thieu, "chưa có bài hướng dẫn: {0}".format(thieu)
+
+
+# ── Hộp thoại cũng phải vừa màn hình ─────────────────────────────────────────
+#
+# Mấy bài trên chỉ soi các TRANG trong thanh bên. Hộp thoại nằm ngoài tầm với
+# của chúng, nên một hộp cao hơn màn hình sẽ lọt qua cả bộ test — và thứ bị cắt
+# đầu tiên luôn là hàng nút dưới cùng, tức đúng cái nút để bấm xong việc.
+#
+# Hộp "Tạo kênh mới" từng đòi 846px chiều cao lúc mới viết, trên màn hình laptop
+# 1366×768. Bài này bắt được ngay.
+
+
+@pytest.fixture(scope="module")
+def hop_tao_kenh(cua_so):
+    from ui_qt.tao_kenh import HopTaoKenh
+
+    cs, app = cua_so
+    hop = HopTaoKenh(cs, cs)
+    app.processEvents()
+    yield hop, app
+    hop.close()
+
+
+def test_hop_tao_kenh_vua_man_hinh(hop_tao_kenh):
+    hop, _app = hop_tao_kenh
+    goi = hop.minimumSizeHint()
+    assert goi.width() <= TRAN_RONG, "hộp Tạo kênh cần {0}px bề rộng".format(
+        goi.width())
+    assert goi.height() <= TRAN_CAO, "hộp Tạo kênh cần {0}px chiều cao".format(
+        goi.height())
+
+
+def test_hop_tao_kenh_co_du_ba_o_chon(hop_tao_kenh):
+    """Thiếu một ô là khuôn không ghép đủ ba mảnh."""
+    hop, _app = hop_tao_kenh
+    assert hop._chon_nganh.count() >= 1
+    assert hop._chon_ve.count() >= 3
+    assert hop._chon_vh.count() >= 3
+
+
+def test_hop_tao_kenh_hien_ten_tieng_viet_chu_khong_hien_ma(hop_tao_kenh):
+    """CLAUDE.md: không dùng từ kỹ thuật trên giao diện.
+
+    Để lọt mã thư mục (`ao-len-than`) lên ô chọn là khách nhìn thấy chữ không
+    dấu viết dính.
+    """
+    hop, _app = hop_tao_kenh
+    for o in (hop._chon_nganh, hop._chon_ve, hop._chon_vh):
+        for i in range(o.count()):
+            assert o.itemText(i) != o.itemData(i), o.itemText(i)
+
+
+def test_doi_khan_gia_thi_so_ky_tu_doi_theo(hop_tao_kenh):
+    """Số ký tự nhảy khi đổi tiếng — đó là cả điểm của dòng ước tính ấy.
+
+    `ky_tu_moi_phut` chênh gần ba lần giữa Nhật (298) và Anh (920). Hiện ra
+    thành số ký tự thì khách tự thấy khi nó vô lý.
+    """
+    hop, app = hop_tao_kenh
+    thay = set()
+    for i in range(hop._chon_vh.count()):
+        hop._chon_vh.setCurrentIndex(i)
+        app.processEvents()
+        thay.add(hop._nhan_dai.text())
+    assert len(thay) == hop._chon_vh.count(), thay

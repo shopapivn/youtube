@@ -1,0 +1,40 @@
+# ============================================================================
+#  NGÁCH TÂM LÝ — bộ lời nhắc và mấy con số mặc định
+# ============================================================================
+#  Ngách quyết định kênh **kể chuyện theo lối nào**. Nó mang theo tám tệp lời
+#  nhắc trong `prompt/` cạnh tệp này — đó mới là phần nặng.
+#
+#  Ngách KHÔNG quyết định kênh nhìn ra sao (đó là bộ vẽ) và cũng không quyết
+#  định kênh nói tiếng gì (đó là bộ văn hoá). Ba thứ ghép lại mới thành kênh.
+#
+#  Bộ lời nhắc này chép từ dây chuyền đã chạy thật, không phải ví dụ dựng cho
+#  có. Bốn kênh TL1–TL4 đang dùng đúng tám tệp này, từng byte một.
+# ============================================================================
+
+ten: "Tâm lý"
+mo_ta: "Chuyện tâm lý, chữa lành, hiểu mình. Một mạch lời dẫn, mỗi cảnh một ẩn dụ thị giác của đúng câu đang đọc."
+
+# ── Mấy con số mặc định của ngách ───────────────────────────────────────────
+#
+# Đây chỉ là điểm khởi hành. Hộp "Tạo kênh mới" cho sửa lại từng cái, và sau
+# khi tạo xong thì sửa tiếp trong Quản lý kênh.
+
+# Video dài mấy phút. Ba kênh mẫu đang để 10, 5 và 3 — cùng ngách, khác độ dài,
+# nên đây đúng là thứ người dùng chọn chứ không phải thứ ngách áp đặt.
+phut_muc_tieu: 8
+
+# veo3 = mỗi cảnh tối đa 8 giây; seedance = 10 giây.
+engine: veo3
+
+# Số ảnh bìa sinh ra để bạn chọn.
+so_thumbnail: 3
+
+# AI viết kịch bản.
+mo_hinh: claude-sonnet-5
+
+# Đốt phụ đề thẳng vào hình? true hợp Facebook/TikTok (người xem tắt tiếng),
+# false thì YouTube đọc được nội dung để đem video đi đề xuất.
+dot_phu_de: true
+
+# Nhạc còn bao nhiêu phần độ to so với giọng đọc. 0.12 = 12%.
+am_luong_nhac: 0.12

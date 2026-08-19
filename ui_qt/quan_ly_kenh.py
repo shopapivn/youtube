@@ -59,6 +59,10 @@ class HopQuanLyKenh(QDialog):
         self._chon = QComboBox()
         self._chon.setMinimumWidth(180)
         dau.addWidget(self._chon)
+        # "Tạo kênh mới" đứng TRƯỚC "Nhân bản": nó là đường đúng cho gần như
+        # mọi trường hợp. Nhân bản chỉ còn đúng một việc — làm bản thứ hai của
+        # một kênh đã sửa nhiều, thứ khuôn không dựng lại được.
+        dau.addWidget(nut_phu("Tạo kênh mới", self._tao_kenh, rong=150))
         dau.addWidget(nut_phu("Nhân bản", self._nhan_ban, rong=124))
         dau.addWidget(nut_phu("Mở thư mục", self._mo_thu_muc, rong=140))
         doc.addLayout(dau)
@@ -97,7 +101,7 @@ class HopQuanLyKenh(QDialog):
         self._o_prompt = {}
         ma = self.ma_dang_chon
         if not ma:
-            self._nhan_tt.setText("Chưa có kênh nào. Bấm “Nhân bản” để tạo.")
+            self._nhan_tt.setText("Chưa có kênh nào. Bấm “Tạo kênh mới”.")
             return
         thu_muc = duong_kenh(self._app.base_dir, ma)
 
@@ -344,6 +348,18 @@ class HopQuanLyKenh(QDialog):
         else:
             self._nhan_tt.setText("Kênh đủ điều kiện chạy.")
             self._nhan_tt.setStyleSheet("color:{0};".format(theme.XANH))
+
+    # ── Tạo kênh mới từ khuôn ────────────────────────────────────────────────
+
+    def _tao_kenh(self) -> None:
+        from .tao_kenh import HopTaoKenh  # noqa: PLC0415
+
+        hop = HopTaoKenh(self._app, self)
+        hop.exec_()
+        if not hop.ma_kenh_moi:
+            return
+        self._chon.addItem(hop.ma_kenh_moi)
+        self._chon.setCurrentText(hop.ma_kenh_moi)
 
     # ── Nhân bản ─────────────────────────────────────────────────────────────
 

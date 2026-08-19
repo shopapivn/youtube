@@ -1,0 +1,29 @@
+# ============================================================================
+#  BỘ VĂN HOÁ — kênh nói tiếng gì, cho người nước nào xem
+# ============================================================================
+#  Đây là NỬA VĂN HOÁ của `style.yaml`, cộng ba thứ đi kèm ngôn ngữ mà đặt sai
+#  là hỏng cả video:
+#
+#    ky_tu_moi_phut  quyết định kịch bản dài bao nhiêu. Nhật 298, Việt 832,
+#                    Anh 920 — chênh gần ba lần. Lấy nhầm số của tiếng khác là
+#                    ra video dài hoặc ngắn hơn ý muốn vài phút.
+#    chu_bia_hoa     tiếng Nhật/Hàn không có chữ hoa, để `true` là ra chữ hỏng.
+#    giong_van       lối xưng hô và giọng điệu của tiếng đó.
+#
+#  ⚠ ĐỔI GIỌNG ĐỌC THÌ PHẢI ĐO LẠI `ky_tu_moi_phut` — mỗi giọng một tốc độ.
+#  Cách đo: lấy số ký tự kịch bản chia cho số phút của tệp mp3 đọc ra.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+ten: "Anh / Mỹ"
+ngon_ngu: "en"
+giong_van: "English — natural, conversational, second person (you). Warm, direct, curious."
+ky_tu_moi_phut: 920
+chu_bia_hoa: true
+ghi_chu_do_dai: "Lấy từ kênh TL3-T3 đang chạy."
+audience_language: "English"
+audience_culture_note: "Design for English-speaking psychology and self-improvement viewers aged 20-40, primarily North American and British audiences. Use settings from modern Western daily life: cozy apartment living rooms with couch pillows and soft lamps, home office desks with journals and coffee, therapy-style armchairs in warm rooms, rainy windows with condensation, park benches under autumn trees, coffee shop corners with lattes, bedroom spaces with soft morning light, walking paths through nature. Emphasize concepts of self-care (active boundary-setting and rest as resistance), growth mindset (failure as learning), mindfulness (present-moment awareness), and emotional intelligence (naming and processing feelings). The white chalk on dark blackboard style evokes classic classroom teaching moments — a familiar educational aesthetic that makes complex psychology feel approachable and trustworthy, resonating with English-speaking audiences' nostalgia for insightful teachers and whiteboard wisdom. Props should include coffee mugs, journals with pens, cozy couch pillows, window frames with rain, small potted succulents, headphones on tables, therapy armchairs, scented candles, tote bags, water bottles, yoga mats. English-speaking audiences are familiar with therapy culture — show psychology through self-reflection moments: journaling, solo walks, deep breathing, quiet room time. Vulnerability is valued and shown through honest introspection, not performance."
+cultural_props: "coffee mug on desk, journal with pen, cozy couch pillow, window frame with rain, small potted succulent, headphones on table, therapy-style armchair, scented candle, tote bag on door hook, water bottle beside yoga mat"
+cultural_metaphors: "anxiety: room walls slowly closing inward while nv1 takes one centering breath to steady | stress: overflowing inbox shapes piling on tidy desk while nv1 sits overwhelmed | boundary: nv1 draws chalk circle on floor and steps calmly inside the protected space | connection: two coffee mugs steaming on shared kitchen table with warm morning light | letting_go: nv1 drops heavy overstuffed backpack onto floor and stands straighter with relief | loneliness: nv1 sits in window seat holding cold coffee mug watching rain alone at twilight | growth: small succulent on windowsill reaching toward morning light with one new leaf | courage: nv1 opens closed journal and begins writing first honest line with pen in hand | acceptance: nv1 sits on couch with messy blanket and holds warm mug with peaceful expression | forgiveness: nv1 places a second mug on the table next to theirs and waits with open posture"
+cultural_emotion_style: "English-speaking audiences value individual introspection, therapy-culture self-improvement, and healthy boundary-setting. Show emotions through personal space rituals: journaling with honest words, solo walks in nature, mindful breathing in quiet rooms, holding a warm mug as grounding. Vulnerability is shown through honest self-reflection — sitting with discomfort, naming emotions, allowing tears without performance. The aesthetic values cozy minimalism: soft lamps, neutral tones, clean surfaces with one meaningful object. Healing comes through naming the feeling, setting the boundary, and choosing rest. Growth mindset means showing the 'first small step' rather than dramatic transformation."

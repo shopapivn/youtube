@@ -47,12 +47,30 @@ phải đi tìm tệp bằng Notepad.
 
 ## Làm kênh mới
 
-Tab Tự động → **Quản lý kênh** → **Nhân bản**. Rồi sửa ba chỗ:
+Tab Tự động → **Tạo kênh mới**. Chọn ba ô:
 
-1. `kenh.yaml` — tiếng, độ dài, **giọng đọc**.
-2. `style.yaml` — phong cách hình và phần văn hoá. Đây là chỗ quyết định video
-   trông như của kênh bạn chứ không phải của kênh khác.
-3. `nv/nv1.png` — thay ảnh nhân vật.
+| ô | quyết định gì |
+|---|---|
+| **Ngách** | kể chuyện theo lối nào — mang theo tám tệp lời nhắc |
+| **Vẽ như thế nào** | kênh nhìn ra sao, kèm ảnh nhân vật hợp nét vẽ ấy |
+| **Khán giả** | nói tiếng gì, cho người nước nào xem |
+
+Đặt mã kênh, dán mã giọng đọc, bấm **Tạo kênh**. Xong — kênh chạy được ngay,
+không có tệp nào phải mở ra sửa tay.
+
+Hộp tạo kênh cho xem trước **ảnh nhân vật** của nét vẽ đang chọn, và hiện luôn
+kịch bản sẽ dài bao nhiêu ký tự. Muốn nhân vật riêng thì bấm *Dùng ảnh nhân vật
+riêng* và chọn ảnh của bạn.
+
+Sửa gì sau đó thì vào **Quản lý kênh**.
+
+> Nút **Nhân bản** vẫn còn, nhưng nó chỉ chép nguyên kênh cũ rồi để bạn tự sửa.
+> Dùng nó khi muốn bản thứ hai của một kênh đã sửa nhiều — thứ khuôn không dựng
+> lại được. Làm kênh mới thì dùng **Tạo kênh mới**.
+
+### Sửa khuôn, hoặc thêm nét vẽ của riêng bạn
+
+Khuôn nằm ở `_KHUON/`. Đọc `_KHUON/DOC-TRUOC.md` trước khi sửa.
 
 ### Hai con số hay bị bỏ qua
 

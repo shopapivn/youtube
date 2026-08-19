@@ -1,0 +1,29 @@
+# ============================================================================
+#  BỘ VĂN HOÁ — kênh nói tiếng gì, cho người nước nào xem
+# ============================================================================
+#  Đây là NỬA VĂN HOÁ của `style.yaml`, cộng ba thứ đi kèm ngôn ngữ mà đặt sai
+#  là hỏng cả video:
+#
+#    ky_tu_moi_phut  quyết định kịch bản dài bao nhiêu. Nhật 298, Việt 832,
+#                    Anh 920 — chênh gần ba lần. Lấy nhầm số của tiếng khác là
+#                    ra video dài hoặc ngắn hơn ý muốn vài phút.
+#    chu_bia_hoa     tiếng Nhật/Hàn không có chữ hoa, để `true` là ra chữ hỏng.
+#    giong_van       lối xưng hô và giọng điệu của tiếng đó.
+#
+#  ⚠ ĐỔI GIỌNG ĐỌC THÌ PHẢI ĐO LẠI `ky_tu_moi_phut` — mỗi giọng một tốc độ.
+#  Cách đo: lấy số ký tự kịch bản chia cho số phút của tệp mp3 đọc ra.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+ten: "Việt Nam"
+ngon_ngu: "vi"
+giong_van: "Vietnamese — natural, everyday, second person (bạn). Warm, close, curious."
+ky_tu_moi_phut: 832
+chu_bia_hoa: true
+ghi_chu_do_dai: "Lấy từ kênh TL2-T2 đang chạy."
+audience_language: "Vietnamese"
+audience_culture_note: "Design for Vietnamese psychology and self-improvement viewers aged 18-35. Use settings from Vietnamese daily life: small apartment rooms with tiled floors and open windows, front stoops (hiên nhà) with plastic chairs and potted plants, sidewalk cafe tables with iced coffee, wet market alleys at dawn, rice paddies at golden hour seen from a balcony, rooftop terraces with laundry lines and city view, small bedroom desks with desk lamps, family dining tables with rice bowls. Emphasize concepts of chịu đựng (quiet endurance as strength), hiếu thảo (filial piety and family duty), tình nghĩa (deep bonds of loyalty and gratitude), and an phận (acceptance of one's circumstances with grace). The simple hand-drawn pencil sketch style reflects Vietnamese 've tay' (hand-drawing) tradition — an intimate sketchbook aesthetic that feels personal and approachable to young Vietnamese viewers who value authentic, unpolished creative expression over digital perfection. Props should include ceramic tea cups, bicycles leaning on walls, balcony laundry, conical hats (nón lá) on hooks, small potted plants on windowsills, paper lanterns, woven mats (chiếu), wooden chopsticks on rice bowls. Vietnamese audiences value subtlety and emotional restraint in public but deep feeling in private. Show psychology through environmental storytelling: rain on tin roofs, quiet family spaces, making tea alone, sitting on the front stoop watching motorbikes pass. Perseverance and quiet endurance are deeply admired — show strength through stillness, not drama."
+cultural_props: "chen tra gom nho, xe dap dung ben hien, lan can ban cong voi quan ao phoi, non la treo tuong, chau cay nho tren bau cua, den long giay, chieu coi trai san, bat com go"
+cultural_metaphors: "anxiety: rain falling hard on tin roof while nv1 sits inside watching through open doorway | stress: too many baskets balanced on bamboo carrying pole across nv1 shoulders | boundary: nv1 draws bamboo curtain across doorway creating soft separation from outside | connection: two small ceramic tea cups on wooden tray near open window with morning light | letting_go: nv1 releases paper lantern floating upward from apartment balcony at dusk | loneliness: nv1 sits alone on front step of empty house at twilight with one plastic chair | growth: morning glory vine climbing rusty balcony railing reaching toward sunlight | courage: nv1 steps onto narrow wooden bridge over quiet stream in soft morning mist | acceptance: nv1 sits cross-legged on woven mat holding warm tea cup watching rain peacefully | forgiveness: nv1 places extra rice bowl and chopsticks at family table for an empty seat"
+cultural_emotion_style: "Vietnamese audiences value subtlety and emotional restraint in public but deep feeling in private spaces. Show psychology through environmental storytelling: rain on tin roofs as sadness, quiet family spaces as safety, making tea alone as self-care, sitting on the front stoop as contemplation. Express chịu đựng (quiet endurance) through still posture under pressure — not breaking down but quietly persisting. Vulnerability is shown through looking away, sitting alone with something small (a tea cup, a letter), or standing in rain without rushing inside. Tình nghĩa (deep bonds) is shown through preparing food for others, setting an extra place at the table, walking together in silence. The tropical visual palette — rain, warm humidity, green plants pushing through concrete — carries emotional weight. Healing comes through patience and the rhythms of daily life."

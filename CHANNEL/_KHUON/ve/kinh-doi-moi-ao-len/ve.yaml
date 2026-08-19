@@ -1,0 +1,27 @@
+# ============================================================================
+#  BỘ VẼ — kênh này nhìn ra sao
+# ============================================================================
+#  Suy thẳng từ ảnh nhân vật `nv1.png` nằm cạnh tệp này, ngày 19/08/2026.
+#  Đổi bộ vẽ mà giữ ảnh cũ là mỗi cảnh ra một nét khác nhau.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+ten: "Kính đồi mồi, áo len camel"
+mo_ta: "Nhân vật đeo kính gọng đồi mồi tròn, áo len cổ lọ tăm màu camel, quần kaki, giày nâu trắng. Nền kem, nét vẽ tay ấm."
+style_name: "tortoiseshell_glasses_camel_knit_cream"
+image_style: "Soft warm hand-drawn illustration psychology scene matching nv1.png — gender-neutral minimalist character with a large round white head, round tortoiseshell brown eyeglasses with visible speckled frame, two small dark oval eyes behind the lenses, soft pink blush on both cheeks, small curved closed smile, thin warm dark-brown outline of varying weight, camel tan ribbed knit turtleneck sweater with fine vertical rib lines, tan khaki trousers with rolled cuffs, brown and white low-top sneakers, plain white mitten hands, gentle cel shading with soft warm shadows, flat warm cream background, soft elliptical ground shadow, no real humans, no photorealism, no 3D, no readable text, no watermark"
+video_style: "Same soft warm hand-drawn illustration on flat cream ground, gentle considered motion, thin warm dark-brown outline with living line weight, camel ribbed knit and khaki trousers held consistent, round tortoiseshell glasses always present, soft cel shading, calm measured pacing in every movement"
+thumbnail_style: "Soft warm hand-drawn psychology YouTube thumbnail on flat cream ground, round white-headed character in round tortoiseshell glasses and camel ribbed turtleneck, clean cream negative space for the headline, one bold symbolic measuring or comparison prop, warm editorial composition with quiet confident tension"
+scene_plan_style: "Soft warm hand-drawn illustration language on cream ground, round-headed character in tortoiseshell glasses and camel knit, hand-drawn props with gentle cel shading, thoughtful measured body language, clear visual cause-and-effect, quiet competence rather than drama"
+palette: "flat warm cream background, camel tan knit, khaki trousers, tortoiseshell brown frames, warm brown outline, white character head and hands, soft pink blush, brown and white sneakers"
+negative_prompt: "no circular badge frame, no dashed border ring, no treadmill or gym equipment, no floating icon clusters, no gears coins books or laurel wreaths orbiting the character, no real humans, no photorealism, no 3D, no neon colors, no readable text, no watermark"
+reference_lock: "Use nv1.png as the exact identity and style anchor: large round white head, round tortoiseshell brown eyeglasses with speckled frame, small dark oval eyes, soft pink blush on both cheeks, small curved smile, camel tan ribbed knit turtleneck, tan khaki trousers with rolled cuffs, brown and white low-top sneakers, white mitten hands, thin warm dark-brown outline. Keep the glasses and the camel ribbed knit in every scene, no redesign, no color change."
+technical_suffix: "same exact soft warm hand-drawn channel style for figures, props, rooms and shadows, consistent nv1 reference when used, thin warm dark-brown outline, gentle cel shading, flat warm cream background, round tortoiseshell glasses always on the character, no readable text, no watermark"
+engagement_rules: "center the bespectacled character as the quietly capable anchor, let the glasses carry the thinking, use props that compare or measure two things side by side, keep cream negative space generous so the eye rests, let the mood say competent and underestimated rather than sad"
+default_character_prompt: "Soft warm hand-drawn psychology character, large round white head, round tortoiseshell brown eyeglasses, small dark oval eyes, soft pink blush on both cheeks, small curved smile, camel tan ribbed knit turtleneck sweater, tan khaki trousers with rolled cuffs, brown and white low-top sneakers, white mitten hands, thin warm dark-brown outline, gentle cel shading, flat warm cream background, no text, no watermark"
+default_character_lock: "gender-neutral minimalist hand-drawn cartoon, large round white head, round tortoiseshell glasses, blush cheeks, small curved smile, camel ribbed turtleneck, khaki trousers, brown and white sneakers, white mitten hands, warm cream background"
+thumb_text_style: "cream text on deep teal blocks (#1F6F6B)"
+thumb_text_shadow: "subtle depth shadow on the teal blocks only"
+thumb_text_hex: "#1F6F6B"
+thumb_text_font: "bold condensed sans with tall x-height"

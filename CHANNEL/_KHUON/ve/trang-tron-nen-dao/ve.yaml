@@ -1,0 +1,27 @@
+# ============================================================================
+#  BỘ VẼ — kênh này nhìn ra sao
+# ============================================================================
+#  Suy thẳng từ ảnh nhân vật `nv1.png` nằm cạnh tệp này, ngày 19/08/2026.
+#  Đổi bộ vẽ mà giữ ảnh cũ là mỗi cảnh ra một nét khác nhau.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+ten: "Trắng trơn, nền đào ấm"
+mo_ta: "Nhân vật trắng trơn không mặc gì, viền đen dày, nền chuyển sắc đào ấm có đồi và mây bo tròn. Vui, mở, dễ gần."
+style_name: "blank_white_figure_warm_peach"
+image_style: "Flat vector cartoon psychology illustration matching nv1.png — gender-neutral minimalist character with a large round pure-white head and a plain pure-white body with NO clothing at all, thick soft rounded black outline of even weight, two small solid black dot eyes, simple open smiling mouth with a small red tongue, short rounded limbs with mitten hands and simple rounded feet, warm peach to apricot gradient sky background, soft rounded distant hills in dusty rose and tan, puffy cream cloud shapes with rounded lobes, soft elliptical ground shadow under the character, clean flat color fills with no texture, no real humans, no photorealism, no 3D, no readable text, no watermark"
+video_style: "Same flat vector cartoon on warm peach gradient, smooth rounded cartoon motion, thick even black outline held steady, plain white unclothed character body, soft rolling hills and puffy cream clouds drifting slowly behind, flat color fills, simple rounded props in matching flat vector style"
+thumbnail_style: "Flat vector cartoon psychology YouTube thumbnail on warm peach gradient, plain white round-headed character with thick black outline and open smiling mouth, generous warm negative sky space for the headline, one bold rounded symbolic prop in flat color, soft rounded hills along the lower edge, warm inviting clickable composition"
+scene_plan_style: "Flat vector cartoon language on warm peach ground, plain white unclothed round-headed character, bold rounded flat-color props, wide open expressive gestures with the whole body, clear visual cause-and-effect, warmth and openness rather than gloom"
+palette: "warm peach sky, soft apricot gradient, dusty rose hills, tan earth, cream clouds, pure white character body, thick black outline, single red accent for the tongue"
+negative_prompt: "no clothing on the character, no hair, no real humans, no photorealism, no 3D, no gradients inside the character, no pencil or sketch texture, no dark or cold palette, no readable text, no watermark"
+reference_lock: "Use nv1.png as the exact identity and style anchor: large round pure-white head, plain pure-white body with NO clothing, two small solid black dot eyes, open smiling mouth with a small red tongue, thick soft rounded black outline of even weight, mitten hands, rounded feet. Keep the flat vector cartoon style and the warm peach gradient world in every scene, no redesign, never add clothes."
+technical_suffix: "same exact flat vector cartoon channel style for the figure, props, hills, clouds and shadows, consistent nv1 reference when used, thick even black outline, flat color fills, warm peach gradient background, no readable text, no watermark"
+engagement_rules: "center the plain white character as the open warm anchor, let the whole body gesture because the character has no clothing detail to read, use bold simple flat-color props that read at thumbnail size, keep the peach world consistent across every element, let the mood stay welcoming — this is the channel people come to in order to rest"
+default_character_prompt: "Flat vector cartoon psychology character, large round pure-white head with no hair, plain pure-white body with no clothing, two small solid black dot eyes, open smiling mouth with a small red tongue, short rounded limbs with mitten hands, thick soft rounded black outline, warm peach gradient background, flat color fill, no text, no watermark"
+default_character_lock: "gender-neutral minimalist flat vector cartoon, large round pure-white head, plain unclothed pure-white body, black dot eyes, open smile with red tongue, thick rounded black outline, no clothing, no hair, no color inside the body"
+thumb_text_style: "white text on deep warm-red rounded blocks (#D94F3D)"
+thumb_text_shadow: "soft warm drop shadow on the red blocks only"
+thumb_text_hex: "#D94F3D"
+thumb_text_font: "heavy rounded gothic sans, thick even strokes"
