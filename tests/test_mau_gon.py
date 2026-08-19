@@ -236,7 +236,9 @@ class TestKhongThieuBuocNao:
         assert "4-do-dai.md" in self._bo()
 
     def test_co_du_cac_buoc_ma_ma_nguon_doi_hoi(self):
-        """Mỗi tên tệp mà `auto_khau` đi tìm đều phải có mặt trong bộ gọn."""
+        """Mỗi tên tệp mà `auto_khau` đi tìm đều phải có mặt trong bộ gọn.
+
+        """
         import os
         import re
 

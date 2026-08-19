@@ -1,7 +1,7 @@
 # ============================================================================
-#  KÊNH TL4-T7 — 心理のとまり木 — tâm lý, người sống lệch nhịp
+#  KÊNH TL6-T7 — 心理の図鑑 — tâm lý, bạn là kiểu người nào
 # ============================================================================
-#  Tool tạo tệp này từ khuôn: ngách “Tâm lý” × bộ vẽ “Trắng trơn, nền đào ấm” × khán giả “Nhật Bản”.
+#  Tool tạo tệp này từ khuôn: ngách “Tâm lý” × bộ vẽ “Người que nét mảnh” × khán giả “Nhật Bản”.
 #  Sửa thoải mái — từ giờ đây là tệp của bạn, khuôn không đụng vào nữa.
 #
 #  ⚠ `ky_tu_moi_phut` đi theo GIỌNG ĐỌC, không theo ngôn ngữ chung chung.
@@ -12,13 +12,13 @@
 #  cửa: ví ShopAPI mà tool đã đăng nhập. Tool có bộ quét, thấy khoá là chặn.
 # ============================================================================
 
-ma: "TL4-T7"
-ten: "心理のとまり木 — tâm lý, người sống lệch nhịp"
+ma: "TL6-T7"
+ten: "心理の図鑑 — tâm lý, bạn là kiểu người nào"
 ngon_ngu: "ja"
 giong_van: "Japanese — natural, polite but conversational (ていねい体). Warm, intimate, curious."
 ky_tu_moi_phut: 298
 chu_bia_hoa: false
-voice_id: "b34JylakFZPlGS0BnwyY"
+voice_id: "Mv8AjrYZCBkdsmDHNwcB"
 phut_muc_tieu: 20
 engine: "veo3"
 so_thumbnail: 3

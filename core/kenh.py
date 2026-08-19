@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Optional
 
 __all__ = [
     "THU_MUC_KENH", "TEP_KENH", "TEP_STYLE", "BUOC_PROMPT",
+    "TEP_CHIEN_LUOC",
     "Kenh", "duong_kenh", "liet_ke_kenh", "doc_kenh", "kiem_kenh",
     "doc_yaml", "co_mui_khoa", "GIU_NGUYEN", "ten_khung",
 ]
@@ -46,6 +47,8 @@ THU_MUC_KENH = "CHANNEL"
 
 TEP_KENH = "kenh.yaml"
 TEP_STYLE = "style.yaml"
+#: Tệp khai chiến lược, chỉ có ở kênh dựng từ khuôn có chiến lược.
+TEP_CHIEN_LUOC = "chien-luoc.yaml"
 THU_MUC_NV = "nv"
 THU_MUC_PROMPT = "prompt"
 
@@ -165,6 +168,13 @@ class Kenh:
     am_luong_nhac: float = 0.12
 
     #: Toàn bộ `style.yaml`, giữ nguyên để đưa thẳng cho bước viết lời nhắc.
+    #: Nội dung `chien-luoc.yaml` nếu kênh dựng từ khuôn có chiến lược.
+    #: Rỗng nghĩa là kênh chạy đường mặc định (remake).
+    #:
+    #: Để ở đây chứ không để trong khuôn vì kênh phải TỰ CHỨA: mấy con số như
+    #: `tran_viet_lai` là thứ người dùng sẽ muốn nắn riêng cho từng kênh.
+    chien_luoc: Dict[str, Any] = field(default_factory=dict)
+
     style: Dict[str, Any] = field(default_factory=dict)
     #: Đường dẫn ảnh nhân vật tham chiếu (thường là `nv/nv1.png`).
     anh_nv: List[str] = field(default_factory=list)
@@ -310,6 +320,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         # hẳn giọng đọc — cả hai đều là gõ nhầm chứ không ai cố ý.
         am_luong_nhac=min(1.0, max(0.0, _so(cai.get("am_luong_nhac"), 0.12))),
         style=doc_yaml(os.path.join(thu_muc, TEP_STYLE)),
+        chien_luoc=doc_yaml(os.path.join(thu_muc, TEP_CHIEN_LUOC)),
         duong=thu_muc,
     )
     kenh.anh_nv = _anh_trong(os.path.join(thu_muc, THU_MUC_NV))

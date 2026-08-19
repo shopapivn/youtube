@@ -47,9 +47,43 @@ CHU_TRANG_THAI = {
     CHO: "chờ", DANG: "ĐANG CHẠY", XONG: "xong", HONG: "HỎNG",
     BO_QUA: "bỏ qua",
 }
+#: Tư liệu ngắn hơn ngần này thì chặn ngay, đừng chạy.
+#:
+#: Một lượt chạy thật ngày 18/08/2026 đem **218 ký tự** đi đọc thành giọng nói
+#: rồi làm tiếp — xem `tests/test_kich_ban_qua_ngan.py`. Chặn ở cửa vào rẻ hơn
+#: chặn ở giữa dây chuyền, vì tới giữa thì tiền đã đi.
+TU_LIEU_TOI_THIEU = 400
+
 MAU_TRANG_THAI = {
     XONG: theme.XANH, HONG: theme.DO, DANG: theme.VANG,
 }
+
+
+def kiem_tu_lieu(link: str, tu_lieu: str) -> tuple:
+    """Đầu vào của một lượt đã dùng được chưa. `("", "")` nghĩa là chạy được.
+
+    Trả về `(tiêu đề hộp báo, nội dung)` — hàm thuần, tách khỏi lớp giao diện
+    để kiểm được mà không phải dựng cửa sổ và không đụng vào `PROJECTS/`.
+
+    Một lượt cần **tư liệu**, lấy từ MỘT trong hai đường: link để tool tự tải
+    lời thoại, hoặc nội dung người dùng đưa thẳng. Trước 19/08/2026 link là bắt
+    buộc cứng, và điều đó chặn cả hai thứ: kênh sáng tác từ bài của chính khách,
+    lẫn ngày YouTube chặn máy (lỗi 429) khiến ba lượt chết trước cả lượt gọi AI
+    đầu tiên.
+    """
+    link = (link or "").strip()
+    tu_lieu = (tu_lieu or "").strip()
+    if not link and not tu_lieu:
+        return ("Chưa có tư liệu",
+                "Cần một trong hai: dán link video để tôi tự lấy lời thoại, "
+                "hoặc dán thẳng nội dung vào ô bên dưới.")
+    if tu_lieu and len(tu_lieu) < TU_LIEU_TOI_THIEU:
+        return ("Tư liệu quá ngắn",
+                "Mới có {0} ký tự. Từng đó không đủ để viết một kịch bản — "
+                "tôi sẽ chạy ra một bài rỗng rồi vẫn trừ tiền. Dán đầy đủ nội "
+                "dung vào, hoặc để trống ô này và dùng link."
+                .format(len(tu_lieu)))
+    return ("", "")
 
 
 def _dem_trong_khau(tt) -> str:
@@ -154,6 +188,7 @@ class TrangTuDong(QWidget):
         self._chon_kenh.setMinimumWidth(170)
         self._chon_kenh.currentTextChanged.connect(lambda _t: self._ve_kenh())
         hang.addWidget(self._chon_kenh)
+        hang.addWidget(nut_phu("Tạo kênh mới", self._tao_kenh, rong=150))
         hang.addWidget(nut_phu("Quản lý kênh", self._mo_quan_ly, rong=150))
         v.addLayout(hang)
 
@@ -177,10 +212,34 @@ class TrangTuDong(QWidget):
         self._nhan_kenh = self._phu("")
         v.addWidget(self._nhan_kenh)
 
-        v.addWidget(self._phu("Link video tư liệu (bắt buộc)"))
+        # ═══ TƯ LIỆU: MỘT TRONG HAI ĐƯỜNG, KHÔNG PHẢI BẮT BUỘC MỘT ═══
+        #
+        # Trước đây link là bắt buộc cứng. Hai chỗ hỏng vì thế:
+        #
+        #   · Kênh sáng tác từ nội dung của chính bạn không chạy nổi, dù dây
+        #     chuyền vốn ĐÃ đọc `0-tu-lieu.txt` nếu tệp ấy có sẵn — chỉ thiếu
+        #     đúng một đường để đưa nó vào.
+        #   · Ngày 19/08/2026 YouTube chặn máy này (lỗi 429) và cả ba lượt thử
+        #     chết ở khâu tải lời thoại, trước cả lượt gọi AI đầu tiên. Có ô
+        #     dán thì đã chạy được ngay.
+        v.addWidget(self._phu(
+            "Tư liệu — cần MỘT trong hai: dán link, hoặc đưa thẳng nội dung"))
         self._o_link = QLineEdit()
         self._o_link.setPlaceholderText("https://www.youtube.com/watch?v=…")
         v.addWidget(self._o_link)
+
+        self._o_tu_lieu = QPlainTextEdit()
+        self._o_tu_lieu.setPlaceholderText(
+            "…hoặc dán thẳng nội dung vào đây (lời thoại đối thủ, hoặc bài "
+            "của chính bạn). Có nội dung ở đây thì tôi bỏ qua link.")
+        self._o_tu_lieu.setFixedHeight(72)
+        v.addWidget(self._o_tu_lieu)
+
+        hang_tl = HangXuongDong()
+        hang_tl.addWidget(nut_phu("Chọn tệp .txt", self._chon_tu_lieu,
+                                  rong=150))
+        hang_tl.addWidget(nut_phu("Xoá tư liệu", self._xoa_tu_lieu, rong=130))
+        v.addLayout(hang_tl)
 
         v.addWidget(self._phu(
             "Tiêu đề và chữ ảnh bìa — bỏ trống thì tôi tự đặt"))
@@ -510,6 +569,22 @@ class TrangTuDong(QWidget):
         hop.exec_()
         self._nap_kenh()
 
+    def _tao_kenh(self) -> None:
+        """Tạo kênh mới rồi **chọn sẵn kênh ấy**.
+
+        Không chọn sẵn thì người dùng vừa tạo xong lại phải đi tìm nó trong ô
+        chọn — và ô ấy xếp theo bảng chữ cái nên kênh mới không nằm ở cuối.
+        """
+        from .tao_kenh import HopTaoKenh  # noqa: PLC0415
+
+        hop = HopTaoKenh(self._app, self)
+        hop.exec_()
+        self._nap_kenh()
+        if hop.ma_kenh_moi:
+            i = self._chon_kenh.findText(hop.ma_kenh_moi)
+            if i >= 0:
+                self._chon_kenh.setCurrentIndex(i)
+
     # ── Chạy ─────────────────────────────────────────────────────────────────
 
     def _ma_luot_moi(self, ma_kenh: str) -> str:
@@ -574,10 +649,10 @@ class TrangTuDong(QWidget):
                 self._chay_tiep()
                 return
         link = self._o_link.text().strip()
-        if not link:
-            self._app.show_message(
-                "Chưa có tư liệu",
-                "Dán link video tư liệu để tôi lấy nội dung làm gốc.")
+        tu_lieu = self._o_tu_lieu.toPlainText().strip()
+        tieu_de_loi, noi_dung_loi = kiem_tu_lieu(link, tu_lieu)
+        if tieu_de_loi:
+            self._app.show_message(tieu_de_loi, noi_dung_loi)
             return
         luot = moi_luot(self._app.base_dir, ma, self._ma_luot_moi(ma), {
             "link": link,
@@ -585,7 +660,40 @@ class TrangTuDong(QWidget):
             "chu_bia": self._o_chu_bia.text().strip(),
         })
         ghi_luot(luot)
+        if tu_lieu:
+            # Dây chuyền đọc `0-tu-lieu.txt` TRƯỚC khi ngó tới link, nên đặt
+            # tệp vào đây là khâu tải tự bỏ qua — không phải sửa gì trong lõi.
+            try:
+                with open(os.path.join(luot.thu_muc, "0-tu-lieu.txt"), "w",
+                          encoding="utf-8") as tep:
+                    tep.write(tu_lieu + "\n")
+            except OSError as loi:
+                self._app.show_message("Không lưu được tư liệu", str(loi))
+                return
+            self._ghi("Dùng tư liệu bạn đưa ({0} ký tự) — bỏ qua khâu tải."
+                      .format(len(tu_lieu)))
         self._bat_dau(luot)
+
+    def _chon_tu_lieu(self) -> None:
+        duong, _ = QFileDialog.getOpenFileName(
+            self, "Chọn tệp tư liệu", "",
+            "Tệp chữ (*.txt *.md);;Mọi loại file (*)")
+        if not duong:
+            return
+        for bang_ma in ("utf-8", "utf-8-sig", "cp1258", "latin-1"):
+            try:
+                with open(duong, "r", encoding=bang_ma) as tep:
+                    self._o_tu_lieu.setPlainText(tep.read())
+                break
+            except UnicodeDecodeError:
+                continue
+            except OSError as loi:
+                self._app.show_message("Không đọc được tệp", str(loi))
+                return
+        self._ghi("Đã nạp tư liệu từ {0}".format(duong))
+
+    def _xoa_tu_lieu(self) -> None:
+        self._o_tu_lieu.setPlainText("")
 
     def _chay_tiep(self) -> None:
         luot = self._doc()

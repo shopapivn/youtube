@@ -390,7 +390,7 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
                         phan_loai as _phan)
 
     for lan in range(4):
-        xin_nhip(bc.on_log, so_suat=2)
+        xin_nhip(bc.on_log, ngu=bc.ngu, so_suat=2)
         khoa_lan = khoa if lan == 0 else "{0}:r{1}".format(khoa, lan)
         try:
             return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
@@ -610,7 +610,7 @@ def _tao_job(bc: BoiCanh, ham: Callable, **kw):
     trừ tiền hai lần.
     """
     def mot_lan():
-        xin_nhip(bc.on_log)
+        xin_nhip(bc.on_log, ngu=bc.ngu)
         return ham(**kw)
 
     return goi_kien_nhan(mot_lan, on_log=bc.on_log, kiem_dung=bc.kiem_dung,
@@ -862,7 +862,7 @@ class SoTheoDoi:
         một job **đã trả tiền** và vẫn đang chạy ngon lành trên máy chủ.
         """
         try:
-            xin_nhip(self._bc.on_log)
+            xin_nhip(self._bc.on_log, ngu=self._bc.ngu)
             goi = _goi_dict(self._bc.client.jobs.retrieve(ma))
         except Exception:  # noqa: BLE001
             return None
@@ -891,7 +891,7 @@ class SoTheoDoi:
                 for _ in range(TRANG_MOI_LUOT):
                     if not con:
                         return
-                    xin_nhip(self._bc.on_log)
+                    xin_nhip(self._bc.on_log, ngu=self._bc.ngu)
                     trang = _goi_dict(self._bc.client.jobs.list(
                         status=trang_thai, limit=SO_MOI_TRANG, cursor=con_tro))
                     for m in (trang.get("data") or []):
@@ -965,7 +965,7 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
         bc.kiem_dung()
         _ngu_ngat(bc, cho)
         cho = min(10.0, cho * 1.4)
-        xin_nhip(bc.on_log)
+        xin_nhip(bc.on_log, ngu=bc.ngu)
         moi = bc.client.jobs.retrieve(ma)
         goi = moi.to_dict() if hasattr(moi, "to_dict") else dict(moi or {})
         trang_thai = str(goi.get("status") or "")
@@ -1180,7 +1180,7 @@ def _url_tham_chieu(bc: BoiCanh, bo_qua_nho: bool = False) -> List[str]:
     bc.ghi("  tải ảnh nhân vật lên (một lần cho cả kênh)…")
 
     def tai():
-        xin_nhip(bc.on_log, so_suat=SUAT_TAI_TEP)
+        xin_nhip(bc.on_log, ngu=bc.ngu, so_suat=SUAT_TAI_TEP)
         return bc.client.uploads.upload_file(duong)
 
     # Trước đây gọi thẳng. Việc tải ảnh cũng tính vào trần 60 lượt/phút, và
@@ -1274,7 +1274,7 @@ def _url_anh_canh(bc: BoiCanh, luot: LuotChay, so: int, duong: str,
                 return str(cu["url"])
 
     def tai():
-        xin_nhip(bc.on_log, so_suat=SUAT_TAI_TEP)
+        xin_nhip(bc.on_log, ngu=bc.ngu, so_suat=SUAT_TAI_TEP)
         return bc.client.uploads.upload_file(duong)
 
     url = goi_kien_nhan(tai, on_log=bc.on_log, kiem_dung=bc.kiem_dung,
@@ -1418,7 +1418,7 @@ def _tai_ket_qua_mot_lan(bc: BoiCanh, goi: Dict[str, Any], chi_so: int,
 
     os.makedirs(os.path.dirname(dich) or ".", exist_ok=True)
     tam = dich + ".tam"
-    xin_nhip(bc.on_log)
+    xin_nhip(bc.on_log, ngu=bc.ngu)
     dau = bc.client._build_headers(accept="*/*")  # noqa: SLF001
     da_nhan = 0
     with bc.client._http.stream("GET", dia_chi, headers=dau) as ph:  # noqa: SLF001

@@ -179,9 +179,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "tom_tat": "Dán link tư liệu, bấm một nút, ra video hoàn thiện.",
         "buoc": [
             "Chọn kênh. Kênh quyết định tiếng nói, giọng đọc, nhân vật và "
-            "phong cách hình.",
-            "Dán link video tư liệu. Điền tiêu đề và chữ ảnh bìa nếu bạn đã "
-            "nghĩ sẵn — bỏ trống thì tôi tự đặt.",
+            "phong cách hình. Chưa có kênh hợp ý? Bấm “Tạo kênh mới”.",
+            "Đưa tư liệu vào — CẦN MỘT TRONG HAI: dán link video để tôi tự "
+            "lấy lời thoại, hoặc dán thẳng nội dung vào ô bên dưới (bài của "
+            "bạn, hay lời thoại bạn đã có sẵn). Có nội dung thì tôi bỏ qua "
+            "link — và không phụ thuộc vào việc YouTube có cho tải hay không.",
+            "Điền tiêu đề và chữ ảnh bìa nếu bạn đã nghĩ sẵn — bỏ trống thì "
+            "tôi tự đặt.",
             "Bấm Chạy. Bảng tiến độ cho biết đang ở khâu nào.",
             "Hôm sau mở tool lên, ô “Lượt” đã sẵn lượt gần nhất của kênh. "
             "Chọn đúng lượt còn dở rồi bấm “Chạy tiếp”.",
@@ -205,8 +209,18 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "bản kịch bản không còn nữa.",
             "Dải ảnh dưới bảng hiện từng cảnh ngay khi tạo xong — bấm đúp một "
             "tấm là mở ảnh gốc, khỏi phải mở thư mục đi tìm.",
+            "Nút “Tạo kênh mới” ghép ba thứ thành một kênh: ngách (kể chuyện "
+            "theo lối nào), cách vẽ, và khán giả (nói tiếng gì). Chọn xong là "
+            "kênh chạy được ngay — bạn không phải mở tệp nào ra sửa tay.",
+            "Chọn khán giả là chọn luôn tốc độ đọc của tiếng ấy. Nhật 298 ký "
+            "tự mỗi phút, Việt 832, Anh 920 — chênh gần ba lần, và lấy nhầm số "
+            "của tiếng khác là ra video dài hoặc ngắn hơn ý muốn vài phút. Hộp "
+            "tạo kênh hiện sẵn kịch bản sẽ dài bao nhiêu ký tự để bạn thấy "
+            "trước.",
             "Nút “Quản lý kênh” cho sửa cả bảy lời nhắc và phong cách hình "
-            "ngay trong tool, và nhân bản kênh để làm kênh tiếng khác.",
+            "ngay trong tool. Nút “Nhân bản” chép nguyên một kênh — chỉ dùng "
+            "khi bạn muốn bản thứ hai của một kênh đã sửa nhiều; làm kênh mới "
+            "thì dùng “Tạo kênh mới”.",
             "Nhà cung cấp trả clip 1280×720, và trước đây video ra đúng cỡ đó. "
             "Muốn to hơn thì vào “Quản lý kênh” → thẻ “Dựng video” → chọn "
             "1080p, 1440p hay 4K. Không tốn thêm đồng nào, chỉ tốn thời gian "
