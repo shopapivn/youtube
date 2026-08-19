@@ -186,6 +186,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "link — và không phụ thuộc vào việc YouTube có cho tải hay không.",
             "Điền tiêu đề và chữ ảnh bìa nếu bạn đã nghĩ sẵn — bỏ trống thì "
             "tôi tự đặt.",
+            "Đã viết kịch bản ở chỗ khác rồi? Dán bài vào ô nội dung và bật "
+            "“Đây là kịch bản hoàn chỉnh”. Tôi bỏ qua khâu viết — không tốn "
+            "tiền khâu đó — và chạy thẳng từ khâu giọng đọc.",
             "Bấm Chạy. Bảng tiến độ cho biết đang ở khâu nào.",
             "Hôm sau mở tool lên, ô “Lượt” đã sẵn lượt gần nhất của kênh. "
             "Chọn đúng lượt còn dở rồi bấm “Chạy tiếp”.",

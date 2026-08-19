@@ -84,3 +84,53 @@ class TestNoiVaoLoiCuaDayChuyen:
         assert doc_tu_lieu < dung_link
         # …và chỉ đi tải khi CHƯA có tư liệu.
         assert "if not tu_lieu and link:" in ma
+
+
+class TestBaiDaVietXong:
+    """TL6: kịch bản viết ở chỗ khác, ưng rồi mới mang sang.
+
+    Trước đây không có đường nào đưa nó vào. "Nạp file có sẵn" đòi phải có lượt
+    chạy trước; mà mở lượt lại đòi tư liệu — người đã có bài rồi thì lấy đâu ra
+    tư liệu. Vòng tròn.
+    """
+
+    def test_bai_du_dai_thi_chay_duoc_ma_KHONG_can_link(self):
+        assert kiem_tu_lieu("", DU_DAI, True) == ("", "")
+
+    def test_danh_dau_ma_de_trong_thi_chan(self):
+        tieu_de, noi_dung = kiem_tu_lieu("", "", True)
+        assert tieu_de == "Chưa có kịch bản"
+        assert "kịch bản hoàn chỉnh" in noi_dung
+
+    def test_link_khong_cuu_duoc_o_trong(self):
+        """Bật ô này thì link vô nghĩa — không có gì để tải, không có khâu viết."""
+        assert kiem_tu_lieu(LINK, "", True)[0] == "Chưa có kịch bản"
+
+    def test_bai_qua_ngan_thi_chan(self):
+        tieu_de, noi_dung = kiem_tu_lieu("", "あ" * 100, True)
+        assert tieu_de == "Kịch bản quá ngắn"
+        assert "100" in noi_dung
+
+
+class TestKhauAnhBiaVanCoChuDeDat:
+    def test_khau_anh_bia_doc_1_tieu_de_txt(self):
+        """Bỏ qua khâu viết thì không ai ghi `1-tieu-de.txt`.
+
+        Khâu ảnh bìa đọc tệp ấy để biết đặt chữ gì lên ảnh — thiếu nó thì ba
+        tấm ảnh bìa ra chữ rỗng, mà mãi tới khâu 7 mới lộ. Nên tab Tự động
+        phải tự ghi nó khi nạp bài có sẵn.
+        """
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(goc, "core", "auto_khau.py"),
+                  encoding="utf-8") as t:
+            assert '"1-tieu-de.txt"' in t.read()
+        with open(os.path.join(goc, "ui_qt", "trang_auto.py"),
+                  encoding="utf-8") as t:
+            trang = t.read()
+        khuc = trang[trang.index("def _nap_kich_ban_san"):]
+        khuc = khuc[:khuc.index("\n    def ", 10)]
+        assert '"1-kich-ban.txt"' in khuc
+        assert '"1-tieu-de.txt"' in khuc
+        assert "TITLE:" in khuc and "THUMB:" in khuc
+        # Không có tiêu đề thì lấy dòng đầu của chính bài — đừng để rỗng.
+        assert "splitlines" in khuc

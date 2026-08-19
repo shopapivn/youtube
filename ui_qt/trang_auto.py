@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QFileDialog, QHeaderView, QLineEdit, QMessageBox,
+    QCheckBox, QComboBox, QFileDialog, QHeaderView, QLineEdit, QMessageBox,
     QPlainTextEdit, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -59,8 +59,12 @@ MAU_TRANG_THAI = {
 }
 
 
-def kiem_tu_lieu(link: str, tu_lieu: str) -> tuple:
+def kiem_tu_lieu(link: str, tu_lieu: str, la_kich_ban: bool = False) -> tuple:
     """Đầu vào của một lượt đã dùng được chưa. `("", "")` nghĩa là chạy được.
+
+    `la_kich_ban=True` khi thứ dán vào **là bài đã viết xong**, không phải tư
+    liệu. Lúc ấy link vô nghĩa: không có gì để tải, và cũng không có khâu viết
+    nào chạy.
 
     Trả về `(tiêu đề hộp báo, nội dung)` — hàm thuần, tách khỏi lớp giao diện
     để kiểm được mà không phải dựng cửa sổ và không đụng vào `PROJECTS/`.
@@ -73,6 +77,16 @@ def kiem_tu_lieu(link: str, tu_lieu: str) -> tuple:
     """
     link = (link or "").strip()
     tu_lieu = (tu_lieu or "").strip()
+    if la_kich_ban:
+        if not tu_lieu:
+            return ("Chưa có kịch bản",
+                    "Bạn đã đánh dấu “Đây là kịch bản hoàn chỉnh” nhưng ô nội "
+                    "dung đang trống. Dán bài vào, hoặc bấm “Chọn tệp .txt”.")
+        if len(tu_lieu) < TU_LIEU_TOI_THIEU:
+            return ("Kịch bản quá ngắn",
+                    "Mới có {0} ký tự. Từng đó đem đi đọc thành giọng nói ra "
+                    "một video vài chục giây.".format(len(tu_lieu)))
+        return ("", "")
     if not link and not tu_lieu:
         return ("Chưa có tư liệu",
                 "Cần một trong hai: dán link video để tôi tự lấy lời thoại, "
@@ -239,6 +253,18 @@ class TrangTuDong(QWidget):
         hang_tl.addWidget(nut_phu("Chọn tệp .txt", self._chon_tu_lieu,
                                   rong=150))
         hang_tl.addWidget(nut_phu("Xoá tư liệu", self._xoa_tu_lieu, rong=130))
+        # ═══ BÀI ĐÃ VIẾT XONG THÌ ĐỪNG VIẾT LẠI ═══
+        #
+        # Người viết kịch bản ở chỗ khác, ưng rồi mới mang sang đây. Trước đây
+        # không có đường nào đưa nó vào: "Nạp file có sẵn" đòi phải có lượt
+        # chạy trước, mà mở lượt lại đòi tư liệu — mà họ có bài rồi thì lấy đâu
+        # ra tư liệu. Vòng tròn.
+        self._o_la_kich_ban = QCheckBox("Đây là kịch bản hoàn chỉnh")
+        self._o_la_kich_ban.setToolTip(
+            "Bật khi thứ bạn dán vào là BÀI ĐÃ VIẾT XONG, không phải tư liệu.\n"
+            "Tôi bỏ qua khâu viết kịch bản — không tốn tiền khâu đó — và chạy "
+            "thẳng từ khâu giọng đọc.")
+        hang_tl.addWidget(self._o_la_kich_ban)
         v.addLayout(hang_tl)
 
         v.addWidget(self._phu(
@@ -650,29 +676,63 @@ class TrangTuDong(QWidget):
                 return
         link = self._o_link.text().strip()
         tu_lieu = self._o_tu_lieu.toPlainText().strip()
-        tieu_de_loi, noi_dung_loi = kiem_tu_lieu(link, tu_lieu)
+        la_kich_ban = self._o_la_kich_ban.isChecked()
+        tieu_de_loi, noi_dung_loi = kiem_tu_lieu(link, tu_lieu, la_kich_ban)
         if tieu_de_loi:
             self._app.show_message(tieu_de_loi, noi_dung_loi)
             return
+        tieu_de = self._o_tieu_de.text().strip()
+        chu_bia = self._o_chu_bia.text().strip()
         luot = moi_luot(self._app.base_dir, ma, self._ma_luot_moi(ma), {
-            "link": link,
-            "tieu_de": self._o_tieu_de.text().strip(),
-            "chu_bia": self._o_chu_bia.text().strip(),
+            "link": link, "tieu_de": tieu_de, "chu_bia": chu_bia,
         })
         ghi_luot(luot)
-        if tu_lieu:
-            # Dây chuyền đọc `0-tu-lieu.txt` TRƯỚC khi ngó tới link, nên đặt
-            # tệp vào đây là khâu tải tự bỏ qua — không phải sửa gì trong lõi.
-            try:
-                with open(os.path.join(luot.thu_muc, "0-tu-lieu.txt"), "w",
-                          encoding="utf-8") as tep:
-                    tep.write(tu_lieu + "\n")
-            except OSError as loi:
-                self._app.show_message("Không lưu được tư liệu", str(loi))
-                return
-            self._ghi("Dùng tư liệu bạn đưa ({0} ký tự) — bỏ qua khâu tải."
-                      .format(len(tu_lieu)))
+        try:
+            if la_kich_ban:
+                self._nap_kich_ban_san(luot, tu_lieu, tieu_de, chu_bia)
+            elif tu_lieu:
+                # Dây chuyền đọc `0-tu-lieu.txt` TRƯỚC khi ngó tới link, nên
+                # đặt tệp vào đây là khâu tải tự bỏ qua — không sửa gì trong lõi.
+                self._ghi_tep(luot, "0-tu-lieu.txt", tu_lieu)
+                self._ghi("Dùng tư liệu bạn đưa ({0} ký tự) — bỏ qua khâu tải."
+                          .format(len(tu_lieu)))
+        except OSError as loi:
+            self._app.show_message("Không lưu được nội dung", str(loi))
+            return
         self._bat_dau(luot)
+
+    @staticmethod
+    def _ghi_tep(luot: LuotChay, ten: str, chu: str) -> None:
+        with open(os.path.join(luot.thu_muc, ten), "w",
+                  encoding="utf-8") as tep:
+            tep.write(chu.rstrip("\n") + "\n")
+
+    def _nap_kich_ban_san(self, luot: LuotChay, bai: str, tieu_de: str,
+                          chu_bia: str) -> None:
+        """Đặt bài đã viết xong vào lượt, rồi đánh dấu khâu viết là đã xong.
+
+        Khâu ảnh bìa đọc `1-tieu-de.txt` để biết đặt chữ gì lên ảnh. Bỏ qua
+        khâu viết thì không ai ghi tệp ấy, nên phải ghi ở đây — thiếu nó thì
+        ba tấm ảnh bìa ra chữ rỗng, mà mãi tới khâu 7 mới lộ.
+
+        Không có tiêu đề thì lấy dòng đầu của chính bài, y như khâu viết vẫn
+        làm khi kênh không có lời nhắc đặt tên. Xấu, nhưng thật — và sửa được
+        ở ô Tiêu đề trước khi chạy.
+        """
+        self._ghi_tep(luot, "1-kich-ban.txt", bai)
+        dong_dau = next((d.strip() for d in bai.splitlines() if d.strip()), "")
+        tieu_de = tieu_de or dong_dau[:80]
+        chu_bia = chu_bia or tieu_de[:20]
+        self._ghi_tep(luot, "1-tieu-de.txt",
+                      "TITLE: {0}\nTHUMB: {1}".format(tieu_de, chu_bia))
+        tt = luot.tt("kich-ban")
+        tt.trang_thai = XONG
+        tt.loi = ""
+        tt.ghi_chu["nap_san"] = "dán thẳng ở tab Tự động"
+        tt.ghi_chu["so_ky_tu"] = len(bai)
+        ghi_luot(luot)
+        self._ghi("Dùng kịch bản bạn đưa ({0} ký tự) — bỏ qua khâu viết, "
+                  "chạy thẳng từ khâu giọng đọc.".format(len(bai)))
 
     def _chon_tu_lieu(self) -> None:
         duong, _ = QFileDialog.getOpenFileName(
