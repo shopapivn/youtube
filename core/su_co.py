@@ -40,7 +40,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple
 __all__ = [
     "dau_vet",
     "CHO_TIEP",
-    "KHOA_DA_DUNG", "TAM_NGHI", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
+    "KHOA_DA_DUNG", "KHOA_LECH", "TAM_NGHI", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
     "CHET", "NHA_MAY_NGHI", "LoiNoiDung", "LoiTaiVe",
     "phan_loai", "nen_thu_lai", "nhip_cho", "mo_ta", "goi_kien_nhan",
     "dat_tran_moi_phut",
@@ -75,6 +75,28 @@ CHO_TIEP = "cho-tiep"
 #: kịch bản đo được 769 giây). Rút ngắn là quay về đúng cái bẫy cũ, chỉ đổi
 #: mặt: bỏ dở một bài đang viết rồi đặt lại từ đầu.
 KHOA_DA_DUNG = "khoa-da-dung"
+
+#: **Khoá đã dùng cho một yêu cầu KHÁC NỘI DUNG.** Đợi bao lâu cũng vô ích.
+#:
+#: ═══ VÌ SAO PHẢI TÁCH KHỎI `KHOA_DA_DUNG` ═══
+#:
+#: Cổng trả `409 idempotency_conflict` cho hai tình huống nghe giống nhau mà
+#: cách xử ngược hẳn nhau:
+#:
+#:   "…đang được xử lý, đợi rồi kiểm tra lại"      -> KHOA_DA_DUNG: đợi, giữ
+#:        việc CÓ THẬT và đang chạy; hỏi lại đúng     khoá cũ, lấy lại bài đã
+#:        khoá ấy là lấy được bài đã trả tiền.        trả tiền.
+#:
+#:   "…đã được dùng cho một yêu cầu có NỘI DUNG      -> loại này: đổi khoá NGAY.
+#:    KHÁC. Hãy dùng khoá mới cho yêu cầu mới"        Không có bài nào để đợi.
+#:
+#: Gộp chung là tool ngồi đợi hết 14 nhịp của `KHOA_DA_DUNG` — **hơn 22 phút**
+#: — cho một thứ máy chủ đã nói thẳng là sẽ không bao giờ tự khỏi. Đo thật
+#: 19/08/2026: một lượt chạy TL5 kẹt đúng 25 phút ở đây rồi mới đổi khoá.
+#:
+#: Nhịp rỗng nên `nhip_cho` trả 0, và loại này KHÔNG nằm trong `_DOI_GIU_KHOA`
+#: của `goi_van_ban` — nên nó rơi thẳng xuống đường đổi khoá.
+KHOA_LECH = "khoa-lech"
 
 #: Máy chủ trục trặc tạm, chưa nhận được việc. Chưa trừ tiền. Đợi rồi thử lại.
 TAM_NGHI = "tam-nghi"
@@ -125,6 +147,11 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
     # Kho tệp tạm đầy.
     (HET_KHO, ("vượt hạn mức lưu trữ", "hạn mức lưu trữ", "storage quota",
                "quota exceeded")),
+    # Khoá lệch nội dung — PHẢI đứng TRƯỚC `KHOA_DA_DUNG`, vì câu báo của nó
+    # cũng chứa chữ "idempotency" và xếp sau là rơi vào nhóm ngồi đợi 22 phút.
+    (KHOA_LECH, ("nội dung khác", "khoá mới cho yêu cầu mới", "dùng khoá mới",
+                 "different request", "different payload", "different body",
+                 "different parameters")),
     # Khoá này đang có một việc chạy dở. Đợi rồi hỏi lại ĐÚNG khoá ấy là lấy
     # được kết quả — xem ghi chú dài ở `KHOA_DA_DUNG`.
     (KHOA_DA_DUNG, ("idempotency-key", "idempotency key", "idempotencyconflict",
@@ -192,6 +219,8 @@ _NHIP = {
     # dài. Tổng ~22 phút, đủ vượt khâu chậm nhất đo được (769 giây). Đây là
     # đường LẤY LẠI bài đã trả tiền, nên kiên nhẫn ở đây đáng giá.
     KHOA_DA_DUNG: (4, 6, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 300, 300),
+    # Rỗng: đợi không bao giờ giúp, phải đổi khoá.
+    KHOA_LECH: (),
     TAM_NGHI: (15, 30, 60, 60, 90, 120, 120, 180, 180),
     CHAM_LAI: (30, 60, 120, 180, 240, 300),
     NHA_MAY_NGHI: (60, 120, 180, 300, 300),
@@ -204,6 +233,7 @@ _NHIP = {
 _MO_TA = {
     CHO_TIEP: "máy chủ đang làm dở việc này",
     KHOA_DA_DUNG: "việc này đang chạy dở, đang đợi lấy lại kết quả",
+    KHOA_LECH: "khoá này đã dùng cho một yêu cầu khác — đổi khoá rồi gửi lại",
     TAM_NGHI: "máy chủ trục trặc tạm — chưa bị trừ tiền",
     CHAM_LAI: "đang gọi quá dày, phải chậm lại",
     NOI_DUNG: "máy chủ trả về nội dung không dùng được",

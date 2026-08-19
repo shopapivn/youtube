@@ -135,6 +135,11 @@ class TestDungDungLuc:
 
 
 class _Luot:
+    # `ma_kenh` phải có: khoá chống-trùng mang cả mã kênh từ 19/08/2026, vì hai
+    # kênh cùng đánh số lượt từ 0001 thì đâm vào nhau. Bản giả thiếu trường mà
+    # `LuotChay` thật có là bản giả nói dối — và nó đã làm sáu phép kiểm ở đây
+    # đỏ lên đúng lúc thêm trường ấy.
+    ma_kenh = "K99"
     ma_luot = "T99"
     thu_muc = "."
 

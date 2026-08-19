@@ -1194,6 +1194,25 @@ def _url_tham_chieu(bc: BoiCanh, bo_qua_nho: bool = False) -> List[str]:
     return [str(url)]
 
 
+def _khoa_ascii(tho: str) -> str:
+    """Ép khoá về thuần ASCII. Một bản duy nhất cho mọi loại khoá.
+
+    Mã kênh do người dùng đặt, mà `kiem_ma_kenh` chỉ chặn mấy ký tự Windows
+    cấm — chữ có dấu vẫn lọt. Từ khi khoá mang cả mã kênh thì đây không còn là
+    rủi ro xa: một kênh đặt tên "Kênh Việt" là đủ làm chết mọi lời gọi.
+    """
+    return tho.encode("ascii", "replace").decode("ascii").replace("?", "-")
+
+
+def _khoa_chat(luot: LuotChay, buoc: str) -> str:
+    """Idempotency-Key cho một lượt gọi viết chữ.
+
+    Mang cả **mã kênh** chứ không chỉ mã lượt — xem ghi chú ở `khoa_viec`.
+    """
+    return _khoa_ascii("{0}:{1}:chat:{2}".format(
+        luot.ma_kenh or "?", luot.ma_luot, buoc))
+
+
 def khoa_viec(luot: LuotChay, viec: str, so: Any, *dau_vao: Any) -> str:
     """Idempotency-Key cho một việc. **Phủ cả đầu vào của việc ấy.**
 
@@ -1217,7 +1236,15 @@ def khoa_viec(luot: LuotChay, viec: str, so: Any, *dau_vao: Any) -> str:
 
     van = "|".join(str(m) for m in dau_vao)
     dau = hashlib.sha256(van.encode("utf-8")).hexdigest()[:10]
-    tho = "{0}:{1}:{2}:{3}".format(luot.ma_luot, viec, so, dau)
+    # ═══ KHOÁ PHẢI MANG CẢ MÃ KÊNH ═══
+    #
+    # Mọi kênh đều đánh số lượt từ `0001`, nên khoá chỉ có mã lượt là kênh thứ
+    # hai đâm thẳng vào kênh thứ nhất. Đo thật 19/08/2026: lượt `0001` của
+    # TL5-T7 va vào lượt `0001` của TL4-T7, cổng trả `409 idempotency_conflict`
+    # và lượt chạy kẹt 25 phút. Với khách vừa tạo ba kênh mới thì đây không
+    # phải ca hiếm — nó dính ngay từ lượt đầu tiên của kênh thứ hai.
+    tho = "{0}:{1}:{2}:{3}:{4}".format(luot.ma_kenh or "?", luot.ma_luot,
+                                       viec, so, dau)
     # ═══ KHOÁ PHẢI THUẦN ASCII ═══
     #
     # Idempotency-Key đi trong **header HTTP**, mà header chỉ nhận ASCII. Lọt
@@ -1228,7 +1255,11 @@ def khoa_viec(luot: LuotChay, viec: str, so: Any, *dau_vao: Any) -> str:
     # Hôm nay mã lượt là `L01`, `0001` — toàn ASCII. Nhưng mã lượt do người
     # dùng đặt (tab Tự động sinh theo số thứ tự, còn chạy tay thì tuỳ), và một
     # cái tên kênh có dấu là đủ làm hỏng cả mẻ. Chặn ngay tại đây rẻ hơn nhiều.
-    return tho.encode("ascii", "replace").decode("ascii").replace("?", "-")
+    #
+    # Từ 19/08/2026 phép này dùng chung với khoá viết chữ — xem `_khoa_ascii`.
+    # Khoá viết chữ từng dựng riêng ở nơi khác và bỏ sót đúng phép này, nên nó
+    # là chỗ duy nhất trong tool còn có thể lọt chữ có dấu vào header.
+    return _khoa_ascii(tho)
 
 
 #: Nhớ URL của ảnh từng cảnh, ở cấp LƯỢT (mỗi lượt một bộ ảnh riêng).
@@ -1522,7 +1553,7 @@ def _khau_kich_ban(bc: BoiCanh):
             bc.ghi("  đang đặt tiêu đề…")
             tra = _goi(bc, _thay(khuon_tieu_de, dict(
                 chung, COMPETITOR_TITLE=luot.dau_vao.get("tieu_de_doi_thu", ""))),
-                "{0}:chat:tieu-de".format(luot.ma_luot))
+                _khoa_chat(luot, "tieu-de"))
             t, b = _doc_tieu_de(tra)
             tieu_de = tieu_de or t
             chu_bia = chu_bia or b
@@ -1563,7 +1594,7 @@ def _khau_kich_ban(bc: BoiCanh):
                 bc.ghi("  {0}…".format(nhan))
                 ban_nhap = _goi(
                     bc, _thay(khuon, dict(chung, DRAFT=ban_nhap)),
-                    "{0}:chat:{1}".format(luot.ma_luot, ten)).strip()
+                    _khoa_chat(luot, ten)).strip()
                 if not ban_nhap:
                     raise RuntimeError("bước “{0}” trả về rỗng".format(nhan))
                 _ghi_chu(nhap, ban_nhap + "\n")
@@ -1630,7 +1661,7 @@ def _khau_kich_ban(bc: BoiCanh):
                 seo = _goi(bc, _thay(k.prompt["6-seo.md"], dict(
                     chung, SCRIPT_OPENING=ban_nhap[:1500],
                     CHANNEL_KEYWORDS=k.style.get("style_name", ""))),
-                    "{0}:chat:seo".format(luot.ma_luot))
+                    _khoa_chat(luot, "seo"))
                 _ghi_chu(duong_seo, seo)
             except Exception as loi:  # noqa: BLE001
                 bc.ghi("  (bỏ qua SEO: {0})".format(str(loi)[:100]))
@@ -1733,7 +1764,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                 chung, DRAFT=nguon, CHARS=khai,
                 CHARS_NOW=len(nguon), CHARS_DELTA=thieu,
                 LENGTH_TASK=viec)),
-                "{0}:chat:4-do-dai.md:v{1}".format(luot.ma_luot, vong)).strip()
+                _khoa_chat(luot, "4-do-dai.md:v{0}".format(vong))).strip()
         except Exception as loi:  # noqa: BLE001 — nắn hỏng thì giữ bản đang có
             bc.ghi("  (vòng nắn {0} hỏng: {1}) — giữ bản hiện tại.".format(
                 vong, str(loi)[:100]))
