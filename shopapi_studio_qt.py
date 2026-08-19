@@ -122,6 +122,15 @@ def _hop_qt(tieu_de: str, chi_tiet: str) -> bool:
     return True
 
 
+def _doc_ban() -> str:
+    """Số hiệu bản đang chạy, để nhật ký nói được lỗi ở bản nào."""
+    try:
+        with open(os.path.join(BASE_DIR, "VERSION"), encoding="utf-8") as tep:
+            return tep.read().strip()
+    except OSError:
+        return ""
+
+
 def main() -> int:
     try:
         from PyQt5.QtWidgets import QApplication
@@ -184,6 +193,27 @@ def main() -> int:
     except Exception:  # noqa: BLE001 — nhật ký hỏng không được chặn tool
         pass
 
+    # ═══ DẤU PHIÊN: BẮT CÁI CHẾT CÂM ═══
+    #
+    # `core/hung_su_co.py` bắt được mọi lỗi Python. Nhưng thư viện mã máy —
+    # `ctranslate2` của bộ nghe, bộ giải mã của Qt, trình điều khiển đồ hoạ —
+    # chết bằng cách gọi thẳng `abort()`: không ngoại lệ, không đi qua
+    # `sys.excepthook`, không kịp ghi một chữ. Với kiểu chết ấy `su-co.log`
+    # rỗng trơn, mà một tệp rỗng thì không phân biệt được với "chưa từng lỗi".
+    #
+    # Khách báo 18/08/2026: *"cứ mở lên 5 phút lại tự tắt"*. Không ghi được lúc
+    # chết thì ghi TRƯỚC, rồi xoá khi đóng tử tế — lần chạy sau nhặt được dấu
+    # ấy là biết lần trước chết, chết sau bao lâu, và đang làm gì.
+    #
+    # Đặt ngay sau nhật ký tiến trình và TRƯỚC mọi thứ có thể chết.
+    try:
+        from core import nhat_ky
+
+        nhat_ky.bat_dau_phien(BASE_DIR, _doc_ban())
+        nhat_ky.don_dep(BASE_DIR)
+    except Exception:  # noqa: BLE001
+        pass
+
     # ═══ MÁY ĐANG KHOÁ THÌ DỌN NGAY LÚC MỞ ═══
     #
     # Chặn từ giờ trở đi là chưa đủ với người vừa cập nhật lên bản này: khoá
@@ -236,7 +266,17 @@ def main() -> int:
         from PyQt5.QtCore import QTimer
 
         QTimer.singleShot(1200, app.quit)
-    return app.exec_()
+    ma = app.exec_()
+    # Đóng tử tế thì xoá dấu phiên. Thiếu dòng này là MỌI lần chạy đều bị ghi
+    # nhầm thành "chết đột ngột", và nhật ký thành ra vô dụng vì lúc nào cũng
+    # kêu.
+    try:
+        from core import nhat_ky
+
+        nhat_ky.ket_thuc_phien(BASE_DIR)
+    except Exception:  # noqa: BLE001
+        pass
+    return ma
 
 
 if __name__ == "__main__":

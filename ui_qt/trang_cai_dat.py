@@ -206,6 +206,8 @@ class TrangCaiDat(QWidget):
         hang.addWidget(nut_phu("Mở thư mục kết quả", self._mo_ket_qua, rong=190))
         hang.addWidget(nut_phu("Mở thư mục tool", self._mo_goc, rong=170))
         hang.addWidget(nut_phu("Xem nhật ký sự cố", self._mo_su_co, rong=180))
+        hang.addWidget(nut_phu("Gói nhật ký gửi hỗ trợ", self._goi_nhat_ky,
+                               rong=210))
         v.addLayout(hang)
         return khung
 
@@ -325,6 +327,32 @@ class TrangCaiDat(QWidget):
         from .thu_vien_ket_qua import mo_file  # noqa: PLC0415
 
         mo_file(duong)
+
+    def _goi_nhat_ky(self) -> None:
+        """Nén cả thư mục nhật ký thành MỘT tệp rồi mở thư mục chứa nó.
+
+        Một nút chứ không phải một bài hướng dẫn "vào workspace, chọn ba tệp
+        này, nén lại": khách đang bực vì tool vừa hỏng, và mỗi bước phải làm
+        tay là một chỗ họ bỏ cuộc — rồi ta lại mất manh mối.
+        """
+        from core import nhat_ky  # noqa: PLC0415
+
+        try:
+            duong = nhat_ky.goi_gui_ho_tro(self._app.base_dir)
+        except Exception as loi:  # noqa: BLE001
+            self._app.show_error(loi)
+            return
+        from .widgets import mo_thu_muc  # noqa: PLC0415
+
+        self._app.show_message(
+            "Đã gói xong nhật ký",
+            "Tệp {0} nằm trong thư mục workspace. Gửi nguyên tệp đó cho hỗ "
+            "trợ — trong đó có giờ tool mở, lúc nào đóng, và lần nào đóng "
+            "không bình thường.".format(os.path.basename(duong)))
+        try:
+            mo_thu_muc(os.path.dirname(duong))
+        except Exception:  # noqa: BLE001 — mở không được thì thôi, tệp vẫn còn
+            pass
 
     def doi_du_an(self, _ten: str) -> None:
         """Đổi dự án không ảnh hưởng gì ở đây, nhưng cửa sổ chính vẫn gọi."""
