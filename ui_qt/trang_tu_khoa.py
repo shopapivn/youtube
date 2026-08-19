@@ -32,25 +32,15 @@ import threading
 from typing import List, Optional
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel,
-                             QPlainTextEdit, QTableWidget, QTableWidgetItem,
-                             QVBoxLayout, QWidget)
+from PyQt5.QtWidgets import (QComboBox, QCompleter, QHBoxLayout, QHeaderView,
+                             QLabel, QPlainTextEdit, QTableWidget,
+                             QTableWidgetItem, QVBoxLayout, QWidget)
 
-from core.tu_khoa_youtube import (COT, HangTuKhoa, bang_tsv, do_tu_khoa,
-                                  tach_tu_khoa)
+from core.tu_khoa_youtube import (COT, COT_GOI_Y, NUOC, HangTuKhoa,
+                                  bang_goi_y_tsv, bang_tsv, do_tu_khoa,
+                                  goi_y_tu_khoa, tach_tu_khoa)
 from ui_qt import theme
 from ui_qt.widgets import nhan, nut_chinh, nut_phu, the, tieu_de_trang
-
-#: Nước nào. Ít mà đủ: người dùng tool này làm kênh tiếng Việt, tiếng Nhật hoặc
-#: nhắm thị trường Mỹ. Ô trống = toàn thế giới.
-NUOC = (
-    ("Việt Nam", "VN"),
-    ("Nhật Bản", "JP"),
-    ("Mỹ", "US"),
-    ("Hàn Quốc", "KR"),
-    ("Toàn thế giới", ""),
-)
-
 
 class TrangTuKhoa(QWidget):
     """Chỗ làm của Skill `tu-khoa`.
@@ -63,6 +53,7 @@ class TrangTuKhoa(QWidget):
         super().__init__()
         self._app = app
         self._hang: List[HangTuKhoa] = []
+        self._goi_y: List = []
         self._huy: Optional[threading.Event] = None
 
         doc = QVBoxLayout(self)
@@ -98,10 +89,17 @@ class TrangTuKhoa(QWidget):
         hang = QHBoxLayout()
         hang.setSpacing(8)
         hang.addWidget(nhan("Nước:", "phu"))
+        # Gõ tìm được: 131 nước mà phải cuộn tay thì tìm "Philippines" mất
+        # lâu hơn cả lượt đo. Gõ "phi" là ra.
         self._nuoc = QComboBox()
-        for ten, ma in NUOC:
+        for ma, ten in NUOC:
             self._nuoc.addItem(ten, ma)
-        self._nuoc.setFixedWidth(150)
+        self._nuoc.setEditable(True)
+        self._nuoc.setInsertPolicy(QComboBox.NoInsert)
+        self._nuoc.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self._nuoc.completer().setFilterMode(Qt.MatchContains)
+        self._nuoc.setCurrentIndex(1)          # Việt Nam
+        self._nuoc.setFixedWidth(180)
         hang.addWidget(self._nuoc)
         hang.addStretch(1)
         self._nut_chay = nut_chinh("Đo từ khoá", self._chay, rong=150)
@@ -117,6 +115,7 @@ class TrangTuKhoa(QWidget):
         doc = QVBoxLayout(khung)
         doc.setSpacing(8)
         self._tom_tat = QLabel("Chưa đo từ khoá nào.")
+        self._tom_tat.setWordWrap(True)
         self._tom_tat.setStyleSheet("font-size:19px;font-weight:700;")
         doc.addWidget(self._tom_tat)
         # Câu này KHÔNG được bỏ đi cho gọn: bảng số trông rất giống số liệu
@@ -144,6 +143,27 @@ class TrangTuKhoa(QWidget):
         for i in range(1, len(COT)):
             dau.setSectionResizeMode(i, QHeaderView.ResizeToContents)
         doc.addWidget(self._bang, 1)
+
+        # Bảng gợi ý nằm NGAY DƯỚI bảng đo, không phải một tab riêng: người
+        # dùng vừa nhìn thấy từ khoá nào đông nhất thì câu hỏi kế tiếp của họ
+        # luôn là "vậy quanh nó người ta còn tìm gì" — bắt họ đi tìm một nút ở
+        # chỗ khác là cắt ngang đúng lúc họ đang nghĩ.
+        self._nhan_goi_y = QLabel(
+            "Bấm một dòng ở bảng trên để xem người ta còn tìm gì quanh từ khoá đó.")
+        self._nhan_goi_y.setWordWrap(True)
+        self._nhan_goi_y.setStyleSheet("color:{0};".format(theme.CHU_MO))
+        doc.addWidget(self._nhan_goi_y)
+        self._bang_goi_y = QTableWidget(0, len(COT_GOI_Y))
+        self._bang_goi_y.setHorizontalHeaderLabels(list(COT_GOI_Y))
+        self._bang_goi_y.verticalHeader().setVisible(False)
+        self._bang_goi_y.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._bang_goi_y.setFixedHeight(168)
+        dau2 = self._bang_goi_y.horizontalHeader()
+        dau2.setSectionResizeMode(0, QHeaderView.Stretch)
+        for i in range(1, len(COT_GOI_Y)):
+            dau2.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+        doc.addWidget(self._bang_goi_y)
+        self._bang.itemSelectionChanged.connect(self._chon_dong)
         return khung
 
     def _hang_duoi(self) -> QHBoxLayout:
@@ -156,6 +176,9 @@ class TrangTuKhoa(QWidget):
             "Google Sheets hay Excel là mỗi ô vào đúng một cột.")
         self._nut_copy.setEnabled(False)
         hang.addWidget(self._nut_copy)
+        self._nut_copy_goi_y = nut_phu("Copy gợi ý", self._copy_goi_y, rong=150)
+        self._nut_copy_goi_y.setEnabled(False)
+        hang.addWidget(self._nut_copy_goi_y)
         return hang
 
     # ── Chạy ─────────────────────────────────────────────────────────────────
@@ -235,6 +258,61 @@ class TrangTuKhoa(QWidget):
                 if h.ghi_chu:
                     muc.setToolTip(h.ghi_chu)
                 self._bang.setItem(i, j, muc)
+
+    def _chon_dong(self) -> None:
+        """Bấm một dòng → hỏi Google xem quanh từ khoá đó người ta còn tìm gì."""
+        dong = self._bang.currentRow()
+        if not (0 <= dong < len(self._hang)):
+            return
+        tu = self._hang[dong].tu_khoa
+        self._bang_goi_y.setRowCount(0)
+        self._nut_copy_goi_y.setEnabled(False)
+        self._nhan_goi_y.setText("Đang hỏi gợi ý cho “{0}”…".format(tu))
+        quoc_gia = self._nuoc.currentData()
+
+        def viec():
+            return goi_y_tu_khoa(tu, quoc_gia=quoc_gia)
+
+        def xong(ds):
+            self._goi_y = list(ds)
+            self._ve_goi_y(tu)
+
+        def hong(loi):
+            # Hạn mức của Google cho phần gợi ý rất chặt và hay đụng. Đây là
+            # phần THÊM, không phải phần chính — hỏng thì nói một câu rồi thôi,
+            # đừng ném hộp thoại đỏ lên giữa một bảng đo đang dùng tốt.
+            self._nhan_goi_y.setText(
+                "Chưa lấy được gợi ý cho “{0}” ({1}). Google giới hạn phần này "
+                "khá chặt — đợi một chút rồi bấm lại.".format(
+                    tu, type(loi).__name__))
+
+        self._app.run_bg(viec, on_ok=xong, on_err=hong)
+
+    def _ve_goi_y(self, tu: str) -> None:
+        self._bang_goi_y.setRowCount(len(self._goi_y))
+        for i, h in enumerate(self._goi_y):
+            for j, o in enumerate(h):
+                muc = QTableWidgetItem(str(o))
+                if j:
+                    muc.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self._bang_goi_y.setItem(i, j, muc)
+        if self._goi_y:
+            self._nhan_goi_y.setText(
+                "Quanh “{0}” — “Đang tăng” là từ khoá vừa bùng lên, làm video "
+                "lúc này là bắt sóng sớm.".format(tu))
+            self._nut_copy_goi_y.setEnabled(True)
+        else:
+            self._nhan_goi_y.setText(
+                "Không có gợi ý nào cho “{0}”.".format(tu))
+
+    def _copy_goi_y(self) -> None:
+        if not self._goi_y:
+            return
+        from PyQt5.QtWidgets import QApplication as _App
+
+        _App.clipboard().setText(bang_goi_y_tsv(self._goi_y))
+        self._ghi("Đã copy {0} gợi ý — dán thẳng vào trang tính.".format(
+            len(self._goi_y)))
 
     def _copy(self) -> None:
         if not self._hang:

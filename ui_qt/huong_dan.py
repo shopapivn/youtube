@@ -92,6 +92,14 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "“cô đơn” ra 454 trong khi “chữa lành” ra 72 — tức gấp sáu lần. "
             "Muốn so hai nhóm từ khoá thì để chung một lần đo, đừng đo hai lần "
             "rồi so hai bảng với nhau.",
+            "Đo xong, bấm một dòng trong bảng là thấy “người ta còn tìm gì "
+            "quanh từ khoá đó”. Cột “Đang tăng” là các từ khoá vừa bùng lên — "
+            "làm video lúc này là bắt sóng sớm, và đó thường là chỗ ra ý tưởng "
+            "nhanh nhất. Đo thật: “mất ngủ” cho 35 gợi ý, từ “chữa mất ngủ” "
+            "tới “nhạc cho người mất ngủ”.",
+            "Chọn được 131 nước, gõ vào ô nước để tìm nhanh. Từ khoá ngách quá "
+            "thì có thể không có gợi ý nào — đó là câu trả lời thật, không "
+            "phải lỗi.",
             "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
             "mất khi cập nhật tool.",
         ],

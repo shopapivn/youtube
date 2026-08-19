@@ -15,7 +15,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.tu_khoa_youtube import (  # noqa: E402
-    COT, MOI_LO, bang_tsv, chia_lo, do_tu_khoa, gop_lo, tach_tu_khoa, tinh_hang,
+    COT, COT_GOI_Y, MOI_LO, NUOC, bang_goi_y_tsv, bang_tsv, chia_lo,
+    do_tu_khoa, goi_y_tu_khoa, gop_lo, tach_tu_khoa, tim_nuoc, tinh_hang,
 )
 
 
@@ -208,3 +209,74 @@ def test_quy_doi_co_the_vuot_100_va_do_la_DUNG():
     assert dan.tu_khoa == "khong_lo"
     assert dan.trung_binh > 100, "phải vọt lên trên 100, không bị kẹp lại"
     assert abs(dan.trung_binh / ra[1].trung_binh - 6.0) < 0.01, "gấp đúng 6 lần"
+
+
+# ── nước ─────────────────────────────────────────────────────────────────────
+
+
+class TestNuoc:
+    def test_du_nhieu_nuoc_chu_khong_phai_vai_cai(self):
+        """Chủ dự án: *"tao muốn là có thể chọn được hết, giống như Google"*."""
+        assert len(NUOC) > 100
+
+    def test_o_dau_la_toan_the_gioi(self):
+        assert NUOC[0] == ("", "Toàn thế giới")
+
+    def test_viet_nam_dung_ngay_sau(self):
+        """Người dùng tool này làm YouTube Việt — đừng bắt họ cuộn."""
+        assert NUOC[1][0] == "VN"
+
+    def test_ma_nuoc_dung_chuan_hai_chu(self):
+        for ma, ten in NUOC[1:]:
+            assert len(ma) == 2 and ma.isupper(), ma
+            assert ten.strip(), ma
+
+    def test_khong_trung_ma(self):
+        ma = [m for m, _ in NUOC]
+        assert len(ma) == len(set(ma))
+
+    def test_tim_nuoc_nhan_ca_ma_lan_ten(self):
+        assert tim_nuoc("VN") == "VN"
+        assert tim_nuoc("vn") == "VN"
+        assert tim_nuoc("Việt Nam") == "VN"
+        assert tim_nuoc("  việt nam  ") == "VN"
+
+    def test_tim_nuoc_khong_ra_thi_tra_rong(self):
+        assert tim_nuoc("Xứ sở thần tiên") == ""
+        assert tim_nuoc("") == ""
+
+
+# ── gợi ý từ khoá ────────────────────────────────────────────────────────────
+
+
+class TestGoiY:
+    def _hoi(self, top=(), rising=()):
+        return lambda _t, _q: {"top": list(top), "rising": list(rising)}
+
+    def test_gop_ca_hai_nhom_va_nhom_dong_dung_truoc(self):
+        ra = goi_y_tu_khoa("x", hoi=self._hoi(
+            top=[("a", 100)], rising=[("b", 250)]))
+        assert [h[1] for h in ra] == ["Đang tìm nhiều", "Đang tăng"]
+
+    def test_nhom_dang_tang_hien_kem_dau_phan_tram(self):
+        """Google trả 28000 nghĩa là TĂNG 280 lần, không phải 28.000 lượt tìm.
+        Thiếu dấu % là người dùng đọc thành số lượt."""
+        ra = goi_y_tu_khoa("x", hoi=self._hoi(rising=[("b", 28000)]))
+        assert ra[0][2] == "+28,000%"
+
+    def test_nhom_dang_tim_nhieu_KHONG_co_dau_phan_tram(self):
+        ra = goi_y_tu_khoa("x", hoi=self._hoi(top=[("a", 100)]))
+        assert ra[0][2] == "100"
+
+    def test_bo_dong_rong(self):
+        ra = goi_y_tu_khoa("x", hoi=self._hoi(top=[("", 5), ("  ", 3), ("a", 1)]))
+        assert [h[0] for h in ra] == ["a"]
+
+    def test_khong_co_gi_thi_tra_ve_rong(self):
+        assert goi_y_tu_khoa("x", hoi=self._hoi()) == []
+
+    def test_bang_goi_y_ngan_bang_TAB(self):
+        ra = goi_y_tu_khoa("x", hoi=self._hoi(top=[("a", 1)]))
+        chu = bang_goi_y_tsv(ra)
+        assert chu.splitlines()[0].split("\t") == list(COT_GOI_Y)
+        assert len(chu.splitlines()) == 2

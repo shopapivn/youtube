@@ -36,9 +36,15 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 __all__ = [
-    "HangTuKhoa", "COT", "MOI_LO", "NGAY",
+    "HangTuKhoa", "COT", "MOI_LO", "NGAY", "NUOC", "COT_GOI_Y",
     "tach_tu_khoa", "chia_lo", "gop_lo", "tinh_hang", "do_tu_khoa", "bang_tsv",
+    "goi_y_tu_khoa", "bang_goi_y_tsv", "tim_nuoc",
 ]
+
+#: Ngăn cột bằng Tab, ngăn dòng bằng xuống dòng. Đặt tên thay vì viết thẳng
+#: `"	"`: chuỗi thoát trong mã dễ bị hỏng khi tệp đi qua công cụ sinh mã,
+#: và một tệp .py hỏng cú pháp thì cả tool không mở được.
+TAB, XUONG = chr(9), chr(10)
 
 #: Google Trends từ chối lượt hỏi quá 5 từ khoá — trả thẳng `400 Bad Request`.
 #: Không phải con số tôi chọn, và không nới được.
@@ -285,3 +291,140 @@ def bang_tsv(hang: Sequence[HangTuKhoa]) -> str:
     for h in hang:
         dong.append("\t".join(str(o).replace("\t", " ") for o in h.hang))
     return "\n".join(dong)
+
+# ── Nước ─────────────────────────────────────────────────────────────────────
+
+#: Mã nước theo ISO 3166-1, đúng thứ Google Trends nhận. Ô đầu rỗng = toàn cầu.
+#:
+#: Xếp theo **mức hay dùng của người làm YouTube Việt** chứ không theo bảng chữ
+#: cái: Việt Nam, rồi các thị trường tiếng Á đông, rồi Âu Mỹ, rồi phần còn lại.
+#: Ô chọn có gõ tìm được nên thứ tự chỉ quyết định "cái gì nằm sẵn trước mắt".
+#:
+#: `trendspy.Trends().geo()` lẽ ra cho danh sách này, nhưng bản 0.1.6 hỏng
+#: (`AttributeError: name_to_location`) nên phải tự giữ.
+NUOC: Tuple[Tuple[str, str], ...] = (
+    ("", "Toàn thế giới"),
+    ("VN", "Việt Nam"), ("US", "Mỹ"), ("JP", "Nhật Bản"), ("KR", "Hàn Quốc"),
+    ("CN", "Trung Quốc"), ("TW", "Đài Loan"), ("HK", "Hồng Kông"),
+    ("TH", "Thái Lan"), ("ID", "Indonesia"), ("MY", "Malaysia"),
+    ("SG", "Singapore"), ("PH", "Philippines"), ("KH", "Campuchia"),
+    ("LA", "Lào"), ("MM", "Myanmar"), ("IN", "Ấn Độ"), ("BD", "Bangladesh"),
+    ("PK", "Pakistan"), ("LK", "Sri Lanka"), ("NP", "Nepal"),
+    ("MN", "Mông Cổ"), ("BN", "Brunei"), ("MV", "Maldives"), ("BT", "Bhutan"),
+    ("TL", "Đông Timor"), ("MO", "Ma Cao"),
+    ("GB", "Anh"), ("FR", "Pháp"), ("DE", "Đức"), ("IT", "Ý"),
+    ("ES", "Tây Ban Nha"), ("PT", "Bồ Đào Nha"), ("NL", "Hà Lan"),
+    ("BE", "Bỉ"), ("CH", "Thụy Sĩ"), ("AT", "Áo"), ("SE", "Thụy Điển"),
+    ("NO", "Na Uy"), ("DK", "Đan Mạch"), ("FI", "Phần Lan"),
+    ("IE", "Ireland"), ("IS", "Iceland"), ("PL", "Ba Lan"), ("CZ", "Séc"),
+    ("SK", "Slovakia"), ("HU", "Hungary"), ("RO", "Romania"),
+    ("BG", "Bulgaria"), ("GR", "Hy Lạp"), ("HR", "Croatia"), ("RS", "Serbia"),
+    ("SI", "Slovenia"), ("UA", "Ukraine"), ("RU", "Nga"), ("BY", "Belarus"),
+    ("LT", "Litva"), ("LV", "Latvia"), ("EE", "Estonia"), ("CY", "Síp"),
+    ("MT", "Malta"), ("LU", "Luxembourg"), ("MD", "Moldova"),
+    ("AL", "Albania"), ("MK", "Bắc Macedonia"), ("BA", "Bosnia"),
+    ("ME", "Montenegro"),
+    ("TR", "Thổ Nhĩ Kỳ"), ("IL", "Israel"), ("SA", "Ả Rập Xê Út"),
+    ("AE", "UAE"), ("QA", "Qatar"), ("KW", "Kuwait"), ("BH", "Bahrain"),
+    ("OM", "Oman"), ("JO", "Jordan"), ("LB", "Liban"), ("IQ", "Iraq"),
+    ("IR", "Iran"), ("SY", "Syria"), ("YE", "Yemen"), ("AF", "Afghanistan"),
+    ("KZ", "Kazakhstan"), ("UZ", "Uzbekistan"), ("AZ", "Azerbaijan"),
+    ("GE", "Gruzia"), ("AM", "Armenia"),
+    ("EG", "Ai Cập"), ("MA", "Maroc"), ("DZ", "Algeria"), ("TN", "Tunisia"),
+    ("LY", "Libya"), ("SD", "Sudan"), ("ET", "Ethiopia"), ("KE", "Kenya"),
+    ("TZ", "Tanzania"), ("UG", "Uganda"), ("NG", "Nigeria"), ("GH", "Ghana"),
+    ("CI", "Bờ Biển Ngà"), ("SN", "Senegal"), ("CM", "Cameroon"),
+    ("ZA", "Nam Phi"), ("ZW", "Zimbabwe"), ("ZM", "Zambia"),
+    ("AO", "Angola"), ("MZ", "Mozambique"), ("MG", "Madagascar"),
+    ("CA", "Canada"), ("MX", "Mexico"), ("GT", "Guatemala"),
+    ("CR", "Costa Rica"), ("PA", "Panama"), ("CU", "Cuba"),
+    ("DO", "Cộng hòa Dominica"), ("PR", "Puerto Rico"), ("JM", "Jamaica"),
+    ("BR", "Brazil"), ("AR", "Argentina"), ("CL", "Chile"),
+    ("CO", "Colombia"), ("PE", "Peru"), ("VE", "Venezuela"),
+    ("EC", "Ecuador"), ("BO", "Bolivia"), ("PY", "Paraguay"),
+    ("UY", "Uruguay"),
+    ("AU", "Úc"), ("NZ", "New Zealand"), ("FJ", "Fiji"),
+    ("PG", "Papua New Guinea"),
+)
+
+
+def tim_nuoc(chu: str) -> str:
+    """Tên nước người dùng gõ → mã ISO. Rỗng nếu không nhận ra.
+
+    Nhận cả tên tiếng Việt lẫn mã hai chữ, không phân biệt hoa thường và dấu
+    cách thừa: người dùng gõ "vn", "VN", hay "Việt Nam" đều là một ý.
+    """
+    tim = " ".join(str(chu or "").split()).lower()
+    if not tim:
+        return ""
+    for ma, ten in NUOC:
+        if tim in (ma.lower(), ten.lower()):
+            return ma
+    return ""
+
+
+# ── Gợi ý từ khoá: thứ đẻ ra ý tưởng video ───────────────────────────────────
+
+#: Cột của bảng gợi ý.
+COT_GOI_Y = ("Từ khoá liên quan", "Nhóm", "Mức")
+
+#: `related_queries` của Google có hạn mức riêng và rất chặt. Gửi kèm `referer`
+#: là cách thư viện tự khuyến nghị khi bị chặn — không có nó thì lời gọi đầu
+#: tiên đã ăn `TrendsQuotaExceededError`.
+_DAU_REFERER = {"referer": "https://www.google.com/"}
+
+
+def goi_y_tu_khoa(tu_khoa: str, *, quoc_gia: str = "VN",
+                  hoi: Optional[Callable] = None) -> List[Tuple[str, str, str]]:
+    """Các từ khoá người ta cũng tìm quanh `tu_khoa`, trên chính YouTube.
+
+    Trả về danh sách `(từ khoá, nhóm, mức)` với hai nhóm:
+
+    * **Đang tìm nhiều** — từ khoá đông nhất quanh chủ đề này. Đây là chỗ chắc
+      ăn: đã có người tìm sẵn.
+    * **Đang tăng** — từ khoá vọt lên so với kỳ trước, có cái tăng vài trăm lần.
+      Đây mới là chỗ đáng làm video: bắt sóng lúc chưa ai kịp làm.
+
+    Google trả mức của nhóm "đang tăng" dưới dạng phần trăm tăng, và con số
+    5.000 nghĩa là gấp 50 lần chứ không phải 5.000 lượt — nên hiện kèm dấu `%`
+    để không ai đọc nhầm thành số lượt.
+    """
+    goi = hoi or _hoi_goi_y
+    tho = goi(tu_khoa, quoc_gia)
+    ra: List[Tuple[str, str, str]] = []
+    for khoa, nhan in (("top", "Đang tìm nhiều"), ("rising", "Đang tăng")):
+        for tu, muc in (tho.get(khoa) or []):
+            if not str(tu).strip():
+                continue
+            ra.append((str(tu), nhan,
+                       "+{0:,}%".format(int(muc)) if khoa == "rising"
+                       else str(int(muc))))
+    return ra
+
+
+def _hoi_goi_y(tu_khoa: str, quoc_gia: str):
+    from trendspy import Trends  # noqa: PLC0415
+
+    goi = Trends().related_queries(
+        tu_khoa, timeframe=NGAY, gprop="youtube", geo=quoc_gia or "",
+        headers=_DAU_REFERER)
+    ra = {}
+    for khoa in ("top", "rising"):
+        bang = (goi or {}).get(khoa)
+        # `list(...)` chứ không `... or ()`: `bang.columns` là chỉ mục pandas,
+        # và hỏi nó "có hay không" thì pandas ném `ValueError` chứ không trả
+        # True/False. Lỗi ấy chỉ lộ khi gọi mạng thật, không lộ ở bài kiểm.
+        cot = list(getattr(bang, "columns", []))
+        if len(cot) < 2:
+            ra[khoa] = []
+            continue
+        ra[khoa] = [(h[cot[0]], h[cot[1]]) for _, h in bang.iterrows()]
+    return ra
+
+
+def bang_goi_y_tsv(hang: Sequence[Tuple[str, str, str]]) -> str:
+    """Bảng gợi ý dưới dạng ngăn bằng Tab — dán thẳng sang trang tính."""
+    dong = [TAB.join(COT_GOI_Y)]
+    for h in hang:
+        dong.append(TAB.join(str(o).replace(TAB, " ") for o in h))
+    return XUONG.join(dong)
