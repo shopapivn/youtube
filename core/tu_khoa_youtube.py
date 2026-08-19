@@ -56,12 +56,19 @@ NGAY = "today 1-m"
 #: Cột của bảng kết quả, đúng thứ tự hiện lên màn hình và dán sang trang tính.
 COT = (
     "Từ khoá",
-    "Trung bình",
-    "Cao nhất",
-    "Thấp nhất",
+    "Mức tìm",
     "Xu hướng",
-    "Số ngày có tìm",
+    "Ngày có tìm",
+    "View trung vị",
+    "View thấp nhất",
 )
+
+#: Lấy bao nhiêu kết quả tìm kiếm để đo cạnh tranh.
+#:
+#: 10 chứ không phải 50: người xem hiếm khi cuộn quá trang đầu, nên "phải mạnh
+#: cỡ nào mới lọt top 10" mới là câu hỏi thật. Lấy nhiều hơn chỉ kéo dài thời
+#: gian chờ và pha loãng con số bằng những video không ai thấy.
+TOP_CANH_TRANH = 10
 
 
 @dataclass
@@ -79,15 +86,21 @@ class HangTuKhoa:
     ngay_co: int = 0
     #: Rỗng khi đo được. Có chữ nghĩa là hàng này không đáng tin — xem `gop_lo`.
     ghi_chu: str = ""
+    #: View trung vị của top `TOP_CANH_TRANH` kết quả tìm trên YouTube. `-1` là
+    #: chưa đo (người dùng tắt phần cạnh tranh).
+    view_giua: int = -1
+    #: View của kết quả THẤP NHẤT trong top ấy. Đây mới là ngưỡng thật để lọt
+    #: vào trang đầu — không phải view của video đứng nhất.
+    view_thap: int = -1
 
     @property
     def hang(self) -> Tuple:
         return (self.tu_khoa,
                 round(self.trung_binh, 1),
-                round(self.cao_nhat, 1),
-                round(self.thap_nhat, 1),
                 "{0:+.0f}%".format(self.xu_huong) if self.ngay_co else "—",
-                self.ngay_co)
+                self.ngay_co,
+                _gon_so(self.view_giua),
+                _gon_so(self.view_thap))
 
 
 # ── Đọc thứ người dùng gõ vào ────────────────────────────────────────────────
@@ -203,13 +216,78 @@ def tinh_hang(tu_khoa: str, day: Sequence[float], ghi_chu: str = "") -> HangTuKh
     )
 
 
+# ── Cạnh tranh: thứ Google Trends không biết ─────────────────────────────────
+
+
+def _gon_so(so: int) -> str:
+    """`327063` → `"327K"`. `-1` → `"—"` (chưa đo)."""
+    n = int(so)
+    if n < 0:
+        return "—"
+    if n >= 1_000_000:
+        return "{0:.1f}M".format(n / 1_000_000).replace(".0M", "M")
+    if n >= 1_000:
+        return "{0:.0f}K".format(n / 1_000)
+    return str(n)
+
+
+def _trung_vi(so: Sequence[int]) -> int:
+    day = sorted(int(g) for g in so)
+    if not day:
+        return -1
+    giua = len(day) // 2
+    return day[giua] if len(day) % 2 else (day[giua - 1] + day[giua]) // 2
+
+
+def do_canh_tranh(tu_khoa: str, *, tim: Optional[Callable] = None) -> Tuple[int, int]:
+    """Trả về `(view trung vị, view thấp nhất)` của top kết quả trên YouTube.
+
+    ═══ VÌ SAO CON SỐ NÀY QUAN TRỌNG HƠN LƯỢT TÌM ═══
+
+    Google Trends nói **có bao nhiêu người muốn xem**. Nó không nói **đã có bao
+    nhiêu người làm rồi, và mạnh cỡ nào** — mà vế thứ hai mới quyết định một
+    kênh nhỏ có cửa hay không.
+
+    Một từ khoá được tìm nhiều mà top 10 toàn video triệu view là một làn đường
+    đã có chủ. Một từ khoá tìm ít hơn nhưng top 10 chỉ vài chục nghìn view là
+    chỗ một kênh mới chen được.
+
+    Lấy **trung vị** chứ không lấy trung bình: một video viral vài triệu view
+    kéo trung bình lên gấp mấy lần và làm cả con số vô nghĩa. Trung vị không bị
+    một ngoại lệ lay chuyển.
+
+    Và lấy thêm **view thấp nhất** của top: đó mới là ngưỡng thật để lọt vào
+    trang đầu. View của video đứng nhất chỉ nói về video ấy.
+
+    Chạy trên máy qua `yt-dlp` — miễn phí, không gọi ví ShopAPI.
+    """
+    lam = tim or _tim_youtube
+    try:
+        ket = lam(tu_khoa, TOP_CANH_TRANH)
+    except Exception:  # noqa: BLE001 — không đo được thì để trống, đừng chết cả bảng
+        return -1, -1
+    view = [int(getattr(h, "views", -1) or -1) for h in (ket or [])]
+    view = [v for v in view if v >= 0]
+    if not view:
+        return -1, -1
+    return _trung_vi(view), min(view)
+
+
+def _tim_youtube(tu_khoa: str, so: int):
+    from .youtube import search_videos  # noqa: PLC0415 — cùng gói, dùng lại
+
+    return search_videos(tu_khoa, limit=so)
+
+
 # ── Xâu cả lại ───────────────────────────────────────────────────────────────
 
 
 def do_tu_khoa(tu_khoa: Sequence[str], *, quoc_gia: str = "VN",
                hoi: Optional[Callable] = None,
                ghi: Optional[Callable[[str], None]] = None,
-               huy: Optional[Callable[[], bool]] = None) -> List[HangTuKhoa]:
+               huy: Optional[Callable[[], bool]] = None,
+               do_canh: bool = True,
+               tim: Optional[Callable] = None) -> List[HangTuKhoa]:
     """Đo cả danh sách từ khoá, trả về bảng đã sắp theo mức tìm giảm dần.
 
     `hoi` là hàm gọi Google Trends — tách ra để bài kiểm chạy được mà không cần
@@ -262,6 +340,23 @@ def do_tu_khoa(tu_khoa: Sequence[str], *, quoc_gia: str = "VN",
                     "không so được với các từ khoá khác" if t in thang_hong else "")
           for t in ds]
     ra.sort(key=lambda h: h.trung_binh, reverse=True)
+
+    # ═══ ĐO CẠNH TRANH SAU CÙNG, VÀ THEO THỨ TỰ ĐÃ SẮP ═══
+    #
+    # Sau cùng vì nó chậm hơn hẳn (mỗi từ khoá một lượt tìm YouTube) và vì phần
+    # trên đã đủ dùng — bấm Dừng giữa chừng thì người dùng vẫn còn bảng mức tìm.
+    #
+    # Theo thứ tự đã sắp vì từ khoá đông nhất là thứ họ muốn biết trước nhất:
+    # dừng sớm thì phần đo được cũng là phần đáng giá nhất.
+    if do_canh:
+        for i, h in enumerate(ra, start=1):
+            if da_huy():
+                bao("đã dừng — {0}/{1} từ khoá có số cạnh tranh.".format(
+                    i - 1, len(ra)))
+                break
+            bao("đang xem cạnh tranh của “{0}” ({1}/{2})…".format(
+                h.tu_khoa, i, len(ra)))
+            h.view_giua, h.view_thap = do_canh_tranh(h.tu_khoa, tim=tim)
     return ra
 
 

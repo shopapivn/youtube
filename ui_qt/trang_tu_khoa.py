@@ -32,15 +32,16 @@ import threading
 from typing import List, Optional
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QComboBox, QCompleter, QHBoxLayout, QHeaderView,
-                             QLabel, QPlainTextEdit, QTableWidget,
+from PyQt5.QtWidgets import (QCheckBox, QComboBox, QCompleter, QHBoxLayout,
+                             QHeaderView, QLabel, QPlainTextEdit, QTableWidget,
                              QTableWidgetItem, QVBoxLayout, QWidget)
 
 from core.tu_khoa_youtube import (COT, COT_GOI_Y, NUOC, HangTuKhoa,
                                   bang_goi_y_tsv, bang_tsv, do_tu_khoa,
                                   goi_y_tu_khoa, tach_tu_khoa)
 from ui_qt import theme
-from ui_qt.widgets import nhan, nut_chinh, nut_phu, the, tieu_de_trang
+from ui_qt.widgets import (HangXuongDong, nhan, nut_chinh, nut_phu, the,
+                           tieu_de_trang)
 
 class TrangTuKhoa(QWidget):
     """Chỗ làm của Skill `tu-khoa`.
@@ -86,8 +87,11 @@ class TrangTuKhoa(QWidget):
             "tâm lý học, chữa lành, thiền định, người hướng nội")
         doc.addWidget(self._o)
 
-        hang = QHBoxLayout()
-        hang.setSpacing(8)
+        # `HangXuongDong` chứ không `QHBoxLayout`: ô nước + ô chọn + hai nút xếp
+        # một hàng cứng làm bề rộng tối thiểu của cả trang vọt lên 940px, vượt
+        # trần 760 và bị đẩy ra khỏi mép cửa sổ. Cho chúng tự xuống dòng thì bề
+        # rộng tối thiểu chỉ còn bằng một chip.
+        hang = HangXuongDong(8)
         hang.addWidget(nhan("Nước:", "phu"))
         # Gõ tìm được: 131 nước mà phải cuộn tay thì tìm "Philippines" mất
         # lâu hơn cả lượt đo. Gõ "phi" là ra.
@@ -101,7 +105,15 @@ class TrangTuKhoa(QWidget):
         self._nuoc.setCurrentIndex(1)          # Việt Nam
         self._nuoc.setFixedWidth(180)
         hang.addWidget(self._nuoc)
-        hang.addStretch(1)
+        # Mặc định BẬT: đây mới là thứ trả lời "làm video này tôi có cửa không".
+        # Tắt được vì mỗi từ khoá tốn thêm một lượt tìm YouTube (~2 giây), và
+        # người chỉ muốn xem nhanh cái nào đông hơn thì không cần chờ.
+        self._o_canh = QCheckBox("Kèm mức cạnh tranh")
+        self._o_canh.setChecked(True)
+        self._o_canh.setToolTip(
+            "Tìm thử từng từ khoá trên YouTube rồi xem top 10 mạnh cỡ nào. "
+            "Chạy trên máy bạn, miễn phí — nhưng mỗi từ khoá lâu thêm vài giây.")
+        hang.addWidget(self._o_canh)
         self._nut_chay = nut_chinh("Đo từ khoá", self._chay, rong=150)
         hang.addWidget(self._nut_chay)
         self._nut_dung = nut_phu("Dừng", self._dung, rong=96)
@@ -125,10 +137,11 @@ class TrangTuKhoa(QWidget):
         # lên vài trăm. Đo thật: "cô đơn" ra 454 khi "chữa lành" là 72 — tức
         # gấp sáu lần. Nói 0–100 rồi hiện ra 454 là tự làm người dùng hoang mang.
         self._ly_do = QLabel(
-            "Con số là mức so sánh GIỮA CHÍNH các từ khoá bạn nhập, không phải "
-            "số lượt tìm — Google không cho ai con số thật. Gấp đôi nghĩa là "
-            "được tìm nhiều gấp đôi. Đọc theo lối so bó đũa: cái nào hơn cái "
-            "nào, và cái nào đang lên.")
+            "“Mức tìm” là mức so sánh GIỮA CHÍNH các từ khoá bạn nhập, không "
+            "phải số lượt tìm — Google không cho ai con số thật; gấp đôi nghĩa "
+            "là được tìm nhiều gấp đôi. Hai cột view là của top 10 kết quả "
+            "trên YouTube: view thấp nhất chính là ngưỡng để lọt trang đầu. "
+            "Mức tìm cao mà view top thấp là chỗ kênh nhỏ chen được.")
         self._ly_do.setWordWrap(True)
         self._ly_do.setStyleSheet("color:{0};".format(theme.CHU_MO))
         doc.addWidget(self._ly_do)
@@ -170,7 +183,7 @@ class TrangTuKhoa(QWidget):
         hang = QHBoxLayout()
         hang.setSpacing(8)
         hang.addStretch(1)
-        self._nut_copy = nut_phu("Copy cả bảng", self._copy, rong=170)
+        self._nut_copy = nut_phu("Copy bảng", self._copy, rong=170)
         self._nut_copy.setToolTip(
             "Chép cả bảng vào bộ nhớ tạm, ngăn cột bằng Tab — dán thẳng vào "
             "Google Sheets hay Excel là mỗi ô vào đúng một cột.")
@@ -202,6 +215,7 @@ class TrangTuKhoa(QWidget):
         self._ghi("Cửa sổ vẫn dùng được; bấm Dừng là ngắt giữa chừng.")
 
         quoc_gia = self._nuoc.currentData()
+        do_canh = self._o_canh.isChecked()
         huy = self._huy
         ghi_nen: List[str] = []
 
@@ -209,7 +223,7 @@ class TrangTuKhoa(QWidget):
             # Chạy ở LUỒNG NỀN — không chạm widget nào ở đây. Nhật ký gom vào
             # một danh sách, giao diện đổ ra khi xong.
             return do_tu_khoa(tu_khoa, quoc_gia=quoc_gia, ghi=ghi_nen.append,
-                              huy=huy.is_set)
+                              huy=huy.is_set, do_canh=do_canh)
 
         def xong(hang: List[HangTuKhoa]) -> None:
             for dong in ghi_nen:

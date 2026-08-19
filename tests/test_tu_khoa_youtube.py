@@ -15,8 +15,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.tu_khoa_youtube import (  # noqa: E402
-    COT, COT_GOI_Y, MOI_LO, NUOC, bang_goi_y_tsv, bang_tsv, chia_lo,
-    do_tu_khoa, goi_y_tu_khoa, gop_lo, tach_tu_khoa, tim_nuoc, tinh_hang,
+    COT, COT_GOI_Y, MOI_LO, NUOC, TOP_CANH_TRANH, _gon_so, _trung_vi,
+    bang_goi_y_tsv, bang_tsv, chia_lo, do_canh_tranh, do_tu_khoa,
+    goi_y_tu_khoa, gop_lo, tach_tu_khoa, tim_nuoc, tinh_hang,
 )
 
 
@@ -122,7 +123,7 @@ class TestTinhHang:
     def test_khong_co_du_lieu_thi_noi_that(self):
         h = tinh_hang("x", [])
         assert h.ghi_chu
-        assert h.hang[4] == "—", "đừng hiện +0% như thể đã đo được"
+        assert h.hang[2] == "—", "đừng hiện +0% như thể đã đo được"
 
 
 # ── chạy cả luồng, thay chỗ gọi mạng ─────────────────────────────────────────
@@ -143,7 +144,7 @@ def test_ca_luong_giu_dung_thu_hang_qua_nhieu_lo():
     """Bài quan trọng nhất: 8 từ khoá phải chia hai lô, mà thứ hạng cuối cùng
     vẫn phải đúng như khi đo tất cả trong một lô."""
     that = {"t%d" % i: [float(100 - i * 10)] * 30 for i in range(8)}
-    ra = do_tu_khoa(list(that), hoi=_hoi_gia(that))
+    ra = do_tu_khoa(list(that), hoi=_hoi_gia(that), do_canh=False)
     assert [h.tu_khoa for h in ra] == ["t%d" % i for i in range(8)]
 
 
@@ -161,7 +162,7 @@ def test_bam_dung_giua_chung_thi_thoi_ngay():
         goi["n"] += 1
         return _hoi_gia(that)(tu_khoa, quoc_gia)
 
-    assert do_tu_khoa(list(that), hoi=hoi, huy=lambda: True) == []
+    assert do_tu_khoa(list(that), hoi=hoi, huy=lambda: True, do_canh=False) == []
     assert goi["n"] == 1, "không được hỏi tiếp sau khi đã bấm dừng"
 
 
@@ -169,7 +170,7 @@ def test_khong_co_tu_khoa_nao_thi_khong_goi_mang():
     def no(*_a, **_k):
         raise AssertionError("không được gọi")
 
-    assert do_tu_khoa([], hoi=no) == []
+    assert do_tu_khoa([], hoi=no, do_canh=False) == []
 
 
 # ── bảng dán sang trang tính ─────────────────────────────────────────────────
@@ -204,7 +205,7 @@ def test_quy_doi_co_the_vuot_100_va_do_la_DUNG():
     that = {"neo": [10.0] * 30, "a": [10.0] * 30, "b": [10.0] * 30,
             "c": [10.0] * 30, "d": [10.0] * 30,
             "khong_lo": [60.0] * 30}
-    ra = do_tu_khoa(list(that), hoi=_hoi_gia(that))
+    ra = do_tu_khoa(list(that), hoi=_hoi_gia(that), do_canh=False)
     dan = ra[0]
     assert dan.tu_khoa == "khong_lo"
     assert dan.trung_binh > 100, "phải vọt lên trên 100, không bị kẹp lại"
@@ -280,3 +281,82 @@ class TestGoiY:
         chu = bang_goi_y_tsv(ra)
         assert chu.splitlines()[0].split("\t") == list(COT_GOI_Y)
         assert len(chu.splitlines()) == 2
+
+
+# ── cạnh tranh: thứ Google Trends không biết ─────────────────────────────────
+
+
+class _Hit:
+    def __init__(self, views):
+        self.views = views
+
+
+class TestCanhTranh:
+    def test_lay_trung_vi_chu_khong_lay_trung_binh(self):
+        """Một video viral vài triệu view kéo trung bình lên gấp mấy lần và làm
+        cả con số vô nghĩa. Trung vị không bị một ngoại lệ lay chuyển."""
+        hit = [_Hit(1000), _Hit(2000), _Hit(3000), _Hit(9_000_000)]
+        giua, thap = do_canh_tranh("x", tim=lambda t, n: hit)
+        assert giua == 2500, "trung vị, không phải trung bình (~2,25 triệu)"
+        assert thap == 1000
+
+    def test_view_thap_nhat_la_nguong_lot_trang_dau(self):
+        """View của video đứng nhất chỉ nói về video ấy."""
+        hit = [_Hit(5_000_000), _Hit(400), _Hit(900)]
+        _, thap = do_canh_tranh("x", tim=lambda t, n: hit)
+        assert thap == 400
+
+    def test_hoi_dung_TOP_CANH_TRANH_ket_qua(self):
+        da_xin = {}
+
+        def tim(_t, n):
+            da_xin["n"] = n
+            return [_Hit(1)]
+
+        do_canh_tranh("x", tim=tim)
+        assert da_xin["n"] == TOP_CANH_TRANH
+
+    def test_tim_hong_thi_khong_chet_ca_bang(self):
+        def no(_t, _n):
+            raise RuntimeError("yt-dlp hỏng")
+
+        assert do_canh_tranh("x", tim=no) == (-1, -1)
+
+    def test_khong_co_ket_qua_nao_thi_de_trong(self):
+        assert do_canh_tranh("x", tim=lambda t, n: []) == (-1, -1)
+
+    def test_bo_ket_qua_khong_biet_view(self):
+        hit = [_Hit(-1), _Hit(500), _Hit(1500)]
+        giua, thap = do_canh_tranh("x", tim=lambda t, n: hit)
+        assert (giua, thap) == (1000, 500)
+
+    def test_chua_do_thi_hien_gach_ngang_chu_khong_hien_0(self):
+        """Hiện 0 nghĩa là "không ai xem", khác hẳn "chưa đo"."""
+        h = tinh_hang("x", [10.0] * 30)
+        assert h.hang[4] == "—" and h.hang[5] == "—"
+
+    def test_gon_so_cho_de_doc(self):
+        assert _gon_so(327063) == "327K"
+        assert _gon_so(2_019_841) == "2M"
+        assert _gon_so(999) == "999"
+        assert _gon_so(-1) == "—"
+
+    def test_do_canh_theo_thu_tu_da_sap(self):
+        """Từ khoá đông nhất đo trước — dừng sớm thì phần đo được cũng là phần
+        đáng giá nhất."""
+        that = {"it": [10.0] * 30, "nhieu": [90.0] * 30}
+        thu_tu = []
+
+        def tim(t, _n):
+            thu_tu.append(t)
+            return [_Hit(100)]
+
+        do_tu_khoa(list(that), hoi=_hoi_gia(that), tim=tim)
+        assert thu_tu == ["nhieu", "it"]
+
+    def test_tat_do_canh_thi_khong_tim_gi_ca(self):
+        def no(*_a):
+            raise AssertionError("không được tìm")
+
+        that = {"a": [10.0] * 30}
+        do_tu_khoa(["a"], hoi=_hoi_gia(that), tim=no, do_canh=False)
