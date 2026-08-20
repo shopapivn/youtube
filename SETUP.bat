@@ -236,15 +236,61 @@ echo [4/5] Kiem tra lai...
 REM Do PyQt5, KHONG do tkinter. Buoc nay tung do "import tkinter" - ma tkinter
 REM di kem san moi ban Python, nen no bao OK tren MOI may ke ca may chua he co
 REM PyQt5. Mot buoc kiem luon luon dung la mot buoc kiem vo dung.
+REM
+REM  === VI SAO KHONG DUNG LAI O DAY KHI IMPORT HONG ===
+REM
+REM  pip bao "Thu vien: OK" o buoc [3/5] nghia la WHEEL da tai va giai nen xong
+REM  - KHONG nghia la import duoc. PyQt5 la thu vien C: file .pyd cua no can
+REM  ban chay Microsoft Visual C++ (vcruntime140.dll, msvcp140.dll). May
+REM  Windows sach - dung may khach hay dung nhat - thuong CHUA co bo do, va khi
+REM  do import chet voi:
+REM
+REM     ImportError: DLL load failed while importing QtWidgets:
+REM     The specified module could not be found.
+REM
+REM  Loi nay khong nhac gi den "Visual C++" nen khach khong doan ra, va ban cu
+REM  chi bao "chup man hinh gui ho tro" - be tac ngay o buoc dau, y het luc
+REM  thieu Python. Nen o day tu tai va cai bo do (giong het cach tren da tu cai
+REM  Python), roi thu import lai. Chi khi van hong moi bat khach lam thu cong.
+%PYEXE% -c "import PyQt5.QtWidgets, PIL" 2>nul
+if not errorlevel 1 goto :qt_ok
+
+echo   - Giao dien chua mo duoc. Nhieu kha nang may thieu ban chay Microsoft
+echo     Visual C++. Studio se tu tai va cai (~25 MB, khong hoi gi them)...
+
+REM Chon dung ban x64 hay x86 theo chinh Python dang dung - khong theo Windows.
+REM Python 32-bit tren Windows 64-bit thi phai lay ban x86, lay nham la vo ich.
+set "VCARCH=x64"
+for /f "delims=" %%i in ('%PYEXE% -c "import struct;print('x64' if struct.calcsize('P')==8 else 'x86')" 2^>nul') do set "VCARCH=%%i"
+
+set "VCEXE=%TEMP%\shopapi-vc_redist.%VCARCH%.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$ProgressPreference='SilentlyContinue';Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.%VCARCH%.exe' -OutFile '%VCEXE%' -UseBasicParsing}catch{exit 1}"
+if errorlevel 1 goto :qt_bao_loi
+if not exist "%VCEXE%" goto :qt_bao_loi
+echo   - Dang cai ban chay Microsoft Visual C++...
+REM /norestart: dung tu khoi dong lai may giua chung buoi cai cua khach. Ma
+REM thoat 3010 nghia la "cai xong, can khoi dong lai" - van la thanh cong, nen
+REM khong kiem errorlevel o day ma thu import lai lam thuoc do that su.
+"%VCEXE%" /install /quiet /norestart
+del /q "%VCEXE%" >nul 2>&1
+
+%PYEXE% -c "import PyQt5.QtWidgets, PIL" 2>nul
+if not errorlevel 1 goto :qt_ok
+
+:qt_bao_loi
+echo.
+echo   !!! Chua mo duoc giao dien (PyQt5).
+echo.
+echo   Da cai ban chay Microsoft Visual C++ nhung van chua duoc. Thu:
+echo     1^) Khoi dong lai may mot lan roi chay lai SETUP.bat
+echo        ^(ban chay Visual C++ doi khi chi an sau khi khoi dong lai^).
+echo     2^) Neu van khong duoc: chup man hinh nay gui nguoi ho tro.
+echo.
+pause
+exit /b 1
+
+:qt_ok
 %PYEXE% -c "import PyQt5.QtWidgets, PIL; print('  - Giao dien Qt: OK')"
-if errorlevel 1 (
-  echo.
-  echo   !!! Chua import duoc PyQt5 hoac Pillow.
-  echo   -^> Chup man hinh nay gui nguoi ho tro.
-  echo.
-  pause
-  exit /b 1
-)
 REM Do luon cac thu vien cua tab "Tu dong". Chung khong can de MO tool, nen
 REM thieu chung thi buoc kiem cu van bao OK - roi khach bam Chay o tab Tu dong,
 REM tool chay het ba khau dau (da TRA TIEN) moi chet o khau 4. Do o day thi
