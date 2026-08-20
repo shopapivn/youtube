@@ -79,10 +79,12 @@ def test_cau_loi_dai_bi_cat_khong_lam_ngap_nhat_ky():
 
 
 def test_loi_khong_mang_ma_thi_khong_che_them_gi():
+    """LoiTaiVe với status=0 rơi vào MAT_MANG — gentle log thay vì verbose."""
     loi = LoiTaiVe("mạng đứt giữa chừng", 0)
     _, dong = _chay(loi)
     assert "request_id" not in dong[0]
-    assert "mạng đứt giữa chừng" in dong[0]
+    # MAT_MANG in gentle log, không in câu lỗi gốc
+    assert "mạng chập chờn" in dong[0]
 
 
 def test_chay_tron_thi_khong_in_dong_nao():

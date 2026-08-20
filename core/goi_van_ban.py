@@ -73,7 +73,7 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .su_co import (
-    CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, NHA_MAY_NGHI, TAM_NGHI,
+    CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, MAT_MANG, NHA_MAY_NGHI, TAM_NGHI,
     dau_vet, goi_kien_nhan, nhip_cho, phan_loai,
 )
 
@@ -102,7 +102,7 @@ _SO_LUOT_KHOA = 4
 #: **đúng khoá cũ** chính là cách lấy lại bài đã trả tiền khi mất phản hồi giữa
 #: chừng. Đổi khoá ở đây là vứt bài ấy đi rồi viết lại từ đầu.
 _DOI_GIU_KHOA: Sequence[str] = (CHO_TIEP, CHAM_LAI, HET_KHO, NHA_MAY_NGHI,
-                                KHOA_DA_DUNG)
+                                KHOA_DA_DUNG, MAT_MANG)
 
 
 #: Client riêng cho đường viết chữ, **không tự thử lại**. Khoá theo `id` client gốc.

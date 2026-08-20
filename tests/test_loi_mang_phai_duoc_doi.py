@@ -36,7 +36,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.errors import describe  # noqa: E402
-from core.su_co import CHET, TAM_NGHI, nhip_cho, phan_loai  # noqa: E402
+from core.su_co import CHET, MAT_MANG, TAM_NGHI, nhip_cho, phan_loai  # noqa: E402
 
 #: Mười ba loại đo được trên máy thật.
 LOI_MANG = [
@@ -56,7 +56,7 @@ LOI_MANG = [
 
 @pytest.mark.parametrize("loi", LOI_MANG, ids=lambda e: type(e).__name__)
 def test_moi_loai_loi_mang_deu_duoc_doi(loi):
-    assert phan_loai(loi) == TAM_NGHI, type(loi).__name__
+    assert phan_loai(loi) == MAT_MANG, type(loi).__name__
 
 
 @pytest.mark.parametrize("loi", LOI_MANG, ids=lambda e: type(e).__name__)
@@ -79,7 +79,7 @@ def test_HAI_NOI_PHAI_NOI_CUNG_MOT_DIEU(loi):
 def test_cau_loi_RONG_van_nhan_ra_duoc():
     """Bản cũ dò chữ, mà `httpx.ReadError('')` thì không có chữ nào."""
     assert str(httpx.ReadError("")) == ""
-    assert phan_loai(httpx.ReadError("")) == TAM_NGHI
+    assert phan_loai(httpx.ReadError("")) == MAT_MANG
 
 
 def test_KHONG_coi_loi_TEP_la_loi_mang():
@@ -94,4 +94,4 @@ def test_loi_boc_trong_loi_khac_van_nhan_ra():
     goc = httpx.ConnectError("")
     ngoai = RuntimeError("gọi API hỏng")
     ngoai.__cause__ = goc
-    assert phan_loai(ngoai) == TAM_NGHI
+    assert phan_loai(ngoai) == MAT_MANG

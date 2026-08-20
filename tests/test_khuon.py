@@ -345,8 +345,8 @@ class TestKhongDeLaiKenhNuaVoi:
 class TestChienLuocDeLen:
     """Chiến lược đè lời nhắc lên ngách — đè, không nhân bản cả bộ."""
 
-    def test_cover_de_dung_hai_tep(self, goc):
-        """Hai tệp, không hơn.
+    def test_cover_de_dung_ba_tep(self, goc):
+        """Ba tệp, không hơn.
 
         Bản đầu của cover có năm bước: mổ bản gốc ra JSON, dàn ý có ngân sách
         ký tự từng phần, viết từng phần, chấm bảy phép, khâu lại. Chủ dự án bỏ
@@ -354,17 +354,31 @@ class TestChienLuocDeLen:
         thứ nó sẽ cứng và không hay"* — và bộ hai lời nhắc của TL4 **đã bật
         kiếm tiền nhiều kênh**.
 
+        Sau đó thêm lại đúng MỘT bước, do chính chủ dự án đề: *"có thể có 1
+        bước trước khi viết đó là việc phân tích kịch bản đối thủ, để biết nó
+        hay chỗ nào và chưa hay chỗ nào"*. Một bước đọc, không phải một cỗ máy.
+
         Phép kiểm này giữ cover ở đúng cỡ ấy.
         """
         dung_kenh(goc, "K-CL", ma_nganh=NGANH, ma_ve=VE, ma_van_hoa=VAN_HOA,
                   ma_chien_luoc="cover", voice_id="g")
         thu = os.path.join(duong_kenh(goc, "K-CL"), THU_MUC_PROMPT)
         goc_nganh = duong_khuon(goc, "nganh", NGANH, THU_MUC_PROMPT)
-        khac = [t for t, _m in BUOC_PROMPT
-                if os.path.isfile(os.path.join(thu, t))
-                and open(os.path.join(thu, t), "rb").read()
-                != open(os.path.join(goc_nganh, t), "rb").read()]
-        assert sorted(khac) == ["2-viet.md", "3-sua.md"], khac
+
+        def khac_nganh(ten):
+            """Tệp này do chiến lược mang tới — đè lên ngách, hoặc ngách không có."""
+            cua_kenh = os.path.join(thu, ten)
+            cua_nganh = os.path.join(goc_nganh, ten)
+            if not os.path.isfile(cua_kenh):
+                return False
+            if not os.path.isfile(cua_nganh):
+                return True          # chiến lược THÊM tệp mới, không phải đè
+            return (open(cua_kenh, "rb").read()
+                    != open(cua_nganh, "rb").read())
+
+        khac = [t for t, _m in BUOC_PROMPT if khac_nganh(t)]
+        assert sorted(khac) == ["2-viet.md", "2a-phan-tich.md",
+                                "3-sua.md"], khac
 
     def test_cover_hoi_DA_HON_chu_khong_hoi_DA_GIONG(self, goc):
         """Cả khác biệt của cover nằm ở đúng câu hỏi này.
@@ -378,8 +392,31 @@ class TestChienLuocDeLen:
         thu = os.path.join(duong_kenh(goc, "K-HON"), THU_MUC_PROMPT)
         with open(os.path.join(thu, "3-sua.md"), encoding="utf-8") as t:
             sua = t.read()
-        assert "ĐÃ HƠN CHƯA" in sua
-        assert "bám câu chữ bản gốc" in sua
+        # Gộp khoảng trắng: lời nhắc bọc dòng ở 79 cột nên câu hỏi có thể bị
+        # cắt làm đôi giữa "HƠN" và "CHƯA".
+        gon = " ".join(sua.split())
+        assert "ĐÃ HAY HƠN BẢN GỐC CHƯA" in gon
+        # ═══ BẢN GỐC KHÔNG ĐƯỢC NẰM TRONG BƯỚC SỬA ═══
+        #
+        # Đo từng mốc trên một lượt chạy thật 19/08/2026, ba mẫu:
+        #
+        #     sau bước viết  30,5% / 21,4% / 56,9% trùng nguyên văn bản gốc
+        #     sau bước sửa   77,6% / 77,0% / 77,5%
+        #
+        # Bước sửa có bản gốc trong tay thì nó viết về phía bản gốc, bất kể
+        # lời nhắc dặn gì — bốn cách diễn đạt khác nhau đều cho cùng kết quả.
+        # Bỏ bản gốc ra khỏi bước này, để lại ghi chú của bước phân tích, thì
+        # ba mẫu tiếp theo cho 1,8% / 1,5% / 1,5%.
+        #
+        # Đây là phép kiểm chặn việc ai đó "tiện tay" đính bản gốc lại vào.
+        assert "<<COMPETITOR_TRANSCRIPT>>" not in sua
+        assert "<<PHAN_TICH>>" in sua
+        assert "GIỐNG" not in sua.upper(), "cover không hỏi đã giống chưa"
+        # Bước đọc bản gốc phải hỏi cả hai chiều — chỉ hỏi "hay chỗ nào" thì
+        # bước viết không có chỗ nào để mà vượt.
+        with open(os.path.join(thu, "2a-phan-tich.md"), encoding="utf-8") as t:
+            pt = t.read()
+        assert "HAY ở chỗ nào" in pt and "CHƯA HAY ở chỗ nào" in pt
         # Câu ElevenLabs là nguyên văn của chủ dự án — đừng "viết lại cho hay".
         for x in ("ElevenLabs", "không bị đều đều", "KHÔNG liền nhau",
                   "KHÔNG BỊ dính chữ"):
@@ -429,4 +466,4 @@ class TestBaKenhNhatTrenDiaThat:
             pytest.skip("chưa có kênh TL5-T7")
         with open(os.path.join(thu, THU_MUC_PROMPT, "3-sua.md"),
                   encoding="utf-8") as t:
-            assert "ĐÃ HƠN CHƯA" in t.read()
+            assert "ĐÃ HAY HƠN BẢN GỐC CHƯA" in " ".join(t.read().split())

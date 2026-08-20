@@ -50,11 +50,13 @@ loạt, lặp lại. Đó là chuyện nội dung, không phải chuyện thẻ 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 __all__ = [
+    "go_dinh_dang",
     "DAU_AI", "KY_TU_AN", "dau_ai_trong", "lam_sach_anh", "lam_sach_video",
     "lam_sach_chu", "lam_sach_tep",
     "CENT_DOI", "co_doi_cao_do", "loc_doi_cao_do", "doi_cao_do",
@@ -469,3 +471,42 @@ def lam_sach_tep(tep: str, ffmpeg: str = "") -> bool:
         except OSError:
             return False
     return False
+
+
+#: Dấu định dạng markdown trong lời đọc.
+#:
+#: ═══ VÌ SAO PHẢI GỠ ═══
+#:
+#: Kịch bản đi thẳng từ tệp `.txt` vào bộ đọc giọng nói. Lời nhắc đã dặn *"xuất
+#: dạng file txt để chạy voice ElevenLabs"*, nhưng AI vẫn hay in đậm mấy chữ nó
+#: cho là quan trọng. Đo trên sáu lượt chạy thật ngày 19/08/2026: bốn lượt sạch,
+#: hai lượt còn **86** và **98** dấu sao.
+#:
+#: Bộ đọc gặp `**強く働いてる**` thì hoặc đọc luôn dấu sao, hoặc vấp — và khách
+#: chỉ nghe ra là "giọng đọc bị lỗi", không đoán được vì sao. Tệp kịch bản cũng
+#: là thứ khách mở ra đọc, nên để dấu ở đó chỉ tổ rác mắt.
+#:
+#: `lam_sach_chu` cố ý KHÔNG làm việc này — nó chỉ bỏ ký tự vô hình và hứa
+#: "không đổi một chữ nào người đọc thấy". Dấu sao thì người đọc thấy, nên nó
+#: phải là một hàm riêng, gọi ở chỗ riêng.
+_DAM = re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.DOTALL)
+#: Nghiêng: `*chữ*`. KHÔNG dùng lookaround kiểu chữ Latin — tiếng Nhật
+#: không có ranh giới từ, nên `*本当に*ですか` sẽ trượt. Thay bằng luật
+#: chặt hơn: không khoảng trắng ngay bên trong, không xuống dòng, không
+#: chứa dấu sao. Nhờ vậy `2 * 3` và `a * b` không bị đụng tới.
+_NGHIENG = re.compile(r"\*(?!\s)([^*\n]+?)(?<!\s)\*")
+_TIEU_DE = re.compile(r"^\s{0,3}#{1,6}\s*", re.MULTILINE)
+
+
+def go_dinh_dang(chu: str) -> str:
+    """Gỡ dấu markdown khỏi lời đọc, giữ nguyên chữ.
+
+    Chỉ gỡ **dấu**, không gỡ chữ: `**mạnh**` thành `mạnh`, không thành rỗng.
+    Dòng tiêu đề `## Phần 1` thành `Phần 1` — chữ ấy vẫn là lời đọc, chỉ có
+    mấy dấu thăng là không.
+    """
+    if not chu:
+        return chu
+    chu = _DAM.sub(lambda m: m.group(1) or m.group(2) or "", chu)
+    chu = _NGHIENG.sub(r"\1", chu)
+    return _TIEU_DE.sub("", chu)

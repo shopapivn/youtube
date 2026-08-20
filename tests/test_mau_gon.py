@@ -232,6 +232,13 @@ class TestKhongThieuBuocNao:
         d = os.path.join(goc, "CHANNEL", "_MAU-GON", "prompt")
         return {t for t in os.listdir(d) if t.endswith(".md")}
 
+    def test_buoc_doc_ban_goc_khong_voi_toi_bo_gon(self):
+        """Miễn trừ ở `BO_QUA_DUOC` chỉ đúng chừng nào cái cổng còn đó.
+
+        Kiểm luôn cổng ở đây, thay vì tin vào một dòng chú thích.
+        """
+        assert "2a-phan-tich.md" not in self._bo()
+
     def test_co_buoc_nan_do_dai(self):
         assert "4-do-dai.md" in self._bo()
 
@@ -249,7 +256,13 @@ class TestKhongThieuBuocNao:
         # Chỉ những tệp mã lấy ra để CHẠY, không tính tên nằm trong chú thích.
         can = set(re.findall(r'k\.prompt\.get\(\s*"([0-9][^"]+\.md)"', ma))
         can |= set(re.findall(r'k\.prompt\[\s*"([0-9][^"]+\.md)"\s*\]', ma))
-        thieu = {t for t in can if t not in self._bo()} - BO_QUA_DUOC
+        # `2a-phan-tich.md` là bước ĐỌC bản gốc, chỉ chiến lược "cover" có.
+        # Bộ gọn là bộ remake nên không có tệp ấy, và dây chuyền tự bỏ qua
+        # bước thiếu tệp. Miễn trừ theo CẤU TRÚC — khác hẳn `BO_QUA_DUOC` vốn
+        # nghĩa là "thiếu cũng không tắt phép kiểm nào", và danh sách đó có
+        # phép canh riêng không cho phình ra.
+        thieu = ({t for t in can if t not in self._bo()}
+                 - BO_QUA_DUOC - {"2a-phan-tich.md"})
         assert not thieu, "bộ gọn thiếu: {0}".format(sorted(thieu))
 
     def test_danh_sach_bo_qua_khong_phinh_ra(self):

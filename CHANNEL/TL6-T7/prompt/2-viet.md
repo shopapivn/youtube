@@ -3,6 +3,8 @@
 
 Tiêu đề video: **<<TITLE>>**
 Viết bằng: **<<LANGUAGE>>**
+Dài: **khoảng <<CHARS>> ký tự** — bản gốc dưới đây dài <<CHARS_GOC>> ký
+tự, lấy đó mà ước lượng.
 
 Bản địa hoá cho người xem của thứ tiếng đó — không phải dịch từng chữ. Tiền
 bạc, giá cả, cơ quan, chuyện đời thường phải là thứ người nghe đang sống cùng.

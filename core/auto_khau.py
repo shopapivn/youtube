@@ -386,7 +386,7 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
     #
     # `core/su_co.py` vốn đã có bảng nhịp lùi tính sẵn cho từng loại sự cố.
     # Chỗ này chỉ việc dùng nó.
-    from .su_co import (TAM_NGHI, dau_vet, nhip_cho,  # noqa: PLC0415
+    from .su_co import (MAT_MANG, TAM_NGHI, dau_vet, nhip_cho,  # noqa: PLC0415
                         phan_loai as _phan)
 
     for lan in range(4):

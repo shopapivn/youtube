@@ -864,8 +864,16 @@ class TrangTuDong(QWidget):
                     luot.thu_muc))
 
     def _hong(self, loi: BaseException) -> None:
+        # Lưới an toàn: MAT_MANG không bao giờ thoát ra vì retry vô hạn, nhưng nếu
+        # lọt tới đây thì log-only thay vì dialog — đây là lỗi mạng chập chờn, không
+        # cần khách làm gì.
+        from core.su_co import MAT_MANG, phan_loai  # noqa: PLC0415
+        if phan_loai(loi) == MAT_MANG:
+            self._ghi("[LỖI] Mạng chập chờn — đã thử lại nhưng vẫn không kết nối được. "
+                      "Kiểm tra VPN hoặc wifi rồi chạy lại.")
+        else:
+            self._app.show_error(loi)
         self._ket_thuc()
-        self._app.show_error(loi)
 
     def _ket_thuc(self) -> None:
         self._dang_chay = False

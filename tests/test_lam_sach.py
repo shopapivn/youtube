@@ -439,3 +439,52 @@ class TestVideo:
         assert not lam_sach_video(FFMPEG, tep)
         assert os.path.isfile(tep)
         assert not [t for t in os.listdir(str(tmp_path)) if ".sach" in t]
+
+
+class TestGoDinhDangMarkdown:
+    """Kịch bản đi thẳng vào bộ đọc giọng nói — dấu markdown lọt vào là hỏng.
+
+    Đo trên sáu lượt chạy thật ngày 19/08/2026: bốn lượt sạch, hai lượt còn 86
+    và 98 dấu sao. Bộ đọc gặp `**強く働いてる**` thì hoặc đọc luôn dấu sao, hoặc
+    vấp — và khách chỉ nghe ra "giọng đọc bị lỗi".
+    """
+
+    def _go(self, chu):
+        from core.lam_sach import go_dinh_dang
+
+        return go_dinh_dang(chu)
+
+    def test_go_dam_giu_chu(self):
+        assert self._go("これ、**強く**です") == "これ、強くです"
+        assert self._go("__đậm__ nữa") == "đậm nữa"
+
+    def test_go_nghieng(self):
+        assert self._go("*本当に*ですか") == "本当にですか"
+
+    def test_go_dau_thang_giu_loi_doc(self):
+        """`## 1つ目` thành `1つ目` — chữ ấy vẫn phải đọc lên."""
+        assert self._go("## 1つ目——脳の話") == "1つ目——脳の話"
+        assert self._go("### Phần 2\nnội dung") == "Phần 2\nnội dung"
+
+    def test_KHONG_dung_toi_dau_sao_that(self):
+        """Phép nhân và mấy dấu sao lẻ không phải markdown — đừng đụng."""
+        for x in ("2 * 3 = 6", "a * b", "5 sao * chất lượng"):
+            assert self._go(x) == x
+
+    def test_bai_khong_co_markdown_thi_y_nguyen(self):
+        bai = "朝、スマホを開いたら。\n\nなんでみんなあんなに熱中できるんだろう。"
+        assert self._go(bai) == bai
+
+    def test_rong_va_None_khong_lam_sap(self):
+        assert self._go("") == ""
+        assert self._go(None) is None
+
+    def test_khau_kich_ban_co_goi_no(self):
+        """Viết hàm mà quên nối vào dây chuyền thì nó chẳng chữa được gì."""
+        import os
+
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(goc, "core", "auto_khau.py"),
+                  encoding="utf-8") as t:
+            ma = t.read()
+        assert "go_dinh_dang(ban_nhap)" in ma

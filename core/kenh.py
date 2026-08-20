@@ -61,6 +61,9 @@ THU_MUC_PROMPT = "prompt"
 #: cũ để ở nơi khác: viết lời nhắc tạo ảnh/clip cho từng cảnh.
 BUOC_PROMPT = (
     ("1-tieu-de.md", "Đặt tiêu đề và chữ trên ảnh bìa"),
+    # Chỉ chiến lược "cover" dùng bước này. Kênh không có tệp thì dây chuyền
+    # bỏ qua — cùng nết với mọi bước không bắt buộc khác.
+    ("2a-phan-tich.md", "Đọc bản gốc: hay chỗ nào, chưa hay chỗ nào"),
     ("2-viet.md", "Viết kịch bản lời đọc"),
     ("3-sua.md", "Đối chiếu và sửa chỗ hụt"),
     ("4-do-dai.md", "Nắn cho đúng độ dài"),

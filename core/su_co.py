@@ -40,7 +40,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple
 __all__ = [
     "dau_vet",
     "CHO_TIEP",
-    "KHOA_DA_DUNG", "KHOA_LECH", "TAM_NGHI", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
+    "KHOA_DA_DUNG", "KHOA_LECH", "TAM_NGHI", "MAT_MANG", "CHAM_LAI", "NOI_DUNG", "HET_KHO", "HET_TIEN",
     "CHET", "NHA_MAY_NGHI", "LoiNoiDung", "LoiTaiVe",
     "phan_loai", "nen_thu_lai", "nhip_cho", "mo_ta", "goi_kien_nhan",
     "dat_tran_moi_phut",
@@ -100,6 +100,16 @@ KHOA_LECH = "khoa-lech"
 
 #: Máy chủ trục trặc tạm, chưa nhận được việc. Chưa trừ tiền. Đợi rồi thử lại.
 TAM_NGHI = "tam-nghi"
+
+#: **Mất mạng phía khách** (VPN chập chờn, wifi đứt giữa chừng). Request chưa rời
+#: khỏi máy → retry cùng khoá **tuyệt đối an toàn** (không thể trừ tiền hai lần).
+#: Retry **vô hạn** với backoff có trần — chỉ dừng khi mạng về hoặc khách bấm Dừng.
+#:
+#: Tách riêng khỏi `TAM_NGHI` vì bản chất khác: máy chủ trục trặc tạm (502/503/504,
+#: engine down) có nhịp đợi hữu hạn ~13 phút là hợp lý — lâu hơn là `NHA_MAY_NGHI`
+#: (cần người vận hành). Còn mất mạng phía khách thì nên đợi tới khi mạng về: một
+#: lượt chạy 3–5 phút là bình thường khi VPN/wifi chập chờn.
+MAT_MANG = "mat-mang"
 
 #: Gọi quá dày. Lùi lại lâu hơn hẳn rồi thử lại.
 CHAM_LAI = "cham-lai"
@@ -187,8 +197,8 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
                 "temporarily", "tạm thời")),
     # Hết giờ chờ phía client — máy chủ có thể vẫn đang làm.
     (CHO_TIEP, ("timeout", "timed out", "hết giờ", "read timeout")),
-    # Đứt mạng.
-    (TAM_NGHI, ("connection", "kết nối", "mạng", "network", "ssl",
+    # Đứt mạng phía khách — request chưa rời khỏi máy, retry vô hạn an toàn.
+    (MAT_MANG, ("connection", "kết nối", "mạng", "network", "ssl",
                 "remote end closed")),
 )
 
@@ -198,6 +208,9 @@ _BANG: Sequence[Tuple[str, Tuple[str, ...]]] = (
 #: câu "đang xử lý". `TAM_NGHI` kiên nhẫn tới ~13 phút vì chính câu báo của máy
 #: chủ nói *"nếu kéo dài quá vài phút hãy báo hỗ trợ"*, tức vài phút là bình
 #: thường. `CHAM_LAI` lùi mạnh nhất — gọi lại sớm là ăn 429 tiếp.
+#:
+#: `MAT_MANG` không có trong bảng này — nó dùng `_NHIP_MANG` riêng với cơ chế
+#: retry vô hạn (xem `_VO_HAN`).
 _NHIP = {
     # ═══ LOẠI NÀY PHẢI KIÊN NHẪN, VÌ TIỀN ĐÃ TRỪ RỒI ═══
     #
@@ -230,11 +243,23 @@ _NHIP = {
     CHET: (),
 }
 
+#: Nhịp backoff cho mất mạng phía khách — trần ở 60 giây, retry vô hạn.
+#:
+#: Khác với `TAM_NGHI` (máy chủ trục trặc tạm, có giới hạn ~13 phút): mất mạng
+#: phía khách thì retry tới khi mạng về. VPN/wifi chập chờn 3–5 phút là chuyện
+#: thường, và request chưa rời khỏi máy nên retry cùng khoá tuyệt đối an toàn.
+#: Trần 60s theo CLAUDE.md — không hỏi dày hơn, nhưng không bỏ cuộc.
+_NHIP_MANG = (5, 10, 20, 30, 60)
+
+#: Các loại retry không giới hạn — chỉ dừng khi thành công hoặc khách bấm Dừng.
+_VO_HAN = frozenset({MAT_MANG})
+
 _MO_TA = {
     CHO_TIEP: "máy chủ đang làm dở việc này",
     KHOA_DA_DUNG: "việc này đang chạy dở, đang đợi lấy lại kết quả",
     KHOA_LECH: "khoá này đã dùng cho một yêu cầu khác — đổi khoá rồi gửi lại",
     TAM_NGHI: "máy chủ trục trặc tạm — chưa bị trừ tiền",
+    MAT_MANG: "mạng chập chờn — chưa bị trừ tiền, đang thử lại",
     CHAM_LAI: "đang gọi quá dày, phải chậm lại",
     NOI_DUNG: "máy chủ trả về nội dung không dùng được",
     NHA_MAY_NGHI: ("cổng ShopAPI đang không có máy chạy việc này — "
@@ -267,7 +292,7 @@ def phan_loai(loi: BaseException) -> str:
         # hỏng đường truyền — phân nhầm là hỏi lại cùng khoá rồi nhận lại rác.
         return NOI_DUNG
     if _la_loi_mang(loi):
-        return TAM_NGHI
+        return MAT_MANG
     ma_code = str(getattr(loi, "code", "") or "").strip().lower()
     if ma_code in _MA_CODE:
         return _MA_CODE[ma_code]
@@ -410,11 +435,18 @@ def _theo_ma_so(loi: BaseException) -> str:
 
 def nen_thu_lai(loai: str, lan: int) -> bool:
     """Đã thử `lan` lần rồi, còn nên thử nữa không."""
+    if loai in _VO_HAN:
+        return True
     return lan < len(_NHIP.get(loai, ()))
 
 
 def nhip_cho(loai: str, lan: int) -> float:
     """Đợi bao lâu trước lần thử thứ `lan + 1`."""
+    if loai in _VO_HAN:
+        # Retry vô hạn với backoff có trần: 5,10,20,30,60 rồi giữ ở 60s mãi.
+        # Trần 60s theo CLAUDE.md — không hỏi dày, nhưng không bỏ cuộc.
+        nhip = _NHIP_MANG
+        return float(nhip[min(lan, len(nhip) - 1)])
     nhip = _NHIP.get(loai, ())
     if not nhip:
         return 0.0
@@ -565,7 +597,7 @@ def goi_kien_nhan(
     on_log: Optional[Callable[[str], None]] = None,
     kiem_dung: Optional[Callable[[], None]] = None,
     ngu: Callable[[float], None] = time.sleep,
-    cho_phep: Sequence[str] = (CHO_TIEP, TAM_NGHI, CHAM_LAI, HET_KHO,
+    cho_phep: Sequence[str] = (CHO_TIEP, TAM_NGHI, MAT_MANG, CHAM_LAI, HET_KHO,
                                NHA_MAY_NGHI),
 ) -> Any:
     """Gọi `ham()`, kiên nhẫn qua những sự cố **đáng đợi**.
@@ -577,6 +609,10 @@ def goi_kien_nhan(
     Cũng không gồm `HET_TIEN` và `CHET`: đợi mấy cũng vậy, ném lên để người
     biết mà xử lý.
 
+    `MAT_MANG` (mất mạng phía khách) retry **vô hạn** với backoff trần 60s —
+    chỉ dừng khi mạng về hoặc khách bấm Dừng. Sau ~3 phút in một dòng gentle
+    "mạng chập chờn, vẫn đang thử lại…" rồi im lặng, in lại mỗi ~5 phút.
+
     ⚠ Người gọi phải bảo đảm `ham()` mang **cùng một Idempotency-Key** qua mọi
     lần thử. Đó là thứ khiến việc thử lại ở đây không bao giờ trừ tiền hai lần.
     """
@@ -586,6 +622,8 @@ def goi_kien_nhan(
             on_log(dong)
 
     lan = 0
+    da_bao_mat_mang = False
+    lan_bao_cuoi = 0
     while True:
         if kiem_dung is not None:
             kiem_dung()
@@ -597,18 +635,29 @@ def goi_kien_nhan(
                 raise
             cho = nhip_cho(loai, lan)
             lan += 1
-            # In cả câu lỗi THẬT và mã tra cứu, không chỉ tên nhóm.
-            #
-            # Bản trước chỉ in `mo_ta(loai)` — nghĩa là mọi sự cố khác nhau đều
-            # hiện lên một câu y hệt: "máy chủ trục trặc tạm". Lượt chạy thật
-            # 18/08/2026 có **34 dòng như thế dồn trong 20 giây** và không dòng
-            # nào cho biết đó là 502, 503, hay engine nào đang tắt.
-            #
-            # Khách gửi ảnh chụp màn hình cho hỗ trợ thì đó là toàn bộ manh mối
-            # họ có. Một câu lặp 34 lần không tra được gì; câu lỗi kèm
-            # `request_id` thì tra được ngay.
-            ghi("  {0} — đợi {1:.0f} giây rồi thử lại (lần {2}). {3}{4}".format(
-                mo_ta(loai), cho, lan, str(loi)[:100], dau_vet(loi)))
+            # Gentle log cho MAT_MANG: in một lần lúc bắt đầu mất mạng, rồi im
+            # lặng, in lại mỗi ~5 phút (300s) để khách biết tool còn sống.
+            if loai == MAT_MANG:
+                if not da_bao_mat_mang:
+                    ghi("  mạng chập chờn, đang thử lại — sẽ tự tiếp tục khi mạng về.")
+                    da_bao_mat_mang = True
+                    lan_bao_cuoi = lan
+                elif lan - lan_bao_cuoi >= 5:  # ~5 phút (5 lần × 60s)
+                    ghi("  … vẫn đang thử lại (lần {0}).".format(lan))
+                    lan_bao_cuoi = lan
+            else:
+                # In cả câu lỗi THẬT và mã tra cứu, không chỉ tên nhóm.
+                #
+                # Bản trước chỉ in `mo_ta(loai)` — nghĩa là mọi sự cố khác nhau đều
+                # hiện lên một câu y hệt: "máy chủ trục trặc tạm". Lượt chạy thật
+                # 18/08/2026 có **34 dòng như thế dồn trong 20 giây** và không dòng
+                # nào cho biết đó là 502, 503, hay engine nào đang tắt.
+                #
+                # Khách gửi ảnh chụp màn hình cho hỗ trợ thì đó là toàn bộ manh mối
+                # họ có. Một câu lặp 34 lần không tra được gì; câu lỗi kèm
+                # `request_id` thì tra được ngay.
+                ghi("  {0} — đợi {1:.0f} giây rồi thử lại (lần {2}). {3}{4}".format(
+                    mo_ta(loai), cho, lan, str(loi)[:100], dau_vet(loi)))
             _ngu_ngat_duoc(ngu, cho, kiem_dung)
 
 
