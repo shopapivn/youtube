@@ -252,11 +252,17 @@ REM  Loi nay khong nhac gi den "Visual C++" nen khach khong doan ra, va ban cu
 REM  chi bao "chup man hinh gui ho tro" - be tac ngay o buoc dau, y het luc
 REM  thieu Python. Nen o day tu tai va cai bo do (giong het cach tren da tu cai
 REM  Python), roi thu import lai. Chi khi van hong moi bat khach lam thu cong.
-%PYEXE% -c "import PyQt5.QtWidgets, PIL" 2>nul
+REM
+REM  QUAN TRONG: khong che loi (2>nul) o lan thu dau - de khach va ta deu THAY
+REM  ten DLL that su thieu, khong doan mu. Khach co VC++ roi ma van loi thi DLL
+REM  khac moi la thu can tim.
+%PYEXE% -c "import PyQt5.QtWidgets, PIL"
 if not errorlevel 1 goto :qt_ok
 
+echo.
 echo   - Giao dien chua mo duoc. Nhieu kha nang may thieu ban chay Microsoft
 echo     Visual C++. Studio se tu tai va cai (~25 MB, khong hoi gi them)...
+echo.
 
 REM Chon dung ban x64 hay x86 theo chinh Python dang dung - khong theo Windows.
 REM Python 32-bit tren Windows 64-bit thi phai lay ban x86, lay nham la vo ich.
@@ -274,17 +280,37 @@ REM khong kiem errorlevel o day ma thu import lai lam thuoc do that su.
 "%VCEXE%" /install /quiet /norestart
 del /q "%VCEXE%" >nul 2>&1
 
+echo   - Thu import lai...
 %PYEXE% -c "import PyQt5.QtWidgets, PIL" 2>nul
+if not errorlevel 1 goto :qt_ok
+
+REM Van loi sau khi cai VC++. Thu go PyQt5 roi cai lai - wheel co khi bi hong.
+echo   - Van chua duoc. Thu cai lai PyQt5 (wheel co the bi hong)...
+%PYEXE% -m pip uninstall -y PyQt5 PyQt5-Qt5 PyQt5-sip >nul 2>&1
+%PYEXE% -m pip install --force-reinstall --no-cache-dir PyQt5>=5.15 Pillow>=10.0 --disable-pip-version-check
+if errorlevel 1 goto :qt_bao_loi
+
+echo   - Thu import lan cuoi...
+%PYEXE% -c "import PyQt5.QtWidgets, PIL"
 if not errorlevel 1 goto :qt_ok
 
 :qt_bao_loi
 echo.
-echo   !!! Chua mo duoc giao dien (PyQt5).
+echo   ========================================================================
+echo   !!! KHONG MO DUOC GIAO DIEN (PyQt5)
+echo   ========================================================================
 echo.
-echo   Da cai ban chay Microsoft Visual C++ nhung van chua duoc. Thu:
-echo     1^) Khoi dong lai may mot lan roi chay lai SETUP.bat
-echo        ^(ban chay Visual C++ doi khi chi an sau khi khoi dong lai^).
-echo     2^) Neu van khong duoc: chup man hinh nay gui nguoi ho tro.
+echo   Da thu:
+echo     - Cai Microsoft Visual C++ Redistributable
+echo     - Cai lai PyQt5 tu dau
+echo   Van chua duoc.
+echo.
+echo   Loi cu the o tren. Hay:
+echo     1^) CHUP MAN HINH TOAN BO doan loi (ke ca ten DLL thieu^)
+echo     2^) Khoi dong lai may mot lan, chay lai SETUP.bat
+echo     3^) Neu van loi: gui anh chup man hinh cho nguoi ho tro.
+echo.
+echo   Khong gui anh thi khong biet DLL nao thieu - khong sua duoc.
 echo.
 pause
 exit /b 1
@@ -311,6 +337,16 @@ if errorlevel 1 (
   echo   -^> Chay lai SETUP.bat khi may co mang de cai imageio-ffmpeg.
   echo.
 )
+REM Khao sat phan cung: GPU, VRAM, encoder FFmpeg co san. Chi chay 1 lan, ket qua
+REM luu vao workspace/phan-cung.json de tab Tu dong va Dung video doc lai. May yeu
+REM thi dung CPU, may manh tu chon GPU/whisper model lon.
+echo   - Khao sat phan cung...
+%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.phan_cung import khao_sat, ghi_ket_qua; pc = khao_sat(); ghi_ket_qua('.', pc); print('     GPU: {}'.format('co' if pc.gpu_nvidia else 'khong'), '- VRAM:', pc.vram_mb, 'MB - CPU:', pc.cpu_cores, 'cores')"
+if errorlevel 1 (
+  echo.
+  echo   !!! Khong khao sat duoc phan cung. Tool van chay duoc - dung che do CPU.
+  echo.
+)
 REM Nhap "core" truoc: chinh no lo viec tim SDK. SDK shopapi CHUA len PyPI nen
 REM khong cai bang pip duoc - ban tai ve kem san SDK trong thu muc _sdk\, va
 REM core\__init__.py biet duong tim o do. Chay trong ma nguon du an thi no lay
@@ -332,6 +368,12 @@ REM Thieu no thi ca tool VAN CHAY, nen o day chi nhac chu khong dung setup lai.
 %PYEXE% -c "import yt_dlp; print('  - yt-dlp:', yt_dlp.version.__version__)"
 if errorlevel 1 (
   echo   - Chua co yt-dlp. Tab Nghien cuu doi thu se moi ban cai bang 1 nut bam.
+)
+REM Khao sat phan cung (GPU, VRAM, CPU) de chon encoder/whisper phu hop.
+echo   - Khao sat phan cung...
+%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.phan_cung import khao_sat, ghi_ket_qua; pc = khao_sat(); ghi_ket_qua('.', pc); print(f'     GPU: {\"co\" if pc.gpu_nvidia else \"khong\"}, VRAM: {pc.vram_mb}MB, CPU: {pc.cpu_cores} cores')"
+if errorlevel 1 (
+  echo   - Khao sat phan cung that bai. Tool van chay duoc, chi dung che do CPU.
 )
 echo.
 

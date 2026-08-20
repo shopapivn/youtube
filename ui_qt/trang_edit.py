@@ -238,8 +238,36 @@ class TrangDungVideo(QWidget):
         self._phu_de.setChecked(True)
         self._phu_de.stateChanged.connect(self._doi_phu_de)
         doc.addWidget(self._phu_de)
+
+        # Tăng tốc GPU: chỉ bật được khi SETUP dò thấy card NVIDIA. Máy không có
+        # thì ô này mờ đi, khách khỏi thắc mắc "sao bật mà không nhanh hơn".
+        self._gpu = QCheckBox("Tăng tốc GPU (nhanh hơn, chất lượng hơi kém)")
+        self._gpu.setChecked(False)
+        co_gpu = self._may_co_gpu()
+        self._gpu.setEnabled(co_gpu)
+        if co_gpu:
+            self._gpu.setToolTip(
+                "Máy bạn có card NVIDIA. Bật thì dựng nhanh hơn nhiều, nhưng "
+                "cùng dung lượng thì hình hơi kém CPU một chút. Tắt để chất "
+                "lượng tốt nhất.")
+        else:
+            self._gpu.setToolTip(
+                "Máy bạn không có card NVIDIA — dựng bằng CPU. Chạy SETUP.bat "
+                "lại nếu vừa lắp card mới.")
+        doc.addWidget(self._gpu)
+
         doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
         return hop
+
+    def _may_co_gpu(self) -> bool:
+        """Máy này có card NVIDIA dùng được cho video không (đọc từ SETUP)."""
+        try:
+            from core.phan_cung import doc_ket_qua
+            base = getattr(self._app, "base_dir", ".")
+            pc = doc_ket_qua(base)
+            return bool(pc and pc.gpu_nvidia and "h264_nvenc" in pc.ffmpeg_encoders)
+        except Exception:  # noqa: BLE001
+            return False
 
     def _doi_phu_de(self) -> None:
         bat = self._phu_de.isChecked()
@@ -261,7 +289,8 @@ class TrangDungVideo(QWidget):
             do_phan_giai=self._do_phan_giai.currentText(), fps=self._fps.value(),
             phu_de=self._phu_de.isChecked(), co_chu=self._co_chu.value(),
             mau_chu=self._mau.currentText(), vi_tri=self._vi_tri.currentText(),
-            nhac_nen=self._nhac.isChecked(), thu_muc_ra=self._ra.value)
+            nhac_nen=self._nhac.isChecked(), thu_muc_ra=self._ra.value,
+            tang_toc_gpu=self._gpu.isChecked())
 
     def _chay(self) -> None:
         if self._dang_chay:

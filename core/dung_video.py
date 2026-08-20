@@ -117,6 +117,7 @@ class CaiDatDung:
     nhac_nen: bool = True
     am_luong_nhac: float = AM_LUONG_NHAC
     thu_muc_ra: str = ""
+    tang_toc_gpu: bool = False  # bật thì dùng GPU encode (nhanh hơn, chất lượng hơi kém)
 
 
 def tim_ffmpeg() -> str:
@@ -342,8 +343,27 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
     else:
         nhan_a = "{0}:a:0".format(chi_so_tieng)
 
-    lenh += ["-filter_complex", ";".join(phan), "-map", nhan_v, "-map", nhan_a,
-             "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+    # Chọn encoder: mặc định CPU (libx264 medium crf 20). Khách bật "Tăng tốc
+    # GPU" ở tab Dựng video, và máy có NVIDIA thật, thì dùng h264_nvenc — nhanh
+    # hơn nhiều, chất lượng hơi kém một chút ở cùng dung lượng.
+    lenh += ["-filter_complex", ";".join(phan), "-map", nhan_v, "-map", nhan_a]
+    lenh += _tham_so_video(cai)
+    lenh += ["-c:a", "aac", "-b:a", "192k",
              "-shortest", "-movflags", "+faststart", dich]
     return lenh
+
+
+def _tham_so_video(cai: CaiDatDung) -> List[str]:
+    """Tham số `-c:v` + preset cho tab Dựng video, theo lựa chọn tăng tốc GPU."""
+    if getattr(cai, "tang_toc_gpu", False):
+        try:
+            from core.phan_cung import doc_ket_qua
+            pc = doc_ket_qua(".")
+            if pc and pc.gpu_nvidia and "h264_nvenc" in pc.ffmpeg_encoders:
+                return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20",
+                        "-pix_fmt", "yuv420p"]
+        except Exception:  # noqa: BLE001 — dò hỏng thì lui về CPU
+            pass
+    # Mặc định an toàn: CPU
+    return ["-c:v", "libx264", "-preset", "medium", "-crf", "20",
+            "-pix_fmt", "yuv420p"]

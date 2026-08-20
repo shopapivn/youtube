@@ -505,18 +505,32 @@ def nghe_bang_whisper(duong_mp3: str, *, ngon_ngu: str = "",
 
 def nghe_trong_tien_trinh_nay(duong_mp3: str, *, ngon_ngu: str = "",
                               cancel: Optional[threading.Event] = None,
-                              thu_muc_model: str = ""):
+                              thu_muc_model: str = "",
+                              base_dir: str = "."):
     """Nạp bộ nghe NGAY TRONG tiến trình đang chạy.
 
     ⚠ Chỉ `core/nghe_ngoai.py` được gọi hàm này, và nó gọi ở **tiến trình con**.
     Gọi từ tiến trình tool là đem cái `abort()` của C++ vào thẳng cửa sổ khách —
     xem giải thích ở `nghe_bang_whisper`.
+
+    Từ ngày 20/08/2026: chọn whisper model động theo phần cứng máy.
     """
     from faster_whisper import WhisperModel  # noqa: PLC0415
+    from core.phan_cung import doc_ket_qua, chon_whisper_model  # noqa: PLC0415
 
     san = (thu_muc_model or os.environ.get("WHISPER_MODEL_DIR", "")).strip()
-    ten = san if san and os.path.isdir(san) else "small"
-    may = WhisperModel(ten, device="cpu", compute_type="int8",
+    if san and os.path.isdir(san):
+        # User đã đặt model riêng — ưu tiên nó
+        ten = san
+        device = "cpu"
+        compute_type = "int8"
+    else:
+        # Chọn động theo phần cứng
+        pc = doc_ket_qua(base_dir)
+        ten, device = chon_whisper_model(pc)
+        compute_type = "float16" if device == "cuda" else "int8"
+
+    may = WhisperModel(ten, device=device, compute_type=compute_type,
                        local_files_only=bool(san and os.path.isdir(san)))
     doan, _tin = may.transcribe(
         duong_mp3, language=(ngon_ngu or None), word_timestamps=True,

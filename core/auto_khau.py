@@ -1516,6 +1516,23 @@ def _khau_kich_ban(bc: BoiCanh):
             "LANGUAGE": k.giong_van or k.ngon_ngu,
             "CHANNEL": _mo_ta_kenh(k),
             "CHARS": k.ky_tu_muc_tieu,
+            # ═══ MỘT CÁI THƯỚC ĐỂ SO, KHÔNG PHẢI MỘT SỐ ĐỂ ĐẾM ═══
+            #
+            # AI không đếm được ký tự. Bảo nó "khoảng 4.470 ký tự" thì nó viết
+            # 2.563 — đo được ngày 19/08/2026. Nhưng nó ước lượng rất tốt khi
+            # có một văn bản nằm ngay trước mắt để so.
+            #
+            # Đây không phải chuyện thẩm mỹ. Bản nháp hụt độ dài chính là thứ
+            # mở đường cho bước SỬA đi lấp phần thiếu bằng chữ của bản gốc. Đo
+            # từng mốc trong một lượt chạy thật:
+            #
+            #     bản gốc                4.463 ký tự
+            #     sau bước viết   30,5% trùng, 2.563 ký tự
+            #     sau bước sửa    77,6% trùng, 4.460 ký tự
+            #
+            # Bài sau khi sửa dài 4.460 trong khi bản gốc 4.463 — lệch ba ký
+            # tự. Bước sửa không sửa; nó lấp chỗ hụt bằng bản gốc.
+            "CHARS_GOC": len(tu_lieu),
             "COMPETITOR_TRANSCRIPT": tu_lieu,
             "TRANSCRIPT_SAMPLE": tu_lieu[:1500],
             "MODE": "faithful",
@@ -1561,6 +1578,36 @@ def _khau_kich_ban(bc: BoiCanh):
                  "TITLE: {0}\nTHUMB: {1}\n".format(tieu_de, chu_bia))
         chung["TITLE"] = tieu_de
         chung["THUMB"] = chu_bia
+
+        # ═══ MỘT BƯỚC ĐỌC BẢN GỐC TRƯỚC KHI VIẾT ═══
+        #
+        # Chỉ chạy khi kênh có `2a-phan-tich.md`; kênh không có thì bỏ qua, y
+        # như mọi bước không bắt buộc khác.
+        #
+        # Chủ dự án, 19/08/2026: *"có thể có 1 bước trước khi viết đó là việc
+        # phân tích kịch bản đối thủ, để biết nó hay chỗ nào và chưa hay chỗ
+        # nào để khi viết có thêm yêu cầu về các vấn đề đó"*.
+        #
+        # Vì sao đáng một lượt gọi: bảo AI *"hãy viết hay hơn"* là giao một
+        # mục tiêu không có chỗ bám. Đưa nó một danh sách **chỗ cụ thể để
+        # vượt** thì việc trở nên làm được. Bản phân tích đi vào lời nhắc viết
+        # qua `<<PHAN_TICH>>`.
+        #
+        # Ghi ra đĩa để đứt là chạy tiếp — cùng nết với các bước nháp bên dưới.
+        khuon_pt = k.prompt.get("2a-phan-tich.md", "")
+        if khuon_pt.strip() and not _doc_chu(duong_kb):
+            nhap_pt = os.path.join(d, "1-nhap-phan-tich.txt")
+            da_co = _doc_chu(nhap_pt).strip()
+            if da_co:
+                bc.ghi("  phân tích bản gốc — đã có từ lần trước, dùng lại.")
+                chung["PHAN_TICH"] = da_co
+            else:
+                bc.kiem_dung()
+                bc.ghi("  đọc và phân tích bản gốc…")
+                pt = _goi(bc, _thay(khuon_pt, chung),
+                          _khoa_chat(luot, "2a-phan-tich.md")).strip()
+                chung["PHAN_TICH"] = pt
+                _ghi_chu(nhap_pt, pt + "\n")
 
         # Bốn bước viết, chạy lần lượt, mỗi bước ăn kết quả bước trước.
         ban_nhap = _doc_chu(duong_kb)
@@ -1639,10 +1686,15 @@ def _khau_kich_ban(bc: BoiCanh):
                     bc.ghi("  (bỏ bản đọc lại: nó làm lệch {0:.0%}, bản trước "
                            "lệch {1:.0%})".format(_lech(cuoi, k),
                                                   _lech(ban_nhap, k)))
+            # Gỡ dấu markdown TRƯỚC khi ghi: tệp này đi thẳng vào bộ đọc giọng
+            # nói, và AI hay in đậm mấy chữ nó cho là quan trọng dù lời nhắc đã
+            # dặn xuất dạng txt. Xem `go_dinh_dang`.
+            from .lam_sach import go_dinh_dang  # noqa: PLC0415
+            ban_nhap = go_dinh_dang(ban_nhap)
             _ghi_chu(duong_kb, ban_nhap + "\n")
             # Bài đã xong thì mấy tệp nháp không còn việc gì. Để lại chỉ làm
             # thư mục kết quả rối, và người mở ra không biết tệp nào là bài thật.
-            for ten in ("2", "3"):
+            for ten in ("2", "3", "phan-tich"):
                 try:
                     os.remove(os.path.join(d, "1-nhap-{0}.txt".format(ten)))
                 except OSError:
@@ -3342,7 +3394,7 @@ def _khau_dung(bc: BoiCanh):
         _ghep_video(ffmpeg, manh, mp3, srt if dot else "", dich,
                     giay=giay, ghi=bc.ghi, nhac=nhac,
                     am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)),
-                    khung=khung)
+                    khung=khung, base_dir=bc.goc)
         # Video dựng xong vốn đã sạch thẻ — FFmpeg mã hoá lại là thẻ của tệp
         # nguồn mất hết. Vẫn chạy một lượt cho chắc: nó chỉ chép luồng sang tệp
         # mới, mất vài giây cho cả video mười phút, và nó bảo hiểm cho ngày nào
@@ -3435,7 +3487,8 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 dich: str, giay: Optional[Sequence[float]] = None,
                 ghi: Optional[Callable[[str], None]] = None,
                 nhac: str = "", am_luong: float = 0.12,
-                khung: Optional[Sequence[int]] = None) -> None:
+                khung: Optional[Sequence[int]] = None,
+                base_dir: str = ".") -> None:
     """Cắt từng clip về đúng độ dài cảnh, nối lại, gắn tiếng, đốt phụ đề.
 
     `giay[i]` là độ dài **cảnh thứ i** lấy từ bảng cảnh — không phải độ dài
@@ -3450,7 +3503,11 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
 
     `khung` là (rộng, cao) muốn xuất ra; `None` = giữ đúng cỡ nhà cung cấp trả
     về. Xem `Kenh.do_phan_giai` để biết vì sao cần và cái được thật là gì.
+
+    `base_dir` là thư mục gốc của tool — cần để đọc kết quả khảo sát phần cứng.
     """
+    from core.phan_cung import doc_ket_qua, chon_encoder
+
     thu_muc = os.path.dirname(dich) or "."
     tam = os.path.join(thu_muc, "_cat")
     os.makedirs(tam, exist_ok=True)
@@ -3474,10 +3531,18 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     # **chính là video giao cho khách**. Để `crf 14` cho nó là giao một tệp to
     # gấp mấy lần cần thiết, tải lên YouTube lâu mà YouTube vẫn nén lại hết.
     # Nên hai đường phải khác nhau, không dùng chung một con số.
-    if ma_lai:
-        preset_cat, crf_cat = "medium", "14"   # bản trung gian, xoá sau khi xong
-    else:
-        preset_cat, crf_cat = "slow", "18"     # đây là bản cuối, đừng làm nó phình
+    #
+    # Từ ngày 20/08/2026: chọn encoder theo khảo sát phần cứng. Bản trung gian
+    # (intermediate=True) dùng GPU nếu có — nhanh gấp 4–8 lần. Bản master cuối
+    # (intermediate=False) luôn dùng CPU để đảm bảo chất lượng.
+    pc = doc_ket_qua(base_dir)
+    codec_cuoi, opts_cuoi = chon_encoder(pc, intermediate=False)
+
+    # Chọn encoder cho BƯỚC CẮT clip. Chỗ này quyết định theo `ma_lai`:
+    #   - ma_lai=True: bản cắt là TRUNG GIAN (sẽ mã lại lần nữa) → GPU nếu có.
+    #   - ma_lai=False: bản cắt CHÍNH LÀ video giao khách (bước sau `-c copy`)
+    #     → phải dùng encoder bản cuối (CPU an toàn), không được dùng GPU.
+    codec_cat, opts_cat = chon_encoder(pc, intermediate=ma_lai)
 
     dung = []
     for i, m in enumerate(clip):
@@ -3499,10 +3564,13 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
             # `-t` sau `-i` = cắt theo thời gian PHÁT. Phải mã lại chứ không
             # `-c copy` được: copy chỉ cắt được ở khung khoá, lệch tới cả giây,
             # và 99 lần lệch cộng dồn là hình lại trôi khỏi tiếng.
-            _chay(ffmpeg, ["-y", "-hide_banner", "-nostats", "-i", m,
-                           "-vf", loc, "-t", "{0:.3f}".format(can),
-                           "-c:v", "libx264", "-preset", preset_cat,
-                           "-crf", crf_cat, "-pix_fmt", "yuv420p", "-an", ra])
+            lenh_cat = ["-y", "-hide_banner", "-nostats", "-i", m,
+                        "-vf", loc, "-t", "{0:.3f}".format(can),
+                        "-c:v", codec_cat]
+            for k, v in opts_cat.items():
+                lenh_cat.extend([k, str(v)])
+            lenh_cat.extend(["-pix_fmt", "yuv420p", "-an", ra])
+            _chay(ffmpeg, lenh_cat)
         dung.append(ra)
         if ghi is not None and (i + 1) % 20 == 0:
             ghi("    cắt {0}/{1} clip…".format(i + 1, len(clip)))
@@ -3552,8 +3620,15 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
         # Lần nén cuối: `slow -crf 18` thay cho `medium -crf 20`. Đây là bản
         # giao cho YouTube, mà việc của mình là đưa cho nó **bản gốc sạch** —
         # YouTube mã hoá lại hết, nên nén tiếc ở đây chỉ tổ mất nét hai lần.
-        lenh += ["-vf", ",".join(buoc), "-c:v", "libx264",
-                 "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p"]
+        # Từ ngày 20/08/2026: luôn dùng CPU cho bản cuối (an toàn), nhưng vẫn
+        # đọc từ kết quả khảo sát để nhất quán.
+        lenh += ["-vf", ",".join(buoc), "-c:v", codec_cuoi]
+        for k, v in opts_cuoi.items():
+            if k not in ("-preset", "-crf"):
+                lenh.extend([k, str(v)])
+        lenh.extend(["-preset", opts_cuoi.get("-preset", "slow")])
+        lenh.extend(["-crf", opts_cuoi.get("-crf", "18")])
+        lenh.extend(["-pix_fmt", "yuv420p"])
     else:
         lenh += ["-c:v", "copy"]
 
