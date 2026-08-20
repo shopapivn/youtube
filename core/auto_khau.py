@@ -58,7 +58,7 @@ from .su_co import (SUAT_TAI_TEP, LoiNoiDung, LoiTaiVe, goi_kien_nhan,
 
 __all__ = [
     "BoiCanh", "dung_bo_viec", "chia_doan_doc", "dem_tien_do",
-    "CHU_MOI_LUOT_DOC", "loc_json",
+    "CHU_MOI_LUOT_DOC", "loc_json", "sua_loi_nhac_canh",
 ]
 
 #: Số ký tự tối đa gửi cho một lượt đọc — **trần cứng của cổng, đã đo**.
@@ -2287,6 +2287,44 @@ def _doc_canh(luot: LuotChay) -> List[Dict[str, Any]]:
     if not tho.strip():
         raise RuntimeError("chưa có bảng cảnh")
     return json.loads(tho)
+
+
+def sua_loi_nhac_canh(luot: LuotChay, so_canh: int, *,
+                      img_prompt: Optional[str] = None,
+                      video_prompt: Optional[str] = None) -> Dict[str, Any]:
+    """Sửa lời nhắc ảnh/clip của **một cảnh** trong `4-canh.json`.
+
+    Đây là đường để người dùng xem lại một cảnh chưa ưng, sửa lời nhắc, rồi bảo
+    tool tạo lại đúng cảnh ấy — không đụng tới 118 cảnh kia.
+
+    Chỉ ghi vào `4-canh.json` (bản chính mà khâu ảnh và khâu clip đọc). Không
+    đụng `PROJECTS/` kết quả và không đụng file cảnh nguồn của kênh — đây là file
+    làm việc của chính lượt đang chạy.
+
+    `None` nghĩa là **giữ nguyên** lời nhắc cũ; chuỗi rỗng bị chặn, vì khâu ảnh
+    từ chối lời nhắc rỗng và cửa soi bảng cảnh (`_canh_dung_duoc`) coi cảnh thiếu
+    lời nhắc ảnh là bảng hỏng — để lọt là cả bảng bị cắt lại từ đầu bằng AI.
+
+    Trả về đúng cảnh vừa sửa. Không tìm thấy cảnh thì ném lỗi.
+    """
+    goi_json = os.path.join(luot.thu_muc, "4-canh.json")
+    tho = _doc_chu(goi_json)
+    if not tho.strip():
+        raise RuntimeError("chưa có bảng cảnh để sửa")
+    canh = json.loads(tho)
+    for c in canh:
+        if int(c.get("scene_id") or 0) != int(so_canh):
+            continue
+        if img_prompt is not None:
+            moi = str(img_prompt).strip()
+            if not moi:
+                raise ValueError("lời nhắc ảnh không được để trống")
+            c["img_prompt"] = moi
+        if video_prompt is not None:
+            c["video_prompt"] = str(video_prompt).strip()
+        _ghi_chu(goi_json, json.dumps(canh, ensure_ascii=False, indent=1))
+        return c
+    raise RuntimeError("không thấy cảnh {0} trong bảng".format(so_canh))
 
 
 class ThamChieu:

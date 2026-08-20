@@ -290,6 +290,23 @@ class TrangTuDong(QWidget):
         nut.addWidget(self._nut_mo)
         v.addLayout(nut)
 
+        # ═══ DỪNG ĐỂ XEM TRƯỚC KHI DỰNG ═══
+        #
+        # Chủ dự án, 20/08/2026: muốn xem lại ảnh và clip từng cảnh TRƯỚC khi
+        # ghép thành video, để cảnh nào chưa ưng thì sửa lời nhắc rồi tạo lại —
+        # thay vì dựng xong cả video mới phát hiện.
+        #
+        # Mặc định TẮT: người chạy quen rồi muốn một nút ra video, không muốn bị
+        # chặn giữa chừng. Bật lên thì dừng ngay sau khâu ảnh bìa, để bảy khâu
+        # trước đã có đủ ảnh + clip cho mình soi. Bấm “Chạy tiếp” là dựng video.
+        self._o_dung_truoc_dung = QCheckBox("Dừng để xem trước khi dựng video")
+        self._o_dung_truoc_dung.setToolTip(
+            "Bật thì sau khi tạo xong ảnh và clip từng cảnh, tôi DỪNG LẠI trước "
+            "khâu dựng video — để bạn bấm đúp từng cảnh trong dải ảnh bên dưới, "
+            "xem lại và sửa lời nhắc tạo lại nếu chưa ưng.\n"
+            "Xem xong bấm “Chạy tiếp” là tôi dựng video hoàn thiện.")
+        v.addWidget(self._o_dung_truoc_dung)
+
         v.addWidget(self._phu(
             "Tám khâu chạy lần lượt; khâu phụ đề và khâu dựng chạy ngay trên "
             "máy bạn. Bấm Dừng lúc nào cũng được — phần đã "
@@ -484,12 +501,99 @@ class TrangTuDong(QWidget):
             muc.setIcon(QIcon(QPixmap.fromImage(anh)))
 
     def _mo_anh_canh(self, muc) -> None:
-        from PyQt5.QtCore import QUrl  # noqa: PLC0415
-        from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
+        """Bấm đúp một cảnh: mở hộp xem lại + sửa lời nhắc để tạo lại.
 
+        Đang chạy thì chưa cho tạo lại (khâu đang bận) — chỉ mở ảnh gốc để xem.
+        """
+        so = int(muc.data(Qt.UserRole + 1) or 0)
         duong = str(muc.data(Qt.UserRole) or "")
-        if duong and os.path.isfile(duong):
-            QDesktopServices.openUrl(QUrl.fromLocalFile(duong))
+
+        def _mo_anh_goc() -> None:
+            from PyQt5.QtCore import QUrl  # noqa: PLC0415
+            from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
+            if duong and os.path.isfile(duong):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(duong))
+
+        if self._dang_chay or not self._duong or not so:
+            _mo_anh_goc()
+            return
+        luot = self._doc()
+        if luot is None:
+            _mo_anh_goc()
+            return
+        from core.auto_khau import _doc_canh  # noqa: PLC0415
+        canh = next((c for c in _doc_canh(luot)
+                     if int(c.get("scene_id") or 0) == so), None)
+        if canh is None:
+            _mo_anh_goc()
+            return
+        from .sua_canh import HopSuaCanh  # noqa: PLC0415
+        HopSuaCanh(self._tao_lai_canh, so, canh, luot.thu_muc, self).exec_()
+
+    def _tao_lai_canh(self, so_canh: int, loai: str, *,
+                      img_prompt: Optional[str] = None,
+                      video_prompt: Optional[str] = None) -> None:
+        """Sửa lời nhắc rồi tạo lại ảnh (loai="anh") hoặc chỉ clip (loai="clip")
+        của **một cảnh** — các cảnh khác không bị đụng, không trả tiền lần nữa.
+
+        Cách làm an toàn tiền: xoá đúng tệp của cảnh này, đặt khâu về "chờ".
+        Khâu ảnh/clip nhìn đĩa trước — cảnh nào còn tệp thì bỏ qua, chỉ cảnh vừa
+        xoá mới được làm. Khoá gọi việc có nhét lời nhắc, nên lời nhắc mới ra
+        khoá mới, không kẹt vào bản cũ. Dừng sau khâu clip để xem tiếp, chưa
+        dựng video.
+        """
+        if self._dang_chay:
+            self._app.show_message("Đang chạy",
+                                   "Bấm Dừng trước rồi hãy tạo lại.")
+            return
+        luot = self._doc()
+        if luot is None:
+            return
+        from core.auto_khau import sua_loi_nhac_canh  # noqa: PLC0415
+        try:
+            sua_loi_nhac_canh(luot, so_canh, img_prompt=img_prompt,
+                              video_prompt=video_prompt)
+        except (ValueError, RuntimeError, OSError) as loi:
+            self._app.show_message("Không sửa được lời nhắc", str(loi))
+            return
+        # Xoá tệp của riêng cảnh này. Tạo lại ảnh thì xoá cả ảnh lẫn clip (clip
+        # lấy ảnh làm khung đầu); tạo lại clip thì giữ ảnh, chỉ xoá clip.
+        anh = os.path.join(luot.thu_muc, "5-anh", "{0}.png".format(so_canh))
+        clip = os.path.join(luot.thu_muc, "6-clip", "{0}.mp4".format(so_canh))
+        try:
+            if loai == "anh" and os.path.isfile(anh):
+                os.remove(anh)
+            if os.path.isfile(clip):
+                os.remove(clip)
+        except OSError as loi:
+            self._app.show_message("Không xoá được tệp cũ", str(loi))
+            return
+        # Đặt khâu về "chờ" để nó chạy lại. Chỉ cảnh vừa xoá tệp được làm.
+        if loai == "anh":
+            dat_lam_lai(luot, "anh", ca_sau=False)
+            self._quen_canh_dai(so_canh)   # để dải phim vẽ lại ảnh mới
+        dat_lam_lai(luot, "clip", ca_sau=False)
+        ghi_luot(luot)
+        ten = "ảnh và clip" if loai == "anh" else "clip"
+        self._ghi("Tạo lại {0} cho cảnh {1} — chạy nền, xong sẽ hiện lại. "
+                  "Chưa dựng video.".format(ten, so_canh))
+        # Dừng sau khâu clip: tạo lại xong dừng lại để xem tiếp, chưa dựng.
+        self._bat_dau(luot, dung_sau="clip")
+
+    def _quen_canh_dai(self, so_canh: int) -> None:
+        """Quên thẻ của một cảnh trên dải phim, để lần vẽ sau nạp lại ảnh mới.
+
+        Dải phim chỉ THÊM cảnh mới, không vẽ lại cảnh đã có — nên ảnh vừa tạo
+        lại (cùng đường dẫn) sẽ giữ nguyên tấm cũ nếu không quên đi trước.
+        """
+        self._dai_da_co.discard(so_canh)
+        for i in range(self._dai.count()):
+            muc = self._dai.item(i)
+            if int(muc.data(Qt.UserRole + 1) or 0) == so_canh:
+                if muc in self._dai_cho:
+                    self._dai_cho.remove(muc)
+                self._dai.takeItem(i)
+                return
 
     # ── Kênh ─────────────────────────────────────────────────────────────────
 
@@ -699,7 +803,10 @@ class TrangTuDong(QWidget):
         except OSError as loi:
             self._app.show_message("Không lưu được nội dung", str(loi))
             return
-        self._bat_dau(luot)
+        # Tích "dừng để xem" thì chạy tới hết khâu ảnh bìa rồi dừng — lúc đó đủ
+        # ảnh và clip từng cảnh để soi, còn khâu dựng vẫn ở trạng thái chờ.
+        dung_sau = "thumbnail" if self._o_dung_truoc_dung.isChecked() else ""
+        self._bat_dau(luot, dung_sau=dung_sau)
 
     @staticmethod
     def _ghi_tep(luot: LuotChay, ten: str, chu: str) -> None:
@@ -763,9 +870,11 @@ class TrangTuDong(QWidget):
                 "Bấm “Chạy” để bắt đầu một lượt mới. “Chạy tiếp” dùng khi một "
                 "lượt đang dở.")
             return
+        # "Chạy tiếp" luôn đi tới hết — kể cả khi ô "dừng để xem" còn tích. Tích
+        # ấy chỉ chặn LƯỢT MỚI; đây là lúc người dùng đã xem xong và muốn dựng.
         self._bat_dau(luot)
 
-    def _bat_dau(self, luot: LuotChay) -> None:
+    def _bat_dau(self, luot: LuotChay, *, dung_sau: str = "") -> None:
         if self._dang_chay:
             return
         k = doc_kenh(self._app.base_dir, luot.ma_kenh)
@@ -798,7 +907,7 @@ class TrangTuDong(QWidget):
                 on_log=self._ghi_nen, cancel=huy,
                 on_nhip=self._nhip_nen)
             return chay(luot, dung_bo_viec(bc), on_log=self._ghi_nen,
-                        on_doi=self._doi_nen, cancel=huy)
+                        on_doi=self._doi_nen, cancel=huy, dung_sau=dung_sau)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
