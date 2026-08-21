@@ -15,8 +15,38 @@ def install(root: Path, model_id: str, repo: str) -> Path:
     target = (target_root / "models" / model_id).resolve()
     target.relative_to(target_root)
     target.mkdir(parents=True, exist_ok=True)
-    from huggingface_hub import snapshot_download
-    snapshot_download(repo_id=repo, local_dir=str(target))
+
+    # ═══ VÌ SAO PHẢI THAY THẾ STDOUT ═══
+    #
+    # Khi chạy qua CHAY-GON.vbs (không cửa sổ console), `sys.stdout` và
+    # `sys.stderr` là `None`. `huggingface_hub.snapshot_download` luôn tạo
+    # progress bar nội bộ → cố gọi `sys.stderr.write()` → AttributeError:
+    # 'NoneType' object has no attribute 'write' (lỗi khách báo 21/08/2026).
+    #
+    # `tqdm_class=None` KHÔNG ĐỦ — `huggingface_hub` vẫn dùng progress bar
+    # riêng của nó. Cách duy nhất: thay tạm `sys.stdout`/`sys.stderr` bằng
+    # dummy file có phương thức `.write()` rỗng.
+    import sys
+    from io import StringIO
+
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    dummy = StringIO()  # file giả có .write() nhưng không làm gì
+
+    try:
+        # Đè tạm để huggingface_hub không crash
+        if sys.stdout is None:
+            sys.stdout = dummy
+        if sys.stderr is None:
+            sys.stderr = dummy
+
+        from huggingface_hub import snapshot_download
+        snapshot_download(repo_id=repo, local_dir=str(target))
+    finally:
+        # Khôi phục ngay
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+
     if not (target / "config.json").is_file():
         raise RuntimeError("Model tải xong nhưng thiếu config.json")
     return target

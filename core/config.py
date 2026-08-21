@@ -84,9 +84,24 @@ _KEY_PATTERN = re.compile(r"\b((?:sk|wk)_[A-Za-z0-9]*_?[A-Za-z0-9\-]{6,})")
 
 
 def looks_like_api_key(value: str) -> bool:
-    """Đoán nhanh xem người dùng đã dán đúng khoá chưa (kiểm tra thật do server làm)."""
+    """Đoán nhanh xem người dùng đã dán đúng khoá chưa (kiểm tra thật do server làm).
+
+    ═══ VÌ SAO PHẢI CHẶN NON-ASCII ═══
+
+    Khách copy từ website đôi khi lấy thêm ký tự ẩn (zero-width space, soft hyphen)
+    không nhìn thấy được. Khoá API chỉ chứa A-Z, a-z, 0-9, gạch dưới — không có ký
+    tự đặc biệt nào cả. Chặn sớm ở đây thay vì để SDK ném UnicodeEncodeError khi
+    đưa khoá vào HTTP header (header chỉ nhận ASCII).
+    """
     text = (value or "").strip()
-    return text.startswith("sk_") and len(text) >= 16 and " " not in text
+    if not text.startswith("sk_") or len(text) < 16 or " " in text:
+        return False
+    # Khoá API chỉ chứa ASCII printable (sk_, chữ, số, gạch dưới, gạch ngang).
+    try:
+        text.encode("ascii")
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def looks_like_email(value: str) -> bool:
