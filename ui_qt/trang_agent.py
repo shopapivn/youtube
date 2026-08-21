@@ -81,7 +81,7 @@ LUA_CHON = (
 class TrangAgent(QWidget):
     """Cài agent lập trình cho khách rồi mở nó đúng trong thư mục tool."""
 
-    def __init__(self, app):
+    def __init__(self, app, nhung: bool = False):
         super().__init__()
         self.app = app
         self._tt = TinhTrang()
@@ -90,15 +90,25 @@ class TrangAgent(QWidget):
         self._cong_cu = None   # None = chưa biết
 
         doc = QVBoxLayout(self)
-        doc.setContentsMargins(28, 24, 28, 24)
+        # `nhung=True`: trang này nằm bên trong tab Cài đặt — bỏ lề ngoài và
+        # tiêu đề trang, vì Settings đã có lề và đã cấp nhãn mục cho nó. Để
+        # nguyên thì lề chồng lề (24+28) đẩy bề rộng quá mép, và có hai tiêu đề
+        # to nối đuôi nhau. Chủ dự án, 21/08/2026: *"đi cải thiện cái tab Agen
+        # xây tool cho vào cài đặt"*.
+        if nhung:
+            doc.setContentsMargins(0, 0, 0, 0)
+        else:
+            doc.setContentsMargins(28, 24, 28, 24)
         doc.setSpacing(14)
-        doc.addWidget(tieu_de_trang(
-            "Agent xây tool",
-            "Nhờ nó sửa chính cái tool này.", "agent"))
+        if not nhung:
+            doc.addWidget(tieu_de_trang(
+                "Agent xây tool",
+                "Nhờ nó sửa chính cái tool này.", "agent"))
         doc.addWidget(self._the_nguon())
         doc.addWidget(self._the_may())
         doc.addWidget(self._the_mo())
-        doc.addStretch(1)
+        if not nhung:
+            doc.addStretch(1)
 
         # Nối tín hiệu SAU khi dựng xong cả ba thẻ. Nối trong `_the_nguon` thì
         # `setChecked(True)` ở đó bắn `toggled` lúc thẻ "Máy của bạn" chưa tồn

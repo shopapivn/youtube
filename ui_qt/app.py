@@ -65,7 +65,9 @@ TRANG = (
     # được nhiều nhất phải đứng trước. Chủ dự án, 14/08/2026: *"mày để là tab
     # đầu tiên nhá"*.
     ("auto", "", "Tự động"),
-    ("agent", "", "Agent xây tool"),
+    # "Agent xây tool" từng đứng đây; từ 21/08/2026 nó nằm trong tab Cài đặt —
+    # đó là thứ cài một lần rồi thôi, đúng chỗ của Cài đặt. Xem
+    # `trang_cai_dat._the_agent`.
     ("skill", "", "Skill"),
     ("content", "", "Viết kịch bản"),
     ("voice", "", "Voice"),
@@ -341,7 +343,6 @@ class CuaSoChinh(QWidget):
     # ── Dựng trang ───────────────────────────────────────────────────────────
 
     def _dung_cac_trang(self) -> None:
-        from .trang_agent import TrangAgent
         from .trang_anh_video import TrangAnhVideo
         from .trang_content import TrangKichBan
         from .trang_edit import TrangDungVideo
@@ -353,7 +354,6 @@ class CuaSoChinh(QWidget):
         from .trang_voice import TrangGiongNoi
 
         xuong = {
-            "agent": lambda: TrangAgent(self),
             "skill": lambda: TrangSkill(self),
             "content": lambda: TrangKichBan(self),
             "voice": lambda: TrangGiongNoi(self),

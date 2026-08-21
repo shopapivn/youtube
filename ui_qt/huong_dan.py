@@ -43,28 +43,6 @@ __all__ = ["HUONG_DAN", "HopHuongDan", "nut_huong_dan", "co_huong_dan"]
 
 #: Hướng dẫn theo khoá tab. Khoá trùng với `ui_qt/app.py:TRANG`.
 HUONG_DAN: Dict[str, Dict[str, object]] = {
-    "agent": {
-        "tieu_de": "Agent xây tool",
-        "tom_tat": "Cài sẵn một trợ lý lập trình chạy ngay trong thư mục tool, "
-                   "để bạn nhờ nó sửa chính cái tool này.",
-        "buoc": [
-            "Chọn ở thẻ trên cùng: dùng ví ShopAPI, hay dùng gói Claude / "
-            "ChatGPT bạn đã có sẵn.",
-            "Bấm “Cài những thứ còn thiếu”. Lần đầu mất vài phút, chỉ làm một lần.",
-            "Bấm “Mở Claude Code” (hoặc “Mở Codex”). Một cửa sổ đen hiện ra — "
-            "đó là nơi bạn gõ yêu cầu.",
-            "Gõ bằng tiếng Việt thường, ví dụ: “thêm cho tôi một tab đọc bình "
-            "luận YouTube rồi tóm tắt”.",
-        ],
-        "luu_y": [
-            "Chọn “ví ShopAPI” thì tiền trừ theo lượt gọi. Chọn gói riêng của "
-            "bạn thì KHÔNG trừ ví ShopAPI đồng nào.",
-            "Cấu hình chỉ có tác dụng trong thư mục tool này. Mở Claude ở chỗ "
-            "khác trên máy, mọi thứ của bạn vẫn nguyên.",
-            "Trợ lý được toàn quyền sửa file trong thư mục tool — nó không hỏi "
-            "duyệt từng bước.",
-        ],
-    },
     "skill": {
         "tieu_de": "Skill",
         "tom_tat": "Những việc lẻ làm một phát ra kết quả: đưa vào một thứ, "
@@ -295,6 +273,11 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "workspace/su-co.log, chỉ là không hiện lên màn hình.",
             "Video ra: nhà cung cấp trả clip 1280×720, nhỏ hơn cả 1080p. Tôi "
             "phóng lên cỡ bạn chọn ở bước dựng cuối. Mặc định 4K.",
+            "Agent xây tool (thẻ dưới cùng): cài sẵn một trợ lý lập trình chạy "
+            "ngay trong thư mục tool, để bạn nhờ nó sửa chính cái tool này. "
+            "Chọn nguồn (ví ShopAPI hay gói Claude/ChatGPT bạn có sẵn), bấm "
+            "cài phần thiếu, rồi bấm mở — một cửa sổ đen hiện ra là nơi bạn gõ "
+            "yêu cầu bằng tiếng Việt thường.",
         ],
         "luu_y": [
             "Cập nhật không bao giờ đụng vào PROJECTS, vào kênh, hay vào lời "
@@ -314,6 +297,10 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "dung tổng hợp” trong YouTube Studio. YouTube nói tích ô đó không "
             "giảm hiển thị hay tiền; còn không khai mới là thứ khoá kiếm tiền "
             "90 ngày rồi gỡ kênh khỏi YPP.",
+            "Agent xây tool: chọn “ví ShopAPI” thì tiền trừ theo lượt gọi; "
+            "chọn gói riêng của bạn thì KHÔNG trừ ví ShopAPI đồng nào. Cấu "
+            "hình chỉ có tác dụng trong thư mục tool này. Trợ lý được toàn "
+            "quyền sửa file trong thư mục tool — nó không hỏi duyệt từng bước.",
         ],
     },
 }

@@ -123,6 +123,7 @@ class TrangCaiDat(QWidget):
         doc.addWidget(self._the_video())
         doc.addWidget(self._the_thu_muc())
         doc.addWidget(self._the_thu_vien())
+        doc.addWidget(self._the_agent())
         doc.addStretch(1)
 
     def _phu(self, chu: str):
@@ -295,6 +296,30 @@ class TrangCaiDat(QWidget):
         if hop.duoc:
             tu_du.ghi_nhan(self._app.base_dir, tu_du.dau_van(self._app.base_dir))
         self._xem_thu_vien()
+
+    def _the_agent(self) -> QWidget:
+        """Gộp "Agent xây tool" vào Cài đặt.
+
+        Chủ dự án, 21/08/2026: *"đi cải thiện cái tab Agen xây tool cho vào cài
+        đặt - thiết kế để nó dễ sử dụng"*. Trước đó nó là một tab riêng ở thanh
+        bên; nhưng đó là thứ cài một lần rồi thôi — đúng chỗ của Cài đặt.
+
+        Nhúng nguyên `TrangAgent` (chế độ `nhung=True`) thay vì chép lại: mọi
+        chốt tiền bạc và logic dò máy nằm gọn một chỗ, sửa một lần ăn cả hai.
+        """
+        from .trang_agent import TrangAgent  # noqa: PLC0415 — tránh vòng nhập
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 16, 20, 18)
+        v.setSpacing(8)
+        v.addWidget(nhan("Agent xây tool", "h2"))
+        v.addWidget(self._phu(
+            "Cài Claude Code hoặc Codex rồi mở ngay trong thư mục tool, để nhờ "
+            "nó sửa chính cái tool này."))
+        self._agent = TrangAgent(self._app, nhung=True)
+        v.addWidget(self._agent)
+        return khung
 
     # ── Việc ─────────────────────────────────────────────────────────────────
 
