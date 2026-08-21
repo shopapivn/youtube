@@ -147,31 +147,24 @@ class TabThuCong(QWidget):
 
     def _thanh_nhap(self) -> QWidget:
         """Bố cục Flow: ô nhập với controls bên trong (như chat input)."""
-        # ═══ CARD CHỨA CẢ Ô NHẬP + CONTROLS ═══
-        # Dùng QFrame (thẻ) với layout dọc: ô nhập ở trên, controls ở dưới
-        card = QFrame()
-        card.setStyleSheet(
-            "QFrame {"
-            "  background: #0A0D12;"
-            "  border: 1px solid #1E2636;"
-            "  border-radius: 12px;"
-            "}")
-        doc = QVBoxLayout(card)
-        doc.setContentsMargins(12, 10, 12, 10)
-        doc.setSpacing(6)
+        khung = the()
+        doc = QVBoxLayout(khung)
+        doc.setContentsMargins(16, 14, 16, 14)
+        doc.setSpacing(8)
 
         # Ô nhập
         self.o_nhap = QPlainTextEdit()
         self.o_nhap.setPlaceholderText("Bạn muốn tạo gì?")
-        self.o_nhap.setMinimumHeight(60)
-        self.o_nhap.setMaximumHeight(120)
+        self.o_nhap.setMinimumHeight(70)
+        self.o_nhap.setMaximumHeight(140)
         self.o_nhap.setStyleSheet(
             "QPlainTextEdit {"
-            "  background: transparent;"
-            "  border: none;"
-            "  color: #E8E9ED;"
+            f"  background: {theme.THE};"
+            f"  border: 1px solid {theme.VIEN};"
+            "  border-radius: 8px;"
+            f"  color: {theme.CHU};"
             "  font-size: 14px;"
-            "  padding: 4px;"
+            "  padding: 10px 12px;"
             "}")
         self.o_nhap.installEventFilter(self)
         doc.addWidget(self.o_nhap)
@@ -184,21 +177,21 @@ class TabThuCong(QWidget):
         # Nút + (upload ảnh tham chiếu)
         nut_upload = QPushButton("+")
         nut_upload.clicked.connect(self._chon_anh)
-        nut_upload.setFixedSize(32, 32)
+        nut_upload.setFixedSize(28, 28)
         nut_upload.setToolTip("Upload ảnh tham chiếu hoặc paste vào khung")
         nut_upload.setStyleSheet(
             "QPushButton {"
-            "  background: transparent;"
-            "  border: 1px solid #3a3a3a;"
+            f"  background: {theme.THE};"
+            f"  border: 1px solid {theme.VIEN};"
             "  border-radius: 6px;"
-            "  color: #888;"
-            "  font-size: 18px;"
+            f"  color: {theme.CHU_MO};"
+            "  font-size: 16px;"
             "  font-weight: 400;"
             "}"
             "QPushButton:hover {"
-            "  background: #161D2B;"
-            "  border-color: #4a4a4a;"
-            "  color: #aaa;"
+            f"  background: {theme.NEN};"
+            f"  border-color: {theme.CHU_MO};"
+            f"  color: {theme.CHU};"
             "}")
         nut_upload.setCursor(Qt.PointingHandCursor)
         hang.addWidget(nut_upload)
@@ -210,16 +203,16 @@ class TabThuCong(QWidget):
         self._badge.clicked.connect(self._mo_settings)
         self._badge.setStyleSheet(
             "QPushButton {"
-            "  background: #161D2B;"
-            "  border: 1px solid #2a3a4a;"
-            "  border-radius: 16px;"
-            "  color: #B8C5D9;"
+            f"  background: {theme.THE};"
+            f"  border: 1px solid {theme.VIEN};"
+            "  border-radius: 14px;"
+            f"  color: {theme.CHU};"
             "  font-size: 12px;"
-            "  padding: 6px 14px;"
+            "  padding: 5px 12px;"
             "}"
             "QPushButton:hover {"
-            "  background: #1E2636;"
-            "  border-color: #3a4a5a;"
+            f"  background: {theme.NEN};"
+            f"  border-color: {theme.XANH};"
             "}")
         self._badge.setCursor(Qt.PointingHandCursor)
         hang.addWidget(self._badge)
@@ -227,30 +220,26 @@ class TabThuCong(QWidget):
         # Nút → gửi
         self.nut_gui = QPushButton("→")
         self.nut_gui.clicked.connect(self.gui)
-        self.nut_gui.setFixedSize(40, 32)
+        self.nut_gui.setFixedSize(36, 28)
         self.nut_gui.setToolTip("Gửi (hoặc Enter)")
         self.nut_gui.setStyleSheet(
             "QPushButton {"
-            "  background: #38BDF8;"
+            f"  background: {theme.XANH};"
             "  border: none;"
-            "  border-radius: 8px;"
-            "  color: #0A0D12;"
-            "  font-size: 18px;"
+            "  border-radius: 6px;"
+            "  color: white;"
+            "  font-size: 16px;"
             "  font-weight: bold;"
             "}"
             "QPushButton:hover {"
-            "  background: #5CC9FA;"
+            "  background: #00AB9E;"
             "}")
         self.nut_gui.setCursor(Qt.PointingHandCursor)
         hang.addWidget(self.nut_gui)
 
         doc.addLayout(hang)
 
-        khung = the()
-        wrapper = QVBoxLayout(khung)
-        wrapper.setContentsMargins(14, 12, 14, 12)
-        wrapper.addWidget(card)
-        wrapper.addWidget(card)
+        khung.setMaximumHeight(240)
 
         # ═══ SETTINGS ẨN (mở qua badge) ═══
         self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
