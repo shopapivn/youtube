@@ -43,9 +43,9 @@ from typing import Dict, List, Optional
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
-    QHeaderView, QPlainTextEdit, QSplitter, QTableWidget,
-    QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
+    QHBoxLayout, QHeaderView, QPlainTextEdit, QPushButton, QSplitter,
+    QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from core.jobs import JobSpec, STATUS_DONE
@@ -146,69 +146,128 @@ class TabThuCong(QWidget):
     # ── Thanh nhập dưới cùng ─────────────────────────────────────────────────
 
     def _thanh_nhap(self) -> QWidget:
-        """Bố cục Flow: ô nhập lớn + nút + bên trái, popup settings bên phải."""
-        khung = the()
-        doc = QVBoxLayout(khung)
-        doc.setContentsMargins(14, 12, 14, 12)
-        doc.setSpacing(10)
+        """Bố cục Flow: ô nhập với controls bên trong (như chat input)."""
+        # ═══ CARD CHỨA CẢ Ô NHẬP + CONTROLS ═══
+        # Dùng QFrame (thẻ) với layout dọc: ô nhập ở trên, controls ở dưới
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame {"
+            "  background: #0A0D12;"
+            "  border: 1px solid #1E2636;"
+            "  border-radius: 12px;"
+            "}")
+        doc = QVBoxLayout(card)
+        doc.setContentsMargins(12, 10, 12, 10)
+        doc.setSpacing(6)
 
-        # ═══ Ô NHẬP LỚN ═══
+        # Ô nhập
         self.o_nhap = QPlainTextEdit()
         self.o_nhap.setPlaceholderText("Bạn muốn tạo gì?")
-        self.o_nhap.setFixedHeight(84)
-        # Enter = gửi, Shift+Enter = xuống dòng
+        self.o_nhap.setMinimumHeight(60)
+        self.o_nhap.setMaximumHeight(120)
+        self.o_nhap.setStyleSheet(
+            "QPlainTextEdit {"
+            "  background: transparent;"
+            "  border: none;"
+            "  color: #E8E9ED;"
+            "  font-size: 14px;"
+            "  padding: 4px;"
+            "}")
         self.o_nhap.installEventFilter(self)
         doc.addWidget(self.o_nhap)
 
-        # ═══ HÀNG NÚT: [+] [Tác nhân] ... [⚙] [→] ═══
+        # Hàng controls dưới: [+] ... [badge] [→]
         hang = QHBoxLayout()
+        hang.setContentsMargins(0, 0, 0, 0)
         hang.setSpacing(8)
 
         # Nút + (upload ảnh tham chiếu)
-        self._nut_upload = nut_phu("+", self._chon_anh, rong=40)
-        self._nut_upload.setToolTip("Upload ảnh tham chiếu (hoặc paste vào ô nhập)")
-        hang.addWidget(self._nut_upload)
-
-        # Nhãn "Tác nhân" (chỉ hiển thị, không phải nút)
-        self._nhan_tac_nhan = nhan("Tác nhân", "phu")
-        hang.addWidget(self._nhan_tac_nhan)
+        nut_upload = QPushButton("+")
+        nut_upload.clicked.connect(self._chon_anh)
+        nut_upload.setFixedSize(32, 32)
+        nut_upload.setToolTip("Upload ảnh tham chiếu hoặc paste vào khung")
+        nut_upload.setStyleSheet(
+            "QPushButton {"
+            "  background: transparent;"
+            "  border: 1px solid #3a3a3a;"
+            "  border-radius: 6px;"
+            "  color: #888;"
+            "  font-size: 18px;"
+            "  font-weight: 400;"
+            "}"
+            "QPushButton:hover {"
+            "  background: #161D2B;"
+            "  border-color: #4a4a4a;"
+            "  color: #aaa;"
+            "}")
+        nut_upload.setCursor(Qt.PointingHandCursor)
+        hang.addWidget(nut_upload)
 
         hang.addStretch(1)
 
-        # Nút ⚙ settings (mở popup chọn loại/tỉ lệ/engine/số lượng)
-        self._nut_settings = nut_phu("⚙", self._mo_settings, rong=40)
-        self._nut_settings.setToolTip("Chọn loại, tỉ lệ, engine, số lượng")
-        hang.addWidget(self._nut_settings)
+        # Badge hiện engine/tỉ lệ (clickable mở settings)
+        self._badge = QPushButton()
+        self._badge.clicked.connect(self._mo_settings)
+        self._badge.setStyleSheet(
+            "QPushButton {"
+            "  background: #161D2B;"
+            "  border: 1px solid #2a3a4a;"
+            "  border-radius: 16px;"
+            "  color: #B8C5D9;"
+            "  font-size: 12px;"
+            "  padding: 6px 14px;"
+            "}"
+            "QPushButton:hover {"
+            "  background: #1E2636;"
+            "  border-color: #3a4a5a;"
+            "}")
+        self._badge.setCursor(Qt.PointingHandCursor)
+        hang.addWidget(self._badge)
 
         # Nút → gửi
-        self.nut_gui = nut_chinh("→", self.gui, rong=50)
+        self.nut_gui = QPushButton("→")
+        self.nut_gui.clicked.connect(self.gui)
+        self.nut_gui.setFixedSize(40, 32)
         self.nut_gui.setToolTip("Gửi (hoặc Enter)")
+        self.nut_gui.setStyleSheet(
+            "QPushButton {"
+            "  background: #38BDF8;"
+            "  border: none;"
+            "  border-radius: 8px;"
+            "  color: #0A0D12;"
+            "  font-size: 18px;"
+            "  font-weight: bold;"
+            "}"
+            "QPushButton:hover {"
+            "  background: #5CC9FA;"
+            "}")
+        self.nut_gui.setCursor(Qt.PointingHandCursor)
         hang.addWidget(self.nut_gui)
 
         doc.addLayout(hang)
 
-        # ═══ SETTINGS ẨN (mở qua nút ⚙) ═══
-        # Loại (Ảnh/Video)
+        khung = the()
+        wrapper = QVBoxLayout(khung)
+        wrapper.setContentsMargins(14, 12, 14, 12)
+        wrapper.addWidget(card)
+        wrapper.addWidget(card)
+
+        # ═══ SETTINGS ẨN (mở qua badge) ═══
         self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
                              on_change=lambda _t: self._doi_loai())
-        # Tỉ lệ
         self.ty_le_nut = NhomChon(("16:9", "4:3", "1:1", "3:4", "9:16"), "16:9",
-                                  on_change=lambda _t: self._cap_nhat_gia())
-        # Engine video
+                                  on_change=lambda _t: self._cap_nhat_badge())
         self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 200)
-        # Số lượng ảnh
+        self.engine.currentTextChanged.connect(self._cap_nhat_badge)
         self.so_luong_nut = NhomChon(("x1", "x2", "x3", "x4"), "x1",
-                                     on_change=lambda _t: self._cap_nhat_gia())
+                                     on_change=lambda _t: self._cap_nhat_badge())
 
-        # Ảnh tham chiếu (ẩn, dùng khi có ảnh)
         self.anh_vao = AnhThamChieu("Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
-
-        # Dialog settings
         self._hop_settings = self._dung_hop_settings()
 
         self._doi_loai()
-        self._cap_nhat_gia()
+        self._cap_nhat_badge()
         return khung
 
     def _dung_hop_settings(self) -> QDialog:
@@ -275,9 +334,17 @@ class TabThuCong(QWidget):
                     return True
         return super().eventFilter(obj, event)
 
-    def _cap_nhat_gia(self) -> None:
-        """Placeholder - không còn hiện dòng giá nữa."""
-        pass
+    def _cap_nhat_badge(self) -> None:
+        """Cập nhật badge hiện engine/số lượng đang chọn."""
+        if self.la_video:
+            engine_name = "Veo3" if self.engine.currentText() == ENGINE_VEO3 else "SeeDance"
+            text = f"🎬 {engine_name}"
+        else:
+            so = self.so_luong_nut.get()
+            text = f"🖼️ Ảnh {so}"
+        ty_le = self.ty_le_nut.get()
+        text += f" • {ty_le}"
+        self._badge.setText(text)
 
     def _doi_loai(self) -> None:
         """Ảnh/Video đổi thì hiện/ẩn engine/số lượng trong popup settings."""
@@ -297,7 +364,7 @@ class TabThuCong(QWidget):
         self._thu_muc.dat(self._app.default_output_dir(
             KIND_VIDEO, ENGINE_VEO3) if video
             else self._app.default_output_dir(KIND_IMAGE))
-        self._cap_nhat_gia()
+        self._cap_nhat_badge()
 
     @property
     def la_video(self) -> bool:
