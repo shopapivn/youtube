@@ -169,7 +169,19 @@ class TabThuCong(QWidget):
         self.o_nhap.installEventFilter(self)
         doc.addWidget(self.o_nhap)
 
-        # Hàng controls dưới: [+] ... [badge] [→]
+        # ═══ SETTINGS INLINE ═══
+        self.loai = _combo((LOAI_ANH, LOAI_VIDEO), LOAI_ANH, 80)
+        self.loai.currentTextChanged.connect(self._doi_loai)
+
+        self.ty_le = _combo(("16:9", "9:16", "1:1", "4:3", "3:4"), "16:9", 70)
+
+        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 90)
+
+        self.so_luong = _combo(("x1", "x2", "x3", "x4"), "x1", 60)
+
+        self.anh_vao = AnhThamChieu("", on_change=None)
+
+        # Hàng controls dưới: [+] [Ảnh▼] [16:9▼] [engine▼ hoặc x2▼] ... [→]
         hang = QHBoxLayout()
         hang.setContentsMargins(0, 0, 0, 0)
         hang.setSpacing(8)
@@ -178,7 +190,7 @@ class TabThuCong(QWidget):
         nut_upload = QPushButton("+")
         nut_upload.clicked.connect(self._chon_anh)
         nut_upload.setFixedSize(28, 28)
-        nut_upload.setToolTip("Upload ảnh tham chiếu hoặc paste vào khung")
+        nut_upload.setToolTip("Ảnh tham chiếu")
         nut_upload.setStyleSheet(
             "QPushButton {"
             f"  background: {theme.THE};"
@@ -196,26 +208,17 @@ class TabThuCong(QWidget):
         nut_upload.setCursor(Qt.PointingHandCursor)
         hang.addWidget(nut_upload)
 
-        hang.addStretch(1)
+        # Loại (Ảnh/Video)
+        hang.addWidget(self.loai)
 
-        # Badge hiện engine/tỉ lệ (clickable mở settings)
-        self._badge = QPushButton()
-        self._badge.clicked.connect(self._mo_settings)
-        self._badge.setStyleSheet(
-            "QPushButton {"
-            f"  background: {theme.THE};"
-            f"  border: 1px solid {theme.VIEN};"
-            "  border-radius: 14px;"
-            f"  color: {theme.CHU};"
-            "  font-size: 12px;"
-            "  padding: 5px 12px;"
-            "}"
-            "QPushButton:hover {"
-            f"  background: {theme.NEN};"
-            f"  border-color: {theme.XANH};"
-            "}")
-        self._badge.setCursor(Qt.PointingHandCursor)
-        hang.addWidget(self._badge)
+        # Tỉ lệ
+        hang.addWidget(self.ty_le)
+
+        # Engine (video) hoặc Số lượng (ảnh)
+        hang.addWidget(self.engine)
+        hang.addWidget(self.so_luong)
+
+        hang.addStretch(1)
 
         # Nút → gửi
         self.nut_gui = QPushButton("→")
@@ -243,65 +246,10 @@ class TabThuCong(QWidget):
         khung.setSizePolicy(khung.sizePolicy().horizontalPolicy(),
                            khung.sizePolicy().Maximum)
 
-        # ═══ SETTINGS ẨN (mở qua badge) ═══
-        self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
-                             on_change=lambda _t: self._doi_loai())
-        self.ty_le_nut = NhomChon(("16:9", "4:3", "1:1", "3:4", "9:16"), "16:9",
-                                  on_change=lambda _t: self._cap_nhat_badge())
-        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 200)
-        self.engine.currentTextChanged.connect(self._cap_nhat_badge)
-        self.so_luong_nut = NhomChon(("x1", "x2", "x3", "x4"), "x1",
-                                     on_change=lambda _t: self._cap_nhat_badge())
-
-        self.anh_vao = AnhThamChieu("Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
-        self._hop_settings = self._dung_hop_settings()
-
         self._doi_loai()
-        self._cap_nhat_badge()
         return khung
 
-    def _dung_hop_settings(self) -> QDialog:
-        """Popup settings: chọn loại, tỉ lệ, engine, số lượng - giống Flow."""
-        hop = QDialog(self)
-        hop.setWindowTitle("Cài đặt")
-        doc = QVBoxLayout(hop)
-        doc.setContentsMargins(20, 16, 20, 16)
-        doc.setSpacing(12)
-
-        # Hình ảnh / Video
-        doc.addWidget(nhan("Loại", "h3"))
-        doc.addWidget(self.loai)
-
-        # Tỉ lệ khung
-        doc.addWidget(nhan("Tỉ lệ", "h3"))
-        doc.addWidget(self.ty_le_nut)
-
-        # Engine (chỉ hiện khi chọn Video)
-        self._nhan_engine = nhan("Engine", "h3")
-        doc.addWidget(self._nhan_engine)
-        doc.addWidget(self.engine)
-
-        # Số lượng (chỉ hiện khi chọn Ảnh)
-        self._nhan_so_luong = nhan("Số lượng", "h3")
-        doc.addWidget(self._nhan_so_luong)
-        doc.addWidget(self.so_luong_nut)
-
-        # Chỗ lưu kết quả
-        doc.addWidget(nhan("Lưu vào", "h3"))
-        doc.addWidget(self._thu_muc)
-
-        # Nút Xong
-        hang_nut = QHBoxLayout()
-        hang_nut.addStretch(1)
-        hang_nut.addWidget(nut_chinh("Xong", hop.accept, rong=120))
-        doc.addLayout(hang_nut)
-
-        return hop
-
-    def _mo_settings(self) -> None:
-        """Mở popup settings."""
-        self._hop_settings.exec_()
 
     def _chon_anh(self) -> None:
         """Nút + : chọn ảnh tham chiếu từ file."""
@@ -325,41 +273,33 @@ class TabThuCong(QWidget):
                     return True
         return super().eventFilter(obj, event)
 
-    def _cap_nhat_badge(self) -> None:
-        """Cập nhật badge hiện engine/số lượng đang chọn."""
-        if self.la_video:
-            engine_name = "Veo3" if self.engine.currentText() == ENGINE_VEO3 else "SeeDance"
-            text = f"🎬 {engine_name}"
-        else:
-            so = self.so_luong_nut.get()
-            text = f"🖼️ Ảnh {so}"
-        ty_le = self.ty_le_nut.get()
-        text += f" • {ty_le}"
-        self._badge.setText(text)
-
     def _doi_loai(self) -> None:
-        """Ảnh/Video đổi thì hiện/ẩn engine/số lượng trong popup settings."""
+        """Ảnh/Video đổi thì hiện/ẩn engine/số lượng trong controls."""
         video = self.la_video
         # Engine chỉ cho video
         self.engine.setVisible(video)
-        self._nhan_engine.setVisible(video)
         # Số lượng chỉ cho ảnh
-        self.so_luong_nut.setVisible(not video)
-        self._nhan_so_luong.setVisible(not video)
+        self.so_luong.setVisible(not video)
         # Tỉ lệ video chỉ có 3 loại (16:9, 9:16, 1:1), ảnh có đủ 5
-        dang_chon = self.ty_le_nut.get()
-        if video and dang_chon in ("4:3", "3:4"):
-            self.ty_le_nut.set("16:9")
+        dang_chon = self.ty_le.currentText()
+        if video:
+            self.ty_le.clear()
+            self.ty_le.addItems(["16:9", "9:16", "1:1"])
+        else:
+            self.ty_le.clear()
+            self.ty_le.addItems(["16:9", "9:16", "1:1", "4:3", "3:4"])
+        # Giữ lại lựa chọn cũ nếu còn hợp lệ
+        if dang_chon in [self.ty_le.itemText(i) for i in range(self.ty_le.count())]:
+            self.ty_le.setCurrentText(dang_chon)
         self.anh_vao.setToolTip(
             "Ảnh đầu vào cho clip" if video else "Ảnh tham chiếu cho ảnh mới")
         self._thu_muc.dat(self._app.default_output_dir(
             KIND_VIDEO, ENGINE_VEO3) if video
             else self._app.default_output_dir(KIND_IMAGE))
-        self._cap_nhat_badge()
 
     @property
     def la_video(self) -> bool:
-        return self.loai.get() == LOAI_VIDEO
+        return self.loai.currentText() == LOAI_VIDEO
 
     # ── Gửi ──────────────────────────────────────────────────────────────────
 
@@ -398,7 +338,7 @@ class TabThuCong(QWidget):
 
     def _dung_spec(self, mo_ta: str, urls: List[str], thu_muc: str,
                    thu_tu: int) -> Optional[JobSpec]:
-        ty_le = self.ty_le_nut.get()
+        ty_le = self.ty_le.currentText()
         if self.la_video:
             engine = self.engine.currentText()
             anh = urls[0] if urls else ""
@@ -414,7 +354,7 @@ class TabThuCong(QWidget):
                         "aspect_ratio": ty_le, "image_url": anh},
                 out_dir=thu_muc, estimate_micro=hold_for_video(engine,
                                                                self._app.prices))
-        so = int(self.so_luong_nut.get().replace("x", ""))
+        so = int(self.so_luong.currentText().replace("x", ""))
         van_de = check_image([mo_ta], n=so, aspect_ratio=ty_le,
                              reference_images=urls)
         if van_de:
