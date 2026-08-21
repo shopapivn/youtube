@@ -171,12 +171,6 @@ class TabThuCong(QWidget):
                                      on_change=lambda _t: self._cap_nhat_gia())
         doc.addWidget(self.so_luong_nut)
 
-        # ═══ DÒNG TRẠNG THÁI GIÁ ═══
-        self._nhan_gia = nhan("", "muted")
-        self._nhan_gia.setWordWrap(True)
-        self._nhan_gia.setMinimumWidth(1)
-        doc.addWidget(self._nhan_gia)
-
         # ═══ Ô NHẬP ═══
         self.o_nhap = QPlainTextEdit()
         self.o_nhap.setPlaceholderText("Bạn muốn tạo gì?")
@@ -220,17 +214,8 @@ class TabThuCong(QWidget):
         self._hop_tac_nhan.exec_()
 
     def _cap_nhat_gia(self) -> None:
-        """Cập nhật dòng "Quá trình tạo sẽ tốn X tín dụng"."""
-        video = self.la_video
-        so = int(self.so_luong_nut.get().replace("x", ""))
-        if video:
-            gia = hold_for_video(self.engine.currentText(), self._app.prices)
-            self._nhan_gia.setText(
-                "Quá trình tạo sẽ tốn {0} tín dụng".format(gia))
-        else:
-            gia = hold_for_image(so, self._app.prices)
-            self._nhan_gia.setText(
-                "Quá trình tạo sẽ tốn {0} tín dụng".format(gia))
+        """Placeholder - không còn hiện dòng giá nữa."""
+        pass
 
     def _doi_loai(self) -> None:
         """Ảnh/Video đổi thì hiện/ẩn engine, số lượng, đổi tỉ lệ cho phù hợp."""
