@@ -43,7 +43,7 @@ from typing import Dict, List, Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
-    QHeaderView, QPlainTextEdit, QSpinBox, QSplitter, QTableWidget,
+    QHeaderView, QPlainTextEdit, QSplitter, QTableWidget,
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -145,126 +145,110 @@ class TabThuCong(QWidget):
     # ── Thanh nhập dưới cùng ─────────────────────────────────────────────────
 
     def _thanh_nhap(self) -> QWidget:
+        """Bố cục Flow: mọi tuỳ chọn hiện sẵn, bố cục dọc, không giấu sau nút."""
         khung = the()
         doc = QVBoxLayout(khung)
         doc.setContentsMargins(14, 12, 14, 12)
         doc.setSpacing(10)
 
+        # ═══ TABS HÌNH ẢNH / VIDEO ═══
+        self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
+                             on_change=lambda _t: self._doi_loai())
+        doc.addWidget(self.loai)
+
+        # ═══ 5 NÚT TỈ LỆ KHUNG ═══
+        # Flow hiện 5 nút icon (16:9, 4:3, 1:1, 3:4, 9:16), không dùng 3 nút chữ.
+        self.ty_le_nut = NhomChon(("16:9", "4:3", "1:1", "3:4", "9:16"), "16:9",
+                                  on_change=lambda _t: self._cap_nhat_gia())
+        doc.addWidget(self.ty_le_nut)
+
+        # ═══ ENGINE VIDEO DROPDOWN ═══
+        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 200)
+        doc.addWidget(self.engine)
+
+        # ═══ 4 NÚT SỐ LƯỢNG x1/x2/x3/x4 ═══
+        self.so_luong_nut = NhomChon(("x1", "x2", "x3", "x4"), "x1",
+                                     on_change=lambda _t: self._cap_nhat_gia())
+        doc.addWidget(self.so_luong_nut)
+
+        # ═══ DÒNG TRẠNG THÁI GIÁ ═══
+        self._nhan_gia = nhan("", "muted")
+        self._nhan_gia.setWordWrap(True)
+        self._nhan_gia.setMinimumWidth(1)
+        doc.addWidget(self._nhan_gia)
+
+        # ═══ Ô NHẬP ═══
         self.o_nhap = QPlainTextEdit()
         self.o_nhap.setPlaceholderText("Bạn muốn tạo gì?")
         self.o_nhap.setFixedHeight(64)
         doc.addWidget(self.o_nhap)
 
-        # BỐN thứ trên màn hình, không hơn: gõ gì · ảnh hay video · tuỳ chọn ·
-        # gửi. Bản trước bày cả 11 ô ra cùng lúc cho một việc "làm lẻ" — trong
-        # khi bản tham chiếu (Google Flow) chỉ để ô nhập, một nút tuỳ chọn và
-        # mũi tên gửi; mọi thứ còn lại nằm sau nút ấy. Thứ chỉnh một lần rồi
-        # thôi mà chiếm chỗ ngang với thứ gõ mỗi lần là bố cục sai.
-        hang = HangXuongDong()
-        # Ảnh/Video là công tắc đổi CẢ màn hình bên dưới — quan trọng hơn tỉ lệ,
-        # nên không có lý do gì nó phải giấu trong một ô xổ xuống trong khi tỉ lệ
-        # thì được ba nút bấm. Cùng một kiểu widget cho hai lựa chọn cùng hạng.
-        self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
-                             on_change=lambda _t: self._doi_loai())
-        hang.addWidget(self.loai)
-
-        # TỈ LỆ KHUNG nằm NGOÀI, không giấu sau nút .
-        #
-        # Người làm YouTube không nghĩ "16:9" — họ nghĩ **video ngang** hay
-        # **Shorts dọc**, và đó là quyết định đầu tiên của cả video chứ không
-        # phải một tuỳ chỉnh nâng cao. Chủ dự án: *"đa phần họ làm ngang"* — nên
-        # Ngang đứng đầu và là mặc định.
-        self.khung = NhomChon(tuple(t[0] for t in KHUNG), KHUNG[0][0],
-                              on_change=lambda _t: self._doi_khung())
-        self.khung.setToolTip("Ngang 16:9 · Dọc 9:16 (Shorts) · Vuông 1:1")
-        hang.addWidget(self.khung)
-
-        self._nut_tuy_chon = nut_phu("Tuỳ chọn", self._mo_tuy_chon, rong=104)
-        self._nut_tuy_chon.setToolTip(
-            "Số lượng, engine video, ảnh tham chiếu, chỗ lưu")
-        hang.addWidget(self._nut_tuy_chon)
+        # ═══ HÀNG NÚT GỬI ═══
+        hang = QHBoxLayout()
+        # Nút + Tác nhân (mở ảnh tham chiếu + chỗ lưu)
+        self._nut_tac_nhan = nut_phu("+ Tác nhân", self._mo_tac_nhan, rong=120)
+        self._nut_tac_nhan.setToolTip("Ảnh tham chiếu, chỗ lưu kết quả")
+        hang.addWidget(self._nut_tac_nhan)
+        hang.addStretch(1)
         self.nut_gui = nut_chinh("Gửi", self.gui)
         hang.addWidget(self.nut_gui)
         doc.addLayout(hang)
 
-        # Dựng widget tuỳ chọn ở đây chứ không dựng trong hộp thoại: phần gửi
-        # đọc `self.ty_le.currentText()` như thường, kể cả khi khách chưa từng
-        # mở hộp thoại lần nào.
-        self.ty_le = _combo(TY_LE_ANH, "16:9", 84)
-        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 112)
-        self.so_luong = QSpinBox()
-        self.so_luong.setRange(1, 8)
-        self.so_luong.setPrefix("x")
-        self.so_luong.setFixedWidth(64)
+        # Widget ẩn cho ảnh tham chiếu + chỗ lưu (mở qua "+ Tác nhân")
         self.anh_vao = AnhThamChieu("Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
-        # Dựng hộp tuỳ chọn NGAY (ẩn), không dựng lúc bấm.
-        #
-        # Widget Qt không có cha mà gọi `setVisible(True)` thì thành **một cửa
-        # sổ riêng trôi nổi giữa màn hình** — chủ dự án chụp được đúng cảnh đó:
-        # một khung con con hiện ra với mỗi ô "x1" và ba nút thu nhỏ/phóng/đóng.
-        # `_doi_loai()` bật/tắt mấy ô này theo Ảnh/Video, nên chúng phải có cha
-        # từ trước khi ai đó chạm vào.
-        self._hop_tuy_chon = self._dung_hop_tuy_chon()
+        self._hop_tac_nhan = self._dung_hop_tac_nhan()
+
         self._doi_loai()
+        self._cap_nhat_gia()
         return khung
 
-    def _dung_hop_tuy_chon(self) -> QDialog:
+    def _dung_hop_tac_nhan(self) -> QDialog:
+        """Hộp "+ Tác nhân": ảnh tham chiếu + chỗ lưu."""
         hop = QDialog(self)
-        hop.setWindowTitle("Tuỳ chọn")
+        hop.setWindowTitle("Tác nhân")
         doc = QVBoxLayout(hop)
         doc.setContentsMargins(20, 16, 20, 16)
         doc.setSpacing(10)
-        for nhan_o, o in (("Tỉ lệ khung", self.ty_le),
-                          ("Engine video", self.engine),
-                          ("Số ảnh mỗi lần gửi", self.so_luong)):
-            hang = QHBoxLayout()
-            hang.addWidget(nhan(nhan_o))
-            hang.addStretch(1)
-            hang.addWidget(o)
-            doc.addLayout(hang)
         doc.addWidget(self.anh_vao)
         doc.addWidget(self._thu_muc)
         doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
         return hop
 
-    def _mo_tuy_chon(self) -> None:
-        """Hộp tuỳ chọn: tỉ lệ, engine, số lượng, ảnh tham chiếu, chỗ lưu.
+    def _mo_tac_nhan(self) -> None:
+        """Mở hộp tác nhân: ảnh tham chiếu + chỗ lưu."""
+        self._hop_tac_nhan.exec_()
 
-        Dựng một lần rồi dùng lại — dựng mới mỗi lần bấm là mất luôn thứ khách
-        vừa chọn ở lần trước.
-        """
-        self._doi_loai()
-        self._hop_tuy_chon.exec_()
-
-    def _doi_khung(self) -> None:
-        """Nút Ngang/Dọc/Vuông chỉ là mặt ngoài của `self.ty_le`.
-
-        Giữ một nguồn sự thật: phần gửi vẫn đọc `self.ty_le.currentText()` như
-        cũ, nên không có chỗ nào phải nhớ hai giá trị và lệch nhau.
-        """
-        ten = self.khung.get()
-        for nhan_khung, ma in KHUNG:
-            if nhan_khung == ten:
-                self.ty_le.setCurrentText(ma)
-                return
+    def _cap_nhat_gia(self) -> None:
+        """Cập nhật dòng "Quá trình tạo sẽ tốn X tín dụng"."""
+        video = self.la_video
+        so = int(self.so_luong_nut.get().replace("x", ""))
+        if video:
+            gia = hold_for_video(self.engine.currentText(), self._app.prices)
+            self._nhan_gia.setText(
+                "Quá trình tạo sẽ tốn {0} tín dụng".format(gia))
+        else:
+            gia = hold_for_image(so, self._app.prices)
+            self._nhan_gia.setText(
+                "Quá trình tạo sẽ tốn {0} tín dụng".format(gia))
 
     def _doi_loai(self) -> None:
-        """Tuỳ chọn của ảnh và của video không giống nhau — hiện nhầm là khách
-        chỉnh một thứ chẳng có tác dụng gì."""
+        """Ảnh/Video đổi thì hiện/ẩn engine, số lượng, đổi tỉ lệ cho phù hợp."""
         video = self.la_video
+        # Engine chỉ cho video
         self.engine.setVisible(video)
-        self.so_luong.setVisible(not video)
-        hien = TY_LE_VIDEO if video else TY_LE_ANH
-        dang_chon = self.ty_le.currentText()
-        self.ty_le.clear()
-        self.ty_le.addItems(list(hien))
-        self.ty_le.setCurrentText(dang_chon if dang_chon in hien else "16:9")
+        # Số lượng chỉ cho ảnh
+        self.so_luong_nut.setVisible(not video)
+        # Tỉ lệ video chỉ có 3 loại (16:9, 9:16, 1:1), ảnh có đủ 5
+        dang_chon = self.ty_le_nut.get()
+        if video and dang_chon in ("4:3", "3:4"):
+            self.ty_le_nut.set("16:9")
         self.anh_vao.setToolTip(
             "Ảnh đầu vào cho clip" if video else "Ảnh tham chiếu cho ảnh mới")
         self._thu_muc.dat(self._app.default_output_dir(
             KIND_VIDEO, ENGINE_VEO3) if video
             else self._app.default_output_dir(KIND_IMAGE))
+        self._cap_nhat_gia()
 
     @property
     def la_video(self) -> bool:
@@ -307,7 +291,7 @@ class TabThuCong(QWidget):
 
     def _dung_spec(self, mo_ta: str, urls: List[str], thu_muc: str,
                    thu_tu: int) -> Optional[JobSpec]:
-        ty_le = self.ty_le.currentText()
+        ty_le = self.ty_le_nut.get()
         if self.la_video:
             engine = self.engine.currentText()
             anh = urls[0] if urls else ""
@@ -323,7 +307,7 @@ class TabThuCong(QWidget):
                         "aspect_ratio": ty_le, "image_url": anh},
                 out_dir=thu_muc, estimate_micro=hold_for_video(engine,
                                                                self._app.prices))
-        so = self.so_luong.value()
+        so = int(self.so_luong_nut.get().replace("x", ""))
         van_de = check_image([mo_ta], n=so, aspect_ratio=ty_le,
                              reference_images=urls)
         if van_de:

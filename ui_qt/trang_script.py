@@ -1,4 +1,4 @@
-"""Skill **Lấy lời thoại video** — dán link, nhận về nguyên đoạn chữ.
+"""Skill **Lấy lời thoại video** - dán link, nhận về nguyên đoạn chữ.
 
 Tách khỏi Skill "Lấy dữ liệu đối thủ" theo yêu cầu của chủ dự án (14/08/2026:
 *"có thể có thêm 1 tab lấy Script video đi để phần đó riêng chứ không phải là
@@ -9,7 +9,7 @@ tiếng của video về rồi nghe** (xem `core/script_video.py`). Một video 
 mất vài phút. Nhét vào vòng lấy dữ liệu 10 kênh × 60 video thì lượt chạy hai
 phút biến thành cả buổi, mà người bấm nút không hiểu vì sao.
 
-Phần nghĩ nằm hết ở `core/script_video.py` — không mạng, không Qt, test được.
+Phần nghĩ nằm hết ở `core/script_video.py` - không mạng, không Qt, test được.
 Tệp này chỉ dựng nút và đổ kết quả ra bảng.
 """
 
@@ -39,7 +39,7 @@ from .widgets import (
 
 __all__ = ["TrangLayScript"]
 
-#: Số dòng nhật ký giữ trên màn hình — xem ghi chú cùng tên ở `trang_research`.
+#: Số dòng nhật ký giữ trên màn hình - xem ghi chú cùng tên ở `trang_research`.
 TRAN_NHAT_KY = 300
 
 
@@ -97,10 +97,30 @@ class TrangLayScript(QWidget):
         self._o_nhap.setFixedHeight(92)
         v.addWidget(self._o_nhap)
 
-        # ═══ TỰ NGHE — MẶC ĐỊNH TẮT ═══
+        # ═══ LẤY NGÔN NGỮ GỐC ═══
+        #
+        # Mặc định ưu tiên tiếng Việt: nếu video có phụ đề tiếng Việt (dịch) thì
+        # lấy bản đó. Nhưng nhiều khi người dùng cần transcript gốc để tham khảo
+        # cách diễn đạt, không phải bản dịch.
+        hang_goc = QHBoxLayout()
+        self._o_ngon_ngu_goc = QCheckBox("Lấy ngôn ngữ gốc của video")
+        self._o_ngon_ngu_goc.setChecked(True)
+        self._o_ngon_ngu_goc.setToolTip(
+            "Bật: lấy phụ đề ngôn ngữ gốc của video (tiếng Anh thì được tiếng Anh, "
+            "không dịch sang tiếng Việt). Dùng khi cần transcript gốc để tham khảo "
+            "cách diễn đạt.\n\n"
+            "Tắt: ưu tiên phụ đề tiếng Việt nếu có (hành vi cũ).")
+        hang_goc.addWidget(self._o_ngon_ngu_goc)
+        ghi_chu_goc = nhan("- lấy đúng lời thoại gốc, không dịch", "phu")
+        ghi_chu_goc.setWordWrap(True)
+        ghi_chu_goc.setMinimumWidth(1)
+        hang_goc.addWidget(ghi_chu_goc, 1)
+        v.addLayout(hang_goc)
+
+        # ═══ TỰ NGHE - MẶC ĐỊNH TẮT ═══
         #
         # Đây là đường dự phòng cuối. Nó luôn ra chữ, kể cả video chưa từng có
-        # phụ đề — nhưng phải tải tiếng về rồi nghe hết, nên chậm gấp nhiều lần
+        # phụ đề - nhưng phải tải tiếng về rồi nghe hết, nên chậm gấp nhiều lần
         # ba đường kia. Bật sẵn thì lần chạy đầu của người dùng là nửa tiếng
         # nhìn màn hình đứng im.
         hang = QHBoxLayout()
@@ -110,14 +130,14 @@ class TrangLayScript(QWidget):
         self._o_nghe.setEnabled(co_may)
         self._o_nghe.setToolTip(
             "Video không có phụ đề thì tải tiếng về, máy bạn tự nghe rồi gõ ra "
-            "chữ. Miễn phí — không tiêu ví ShopAPI.\n\nChậm: một video 10 phút "
+            "chữ. Miễn phí - không tiêu ví ShopAPI.\n\nChậm: một video 10 phút "
             "mất vài phút. Lần đầu còn phải tải bộ nghe (~0,5 GB)."
             if co_may else
             "Máy chưa có thư viện nghe (faster-whisper). Mở tab Agent, bấm "
-            "“Cài những thứ còn thiếu” rồi quay lại.")
+            "'Cài những thứ còn thiếu' rồi quay lại.")
         hang.addWidget(self._o_nghe)
         ghi_chu = nhan(
-            "— chậm, chỉ bật khi cần" if co_may else "— máy chưa cài phần nghe",
+            "- chậm, chỉ bật khi cần" if co_may else "- máy chưa cài phần nghe",
             "phu")
         ghi_chu.setWordWrap(True)
         ghi_chu.setMinimumWidth(1)
@@ -169,14 +189,14 @@ class TrangLayScript(QWidget):
         hang = HangXuongDong()
         self._nut_copy = nut_phu("Copy tất cả", self._copy_tat_ca, rong=150)
         self._nut_copy.setToolTip(
-            "Chép cả bảng vào bộ nhớ tạm, ngăn cột bằng Tab — dán thẳng vào "
+            "Chép cả bảng vào bộ nhớ tạm, ngăn cột bằng Tab - dán thẳng vào "
             "Google Sheets hay Excel là mỗi ô vào đúng một cột.")
         self._nut_copy.setEnabled(False)
         hang.addWidget(self._nut_copy)
         self._nut_csv = nut_phu("Lưu CSV", self._xuat_csv, rong=124)
         self._nut_csv.setEnabled(False)
         hang.addWidget(self._nut_csv)
-        # Mỗi video một tệp .txt: đây là dạng người viết kịch bản dùng thật —
+        # Mỗi video một tệp .txt: đây là dạng người viết kịch bản dùng thật -
         # mở ra đọc, chép một đoạn, chứ không ai đọc lời thoại trong ô Excel.
         self._nut_txt = nut_phu("Lưu .txt từng video", self._xuat_txt, rong=182)
         self._nut_txt.setEnabled(False)
@@ -217,7 +237,7 @@ class TrangLayScript(QWidget):
         if not dau_vao:
             self._app.show_message(
                 "Chưa có link nào",
-                "Dán link video YouTube — mỗi dòng một link. Dán link kênh thì "
+                "Dán link video YouTube - mỗi dòng một link. Dán link kênh thì "
                 "tôi lấy lời thoại của cả kênh đó.")
             return
 
@@ -226,19 +246,21 @@ class TrangLayScript(QWidget):
         self._nut_dung.setEnabled(True)
         self._bang.setRowCount(0)
         self._ket = []
-        self._tom_tat.setText("Đang lấy…")
+        self._tom_tat.setText("Đang lấy...")
         self._tom_tat.setStyleSheet("font-size:17px;font-weight:700;")
         cho_phep_nghe = self._o_nghe.isChecked()
+        uu_tien_ngon_ngu_goc = self._o_ngon_ngu_goc.isChecked()
         huy = self._huy
 
         def viec() -> List[KetScript]:
-            # LUỒNG NỀN — không chạm widget nào ở đây. Nhật ký đi qua
+            # LUỒNG NỀN - không chạm widget nào ở đây. Nhật ký đi qua
             # `goi_tren_luong_ve`, thứ duy nhất được phép nói chuyện với Qt.
             urls = self._gom_link(dau_vao, huy)
             if not urls:
                 return []
             return lay_nhieu_script(urls, cancel=huy,
                                     cho_phep_nghe=cho_phep_nghe,
+                                    uu_tien_ngon_ngu_goc=uu_tien_ngon_ngu_goc,
                                     on_log=self._ghi_tu_luong_nen)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
@@ -246,7 +268,7 @@ class TrangLayScript(QWidget):
     def _gom_link(self, dau_vao, huy) -> List[str]:
         """Đổi mọi dòng người dùng dán thành một danh sách link video.
 
-        Link kênh thì mở kênh ra lấy hết link video trong đó — người dán một
+        Link kênh thì mở kênh ra lấy hết link video trong đó - người dán một
         kênh vào đây là muốn lời thoại của kênh ấy, không phải một lời nhắc
         rằng "đây phải là link video".
         """
@@ -262,7 +284,7 @@ class TrangLayScript(QWidget):
                 self._ghi_tu_luong_nen("Đang mở kênh: {0}".format(gia_tri))
                 try:
                     kenh = fetch_channel(gia_tri, cancel=huy)
-                except Exception as loi:  # noqa: BLE001 — một kênh hỏng không giết lượt
+                except Exception as loi:  # noqa: BLE001 - một kênh hỏng không giết lượt
                     self._ghi_tu_luong_nen("  LỖI kênh: {0}".format(loi))
                     continue
                 moi = [v.url for v in kenh.videos if v.url]
@@ -270,7 +292,7 @@ class TrangLayScript(QWidget):
                 ra.extend(moi)
             elif kieu == INPUT_KEYWORD:
                 self._ghi_tu_luong_nen(
-                    "Bỏ qua “{0}” — chỗ này cần link video hoặc link kênh, "
+                    "Bỏ qua \"{0}\" - chỗ này cần link video hoặc link kênh, "
                     "không tìm theo từ khoá.".format(gia_tri))
         # Bỏ trùng, giữ thứ tự: dán một kênh rồi dán thêm một video của chính
         # kênh ấy là chuyện thường, mà lấy hai lần thì tốn đôi thời gian.
@@ -285,7 +307,7 @@ class TrangLayScript(QWidget):
     def _dung(self) -> None:
         if self._huy is not None:
             self._huy.set()
-        self._ghi("Đã yêu cầu dừng…")
+        self._ghi("Đã yêu cầu dừng...")
 
     def _hong(self, loi: BaseException) -> None:
         self._nut_chay.setEnabled(True)
@@ -315,8 +337,8 @@ class TrangLayScript(QWidget):
             "Lấy được lời thoại của {0}/{1} video.{2}".format(
                 len(duoc), len(ds),
                 "" if len(duoc) == len(ds) else
-                "  Video còn lại không có phụ đề — bật “Tự nghe khi không có "
-                "phụ đề” rồi chạy lại là máy bạn nghe hộ."))
+                "  Video còn lại không có phụ đề - bật 'Tự nghe khi không có "
+                "phụ đề' rồi chạy lại là máy bạn nghe hộ."))
         self._tom_tat.setStyleSheet(
             "font-size:17px;font-weight:700;color:{0};".format(
                 theme.XANH if co else theme.VANG))
@@ -332,7 +354,7 @@ class TrangLayScript(QWidget):
                 # .txt đều lấy từ đó chứ không lấy từ bảng.
                 chu = str(o)
                 if j == len(dong) - 1 and len(chu) > 300:
-                    chu = chu[:300] + "…"
+                    chu = chu[:300] + "..."
                 bang.setItem(i, j, QTableWidgetItem(chu))
         bang.setSortingEnabled(True)
 
@@ -342,10 +364,10 @@ class TrangLayScript(QWidget):
         self._log.appendPlainText(dong)
         if self._log.blockCount() > TRAN_NHAT_KY:
             self._log.clear()
-            self._log.appendPlainText("… (đã cắt bớt nhật ký cũ)")
+            self._log.appendPlainText("... (đã cắt bớt nhật ký cũ)")
 
     def _ghi_tu_luong_nen(self, dong: str) -> None:
-        """Nhật ký bắn từ LUỒNG NỀN — phải đi vòng qua luồng vẽ.
+        """Nhật ký bắn từ LUỒNG NỀN - phải đi vòng qua luồng vẽ.
 
         Gọi thẳng `appendPlainText` từ luồng nền là chạm widget ngoài luồng vẽ:
         Qt cho chạy một lúc rồi sập, không đoán trước được lúc nào.
@@ -365,7 +387,7 @@ class TrangLayScript(QWidget):
             dong.append(TAB.join(str(o).replace(TAB, " ").replace(XUONG, " ")
                                  for o in h))
         _App.clipboard().setText(XUONG.join(dong))
-        self._ghi("Đã copy {0} dòng — dán thẳng vào trang tính.".format(
+        self._ghi("Đã copy {0} dòng - dán thẳng vào trang tính.".format(
             len(dong) - 1))
 
     def _xuat_csv(self) -> None:
@@ -376,7 +398,7 @@ class TrangLayScript(QWidget):
             os.makedirs(thu_muc, exist_ok=True)
             write_csv(os.path.join(thu_muc, "loi-thoai.csv"),
                       list(COT_SCRIPT), hang_script(self._ket))
-        except Exception as loi:  # noqa: BLE001 — ổ đầy, thư mục bị khoá…
+        except Exception as loi:  # noqa: BLE001 - ổ đầy, thư mục bị khoá...
             self._app.show_error(loi)
             return
         self._xong_xuat(thu_muc, "loi-thoai.csv")

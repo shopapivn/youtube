@@ -195,6 +195,14 @@ def goi_van_ban(
             on_log(dong)
 
     goc = khoa or str(uuid.uuid4())
+    # ═══ KHOÁ PHẢI THUẦN ASCII ═══
+    #
+    # Idempotency-Key đi trong header HTTP, mà header chỉ nhận ASCII. Nếu nơi
+    # gọi truyền `khoa=` chứa tiếng Việt (tên phiên, mã kênh) mà không sanitize
+    # → `UnicodeEncodeError: 'ascii' codec can't encode characters`.
+    #
+    # Sanitize TẠI ĐÂY thay vì tin nơi gọi đã làm: một chỗ duy nhất, không lọt.
+    goc = goc.encode("ascii", "replace").decode("ascii").replace("?", "-")
     loi_cuoi: Optional[BaseException] = None
 
     for luot in range(_SO_LUOT_KHOA):

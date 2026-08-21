@@ -138,12 +138,16 @@ def co_the_nghe() -> bool:
 # ── Đường 1 & 2: phụ đề đi kèm video ─────────────────────────────────────────
 
 
-def _chon_phu_de(thong_tin: Dict, tu_lam: bool):
+def _chon_phu_de(thong_tin: Dict, tu_lam: bool, uu_tien_ngon_ngu_goc: bool = False):
     """Chọn bản phụ đề hợp nhất. Trả về `(đường dẫn, mã ngôn ngữ)`.
 
     `tu_lam=True` lấy trong `subtitles` (người đăng tự làm), `False` lấy trong
     `automatic_captions` (máy YouTube nghe). Tách hai lần gọi chứ không gộp: hai
     thứ này khác nhau về độ tin, và bảng kết quả phải nói rõ chữ nào từ đâu.
+
+    `uu_tien_ngon_ngu_goc=True` lấy ngôn ngữ gốc của video (bản đầu tiên trong
+    danh sách), không ưu tiên tiếng Việt. Dùng khi muốn transcript gốc chứ không
+    phải bản dịch.
 
     Xin định dạng `json3` trước `vtt`: phụ đề máy nghe ở dạng `vtt` là kiểu
     cuộn, mỗi dòng lặp lại gần hết dòng trước, gộp thẳng ra một đoạn dài gấp ba
@@ -152,7 +156,13 @@ def _chon_phu_de(thong_tin: Dict, tu_lam: bool):
     kho = thong_tin.get("subtitles" if tu_lam else "automatic_captions") or {}
     if not isinstance(kho, dict):
         return "", ""
-    ngon_ngu = [m for m in UU_TIEN_NGON_NGU if m in kho] or sorted(kho)
+    if uu_tien_ngon_ngu_goc:
+        # Lấy ngôn ngữ gốc: bản đầu tiên trong danh sách (YouTube đặt ngôn ngữ
+        # gốc lên đầu). Không ưu tiên tiếng Việt — dùng khi cần transcript gốc.
+        ngon_ngu = sorted(kho)
+    else:
+        # Ưu tiên tiếng Việt trước (hành vi cũ)
+        ngon_ngu = [m for m in UU_TIEN_NGON_NGU if m in kho] or sorted(kho)
     for ma in ngon_ngu:
         for dinh_dang in ("json3", "srv3", "vtt"):
             for muc in kho.get(ma) or []:
@@ -471,8 +481,12 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
 
 def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
                cho_phep_nghe: bool = False,
+               uu_tien_ngon_ngu_goc: bool = False,
                on_log: Optional[Callable[[str], None]] = None) -> KetScript:
     """Lấy lời thoại của một video, thử lần lượt bốn đường. **Có gọi mạng.**
+
+    `uu_tien_ngon_ngu_goc=True` lấy ngôn ngữ gốc của video (không dịch sang
+    tiếng Việt). Mặc định `False` để giữ hành vi cũ (ưu tiên tiếng Việt).
 
     Không bao giờ ném lỗi ra ngoài: một video hỏng chỉ là một dòng có cột lời
     thoại trống kèm lý do, chứ không được giết cả lượt chạy hàng trăm video.
@@ -513,7 +527,7 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
         if cancel is not None and cancel.is_set():
             ket.loi = "đã dừng"
             return ket
-        dia_chi, ma = _chon_phu_de(thong_tin, tu_lam)
+        dia_chi, ma = _chon_phu_de(thong_tin, tu_lam, uu_tien_ngon_ngu_goc)
         if not dia_chi:
             continue
         chu, vi_sao = _tai_chu(dia_chi)
@@ -616,6 +630,7 @@ def lay_nhieu_script(
     *,
     cancel: Optional[threading.Event] = None,
     cho_phep_nghe: bool = False,
+    uu_tien_ngon_ngu_goc: bool = False,
     on_log: Optional[Callable[[str], None]] = None,
     on_xong_mot: Optional[Callable[[KetScript], None]] = None,
     lay: Callable[..., KetScript] = lay_script,
@@ -642,7 +657,9 @@ def lay_nhieu_script(
         ghi("[{0}/{1}] {2}".format(thu_tu, len(ds), url))
         try:
             ket = lay(str(url).strip(), cancel=cancel,
-                      cho_phep_nghe=cho_phep_nghe, on_log=on_log)
+                      cho_phep_nghe=cho_phep_nghe,
+                      uu_tien_ngon_ngu_goc=uu_tien_ngon_ngu_goc,
+                      on_log=on_log)
         except Exception as loi:  # noqa: BLE001 — một video hỏng không giết lượt
             ket = KetScript(url=str(url).strip(), loi=str(loi)[:200])
         if ket.duoc:

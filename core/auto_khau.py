@@ -1977,6 +1977,7 @@ def _noi_mp3(bc: BoiCanh, manh: Sequence[str], dich: str) -> None:
     lenh = [ffmpeg, "-y", "-hide_banner", "-nostats", "-f", "concat",
             "-safe", "0", "-i", danh_sach, "-c", "copy", dich]
     ket = subprocess.run(lenh, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace",
                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     try:
         os.remove(danh_sach)
