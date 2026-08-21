@@ -111,10 +111,10 @@ def test_du_tam_trang_deu_dung_len_duoc(cua_so):
 
 
 def test_tab_tu_dong_dung_dau_va_khong_co_icon(cua_so):
-    """Chủ dự án, 14/08/2026: *"mày để là tab đầu tiên nhá"*, *"không có icon nhé"*."""
+    """Chủ dự án, 21/08/2026: Tài khoản lên đầu, không có icon."""
     from ui_qt.app import TRANG
 
-    assert TRANG[0][0] == "auto", "tab Tự động phải đứng đầu"
+    assert TRANG[0][0] == "wallet", "tab Tài khoản phải đứng đầu"
     co_icon = [k for k, bt, _nh in TRANG if str(bt).strip()]
     assert not co_icon, "thanh bên không được có icon: {0}".format(co_icon)
 

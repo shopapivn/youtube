@@ -56,36 +56,20 @@ _NHIP_MS = 150
 #: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
 #: xem `ui_qt/bang_viec.py` để biết vì sao.
 TRANG = (
-    # ═══ "TỰ ĐỘNG" ĐỨNG ĐẦU ═══
-    #
-    # Đây là đường chính của tool: một link vào, một video hoàn thiện ra. Mọi
-    # tab dưới nó là chỗ làm **từng khâu một** khi cần can thiệp tay.
-    #
-    # Thứ tự trong thanh bên là thứ tự tool tự giới thiệu mình, nên thứ làm
-    # được nhiều nhất phải đứng trước. Chủ dự án, 14/08/2026: *"mày để là tab
-    # đầu tiên nhá"*.
-    ("auto", "", "Tự động"),
-    # "Agent xây tool" từng đứng đây; từ 21/08/2026 nó nằm trong tab Cài đặt —
-    # đó là thứ cài một lần rồi thôi, đúng chỗ của Cài đặt. Xem
-    # `trang_cai_dat._the_agent`.
-    ("skill", "", "Skill"),
-    ("content", "", "Viết kịch bản"),
-    ("voice", "", "Voice"),
-    # (Hai tab "Tạo ảnh" và "Tạo video" gộp làm một ngày 12/08/2026. Chúng vốn
-    # là MỘT khuôn dùng hai lần, mà thứ khách thật sự muốn — *ảnh này, rồi cho
-    # nó động đậy* — thì không tab nào diễn đạt được vì nó vắt qua cả hai.)
-    # Giọng đọc → phụ đề → prompt từng cảnh → Excel.
-    #
-    # Đứng TRƯỚC "Ảnh & Video" vì đó là thứ tự người ta làm thật: có bảng cảnh
-    # rồi mới đi tạo ảnh cho từng cảnh. Trước 15/08/2026 nó đứng sau, và ai đi
-    # từ trên xuống sẽ vào tab tạo ảnh khi chưa có gì để tạo. Excel tab này xuất
-    # ra nạp thẳng được sang tab kế bên — thứ tự đó giờ khớp cả trên màn hình.
-    ("prompt-visuals", "", "Prompt Visuals"),
-    # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026) — xem ghi chú cũ ở
-    # dưới. Nhận thẳng Excel của tab trên, hoặc gõ tay từng dòng.
-    ("media", "", "Ảnh & Video"),
-    ("edit", "", "Dựng video"),
+    # Chủ dự án, 21/08/2026: đưa Tài khoản lên đầu, Auto về sau Dựng video.
     ("wallet", "", "Tài khoản"),
+    ("skill", "", "Công cụ YTB"),
+    ("content", "", "Viết kịch bản"),
+    ("voice", "", "Voice 11Lab"),
+    ("prompt-visuals", "", "Prompt Visuals"),
+    # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026).
+    ("media", "", "Tạo ảnh+video (Veo3)"),
+    ("edit", "", "Edit video"),
+    # "Tự động" đứng sau Edit video: tab chạy cả pipeline mà khách đã biết từng
+    # khâu xong mới thật sự dùng — đặt cuối là hướng dẫn ngầm đọc từ trên xuống.
+    ("auto", "", "Tự động"),
+    # "Agent xây tool" từng đứng đây; từ 21/08/2026 nó nằm trong tab Cài đặt.
+    # Xem `trang_cai_dat._the_agent`.
     ("cai-dat", "", "Cài đặt"),
 )
 
