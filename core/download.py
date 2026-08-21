@@ -10,6 +10,7 @@ theo từng khối để file video 50MB không ngốn hết RAM.
 from __future__ import annotations
 
 import os
+import time
 from typing import Callable, Optional
 
 import httpx
@@ -41,54 +42,73 @@ def download_to(
     * `on_progress(đã_tải, tổng_cộng)` — `tổng_cộng` là `None` khi máy chủ không
       báo `Content-Length`.
     * `should_stop()` trả `True` thì dừng giữa chừng và dọn file tạm.
+    * Lỗi mạng thuần retry **vô hạn** với backoff trần 60s — không bao giờ show
+      dialog "Mạng bị gián đoạn" cho việc tải file kết quả.
     """
+    from .errors import _la_loi_mang  # noqa: PLC0415
+
     folder = os.path.dirname(os.path.abspath(dest_path))
     if folder:
         os.makedirs(folder, exist_ok=True)
 
     temp_path = dest_path + ".part"
-    downloaded = 0
-    try:
-        with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as http:
-            with http.stream("GET", url) as response:
-                if response.status_code >= 400:
-                    raise DownloadError(
-                        "Máy chủ lưu trữ trả về mã {0} khi tải kết quả. "
-                        "Link kết quả chỉ sống 7 ngày — nếu job đã cũ, bạn tạo lại giúp mình.".format(
-                            response.status_code
-                        )
-                    )
-                total: Optional[int] = None
-                raw_length = response.headers.get("Content-Length")
-                if raw_length is not None:
-                    try:
-                        total = int(raw_length)
-                    except ValueError:
-                        total = None
+    nhip_mang = (5, 10, 20, 30, 60)
+    lan_mang = 0
 
-                with open(temp_path, "wb") as handle:
-                    for chunk in response.iter_bytes(_CHUNK):
-                        if should_stop is not None and should_stop():
-                            raise DownloadError("Bạn đã dừng tool nên việc tải file bị huỷ.")
-                        handle.write(chunk)
-                        downloaded += len(chunk)
-                        if on_progress is not None:
-                            on_progress(downloaded, total)
-    except DownloadError:
-        _cleanup(temp_path)
-        raise
-    except httpx.HTTPError as exc:
-        _cleanup(temp_path)
-        raise DownloadError(
-            "Không tải được file kết quả: {0}. Bạn kiểm tra mạng rồi bấm tải lại.".format(exc)
-        ) from exc
-    except OSError as exc:
-        _cleanup(temp_path)
-        raise DownloadError(
-            "Không ghi được file vào {0}: {1}. Bạn kiểm tra quyền ghi và dung lượng ổ đĩa.".format(
-                folder, exc
-            )
-        ) from exc
+    while True:
+        if should_stop is not None and should_stop():
+            _cleanup(temp_path)
+            raise DownloadError("Bạn đã dừng tool nên việc tải file bị huỷ.")
+        downloaded = 0
+        try:
+            with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as http:
+                with http.stream("GET", url) as response:
+                    if response.status_code >= 400:
+                        raise DownloadError(
+                            "Máy chủ lưu trữ trả về mã {0} khi tải kết quả. "
+                            "Link kết quả chỉ sống 7 ngày — nếu job đã cũ, bạn tạo lại giúp mình.".format(
+                                response.status_code
+                            )
+                        )
+                    total: Optional[int] = None
+                    raw_length = response.headers.get("Content-Length")
+                    if raw_length is not None:
+                        try:
+                            total = int(raw_length)
+                        except ValueError:
+                            total = None
+
+                    with open(temp_path, "wb") as handle:
+                        for chunk in response.iter_bytes(_CHUNK):
+                            if should_stop is not None and should_stop():
+                                raise DownloadError("Bạn đã dừng tool nên việc tải file bị huỷ.")
+                            handle.write(chunk)
+                            downloaded += len(chunk)
+                            if on_progress is not None:
+                                on_progress(downloaded, total)
+            # Tải xong, thoát vòng retry
+            break
+        except DownloadError:
+            _cleanup(temp_path)
+            raise
+        except OSError as exc:
+            _cleanup(temp_path)
+            raise DownloadError(
+                "Không ghi được file vào {0}: {1}. Bạn kiểm tra quyền ghi và dung lượng ổ đĩa.".format(
+                    folder, exc
+                )
+            ) from exc
+        except Exception as exc:  # noqa: BLE001 — httpx.HTTPError và lỗi mạng khác
+            _cleanup(temp_path)
+            if _la_loi_mang(exc) or isinstance(exc, httpx.HTTPError):
+                # Lỗi mạng: retry vô hạn với backoff trần 60s
+                delay = float(nhip_mang[min(lan_mang, len(nhip_mang) - 1)])
+                lan_mang += 1
+                time.sleep(delay)
+                continue
+            raise DownloadError(
+                "Không tải được file kết quả: {0}. Bạn kiểm tra mạng rồi bấm tải lại.".format(exc)
+            ) from exc
 
     os.replace(temp_path, dest_path)
     return dest_path

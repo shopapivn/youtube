@@ -835,10 +835,22 @@ class JobManager:
                 self._events.put(("done", self.summary()))
 
     def _create_with_retry(self, record: JobRecord) -> Optional[Dict[str, Any]]:
-        """Gọi endpoint tạo job, tự chờ và thử lại với lỗi tạm thời."""
+        """Gọi endpoint tạo job, tự chờ và thử lại với lỗi tạm thời.
+
+        Lỗi mạng thuần (VPN chập chờn, wifi đứt) retry **vô hạn** với backoff
+        trần 60s — chỉ dừng khi mạng về hoặc khách bấm Dừng. Các lỗi khác
+        (server, nội dung, hết tiền) vẫn dừng sau MAX_JOB_ATTEMPTS lần.
+        """
+        from .errors import _la_loi_mang  # noqa: PLC0415
+
         spec = record.spec
-        for attempt in range(MAX_JOB_ATTEMPTS):
-            record.attempt = attempt + 1
+        attempt = 0
+        da_bao_mat_mang = False
+        lan_bao_cuoi = 0
+
+        while True:
+            attempt += 1
+            record.attempt = attempt
             if self._stop.is_set():
                 self._finish(record, STATUS_CANCELLED, "Bạn đã dừng trước khi job được gửi đi.")
                 return None
@@ -853,6 +865,7 @@ class JobManager:
                 self._bao_nhip(spec.kind, exc)
                 advice = describe(exc)
                 record.advice = advice
+
                 if advice.needs_topup:
                     # Ví trống. Kéo phanh cho CẢ LÔ ngay lập tức: những việc còn
                     # xếp hàng sẽ được đánh dấu "chưa chạy" thay vì lần lượt gửi
@@ -862,21 +875,44 @@ class JobManager:
                         "Ví hết tiền — đã dừng cả lô. Những việc còn lại chưa gửi đi "
                         "nên không bị trừ tiền."
                     )
-                if not advice.retryable or attempt == MAX_JOB_ATTEMPTS - 1:
                     self._finish(record, STATUS_FAILED, advice.one_line())
                     return None
-                delay = retry_after_seconds(exc, attempt)
+
+                # LỖI MẠNG THUẦN → retry vô hạn với backoff trần 60s, log gentle
+                if _la_loi_mang(exc):
+                    if not da_bao_mat_mang:
+                        self._log("  mạng chập chờn — đang thử lại, sẽ tự tiếp tục khi mạng về.")
+                        da_bao_mat_mang = True
+                        lan_bao_cuoi = attempt
+                    elif attempt - lan_bao_cuoi >= 5:  # ~5 phút (5 lần × 60s)
+                        self._log("  … vẫn đang thử lại (lần {0}).".format(attempt))
+                        lan_bao_cuoi = attempt
+                    # Backoff: 5, 10, 20, 30, 60, 60, 60… (trần ở 60s)
+                    nhip_mang = (5, 10, 20, 30, 60)
+                    delay = float(nhip_mang[min(attempt - 1, len(nhip_mang) - 1)])
+                    self._update(record, STATUS_CREATING,
+                                "Mạng chập chờn — đang chờ {0:.0f}s rồi thử lại…".format(delay))
+                    if self._sleep(delay):
+                        self._finish(record, STATUS_CANCELLED, "Bạn đã dừng trong lúc chờ mạng.")
+                        return None
+                    continue  # thử lại vô hạn
+
+                # Lỗi KHÔNG phải mạng thuần: giới hạn MAX_JOB_ATTEMPTS lần
+                if not advice.retryable or attempt >= MAX_JOB_ATTEMPTS:
+                    self._finish(record, STATUS_FAILED, advice.one_line())
+                    return None
+
+                delay = retry_after_seconds(exc, attempt - 1)
                 self._update(
                     record,
                     STATUS_CREATING,
                     "{0} — chờ {1:.0f} giây rồi thử lại (lần {2}/{3}).".format(
-                        advice.title, delay, attempt + 2, MAX_JOB_ATTEMPTS
+                        advice.title, delay, attempt + 1, MAX_JOB_ATTEMPTS
                     ),
                 )
                 if self._sleep(delay):
                     self._finish(record, STATUS_CANCELLED, "Bạn đã dừng trong lúc chờ thử lại.")
                     return None
-        return None
 
     def _call_create(self, spec: JobSpec):
         """Gọi đúng endpoint theo loại job. Đây là chỗ duy nhất tool chạm vào SDK để tạo job."""
@@ -976,7 +1012,14 @@ class JobManager:
             try:
                 last = client.jobs.retrieve(job_id).to_dict()
             except Exception as exc:  # noqa: BLE001
+                from .errors import _la_loi_mang  # noqa: PLC0415
+                # Lỗi mạng thuần: im lặng retry (không mark job là failed)
+                # Lỗi khác retryable: cũng retry tiếp
+                # Lỗi không retryable: dừng hẳn
                 advice = describe(exc)
+                if _la_loi_mang(exc):
+                    # Mất mạng khi hỏi thăm: không báo gì, vòng sau tự hỏi lại
+                    continue
                 if not advice.retryable:
                     record.advice = advice
                     self._finish(record, STATUS_FAILED, advice.one_line())
