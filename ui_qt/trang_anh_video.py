@@ -40,7 +40,8 @@ from __future__ import annotations
 import os
 from typing import Dict, List, Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
+from PyQt5.QtGui import QKeyEvent
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
     QHeaderView, QPlainTextEdit, QSplitter, QTableWidget,
@@ -145,85 +146,148 @@ class TabThuCong(QWidget):
     # ── Thanh nhập dưới cùng ─────────────────────────────────────────────────
 
     def _thanh_nhap(self) -> QWidget:
-        """Bố cục Flow: mọi tuỳ chọn hiện sẵn, bố cục dọc, không giấu sau nút."""
+        """Bố cục Flow: ô nhập lớn + nút + bên trái, popup settings bên phải."""
         khung = the()
         doc = QVBoxLayout(khung)
         doc.setContentsMargins(14, 12, 14, 12)
         doc.setSpacing(10)
 
-        # ═══ TABS HÌNH ẢNH / VIDEO ═══
-        self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
-                             on_change=lambda _t: self._doi_loai())
-        doc.addWidget(self.loai)
-
-        # ═══ 5 NÚT TỈ LỆ KHUNG ═══
-        # Flow hiện 5 nút icon (16:9, 4:3, 1:1, 3:4, 9:16), không dùng 3 nút chữ.
-        self.ty_le_nut = NhomChon(("16:9", "4:3", "1:1", "3:4", "9:16"), "16:9",
-                                  on_change=lambda _t: self._cap_nhat_gia())
-        doc.addWidget(self.ty_le_nut)
-
-        # ═══ ENGINE VIDEO DROPDOWN ═══
-        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 200)
-        doc.addWidget(self.engine)
-
-        # ═══ 4 NÚT SỐ LƯỢNG x1/x2/x3/x4 ═══
-        self.so_luong_nut = NhomChon(("x1", "x2", "x3", "x4"), "x1",
-                                     on_change=lambda _t: self._cap_nhat_gia())
-        doc.addWidget(self.so_luong_nut)
-
-        # ═══ Ô NHẬP ═══
+        # ═══ Ô NHẬP LỚN ═══
         self.o_nhap = QPlainTextEdit()
         self.o_nhap.setPlaceholderText("Bạn muốn tạo gì?")
-        self.o_nhap.setFixedHeight(64)
+        self.o_nhap.setFixedHeight(84)
+        # Enter = gửi, Shift+Enter = xuống dòng
+        self.o_nhap.installEventFilter(self)
         doc.addWidget(self.o_nhap)
 
-        # ═══ HÀNG NÚT GỬI ═══
+        # ═══ HÀNG NÚT: [+] [Tác nhân] ... [⚙] [→] ═══
         hang = QHBoxLayout()
-        # Nút + Tác nhân (mở ảnh tham chiếu + chỗ lưu)
-        self._nut_tac_nhan = nut_phu("+ Tác nhân", self._mo_tac_nhan, rong=120)
-        self._nut_tac_nhan.setToolTip("Ảnh tham chiếu, chỗ lưu kết quả")
-        hang.addWidget(self._nut_tac_nhan)
+        hang.setSpacing(8)
+
+        # Nút + (upload ảnh tham chiếu)
+        self._nut_upload = nut_phu("+", self._chon_anh, rong=40)
+        self._nut_upload.setToolTip("Upload ảnh tham chiếu (hoặc paste vào ô nhập)")
+        hang.addWidget(self._nut_upload)
+
+        # Nhãn "Tác nhân" (chỉ hiển thị, không phải nút)
+        self._nhan_tac_nhan = nhan("Tác nhân", "phu")
+        hang.addWidget(self._nhan_tac_nhan)
+
         hang.addStretch(1)
-        self.nut_gui = nut_chinh("Gửi", self.gui)
+
+        # Nút ⚙ settings (mở popup chọn loại/tỉ lệ/engine/số lượng)
+        self._nut_settings = nut_phu("⚙", self._mo_settings, rong=40)
+        self._nut_settings.setToolTip("Chọn loại, tỉ lệ, engine, số lượng")
+        hang.addWidget(self._nut_settings)
+
+        # Nút → gửi
+        self.nut_gui = nut_chinh("→", self.gui, rong=50)
+        self.nut_gui.setToolTip("Gửi (hoặc Enter)")
         hang.addWidget(self.nut_gui)
+
         doc.addLayout(hang)
 
-        # Widget ẩn cho ảnh tham chiếu + chỗ lưu (mở qua "+ Tác nhân")
+        # ═══ SETTINGS ẨN (mở qua nút ⚙) ═══
+        # Loại (Ảnh/Video)
+        self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
+                             on_change=lambda _t: self._doi_loai())
+        # Tỉ lệ
+        self.ty_le_nut = NhomChon(("16:9", "4:3", "1:1", "3:4", "9:16"), "16:9",
+                                  on_change=lambda _t: self._cap_nhat_gia())
+        # Engine video
+        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 200)
+        # Số lượng ảnh
+        self.so_luong_nut = NhomChon(("x1", "x2", "x3", "x4"), "x1",
+                                     on_change=lambda _t: self._cap_nhat_gia())
+
+        # Ảnh tham chiếu (ẩn, dùng khi có ảnh)
         self.anh_vao = AnhThamChieu("Ảnh tham chiếu:", on_change=None)
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
-        self._hop_tac_nhan = self._dung_hop_tac_nhan()
+
+        # Dialog settings
+        self._hop_settings = self._dung_hop_settings()
 
         self._doi_loai()
         self._cap_nhat_gia()
         return khung
 
-    def _dung_hop_tac_nhan(self) -> QDialog:
-        """Hộp "+ Tác nhân": ảnh tham chiếu + chỗ lưu."""
+    def _dung_hop_settings(self) -> QDialog:
+        """Popup settings: chọn loại, tỉ lệ, engine, số lượng - giống Flow."""
         hop = QDialog(self)
-        hop.setWindowTitle("Tác nhân")
+        hop.setWindowTitle("Cài đặt")
         doc = QVBoxLayout(hop)
         doc.setContentsMargins(20, 16, 20, 16)
-        doc.setSpacing(10)
-        doc.addWidget(self.anh_vao)
+        doc.setSpacing(12)
+
+        # Hình ảnh / Video
+        doc.addWidget(nhan("Loại", "h3"))
+        doc.addWidget(self.loai)
+
+        # Tỉ lệ khung
+        doc.addWidget(nhan("Tỉ lệ", "h3"))
+        doc.addWidget(self.ty_le_nut)
+
+        # Engine (chỉ hiện khi chọn Video)
+        self._nhan_engine = nhan("Engine", "h3")
+        doc.addWidget(self._nhan_engine)
+        doc.addWidget(self.engine)
+
+        # Số lượng (chỉ hiện khi chọn Ảnh)
+        self._nhan_so_luong = nhan("Số lượng", "h3")
+        doc.addWidget(self._nhan_so_luong)
+        doc.addWidget(self.so_luong_nut)
+
+        # Chỗ lưu kết quả
+        doc.addWidget(nhan("Lưu vào", "h3"))
         doc.addWidget(self._thu_muc)
-        doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
+
+        # Nút Xong
+        hang_nut = QHBoxLayout()
+        hang_nut.addStretch(1)
+        hang_nut.addWidget(nut_chinh("Xong", hop.accept, rong=120))
+        doc.addLayout(hang_nut)
+
         return hop
 
-    def _mo_tac_nhan(self) -> None:
-        """Mở hộp tác nhân: ảnh tham chiếu + chỗ lưu."""
-        self._hop_tac_nhan.exec_()
+    def _mo_settings(self) -> None:
+        """Mở popup settings."""
+        self._hop_settings.exec_()
+
+    def _chon_anh(self) -> None:
+        """Nút + : chọn ảnh tham chiếu từ file."""
+        duong, _ = QFileDialog.getOpenFileName(
+            self, "Chọn ảnh tham chiếu", "",
+            "Ảnh (*.jpg *.jpeg *.png *.webp);;Tất cả (*.*)")
+        if duong:
+            self.anh_vao.dat(duong)
+
+    def eventFilter(self, obj, event) -> bool:
+        """Bắt Enter = gửi, Shift+Enter = xuống dòng."""
+        if obj == self.o_nhap and event.type() == QEvent.KeyPress:
+            ke: QKeyEvent = event
+            if ke.key() == Qt.Key_Return or ke.key() == Qt.Key_Enter:
+                if ke.modifiers() == Qt.ShiftModifier:
+                    # Shift+Enter: xuống dòng (mặc định)
+                    return False
+                else:
+                    # Enter: gửi
+                    self.gui()
+                    return True
+        return super().eventFilter(obj, event)
 
     def _cap_nhat_gia(self) -> None:
         """Placeholder - không còn hiện dòng giá nữa."""
         pass
 
     def _doi_loai(self) -> None:
-        """Ảnh/Video đổi thì hiện/ẩn engine, số lượng, đổi tỉ lệ cho phù hợp."""
+        """Ảnh/Video đổi thì hiện/ẩn engine/số lượng trong popup settings."""
         video = self.la_video
         # Engine chỉ cho video
         self.engine.setVisible(video)
+        self._nhan_engine.setVisible(video)
         # Số lượng chỉ cho ảnh
         self.so_luong_nut.setVisible(not video)
+        self._nhan_so_luong.setVisible(not video)
         # Tỉ lệ video chỉ có 3 loại (16:9, 9:16, 1:1), ảnh có đủ 5
         dang_chon = self.ty_le_nut.get()
         if video and dang_chon in ("4:3", "3:4"):
