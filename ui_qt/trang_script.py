@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
     QCheckBox, QFileDialog, QHBoxLayout, QHeaderView, QPlainTextEdit,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
+# QCheckBox còn dùng cho checkbox "Tự nghe khi không có phụ đề"
 
 from core.research import write_csv
 from core.script_video import (
@@ -97,25 +98,15 @@ class TrangLayScript(QWidget):
         self._o_nhap.setFixedHeight(92)
         v.addWidget(self._o_nhap)
 
-        # ═══ LẤY NGÔN NGỮ GỐC ═══
+        # ═══ LẤY NGÔN NGỮ GỐC - MẶC ĐỊNH VÀ BẮT BUỘC ═══
         #
-        # Mặc định ưu tiên tiếng Việt: nếu video có phụ đề tiếng Việt (dịch) thì
-        # lấy bản đó. Nhưng nhiều khi người dùng cần transcript gốc để tham khảo
-        # cách diễn đạt, không phải bản dịch.
-        hang_goc = QHBoxLayout()
-        self._o_ngon_ngu_goc = QCheckBox("Lấy ngôn ngữ gốc của video")
-        self._o_ngon_ngu_goc.setChecked(True)
-        self._o_ngon_ngu_goc.setToolTip(
-            "Bật: lấy phụ đề ngôn ngữ gốc của video (tiếng Anh thì được tiếng Anh, "
-            "không dịch sang tiếng Việt). Dùng khi cần transcript gốc để tham khảo "
-            "cách diễn đạt.\n\n"
-            "Tắt: ưu tiên phụ đề tiếng Việt nếu có (hành vi cũ).")
-        hang_goc.addWidget(self._o_ngon_ngu_goc)
-        ghi_chu_goc = nhan("- lấy đúng lời thoại gốc, không dịch", "phu")
-        ghi_chu_goc.setWordWrap(True)
-        ghi_chu_goc.setMinimumWidth(1)
-        hang_goc.addWidget(ghi_chu_goc, 1)
-        v.addLayout(hang_goc)
+        # Từ 21/08/2026: luôn lấy ngôn ngữ gốc của video, không dịch. Video tiếng
+        # Anh thì lấy tiếng Anh, video tiếng Việt thì lấy tiếng Việt.
+        #
+        # Chủ dự án: *"không cần thêm tùy chọn ở UI mà mặc định là video gốc ngôn
+        # ngữ nào thì phải lấy đúng của ngôn ngữ đó"* (21/08/2026).
+        #
+        # Không còn checkbox — hành vi cố định.
 
         # ═══ TỰ NGHE - MẶC ĐỊNH TẮT ═══
         #
