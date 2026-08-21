@@ -101,14 +101,14 @@ class TabThuCong(QWidget):
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(0, 0, 0, 0)
-        doc.setSpacing(10)
+        doc.setSpacing(0)
 
         self.thu_vien = ThuVienKetQua(
             "Gõ mô tả ở dưới rồi bấm Gửi. Kết quả hiện ở đây.")
         self.thu_vien.dat_viec(khi_lam_lai=self._lam_lai,
                                khi_cho_dong=self._cho_dong)
         doc.addWidget(self.thu_vien, 1)
-        doc.addWidget(self._thanh_nhap())
+        doc.addWidget(self._thanh_nhap(), 0)
 
     #: Ví dụ bấm được, hiện khi màn hình còn trống.
     #:
@@ -149,14 +149,14 @@ class TabThuCong(QWidget):
         """Bố cục Flow: ô nhập với controls bên trong (như chat input)."""
         khung = the()
         doc = QVBoxLayout(khung)
-        doc.setContentsMargins(16, 14, 16, 14)
+        doc.setContentsMargins(16, 12, 16, 12)
         doc.setSpacing(8)
 
         # Ô nhập
         self.o_nhap = QPlainTextEdit()
         self.o_nhap.setPlaceholderText("Bạn muốn tạo gì?")
-        self.o_nhap.setMinimumHeight(70)
-        self.o_nhap.setMaximumHeight(140)
+        self.o_nhap.setMinimumHeight(56)
+        self.o_nhap.setMaximumHeight(110)
         self.o_nhap.setStyleSheet(
             "QPlainTextEdit {"
             f"  background: {theme.THE};"
@@ -164,7 +164,7 @@ class TabThuCong(QWidget):
             "  border-radius: 8px;"
             f"  color: {theme.CHU};"
             "  font-size: 14px;"
-            "  padding: 10px 12px;"
+            "  padding: 8px 12px;"
             "}")
         self.o_nhap.installEventFilter(self)
         doc.addWidget(self.o_nhap)
@@ -239,7 +239,9 @@ class TabThuCong(QWidget):
 
         doc.addLayout(hang)
 
-        khung.setMaximumHeight(240)
+        khung.setMaximumHeight(180)
+        khung.setSizePolicy(khung.sizePolicy().horizontalPolicy(),
+                           khung.sizePolicy().Maximum)
 
         # ═══ SETTINGS ẨN (mở qua badge) ═══
         self.loai = NhomChon((LOAI_ANH, LOAI_VIDEO), LOAI_ANH,
