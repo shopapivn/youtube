@@ -45,7 +45,7 @@ from typing import Dict, Optional
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from core.jobs import (
@@ -144,9 +144,30 @@ def mo_file(duong_dan: str) -> None:
         pass
 
 
+#: Trần/sàn chiều cao ô xem trước. Ngang (16:9) ~135, dọc (9:16) ~427 — cứ để
+#: đúng tỉ lệ ảnh thì không còn khoảng trống thừa như ô vuông cố định trước đây.
+_CAO_MIN = 120
+_CAO_MAX = 440
+
+
+def _cao_xem_truoc(w: float, h: float) -> int:
+    """Chiều cao ô xem trước cho bề rộng `CANH`, giữ đúng tỉ lệ `w:h`."""
+    if w > 0 and h > 0:
+        return max(_CAO_MIN, min(_CAO_MAX, round(CANH * h / w)))
+    return round(CANH * 9 / 16)  # mặc định 16:9, khung ngang phổ biến nhất
+
+
+def _cao_theo_ty_le(ty_le: str) -> int:
+    """Đổi chuỗi "16:9" thành chiều cao ô xem trước. Không đọc được thì 16:9."""
+    try:
+        w, h = (float(x) for x in str(ty_le).replace(" ", "").split(":", 1))
+    except (ValueError, AttributeError):
+        return _cao_xem_truoc(0, 0)
+    return _cao_xem_truoc(w, h)
+
+
 class TheKetQua(QFrame):
     """Một việc: ảnh xem trước (hoặc khung hình clip), nhãn mô tả, trạng thái."""
-
     #: Luồng nền rút xong khung hình của clip -> đường dẫn file PNG.
     #:
     #: Phải đi qua tín hiệu chứ không gọi thẳng: Qt cấm sờ vào widget từ luồng
@@ -155,7 +176,8 @@ class TheKetQua(QFrame):
     khung_xong = pyqtSignal(str)
 
     def __init__(self, mo_ta: str, la_video: bool, khi_lam_lai=None,
-                 khi_cho_dong=None, uid: str = ""):
+                 khi_cho_dong=None, uid: str = "", so_anh_tham_chieu: int = 0,
+                 ty_le: str = ""):
         super().__init__()
         self.khung_xong.connect(self._dat_khung)
         self._mo_ta = mo_ta
@@ -169,6 +191,8 @@ class TheKetQua(QFrame):
         self._duong_dan = ""
         self._da_ve = ""          # file đã vẽ rồi — đừng nạp lại từ đĩa
         self._la_video = la_video
+        #: Cao ô xem trước theo tỉ lệ đã chọn; refit lại đúng ảnh thật khi nạp.
+        self._cao_anh = _cao_theo_ty_le(ty_le)
         self.setFixedWidth(CANH + 16)
         self.setStyleSheet(
             f"background:{theme.THE}; border:1px solid {theme.VIEN};"
@@ -179,8 +203,15 @@ class TheKetQua(QFrame):
         doc.setContentsMargins(8, 8, 8, 8)
         doc.setSpacing(6)
 
+        # Ảnh xem trước + badge số ảnh tham chiếu
+        self._khung_anh = QWidget()
+        self._khung_anh.setFixedSize(CANH, self._cao_anh)
+        lop_anh = QVBoxLayout(self._khung_anh)
+        lop_anh.setContentsMargins(0, 0, 0, 0)
+        lop_anh.setSpacing(0)
+
         self._o_anh = QLabel()
-        self._o_anh.setFixedSize(CANH, CANH)
+        self._o_anh.setFixedSize(CANH, self._cao_anh)
         self._o_anh.setAlignment(Qt.AlignCenter)
         self._o_anh.setStyleSheet(
             f"background:{'#1f2430' if la_video else theme.THE_MO};"
@@ -190,7 +221,22 @@ class TheKetQua(QFrame):
         # là thứ ở lại nếu máy không có FFmpeg. Ô đen rỗng đọc ra là "chưa có
         # gì"; ô đen có chữ đọc ra là "có clip, bấm vào xem".
         self._o_anh.setText("clip" if la_video else "")
-        doc.addWidget(self._o_anh)
+        lop_anh.addWidget(self._o_anh)
+
+        # Badge số ảnh tham chiếu (góc trên phải)
+        if so_anh_tham_chieu > 0:
+            badge = QLabel(str(so_anh_tham_chieu))
+            badge.setParent(self._khung_anh)
+            badge.setFixedSize(24, 24)
+            badge.move(CANH - 28, 4)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setStyleSheet(
+                f"background:{theme.XANH}; border:none; border-radius:12px;"
+                " color:white; font-size:11px; font-weight:bold;")
+            badge.setToolTip(f"{so_anh_tham_chieu} ảnh tham chiếu")
+            badge.show()
+
+        doc.addWidget(self._khung_anh)
 
         self._o_mo_ta = nhan(mo_ta[:64], "phu")
         self._o_mo_ta.setWordWrap(True)
@@ -217,7 +263,7 @@ class TheKetQua(QFrame):
         hang.addWidget(self._nut_lai)
         if not la_video:
             self._nut_dong = nut_phu(
-                "Thành clip", lambda: self._goi(self._khi_cho_dong), rong=96)
+                "Tạo video", lambda: self._goi(self._khi_cho_dong), rong=96)
             self._nut_dong.setToolTip("Dùng ảnh này làm khung đầu cho một clip")
             hang.addWidget(self._nut_dong)
         hang.addStretch(1)
@@ -275,8 +321,23 @@ class TheKetQua(QFrame):
         if anh.isNull():
             return
         self._da_ve = self._duong_dan
-        self._o_anh.setPixmap(anh.scaled(CANH, CANH, Qt.KeepAspectRatio,
+        self._fit(anh.width(), anh.height())
+        self._o_anh.setPixmap(anh.scaled(CANH, self._cao_anh, Qt.KeepAspectRatio,
                                          Qt.SmoothTransformation))
+
+    def _fit(self, w: int, h: int) -> None:
+        """Chỉnh ô xem trước về đúng tỉ lệ ảnh thật, bỏ khoảng trống thừa.
+
+        Tỉ lệ lúc dựng thẻ chỉ là dự đoán từ ô "tỉ lệ" khách chọn; ảnh trả về
+        có thể lệch (nhà cung cấp làm tròn khác). Đo ảnh thật rồi nắn lại một
+        lần khi nạp — vẫn giữ bề rộng `CANH` để lưới thẳng cột.
+        """
+        cao = _cao_xem_truoc(w, h)
+        if cao == self._cao_anh:
+            return
+        self._cao_anh = cao
+        self._khung_anh.setFixedSize(CANH, cao)
+        self._o_anh.setFixedSize(CANH, cao)
 
     def _xin_khung_hinh(self, duong_video: str) -> None:
         """Nhờ luồng nền rút khung hình, rồi vẽ khi có."""
@@ -305,7 +366,8 @@ class TheKetQua(QFrame):
         if anh.isNull():
             return
         self._o_anh.setText("")
-        self._o_anh.setPixmap(anh.scaled(CANH, CANH, Qt.KeepAspectRatio,
+        self._fit(anh.width(), anh.height())
+        self._o_anh.setPixmap(anh.scaled(CANH, self._cao_anh, Qt.KeepAspectRatio,
                                          Qt.SmoothTransformation))
 
     @property
@@ -325,17 +387,44 @@ class ThuVienKetQua(QWidget):
         self._the: Dict[str, TheKetQua] = {}
         self._thu_tu = []          # uid theo thứ tự thêm, mới nhất ở cuối
         self._xong = set()
+        self._hong = set()
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(0, 0, 0, 0)
         doc.setSpacing(8)
 
-        # MỘT dòng cho cả lô. Bốn mươi thẻ mỗi thẻ một phần trăm riêng không trả
-        # lời được câu duy nhất khách hỏi khi bỏ đi pha trà: *"xong chưa"*.
-        self._dong_lo = nhan("", "phu")
+        # Khối tiến độ — thứ khách nhìn trong lúc chờ, nên làm cho **đẹp và tự
+        # tin**: một tấm nền bo góc, dòng trạng thái đậm bên trái, phần trăm to
+        # bên phải, và một thanh chạy dày bo tròn. Bốn mươi thẻ mỗi thẻ một phần
+        # trăm riêng không trả lời được câu duy nhất khách hỏi khi bỏ đi pha
+        # trà: *"xong chưa"* — một thanh liền mạch trả lời đúng câu đó.
+        self._khoi_tien_do = QFrame()
+        self._khoi_tien_do.setStyleSheet(
+            "background:{0}; border:1px solid {1}; border-radius:12px;".format(
+                theme.THE, theme.VIEN))
+        theme.bong(self._khoi_tien_do, mo=22, alpha=30, doc=2)
+        khoi = QVBoxLayout(self._khoi_tien_do)
+        khoi.setContentsMargins(16, 12, 16, 14)
+        khoi.setSpacing(9)
+
+        hang = QHBoxLayout()
+        hang.setContentsMargins(0, 0, 0, 0)
+        hang.setSpacing(8)
+        self._dong_lo = nhan("", "h2")
         self._dong_lo.setMinimumWidth(1)
-        self._dong_lo.hide()
-        doc.addWidget(self._dong_lo)
+        hang.addWidget(self._dong_lo, 1)
+        self._o_phan_tram = QLabel("")
+        self._o_phan_tram.setStyleSheet(
+            "color:{0}; font-size:20px; font-weight:700;".format(theme.NHAN))
+        hang.addWidget(self._o_phan_tram, 0, Qt.AlignRight)
+        khoi.addLayout(hang)
+
+        self._thanh_lo = QProgressBar()
+        self._thanh_lo.setTextVisible(False)
+        self._thanh_lo.setFixedHeight(12)
+        khoi.addWidget(self._thanh_lo)
+        self._khoi_tien_do.hide()
+        doc.addWidget(self._khoi_tien_do)
 
         self._loi_moi = nhan(goi_y or "Kết quả sẽ hiện ở đây.", "phu")
         self._loi_moi.setAlignment(Qt.AlignCenter)
@@ -360,15 +449,28 @@ class ThuVienKetQua(QWidget):
         self._khi_lam_lai = khi_lam_lai
         self._khi_cho_dong = khi_cho_dong
 
-    def them(self, uid: str, mo_ta: str, la_video: bool) -> TheKetQua:
-        """Thêm một thẻ ở **đầu** lưới. Trùng uid thì trả lại thẻ cũ."""
+    def them(self, uid: str, mo_ta: str, la_video: bool,
+             so_anh_tham_chieu: int = 0, ty_le: str = "",
+             thay_uid: str = "") -> TheKetQua:
+        """Thêm một thẻ ở **đầu** lưới. Trùng uid thì trả lại thẻ cũ.
+
+        `thay_uid` — khi khách bấm "Làm lại" một thẻ rồi gửi lại: thẻ mới **thế
+        đúng chỗ** thẻ cũ và thẻ cũ biến đi, chứ không đẻ ra một thẻ mới trên
+        đầu để lại tấm cũ nằm đó. Làm lại là *sửa cái đó*, không phải tạo cái mới.
+        """
         co_san = self._the.get(uid)
         if co_san is not None:
             return co_san
+        vi_tri = 0
+        cu = self._the.get(thay_uid) if thay_uid else None
+        if cu is not None:
+            vi_tri = max(0, self._luoi.indexOf(cu))
+            self._bo_the(thay_uid)
         the_moi = TheKetQua(mo_ta, la_video,
                             getattr(self, '_khi_lam_lai', None),
-                            getattr(self, '_khi_cho_dong', None), uid=uid)
-        self._luoi.insertWidget(0, the_moi)
+                            getattr(self, '_khi_cho_dong', None), uid=uid,
+                            so_anh_tham_chieu=so_anh_tham_chieu, ty_le=ty_le)
+        self._luoi.insertWidget(vi_tri, the_moi)
         self._the[uid] = the_moi
         self._thu_tu.append(uid)
         self._loi_moi.hide()
@@ -376,37 +478,93 @@ class ThuVienKetQua(QWidget):
         self._cat_bot()
         return the_moi
 
+    def _bo_the(self, uid: str) -> None:
+        """Gỡ một thẻ khỏi lưới và mọi sổ theo dõi. Dùng cho "Làm lại" thế chỗ."""
+        cu = self._the.pop(uid, None)
+        if cu is not None:
+            cu.setParent(None)
+            cu.deleteLater()
+        if uid in self._thu_tu:
+            self._thu_tu.remove(uid)
+        self._xong.discard(uid)
+        self._hong.discard(uid)
+
     def cap_nhat(self, ban_ghi) -> Optional[TheKetQua]:
         """Vẽ lại theo một `JobRecord`. Chưa có thẻ thì tạo — việc chạy lại từ
         bảng khác vẫn hiện ra ở đây thay vì biến mất."""
-        uid = getattr(ban_ghi, "uid", "")
+        spec = getattr(ban_ghi, "spec", None)
+        # Thẻ được thêm theo `spec.idempotency_key` (xem `_gui_that`/`chay` ở
+        # tab Ảnh & Video), nên phải tra ngược theo ĐÚNG khoá đó. `ban_ghi.uid`
+        # là mã hex nội bộ RIÊNG (`JobRecord.uid = uuid4().hex[:8]`), không bao
+        # giờ bằng `idempotency_key` (`str(uuid4())`) — tra theo `uid` là trượt
+        # sạch: thẻ gốc đứng hình ở "Đang chờ tới lượt" còn tool đẻ ra một thẻ
+        # trùng mới. Giữ đường lui về `uid` cho các nơi gọi không có spec.
+        uid = str(getattr(spec, "idempotency_key", "")
+                  or getattr(ban_ghi, "uid", ""))
         if not uid:
             return None
-        spec = getattr(ban_ghi, "spec", None)
         the_nay = self._the.get(uid)
         if the_nay is None:
             if spec is None:
                 return None
+            params = getattr(spec, "params", None) or {}
             the_nay = self.them(uid, str(getattr(spec, "content", "")),
-                                getattr(spec, "kind", "") == "video")
+                                getattr(spec, "kind", "") == "video",
+                                ty_le=str(params.get("aspect_ratio", "")))
         trang_thai = str(getattr(ban_ghi, "status", ""))
         the_nay.cap_nhat(trang_thai,
                          int(getattr(ban_ghi, "progress", 0) or 0),
                          getattr(ban_ghi, "files", ()))
         if trang_thai in (STATUS_DONE, STATUS_FAILED):
             self._xong.add(uid)
+        if trang_thai == STATUS_FAILED:
+            self._hong.add(uid)
         self._ve_dong_lo()
         return the_nay
+
+    #: Màu thanh chạy theo trạng thái cả lô: đang chạy thì xanh nhấn, xong hết
+    #: thì xanh "xong việc", còn dở mà có cái hỏng thì pha sắc đỏ để mắt bắt
+    #: được ngay là "lô này có tấm cần làm lại". Chunk tô dốc màu cho có chiều
+    #: sâu chứ không phẳng lì — nhìn "xịn" hơn hẳn một vệt đặc.
+    def _to_thanh(self, mau: str, nhat: str) -> None:
+        self._thanh_lo.setStyleSheet(
+            "QProgressBar { background:" + theme.VIEN + "; border:none;"
+            " border-radius:6px; }"
+            " QProgressBar::chunk {"
+            " border-radius:6px;"
+            " background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 "
+            + nhat + ", stop:1 " + mau + "); }")
 
     def _ve_dong_lo(self) -> None:
         tong = len(self._thu_tu)
         if tong <= 1:
-            self._dong_lo.hide()
+            self._khoi_tien_do.hide()
             return
         xong = len([u for u in self._thu_tu if u in self._xong])
-        self._dong_lo.setText("{0}/{1} xong".format(xong, tong)
-                              if xong < tong else "Xong cả {0}".format(tong))
-        self._dong_lo.show()
+        hong = len([u for u in self._thu_tu if u in self._hong])
+        self._thanh_lo.setRange(0, tong)
+        self._thanh_lo.setValue(xong)
+        phan_tram = round(xong * 100 / tong) if tong else 0
+        if xong < tong:
+            chu = "Đang tạo…  <b>{0}/{1}</b> xong".format(xong, tong)
+            self._o_phan_tram.setStyleSheet(
+                "color:{0}; font-size:20px; font-weight:700;".format(
+                    theme.DO if hong else theme.NHAN))
+            self._to_thanh(theme.DO if hong else theme.NHAN,
+                           "#f4a3a0" if hong else "#5b9bf3")
+        else:
+            chu = "✓  Xong cả <b>{0}</b>".format(tong)
+            self._o_phan_tram.setStyleSheet(
+                "color:{0}; font-size:20px; font-weight:700;".format(
+                    theme.DO if hong else theme.XANH))
+            self._to_thanh(theme.DO if hong else theme.XANH,
+                           "#f4a3a0" if hong else "#4db6a9")
+        self._o_phan_tram.setText("{0}%".format(phan_tram))
+        if hong:
+            chu += "  ·  <span style='color:{0}'>{1} lỗi</span>".format(
+                theme.DO, hong)
+        self._dong_lo.setText(chu)
+        self._khoi_tien_do.show()
 
     def _cat_bot(self) -> None:
         while len(self._thu_tu) > TRAN_THE:
@@ -424,7 +582,8 @@ class ThuVienKetQua(QWidget):
                 cu.deleteLater()
         self._thu_tu.clear()
         self._xong.clear()
-        self._dong_lo.hide()
+        self._hong.clear()
+        self._khoi_tien_do.hide()
         self._cuon.hide()
         self._loi_moi.show()
 

@@ -148,6 +148,17 @@ class HangXuongDong(QLayout):
     def count(self) -> int:
         return len(self._muc)
 
+    def indexOf(self, w) -> int:  # noqa: N802 — tên do Qt quy định
+        """Vị trí hiển thị của một widget, -1 nếu không có.
+
+        Cần cho "Làm lại": thẻ mới phải thế đúng chỗ thẻ cũ, mà muốn biết "chỗ
+        cũ" là đâu thì phải hỏi được layout con này đang xếp thẻ ở ô số mấy.
+        """
+        for i, muc in enumerate(self._muc):
+            if muc is not None and muc.widget() is w:
+                return i
+        return -1
+
     def itemAt(self, chi_so):  # noqa: N802
         return self._muc[chi_so] if 0 <= chi_so < len(self._muc) else None
 

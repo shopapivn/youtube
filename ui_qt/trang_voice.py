@@ -345,7 +345,10 @@ class TrangGiongNoi(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
         self._tab_nguon = QTabWidget()
-        self._tab_nguon.addTab(self._tam_file(), LOI_FILE)
+        # `&` trong nhãn tab bị Qt nuốt làm phím tắt (QTabWidget hiểu "&t" là
+        # Alt+t), nên "File & thư mục" hiện thiếu chữ. Nhân đôi thành "&&" để
+        # hiện đúng một dấu &; `tabText()` vẫn trả lại nguyên văn LOI_FILE.
+        self._tab_nguon.addTab(self._tam_file(), LOI_FILE.replace("&", "&&"))
         self._tab_nguon.addTab(self._tam_text(), LOI_TEXT)
         self._tab_nguon.setTabToolTip(
             0, "Lấy nội dung từ file .txt có sẵn trên máy — chọn vài file lẻ "
@@ -715,7 +718,7 @@ class TrangGiongNoi(QWidget):
         tiếp là bảng file đứng im trong khi job vẫn chạy.
         """
         self.bang.nhan_su_kien(loai, du_lieu)
-        if loai == "log":
+        if loai == "job":
             self._nghe_viec(du_lieu)
         elif loai == "done":
             self._ket_lo(du_lieu)
@@ -783,6 +786,12 @@ class TrangGiongNoi(QWidget):
     # ── Chạy ─────────────────────────────────────────────────────────────────
 
     def _chay(self) -> None:
+        # Chưa có khoá thì START im lặng không làm gì (`start_batch` bỏ qua khi
+        # `jobs is None`) — khách bấm mà không thấy phản hồi, tưởng tool hỏng.
+        # Nói thẳng cần khoá, và chỉ luôn thứ dùng được ngay không cần khoá.
+        if self._app.client is None:
+            self._app.bao_can_khoa()
+            return
         muc = self._tat_ca()
         if not muc:
             self._app.show_message(

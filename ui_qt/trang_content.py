@@ -146,6 +146,11 @@ class TabTemplate(QWidget):
         self._nap_danh_sach_mau()
         self._nap_mau()
 
+    def doi_du_an(self, _ten: str) -> None:
+        """Dự án đổi thì chỗ lưu kịch bản đi theo — không thì file lượt sau rơi
+        vào thư mục dự án cũ (xem `app.dat_du_an` và `core/du_an.py`)."""
+        self._thu_muc.dat(self._app.default_output_dir("kich-ban"))
+
     # ── Template ─────────────────────────────────────────────────────────────
 
     def _nap_danh_sach_mau(self) -> None:
@@ -362,6 +367,10 @@ class TrangKichBan(QWidget):
                              "kết quả prompt trước làm đầu vào cho prompt sau.")
         self.tab = tab
         doc.addWidget(tab, 1)
+
+    def doi_du_an(self, ten: str) -> None:
+        """Chuyển tiếp cho tab Template — chỗ duy nhất giữ thư mục lưu."""
+        self.template.doi_du_an(ten)
 
     def _tab_chat(self) -> QWidget:
         """Nhập muộn: tab Chat là file riêng, thiếu nó thì trang vẫn phải mở được.

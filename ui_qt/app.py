@@ -27,7 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
-    QFrame, QHBoxLayout, QMessageBox, QPushButton, QScrollArea,
+    QApplication, QFrame, QHBoxLayout, QMessageBox, QPushButton, QScrollArea,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -245,7 +245,17 @@ class CuaSoChinh(QWidget):
         hinh = logo.icon()
         if hinh is not None:
             self.setWindowIcon(hinh)
-        self.resize(1180, 840)
+        # Đủ RỘNG cho lưới kết quả xếp **bốn thẻ một hàng** (mỗi thẻ 256px +
+        # thanh bên 240 + lề trang) và đủ CAO cho **ba hàng thẻ** thấy cùng lúc
+        # — chủ dự án kéo tay ra đúng cỡ này rồi bảo lấy làm mặc định. Vẫn kẹp
+        # theo chỗ trống thật để laptop nhỏ không tràn mép.
+        rong, cao = 1400, 1000
+        man = QApplication.primaryScreen()
+        if man is not None:
+            trong = man.availableGeometry()
+            rong = min(rong, max(1000, trong.width() - 40))
+            cao = min(cao, max(700, trong.height() - 40))
+        self.resize(rong, cao)
         self.setMinimumSize(1000, 700)
 
         self.events: "queue.Queue" = queue.Queue()

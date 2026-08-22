@@ -124,31 +124,45 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": [
             "Gắn “Ảnh tham chiếu” để nhân vật giống nhau giữa các lần tạo; với "
             "video thì đó là khung hình đầu của clip.",
+            "Bấm “Làm lại” trên một thẻ sẽ đưa mô tả cũ trở lại ô nhập cho bạn "
+            "sửa vài chữ rồi tự bấm Gửi — không tạo lại ngay, nên không lỡ tốn "
+            "tiền một tấm y hệt tấm bạn vừa không ưng.",
+            "Thanh tiến độ dưới lưới cho biết cả loạt xong bao nhiêu; tấm nào "
+            "hỏng thì hiện màu đỏ để bạn biết cần làm lại.",
             "Veo3 ra clip 8 giây, Seedance 10 giây.",
             "Ảnh hoặc clip hỏng được hoàn tiền và chạy lại được.",
         ],
     },
     "media.hang_loat": {
         "tieu_de": "Ảnh & Video → Hàng loạt",
-        "tom_tat": "Một bảng cảnh, chạy hết một lượt, ảnh nối thẳng sang video.",
+        "tom_tat": "Chọn một trong ba việc, đổ danh sách vào bảng, chạy hết một lượt.",
         "buoc": [
-            "Bấm “Tải file mẫu” để lấy file Excel, điền vào đó rồi bấm “Nạp "
-            "Excel”. Trong file có trang “huong-dan” giải nghĩa từng cột.",
-            "Mỗi dòng một cảnh: mô tả ảnh, mô tả clip, và ảnh tham chiếu.",
-            "Điền cả hai mô tả thì tôi tạo ảnh trước rồi cho nó động đậy. Chỉ "
-            "điền mô tả ảnh thì chỉ tạo ảnh.",
-            "Chỉ điền mô tả clip kèm ảnh tham chiếu thì tôi làm clip thẳng từ "
-            "ảnh bạn đưa, không tạo ảnh mới — hợp khi bạn đã có sẵn ảnh.",
+            "Chọn việc bạn cần ở trên cùng: “Tạo ảnh”, “Tạo video”, hay “Ảnh → "
+            "Video” (tạo ảnh xong cho nó động đậy thành clip). Bảng sẽ hiện đúng "
+            "cột cho việc đó, không bày thừa.",
+            "Đổ danh sách cảnh vào bảng — ba cách: bấm “Dán danh sách” rồi dán "
+            "cả danh sách, mỗi dòng một cảnh (nhanh nhất); hoặc “Nạp Excel” "
+            "(bấm “Tải file mẫu” để lấy file điền sẵn cột); hoặc gõ/dán thẳng "
+            "từng dòng vào bảng.",
+            "Muốn ảnh bám một nhân vật? Chọn “Ảnh tham chiếu cho cả loạt”, hoặc "
+            "bấm “＋ ảnh” ở từng dòng để chọn ảnh riêng cho dòng đó.",
             "Chọn tỉ lệ, engine, chỗ lưu rồi bấm “Chạy cả loạt”.",
         ],
         "luu_y": [
+            "Ba việc, ba chế độ: “Tạo ảnh” chỉ ra ảnh; “Tạo video” làm clip "
+            "thẳng từ ảnh đầu vào bạn đưa (mỗi dòng cần một ảnh); “Ảnh → Video” "
+            "tạo ảnh của cảnh rồi cho chính ảnh đó thành khung đầu cho clip.",
             "Ảnh tham chiếu là thứ giữ cho nhân vật không đổi mặt giữa các "
-            "cảnh. Chọn một ảnh dùng chung cho cả loạt, hoặc điền riêng cho "
-            "từng dòng — dòng nào điền riêng thì dòng ấy thắng.",
+            "cảnh. Dòng nào chọn ảnh riêng thì dòng ấy thắng ảnh chung.",
+            "Chọn ảnh bằng nút “＋ ảnh” — không phải gõ đường dẫn. Mỗi dòng chọn "
+            "được tối đa 10 ảnh.",
             "File Excel từ tab Prompt Visuals nạp thẳng sang đây được, không "
             "phải sửa gì.",
-            "Bật “Ảnh vừa tạo → đầu vào video” thì ảnh của cảnh nào thành khung "
-            "đầu cho clip của chính cảnh đó.",
+            "“Dán danh sách” dán theo đúng chế độ đang chọn: ở “Tạo video” mỗi "
+            "dòng là mô tả video, hai chế độ kia mỗi dòng là mô tả ảnh. Muốn "
+            "điền cả hai trên một dòng thì ngăn bằng dấu | .",
+            "Thanh tiến độ dưới lưới ảnh cho biết cả loạt xong tới đâu; cảnh "
+            "nào hỏng thì thanh chuyển đỏ để bạn thấy ngay.",
             "Hai cột trạng thái bên phải cho biết từng cảnh đang tới đâu.",
         ],
     },

@@ -156,6 +156,9 @@ class _AppGia:
     def show_message(self, tieu_de, chu):
         self.da_hien.append((tieu_de, chu))
 
+    def show_error(self, loi):
+        self.da_hien.append(("loi", str(loi)))
+
     def start_batch(self, specs, folder=""):
         self.da_chay.append((list(specs), folder))
 
@@ -233,6 +236,86 @@ class TestTabHangLoat:
             tab.them_dong(m["anh"], m["video"], m["tham_chieu"])
         assert tab.bang.rowCount() == 3
         assert len(tab.canh()) == 3, "cả ba kiểu dòng đều phải có việc để làm"
+
+
+class TestBaCheDo:
+    """Ba chế độ (Tạo ảnh / Tạo video / Ảnh→Video) — trả lời "bắt đầu từ đâu"."""
+
+    def test_che_do_an_hien_dung_cot(self, qt_app, tmp_path):
+        from ui_qt.trang_anh_video import CD_ANH, CD_VIDEO, CD_CHUOI, _CotBang
+        tab, _app = _dung_tab(str(tmp_path))
+
+        tab._dat_che_do(CD_ANH)
+        assert tab.bang.isColumnHidden(_CotBang.VIDEO)
+        assert tab.bang.isColumnHidden(_CotBang.TT_VIDEO)
+        assert not tab.bang.isColumnHidden(_CotBang.ANH)
+
+        tab._dat_che_do(CD_VIDEO)
+        assert tab.bang.isColumnHidden(_CotBang.ANH)
+        assert tab.bang.isColumnHidden(_CotBang.TT_ANH)
+        assert not tab.bang.isColumnHidden(_CotBang.VIDEO)
+
+        tab._dat_che_do(CD_CHUOI)
+        for cot in (_CotBang.ANH, _CotBang.VIDEO,
+                    _CotBang.TT_ANH, _CotBang.TT_VIDEO):
+            assert not tab.bang.isColumnHidden(cot)
+
+    def test_che_do_anh_khong_lam_video_du_con_sot_chu(self, qt_app, tmp_path):
+        """Gõ cả hai ở chế độ chuỗi rồi đổi sang "Tạo ảnh" thì không lỡ tạo clip."""
+        from ui_qt.trang_anh_video import CD_ANH, CD_VIDEO
+        tab, _app = _dung_tab(str(tmp_path))
+        tab.bang.setRowCount(0)
+        tab.them_dong("a room", "the camera drifts", "")
+
+        tab._dat_che_do(CD_ANH)
+        assert tab.canh() == [(0, "a room", "")], "chế độ ảnh bỏ mô tả video"
+
+        tab._dat_che_do(CD_VIDEO)
+        assert tab.canh() == [(0, "", "the camera drifts")], "chế độ video bỏ mô tả ảnh"
+
+    def test_nut_tham_chieu_luu_duong_dan(self, qt_app, tmp_path):
+        """Ảnh tham chiếu riêng lưu trên nút trong ô, không gõ đường dẫn."""
+        from ui_qt.trang_anh_video import _CotBang
+        tab, _app = _dung_tab(str(tmp_path))
+        anh = tmp_path / "nv1.png"
+        anh.write_bytes(b"anh-gia")
+        tab.bang.setRowCount(0)
+        dong = tab.them_dong("a room", "", str(anh))
+        nut = tab.bang.cellWidget(dong, _CotBang.THAM_CHIEU)
+        assert nut is not None and nut.duong_dan == [str(anh)]
+        assert tab._anh_cua_dong(dong) == [str(anh)]
+
+    def test_dong_chi_clip_gui_video_khong_TypeError(self, qt_app, tmp_path):
+        """Lỗi cũ: `_gui_video(dong, mo_ta, url)` sai chữ ký → TypeError lúc chạy.
+
+        Không gọi mạng thật: client giả trả URL giả, `start_batch` chỉ ghi lại.
+        Chế độ "Tạo video" gửi dòng chỉ-clip qua đúng đường `_gui_video`.
+        """
+        from core.pricing import DEFAULT_PRICES
+        from ui_qt.trang_anh_video import CD_VIDEO, KIND_VIDEO
+
+        class _Uploads:
+            def upload_file(self, path):
+                return "https://fake/" + os.path.basename(path)
+
+        class _Client:
+            uploads = _Uploads()
+
+        tab, app = _dung_tab(str(tmp_path))
+        app.client = _Client()
+        app.prices = DEFAULT_PRICES
+        anh = tmp_path / "khung.png"
+        anh.write_bytes(b"anh-gia")
+        tab._dat_che_do(CD_VIDEO)
+        tab.bang.setRowCount(0)
+        tab.them_dong("", "the camera drifts left", str(anh))
+
+        tab.chay()  # không được ném TypeError
+
+        assert len(app.da_chay) == 1, "phải gửi đúng một lô video"
+        specs, _folder = app.da_chay[0]
+        assert len(specs) == 1 and specs[0].kind == KIND_VIDEO
+        assert specs[0].params["image_url"] == "https://fake/khung.png"
 
 
 def test_hai_tab_con_deu_co_o_anh_tham_chieu():

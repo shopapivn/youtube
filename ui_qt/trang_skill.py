@@ -232,7 +232,14 @@ class TamSkillChu(QWidget):
         if self._app.client is None:
             self._app.bao_can_khoa()
             return
-        yeu_cau = self.skill.prompt.format(dau_vao) if "{0}" in self.skill.prompt \
+        # Thay `{0}` bằng chữ khách gõ mà KHÔNG dùng `str.format`: skill do Agent
+        # tự đặt có thể chứa dấu ngoặc nhọn khác (ví dụ mẫu JSON `{"key": …}`),
+        # và `.format` gặp ngoặc lạ là ném `KeyError`/`ValueError` — mà dòng này
+        # chạy trên LUỒNG VẼ, trước khi vào `run_bg`, nên lỗi thoát thẳng ra hộp
+        # "tool gặp lỗi" thay vì thành câu báo nhẹ nhàng. `.replace` chỉ đổi đúng
+        # `{0}`, để nguyên mọi ngoặc còn lại.
+        yeu_cau = self.skill.prompt.replace("{0}", dau_vao) \
+            if "{0}" in self.skill.prompt \
             else self.skill.prompt + "\n\n" + dau_vao
         client = self._app.client
         toi_da = self.skill.toi_da_token
@@ -286,10 +293,17 @@ class TamSkillChu(QWidget):
         import time
 
         thu_muc = self._thu_muc.value
+        # `skill.ma` của skill do Agent tạo có dạng `rieng:tên` — dấu hai chấm là
+        # ký tự CẤM trong tên file trên Windows (nó biến phần đuôi thành luồng dữ
+        # liệu ẩn NTFS: file "biến mất" mà không báo lỗi). Đổi mọi ký tự cấm sang
+        # gạch ngang trước khi ghép tên file.
+        ten_an_toan = self.skill.ma
+        for xau in r'\/:*?"<>|':
+            ten_an_toan = ten_an_toan.replace(xau, "-")
         try:
             os.makedirs(thu_muc, exist_ok=True)
             duong_dan = os.path.join(thu_muc, "{0}-{1}.txt".format(
-                self.skill.ma, time.strftime("%Y%m%d-%H%M%S")))
+                ten_an_toan, time.strftime("%Y%m%d-%H%M%S")))
             with open(duong_dan, "w", encoding="utf-8") as tep:
                 tep.write(self.ket_qua + "\n")
         except OSError as loi:

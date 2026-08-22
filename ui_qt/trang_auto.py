@@ -902,7 +902,8 @@ class TrangTuDong(QWidget):
             bc = BoiCanh(
                 goc=self._app.base_dir, kenh=k,
                 goi_chat=self._dung_goi_chat(),
-                client=self._app.client if hasattr(self._app, "client")
+                client=self._app.client
+                if getattr(self._app, "client", None) is not None
                 else self._dung_client(),
                 on_log=self._ghi_nen, cancel=huy,
                 on_nhip=self._nhip_nen)
@@ -1211,7 +1212,7 @@ class TrangTuDong(QWidget):
                 .format(", ".join(sau))) if sau else ""
         self._app.show_message(
             "Đã nạp xong",
-            "Khâu “{0}” giờ dùng file của bạn:\n{1}\n\nTool sẽ bỏ qua khâu này "
+            "Khâu “{0}” giờ dùng file của bạn:\n{1}\n\nTool sẽ bỏ qua khâu này. "
             "Bấm “Chạy tiếp” để đi tiếp.{2}"
             .format(ten_khau(ma), dich, them))
 

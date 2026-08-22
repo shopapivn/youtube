@@ -232,6 +232,7 @@ def hold_for_tts(text_length: int, prices: PriceTable = DEFAULT_PRICES) -> int:
     """
     if text_length <= 0:
         return 0
+    prices = prices or DEFAULT_PRICES  # bảng giá chưa nạp thì cứ ước theo giá mặc định
     per_minute = prices.tts_chars_per_minute
     minutes = max(1, -(-int(text_length) // per_minute))  # trần của phép chia
     return minutes * prices.tts_price_per_minute
@@ -241,9 +242,11 @@ def hold_for_image(n: int, prices: PriceTable = DEFAULT_PRICES) -> int:
     """µVND bị tạm giữ cho một job tạo `n` ảnh."""
     if n <= 0:
         return 0
+    prices = prices or DEFAULT_PRICES  # bảng giá chưa nạp thì cứ ước theo giá mặc định
     return int(n) * prices.image_per_image
 
 
 def hold_for_video(engine: str, prices: PriceTable = DEFAULT_PRICES) -> int:
     """µVND bị tạm giữ cho một video. Giá theo engine, không theo thời lượng."""
+    prices = prices or DEFAULT_PRICES  # bảng giá chưa nạp thì cứ ước theo giá mặc định
     return prices.video_price(engine)
