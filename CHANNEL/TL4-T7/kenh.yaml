@@ -20,6 +20,17 @@ ky_tu_moi_phut: 298
 chu_bia_hoa: false
 voice_id: "b34JylakFZPlGS0BnwyY"
 phut_muc_tieu: 20
+# ── Remake "gần như giống đối thủ nhất" ──────────────────────────────────────
+#  Kênh này bám ĐỘ DÀI VIDEO GỐC, không nắn về mốc phút cố định: bài viết ra dài
+#  đúng bằng lời thoại video đối thủ. Vì thế `phut_muc_tieu` ở trên không còn dẫn
+#  dắt độ dài (để lại chỉ cho hộp Quản lý kênh hiển thị), và thư mục prompt/ đã
+#  BỎ tệp 4-do-dai.md để không có bước nắn.
+do_dai_theo_goc: true
+# ── Tiêu đề & chữ bìa: lấy nguyên của đối thủ ────────────────────────────────
+#  Kênh này lấy NGUYÊN tiêu đề đối thủ, và ĐỌC chữ trên ảnh bìa đối thủ làm chữ
+#  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ
+#  bìa lấy đúng tiêu đề đối thủ, không làm vỡ lượt chạy.
+che_do_tieu_de: "nguyen_goc"
 engine: "veo3"
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"

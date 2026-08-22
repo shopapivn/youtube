@@ -61,6 +61,22 @@ class TestVongTronKhepKin:
         assert dong[1]["anh"] and not dong[1]["video"], "dòng 2: chỉ ảnh"
         assert not dong[2]["anh"] and dong[2]["video"], "dòng 3: chỉ clip"
 
+    def test_mau_dien_duong_dan_khong_phai_ten_file(self, tmp_path):
+        """Chủ dự án 22/08/2026: điền tên file khó, phải là ĐƯỜNG DẪN đầy đủ."""
+        dong = doc_excel(viet_mau(str(tmp_path / "mau.xlsx")))
+        assert "\\" in dong[0]["tham_chieu"], "ô tham chiếu mẫu phải là đường dẫn"
+        assert "," in dong[1]["tham_chieu"], "dòng 2 làm mẫu nhiều ảnh cách dấu phẩy"
+
+    def test_mau_huong_dan_cach_lay_duong_dan(self, tmp_path):
+        from openpyxl import load_workbook
+
+        s = load_workbook(viet_mau(str(tmp_path / "mau.xlsx")))
+        chu = "\n".join(
+            str(o.value or "")
+            for hang in s["huong-dan"].iter_rows() for o in hang)
+        assert "đường dẫn" in chu.lower()
+        assert "Copy as path" in chu, "phải chỉ khách cách lấy đường dẫn"
+
 
 class TestGiuTenCotTiengAnh:
     """Giữ tên VE3 để file từ Prompt Visuals nạp thẳng sang được."""
@@ -195,7 +211,36 @@ class TestTabHangLoat:
         anh.write_bytes(b"anh-gia")
         tab.bang.setRowCount(0)
         tab.them_dong("a quiet room", "", str(anh))
-        assert tab._anh_cua_dong(0) == [str(anh)],             "cột “Ảnh tham chiếu” của dòng phải tới được chỗ dựng việc"
+        assert tab._anh_cua_dong(0) == [str(anh)], \
+            "cột “Ảnh tham chiếu” của dòng phải tới được chỗ dựng việc"
+
+    def test_o_tham_chieu_nhan_nhieu_duong_dan_cach_nhau_dau_phay(
+            self, qt_app, tmp_path):
+        """Chủ dự án 22/08/2026: điền ĐƯỜNG DẪN, nhiều ảnh cách nhau dấu phẩy."""
+        tab, _app = _dung_tab(str(tmp_path))
+        a = tmp_path / "nv1.png"
+        b = tmp_path / "nv1-nghieng.png"
+        for t in (a, b):
+            t.write_bytes(b"anh-gia")
+        tab.bang.setRowCount(0)
+        tab.them_dong("a room", "", "{0}, {1}".format(a, b))
+        assert tab._anh_cua_dong(0) == [str(a), str(b)]
+
+    def test_o_tham_chieu_boc_ngoac_kep_kieu_copy_as_path(self, qt_app, tmp_path):
+        """“Sao chép dưới dạng đường dẫn” của Windows kẹp ngoặc kép — phải bóc."""
+        tab, _app = _dung_tab(str(tmp_path))
+        anh = tmp_path / "nv1.png"
+        anh.write_bytes(b"anh-gia")
+        tab.bang.setRowCount(0)
+        tab.them_dong("a room", "", '"{0}"'.format(anh))
+        assert tab._anh_cua_dong(0) == [str(anh)]
+
+    def test_o_tham_chieu_ten_tro_troi_bi_bo_qua(self, qt_app, tmp_path):
+        """Tên không phải đường dẫn thật → bỏ, không âm thầm gán nhầm."""
+        tab, _app = _dung_tab(str(tmp_path))
+        tab.bang.setRowCount(0)
+        tab.them_dong("a room", "", "nv1.png")
+        assert tab._anh_cua_dong(0) == []
 
     def test_anh_rieng_cua_dong_thang_anh_chung(self, qt_app, tmp_path):
         tab, _app = _dung_tab(str(tmp_path))
@@ -247,17 +292,20 @@ class TestBaCheDo:
 
         tab._dat_che_do(CD_ANH)
         assert tab.bang.isColumnHidden(_CotBang.VIDEO)
-        assert tab.bang.isColumnHidden(_CotBang.TT_VIDEO)
         assert not tab.bang.isColumnHidden(_CotBang.ANH)
+        # Cột Trạng thái / Kết quả / Làm lại luôn hiện ở mọi chế độ.
+        assert not tab.bang.isColumnHidden(_CotBang.TRANG_THAI)
+        assert not tab.bang.isColumnHidden(_CotBang.LAM_LAI)
 
         tab._dat_che_do(CD_VIDEO)
         assert tab.bang.isColumnHidden(_CotBang.ANH)
-        assert tab.bang.isColumnHidden(_CotBang.TT_ANH)
         assert not tab.bang.isColumnHidden(_CotBang.VIDEO)
+        assert not tab.bang.isColumnHidden(_CotBang.TRANG_THAI)
+        assert not tab.bang.isColumnHidden(_CotBang.LAM_LAI)
 
         tab._dat_che_do(CD_CHUOI)
         for cot in (_CotBang.ANH, _CotBang.VIDEO,
-                    _CotBang.TT_ANH, _CotBang.TT_VIDEO):
+                    _CotBang.TRANG_THAI, _CotBang.LAM_LAI):
             assert not tab.bang.isColumnHidden(cot)
 
     def test_che_do_anh_khong_lam_video_du_con_sot_chu(self, qt_app, tmp_path):

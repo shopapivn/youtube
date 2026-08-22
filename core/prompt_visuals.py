@@ -67,12 +67,17 @@ NODE_PROMPT = "prompt"
 
 def dung_workflow(ma_artifact_audio: str, *, engine: str = "veo3",
                   mo_hinh: str = "claude-sonnet-5", ngon_ngu: str = "vi",
+                  nhat_quan: bool = True,
                   ma_chay: str = "prompt-visuals") -> Dict[str, Any]:
     """Dựng tờ khai workflow hai bước cho một file giọng đọc.
 
     `ma_artifact_audio` là mã artifact đã nạp vào kho của Studio — không phải
     đường dẫn file. Runner chỉ làm việc với mã artifact; đưa đường dẫn thẳng vào
     là nó không tìm ra và báo một câu lỗi chẳng ai hiểu.
+
+    `nhat_quan` bật thì `prompt.workbook` chạy thêm **một lượt** đọc cả lời đọc
+    để dựng dàn nhân vật cố định + một phong cách, rồi mọi cảnh dùng chung —
+    y như tab Tự động. Tắt thì về hành vi cũ: mỗi cảnh tự do, sheet nhân vật rỗng.
 
     `ma_chay` thành `workflow_id`, và `workflow_id` cũng là **tên tệp điểm
     dừng** (`workspace/builder/checkpoints/<id>.json`). Nên mỗi file giọng đọc
@@ -110,7 +115,8 @@ def dung_workflow(ma_artifact_audio: str, *, engine: str = "veo3",
                 "id": NODE_PROMPT,
                 "tool_id": "prompt.workbook",
                 "inputs": {},
-                "config": {"engine": engine, "model": mo_hinh},
+                "config": {"engine": engine, "model": mo_hinh,
+                           "nhat_quan_nhan_vat": bool(nhat_quan)},
             },
         ],
         "edges": [

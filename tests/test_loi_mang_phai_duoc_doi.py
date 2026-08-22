@@ -118,3 +118,40 @@ def test_tu_xu_ly_ngam_KHONG_bat_loi_tep():
     from shopapi import AuthenticationError  # noqa: PLC0415
 
     assert tu_xu_ly_ngam(AuthenticationError("khoá hỏng")) is False
+
+
+class TestQuaTaiKhongBaoGioHienHop:
+    """`la_qua_tai` tách "quá tần suất / máy chủ bận" ra khỏi lỗi mạng thường.
+
+    Chủ dự án 22/08/2026 (ảnh hộp "Bạn gửi hơi nhanh"): *"đã MAX đừng thông báo
+    linh tinh"*. Chạy hết công suất thì 429 và 5xx là thường trực, tự khỏi —
+    phải thử lại tới khi qua, không giới hạn như lỗi mạng, và KHÔNG hiện hộp.
+    """
+
+    def test_rate_limit_la_qua_tai(self):
+        from core.errors import la_qua_tai  # noqa: PLC0415
+        from shopapi import RateLimitError  # noqa: PLC0415
+
+        assert la_qua_tai(RateLimitError("bạn gửi hơi nhanh")) is True
+
+    def test_may_chu_ban_5xx_la_qua_tai(self):
+        from core.errors import la_qua_tai  # noqa: PLC0415
+        from shopapi import APIStatusError  # noqa: PLC0415
+
+        for ma in (429, 500, 503):
+            loi = APIStatusError.__new__(APIStatusError)
+            loi.status = ma
+            assert la_qua_tai(loi) is True, ma
+
+    def test_loi_mang_KHONG_phai_qua_tai(self):
+        """Đứt mạng đi đường thử-lại-có-trần riêng, không nhầm sang 'quá tải'."""
+        from core.errors import la_qua_tai  # noqa: PLC0415
+
+        for loi in LOI_MANG:
+            assert la_qua_tai(loi) is False, type(loi).__name__
+
+    def test_loi_that_KHONG_phai_qua_tai(self):
+        from core.errors import la_qua_tai  # noqa: PLC0415
+        from shopapi import AuthenticationError  # noqa: PLC0415
+
+        assert la_qua_tai(AuthenticationError("khoá hỏng")) is False

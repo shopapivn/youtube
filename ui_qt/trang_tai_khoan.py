@@ -30,7 +30,7 @@ from core.api import fetch_balance, wallet_micro
 from core.money import format_vnd
 
 from . import theme
-from core.config import looks_like_api_key
+from core.config import DASHBOARD_KEYS_URL, looks_like_api_key, looks_like_email
 
 from .widgets import (
     DaiUocTinh, HangXuongDong, NhomChon, nhan, nut_chinh, nut_phu, the,
@@ -63,9 +63,9 @@ class TrangTaiKhoan(QWidget):
     #: Bước 3 KHÔNG kể tên bảy tab: đọc xong bảy cái tên vẫn không biết bắt đầu
     #: từ đâu. Nó chỉ tên MỘT tab, cái đầu tiên của mạch làm video.
     BA_BUOC = (
-        ("1", "Đăng nhập", "Nhập email shopapi.vn ở ô ngay dưới."),
-        ("2", "Nạp tiền", "Bấm “Nạp tiền”, quét mã QR."),
-        ("3", "Làm video", "Sang tab Viết kịch bản, rồi đi tiếp xuống dưới."),
+        ("1", "Đăng nhập bằng email", "Gõ email và mật khẩu shopapi.vn, bấm “Đăng nhập & lấy khoá”."),
+        ("2", "Tool tự tạo khoá", "Đăng nhập xong tôi tự tạo và lưu khoá API cho bạn — khỏi vào web."),
+        ("3", "Nạp tiền & làm video", "Nạp tiền bằng mã QR, rồi sang tab Viết kịch bản."),
     )
 
     def _the_bat_dau(self):
@@ -95,6 +95,154 @@ class TrangTaiKhoan(QWidget):
             doc.addLayout(hang)
         return khung
 
+    # ── Đăng nhập bằng email (tool tự tạo khoá hộ) ─────────────────────────────
+
+    def _the_dang_nhap(self):
+        """Đăng nhập bằng email → tool tự tạo khoá API, khỏi vào web.
+
+        Chủ dự án 22/08/2026: *"khách lần đầu chạy họ phải vào web tạo API key rồi
+        quay lại rất phiền… thiết kế tab tài khoản có thể đăng nhập và tạo API
+        key"*. Máy chủ có sẵn `POST /auth/login` và `POST /account/api-keys` (xem
+        `core/auth.py`), nên đây là con đường thẳng nhất: gõ email + mật khẩu, tool
+        đăng nhập rồi tạo và lưu khoá hộ — chữ "khoá API" khách không cần biết.
+        """
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 14, 20, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Đăng nhập bằng email", "h2"))
+        v.addWidget(nhan(
+            "Gõ email và mật khẩu tài khoản shopapi.vn — tôi tự tạo và lưu khoá "
+            "cho bạn, khỏi phải vào web.", "muted"))
+
+        self._o_email = QLineEdit()
+        self._o_email.setPlaceholderText("email của bạn, ví dụ ten@congty.vn")
+        self._o_email.returnPressed.connect(self._tiep_tuc)
+        v.addWidget(self._o_email)
+
+        self._o_mat_khau = QLineEdit()
+        self._o_mat_khau.setPlaceholderText("mật khẩu")
+        self._o_mat_khau.setEchoMode(QLineEdit.Password)
+        self._o_mat_khau.returnPressed.connect(self._tiep_tuc)
+        v.addWidget(self._o_mat_khau)
+
+        # Ô mã 2 lớp: ẩn tới khi máy chủ đòi. Phần lớn khách không bật 2FA nên
+        # bày sẵn ô này chỉ tổ làm màn hình rối và doạ người mới.
+        self._o_ma_2fa = QLineEdit()
+        self._o_ma_2fa.setObjectName("mono")
+        self._o_ma_2fa.setPlaceholderText("mã 6 số trong ứng dụng xác thực")
+        self._o_ma_2fa.returnPressed.connect(self._tiep_tuc)
+        self._o_ma_2fa.hide()
+        v.addWidget(self._o_ma_2fa)
+
+        self._nut_dang_nhap = nut_chinh("Đăng nhập & lấy khoá", self._tiep_tuc)
+        v.addWidget(self._nut_dang_nhap)
+
+        self._nhan_dang_nhap = nhan("", "muted")
+        self._nhan_dang_nhap.setWordWrap(True)
+        v.addWidget(self._nhan_dang_nhap)
+        return khung
+
+    def _bao_dn(self, chu: str) -> None:
+        self._nhan_dang_nhap.setText(chu)
+
+    def _tiep_tuc(self) -> None:
+        """Nút chính: khi máy chủ đòi MÃ MỚI để tạo khoá thì đi thẳng bước tạo
+        khoá, còn lại thì đăng nhập (rồi tự tạo khoá)."""
+        phien = self._phien
+        if self._cho_ma == "step_up" and phien is not None and phien.is_active:
+            self._tao_khoa()
+        else:
+            self._dang_nhap()
+
+    def _dang_nhap(self) -> None:
+        email = self._o_email.text().strip()
+        mat_khau = self._o_mat_khau.text()
+        if not looks_like_email(email):
+            self._bao_dn("Email chưa đúng. Ví dụ đúng: ten@congty.vn.")
+            return
+        if not mat_khau:
+            self._bao_dn("Bạn chưa nhập mật khẩu.")
+            return
+        ma = self._o_ma_2fa.text().strip() or None
+        self._phien = self._app.phien_dang_nhap()
+        self._nut_dang_nhap.setEnabled(False)
+        self._bao_dn("Đang đăng nhập…")
+
+        def viec():
+            self._phien.login(email, mat_khau, two_factor_code=ma)
+            return self._phien.user
+
+        self._app.run_bg(viec, on_ok=self._sau_dang_nhap, on_err=self._loi_xac_thuc)
+
+    def _sau_dang_nhap(self, _user) -> None:
+        """Đăng nhập xong thì tạo khoá luôn — khách chỉ bấm một nút."""
+        self._cho_ma = None
+        self._o_ma_2fa.clear()
+        self._bao_dn("Đăng nhập xong, đang tạo khoá…")
+        self._tao_khoa()
+
+    def _tao_khoa(self) -> None:
+        if self._phien is None:
+            return
+        ma = self._o_ma_2fa.text().strip() or None
+        self._nut_dang_nhap.setEnabled(False)
+
+        def viec():
+            ket_qua = self._phien.create_api_key("ShopAPI Studio", two_factor_code=ma)
+            return str(ket_qua.get("key") or "")
+
+        self._app.run_bg(viec, on_ok=self._da_tao_khoa, on_err=self._loi_xac_thuc)
+
+    def _da_tao_khoa(self, khoa: str) -> None:
+        self._nut_dang_nhap.setEnabled(True)
+        if not khoa:
+            self._bao_dn("Máy chủ không trả về khoá. Bạn thử lại sau ít phút giúp mình.")
+            return
+        try:
+            self._app.dat_khoa(khoa)
+        except Exception as loi:  # noqa: BLE001
+            self._app.show_error(loi)
+            return
+        self._cho_ma = None
+        self._o_mat_khau.clear()
+        self._o_ma_2fa.clear()
+        self._o_ma_2fa.hide()
+        self._nut_dang_nhap.setText("Đăng nhập & lấy khoá")
+        self._bao_dn("")
+        self._ve_trang_thai_khoa()
+        self._app.show_message(
+            "Xong rồi!",
+            "Tôi đã đăng nhập và tự tạo khoá API cho bạn. Bạn dùng được mọi tab "
+            "ngay bây giờ.")
+        self.lam_moi()
+
+    def _loi_xac_thuc(self, loi: BaseException) -> None:
+        from core.auth import TwoFactorRequired, describe_auth_error  # noqa: PLC0415
+
+        self._nut_dang_nhap.setEnabled(True)
+        if isinstance(loi, TwoFactorRequired):
+            self._o_ma_2fa.show()
+            if getattr(loi, "stage", "login") == "step_up":
+                # Cạm bẫy đắt nhất: mã TOTP dùng MỘT LẦN. Mã vừa đăng nhập đã tiêu,
+                # tạo khoá cần mã MỚI — không nói rõ thì khách gõ lại mã cũ, bị từ
+                # chối, rồi tưởng tool hỏng (xem chú thích đầu core/auth.py).
+                self._cho_ma = "step_up"
+                self._nut_dang_nhap.setText("Tạo khoá")
+                self._bao_dn(
+                    "Tài khoản có xác thực 2 lớp. Để tạo khoá cần MỘT MÃ MỚI — mã "
+                    "vừa dùng để đăng nhập không dùng lại được. Bạn mở ứng dụng xác "
+                    "thực lấy mã mới rồi bấm “Tạo khoá”.")
+            else:
+                self._cho_ma = "login"
+                self._bao_dn(
+                    "Tài khoản của bạn bật xác thực 2 lớp. Nhập mã 6 số trong ứng "
+                    "dụng xác thực rồi bấm lại.")
+            self._o_ma_2fa.setFocus()
+            return
+        self._cho_ma = None
+        self._bao_dn(describe_auth_error(loi))
+
     def _the_khoa(self):
         """Ô dán khoá API — **cửa vào duy nhất của cả tool**.
 
@@ -112,7 +260,7 @@ class TrangTaiKhoan(QWidget):
         v.setSpacing(8)
         hang = QHBoxLayout()
         hang.setSpacing(8)
-        hang.addWidget(nhan("Khoá API", "h2"))
+        hang.addWidget(nhan("Đã có khoá API? Dán vào đây", "h2"))
         self._nhan_khoa = nhan("", "muted")
         hang.addWidget(self._nhan_khoa, 1)
         v.addLayout(hang)
@@ -128,8 +276,20 @@ class TrangTaiKhoan(QWidget):
         self._nut_hien = nut_phu("Hiện", self._doi_hien_khoa, rong=64)
         self._nut_hien.setToolTip("Hiện khoá để soát lại")
         d.addWidget(self._nut_hien)
-        d.addWidget(nut_chinh("Lưu khoá", self._luu_khoa, rong=120))
+        d.addWidget(nut_phu("Lưu khoá", self._luu_khoa, rong=120))
         v.addLayout(d)
+        # Nút mở thẳng trang tạo khoá — chưa vào tool được thì phải qua web một
+        # lần để tạo khoá (máy chủ chỉ hiện khoá đúng một lần lúc tạo, không có
+        # cách lấy lại). Nút này bấm là mở đúng trang, khỏi phải gõ địa chỉ khó.
+        e = QHBoxLayout()
+        e.setSpacing(8)
+        self._nut_lay_khoa = nut_phu("Lấy khoá API", self._mo_trang_khoa, rong=150)
+        self._nut_lay_khoa.setToolTip(
+            "Mở trang tạo khoá trên shopapi.vn. Tạo xong, chép khoá rồi quay lại "
+            "dán vào ô bên trên.")
+        e.addWidget(self._nut_lay_khoa)
+        e.addWidget(nhan("chưa có khoá? bấm đây để tạo trên web rồi chép về", "muted"), 1)
+        v.addLayout(e)
         # Câu "lấy khoá ở shopapi.vn" đã nằm ở bước 1 của thẻ "Làm theo 3
         # bước" ngay phía trên. Nói lại lần hai chỉ tốn chiều cao — mà trang
         # này đã chạm trần cửa sổ nhỏ nhất. Phần "khoá cất mã hoá" chuyển vào
@@ -142,6 +302,24 @@ class TrangTaiKhoan(QWidget):
     def _doi_hien_khoa(self) -> None:
         an = self._o_khoa.echoMode() == QLineEdit.Password
         self._o_khoa.setEchoMode(QLineEdit.Normal if an else QLineEdit.Password)
+
+    def _mo_trang_khoa(self) -> None:
+        """Mở trang tạo khoá API trên web bằng trình duyệt mặc định.
+
+        Máy chủ (`shopapi.vn`) chưa có lối đăng nhập / tạo khoá ngay trong tool —
+        khoá chỉ tạo được trên web và **chỉ hiện đúng một lần** lúc tạo. Nên thứ
+        đỡ phiền nhất tôi làm được là bấm một cái mở đúng trang đó, khỏi phải gõ
+        địa chỉ hay tự mò trong dashboard.
+        """
+        from PyQt5.QtCore import QUrl  # noqa: PLC0415
+        from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
+
+        QDesktopServices.openUrl(QUrl(DASHBOARD_KEYS_URL))
+        self._app.show_message(
+            "Đã mở trang tạo khoá",
+            "Tôi vừa mở trang tạo khoá trên trình duyệt. Bạn tạo một khoá mới, "
+            "chép lại (khoá chỉ hiện đúng một lần), rồi quay lại đây dán vào ô "
+            "Khoá API và bấm “Lưu khoá”.")
 
     def _ve_trang_thai_khoa(self) -> None:
         cau_hinh = self._app.config
@@ -181,6 +359,10 @@ class TrangTaiKhoan(QWidget):
         self._app = app
         self._phieu: Optional[Dict[str, Any]] = None
         self._so_nhip = 0
+        #: Phiên đăng nhập web đang dựng (chỉ sống trong lúc đăng nhập/tạo khoá).
+        self._phien = None
+        #: Đang chờ khách nhập mã 2 lớp ở bước nào: None / "login" / "step_up".
+        self._cho_ma: Optional[str] = None
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 16, 24, 16)
@@ -188,6 +370,7 @@ class TrangTaiKhoan(QWidget):
         doc.addWidget(tieu_de_trang(
             "Tài khoản", "Đăng nhập, số dư, nạp tiền.", "wallet"))
         doc.addWidget(self._the_bat_dau())
+        doc.addWidget(self._the_dang_nhap())
         doc.addWidget(self._the_khoa())
 
         # ── Số dư ────────────────────────────────────────────────────────────

@@ -353,8 +353,7 @@ def test_thu_cong_hien_cho_luu(qt_app, tmp_path):
 # ── 9. Làm lại một cảnh: cho sửa prompt trước khi gửi ────────────────────────
 
 def test_lam_lai_canh_cho_sua_prompt_roi_gui(qt_app, tmp_path, monkeypatch):
-    """Bấm Làm lại thẻ ảnh: hiện ô sửa, sửa xong ghi lại bảng và tạo lại."""
-    from PyQt5.QtWidgets import QInputDialog
+    """Bấm Làm lại thẻ ảnh: hiện hộp sửa CẢ HAI prompt, sửa xong ghi lại và tạo lại."""
     from ui_qt.trang_anh_video import CD_ANH, _CotBang
 
     tab, app = _dung_hang_loat(str(tmp_path))
@@ -365,8 +364,8 @@ def test_lam_lai_canh_cho_sua_prompt_roi_gui(qt_app, tmp_path, monkeypatch):
     tab._dong_cua_anh[uid] = dong
 
     monkeypatch.setattr(
-        QInputDialog, "getMultiLineText",
-        staticmethod(lambda *a, **k: ("cảnh gốc, sáng hơn", True)))
+        tab, "_hoi_sua_canh",
+        lambda d, ca_hai=False: ("cảnh gốc, sáng hơn", "", True))
     tab._lam_lai_canh("cảnh gốc", "", uid)
 
     assert tab._chu(dong, _CotBang.ANH) == "cảnh gốc, sáng hơn", (
@@ -377,8 +376,7 @@ def test_lam_lai_canh_cho_sua_prompt_roi_gui(qt_app, tmp_path, monkeypatch):
 
 
 def test_lam_lai_canh_huy_thi_khong_gui(qt_app, tmp_path, monkeypatch):
-    """Bấm Huỷ ở ô sửa: không đổi bảng, không gửi gì."""
-    from PyQt5.QtWidgets import QInputDialog
+    """Bấm Huỷ ở hộp sửa: không đổi bảng, không gửi gì."""
     from ui_qt.trang_anh_video import CD_ANH, _CotBang
 
     tab, app = _dung_hang_loat(str(tmp_path))
@@ -389,8 +387,8 @@ def test_lam_lai_canh_huy_thi_khong_gui(qt_app, tmp_path, monkeypatch):
     tab._dong_cua_anh[uid] = dong
 
     monkeypatch.setattr(
-        QInputDialog, "getMultiLineText",
-        staticmethod(lambda *a, **k: ("chữ bỏ đi", False)))
+        tab, "_hoi_sua_canh",
+        lambda d, ca_hai=False: ("chữ bỏ đi", "", False))
     tab._lam_lai_canh("cảnh gốc", "", uid)
 
     assert tab._chu(dong, _CotBang.ANH) == "cảnh gốc", "huỷ thì giữ nguyên bảng"
@@ -398,8 +396,7 @@ def test_lam_lai_canh_huy_thi_khong_gui(qt_app, tmp_path, monkeypatch):
 
 
 def test_lam_lai_clip_chi_luu_cho_chay_lo(qt_app, tmp_path, monkeypatch):
-    """Làm lại thẻ clip: sửa mô tả clip, ghi lại bảng, chờ 'Chạy cả loạt'."""
-    from PyQt5.QtWidgets import QInputDialog
+    """Làm lại thẻ clip (chưa có ảnh sẵn): ghi lại mô tả, chờ 'Chạy cả loạt'."""
     from ui_qt.trang_anh_video import CD_CHUOI, _CotBang
 
     tab, app = _dung_hang_loat(str(tmp_path))
@@ -410,8 +407,8 @@ def test_lam_lai_clip_chi_luu_cho_chay_lo(qt_app, tmp_path, monkeypatch):
     tab._dong_cua_video[uid] = dong
 
     monkeypatch.setattr(
-        QInputDialog, "getMultiLineText",
-        staticmethod(lambda *a, **k: ("máy quay lùi ra", True)))
+        tab, "_hoi_sua_canh",
+        lambda d, ca_hai=False: ("cảnh gốc", "máy quay lùi ra", True))
     tab._lam_lai_canh("", "", uid)
 
     assert tab._chu(dong, _CotBang.VIDEO) == "máy quay lùi ra", (
@@ -419,16 +416,52 @@ def test_lam_lai_clip_chi_luu_cho_chay_lo(qt_app, tmp_path, monkeypatch):
     assert app.da_chay == [], "clip làm lại chỉ ghi lại, chờ Chạy cả loạt"
 
 
+def test_lam_lai_canh_hop_sua_hien_ca_hai_prompt(qt_app, tmp_path, monkeypatch):
+    """Chủ dự án 22/08: hộp Làm lại ở phần chi tiết phải mở ĐỦ CẢ HAI ô prompt.
+
+    Dù đang ở chế độ chỉ-ảnh, làm lại từ lưới chi tiết vẫn phải cho sửa cả prompt
+    ảnh lẫn prompt video — bắt ngay ở `_hoi_sua_canh(ca_hai=True)`.
+    """
+    from ui_qt.trang_anh_video import CD_ANH, CD_CHUOI, HopSuaCanh
+
+    tab, _app = _dung_hang_loat(str(tmp_path))
+    tab._dat_che_do(CD_ANH)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc")
+    uid = "khoa-9"
+    tab._dong_cua_anh[uid] = dong
+
+    da_goi = {}
+
+    def gia_lap(che_do, mo_ta_anh, mo_ta_video, cha=None):
+        da_goi["che_do"] = che_do
+        return HopSuaCanh(che_do, mo_ta_anh, mo_ta_video, cha)
+
+    monkeypatch.setattr("ui_qt.trang_anh_video.HopSuaCanh", gia_lap)
+    monkeypatch.setattr(HopSuaCanh, "exec_", lambda self: 0)  # coi như bấm Huỷ
+    tab._lam_lai_canh("cảnh gốc", "", uid)
+
+    assert da_goi.get("che_do") == CD_CHUOI, (
+        "làm lại ở chi tiết phải mở hộp hai ô (chế độ chuỗi) dù tab đang ở Tạo ảnh")
+
+
 # ── 10. Gộp một khung: cột Kết quả + chi tiết thu gọn ────────────────────────
 
 def test_bang_co_cot_ket_qua_du_bay_cot(qt_app, tmp_path):
-    """Chủ dự án 22/08: mỗi dòng tự đủ, có cột Kết quả xem trước ngay trên dòng."""
+    """Chủ dự án 22/08: mỗi dòng tự đủ, có cột Kết quả xem trước ngay trên dòng.
+
+    Cũng 22/08: gộp hai cột trạng thái Ảnh/Video → một cột "Trạng thái", tách nút
+    "Làm lại" ra một cột riêng cho khỏi đè lên cột Kết quả.
+    """
     from ui_qt.trang_anh_video import _CotBang
 
     tab, _app = _dung_hang_loat(str(tmp_path))
-    assert tab.bang.columnCount() == 7, "thêm cột Kết quả → bảng đủ 7 cột"
+    assert tab.bang.columnCount() == 7, "giữ 7 cột: gộp 2 trạng thái, tách Làm lại"
     assert _CotBang.TIEU_DE[_CotBang.KET_QUA] == "Kết quả"
     assert tab.bang.horizontalHeaderItem(_CotBang.KET_QUA).text() == "Kết quả"
+    assert _CotBang.TIEU_DE[_CotBang.TRANG_THAI] == "Trạng thái"
+    assert _CotBang.TIEU_DE[_CotBang.LAM_LAI] == "Làm lại"
+    assert tab.bang.horizontalHeaderItem(_CotBang.LAM_LAI).text() == "Làm lại"
 
 
 def test_chieu_cao_dong_co_dinh_khong_phinh_theo_prompt(qt_app, tmp_path):
@@ -465,7 +498,11 @@ def test_chi_tiet_mac_dinh_dong_bat_thi_mo(qt_app, tmp_path):
 
 
 def test_nut_chi_tiet_hien_dem_tien_do(qt_app, tmp_path):
-    """Đóng chi tiết thì nút gạt hiện gọn số đã xong (6/8 xong…)."""
+    """Đóng chi tiết thì nút gạt hiện số đã xong TÁCH RIÊNG ảnh/video.
+
+    Chủ dự án 22/08/2026: đếm gộp "1/3" chung chung; phải "Ảnh 1/3" (và có clip
+    thì thêm "· Video y/m") cho biết riêng từng chặng.
+    """
     from core.jobs import STATUS_DONE
 
     tab, _app = _dung_hang_loat(str(tmp_path))
@@ -473,19 +510,21 @@ def test_nut_chi_tiet_hien_dem_tien_do(qt_app, tmp_path):
         tab.thu_vien.them(u, "cảnh " + u, False)
     tab.thu_vien.cap_nhat(_BanGhi("u0", STATUS_DONE, _Spec("u0")))
     tab._cap_nhat_nut_chi_tiet()
-    assert "(1/3 xong)" in tab._nut_chi_tiet.text()
+    assert "Ảnh 1/3" in tab._nut_chi_tiet.text()
 
 
 def test_o_ket_qua_hien_lam_lai_khi_co_ket_qua(qt_app, tmp_path):
-    """Ô kết quả của dòng: có ảnh/clip xong mới hiện link Làm lại."""
+    """Nút "Làm lại" ở CỘT RIÊNG: có ảnh/clip xong mới hiện, liên kết đúng dòng."""
     from ui_qt.trang_anh_video import _CotBang, _OKetQuaDong
 
     tab, _app = _dung_hang_loat(str(tmp_path))
     o = tab.bang.cellWidget(0, _CotBang.KET_QUA)
     assert isinstance(o, _OKetQuaDong)
-    assert not o._lam_lai.isVisible(), "chưa có kết quả thì chưa có Làm lại"
+    nut = tab.bang.cellWidget(0, _CotBang.LAM_LAI)
+    assert nut is o.nut_lam_lai, "nút cột Làm lại phải liên kết về ô kết quả cùng dòng"
+    assert not nut.isVisible(), "chưa có kết quả thì chưa hiện Làm lại"
     o.dat_ket_qua(str(tmp_path / "khong-co.mp4"), True)
-    assert o.video and not o._lam_lai.isHidden(), "xong thì hiện Làm lại"
+    assert o.video and not nut.isHidden(), "xong thì hiện Làm lại ở cột riêng"
 
 
 # ── 11. Làm lại NGAY TRÊN DÒNG: đổi ảnh vs chỉ đổi video ─────────────────────

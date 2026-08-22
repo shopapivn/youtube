@@ -21,6 +21,14 @@ chu_bia_hoa: false
 voice_id: "3JDquces8E8bkmvbh6Bc"
 phut_muc_tieu: 15
 engine: "veo3"
+# ── Tiêu đề đặt lại theo chất riêng của kênh ─────────────────────────────────
+#  TL5-T7 có bản sắc riêng, KHÔNG cố giống đối thủ (chiến lược "Cover — làm hơn
+#  bản gốc"). Nên tiêu đề/chữ bìa viết lại theo giọng kênh, chỉ giữ lõi lời hứa,
+#  không bê nguyên tiêu đề đối thủ. Bỏ dòng này đi thì kênh quay về bám bản gốc.
+che_do_tieu_de: "restyled"
+# ── Thời lượng CỐ ĐỊNH theo phút ─────────────────────────────────────────────
+#  KHÔNG bật `do_dai_theo_goc`: video giữ độ dài theo `phut_muc_tieu` ở trên
+#  (15 phút × 298 ký tự/phút), không bám độ dài video gốc như TL4-T7.
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"
 dot_phu_de: true

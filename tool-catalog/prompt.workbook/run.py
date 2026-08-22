@@ -43,9 +43,57 @@ SCENE_COLUMNS = [
 CREATIVE = ("scene_kind", "subject_mode", "primary_subject", "primary_action", "visual_anchor",
             "must_not_show", "img_prompt", "video_prompt", "characters_used", "location_used")
 
+#: Cot cua sheet `characters` — trung ten voi VE3_SUITE va voi tab Tu dong
+#: (`core/auto_khau.COT_NHAN_VAT`), de file mo thang bang VE3 duoc.
+CHARACTER_HEADERS = ["id", "role", "name", "english_prompt", "vietnamese_prompt",
+                     "image_file", "status", "gender", "age", "notes"]
+
 #: Tran chu cho mot luot chia canh. Cao vi moi canh keo theo hai loi nhac tieng
 #: Anh chi tiet; hut tran thi JSON dut giua cau va ca khuc phai hoi lai.
 TOKEN_CANH = 16384
+
+#: Tran chu cho luot "casting" — mot luot doc ca loi doc roi dung dan nhan vat.
+#: Thap hon TOKEN_CANH vi no chi tra ve vai nhan vat, khong phai ca tram canh.
+TOKEN_CAST = 4096
+
+#: Bao nhieu ky tu loi doc dua cho luot casting. Du de nhan ra ai la nhan vat
+#: lap lai ma khong doi ca kich ban vao mot lan goi.
+CAST_KY_TU = 12000
+
+#: Lời nhắc dựng dàn nhân vật + phong cách từ chính lời đọc. Prompt Visuals
+#: không có kênh nên không có `nv1.png` hay style sẵn — bản này bảo AI **tự rút
+#: ra** dàn nhân vật lặp lại và một phong cách thống nhất, để mọi cảnh sau dùng
+#: chung. Không có nhân vật lặp lại (ví dụ video toàn cảnh vật) thì trả mảng
+#: rỗng — lúc đó tool về đúng hành vi cũ, không bịa người.
+_KHUON_CAST = """You are the casting director for a narrated video. Read the
+whole narration transcript below and decide:
+
+1. The RECURRING characters — people/creatures the narration comes back to. For
+   each, write ONE fixed English appearance description (`english_prompt`) that
+   every scene will reuse verbatim so the character never drifts. Give ids
+   `nv1`, `nv2`… in order of importance. If the video has no recurring
+   character (pure landscape/abstract), return an empty `characters` list — do
+   NOT invent a person.
+2. ONE consistent visual `style` for the whole video: `image_style`, `palette`,
+   `motion`.
+
+## Context
+{context}
+
+## Transcript
+{transcript}
+
+## Return JSON only, no commentary
+```json
+{{"style": {{"image_style": "...", "palette": "...", "motion": "..."}},
+ "characters": [
+   {{"id": "nv1", "role": "protagonist", "name": "...",
+    "english_prompt": "<fixed appearance, no scene-specific pose>",
+    "reference_lock": "<short identity anchor>",
+    "gender": "", "age": "", "notes": ""}}
+ ]}}
+```
+"""
 
 _KHOA_IN = threading.Lock()
 
@@ -58,7 +106,7 @@ def emit(value: Mapping[str, Any]) -> None:
 
 
 def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
-           chia_fn: Callable = None) -> Mapping[str, Any]:
+           chia_fn: Callable = None, cast_fn: Callable = None) -> Mapping[str, Any]:
     inputs = request.get("inputs") if isinstance(request.get("inputs"), dict) else {}
     srt_path = _path(inputs.get("subtitles"), "subtitles")
     context = _optional_json(inputs.get("context"))
@@ -68,17 +116,29 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
     config = request.get("config") if isinstance(request.get("config"), dict) else {}
     engine = str(config.get("engine") or "veo3")
     model = str(config.get("model") or "claude-sonnet-5")
+    nhat_quan = bool(config.get("nhat_quan_nhan_vat", True))
 
     goi = _hop_goi(request, model)
     try:
+        # Dung dan nhan vat + phong cach TRUOC khi cat canh, de moi canh sau deu
+        # nhac dung mot dan va giu mot tong — y het tab Tu dong, chi khac la o
+        # day dan duoc rut ra tu chinh loi doc chu khong lay tu kenh.
+        cast = _dan_nhan_vat(goi, cues, context, nhat_quan=nhat_quan,
+                             cast_fn=cast_fn, chia_fn=chia_fn)
+        cast_style = _khoi_cast_style(cast)
+        nhan_vat_chinh = cast["characters"][0]["id"] if cast["characters"] else ""
+
         scenes, cach = _canh(cues, engine=engine, context=context, goi=goi,
-                             chia_fn=chia_fn, enrich_fn=enrich_fn)
+                             chia_fn=chia_fn, enrich_fn=enrich_fn,
+                             cast_style=cast_style, nhan_vat_chinh=nhan_vat_chinh)
+        _gan_reference_files(scenes, cast["characters"])
         _validate_coverage(cues, scenes)
         workspace = Path(str(request.get("workspace") or "")).resolve(); workspace.mkdir(parents=True, exist_ok=True)
         manifest = {"schema_version": 1, "project_id": str(request.get("workflow_id") or "project"),
                     "source": {"subtitle_artifact_id": _artifact_id(inputs.get("subtitles")),
                                "content_artifact_id": _artifact_id(inputs.get("context"))},
-                    "settings": {"model": model, "cach_chia": cach}, "characters": [], "locations": [],
+                    "settings": {"model": model, "cach_chia": cach, "style": cast["style"]},
+                    "characters": cast["characters"], "locations": [],
                     "scenes": scenes, "coverage": {"cue_count": len(cues), "covered": len(cues), "percent": 100}}
         workbook = workspace / "scene-prompts.xlsx"
         render_workbook(workbook, manifest)
@@ -99,16 +159,17 @@ THEO_NGHIA = "theo-noi-dung"
 THEO_DONG_HO = "theo-dong-ho"
 
 
-def _canh(cues, *, engine, context, goi, chia_fn=None, enrich_fn=None):
+def _canh(cues, *, engine, context, goi, chia_fn=None, enrich_fn=None,
+          cast_style="", nhan_vat_chinh=""):
     """Cat canh theo nghia; khong duoc thi lui ve dong ho va **noi ra**.
 
     Duong lui phai con, vi khong co no thi mot cu 503 la khach khong nhan duoc
     gi ca. Nhung lui im lang thi con te hon: khach mo file Excel ra, thay du
     111 canh va du loi nhac, khong the nao biet rang canh da bi cat giua cau.
     """
-    chia = chia_fn or _bo_chia(goi, context, engine)
+    chia = chia_fn or _bo_chia(goi, context, engine, cast_style)
     try:
-        return _canh_theo_nghia(cues, chia, engine), THEO_NGHIA
+        return _canh_theo_nghia(cues, chia, engine, nhan_vat_chinh), THEO_NGHIA
     except Exception as loi:  # noqa: BLE001 — het duong nay thi con duong lui
         emit({"type": "event", "event": "progress", "progress": 0.0,
               "message": "Chua chia duoc canh theo noi dung ({0}). Toi tam cat "
@@ -124,7 +185,7 @@ def _canh(cues, *, engine, context, goi, chia_fn=None, enrich_fn=None):
     return scenes, THEO_DONG_HO
 
 
-def _canh_theo_nghia(cues, chia, engine) -> List[Dict[str, Any]]:
+def _canh_theo_nghia(cues, chia, engine, nhan_vat_chinh="") -> List[Dict[str, Any]]:
     """AI tu chia canh theo nghia va viet luon loi nhac cho tung canh.
 
     Mot luot goi lam ca hai viec, khong phai hai luot: canh duoc cat o dau la
@@ -132,7 +193,8 @@ def _canh_theo_nghia(cues, chia, engine) -> List[Dict[str, Any]]:
     tra tien hai lan cho cung mot doan chu.
     """
     ra: List[Dict[str, Any]] = []
-    for canh in chia_theo_nghia(cues, chia, tran=max_seconds_for(engine)):
+    for canh in chia_theo_nghia(cues, chia, tran=max_seconds_for(engine),
+                                nhan_vat_mac_dinh=nhan_vat_chinh):
         scene = {key: "" for key in SCENE_COLUMNS}
         for ten, gia_tri in canh.items():
             if ten in scene:
@@ -219,14 +281,20 @@ def _hop_goi(request: Mapping[str, Any], model: str):
     return goi
 
 
-def _bo_chia(goi, context, engine) -> Callable:
-    """Ham hoi AI chia mot khuc phu de. `core.chia_canh` lo phan con lai."""
+def _bo_chia(goi, context, engine, cast_style="") -> Callable:
+    """Ham hoi AI chia mot khuc phu de. `core.chia_canh` lo phan con lai.
+
+    `cast_style` la khoi chu "dan nhan vat + phong cach" da dung san o
+    `_dan_nhan_vat`. Rong thi `dien_khuon` xoa sach `<<CAST_STYLE>>`, template
+    ve dung nhu cu (khong bia nhan vat) — dung hanh vi PV truoc day.
+    """
     tran = max_seconds_for(engine)
     boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else ""
     xong = {"value": 0}
 
     def chia(khuc, thu_tu, tong_khuc):
-        loi_nhac = loi_nhac_chia(KHUON_MAC_DINH, khuc, tran, {"CONTEXT": boi_canh})
+        loi_nhac = loi_nhac_chia(KHUON_MAC_DINH, khuc, tran,
+                                 {"CONTEXT": boi_canh, "CAST_STYLE": cast_style})
         tra = goi(loi_nhac, "chia-{0}".format(khuc[0]["index"]))
         goi_ve = loc_json(tra)
         ds = goi_ve.get("scenes") if isinstance(goi_ve, dict) else goi_ve
@@ -240,6 +308,112 @@ def _bo_chia(goi, context, engine) -> Callable:
         return ds
 
     return chia
+
+
+def _dan_nhan_vat(goi, cues, context, *, nhat_quan=True, cast_fn=None, chia_fn=None):
+    """Mot luot AI doc ca loi doc roi tra ve dan nhan vat + phong cach.
+
+    Best-effort: casting hong (503, JSON rac) thi ve dan rong va **noi ra** —
+    khong duoc giet ca luot, vi con canh van chia duoc theo cach cu.
+
+    Chi goi mang o luong that (khong co `chia_fn` bom vao, va cong bat). Bai
+    kiem bom `cast_fn` de tra dan gia; hoac bom `chia_fn` (khong `cast_fn`) thi
+    coi nhu nguoi goi tu lai AI -> khong casting, khong cham mang.
+    """
+    trong = {"style": {}, "characters": []}
+    if not nhat_quan:
+        return trong
+    if cast_fn is None and chia_fn is not None:
+        return trong  # che do bom tay: khong tu goi mang de casting
+    try:
+        raw = cast_fn(cues, context) if cast_fn is not None else _dung_dan_cast(goi, cues, context)
+        cast = _sach_cast(raw)
+    except Exception as loi:  # noqa: BLE001 — casting la phu, hong thi ve hanh vi cu
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": "Chua dung duoc dan nhan vat ({0}). Moi canh se tu do, "
+                         "khong khoa mot nguoi xuyen suot.".format(str(loi)[:120])})
+        return trong
+    if cast["characters"]:
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": "Da dung dan {0} nhan vat co dinh cho ca video.".format(
+                  len(cast["characters"]))})
+    return cast
+
+
+def _dung_dan_cast(goi, cues, context) -> Mapping[str, Any]:
+    """Goi AI mot lan (`goi(..., "cast")`, khoa idempotent) de rut dan + style."""
+    loi_doc = " ".join(str(cue.get("text") or "").strip() for cue in cues)[:CAST_KY_TU]
+    boi_canh = json.dumps(context, ensure_ascii=False)[:4000] if context else "(khong co)"
+    loi_nhac = _KHUON_CAST.format(context=boi_canh, transcript=loi_doc)
+    return loc_json(goi(loi_nhac, "cast"))
+
+
+def _sach_cast(raw) -> Dict[str, Any]:
+    """Chuan hoa dan cast: bo dong thieu mo ta, danh id nv1.. neu AI bo trong."""
+    if not isinstance(raw, Mapping):
+        return {"style": {}, "characters": []}
+    style = raw.get("style") if isinstance(raw.get("style"), Mapping) else {}
+    ra: List[Dict[str, Any]] = []
+    for thu_tu, item in enumerate(raw.get("characters") or [], 1):
+        if not isinstance(item, Mapping):
+            continue
+        english = str(item.get("english_prompt") or "").strip()
+        if not english:
+            continue  # khong co mo ta ngoai hinh thi khong khoa duoc, bo qua
+        cid = str(item.get("id") or "").strip() or "nv{0}".format(thu_tu)
+        ra.append({"id": cid, "role": str(item.get("role") or ""),
+                   "name": str(item.get("name") or ""), "english_prompt": english,
+                   "reference_lock": str(item.get("reference_lock") or ""),
+                   "gender": str(item.get("gender") or ""),
+                   "age": str(item.get("age") or ""),
+                   "notes": str(item.get("notes") or "")})
+    return {"style": dict(style), "characters": ra}
+
+
+def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
+    """Dung chu cho `<<CAST_STYLE>>`: dan nhan vat + luat tai dung + duoi style.
+
+    Rong (khong dan, khong style) thi tra "" — `dien_khuon` xoa placeholder,
+    template ve dung nhu cu.
+    """
+    chars = cast.get("characters") or []
+    style = cast.get("style") or {}
+    dong: List[str] = []
+    if chars:
+        dong.append("## RECURRING CHARACTERS — reuse, never redesign")
+        dong.append("These are the ONLY recurring characters in this video. When "
+                    "a scene shows one, put its id in `characters_used` and keep "
+                    "its appearance EXACTLY as written here — do NOT re-describe "
+                    "face, hair, clothes or colours per scene:")
+        for c in chars:
+            nhan = c.get("role") or c.get("name") or "character"
+            dong.append("- {0} ({1}): {2}".format(c["id"], nhan, c["english_prompt"]))
+    duoi = [("Image style", style.get("image_style")), ("Palette", style.get("palette")),
+            ("Motion", style.get("motion"))]
+    duoi = [(ten, str(gt).strip()) for ten, gt in duoi if str(gt or "").strip()]
+    if duoi:
+        if dong:
+            dong.append("")
+        dong.append("## STYLE — hold this exact look across every scene")
+        for ten, gt in duoi:
+            dong.append("{0}: {1}".format(ten, gt))
+    return "\n".join(dong)
+
+
+def _gan_reference_files(scenes, characters) -> None:
+    """Moi canh dung nhan vat nao thi tro toi `<id>.png` — dung quy uoc auto/VE3.
+
+    Khau dung anh o VE3/tab Hang loat bam vao `reference_files` de dinh anh
+    tham chieu, khoa mat mot nguoi xuyen suot. Chi gan id co that trong dan.
+    """
+    hop_id = {c["id"] for c in characters}
+    for scene in scenes:
+        if scene.get("reference_files"):
+            continue
+        tho = str(scene.get("characters_used") or "").replace(",", " ").split()
+        ids = [i for i in tho if i in hop_id]
+        if ids:
+            scene["reference_files"] = json.dumps(["{0}.png".format(i) for i in ids])
 
 
 def _bo_enrich(goi) -> Callable:
@@ -309,9 +483,21 @@ def render_workbook(path: Path, manifest: Mapping[str, Any]) -> None:
         cell.fill = PatternFill("solid", fgColor="70AD47")
     for row, scene in enumerate(manifest["scenes"], 2):
         for col, name in enumerate(SCENE_COLUMNS, 1): scenes_sheet.cell(row, col, scene.get(name, ""))
-    for name, headers in (("characters", ["id", "role", "name", "english_prompt", "vietnamese_prompt",
-                                            "image_file", "status", "gender", "age", "notes"]),
-                          ("director_plan", ["scene_id", "plan", "status"]),
+    chars_sheet = book.create_sheet("characters")
+    for col, header in enumerate(CHARACTER_HEADERS, 1): chars_sheet.cell(1, col, header)
+    for row, nv in enumerate(manifest.get("characters") or [], 2):
+        # `image_file = <id>.png` + `status = pending` khop quy uoc tab Tu dong,
+        # de khach thay ro moi nhan vat can mot anh tham chieu (chua co thi
+        # pending), va VE3 mo file len la nhan ra ngay.
+        cid = str(nv.get("id") or "")
+        gia_tri = {"id": cid, "role": nv.get("role", ""), "name": nv.get("name", ""),
+                   "english_prompt": nv.get("english_prompt", ""),
+                   "vietnamese_prompt": nv.get("vietnamese_prompt", ""),
+                   "image_file": "{0}.png".format(cid) if cid else "", "status": "pending",
+                   "gender": nv.get("gender", ""), "age": nv.get("age", ""),
+                   "notes": nv.get("notes", "")}
+        for col, header in enumerate(CHARACTER_HEADERS, 1): chars_sheet.cell(row, col, gia_tri.get(header, ""))
+    for name, headers in (("director_plan", ["scene_id", "plan", "status"]),
                           ("thumbnail", ["id", "prompt", "status"])):
         sheet = book.create_sheet(name)
         for col, header in enumerate(headers, 1): sheet.cell(1, col, header)

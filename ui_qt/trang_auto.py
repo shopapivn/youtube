@@ -693,9 +693,9 @@ class TrangTuDong(QWidget):
             dang_chay=self._dang_chay and self._duong == self._duong_chay)
 
     def _mo_quan_ly(self) -> None:
-        from .quan_ly_kenh import HopQuanLyKenh  # noqa: PLC0415
+        from .kenh import HopKenh  # noqa: PLC0415
 
-        hop = HopQuanLyKenh(self._app, self._chon_kenh.currentText(), self)
+        hop = HopKenh(self._app, self._chon_kenh.currentText(), self)
         hop.exec_()
         self._nap_kenh()
 
@@ -705,9 +705,9 @@ class TrangTuDong(QWidget):
         Không chọn sẵn thì người dùng vừa tạo xong lại phải đi tìm nó trong ô
         chọn — và ô ấy xếp theo bảng chữ cái nên kênh mới không nằm ở cuối.
         """
-        from .tao_kenh import HopTaoKenh  # noqa: PLC0415
+        from .kenh import HopKenh  # noqa: PLC0415
 
-        hop = HopTaoKenh(self._app, self)
+        hop = HopKenh(self._app, "", self)
         hop.exec_()
         self._nap_kenh()
         if hop.ma_kenh_moi:
@@ -944,15 +944,25 @@ class TrangTuDong(QWidget):
         client = self._dung_client(self.GIAY_CHO_VIET)
 
         def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
-                khoa: str = "", toi_da_token: int = 8192) -> str:
+                khoa: str = "", toi_da_token: int = 8192,
+                anh: str = "") -> str:
             from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
 
             def kiem_dung():
                 if self._huy is not None and self._huy.is_set():
                     raise RuntimeError("đã dừng")
 
+            # Có ảnh (đọc chữ trên bìa đối thủ) thì gửi kèm dạng mảng mà cổng
+            # hiểu: một phần chữ + một phần ảnh. Không có ảnh thì giữ nguyên
+            # chuỗi như cũ — không đổi hành vi mọi lượt viết chữ khác.
+            if anh:
+                noi_dung = [{"type": "text", "text": loi_nhac},
+                            {"type": "image_url", "image_url": {"url": anh}}]
+            else:
+                noi_dung = loi_nhac
+
             return goi_van_ban(
-                client, [{"role": "user", "content": loi_nhac}],
+                client, [{"role": "user", "content": noi_dung}],
                 mo_hinh=mo_hinh, toi_da_token=int(toi_da_token), khoa=khoa,
                 on_log=self._ghi_nen, kiem_dung=kiem_dung)
 

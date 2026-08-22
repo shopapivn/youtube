@@ -150,10 +150,10 @@ def test_moi_tab_deu_co_bai_huong_dan(cua_so):
 
 @pytest.fixture(scope="module")
 def hop_tao_kenh(cua_so):
-    from ui_qt.tao_kenh import HopTaoKenh
+    from ui_qt.kenh import HopKenh
 
     cs, app = cua_so
-    hop = HopTaoKenh(cs, cs)
+    hop = HopKenh(cs, "", cs)          # rỗng = mở ở chế độ tạo kênh mới
     app.processEvents()
     yield hop, app
     hop.close()
@@ -162,18 +162,18 @@ def hop_tao_kenh(cua_so):
 def test_hop_tao_kenh_vua_man_hinh(hop_tao_kenh):
     hop, _app = hop_tao_kenh
     goi = hop.minimumSizeHint()
-    assert goi.width() <= TRAN_RONG, "hộp Tạo kênh cần {0}px bề rộng".format(
+    assert goi.width() <= TRAN_RONG, "hộp Kênh cần {0}px bề rộng".format(
         goi.width())
-    assert goi.height() <= TRAN_CAO, "hộp Tạo kênh cần {0}px chiều cao".format(
+    assert goi.height() <= TRAN_CAO, "hộp Kênh cần {0}px chiều cao".format(
         goi.height())
 
 
 def test_hop_tao_kenh_co_du_ba_o_chon(hop_tao_kenh):
     """Thiếu một ô là khuôn không ghép đủ ba mảnh."""
     hop, _app = hop_tao_kenh
-    assert hop._chon_nganh.count() >= 1
-    assert hop._chon_ve.count() >= 3
-    assert hop._chon_vh.count() >= 3
+    assert hop._c_nganh.count() >= 1
+    assert hop._c_ve.count() >= 3
+    assert hop._c_vh.count() >= 3
 
 
 def test_hop_tao_kenh_hien_ten_tieng_viet_chu_khong_hien_ma(hop_tao_kenh):
@@ -183,24 +183,134 @@ def test_hop_tao_kenh_hien_ten_tieng_viet_chu_khong_hien_ma(hop_tao_kenh):
     dấu viết dính.
     """
     hop, _app = hop_tao_kenh
-    for o in (hop._chon_nganh, hop._chon_ve, hop._chon_vh):
+    for o in (hop._c_nganh, hop._c_ve, hop._c_vh):
         for i in range(o.count()):
             assert o.itemText(i) != o.itemData(i), o.itemText(i)
 
 
-def test_doi_khan_gia_thi_so_ky_tu_doi_theo(hop_tao_kenh):
-    """Số ký tự nhảy khi đổi tiếng — đó là cả điểm của dòng ước tính ấy.
+def test_chon_phong_cach_thi_dien_san_loi_ta(hop_tao_kenh):
+    """Chọn một phong cách ở Bước 3 phải điền sẵn ô lời tả + các khoá hình.
 
-    `ky_tu_moi_phut` chênh gần ba lần giữa Nhật (298) và Anh (920). Hiện ra
-    thành số ký tự thì khách tự thấy khi nó vô lý.
+    Đây là cả điểm của bộ chọn: khách không phải tự viết khoá tiếng Anh nào,
+    và đổi phong cách thì lời tả ảnh lẫn chuyển động video đổi theo — nhờ vậy
+    prompt ảnh/video mới đồng bộ một kiểu.
+    """
+    from ui_qt.kenh import PHONG_CACH
+
+    hop, app = hop_tao_kenh
+    thay_anh = set()
+    thay_video = set()
+    for i in range(len(PHONG_CACH)):
+        hop._c_phong.setCurrentIndex(i)
+        app.processEvents()
+        assert hop._o_style.text().strip(), "phong cách rỗng lời tả ảnh"
+        thay_anh.add(hop._o_style.text())
+        thay_video.add(hop._o_ve_khac["video_style"].text())
+    assert len(thay_anh) == len(PHONG_CACH), "lời tả ảnh không đổi theo phong cách"
+    assert len(thay_video) == len(PHONG_CACH), "video_style không đổi theo phong cách"
+
+
+def test_moi_phong_cach_du_khoa_dong_bo_prompt(hop_tao_kenh):
+    """Mỗi phong cách phải đủ bốn khoá prompt thật sự đọc, không được rỗng.
+
+    `7-canh.md` cắm `image_style`/`video_style`/`palette`/`negative_prompt` vào
+    đuôi mỗi prompt ảnh + video. Rỗng một khoá là một phong cách nhìn nhạt hơn
+    hẳn các phong cách khác mà khách không hiểu vì sao.
+    """
+    from ui_qt.kenh import PHONG_CACH
+
+    thieu = []
+    for ten, kv in PHONG_CACH:
+        for khoa in ("image_style", "video_style", "palette", "negative_prompt"):
+            if not (kv.get(khoa) or "").strip():
+                thieu.append("{0}: {1}".format(ten, khoa))
+    assert not thieu, "phong cách thiếu khoá: {0}".format("; ".join(thieu))
+
+
+def test_di_het_nam_buoc_khong_tran_760px(hop_tao_kenh):
+    """Bấm Tiếp đi hết 5 bước — không bước nào đẩy nút ra ngoài mép 760px.
+
+    Trình thiết kế kênh giờ là một QStackedWidget năm trang. Bề rộng tối thiểu
+    của hộp bằng trang rộng nhất, nên phải soi từng bước chứ không chỉ bước mở
+    ra đầu tiên.
     """
     hop, app = hop_tao_kenh
-    thay = set()
-    for i in range(hop._chon_vh.count()):
-        hop._chon_vh.setCurrentIndex(i)
+    hop._di_toi(0)
+    app.processEvents()
+    tran = []
+    for _ in range(10):                    # dư số bước, dừng ở bước cuối
+        rong = hop.minimumSizeHint().width()
+        if rong > TRAN_RONG:
+            tran.append("bước {0} cần {1}px".format(hop._buoc + 1, rong))
+        if hop._buoc >= len(hop._trang) - 1:
+            break
+        hop._tiep()                        # chưa tới bước cuối nên không tạo kênh
         app.processEvents()
-        thay.add(hop._nhan_dai.text())
-    assert len(thay) == hop._chon_vh.count(), thay
+    assert len(hop._trang) == 5, "phải có 5 bước, đang có {0}".format(
+        len(hop._trang))
+    assert not tran, "; ".join(tran)
+
+
+def test_che_do_sua_nap_dung_kenh(cua_so):
+    """Mở HopKenh với một mã kênh → vào thẳng chế độ sửa, năm bước nạp sẵn."""
+    from ui_qt.kenh import HopKenh
+    from core.kenh import liet_ke_kenh
+
+    cs, app = cua_so
+    ds = liet_ke_kenh(cs.base_dir)
+    if not ds:
+        pytest.skip("máy test chưa có kênh nào để mở chế độ sửa")
+    hop = HopKenh(cs, ds[0], cs)
+    app.processEvents()
+    try:
+        assert hop._che_do == "sua"
+        assert hop._ma_sua == ds[0]
+        assert len(hop._trang) == 5
+        # Lời nhắc của kênh phải nạp được vào các ô sửa.
+        assert hop._o_prompt, "chế độ sửa chưa nạp ô lời nhắc nào"
+        for i in range(len(hop._trang)):
+            hop._di_toi(i)
+            app.processEvents()
+            assert hop.minimumSizeHint().width() <= TRAN_RONG, \
+                "bước {0} tràn mép".format(i + 1)
+    finally:
+        hop.close()
+
+
+def test_buoc_cuoi_tao_duoc_kenh_chay_duoc(cua_so, monkeypatch):
+    """Đi tới bước cuối rồi tạo → ra kênh mà `kiem_kenh` không kêu gì.
+
+    Đây là cả điểm của luồng "bắt đầu từ mẫu": chọn kiểu vẽ + khán giả, điền
+    giọng đọc, bấm Tạo là ra kênh chạy được — không phải tự viết khoá nào.
+    """
+    import shutil as _sh
+    from ui_qt.kenh import HopKenh
+    from core.kenh import doc_kenh, duong_kenh, kiem_kenh
+
+    cs, app = cua_so
+    hop = HopKenh(cs, "", cs)
+    app.processEvents()
+    if len(hop._trang) != 5:
+        hop.close()
+        pytest.skip("máy test chưa có mẫu khuôn để dựng kênh")
+
+    ma = "ZZ-TEST-KENH"
+    dich = duong_kenh(cs.base_dir, ma)
+    _sh.rmtree(dich, ignore_errors=True)
+    monkeypatch.setattr(cs, "show_message", lambda *a, **k: None)
+    hop._o_ma.setText(ma)
+    hop._o_giong.setText("test_voice_id")
+    app.processEvents()
+    try:
+        hop._tao()
+        assert os.path.isdir(dich), "chưa tạo được thư mục kênh"
+        assert hop.ma_kenh_moi == ma
+        assert kiem_kenh(doc_kenh(cs.base_dir, ma)) == [], \
+            "kênh mới tạo mà vẫn thiếu điều kiện chạy"
+    finally:
+        hop.close()
+        _sh.rmtree(dich, ignore_errors=True)
+
 
 
 # ── Hộp "Sửa khuôn" ──────────────────────────────────────────────────────────

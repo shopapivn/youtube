@@ -121,17 +121,22 @@ def viet_mau(duong_dich: str) -> str:
 
     # Ba dòng mẫu, mỗi dòng một kiểu dùng — vì ba kiểu ấy cho ra ba kết quả
     # khác hẳn nhau, và không nhìn thấy cả ba thì khách không đoán được.
+    #
+    # Ô ảnh tham chiếu điền ĐƯỜNG DẪN ĐẦY ĐỦ tới ảnh trên máy, không phải mỗi tên
+    # file: tab Ảnh & Video tra `reference_files` bằng đường dẫn thật trên đĩa —
+    # điền trơ trọi "nv1.png" thì nó không biết tìm ở đâu nên bỏ qua, và mọi cảnh
+    # lại ra một người khác nhau. Dòng 2 có hai ảnh cách nhau dấu phẩy làm mẫu.
     trang.append([1,
                   "Warm afternoon light through thin curtains, a person seen "
                   "from behind by the window, quiet room",
                   "slow push in, dust drifting in the light",
-                  "nv1.png"])
+                  r"D:\Anh tham chieu\nv1.png"])
     trang.append([2,
                   "Close-up of hands holding a warm ceramic cup, steam catching "
                   "the backlight",
-                  "", "nv1.png"])
+                  "", r"D:\Anh tham chieu\nv1.png, D:\Anh tham chieu\nv1-nhin-nghieng.png"])
     trang.append([3, "", "the camera drifts left across an empty room",
-                  "anh-cua-toi.png"])
+                  r"D:\Anh tham chieu\khung-dau.png"])
 
     huong = sach.create_sheet("huong-dan")
     for dong in (
@@ -142,8 +147,17 @@ def viet_mau(duong_dich: str) -> str:
         ("video_prompt", "Xem ghi chú",
          "Mô tả clip. Để trống thì dòng này chỉ tạo ảnh, không làm clip."),
         ("reference_files", "Nên",
-         "Ảnh tham chiếu cho riêng dòng này. Bỏ trống thì dùng ảnh bạn chọn "
-         "chung cho cả loạt."),
+         "ĐƯỜNG DẪN đầy đủ tới ảnh tham chiếu trên máy bạn, KHÔNG phải chỉ tên "
+         "file. Nhiều ảnh thì cách nhau dấu phẩy. Bỏ trống thì dùng ảnh bạn "
+         "chọn chung cho cả loạt."),
+        ("", "", ""),
+        ("Cách lấy đường dẫn:", "",
+         "Mở thư mục chứa ảnh → bấm chuột PHẢI vào ảnh → chọn “Sao chép dưới "
+         "dạng đường dẫn” (Copy as path) → dán vào ô. Có dấu ngoặc kép cũng "
+         "được, tôi tự bỏ."),
+        ("Ví dụ một ảnh:", "", r"D:\Anh tham chieu\nv1.png"),
+        ("Ví dụ nhiều ảnh:", "",
+         r"D:\Anh tham chieu\nv1.png, D:\Anh tham chieu\nv1-nhin-nghieng.png"),
         ("", "", ""),
         ("Mỗi dòng cần ít nhất MỘT", "", "trong hai cột img_prompt và video_prompt."),
         ("", "", ""),

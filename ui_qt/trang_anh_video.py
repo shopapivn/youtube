@@ -44,7 +44,7 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QKeyEvent, QTextCursor
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
-    QHBoxLayout, QHeaderView, QPlainTextEdit, QPushButton, QSizePolicy,
+    QHBoxLayout, QHeaderView, QLabel, QPlainTextEdit, QPushButton, QSizePolicy,
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -493,10 +493,10 @@ class TabThuCong(QWidget):
 class _CotBang:
     """Chỉ số cột — gõ số trần vào code là chỗ hỏng im lặng khi thêm cột."""
 
-    STT, ANH, THAM_CHIEU, VIDEO, TT_ANH, TT_VIDEO, KET_QUA = range(7)
-    TIEU_DE = ("#", "Mô tả ảnh", "Ảnh tham chiếu",
-               "Mô tả video (để trống = không làm video)",
-               "Ảnh", "Video", "Kết quả")
+    STT, ANH, THAM_CHIEU, VIDEO, TRANG_THAI, KET_QUA, LAM_LAI = range(7)
+    TIEU_DE = ("#", "Prompt tạo ảnh", "Ảnh tham chiếu",
+               "Prompt tạo video (để trống = không làm video)",
+               "Trạng thái", "Kết quả", "Làm lại")
 
 
 #: Ba chế độ của tab Hàng loạt — ba nhu cầu khác hẳn nhau mà khách gộp chung một
@@ -515,16 +515,16 @@ _MO_TA_CHE_DO = {
 
 
 class _OKetQuaDong(QWidget):
-    """Ô cột **Kết quả** của một dòng bảng: ảnh/clip xem trước bấm mở + link Làm lại.
+    """Ô cột **Kết quả** của một dòng bảng: ảnh/clip xem trước bấm mở.
 
     Giữ luôn dữ liệu của dòng NGAY TRÊN widget (đi theo dòng khi Qt dồn/xoá
     dòng), nên không lệch như một dict khoá-theo-số-dòng — đúng cách nút tham
-    chiếu đã làm. Nhờ vậy "Làm lại" của dòng nào là của đúng dòng đó.
+    chiếu đã làm. Nút "Làm lại" nằm ở CỘT RIÊNG (`_CotBang.LAM_LAI`), liên kết
+    ngược về ô này qua `nut_lam_lai` để hiện đúng lúc có kết quả.
     """
 
-    def __init__(self, khi_lam_lai, cha=None):
+    def __init__(self, cha=None):
         super().__init__(cha)
-        self._khi_lam_lai = khi_lam_lai
         #: File kết quả (đường dẫn trên máy) và bản chụp mô tả lúc gửi gần nhất.
         self.anh = ""
         self.video = ""
@@ -533,26 +533,24 @@ class _OKetQuaDong(QWidget):
         #: idempotency_key job gần nhất — để làm lại thế đúng thẻ cũ (`thay_uid`).
         self.uid_anh = ""
         self.uid_video = ""
+        #: Trạng thái từng chặng, gộp lại thành một ô cột "Trạng thái".
+        self.tt_anh = ""
+        self.tt_video = ""
+        #: Nút "Làm lại" ở cột riêng của cùng dòng — bật hiện khi có kết quả.
+        self.nut_lam_lai = None
 
         hang = QHBoxLayout(self)
         hang.setContentsMargins(2, 2, 2, 2)
         hang.setSpacing(6)
-        self._xem = AnhXemNho(44)
+        # Ô xem trước to hơn (64px) để nhìn thẳng vào dòng là thấy được ảnh/clip,
+        # không phải mở lưới chi tiết. Dòng bảng cao 76px vừa ôm ô này.
+        self._xem = AnhXemNho(64)
         self._xem.setVisible(False)
         hang.addWidget(self._xem)
-        self._lam_lai = QPushButton("Làm lại")
-        self._lam_lai.setCursor(Qt.PointingHandCursor)
-        self._lam_lai.setVisible(False)
-        self._lam_lai.setStyleSheet(
-            "QPushButton { border:none; background:transparent;"
-            f" color:{theme.XANH}; padding:2px 4px; }}"
-            "QPushButton:hover { text-decoration:underline; }")
-        self._lam_lai.clicked.connect(lambda: self._khi_lam_lai(self))
-        hang.addWidget(self._lam_lai)
         hang.addStretch(1)
 
     def dat_ket_qua(self, duong_dan: str, la_video: bool) -> None:
-        """Job của dòng vừa xong: nhớ file, vẽ ô xem trước, hiện link Làm lại."""
+        """Job của dòng vừa xong: nhớ file, vẽ ô xem trước, hiện nút Làm lại."""
         if not duong_dan:
             return
         if la_video:
@@ -563,7 +561,68 @@ class _OKetQuaDong(QWidget):
         uu = self.video or self.anh
         self._xem.dat(uu, bool(self.video))
         self._xem.setVisible(True)
-        self._lam_lai.setVisible(True)
+        if self.nut_lam_lai is not None:
+            self.nut_lam_lai.setVisible(True)
+
+
+class _OTrangThai(QWidget):
+    """Ô cột **Trạng thái** — HAI DÒNG: trên là ảnh, dưới là clip.
+
+    Chủ dự án 22/08/2026: bản cũ vừa xấu vừa lỗi — chữ của item ẩn phía sau lọt
+    qua widget trong suốt nên chồng lên nhau thành mớ "…", lại thêm mấy hình vẽ
+    🖼🎬 rối mắt. Bản này:
+
+    * **đục nền** (`autoFillBackground`) để chữ item ẩn không lọt qua nữa;
+    * bỏ hình vẽ, mỗi dòng chỉ một **chấm màu** báo trạng thái + nhãn "Ảnh/Clip"
+      + câu ngắn, một dòng không tràn (không bật xuống dòng nên thừa thì cắt gọn);
+    * màu chấm: xám = chờ, vàng = đang chạy, xanh = xong, đỏ = lỗi.
+    """
+
+    def __init__(self, cha=None):
+        super().__init__(cha)
+        # Đục nền: nếu để trong suốt, chữ của QTableWidgetItem ẩn cùng ô sẽ hiện
+        # xuyên qua và chồng lên hai dòng này — đúng cái "lỗi" khách chụp lại.
+        self.setAutoFillBackground(True)
+        self.setStyleSheet("background:{0};".format(theme.THE))
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(6, 3, 6, 3)
+        doc.setSpacing(1)
+        self._dong_anh = QLabel("")
+        self._dong_video = QLabel("")
+        for nh in (self._dong_anh, self._dong_video):
+            nh.setTextFormat(Qt.RichText)
+            nh.setStyleSheet("font-size:11px; background:transparent;")
+            nh.setMinimumWidth(1)
+            doc.addWidget(nh)
+
+    @staticmethod
+    def _mau(chu: str) -> str:
+        """Chấm màu theo câu trạng thái — đọc keyword, không cần mã trạng thái."""
+        c = (chu or "").strip().lower()
+        if not c or c == "—":
+            return theme.CHU_MO
+        if "xong" in c:
+            return theme.XANH
+        if any(k in c for k in ("lỗi", "thiếu", "chưa", "hỏng", "thất bại",
+                                "từ chối", "không")):
+            return theme.DO
+        if "chờ" in c:
+            return theme.CHU_MO
+        return theme.VANG
+
+    def _dong(self, ten: str, chu: str) -> str:
+        return ('<span style="color:{0}">●</span> '
+                '<span style="color:{1}">{2}</span> '
+                '<span style="color:{3}">{4}</span>').format(
+                    self._mau(chu), theme.CHU_MO, ten, theme.CHU, chu or "—")
+
+    def dat(self, tt_anh: str, tt_video: str, hien_anh: bool,
+            hien_video: bool) -> None:
+        """Vẽ lại hai dòng theo chế độ: chế độ chỉ-ảnh giấu dòng clip và ngược lại."""
+        self._dong_anh.setText(self._dong("Ảnh", tt_anh))
+        self._dong_video.setText(self._dong("Clip", tt_video))
+        self._dong_anh.setVisible(hien_anh)
+        self._dong_video.setVisible(hien_video)
 
 
 class HopSuaCanh(QDialog):
@@ -577,7 +636,9 @@ class HopSuaCanh(QDialog):
     def __init__(self, che_do: str, mo_ta_anh: str, mo_ta_video: str, cha=None):
         super().__init__(cha)
         self.setWindowTitle("Làm lại cảnh")
-        self.resize(520, 340)
+        # Đủ cao cho CẢ HAI ô prompt (ảnh + clip) mở rộng thoải mái — chủ dự án
+        # 22/08: hộp làm lại "phải mở ra đủ" chứ không cụt một ô như trước.
+        self.resize(600, 520)
         self._goc_anh = mo_ta_anh
         self._goc_video = mo_ta_video
         self._o_anh = None
@@ -587,15 +648,15 @@ class HopSuaCanh(QDialog):
         doc.setContentsMargins(18, 16, 18, 16)
         doc.setSpacing(8)
         if che_do != CD_VIDEO:
-            doc.addWidget(nhan("Mô tả ảnh", "muted"))
+            doc.addWidget(nhan("Prompt tạo ảnh", "muted"))
             self._o_anh = QPlainTextEdit(mo_ta_anh)
             self._o_anh.setMinimumHeight(_O_NHAP_MIN)
-            doc.addWidget(self._o_anh)
+            doc.addWidget(self._o_anh, 1)
         if che_do != CD_ANH:
-            doc.addWidget(nhan("Mô tả video", "muted"))
+            doc.addWidget(nhan("Prompt tạo video", "muted"))
             self._o_video = QPlainTextEdit(mo_ta_video)
             self._o_video.setMinimumHeight(_O_NHAP_MIN)
-            doc.addWidget(self._o_video)
+            doc.addWidget(self._o_video, 1)
         nhac = nhan(
             "Đổi mô tả ảnh thì tôi làm lại cả ảnh lẫn clip. Chỉ đổi mô tả clip "
             "thì tôi làm lại mỗi clip, giữ nguyên ảnh. Không đổi gì mà vẫn bấm "
@@ -656,29 +717,43 @@ class TabHangLoat(QWidget):
         self.bang = QTableWidget(0, len(_CotBang.TIEU_DE))
         self.bang.setHorizontalHeaderLabels(list(_CotBang.TIEU_DE))
         self.bang.verticalHeader().setVisible(False)
-        self.bang.setEditTriggers(QAbstractItemView.AllEditTriggers)
+        # Sửa nhanh vẫn được (chọn ô rồi gõ, hoặc F2), nhưng NHẤP ĐÚP mở hộp sửa
+        # prompt to rộng dễ nhìn thay vì ô hẹp — xem `_mo_sua_prompt`. Bỏ
+        # "nhấp-để-sửa" tại chỗ để nhấp đúp không vừa mở ô sửa vừa mở hộp.
+        self.bang.setEditTriggers(
+            QAbstractItemView.EditKeyPressed
+            | QAbstractItemView.AnyKeyPressed)
+        self.bang.cellDoubleClicked.connect(self._mo_sua_prompt)
         dau = self.bang.horizontalHeader()
         dau.setSectionResizeMode(_CotBang.STT, QHeaderView.Fixed)
-        self.bang.setColumnWidth(_CotBang.STT, 44)
+        self.bang.setColumnWidth(_CotBang.STT, 40)
         dau.setSectionResizeMode(_CotBang.ANH, QHeaderView.Stretch)
         dau.setSectionResizeMode(_CotBang.VIDEO, QHeaderView.Stretch)
-        for cot in (_CotBang.TT_ANH, _CotBang.TT_VIDEO):
-            dau.setSectionResizeMode(cot, QHeaderView.Fixed)
-            self.bang.setColumnWidth(cot, 108)
-        # Cột Kết quả: ô xem trước bé + link "Làm lại". Cố định hẹp để hai cột
-        # mô tả (Stretch) vẫn co được, không đẩy bảng quá mép 760px.
+        dau.setSectionResizeMode(_CotBang.THAM_CHIEU, QHeaderView.Fixed)
+        self.bang.setColumnWidth(_CotBang.THAM_CHIEU, 110)
+        # Một cột trạng thái gộp cả chặng ảnh lẫn chặng clip — thay hai cột hẹp
+        # cũ, nhờ vậy dôi ra chỗ cho cột "Làm lại" khỏi bị che.
+        dau.setSectionResizeMode(_CotBang.TRANG_THAI, QHeaderView.Fixed)
+        self.bang.setColumnWidth(_CotBang.TRANG_THAI, 150)
+        # Cột Kết quả: ô xem trước LỚN để nhìn trực quan ngay trên dòng (chủ dự
+        # án 22/08: "phần kết quả nên có diện tích đủ để xem trực quan"). Làm
+        # YouTube nên ảnh NGANG 16:9 — phải đủ rộng cho ảnh ngang, không thì ảnh
+        # bị cắt hụt chiều ngang. Ô xem cao 64 → ảnh 16:9 rộng ~114; để cột 132
+        # cho ảnh ngang lọt trọn. Hai cột prompt là Stretch nên tự co nhường chỗ.
         dau.setSectionResizeMode(_CotBang.KET_QUA, QHeaderView.Fixed)
-        self.bang.setColumnWidth(_CotBang.KET_QUA, 92)
+        self.bang.setColumnWidth(_CotBang.KET_QUA, 132)
+        dau.setSectionResizeMode(_CotBang.LAM_LAI, QHeaderView.Fixed)
+        self.bang.setColumnWidth(_CotBang.LAM_LAI, 76)
         # ═══ CHIỀU CAO DÒNG CỐ ĐỊNH ═══
         #
         # Chủ dự án 22/08 (kèm ảnh dòng bị kéo cao ngoằng): mô tả dài làm dòng
         # phình to, cả bảng vỡ. Nên khoá cứng chiều cao dòng và TẮT xuống dòng —
-        # ô mô tả chỉ hiện một dòng gọn; muốn xem/sửa hết prompt thì bấm "Làm
-        # lại" (hộp `HopSuaCanh` hiện đủ). Cao 56px vừa ôm ô xem trước 44px.
+        # ô prompt chỉ hiện một dòng gọn; nhấp đúp mở hộp sửa to để xem/chỉnh cả
+        # prompt. Cao 76px vừa ôm ô xem trước 64px và ô trạng thái hai dòng.
         self.bang.setWordWrap(False)
         dv = self.bang.verticalHeader()
         dv.setSectionResizeMode(QHeaderView.Fixed)
-        dv.setDefaultSectionSize(56)
+        dv.setDefaultSectionSize(76)
         # ═══ MỘT KHUNG, CHI TIẾT MỞ RA KHI CẦN ═══
         #
         # Chủ dự án 22/08: gộp hai phần thành một, tập trung vào bảng — mỗi dòng
@@ -710,11 +785,20 @@ class TabHangLoat(QWidget):
         self._cap_nhat_nut_chi_tiet()
 
     def _cap_nhat_nut_chi_tiet(self) -> None:
-        """Nhãn nút gạt: mũi tên theo trạng thái + đếm gọn khi đang đóng."""
+        """Nhãn nút gạt: mũi tên theo trạng thái + đếm RIÊNG ảnh/video khi đóng.
+
+        Chủ dự án 22/08/2026: đếm gộp "49/120" chung chung; phải tách "Ảnh x/n ·
+        Video y/m" như phần chi tiết để biết riêng từng chặng tới đâu.
+        """
         mo = not self.thu_vien.isHidden()
         mui = "▾" if mo else "▸"
-        xong, tong = self.thu_vien.tom_tat_tien_do()
-        dem = " ({0}/{1} xong)".format(xong, tong) if tong else ""
+        (ax, av), (vx, vv) = self.thu_vien.tom_tat_theo_loai()
+        phan = []
+        if av:
+            phan.append("Ảnh {0}/{1}".format(ax, av))
+        if vv:
+            phan.append("Video {0}/{1}".format(vx, vv))
+        dem = " ({0})".format(" · ".join(phan)) if phan else ""
         # Khi mở, thanh tiến độ đầy đủ đã nằm trong lưới — nút khỏi lặp lại số.
         self._nut_chi_tiet.setText(
             "{0} {1} chi tiết kết quả{2}".format(
@@ -793,8 +877,8 @@ class TabHangLoat(QWidget):
         an_video = che_do == CD_ANH           # chế độ ảnh: giấu cột mô tả video
         self.bang.setColumnHidden(_CotBang.ANH, an_anh)
         self.bang.setColumnHidden(_CotBang.VIDEO, an_video)
-        self.bang.setColumnHidden(_CotBang.TT_ANH, an_anh)
-        self.bang.setColumnHidden(_CotBang.TT_VIDEO, an_video)
+        # Cột Trạng thái / Kết quả / Làm lại luôn hiện ở cả ba chế độ — chúng nói
+        # về việc chạy chứ không về loại mô tả, nên không có lý do giấu.
 
         # Cột tham chiếu ở chế độ video là ảnh ĐẦU VÀO bắt buộc, không phải tuỳ chọn.
         tieu_de = list(_CotBang.TIEU_DE)
@@ -926,20 +1010,33 @@ class TabHangLoat(QWidget):
         item_an.setFlags(Qt.ItemIsEnabled)
         self.bang.setItem(dong, _CotBang.THAM_CHIEU, item_an)
         self.bang.setCellWidget(dong, _CotBang.THAM_CHIEU, nut)
-        if tham_chieu and os.path.isfile(tham_chieu):
-            self._dat_tham_chieu(nut, [tham_chieu])
-        for cot in (_CotBang.TT_ANH, _CotBang.TT_VIDEO):
-            o = QTableWidgetItem("")
-            o.setFlags(Qt.ItemIsEnabled)
-            self.bang.setItem(dong, cot, o)
-        # Ô kết quả của dòng: ảnh/clip xem trước bấm mở + link "Làm lại". Là
-        # nguồn thật đi theo dòng khi Qt dồn/xoá dòng (như nút tham chiếu), nên
-        # không lệch như một dict khoá-theo-số-dòng.
+        duong_tc = self._tach_duong_tham_chieu(tham_chieu)
+        if duong_tc:
+            self._dat_tham_chieu(nut, duong_tc)
+        # Cột Trạng thái gộp: ô chữ HAI DÒNG (trên ảnh, dưới clip). Item ẩn giữ
+        # chữ gộp để `_chu`/`_dat_trang_thai` đọc lên không vấp None; widget nổi
+        # lên vẽ hai dòng cho khỏi tràn ô như bản một-dòng cũ.
+        o_tt = QTableWidgetItem("")
+        o_tt.setFlags(Qt.ItemIsEnabled)
+        self.bang.setItem(dong, _CotBang.TRANG_THAI, o_tt)
+        w_tt = _OTrangThai()
+        self.bang.setCellWidget(dong, _CotBang.TRANG_THAI, w_tt)
+        # Ô kết quả của dòng: ảnh/clip xem trước bấm mở. Là nguồn thật đi theo
+        # dòng khi Qt dồn/xoá dòng (như nút tham chiếu), nên không lệch như một
+        # dict khoá-theo-số-dòng.
         o_kq = QTableWidgetItem("")
         o_kq.setFlags(Qt.ItemIsEnabled)
         self.bang.setItem(dong, _CotBang.KET_QUA, o_kq)
-        self.bang.setCellWidget(
-            dong, _CotBang.KET_QUA, _OKetQuaDong(self._lam_lai_dong))
+        widget_kq = _OKetQuaDong()
+        self.bang.setCellWidget(dong, _CotBang.KET_QUA, widget_kq)
+        # Nút "Làm lại" ở cột riêng, ẩn tới khi có kết quả. Liên kết hai chiều:
+        # ô kết quả bật nút hiện khi xong; nút tra ngược ra dòng để làm lại.
+        o_ll = QTableWidgetItem("")
+        o_ll.setFlags(Qt.ItemIsEnabled)
+        self.bang.setItem(dong, _CotBang.LAM_LAI, o_ll)
+        nut_ll = self._nut_lam_lai_dong()
+        widget_kq.nut_lam_lai = nut_ll
+        self.bang.setCellWidget(dong, _CotBang.LAM_LAI, nut_ll)
         return dong
 
     #: Nhiều nhất bấy nhiêu ảnh tham chiếu mỗi dòng — theo trần của máy chủ.
@@ -971,6 +1068,21 @@ class TabHangLoat(QWidget):
         if not chon:
             return
         self._dat_tham_chieu(nut, list(chon)[: self._TRAN_THAM_CHIEU])
+
+    def _tach_duong_tham_chieu(self, chu: str) -> List[str]:
+        """Tách ô `reference_files` của Excel thành danh sách đường dẫn có thật.
+
+        Khách điền ĐƯỜNG DẪN đầy đủ, nhiều ảnh cách nhau dấu phẩy. Lệnh “Sao chép
+        dưới dạng đường dẫn” của Windows kẹp cả cặp ngoặc kép — bóc luôn để dán
+        vào là chạy. Chỉ giữ file có thật; tên trơ trọi (kiểu `nv1.png`) không
+        trỏ tới đâu trên máy này nên bỏ qua, khỏi âm thầm gán nhầm.
+        """
+        ra: List[str] = []
+        for phan in (chu or "").split(","):
+            p = phan.strip().strip('"').strip()
+            if p and os.path.isfile(p):
+                ra.append(p)
+        return ra[: self._TRAN_THAM_CHIEU]
 
     @staticmethod
     def _dat_tham_chieu(nut: QPushButton, duong_dan: List[str]) -> None:
@@ -1042,6 +1154,113 @@ class TabHangLoat(QWidget):
             if self.bang.cellWidget(dong, _CotBang.KET_QUA) is o:
                 return dong
         return None
+
+    def _nut_lam_lai_dong(self) -> QPushButton:
+        """Nút "Làm lại" ở cột riêng, ẩn tới khi có kết quả.
+
+        Tra ngược ra dòng bằng cách quét cột `LAM_LAI` (nút đi theo dòng khi Qt
+        dồn/xoá dòng), rồi gọi `_lam_lai_dong` với ô kết quả của đúng dòng đó.
+        """
+        nut = QPushButton("Làm lại")
+        nut.setCursor(Qt.PointingHandCursor)
+        nut.setVisible(False)
+        nut.setStyleSheet(
+            "QPushButton { border:none; background:transparent;"
+            f" color:{theme.XANH}; padding:2px 4px; }}"
+            "QPushButton:hover { text-decoration:underline; }")
+        nut.clicked.connect(lambda _c, n=nut: self._bam_lam_lai(n))
+        return nut
+
+    def _bam_lam_lai(self, nut: QPushButton) -> None:
+        for dong in range(self.bang.rowCount()):
+            if self.bang.cellWidget(dong, _CotBang.LAM_LAI) is nut:
+                o = self._o_ket_qua(dong)
+                if o is not None:
+                    self._lam_lai_dong(o)
+                return
+
+    def _mo_sua_prompt(self, dong: int, cot: int) -> None:
+        """Nhấp đúp ô prompt → hộp sửa TO RỘNG, dễ nhìn dễ chỉnh hơn ô hẹp.
+
+        Chủ dự án 22/08/2026: ô prompt trong bảng hẹp, click vào nên hiện dạng
+        dễ nhìn để chỉnh. Chỉ mở cho hai cột prompt (ảnh/video); các cột khác
+        (số thứ tự, tham chiếu, trạng thái…) nhấp đúp không làm gì.
+        """
+        if cot not in (_CotBang.ANH, _CotBang.VIDEO):
+            return
+        la_video = cot == _CotBang.VIDEO
+        o_bang = self.bang.item(dong, cot)
+        cu = o_bang.text() if o_bang is not None else ""
+        moi = self._hoi_prompt(dong, la_video, cu)
+        if moi is None:
+            return
+        if o_bang is None:
+            o_bang = QTableWidgetItem("")
+            self.bang.setItem(dong, cot, o_bang)
+        o_bang.setText(moi)
+
+    def _hoi_prompt(self, dong: int, la_video: bool, cu: str):
+        """Hộp sửa một prompt. Trả chữ mới, hoặc `None` nếu khách bấm Huỷ.
+
+        Tách khỏi `_mo_sua_prompt` để bài kiểm thay được hộp thoại — mở hộp thật
+        trong test là kẹt ở `exec_()`.
+        """
+        tieu_de = "Sửa prompt tạo video" if la_video else "Sửa prompt tạo ảnh"
+        hop = QDialog(self)
+        hop.setWindowTitle("{0} — cảnh {1}".format(tieu_de, dong + 1))
+        hop.resize(600, 420)
+        doc = QVBoxLayout(hop)
+        doc.setContentsMargins(18, 16, 18, 16)
+        doc.setSpacing(10)
+        doc.addWidget(nhan(tieu_de, "h2"))
+        nhac = nhan(
+            "Mô tả chuyển động của clip. Để trống thì cảnh này không làm video."
+            if la_video else
+            "Viết bằng tiếng Anh cho ảnh đẹp. Đây là thứ quyết định ảnh ra sao.",
+            "muted")
+        nhac.setWordWrap(True)
+        nhac.setMinimumWidth(1)
+        doc.addWidget(nhac)
+        o = QPlainTextEdit(cu)
+        o.setMinimumHeight(_O_NHAP_MIN)
+        doc.addWidget(o, 1)
+        hang = QHBoxLayout()
+        hang.addStretch(1)
+        hang.addWidget(nut_phu("Huỷ", hop.reject, rong=88))
+        hang.addWidget(nut_chinh("Lưu", hop.accept, rong=120))
+        doc.addLayout(hang)
+        if hop.exec_() != QDialog.Accepted:
+            return None
+        return o.toPlainText().strip()
+
+    def _dat_tt(self, dong: int, la_video: bool, chu: str) -> None:
+        """Ghi trạng thái một chặng lên ô Kết quả rồi kết xuất cột Trạng thái.
+
+        Ô Trạng thái hiện HAI DÒNG (trên ảnh, dưới clip) qua `_OTrangThai`, nên
+        không tràn như bản gộp một dòng cũ. Item ẩn vẫn giữ chữ gộp để `_chu`
+        đọc lên: một chặng thì trần, cả hai thì `"ảnh: … · clip: …"`.
+        """
+        o = self._o_ket_qua(dong)
+        if o is not None:
+            if la_video:
+                o.tt_video = chu
+            else:
+                o.tt_anh = chu
+            tt_anh, tt_video = o.tt_anh, o.tt_video
+        else:
+            tt_anh, tt_video = ("", chu) if la_video else (chu, "")
+        # Chế độ đang mở quyết định hiện dòng nào — chế độ "Tạo ảnh" giấu dòng
+        # clip và ngược lại, để ô không bày một dòng "—" thừa.
+        hien_anh = self._che_do != CD_VIDEO or bool(tt_anh)
+        hien_video = self._che_do != CD_ANH or bool(tt_video)
+        w = self.bang.cellWidget(dong, _CotBang.TRANG_THAI)
+        if isinstance(w, _OTrangThai):
+            w.dat(tt_anh, tt_video, hien_anh, hien_video)
+        if tt_anh and tt_video:
+            gop = "ảnh: {0}  ·  clip: {1}".format(tt_anh, tt_video)
+        else:
+            gop = tt_anh or tt_video
+        self._dat_trang_thai(dong, _CotBang.TRANG_THAI, gop)
 
     def nap_txt(self) -> None:
         duong_dan, _ = QFileDialog.getOpenFileName(
@@ -1142,42 +1361,46 @@ class TabHangLoat(QWidget):
         return self._dong_cua_video.get(uid)
 
     def _lam_lai_canh(self, _mo_ta: str, _duong_dan: str, uid: str = "") -> None:
-        """Làm lại **một cảnh** — mở ô cho SỬA mô tả trước khi gửi lại.
+        """Làm lại **một cảnh** từ lưới chi tiết — mở hộp sửa ĐỦ CẢ HAI prompt.
 
-        Trước đây bấm là gửi thẳng chữ đang nằm trong bảng, KHÔNG cho sửa —
-        nhưng "làm lại" gần như luôn là để đổi vài chữ trong prompt cho ra khác
-        đi. Giờ hiện đúng mô tả cũ trong một ô sửa; sửa xong ghi lại vào bảng
-        rồi mới tạo lại, thế chỗ đúng thẻ cũ (`thay_uid`).
+        Chủ dự án 22/08: nút Làm lại ở phần chi tiết "phải mở ra đủ cả cho sửa cả
+        prompt video và ảnh". Trước đây mỗi thẻ chỉ mở một ô cụt (thẻ ảnh sửa mỗi
+        prompt ảnh, thẻ clip sửa mỗi prompt clip). Giờ hiện cả hai ô trong một
+        hộp; sửa xong ghi lại vào bảng rồi tạo lại, thế đúng thẻ cũ (`thay_uid`).
 
-        Thẻ ảnh sửa mô tả ảnh và tạo lại ngay. Thẻ clip thì sửa mô tả clip, ghi
-        lại vào bảng — clip tạo lại theo ảnh đầu vào nên bấm "Chạy cả loạt" để
-        chạy với mô tả mới.
+        Thẻ ảnh: tạo lại ảnh ngay (kèm nối clip nếu có mô tả clip). Thẻ clip: nếu
+        đã có ảnh đầu vào thì tạo lại clip ngay theo mô tả mới; chưa có thì ghi
+        lại, chờ "Chạy cả loạt".
         """
-        from PyQt5.QtWidgets import QInputDialog  # noqa: PLC0415
-
         dong = self._dong_cua(uid)
         if dong is None or dong >= self.bang.rowCount():
             return
-        la_clip = uid in self._dong_cua_video and uid not in self._dong_cua_anh
-        cot = _CotBang.VIDEO if la_clip else _CotBang.ANH
-        moi, dong_y = QInputDialog.getMultiLineText(
-            self, "Làm lại cảnh {0}".format(dong + 1),
-            "Sửa mô tả rồi bấm OK để tạo lại:", self._chu(dong, cot))
+        mo_ta_anh, mo_ta_video, dong_y = self._hoi_sua_canh(dong, ca_hai=True)
         if not dong_y:
             return
-        moi = moi.strip()
-        if not moi:
-            self._app.show_message("Cảnh này trống",
-                                   "Nhập mô tả cho cảnh đó rồi làm lại.")
-            return
-        self._dat_trang_thai(dong, cot, moi)   # ghi mô tả đã sửa vào bảng
+        # Ghi CẢ HAI prompt đã sửa vào bảng cho khớp cái sắp gửi.
+        self._dat_trang_thai(dong, _CotBang.ANH, mo_ta_anh)
+        self._dat_trang_thai(dong, _CotBang.VIDEO, mo_ta_video)
+
+        la_clip = uid in self._dong_cua_video and uid not in self._dong_cua_anh
+        o = self._o_ket_qua(dong)
         if la_clip:
+            # Thẻ clip: có ảnh đầu vào rồi thì tạo lại clip ngay; chưa có thì chờ.
+            if o is not None and o.anh and mo_ta_video.strip():
+                self._lam_lai_video_dong(dong, mo_ta_video, o)
+                return
             self._app.show_message(
                 "Đã lưu mô tả clip",
                 "Cảnh {0} sẽ tạo lại theo mô tả mới khi bạn bấm “Chạy cả loạt”."
                 .format(dong + 1))
             return
-        self._gui_mot_canh(dong, moi, thay_uid=uid)
+        # Thẻ ảnh: cần mô tả ảnh để tạo lại; có mô tả clip thì nối tiếp sang video.
+        if not mo_ta_anh.strip():
+            self._bao_trong()
+            return
+        self._gui_mot_canh(dong, mo_ta_anh, thay_uid=uid)
+        if mo_ta_video.strip():
+            self._ep_noi.add(dong)
 
     def _gui_mot_canh(self, dong: int, mo_ta: str, thay_uid: str = "") -> None:
         # Ảnh tham chiếu của đúng dòng này. Làm lại một cảnh lẻ mà bỏ tham
@@ -1213,9 +1436,9 @@ class TabHangLoat(QWidget):
         if o is not None:
             o.uid_anh = spec.idempotency_key
             o.mo_ta_anh = mo_ta
-        self._dat_trang_thai(dong, _CotBang.TT_ANH, "đang chờ")
+        self._dat_tt(dong, False, "đang chờ")
         self.thu_vien.them(spec.idempotency_key, mo_ta, False, ty_le=ty_le,
-                           thay_uid=thay_uid)
+                           so_canh=dong + 1, thay_uid=thay_uid)
         self._app.start_batch([spec], folder=thu_muc)
 
     def _cho_dong_canh(self, _mo_ta: str, duong_dan: str, uid: str = "") -> None:
@@ -1239,12 +1462,17 @@ class TabHangLoat(QWidget):
 
     # ── Làm lại NGAY TRÊN DÒNG (nút trong ô Kết quả) ─────────────────────────
 
-    def _hoi_sua_canh(self, dong: int):
+    def _hoi_sua_canh(self, dong: int, ca_hai: bool = False):
         """Mở hộp sửa mô tả của dòng → `(mô tả ảnh, mô tả video, đồng ý)`.
 
         Là ĐƯỜNG NỐI để bài kiểm thay thế: bài kiểm không mở được cửa sổ thật.
+
+        `ca_hai=True` → luôn hiện ĐỦ CẢ HAI ô (ảnh + clip) bất kể chế độ. Nút
+        "Làm lại" ở phần chi tiết dùng nó: chủ dự án 22/08 muốn sửa được cả prompt
+        ảnh lẫn prompt video ngay trong một hộp, không phải mỗi thẻ một ô cụt.
         """
-        hop = HopSuaCanh(self._che_do,
+        che_do = CD_CHUOI if ca_hai else self._che_do
+        hop = HopSuaCanh(che_do,
                          self._chu(dong, _CotBang.ANH),
                          self._chu(dong, _CotBang.VIDEO), self)
         if hop.exec_() != QDialog.Accepted:
@@ -1315,7 +1543,7 @@ class TabHangLoat(QWidget):
                 "ảnh lẫn clip, hoặc chọn một ảnh đầu vào.")
             return
         if self._app.client is None:
-            self._dat_trang_thai(dong, _CotBang.TT_VIDEO, "thiếu khoá API")
+            self._dat_tt(dong, True, "thiếu khoá API")
             return
         thu_muc = self._thu_muc.value
         uid_cu = o.uid_video
@@ -1324,7 +1552,7 @@ class TabHangLoat(QWidget):
             self._gui_video([(dong, mo_ta_video, url)], thu_muc,
                             thay_uid=uid_cu)
 
-        self._dat_trang_thai(dong, _CotBang.TT_VIDEO, "đang gửi ảnh lên")
+        self._dat_tt(dong, True, "đang gửi ảnh lên")
         self._app.run_bg(
             lambda: str(self._app.client.uploads.upload_file(nguon)),
             on_ok=gui, on_err=self._app.show_error)
@@ -1401,6 +1629,7 @@ class TabHangLoat(QWidget):
         ty_le = self.ty_le.currentText()
         specs: List[JobSpec] = []
         so_tc: Dict[str, int] = {}          # khoá việc → số ảnh tham chiếu (badge)
+        so_canh_map: Dict[str, int] = {}     # khoá việc → số cảnh (nhãn #N, theo STT)
         video_ngay = []                     # dòng chỉ-clip: (dòng, mô tả, url)
         self._dong_cua_anh.clear()
         self._dong_cua_video.clear()
@@ -1445,7 +1674,8 @@ class TabHangLoat(QWidget):
                 o.uid_anh = spec.idempotency_key
                 o.mo_ta_anh = mo_ta
             so_tc[spec.idempotency_key] = len(urls)
-            self._dat_trang_thai(dong, _CotBang.TT_ANH, "đang chờ")
+            so_canh_map[spec.idempotency_key] = dong + 1
+            self._dat_tt(dong, False, "đang chờ")
             specs.append(spec)
         if not specs and not video_ngay:
             return
@@ -1457,6 +1687,8 @@ class TabHangLoat(QWidget):
             for spec in specs:
                 self.thu_vien.them(spec.idempotency_key, spec.content, False,
                                    so_anh_tham_chieu=so_tc.get(
+                                       spec.idempotency_key, 0),
+                                   so_canh=so_canh_map.get(
                                        spec.idempotency_key, 0),
                                    ty_le=ty_le)
             self._app.start_batch(specs, folder=thu_muc)
@@ -1480,8 +1712,8 @@ class TabHangLoat(QWidget):
             self._cap_nhat_nut_chi_tiet()
         dong = self._dong_cua_anh.get(khoa)
         if dong is not None:
-            self._dat_trang_thai(dong, _CotBang.TT_ANH,
-                                 self._nhan_ngan(du_lieu))
+            self._dat_tt(dong, False,
+                         self._nhan_ngan(du_lieu))
             files = list(getattr(du_lieu, "files", ()) or ())
             if trang_thai == STATUS_DONE and files:
                 self._cho_noi[dong] = files[0]
@@ -1491,8 +1723,8 @@ class TabHangLoat(QWidget):
             return
         dong = self._dong_cua_video.get(khoa)
         if dong is not None:
-            self._dat_trang_thai(dong, _CotBang.TT_VIDEO,
-                                 self._nhan_ngan(du_lieu))
+            self._dat_tt(dong, True,
+                         self._nhan_ngan(du_lieu))
             files = list(getattr(du_lieu, "files", ()) or ())
             if trang_thai == STATUS_DONE and files:
                 o = self._o_ket_qua(dong)
@@ -1539,10 +1771,10 @@ class TabHangLoat(QWidget):
         client = self._app.client
         thu_muc = self._thu_muc.value
         for dong, _mo_ta, _duong in cho_tai:
-            self._dat_trang_thai(dong, _CotBang.TT_VIDEO, "đang gửi ảnh lên")
+            self._dat_tt(dong, True, "đang gửi ảnh lên")
         if client is None:
             for dong, _mo_ta, _duong in cho_tai:
-                self._dat_trang_thai(dong, _CotBang.TT_VIDEO, "thiếu khoá API")
+                self._dat_tt(dong, True, "thiếu khoá API")
             return
 
         def tai():
@@ -1563,7 +1795,7 @@ class TabHangLoat(QWidget):
             van_de = check_video([mo_ta], engine=engine, aspect_ratio=ty_le,
                                  image_url=url)
             if van_de:
-                self._dat_trang_thai(dong, _CotBang.TT_VIDEO, "mô tả chưa đạt")
+                self._dat_tt(dong, True, "mô tả chưa đạt")
                 continue
             spec = JobSpec(
                 kind=KIND_VIDEO, content=mo_ta, label=mo_ta[:80], index=dong + 1,
@@ -1576,7 +1808,7 @@ class TabHangLoat(QWidget):
                 o.uid_video = spec.idempotency_key
                 o.mo_ta_video = mo_ta
             self.thu_vien.them(spec.idempotency_key, mo_ta, True, ty_le=ty_le,
-                               thay_uid=thay_uid)
+                               so_canh=dong + 1, thay_uid=thay_uid)
             specs.append(spec)
         if specs:
             self._app.start_batch(specs, folder=thu_muc)

@@ -34,8 +34,9 @@ from PyQt5.QtWidgets import (
 
 from core.api import build_client, fetch_prices, wallet_micro
 from core import cai_dat, du_an
-from core.config import CONFIG_FILENAME, Config, load_config, save_config
-from core.errors import describe, retry_after_seconds, tu_xu_ly_ngam
+from core.config import (CONFIG_FILENAME, Config, load_config, save_config,
+                          sanitize_api_key)
+from core.errors import describe, la_qua_tai, retry_after_seconds, tu_xu_ly_ngam
 from core.jobs import JobManager, JobSpec
 from core.money import format_vnd
 from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
@@ -539,6 +540,24 @@ class CuaSoChinh(QWidget):
         setattr(self, "account", phien)
         return phien
 
+    def phien_dang_nhap(self):
+        """Phiên dùng cho ĐĂNG NHẬP bằng email — kể cả lần đầu chưa có token.
+
+        Khác :meth:`account_session` ở đúng một chỗ: hàm kia trả `None` khi chưa
+        có refresh token (nó chỉ để KHÔI PHỤC phiên cũ), còn hàm này luôn trả một
+        phiên sống để tab Tài khoản gọi `login()` rồi `create_api_key()`. Tạo
+        xong, `on_session_changed` lo cất refresh token nên lần mở tool sau khách
+        không phải gõ mật khẩu lại.
+        """
+        from core.auth import AccountSession
+
+        phien = getattr(self, "account", None)
+        if not isinstance(phien, AccountSession):
+            phien = AccountSession(self.config.base_url)
+            setattr(self, "account", phien)
+        phien.on_session_changed = self._nho_phien
+        return phien
+
     def _nho_phien(self, phien) -> None:
         """Cất lại refresh token mỗi lần máy chủ xoay nó.
 
@@ -580,7 +599,9 @@ class CuaSoChinh(QWidget):
 
         Lỗi TẠM (quá tần suất, máy chủ bận, mạng chập) thì **tự chờ rồi thử lại
         tại đây, không báo ra** — khách từng tưởng hộp "Bạn gửi hơi nhanh" là
-        hỏng. Chỉ khi thử mãi vẫn không xong (sự cố thật) mới đưa lên `on_err`.
+        hỏng. Riêng "quá tải" (429 / máy chủ bận) khi chạy MAX là chuyện thường
+        trực nên thử **không giới hạn** tới khi qua (chỉ dừng khi đóng cửa sổ);
+        các lỗi tạm khác thử tới `_THU_LAI_NEN_TOI_DA` lần rồi mới đưa lên `on_err`.
         """
         def chay() -> None:
             lan = 0
@@ -588,8 +609,8 @@ class CuaSoChinh(QWidget):
                 try:
                     ket = viec()
                 except BaseException as loi:  # noqa: BLE001 — chuyển về luồng vẽ
-                    if (tu_xu_ly_ngam(loi) and lan < self._THU_LAI_NEN_TOI_DA
-                            and not self._dang_dong):
+                    con_thu = la_qua_tai(loi) or lan < self._THU_LAI_NEN_TOI_DA
+                    if (tu_xu_ly_ngam(loi) and con_thu and not self._dang_dong):
                         cho = retry_after_seconds(loi, lan)
                         lan += 1
                         if self._ngu_nen(cho):
@@ -705,7 +726,7 @@ class CuaSoChinh(QWidget):
         câu đó, và cách duy nhất để thoát là tắt tool mở lại. Không ai đoán ra
         điều đó.
         """
-        self.config.api_key = khoa.strip()
+        self.config.api_key = sanitize_api_key(khoa)
         save_config(self.config_path, self.config)
         self.client = build_client(self.config)
         if self.jobs is None:

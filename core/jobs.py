@@ -861,7 +861,7 @@ class JobManager:
         trần 60s — chỉ dừng khi mạng về hoặc khách bấm Dừng. Các lỗi khác
         (server, nội dung, hết tiền) vẫn dừng sau MAX_JOB_ATTEMPTS lần.
         """
-        from .errors import _la_loi_mang  # noqa: PLC0415
+        from .errors import _la_loi_mang, la_qua_tai  # noqa: PLC0415
 
         spec = record.spec
         attempt = 0
@@ -916,6 +916,20 @@ class JobManager:
                         self._finish(record, STATUS_CANCELLED, "Bạn đã dừng trong lúc chờ mạng.")
                         return None
                     continue  # thử lại vô hạn
+
+                # QUÁ TẢI (429 / máy chủ bận 5xx) → chạy MAX là gặp liên tục, tự
+                # khỏi. Chủ dự án 22/08: "đã MAX đừng thông báo linh tinh". Thử
+                # lại tới khi qua (tôn trọng Retry-After, trần 60s), KHÔNG đánh
+                # dấu job hỏng — chỉ dừng khi khách bấm Dừng.
+                if la_qua_tai(exc):
+                    delay = retry_after_seconds(exc, attempt - 1)
+                    self._update(
+                        record, STATUS_CREATING,
+                        "Máy chủ đang bận — chờ {0:.0f}s rồi tự thử lại…".format(delay))
+                    if self._sleep(delay):
+                        self._finish(record, STATUS_CANCELLED, "Bạn đã dừng trong lúc chờ thử lại.")
+                        return None
+                    continue  # thử lại vô hạn, không hiện lỗi
 
                 # Lỗi KHÔNG phải mạng thuần: giới hạn MAX_JOB_ATTEMPTS lần
                 if not advice.retryable or attempt >= MAX_JOB_ATTEMPTS:

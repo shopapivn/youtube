@@ -283,6 +283,9 @@ class BoiCanh:
     #: giữa hai mốc ấy là bốn mươi phút chỉ hiện đúng hai chữ "ĐANG CHẠY", và
     #: không cách nào phân biệt "đang làm cảnh 87" với "tool treo".
     on_nhip: Optional[Callable[[LuotChay], None]] = None
+    #: Tải một ảnh về theo URL, trả bytes. Tách ra để bài kiểm đọc ảnh bìa đối
+    #: thủ không phải chạm mạng. Để trống thì dùng `_tai_anh_thumb` (urllib).
+    tai_anh: Optional[Callable[[str], bytes]] = None
 
     def ghi(self, dong: str) -> None:
         if self.on_log is not None:
@@ -313,7 +316,7 @@ class BoiCanh:
 
 
 def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
-         toi_da_token: int = 8192) -> str:
+         toi_da_token: int = 8192, anh: str = "") -> str:
     """Gọi AI, kèm Idempotency-Key **cố định theo bước**.
 
     ═══ VÌ SAO CẦN KHOÁ CỐ ĐỊNH, VÀ VÌ SAO KHÔNG ĐƯỢC GỬI LẠI ═══
@@ -393,8 +396,12 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
         xin_nhip(bc.on_log, ngu=bc.ngu, so_suat=2)
         khoa_lan = khoa if lan == 0 else "{0}:r{1}".format(khoa, lan)
         try:
+            # `anh` (đọc chữ trên ảnh bìa đối thủ) chỉ truyền khi thật có ảnh —
+            # `goi_chat` cũ không nhận kwarg này, nên không đưa vào lúc viết chữ
+            # thường để khỏi phá các nơi gọi khác.
+            them = {"anh": anh} if anh else {}
             return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
-                               khoa=khoa_lan, toi_da_token=toi_da_token)
+                               khoa=khoa_lan, toi_da_token=toi_da_token, **them)
         except Exception as loi:  # noqa: BLE001
             if lan == 3:
                 raise
@@ -565,6 +572,82 @@ def _doc_chu(duong: str) -> str:
             return tep.read()
     except OSError:
         return ""
+
+
+# ═══ NHỚ TIÊU ĐỀ + MÃ VIDEO ĐỐI THỦ ĐỂ CHẠY LẠI VẪN CÒN ═══
+#
+# Chạy lại một lượt thì bước lấy lời thoại bị bỏ qua (đã có `0-tu-lieu.txt`),
+# nên `ket.title`/`ket.video_id` không còn. Kênh `nguyen_goc` cần cả hai để
+# lấy nguyên tiêu đề và dựng địa chỉ ảnh bìa. Ghi ra một tệp bên cạnh lời thoại.
+def _ghi_doi_thu(d: str, tieu_de: str, video_id: str) -> None:
+    _ghi_chu(os.path.join(d, "0-doi-thu.txt"),
+             "TITLE: {0}\nVIDEO_ID: {1}\n".format(tieu_de or "", video_id or ""))
+
+
+def _doc_doi_thu(d: str) -> Dict[str, str]:
+    ra = {"title": "", "video_id": ""}
+    for dong in _doc_chu(os.path.join(d, "0-doi-thu.txt")).splitlines():
+        if dong.startswith("TITLE:"):
+            ra["title"] = dong[len("TITLE:"):].strip()
+        elif dong.startswith("VIDEO_ID:"):
+            ra["video_id"] = dong[len("VIDEO_ID:"):].strip()
+    return ra
+
+
+def _tai_anh_thumb(url: str) -> bytes:
+    """Tải một ảnh về theo URL, trả bytes. Mặc định của `BoiCanh.tai_anh`."""
+    from urllib.request import Request, urlopen  # noqa: PLC0415
+
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urlopen(req, timeout=30) as ph:  # noqa: S310 — URL cố định của YouTube
+        return ph.read()
+
+
+def _anh_thanh_data_url(byte: bytes, kieu: str = "image/jpeg") -> str:
+    import base64  # noqa: PLC0415
+
+    return "data:{0};base64,{1}".format(
+        kieu, base64.b64encode(byte).decode("ascii"))
+
+
+#: Lời nhắc đọc chữ trên ảnh bìa — ngắn, chỉ xin đúng chữ nhìn thấy.
+_LOI_NHAC_DOC_BIA = (
+    "Đây là ảnh bìa (thumbnail) một video. Hãy đọc và trả về ĐÚNG dòng chữ lớn "
+    "in trên ảnh, y nguyên từng chữ, không thêm giải thích, không dịch, không "
+    "thêm dấu ngoặc. Nếu ảnh không có chữ thì trả về một dòng trống."
+)
+
+
+def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay, video_id: str) -> str:
+    """Đọc chữ trên ảnh bìa đối thủ. Hỏng thì trả "" để nơi gọi lấy đường lui.
+
+    Không bao giờ ném lỗi ra ngoài: cổng có thể không nhận ảnh, ảnh có thể không
+    tải được — chuyện ấy không đáng làm vỡ cả lượt chạy. Nơi gọi thấy "" thì
+    lấy tiêu đề đối thủ làm chữ bìa.
+    """
+    vid = str(video_id or "").strip()
+    if not vid:
+        return ""
+    tai = bc.tai_anh or _tai_anh_thumb
+    byte = b""
+    for ten in ("maxresdefault.jpg", "hqdefault.jpg"):
+        url = "https://i.ytimg.com/vi/{0}/{1}".format(vid, ten)
+        try:
+            byte = tai(url)
+        except Exception as loi:  # noqa: BLE001
+            bc.ghi("  (không tải được ảnh bìa {0}: {1})".format(ten, loi))
+            byte = b""
+        if byte:
+            break
+    if not byte:
+        return ""
+    try:
+        tra = _goi(bc, _LOI_NHAC_DOC_BIA, _khoa_chat(luot, "thumb-ocr"),
+                   anh=_anh_thanh_data_url(byte))
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("  (không đọc được chữ trên ảnh bìa đối thủ: {0})".format(loi))
+        return ""
+    return " ".join((tra or "").split())
 
 
 def _giay_srt(moc: Any) -> float:
@@ -1510,12 +1593,31 @@ def _khau_kich_ban(bc: BoiCanh):
                     "không lấy được lời thoại của video tư liệu: {0}".format(
                         getattr(ket, "loi", "") or "không rõ"))
             _ghi_chu(os.path.join(d, "0-tu-lieu.txt"), tu_lieu)
+            # Giữ lại tiêu đề + mã video đối thủ: kênh `nguyen_goc` cần chúng, mà
+            # chạy lại thì bước lấy này bị bỏ qua nên `ket` không còn.
+            _ghi_doi_thu(d, getattr(ket, "title", "") or "",
+                         getattr(ket, "video_id", "") or "")
             bc.ghi("  tư liệu: {0} chữ.".format(len(tu_lieu.split())))
+
+        # ═══ ĐỘ DÀI NHẮM TỚI: THEO PHÚT, HAY THEO VIDEO GỐC ═══
+        #
+        # Kênh thường nhắm một số phút cố định (`ky_tu_muc_tieu`). Kênh remake
+        # "gần như giống đối thủ nhất" (`do_dai_theo_goc`) thì nhắm đúng độ dài
+        # bản gốc: video dài bằng video đối thủ, không bị kéo/nén về mốc cố định.
+        # Con số này dẫn dắt bước viết, bước nắn (nếu có) và chốt chặn quá ngắn.
+        #
+        # Bám bản gốc CHỈ khi thật có bản gốc. Chạy kênh remake mà quên đưa link
+        # thì `tu_lieu` rỗng — lấy 0 làm mục tiêu sẽ tắt luôn cả sàn chống "kịch
+        # bản quá ngắn" (`_kiem_kich_ban_dung_duoc` bỏ qua khi mục tiêu ≤ 0), tức
+        # một câu AI hỏi lại cũng lọt. Thiếu bản gốc thì quay về mốc phút cho an
+        # toàn, dù đằng nào bài không-bản-gốc cũng chẳng còn là remake.
+        muc_tieu_kt = (len(tu_lieu) if k.do_dai_theo_goc and tu_lieu
+                       else k.ky_tu_muc_tieu)
 
         chung = {
             "LANGUAGE": k.giong_van or k.ngon_ngu,
             "CHANNEL": _mo_ta_kenh(k),
-            "CHARS": k.ky_tu_muc_tieu,
+            "CHARS": muc_tieu_kt,
             # ═══ MỘT CÁI THƯỚC ĐỂ SO, KHÔNG PHẢI MỘT SỐ ĐỂ ĐẾM ═══
             #
             # AI không đếm được ký tự. Bảo nó "khoảng 4.470 ký tự" thì nó viết
@@ -1535,7 +1637,10 @@ def _khau_kich_ban(bc: BoiCanh):
             "CHARS_GOC": len(tu_lieu),
             "COMPETITOR_TRANSCRIPT": tu_lieu,
             "TRANSCRIPT_SAMPLE": tu_lieu[:1500],
-            "MODE": "faithful",
+            # Bám bản gốc hay đặt lại theo chất kênh — do kênh chọn qua
+            # `che_do_tieu_de` (mặc định "faithful", nết cũ). Lời nhắc
+            # `1-tieu-de.md` đã có sẵn hai nhánh này; đây chỉ chọn nhánh nào.
+            "MODE": k.che_do_tieu_de,
             "CASING": ("Viết hoa toàn bộ." if k.chu_bia_hoa
                        else "Giữ nguyên chữ như bạn viết."),
         }
@@ -1548,8 +1653,30 @@ def _khau_kich_ban(bc: BoiCanh):
         tieu_de = str(luot.dau_vao.get("tieu_de") or "").strip()
         chu_bia = str(luot.dau_vao.get("chu_bia") or "").strip()
         khuon_tieu_de = k.prompt.get("1-tieu-de.md", "")
+        # Tiêu đề + mã video đối thủ đã nhớ lúc lấy lời thoại (còn cả khi chạy
+        # lại). Vừa để nhánh `nguyen_goc` lấy nguyên, vừa cho nhánh gọi AI biết
+        # tiêu đề thật của đối thủ thay vì một ô rỗng như trước.
+        doi_thu = _doc_doi_thu(d)
+        tieu_de_doi_thu = (str(luot.dau_vao.get("tieu_de_doi_thu") or "").strip()
+                           or doi_thu.get("title", ""))
         if tieu_de and chu_bia:
             bc.ghi("  dùng tiêu đề và chữ bìa bạn đã đưa — bỏ qua bước đặt tên.")
+        elif k.che_do_tieu_de == "nguyen_goc" and tieu_de_doi_thu:
+            # ═══ LẤY NGUYÊN TIÊU ĐỀ + ĐỌC CHỮ TRÊN ẢNH BÌA ĐỐI THỦ ═══
+            #
+            # Chủ dự án, 22/08/2026: kênh remake "gần như giống đối thủ nhất" thì
+            # lấy nguyên tiêu đề đối thủ, và chữ bìa đọc thẳng từ ảnh bìa đối thủ
+            # — bỏ hẳn lượt gọi AI viết lại. Đọc ảnh bìa hỏng (cổng không nhận
+            # ảnh, ảnh không tải được) thì lấy tiêu đề làm chữ bìa: đường lui an
+            # toàn, không bao giờ làm vỡ lượt chạy.
+            tieu_de = tieu_de or tieu_de_doi_thu
+            if not chu_bia:
+                bc.kiem_dung()
+                bc.ghi("  đang đọc chữ trên ảnh bìa đối thủ…")
+                doc = _doc_chu_bia_doi_thu(bc, luot, doi_thu.get("video_id", ""))
+                chu_bia = doc or tieu_de
+                if not doc:
+                    bc.ghi("  (không lấy được chữ bìa — tạm dùng tiêu đề đối thủ)")
         elif not khuon_tieu_de.strip():
             # ═══ THIẾU LỜI NHẮC THÌ BỎ QUA, ĐỪNG GỬI LỜI NHẮC RỖNG ═══
             #
@@ -1569,7 +1696,7 @@ def _khau_kich_ban(bc: BoiCanh):
             bc.kiem_dung()
             bc.ghi("  đang đặt tiêu đề…")
             tra = _goi(bc, _thay(khuon_tieu_de, dict(
-                chung, COMPETITOR_TITLE=luot.dau_vao.get("tieu_de_doi_thu", ""))),
+                chung, COMPETITOR_TITLE=tieu_de_doi_thu)),
                 _khoa_chat(luot, "tieu-de"))
             t, b = _doc_tieu_de(tra)
             tieu_de = tieu_de or t
@@ -1657,7 +1784,7 @@ def _khau_kich_ban(bc: BoiCanh):
             # *"đang có 2.933, thêm khoảng 480 nữa"* là giao một việc đo được.
             # Nên: đo, nói chênh lệch cụ thể, nắn, đo lại — tối đa ba vòng.
             truoc_nan = ban_nhap
-            ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap)
+            ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap, muc_tieu_kt)
 
             # ═══ ĐỌC LẠI CHỈ KHI ĐÃ NẮN ═══
             #
@@ -1679,13 +1806,13 @@ def _khau_kich_ban(bc: BoiCanh):
                                       dict(chung, DRAFT=ban_nhap)),
                             "{0}:chat:5-hoan-thien.md".format(
                                 luot.ma_luot)).strip()
-                if cuoi and _lech(cuoi, k) <= max(_lech(ban_nhap, k),
-                                                  CHENH_CHO_PHEP):
+                if cuoi and _lech(cuoi, muc_tieu_kt) <= max(
+                        _lech(ban_nhap, muc_tieu_kt), CHENH_CHO_PHEP):
                     ban_nhap = cuoi
                 elif cuoi:
                     bc.ghi("  (bỏ bản đọc lại: nó làm lệch {0:.0%}, bản trước "
-                           "lệch {1:.0%})".format(_lech(cuoi, k),
-                                                  _lech(ban_nhap, k)))
+                           "lệch {1:.0%})".format(_lech(cuoi, muc_tieu_kt),
+                                                  _lech(ban_nhap, muc_tieu_kt)))
             # Gỡ dấu markdown TRƯỚC khi ghi: tệp này đi thẳng vào bộ đọc giọng
             # nói, và AI hay in đậm mấy chữ nó cho là quan trọng dù lời nhắc đã
             # dặn xuất dạng txt. Xem `go_dinh_dang`.
@@ -1700,10 +1827,10 @@ def _khau_kich_ban(bc: BoiCanh):
                 except OSError:
                     pass
 
-        lech = abs(len(ban_nhap) - k.ky_tu_muc_tieu) / max(1, k.ky_tu_muc_tieu)
+        lech = abs(len(ban_nhap) - muc_tieu_kt) / max(1, muc_tieu_kt)
         bc.ghi("  kịch bản: {0} ký tự (nhắm {1}, lệch {2:.0%}).".format(
-            len(ban_nhap), k.ky_tu_muc_tieu, lech))
-        _kiem_kich_ban_dung_duoc(len(ban_nhap), k.ky_tu_muc_tieu, duong_kb)
+            len(ban_nhap), muc_tieu_kt, lech))
+        _kiem_kich_ban_dung_duoc(len(ban_nhap), muc_tieu_kt, duong_kb)
 
         # SEO — thiếu cũng vẫn ra được video, nên hỏng thì chỉ ghi nhật ký.
         duong_seo = os.path.join(d, "1-seo.txt")
@@ -1730,13 +1857,17 @@ def _khau_kich_ban(bc: BoiCanh):
     return lam
 
 
-def _lech(chu: str, k: Kenh) -> float:
-    """Kịch bản này lệch bao nhiêu phần trăm so với độ dài kênh nhắm tới."""
-    return abs(len(chu) - k.ky_tu_muc_tieu) / max(1, k.ky_tu_muc_tieu)
+def _lech(chu: str, muc_tieu: int) -> float:
+    """Kịch bản này lệch bao nhiêu phần trăm so với độ dài nhắm tới.
+
+    `muc_tieu` là số ký tự nhắm tới — hoặc `ky_tu_muc_tieu` của kênh (theo
+    phút), hoặc độ dài bản gốc khi kênh bật `do_dai_theo_goc`.
+    """
+    return abs(len(chu) - muc_tieu) / max(1, muc_tieu)
 
 
 def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
-                ban_nhap: str) -> str:
+                ban_nhap: str, muc_tieu: Optional[int] = None) -> str:
     """Nắn kịch bản về đúng độ dài, đo lại sau mỗi vòng.
 
     Trả về bản tốt nhất đo được — kể cả khi hết vòng mà vẫn chưa đạt, vì một
@@ -1765,6 +1896,10 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     nguyên vẹn để nắn lại từ đầu.
     """
     khuon = k.prompt.get("4-do-dai.md", "")
+    # Không truyền mục tiêu thì lấy theo phút của kênh — nết cũ, và là thứ các
+    # bài kiểm tra gọi thẳng `_nan_do_dai` trông đợi.
+    if muc_tieu is None:
+        muc_tieu = k.ky_tu_muc_tieu
     if not khuon.strip():
         # ═══ THIẾU TỆP LỜI NHẮC THÌ PHẢI NÓI, ĐỪNG TẮT TRONG IM LẶNG ═══
         #
@@ -1775,13 +1910,13 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         #
         # Kiểm tra ngay nếu đọc dòng này khi đang đi tìm lỗi: bước nắn CHỈ chạy
         # khi kênh có tệp `prompt/4-do-dai.md`.
-        if abs(len(ban_nhap) - k.ky_tu_muc_tieu) > k.ky_tu_muc_tieu * CHENH_CHO_PHEP:
+        if abs(len(ban_nhap) - muc_tieu) > muc_tieu * CHENH_CHO_PHEP:
             bc.ghi("  (kênh thiếu prompt/4-do-dai.md nên không nắn độ dài "
                    "được — bài đang {0} ký tự, nhắm {1})".format(
-                       len(ban_nhap), k.ky_tu_muc_tieu))
+                       len(ban_nhap), muc_tieu))
         return ban_nhap
 
-    dich = k.ky_tu_muc_tieu
+    dich = muc_tieu
     duoi, tren = dich * (1 - CHENH_CHO_PHEP), dich * (1 + CHENH_CHO_PHEP)
     khai = dich                       # lượt đầu khai đúng mục tiêu
     tot_nhat, cach_nhat = ban_nhap, abs(len(ban_nhap) - dich)
@@ -1789,7 +1924,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     for vong in range(1, VONG_NAN_TOI_DA + 1):
         if duoi <= len(tot_nhat) <= tren:
             bc.ghi("  độ dài đạt: {0} ký tự (lệch {1:.0%}).".format(
-                len(tot_nhat), _lech(tot_nhat, k)))
+                len(tot_nhat), _lech(tot_nhat, muc_tieu)))
             return tot_nhat
 
         # ═══ LUÔN NẮN TỪ BẢN GỐC ═══
@@ -1844,7 +1979,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         khai = int(max(dich * 0.3, min(dich * 1.5, khai * he_so)))
 
     bc.ghi("  độ dài cuối: {0} ký tự (lệch {1:.0%}).".format(
-        len(tot_nhat), _lech(tot_nhat, k)))
+        len(tot_nhat), _lech(tot_nhat, muc_tieu)))
     return tot_nhat
 
 

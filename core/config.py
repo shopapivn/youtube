@@ -52,6 +52,7 @@ __all__ = [
     "redact",
     "looks_like_api_key",
     "looks_like_email",
+    "sanitize_api_key",
 ]
 
 #: Base URL công khai — CONTRACT.md §0.
@@ -102,6 +103,31 @@ def looks_like_api_key(value: str) -> bool:
     except UnicodeEncodeError:
         return False
     return True
+
+
+#: Ký tự hợp lệ trong một khoá API: chữ, số, gạch dưới, gạch ngang — khớp với
+#: `_KEY_PATTERN`. Mọi ký tự khác (dấu cách, zero-width space, soft hyphen, ký
+#: tự tiếng Việt dính vào lúc copy) KHÔNG bao giờ là một phần của khoá thật.
+_KHOA_HOP_LE = re.compile(r"[^A-Za-z0-9_\-]")
+
+
+def sanitize_api_key(value: str) -> str:
+    """Dọn khoá API trước khi đưa vào HTTP header — bỏ mọi ký tự không thể là khoá.
+
+    ═══ VÌ SAO CẦN HÀM NÀY ═══
+
+    Khách copy khoá từ web đôi khi dính ký tự ẩn (zero-width space, soft hyphen,
+    khoảng trắng lạ) mà mắt không thấy. Khoá thật chỉ gồm chữ, số, gạch dưới,
+    gạch ngang. Nếu để nguyên khoá dính ký tự ẩn rồi nhét vào header
+    `Authorization: Bearer …`, `httpx` mã hoá header sang ASCII và ném
+    `UnicodeEncodeError: 'ascii' codec can't encode characters` — khách nhận hộp
+    "Lỗi ngoài dự kiến" khó hiểu (ảnh khách gửi 22/08/2026).
+
+    Bỏ đúng những ký tự đó là **an toàn**: chúng không bao giờ thuộc về khoá, nên
+    xoá đi thường lấy lại chính khoá đúng. Nếu sau khi dọn vẫn sai thì máy chủ
+    trả 401 → tool hiện câu "tạo khoá mới" bình thường, không còn nổ ASCII.
+    """
+    return _KHOA_HOP_LE.sub("", (value or "").strip())
 
 
 def looks_like_email(value: str) -> bool:

@@ -242,6 +242,26 @@ def describe(exc: BaseException) -> ErrorAdvice:
             retryable=True,
         )
 
+    # ── Khoá dính ký tự lạ (không mã hoá được sang ASCII) ────────────────────
+    #
+    # `httpx` mã hoá giá trị header sang ASCII. Khoá API dính ký tự ẩn (zero-width
+    # space, soft hyphen… copy nhầm từ web) nhét vào `Authorization: Bearer …`
+    # làm nổ `UnicodeEncodeError: 'ascii' codec can't encode characters`. Khách
+    # gửi ảnh 22/08/2026: hộp "Lỗi ngoài dự kiến … chụp màn hình gửi hỗ trợ" —
+    # đúng thứ CLAUDE.md cấm cho một sự cố khách tự sửa được. `build_client` +
+    # `dat_khoa` giờ đã tự dọn khoá, nhánh này là lưới an toàn nếu còn sót.
+    if isinstance(exc, UnicodeEncodeError):
+        return ErrorAdvice(
+            title="Khoá API dính ký tự lạ",
+            message="Khoá API của bạn có ký tự ẩn (thường do copy từ web dính "
+                    "thêm khoảng trắng hoặc ký tự vô hình).",
+            action="Bạn tạo một khoá mới rồi dán lại vào ô Khoá API — nhớ chép "
+                   "đúng phần “sk_…”, đừng lấy dư ký tự nào.",
+            link=DASHBOARD_KEYS_URL,
+            link_label="Mở trang API key",
+            needs_new_key=True,
+        )
+
     # ── Không phải lỗi của SDK (ghi file, thư mục không tồn tại…) ─────────────
     return ErrorAdvice(
         title="Lỗi ngoài dự kiến",
@@ -321,6 +341,24 @@ def tu_xu_ly_ngam(exc: BaseException) -> bool:
     if isinstance(exc, APIStatusError) and getattr(exc, "status", 0) >= 500:
         return True
     return isinstance(exc, (OSError, EOFError)) or _la_loi_mang(exc)
+
+
+def la_qua_tai(exc: BaseException) -> bool:
+    """Lỗi "quá tần suất / máy chủ bận" — chạy MAX là gặp LIÊN TỤC, tự khỏi.
+
+    Chủ dự án 22/08/2026 (kèm ảnh hộp "Bạn gửi hơi nhanh"): *"tao đã bảo là cần
+    MAX mọi thứ, nếu đã MAX đừng có thông báo linh tinh"*. Khi khách cố tình đẩy
+    hết công suất thì 429 và "máy chủ bận" là chuyện thường trực, không phải sự
+    cố — khách không làm gì được, hiện hộp lỗi chỉ khiến họ tưởng hỏng.
+
+    Tách riêng khỏi phần "đứt mạng" trong `tu_xu_ly_ngam`: mất mạng thật thì thử
+    ít lần rồi vẫn nên báo "kiểm tra kết nối"; còn quá tải thì thử tới khi qua,
+    KHÔNG BAO GIỜ hiện hộp (chỉ dừng khi khách bấm Dừng).
+    """
+    if isinstance(exc, RateLimitError):
+        return True
+    status = getattr(exc, "status", 0)
+    return isinstance(exc, APIStatusError) and (status == 429 or status >= 500)
 
 
 def retry_after_seconds(exc: BaseException, attempt: int, *, base: float = 2.0, cap: float = 60.0) -> float:

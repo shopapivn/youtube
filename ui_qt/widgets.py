@@ -12,6 +12,7 @@ import sys
 from typing import Any, Callable, List, Optional, Sequence
 
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QFileDialog, QFrame, QLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QSizePolicy, QVBoxLayout, QWidget,
@@ -358,6 +359,9 @@ class AnhThamChieu(QWidget):
     #: Máy chủ nhận tối đa 10 ảnh tham chiếu mỗi lượt.
     TRAN = 10
 
+    #: Chiều cao ảnh xem trước — đủ nhìn ra tấm nào, không kéo cao cả hàng.
+    CAO_XEM = 40
+
     def __init__(self, nhan_text: str = "Ảnh tham chiếu:",
                  on_change: Optional[Callable[[], None]] = None):
         super().__init__()
@@ -367,6 +371,13 @@ class AnhThamChieu(QWidget):
         ngang.setContentsMargins(0, 0, 0, 0)
         ngang.setSpacing(8)
         ngang.addWidget(nhan(nhan_text))
+        # Ảnh xem trước hiện NGAY sau khi chọn — thấy tấm ảnh tức là đã nhận,
+        # khỏi phải đoán qua một dòng chữ tên file.
+        self._xem = QLabel()
+        self._xem.setFixedHeight(self.CAO_XEM)
+        self._xem.setAlignment(Qt.AlignCenter)
+        self._xem.hide()
+        ngang.addWidget(self._xem)
         self._trang_thai = nhan("chưa chọn ảnh nào", "muted")
         ngang.addWidget(self._trang_thai, 1)
         ngang.addWidget(nut_phu("Chọn ảnh…", self._chon, rong=110))
@@ -405,6 +416,8 @@ class AnhThamChieu(QWidget):
         if not self._duong_dan:
             self._trang_thai.setText("chưa chọn ảnh nào")
             self._nut_bo.setEnabled(False)
+            self._xem.clear()
+            self._xem.hide()
         else:
             ten = os.path.basename(self._duong_dan[0])
             them = "" if len(self._duong_dan) == 1 else "  +{0} ảnh nữa".format(
@@ -412,8 +425,20 @@ class AnhThamChieu(QWidget):
             canh = "" if da_chon <= self.TRAN else "   (chỉ lấy {0} ảnh đầu)".format(self.TRAN)
             self._trang_thai.setText(ten + them + canh)
             self._nut_bo.setEnabled(True)
+            self._ve_xem()
         if self._on_change is not None:
             self._on_change()
+
+    def _ve_xem(self) -> None:
+        """Vẽ thumbnail của ảnh đầu tiên; giấu ô xem nếu không nạp được."""
+        anh = QPixmap(self._duong_dan[0]) if self._duong_dan else QPixmap()
+        if anh.isNull():
+            self._xem.clear()
+            self._xem.hide()
+            return
+        self._xem.setPixmap(anh.scaledToHeight(self.CAO_XEM,
+                                               Qt.SmoothTransformation))
+        self._xem.show()
 
     def tai_len(self, client) -> List[str]:
         """Tải ảnh lên, trả về URL. **Gọi từ luồng nền**, không phải luồng vẽ."""

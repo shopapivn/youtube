@@ -98,6 +98,11 @@ KHUC_SONG_SONG = 9
 #: không biết kênh nào. Nên bản mặc định này cố ý **không** nhắc tới nhân vật
 #: cố định: bịa ra một `nv1.png` không tồn tại thì mọi lời nhắc đều trỏ vào một
 #: tấm ảnh không có thật.
+#:
+#: Chỗ `<<CAST_STYLE>>` để trống theo mặc định (điền "" là biến mất sạch). Khi
+#: nơi gọi **tự dựng được một dàn nhân vật + phong cách** từ chính lời đọc (xem
+#: `prompt.workbook._dung_dan_cast`), nó truyền cả khối chữ ấy vào đây để các
+#: cảnh dùng lại đúng nhân vật đó — không bịa `nv1` khi chưa có dàn.
 KHUON_MAC_DINH = """# DIVIDE THE SRT INTO SCENES BY MEANING, THEN WRITE PROMPTS
 
 Read the SRT below, **divide it into scenes by MEANING**, and write an image
@@ -106,6 +111,7 @@ prompt and a video prompt for each scene.
 Do not cut on a fixed clock. Cut where the thought changes. One scene = one
 idea the narrator is landing.
 
+<<CAST_STYLE>>
 ## Context of this video
 <<CONTEXT>>
 

@@ -212,31 +212,52 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "bản kịch bản không còn nữa.",
             "Dải ảnh dưới bảng hiện từng cảnh ngay khi tạo xong — bấm đúp một "
             "tấm là mở ảnh gốc, khỏi phải mở thư mục đi tìm.",
-            "Nút “Tạo kênh mới” ghép ba thứ thành một kênh: ngách (kể chuyện "
-            "theo lối nào), cách vẽ, và khán giả (nói tiếng gì). Chọn xong là "
-            "kênh chạy được ngay — bạn không phải mở tệp nào ra sửa tay.",
+            "Nút “Tạo kênh mới” dẫn bạn đi qua năm bước làm một video, mỗi "
+            "bước một màn hình, cứ bấm “Tiếp ▶”: ① đặt tên rồi chọn kiểu vẽ "
+            "(thấy luôn ảnh nhân vật mẫu) và khán giả; ② giọng đọc; "
+            "③ hình ảnh và nhân vật; ④ các prompt; ⑤ dựng video. Mỗi "
+            "bước đã điền sẵn từ mẫu bạn chọn, nên đi thẳng tới cuối không sửa "
+            "gì cũng ra một kênh chạy được — bạn không phải mở tệp nào ra gõ.",
             "Chọn khán giả là chọn luôn tốc độ đọc của tiếng ấy. Nhật 298 ký "
-            "tự mỗi phút, Việt 832, Anh 920 — chênh gần ba lần, và lấy nhầm số "
-            "của tiếng khác là ra video dài hoặc ngắn hơn ý muốn vài phút. Hộp "
-            "tạo kênh hiện sẵn kịch bản sẽ dài bao nhiêu ký tự để bạn thấy "
-            "trước.",
-            "Nút “Quản lý kênh” cho sửa cả bảy lời nhắc và phong cách hình "
-            "ngay trong tool. Nút “Nhân bản” chép nguyên một kênh — chỉ dùng "
-            "khi bạn muốn bản thứ hai của một kênh đã sửa nhiều; làm kênh mới "
-            "thì dùng “Tạo kênh mới”.",
-            "Nút “Sửa khuôn” (trong hộp Tạo kênh và Quản lý kênh) là chỗ tạo "
-            "và sửa chính bốn mảnh dựng nên kênh: ngách, bộ vẽ, bộ văn hoá và "
-            "chiến lược. Chọn loại → chọn bộ có sẵn hoặc “➕ Tạo mới…” → điền "
-            "các ô có nhãn tiếng Việt → Lưu. Không phải mở tệp nào gõ tay nữa. "
-            "Bộ mới hiện ngay trong ô chọn khi bạn tạo kênh.",
+            "tự mỗi phút, Việt 832, Anh 920 — chênh gần ba lần, nên cùng một "
+            "kịch bản mà đọc bằng tiếng khác thì độ dài video khác hẳn. Bước ② "
+            "chỉ còn chọn giọng đọc; độ dài do content quyết, không đặt ở đây. "
+            "Chưa có mã giọng (Voice ID)? Ngay bước này có liên kết mở Thư viện "
+            "giọng ElevenLabs để nghe thử và lấy mã.",
+            "Bước ③ “Hình ảnh & nhân vật” lên trước vì chọn phong cách hình và "
+            "nhân vật xong thì các prompt ở bước sau mới tạo ảnh/video đúng "
+            "phong cách ấy. Ở đây chọn phong cách hình từ danh sách (Anime, "
+            "Điện ảnh thực tế, Màu nước, Truyện tranh, 3D…) — tool tự điền lời "
+            "tả và đồng bộ nó sang mọi prompt tạo ảnh, video, ảnh bìa; và bấm "
+            "“Tải nhân vật lên” để thay ảnh nhân vật. Muốn tả riêng thì chọn "
+            "“Tùy chỉnh” rồi tự gõ. Cần chỉnh kỹ hơn thì mở “⚙ Chỉnh sâu”; còn "
+            "liên kết “Tạo/sửa bộ vẽ nâng cao…” dành cho người đã rành.",
+            "Bước ④ “Các prompt” là chỗ quản lý mọi PROMPT của kênh, bày "
+            "thành các thẻ bấm vào để mở: prompt tạo tiêu đề + chữ thumbnail, "
+            "prompt content, prompt review (đảm bảo content đạt tiêu chuẩn), "
+            "prompt tạo ra các prompt ảnh + video, prompt ảnh thumbnail, prompt "
+            "nhạc nền… Mỗi prompt là một câu tool gửi cho Claude (API) để ra "
+            "kết quả; đã điền sẵn từ mẫu, bấm vào thẻ để mở ra sửa, không sửa "
+            "gì cũng chạy được. Cùng bước này chọn cách lấy nội dung (chiến lược).",
+            "Nút “Quản lý kênh” mở đúng năm bước ấy nhưng nạp sẵn kênh đang "
+            "chọn, nút cuối là “Lưu”: sửa được cả các prompt, giọng đọc, "
+            "nhạc nền, độ phân giải và phong cách hình ngay trong tool. Trong "
+            "hộp còn nút “Nhân bản” chép nguyên một kênh — chỉ dùng khi bạn "
+            "muốn bản thứ hai của một kênh đã sửa nhiều; làm kênh mới thì dùng "
+            "“Tạo kênh mới”.",
+            "Liên kết “Tạo/sửa bộ vẽ nâng cao…” (ở bước ③) là chỗ tạo và sửa "
+            "chính bốn mảnh dựng nên kênh: ngách, bộ vẽ, bộ văn hoá và chiến "
+            "lược. Chọn loại → chọn bộ có sẵn hoặc “➕ Tạo mới…” → điền các ô có "
+            "nhãn tiếng Việt → Lưu. Không phải mở tệp nào gõ tay nữa. Bộ mới "
+            "hiện ngay trong ô chọn khi bạn tạo kênh.",
             "Thêm bộ văn hoá / tiếng mới thì phải điền “số ký tự mỗi phút” ĐO "
             "THẬT từ giọng bạn dùng (lấy số ký tự kịch bản chia số phút file "
             "mp3). Để 0 thì tool không cho lưu — đúng vậy, vì lấy nhầm số là "
             "hỏng độ dài video.",
             "Chiến lược “Sáng tạo — tự viết” không cần link đối thủ: bạn dán "
             "thẳng ý tưởng hoặc dàn ý vào ô tư liệu (để trống cũng chạy, khi "
-            "đó AI viết chỉ từ tiêu đề). Chiến lược “Cover” thì cần link — hộp "
-            "Tạo kênh nhắc ngay dưới ô chọn chiến lược.",
+            "đó AI viết chỉ từ tiêu đề). Chiến lược “Cover” thì cần link — bước "
+            "④ nhắc ngay dưới ô chọn chiến lược.",
             "Nhà cung cấp trả clip 1280×720, và trước đây video ra đúng cỡ đó. "
             "Muốn to hơn thì vào “Quản lý kênh” → thẻ “Dựng video” → chọn "
             "1080p, 1440p hay 4K. Không tốn thêm đồng nào, chỉ tốn thời gian "
@@ -258,6 +279,8 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Chọn một hay nhiều file giọng đọc (.mp3, .wav…).",
             "Chọn engine bạn sẽ dùng để dựng video — Veo 3 hay Seedance. Cảnh "
             "được cắt đúng theo độ dài clip của engine đó.",
+            "Để yên ô “Giữ nhân vật & phong cách xuyên suốt” nếu video có một "
+            "nhân vật chính; tắt đi nếu mỗi cảnh một chủ thể khác nhau.",
             "Bấm “Tạo prompt”. Mỗi file giọng đọc ra một file Excel.",
         ],
         "luu_y": [
@@ -265,6 +288,11 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "thôi. Việc nghe chạy ngay trên máy bạn.",
             "Bước viết prompt có gọi AI, mỗi 20 cảnh "
             "một lượt gọi.",
+            "Bật “Giữ nhân vật & phong cách xuyên suốt” thì tool đọc cả lời đọc "
+            "một lượt (thêm một lượt gọi AI) để dựng dàn nhân vật cố định: sheet "
+            "characters trong file Excel được điền, và mọi cảnh dùng chung đúng "
+            "nhân vật đó cùng một phong cách — giống tab Tự động. Tắt thì mỗi "
+            "cảnh tự do, sheet characters để trống.",
             "File Excel đặt tên sheet đúng kiểu VE3 (scenes, characters…) nên "
             "mở thẳng bằng VE3_SUITE được, không phải chép cột sang.",
             "Chọn nhiều file thì chạy lần lượt; một file hỏng không làm hỏng "
@@ -285,14 +313,22 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     },
     "wallet": {
         "tieu_de": "Ví & Tài khoản",
-        "tom_tat": "Đăng nhập, xem số dư, nạp tiền, lấy khoá API.",
+        "tom_tat": "Đăng nhập bằng email, xem số dư, nạp tiền.",
         "buoc": [
-            "Đăng nhập bằng email đã đăng ký ở shopapi.vn.",
+            "Gõ email và mật khẩu tài khoản shopapi.vn rồi bấm “Đăng nhập & lấy "
+            "khoá”. Tôi tự tạo và lưu khoá API cho bạn — không phải vào web tạo "
+            "khoá rồi chép sang nữa.",
             "Chọn mức nạp rồi làm theo hướng dẫn chuyển khoản.",
             "Số dư và lịch sử trừ tiền đều nằm ở trang này.",
         ],
         "luu_y": ["Mọi con số về tiền trong tool đều gom về đây, các tab khác "
-                  "chỉ lo phần việc."],
+                  "chỉ lo phần việc.",
+                  "Chưa có tài khoản, hoặc muốn tự tạo khoá tay thì bấm “Lấy "
+                  "khoá API” để mở thẳng trang shopapi.vn, tạo xong dán khoá vào "
+                  "ô “Đã có khoá API? Dán vào đây”.",
+                  "Tài khoản bật xác thực 2 lớp: tool sẽ hiện ô nhập mã 6 số. "
+                  "Mã chỉ dùng được một lần, nên bước tạo khoá có thể hỏi bạn "
+                  "một mã mới — cứ mở app xác thực lấy mã mới là được."],
     },
     "cai-dat": {
         "tieu_de": "Cài đặt",

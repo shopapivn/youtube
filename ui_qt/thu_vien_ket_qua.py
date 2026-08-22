@@ -257,10 +257,13 @@ class TheKetQua(QFrame):
 
     def __init__(self, mo_ta: str, la_video: bool, khi_lam_lai=None,
                  khi_cho_dong=None, uid: str = "", so_anh_tham_chieu: int = 0,
-                 ty_le: str = ""):
+                 ty_le: str = "", so_canh: int = 0):
         super().__init__()
         self.khung_xong.connect(self._dat_khung)
         self._mo_ta = mo_ta
+        #: Số cảnh (theo dòng bảng Hàng loạt) — hiện nhãn `#N` để biết thẻ nào là
+        #: cảnh nào. 0 nghĩa là không có số (tab Thủ công), khỏi dán nhãn.
+        self.so_canh = so_canh
         #: Khoá của việc sinh ra thẻ này. Trang nào gửi việc thì trang ấy giữ
         #: bảng `khoá → dòng`, nên thẻ phải khai được mình là việc nào —
         #: không thì bấm "Làm lại" ở tab Hàng loạt chỉ còn cách dò theo mô tả,
@@ -302,6 +305,22 @@ class TheKetQua(QFrame):
         # gì"; ô đen có chữ đọc ra là "có clip, bấm vào xem".
         self._o_anh.setText("clip" if la_video else "")
         lop_anh.addWidget(self._o_anh)
+
+        # Badge số cảnh `#N` (góc trên trái) — để một loạt 40 cảnh biết thẻ nào
+        # là dòng nào. Chỉ dán khi có số (tab Hàng loạt); tab Thủ công để trống.
+        if so_canh > 0:
+            so = QLabel("#{0}".format(so_canh))
+            so.setParent(self._khung_anh)
+            so.setFixedHeight(22)
+            so.setMinimumWidth(28)
+            so.move(4, 4)
+            so.setAlignment(Qt.AlignCenter)
+            so.setStyleSheet(
+                "background:rgba(0,0,0,0.55); border:none; border-radius:11px;"
+                " color:white; font-size:11px; font-weight:bold;"
+                " padding:0 6px;")
+            so.setToolTip("Cảnh {0}".format(so_canh))
+            so.show()
 
         # Badge số ảnh tham chiếu (góc trên phải)
         if so_anh_tham_chieu > 0:
@@ -466,6 +485,7 @@ class ThuVienKetQua(QWidget):
         super().__init__()
         self._the: Dict[str, TheKetQua] = {}
         self._thu_tu = []          # uid theo thứ tự thêm, mới nhất ở cuối
+        self._so_canh: Dict[str, int] = {}   # uid → số cảnh (0 nếu không có)
         self._xong = set()
         self._hong = set()
 
@@ -503,6 +523,21 @@ class ThuVienKetQua(QWidget):
         self._thanh_lo.setTextVisible(False)
         self._thanh_lo.setFixedHeight(12)
         khoi.addWidget(self._thanh_lo)
+
+        # ═══ TÁCH TIẾN ĐỘ ẢNH / VIDEO ═══
+        #
+        # Chủ dự án 22/08/2026: thanh "đang tạo…" gộp chung không cho biết ảnh
+        # tới đâu, video tới đâu — mà chế độ Ảnh→Video chạy hai chặng. Khi lô có
+        # cả hai loại thì hiện thêm hai dòng con: một cho ảnh, một cho video.
+        self._khoi_tach = QWidget()
+        tach = QVBoxLayout(self._khoi_tach)
+        tach.setContentsMargins(0, 2, 0, 0)
+        tach.setSpacing(4)
+        self._dong_anh, self._thanh_anh = self._dong_con(tach, "Ảnh")
+        self._dong_video, self._thanh_video = self._dong_con(tach, "Video")
+        self._khoi_tach.hide()
+        khoi.addWidget(self._khoi_tach)
+
         self._khoi_tien_do.hide()
         doc.addWidget(self._khoi_tien_do)
 
@@ -531,32 +566,52 @@ class ThuVienKetQua(QWidget):
 
     def them(self, uid: str, mo_ta: str, la_video: bool,
              so_anh_tham_chieu: int = 0, ty_le: str = "",
-             thay_uid: str = "") -> TheKetQua:
-        """Thêm một thẻ ở **đầu** lưới. Trùng uid thì trả lại thẻ cũ.
+             thay_uid: str = "", so_canh: int = 0) -> TheKetQua:
+        """Thêm một thẻ vào lưới. Trùng uid thì trả lại thẻ cũ.
 
         `thay_uid` — khi khách bấm "Làm lại" một thẻ rồi gửi lại: thẻ mới **thế
         đúng chỗ** thẻ cũ và thẻ cũ biến đi, chứ không đẻ ra một thẻ mới trên
         đầu để lại tấm cũ nằm đó. Làm lại là *sửa cái đó*, không phải tạo cái mới.
+
+        `so_canh` — tab Hàng loạt truyền số dòng (bắt đầu từ 1). Khi có số, thẻ
+        chèn **theo thứ tự cảnh tăng dần** (cảnh 1, 2, 3…), không phải "mới nhất
+        lên đầu" — một loạt 40 cảnh mà đảo thứ tự thì không quản nổi. `so_canh==0`
+        (tab Thủ công, không có số cảnh) giữ nguyên nếp cũ: chèn lên đầu.
         """
         co_san = self._the.get(uid)
         if co_san is not None:
             return co_san
-        vi_tri = 0
         cu = self._the.get(thay_uid) if thay_uid else None
         if cu is not None:
             vi_tri = max(0, self._luoi.indexOf(cu))
             self._bo_the(thay_uid)
+        elif so_canh > 0:
+            vi_tri = self._vi_tri_theo_canh(so_canh)
+        else:
+            vi_tri = 0
         the_moi = TheKetQua(mo_ta, la_video,
                             getattr(self, '_khi_lam_lai', None),
                             getattr(self, '_khi_cho_dong', None), uid=uid,
-                            so_anh_tham_chieu=so_anh_tham_chieu, ty_le=ty_le)
+                            so_anh_tham_chieu=so_anh_tham_chieu, ty_le=ty_le,
+                            so_canh=so_canh)
         self._luoi.insertWidget(vi_tri, the_moi)
         self._the[uid] = the_moi
+        self._so_canh[uid] = so_canh
         self._thu_tu.append(uid)
         self._loi_moi.hide()
         self._cuon.show()
         self._cat_bot()
         return the_moi
+
+    def _vi_tri_theo_canh(self, so_canh: int) -> int:
+        """Chỗ chèn để lưới xếp theo số cảnh tăng dần: trước thẻ đầu tiên có số
+        cảnh LỚN HƠN. Thẻ không có số cảnh (0) coi như đứng sau cùng."""
+        for vi_tri in range(self._luoi.count()):
+            w = self._luoi.itemAt(vi_tri).widget()
+            khac = getattr(w, "so_canh", 0)
+            if khac > so_canh:
+                return vi_tri
+        return self._luoi.count()
 
     def _bo_the(self, uid: str) -> None:
         """Gỡ một thẻ khỏi lưới và mọi sổ theo dõi. Dùng cho "Làm lại" thế chỗ."""
@@ -566,6 +621,7 @@ class ThuVienKetQua(QWidget):
             cu.deleteLater()
         if uid in self._thu_tu:
             self._thu_tu.remove(uid)
+        self._so_canh.pop(uid, None)
         self._xong.discard(uid)
         self._hong.discard(uid)
 
@@ -590,7 +646,8 @@ class ThuVienKetQua(QWidget):
             params = getattr(spec, "params", None) or {}
             the_nay = self.them(uid, str(getattr(spec, "content", "")),
                                 getattr(spec, "kind", "") == "video",
-                                ty_le=str(params.get("aspect_ratio", "")))
+                                ty_le=str(params.get("aspect_ratio", "")),
+                                so_canh=int(getattr(spec, "index", 0) or 0))
         trang_thai = str(getattr(ban_ghi, "status", ""))
         the_nay.cap_nhat(trang_thai,
                          int(getattr(ban_ghi, "progress", 0) or 0),
@@ -601,6 +658,41 @@ class ThuVienKetQua(QWidget):
             self._hong.add(uid)
         self._ve_dong_lo()
         return the_nay
+
+    def _dong_con(self, cha, ten: str):
+        """Một dòng con của khối tách: nhãn "Ảnh 3/8" + thanh chạy nhỏ.
+
+        Trả `(nhãn, thanh)` để `_ve_dong_lo` cập nhật số và giá trị.
+        """
+        hang = QHBoxLayout()
+        hang.setContentsMargins(0, 0, 0, 0)
+        hang.setSpacing(8)
+        nh = nhan("{0}".format(ten), "phu")
+        nh.setMinimumWidth(90)
+        hang.addWidget(nh)
+        thanh = QProgressBar()
+        thanh.setTextVisible(False)
+        thanh.setFixedHeight(8)
+        hang.addWidget(thanh, 1)
+        cha.addLayout(hang)
+        return nh, thanh
+
+    def _dem_theo_loai(self):
+        """`((ảnh_xong, ảnh_tổng), (video_xong, video_tổng))` theo loại thẻ."""
+        av = vv = ax = vx = 0
+        for uid in self._thu_tu:
+            the = self._the.get(uid)
+            if the is None:
+                continue
+            if getattr(the, "_la_video", False):
+                vv += 1
+                if uid in self._xong:
+                    vx += 1
+            else:
+                av += 1
+                if uid in self._xong:
+                    ax += 1
+        return (ax, av), (vx, vv)
 
     #: Màu thanh chạy theo trạng thái cả lô: đang chạy thì xanh nhấn, xong hết
     #: thì xanh "xong việc", còn dở mà có cái hỏng thì pha sắc đỏ để mắt bắt
@@ -619,6 +711,7 @@ class ThuVienKetQua(QWidget):
         tong = len(self._thu_tu)
         if tong <= 1:
             self._khoi_tien_do.hide()
+            self._khoi_tach.hide()
             return
         xong = len([u for u in self._thu_tu if u in self._xong])
         hong = len([u for u in self._thu_tu if u in self._hong])
@@ -644,12 +737,32 @@ class ThuVienKetQua(QWidget):
             chu += "  ·  <span style='color:{0}'>{1} lỗi</span>".format(
                 theme.DO, hong)
         self._dong_lo.setText(chu)
+        self._ve_tach()
         self._khoi_tien_do.show()
+
+    def _ve_tach(self) -> None:
+        """Hai dòng con Ảnh/Video — chỉ hiện khi lô có CẢ hai loại việc.
+
+        Lô chỉ-ảnh hoặc chỉ-video thì thanh gộp phía trên đã nói đủ; bày thêm
+        một dòng con "Video 0/0" trống là nhiễu. Chế độ Ảnh→Video mới cần tách.
+        """
+        (ax, av), (vx, vv) = self._dem_theo_loai()
+        if av > 0 and vv > 0:
+            self._dong_anh.setText("Ảnh  {0}/{1}".format(ax, av))
+            self._thanh_anh.setRange(0, av)
+            self._thanh_anh.setValue(ax)
+            self._dong_video.setText("Video  {0}/{1}".format(vx, vv))
+            self._thanh_video.setRange(0, vv)
+            self._thanh_video.setValue(vx)
+            self._khoi_tach.show()
+        else:
+            self._khoi_tach.hide()
 
     def _cat_bot(self) -> None:
         while len(self._thu_tu) > TRAN_THE:
             uid = self._thu_tu.pop(0)
             cu = self._the.pop(uid, None)
+            self._so_canh.pop(uid, None)
             if cu is not None:
                 cu.setParent(None)
                 cu.deleteLater()
@@ -661,9 +774,11 @@ class ThuVienKetQua(QWidget):
                 cu.setParent(None)
                 cu.deleteLater()
         self._thu_tu.clear()
+        self._so_canh.clear()
         self._xong.clear()
         self._hong.clear()
         self._khoi_tien_do.hide()
+        self._khoi_tach.hide()
         self._cuon.hide()
         self._loi_moi.show()
 
@@ -678,3 +793,12 @@ class ThuVienKetQua(QWidget):
         tong = len(self._thu_tu)
         xong = len([u for u in self._thu_tu if u in self._xong])
         return xong, tong
+
+    def tom_tat_theo_loai(self):
+        """`((ảnh_xong, ảnh_tổng), (video_xong, video_tổng))` — tách ảnh/video.
+
+        Nút "Xem chi tiết" dùng số này để hiện "Ảnh 30/60 · Video 19/60" thay vì
+        gộp chung "49/120" — chủ dự án 22/08/2026: phải biết riêng ảnh tới đâu,
+        clip tới đâu, chứ đếm gộp thì chung chung không nói lên điều gì.
+        """
+        return self._dem_theo_loai()

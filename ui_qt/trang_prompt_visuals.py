@@ -21,8 +21,8 @@ import threading
 from typing import List, Optional
 
 from PyQt5.QtWidgets import (
-    QComboBox, QFileDialog, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar,
-    QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QPlainTextEdit,
+    QProgressBar, QVBoxLayout, QWidget,
 )
 
 from core.prompt_visuals import (
@@ -95,6 +95,18 @@ class TrangPromptVisuals(QWidget):
         self._mo_hinh = self._o_chon(MO_HINH, chon, "Mô hình viết prompt")
         self._ngon_ngu = self._o_chon(NGON_NGU, chon, "Tiếng trong file")
         v.addLayout(chon)
+
+        # Giữ một dàn nhân vật + một phong cách xuyên suốt — kế thừa tab Tự động.
+        # Bật sẵn: đa số video có một nhân vật chính, để mỗi cảnh một người khác
+        # là hỏng. Tắt thì về hành vi cũ (mỗi cảnh tự do).
+        self._nhat_quan = QCheckBox("Giữ nhân vật & phong cách xuyên suốt")
+        self._nhat_quan.setChecked(True)
+        self._nhat_quan.setToolTip(
+            "Đọc cả lời đọc một lượt để dựng dàn nhân vật cố định và một phong "
+            "cách, rồi mọi cảnh dùng chung — sheet nhân vật trong file Excel sẽ "
+            "được điền. Tắt thì mỗi cảnh tự do, sheet nhân vật để trống.\n"
+            "Bật thì tốn thêm một lượt gọi AI cho mỗi file.")
+        v.addWidget(self._nhat_quan)
         return khung
 
     def _o_chon(self, muc, hang, mach: str) -> QComboBox:
@@ -118,7 +130,8 @@ class TrangPromptVisuals(QWidget):
         # trước cái nào là cái nào.
         v.addWidget(self._chu_phu(
             "Bước nghe chạy trên máy bạn, miễn phí. Bước viết prompt gọi AI nên "
-            "gọi AI — mỗi 20 cảnh một lượt gọi."))
+            "gọi AI — mỗi 20 cảnh một lượt gọi. Bật “Giữ nhân vật & phong cách "
+            "xuyên suốt” thì có thêm một lượt gọi dựng dàn nhân vật trước."))
 
         self._canh_bao = self._chu_phu("")
         self._canh_bao.setStyleSheet("color:{0};".format(theme.VANG))
@@ -235,6 +248,7 @@ class TrangPromptVisuals(QWidget):
         engine = self._engine.currentData()
         mo_hinh = self._mo_hinh.currentData()
         ngon_ngu = self._ngon_ngu.currentData()
+        nhat_quan = self._nhat_quan.isChecked()
         files = list(self._files)
 
         self._huy = threading.Event()
@@ -246,11 +260,11 @@ class TrangPromptVisuals(QWidget):
         self._ghi("Bắt đầu — {0} file.".format(len(files)))
 
         def viec() -> List[str]:
-            return self._chay_nen(files, engine, mo_hinh, ngon_ngu, huy)
+            return self._chay_nen(files, engine, mo_hinh, ngon_ngu, nhat_quan, huy)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
-    def _chay_nen(self, files, engine, mo_hinh, ngon_ngu, huy) -> List[str]:
+    def _chay_nen(self, files, engine, mo_hinh, ngon_ngu, nhat_quan, huy) -> List[str]:
         """LUỒNG NỀN. Không chạm widget — mọi câu chữ đi qua `_ghi_nen`."""
         from core.artifacts import LocalArtifactStore  # noqa: PLC0415
         from core.workflow_runner import CancellationToken  # noqa: PLC0415
@@ -273,7 +287,7 @@ class TrangPromptVisuals(QWidget):
                 ma_chay = "pv-" + _ma_an_toan(ten) or "pv-chay"
                 wf = dung_workflow(_ma_artifact(ma), engine=engine,
                                    mo_hinh=mo_hinh, ngon_ngu=ngon_ngu,
-                                   ma_chay=ma_chay)
+                                   nhat_quan=nhat_quan, ma_chay=ma_chay)
                 huy_token = CancellationToken()
                 if huy.is_set():
                     break

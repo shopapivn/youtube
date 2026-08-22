@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from shopapi import ShopAPI
 
-from .config import Config
+from .config import Config, sanitize_api_key
 from .pricing import DEFAULT_PRICES, PriceTable
 
 __all__ = ["build_client", "fetch_balance", "fetch_prices", "extract_outputs", "wallet_micro"]
@@ -46,7 +46,7 @@ def build_client(config: Config) -> ShopAPI:
     import httpx  # noqa: PLC0415
 
     client = ShopAPI(
-        api_key=config.api_key,
+        api_key=sanitize_api_key(config.api_key),
         base_url=config.base_url,
         timeout=_TIMEOUT,
         max_retries=_MAX_RETRIES,

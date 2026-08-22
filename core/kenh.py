@@ -40,6 +40,7 @@ __all__ = [
     "TEP_CHIEN_LUOC",
     "Kenh", "duong_kenh", "liet_ke_kenh", "doc_kenh", "kiem_kenh",
     "doc_yaml", "co_mui_khoa", "GIU_NGUYEN", "ten_khung",
+    "CHE_DO_TIEU_DE", "ten_che_do",
 ]
 
 #: Thư mục chứa mọi kênh, nằm cạnh `shopapi_studio_qt.py`.
@@ -94,6 +95,33 @@ class Kenh:
     #: Số ký tự đọc được trong một phút của tiếng này. Dùng để quy phút → ký tự
     #: cho bước nắn độ dài. Đo từ giọng thật, không đoán.
     ky_tu_moi_phut: int = 900
+    #: Bám độ dài THEO VIDEO GỐC thay vì theo `phut_muc_tieu`.
+    #:
+    #: Kênh remake kiểu "gần như giống đối thủ nhất" muốn video dài đúng bằng
+    #: video đối thủ, không phải một con số phút cố định. Bật cờ này thì mục tiêu
+    #: độ dài của bước viết = số ký tự tư liệu đối thủ (`CHARS_GOC`), và chốt
+    #: chặn "kịch bản quá ngắn" cũng đo theo bản gốc chứ không theo 20 phút.
+    #:
+    #: `phut_muc_tieu` khi ấy không còn dẫn dắt độ dài — để nguyên cũng được.
+    #: Thường đi kèm việc BỎ `prompt/4-do-dai.md` để không nắn về mốc cố định.
+    do_dai_theo_goc: bool = False
+    #: Chế độ đặt TIÊU ĐỀ và CHỮ BÌA — bám bản gốc hay đặt lại theo chất kênh.
+    #:
+    #: `"faithful"` (mặc định) — bám sát tiêu đề đối thủ, chỉ dịch và bản địa
+    #: hoá, giữ nguyên lời hứa/mồi tò mò. Nết cũ của mọi kênh trước đây.
+    #: `"restyled"` — viết lại tiêu đề theo giọng riêng của kênh, chỉ giữ lõi
+    #: lời hứa. Dành cho kênh có bản sắc riêng, không cố giống đối thủ.
+    #: `"nguyen_goc"` — LẤY NGUYÊN tiêu đề đối thủ, và ĐỌC chữ trên ảnh bìa đối
+    #: thủ làm chữ bìa. Không gọi AI viết lại — bỏ hẳn lượt gọi ấy. Dành cho kênh
+    #: remake "gần như giống đối thủ nhất". Đọc ảnh bìa hỏng thì chữ bìa lấy
+    #: đúng tiêu đề đối thủ (đường lui, không bao giờ làm vỡ lượt chạy).
+    #:
+    #: Lời nhắc `prompt/1-tieu-de.md` VỐN đã có sẵn hai nhánh `faithful`/
+    #: `restyled` qua ô `<<MODE>>`; hai giá trị ấy chỉ chọn nhánh nào được điền
+    #: vào. Trước đây luồng AUTO đóng cứng `faithful`, nên nhánh `restyled` viết
+    #: trong lời nhắc chưa bao giờ chạy — cờ này mở nó ra mà không đụng nội dung
+    #: lời nhắc. Riêng `nguyen_goc` KHÔNG chạy lời nhắc này.
+    che_do_tieu_de: str = "faithful"
     #: Mã giọng đọc trên cổng ShopAPI.
     voice_id: str = ""
     #: Engine dựng clip — quyết định trần độ dài mỗi cảnh (veo3 8s, seedance 10s).
@@ -309,6 +337,8 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         giong_van=str(cai.get("giong_van") or ""),
         phut_muc_tieu=_so(cai.get("phut_muc_tieu"), 10.0),
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
+        do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
+        che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),
         mo_hinh=str(cai.get("mo_hinh") or "claude-sonnet-5"),
@@ -372,6 +402,24 @@ def ten_khung(gia_tri) -> str:
     if chu in ("1080p", "1080", "fullhd", "fhd"):
         return "1080p"
     return ""
+
+
+#: Ba chế độ đặt tiêu đề. `faithful`/`restyled` là hai nhánh lời nhắc
+#: `1-tieu-de.md` hiểu; `nguyen_goc` lấy nguyên tiêu đề đối thủ + đọc ảnh bìa,
+#: không chạy lời nhắc.
+CHE_DO_TIEU_DE = ("faithful", "restyled", "nguyen_goc")
+
+
+def ten_che_do(gia_tri) -> str:
+    """Nắn tên chế độ tiêu đề về giá trị hiểu được; gõ sai thì về "faithful".
+
+    Rơi về `"faithful"` (bám bản gốc) khi bỏ trống hoặc gõ một chữ tool không
+    hiểu — nết an toàn, đúng hành vi mọi kênh cũ, chứ không lặng lẽ tắt bước đặt
+    tên vì một chữ gõ nhầm. Muốn kênh tự đặt lại tiêu đề thì khai `restyled`;
+    muốn lấy nguyên tiêu đề + chữ bìa đối thủ thì khai `nguyen_goc`.
+    """
+    chu = str(gia_tri or "").strip().lower()
+    return chu if chu in CHE_DO_TIEU_DE else "faithful"
 
 
 def _anh_trong(thu_muc: str) -> List[str]:

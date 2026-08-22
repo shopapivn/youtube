@@ -94,9 +94,16 @@ _NHAN_NGANH = [
     ("engine", "Máy dựng video", "veo3: mỗi cảnh tối đa 8 giây. seedance: 10 giây.", ("combo", ["veo3", "seedance"])),
     ("so_thumbnail", "Số ảnh bìa sinh ra", "Số ảnh bìa tạo để bạn chọn.", "so"),
     ("mo_hinh", "AI viết kịch bản", "Mô hình viết, ví dụ claude-sonnet-5.", "line"),
-    ("dot_phu_de", "Đốt phụ đề vào hình", "Bật: hợp Facebook/TikTok. Tắt: YouTube đọc được nội dung.", "bool"),
-    ("am_luong_nhac", "Độ to nhạc nền", "Phần trăm so với giọng đọc. 12% là mức thường dùng.", "%"),
+    # `dot_phu_de` và `am_luong_nhac` KHÔNG bày ở đây nữa: đó là công tắc
+    # lúc-dựng thuộc về KÊNH (sửa ở thẻ “Dựng video” của hộp Kênh), không phải
+    # thuộc tính của ngách. Vẫn ghi kèm khi lưu — xem `_thu_du_lieu`.
 ]
+
+#: Hai khoá dựng-video vẫn phải ghi vào ngách vì `core.soan_khuon.ghi_nganh`
+#: bắt buộc chúng, nhưng không còn ô cho người dùng chỉnh. Giữ giá trị cũ của
+#: bộ, hoặc mặc định bên dưới cho bộ mới.
+_NGANH_AN = {"dot_phu_de": True, "am_luong_nhac": 0.12}
+
 
 _NHAN_CHIEN_LUOC = [
     ("ten", "Tên chiến lược", "Tiếng Việt, hiện lên ô chọn.", "line"),
@@ -244,6 +251,7 @@ class HopSoanKhuon(QDialog):
         self._o_ma.setText("" if tao_moi else bo.ma)
 
         du = bo.du_lieu if bo else {}
+        self._du_hien = du
         for khoa, nh, tip, kieu in _NHAN[self._loai]:
             self._them_o(khoa, nh, tip, kieu, du.get(khoa))
 
@@ -312,8 +320,15 @@ class HopSoanKhuon(QDialog):
         return w.text().strip()
 
     def _thu_du_lieu(self) -> Dict[str, object]:
-        return {khoa: self._gia_tri(khoa)
-                for khoa, _nh, _tip, _kieu in _NHAN[self._loai]}
+        du = {khoa: self._gia_tri(khoa)
+              for khoa, _nh, _tip, _kieu in _NHAN[self._loai]}
+        if self._loai == "nganh":
+            # Hai khoá dựng-video không còn ô nhập; giữ giá trị cũ của bộ (hoặc
+            # mặc định) để `ghi_nganh` không kêu thiếu.
+            cu = getattr(self, "_du_hien", {}) or {}
+            for khoa, mac in _NGANH_AN.items():
+                du[khoa] = cu.get(khoa, mac)
+        return du
 
     # ── Ảnh nhân vật (chỉ bộ vẽ) ─────────────────────────────────────────────
 

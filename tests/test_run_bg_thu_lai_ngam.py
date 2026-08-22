@@ -117,3 +117,41 @@ def test_thu_mai_khong_xong_thi_cuoi_cung_van_bao(cua_so, monkeypatch):
 
     assert len(loi_box) == 1, "thử hết trần thì phải báo, không im lặng nuốt"
     assert dem["n"] == cs._THU_LAI_NEN_TOI_DA + 1, "gọi lần đầu + đúng số lần thử lại trần"
+
+
+def test_qua_tan_suat_thu_mai_khong_bao_gio_hien_hop(cua_so, monkeypatch):
+    """Chủ dự án 22/08: "đã MAX đừng thông báo linh tinh".
+
+    Chạy hết công suất thì 429 là chuyện thường trực — phải thử lại TỚI KHI QUA,
+    KHÔNG bao giờ hiện hộp "Bạn gửi hơi nhanh", kể cả khi vượt xa số lần trần
+    của lỗi mạng thường.
+    """
+    from shopapi import RateLimitError
+
+    from ui_qt import app as app_mod
+
+    cs, app = cua_so
+    monkeypatch.setattr(app_mod, "retry_after_seconds", lambda *a, **k: 0.0)
+
+    da_hien = []
+    monkeypatch.setattr(cs, "show_error", lambda loi: da_hien.append(loi))
+
+    # Nổ 429 nhiều hơn hẳn trần lỗi mạng rồi mới xong — vẫn không được báo.
+    so_lan_ngan = cs._THU_LAI_NEN_TOI_DA + 4
+    dem = {"n": 0}
+
+    def viec():
+        dem["n"] += 1
+        if dem["n"] <= so_lan_ngan:
+            raise RateLimitError("bạn gửi hơi nhanh")
+        return "xong"
+
+    ket = []
+    loi_box = []
+    cs.run_bg(viec, on_ok=ket.append, on_err=loi_box.append)
+    _cho(app, lambda: ket or loi_box)
+
+    assert ket == ["xong"], "429 phải thử lại tới khi qua rồi trả kết quả"
+    assert loi_box == [], "429 KHÔNG được đưa lên on_err"
+    assert da_hien == [], "429 KHÔNG được hiện hộp lỗi dù thử quá số lần trần"
+    assert dem["n"] == so_lan_ngan + 1, "thử lại vượt trần lỗi mạng vẫn tiếp tục"
