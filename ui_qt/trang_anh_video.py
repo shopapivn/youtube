@@ -269,10 +269,18 @@ class TabThuCong(QWidget):
 
         doc.addLayout(hang)
 
+        # ═══ CHỖ LƯU KẾT QUẢ — HIỆN NGAY DƯỚI HÀNG NÚT GỬI ═══
+        #
+        # Trước đây ô này bị tạo ra nhưng **không gắn vào layout**, nên tab Thủ
+        # công không cho thấy file rơi vào đâu — khách tạo xong phải tự đi mò
+        # thư mục. Đặt ngay trong khung nhập, sát nút gửi, để luôn thấy và đổi
+        # được chỗ lưu tại chỗ.
+        self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
+        doc.addWidget(self._thu_muc)
+
         khung.setSizePolicy(khung.sizePolicy().horizontalPolicy(),
                            khung.sizePolicy().Maximum)
 
-        self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
         self._doi_loai()
         return khung
 
@@ -666,6 +674,14 @@ class TabHangLoat(QWidget):
         if hasattr(self, "noi_chuoi"):
             self.noi_chuoi.setVisible(che_do == CD_CHUOI)
 
+        # Engine video chỉ hiện khi chế độ có làm video. "Tạo ảnh" thì giấu cả
+        # nhãn lẫn ô chọn — không bắt khách nhìn một tuỳ chọn không dùng tới.
+        co_video = che_do != CD_ANH
+        if hasattr(self, "engine"):
+            self.engine.setVisible(co_video)
+        if hasattr(self, "_nhan_engine"):
+            self._nhan_engine.setVisible(co_video)
+
         # Tỉ lệ: chế độ TẠO ẢNH cho đủ 5 (thêm 4:3, 3:4). Video và chuỗi ảnh→
         # video chỉ 3, vì engine video chỉ nhận 16:9/9:16/1:1 — nối một ảnh 4:3
         # sang clip là máy chủ trả 422, tốn công khách vô ích.
@@ -735,7 +751,11 @@ class TabHangLoat(QWidget):
         hang.addWidget(nhan("Tỉ lệ"))
         self.ty_le = _combo(TY_LE_VIDEO, "16:9", 84)
         hang.addWidget(self.ty_le)
-        hang.addWidget(nhan("Engine video"))
+        # Engine chỉ có nghĩa khi có làm video. Chế độ "Tạo ảnh" giấu cả nhãn lẫn
+        # ô chọn (xem `_dat_che_do`) — bày "Engine video" ở màn hình chỉ tạo ảnh
+        # là một câu hỏi thừa khách phải bỏ qua.
+        self._nhan_engine = nhan("Engine video")
+        hang.addWidget(self._nhan_engine)
         self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 112)
         hang.addWidget(self.engine)
         doc.addLayout(hang)
@@ -970,21 +990,42 @@ class TabHangLoat(QWidget):
         return self._dong_cua_video.get(uid)
 
     def _lam_lai_canh(self, _mo_ta: str, _duong_dan: str, uid: str = "") -> None:
-        """Làm lại **một cảnh**, không chạy lại cả loạt.
+        """Làm lại **một cảnh** — mở ô cho SỬA mô tả trước khi gửi lại.
 
-        Đọc lại mô tả từ BẢNG chứ không dùng mô tả cũ kèm theo thẻ: khách hay
-        sửa chữ trong bảng rồi mới bấm làm lại, và cái họ muốn chạy là chữ vừa
-        sửa.
+        Trước đây bấm là gửi thẳng chữ đang nằm trong bảng, KHÔNG cho sửa —
+        nhưng "làm lại" gần như luôn là để đổi vài chữ trong prompt cho ra khác
+        đi. Giờ hiện đúng mô tả cũ trong một ô sửa; sửa xong ghi lại vào bảng
+        rồi mới tạo lại, thế chỗ đúng thẻ cũ (`thay_uid`).
+
+        Thẻ ảnh sửa mô tả ảnh và tạo lại ngay. Thẻ clip thì sửa mô tả clip, ghi
+        lại vào bảng — clip tạo lại theo ảnh đầu vào nên bấm "Chạy cả loạt" để
+        chạy với mô tả mới.
         """
+        from PyQt5.QtWidgets import QInputDialog  # noqa: PLC0415
+
         dong = self._dong_cua(uid)
         if dong is None or dong >= self.bang.rowCount():
             return
-        mo_ta = self._chu(dong, _CotBang.ANH)
-        if not mo_ta:
-            self._app.show_message("Cảnh này trống",
-                                   "Nhập mô tả ảnh cho dòng đó rồi làm lại.")
+        la_clip = uid in self._dong_cua_video and uid not in self._dong_cua_anh
+        cot = _CotBang.VIDEO if la_clip else _CotBang.ANH
+        moi, dong_y = QInputDialog.getMultiLineText(
+            self, "Làm lại cảnh {0}".format(dong + 1),
+            "Sửa mô tả rồi bấm OK để tạo lại:", self._chu(dong, cot))
+        if not dong_y:
             return
-        self._gui_mot_canh(dong, mo_ta, thay_uid=uid)
+        moi = moi.strip()
+        if not moi:
+            self._app.show_message("Cảnh này trống",
+                                   "Nhập mô tả cho cảnh đó rồi làm lại.")
+            return
+        self._dat_trang_thai(dong, cot, moi)   # ghi mô tả đã sửa vào bảng
+        if la_clip:
+            self._app.show_message(
+                "Đã lưu mô tả clip",
+                "Cảnh {0} sẽ tạo lại theo mô tả mới khi bạn bấm “Chạy cả loạt”."
+                .format(dong + 1))
+            return
+        self._gui_mot_canh(dong, moi, thay_uid=uid)
 
     def _gui_mot_canh(self, dong: int, mo_ta: str, thay_uid: str = "") -> None:
         # Ảnh tham chiếu của đúng dòng này. Làm lại một cảnh lẻ mà bỏ tham

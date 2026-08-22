@@ -320,3 +320,100 @@ def test_danh_so_lai_khop_dong_that(qt_app, tmp_path):
     so = [tab.bang.item(r, _CotBang.STT).text()
           for r in range(tab.bang.rowCount())]
     assert so == ["1", "2"], "cột # phải đánh lại liền mạch"
+
+
+# ── 7. Engine video chỉ hiện khi chế độ có làm video ─────────────────────────
+
+def test_engine_an_o_che_do_tao_anh(qt_app, tmp_path):
+    """Chế độ Tạo ảnh giấu ô Engine video; hai chế độ kia hiện lại."""
+    from ui_qt.trang_anh_video import CD_ANH, CD_VIDEO, CD_CHUOI
+
+    tab, _app = _dung_hang_loat(str(tmp_path))
+
+    tab._dat_che_do(CD_ANH)
+    assert tab.engine.isHidden(), "Tạo ảnh: engine video là tuỳ chọn thừa"
+    assert tab._nhan_engine.isHidden(), "giấu cả nhãn 'Engine video'"
+
+    for cd in (CD_VIDEO, CD_CHUOI):
+        tab._dat_che_do(cd)
+        assert not tab.engine.isHidden(), "chế độ có video: engine phải hiện lại"
+
+
+# ── 8. Tab Thủ công cho thấy chỗ lưu kết quả ─────────────────────────────────
+
+def test_thu_cong_hien_cho_luu(qt_app, tmp_path):
+    """Ô chọn chỗ lưu phải nằm trong giao diện, không bị tạo ra rồi bỏ quên."""
+    from ui_qt.trang_anh_video import TabThuCong
+
+    tab = TabThuCong(_AppGia(str(tmp_path)))
+    assert tab._thu_muc.parent() is not None, (
+        "ô chọn chỗ lưu phải được gắn vào layout để khách thấy file rơi đâu")
+
+
+# ── 9. Làm lại một cảnh: cho sửa prompt trước khi gửi ────────────────────────
+
+def test_lam_lai_canh_cho_sua_prompt_roi_gui(qt_app, tmp_path, monkeypatch):
+    """Bấm Làm lại thẻ ảnh: hiện ô sửa, sửa xong ghi lại bảng và tạo lại."""
+    from PyQt5.QtWidgets import QInputDialog
+    from ui_qt.trang_anh_video import CD_ANH, _CotBang
+
+    tab, app = _dung_hang_loat(str(tmp_path))
+    tab._dat_che_do(CD_ANH)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc")
+    uid = "khoa-1"
+    tab._dong_cua_anh[uid] = dong
+
+    monkeypatch.setattr(
+        QInputDialog, "getMultiLineText",
+        staticmethod(lambda *a, **k: ("cảnh gốc, sáng hơn", True)))
+    tab._lam_lai_canh("cảnh gốc", "", uid)
+
+    assert tab._chu(dong, _CotBang.ANH) == "cảnh gốc, sáng hơn", (
+        "prompt sửa phải ghi lại vào bảng")
+    assert app.da_chay, "sửa xong phải gửi tạo lại"
+    spec = app.da_chay[-1][0][0]
+    assert spec.content == "cảnh gốc, sáng hơn", "gửi đúng mô tả vừa sửa"
+
+
+def test_lam_lai_canh_huy_thi_khong_gui(qt_app, tmp_path, monkeypatch):
+    """Bấm Huỷ ở ô sửa: không đổi bảng, không gửi gì."""
+    from PyQt5.QtWidgets import QInputDialog
+    from ui_qt.trang_anh_video import CD_ANH, _CotBang
+
+    tab, app = _dung_hang_loat(str(tmp_path))
+    tab._dat_che_do(CD_ANH)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc")
+    uid = "khoa-2"
+    tab._dong_cua_anh[uid] = dong
+
+    monkeypatch.setattr(
+        QInputDialog, "getMultiLineText",
+        staticmethod(lambda *a, **k: ("chữ bỏ đi", False)))
+    tab._lam_lai_canh("cảnh gốc", "", uid)
+
+    assert tab._chu(dong, _CotBang.ANH) == "cảnh gốc", "huỷ thì giữ nguyên bảng"
+    assert app.da_chay == [], "huỷ thì không gửi"
+
+
+def test_lam_lai_clip_chi_luu_cho_chay_lo(qt_app, tmp_path, monkeypatch):
+    """Làm lại thẻ clip: sửa mô tả clip, ghi lại bảng, chờ 'Chạy cả loạt'."""
+    from PyQt5.QtWidgets import QInputDialog
+    from ui_qt.trang_anh_video import CD_CHUOI, _CotBang
+
+    tab, app = _dung_hang_loat(str(tmp_path))
+    tab._dat_che_do(CD_CHUOI)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc", "máy quay đẩy tới")
+    uid = "vid-1"
+    tab._dong_cua_video[uid] = dong
+
+    monkeypatch.setattr(
+        QInputDialog, "getMultiLineText",
+        staticmethod(lambda *a, **k: ("máy quay lùi ra", True)))
+    tab._lam_lai_canh("", "", uid)
+
+    assert tab._chu(dong, _CotBang.VIDEO) == "máy quay lùi ra", (
+        "mô tả clip sửa phải ghi lại vào bảng")
+    assert app.da_chay == [], "clip làm lại chỉ ghi lại, chờ Chạy cả loạt"
