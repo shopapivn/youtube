@@ -64,6 +64,7 @@ class HopQuanLyKenh(QDialog):
         # một kênh đã sửa nhiều, thứ khuôn không dựng lại được.
         dau.addWidget(nut_phu("Tạo kênh mới", self._tao_kenh, rong=150))
         dau.addWidget(nut_phu("Nhân bản", self._nhan_ban, rong=124))
+        dau.addWidget(nut_phu("Sửa khuôn", self._sua_khuon, rong=124))
         dau.addWidget(nut_phu("Mở thư mục", self._mo_thu_muc, rong=140))
         doc.addLayout(dau)
 
@@ -360,6 +361,16 @@ class HopQuanLyKenh(QDialog):
             return
         self._chon.addItem(hop.ma_kenh_moi)
         self._chon.setCurrentText(hop.ma_kenh_moi)
+
+    # ── Sửa khuôn ────────────────────────────────────────────────────────────
+
+    def _sua_khuon(self) -> None:
+        from .soan_khuon import HopSoanKhuon  # noqa: PLC0415
+
+        hop = HopSoanKhuon(self._app, self)
+        hop.exec_()
+        # Khuôn đổi không đụng kênh đã tạo (kênh tự chứa) — không cần nạp lại
+        # danh sách kênh ở đây; lần Tạo kênh mới sau sẽ thấy khuôn mới.
 
     # ── Nhân bản ─────────────────────────────────────────────────────────────
 

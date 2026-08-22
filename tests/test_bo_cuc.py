@@ -201,3 +201,60 @@ def test_doi_khan_gia_thi_so_ky_tu_doi_theo(hop_tao_kenh):
         app.processEvents()
         thay.add(hop._nhan_dai.text())
     assert len(thay) == hop._chon_vh.count(), thay
+
+
+# ── Hộp "Sửa khuôn" ──────────────────────────────────────────────────────────
+#
+# Hộp này dựng lại form động mỗi lần đổi loại (Bộ vẽ có 18 ô, đổi sang Chiến
+# lược chỉ còn 3 ô + tab lời nhắc). Một lỗi ở nhánh nào cũng chỉ lộ ra khi bấm
+# đúng loại ấy — nên bài này quét cả bốn loại, không chỉ loại mở ra đầu tiên.
+
+
+@pytest.fixture(scope="module")
+def hop_soan_khuon(cua_so):
+    from ui_qt.soan_khuon import HopSoanKhuon
+
+    cs, app = cua_so
+    hop = HopSoanKhuon(cs, cs)
+    app.processEvents()
+    yield hop, app
+    hop.close()
+
+
+def test_hop_soan_khuon_vua_be_rong_man_hinh(hop_soan_khuon):
+    hop, _app = hop_soan_khuon
+    goi = hop.minimumSizeHint()
+    assert goi.width() <= TRAN_RONG, "hộp Sửa khuôn cần {0}px bề rộng".format(
+        goi.width())
+
+
+def test_hop_soan_khuon_dung_duoc_ca_bon_loai(hop_soan_khuon):
+    """Đổi qua từng loại phải dựng form không văng, và ô mã theo đúng chế độ."""
+    hop, app = hop_soan_khuon
+    from core.soan_khuon import LOAI
+
+    for i in range(hop._chon_loai.count()):
+        hop._chon_loai.setCurrentIndex(i)
+        app.processEvents()
+        assert hop._chon_loai.currentData() in LOAI
+        # Có ít nhất một ô nhãn được dựng cho loại này.
+        assert hop._o, "loại {0} không dựng được ô nào".format(
+            hop._chon_loai.currentData())
+
+
+def test_hop_soan_khuon_chon_tao_moi_thi_mo_khoa_ma(hop_soan_khuon):
+    """“➕ Tạo mới…” mở khoá ô mã; sửa bộ có sẵn thì khoá lại."""
+    hop, app = hop_soan_khuon
+    from ui_qt.soan_khuon import _TAO_MOI
+
+    hop._chon_loai.setCurrentIndex(0)     # Bộ vẽ — chắc chắn có bộ sẵn
+    app.processEvents()
+    hop._chon_bo.setCurrentIndex(0)       # bộ có sẵn
+    app.processEvents()
+    assert not hop._o_ma.isEnabled(), "sửa bộ có sẵn phải khoá ô mã"
+
+    i = hop._chon_bo.findData(_TAO_MOI)
+    hop._chon_bo.setCurrentIndex(i)
+    app.processEvents()
+    assert hop._o_ma.isEnabled(), "Tạo mới phải mở khoá ô mã"
+

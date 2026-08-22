@@ -445,6 +445,50 @@ class TestChienLuocDeLen:
         assert k.chien_luoc.get("can_ban_goc") is True
 
 
+class TestSangTao:
+    """Chiến lược Sáng tạo — tự viết, không cần bản gốc.
+
+    Ba chiến lược khác nhau ở chỗ lấy nội dung từ đâu; Sáng tạo là đường không
+    có link đối thủ. Nó phải chạy được ngay, và phải gỡ sạch mọi câu chữ nhắc
+    tới "bản gốc" — nếu để nguyên bước sửa của Remake, bước ấy lôi bài về đúng
+    cái dàn ý thô người dùng đưa vào, hỏng cả phần AI vừa triển khai.
+    """
+
+    def test_kenh_sang_tao_chay_duoc_ngay(self, goc):
+        dung_kenh(goc, "K-ST", ma_nganh=NGANH, ma_ve=VE, ma_van_hoa=VAN_HOA,
+                  ma_chien_luoc="sang-tao", voice_id="g")
+        assert kiem_kenh(doc_kenh(goc, "K-ST")) == []
+
+    def test_de_len_hai_tep_viet_va_sua_khong_keo_phan_tich(self, goc):
+        dung_kenh(goc, "K-ST2", ma_nganh=NGANH, ma_ve=VE, ma_van_hoa=VAN_HOA,
+                  ma_chien_luoc="sang-tao", voice_id="g")
+        thu = os.path.join(duong_kenh(goc, "K-ST2"), THU_MUC_PROMPT)
+        goc_nganh = duong_khuon(goc, "nganh", NGANH, THU_MUC_PROMPT)
+        # 2-viet.md khác bản ngách (Remake) — Sáng tạo viết từ ý tưởng, không
+        # viết lại của đối thủ.
+        assert (open(os.path.join(thu, "2-viet.md"), "rb").read()
+                != open(os.path.join(goc_nganh, "2-viet.md"), "rb").read())
+        # Không có bản gốc thì không có gì để phân tích.
+        assert not os.path.isfile(os.path.join(thu, "2a-phan-tich.md"))
+
+    def test_buoc_sua_khong_con_bam_ban_goc(self, goc):
+        """Bước sửa của Sáng tạo không được so với bản gốc nào."""
+        dung_kenh(goc, "K-ST3", ma_nganh=NGANH, ma_ve=VE, ma_van_hoa=VAN_HOA,
+                  ma_chien_luoc="sang-tao", voice_id="g")
+        with open(os.path.join(duong_kenh(goc, "K-ST3"), THU_MUC_PROMPT,
+                               "3-sua.md"), encoding="utf-8") as t:
+            sua = t.read()
+        assert "<<COMPETITOR_TRANSCRIPT>>" not in sua
+        assert "gốc đã viral" not in sua
+
+    def test_can_ban_goc_la_false(self, goc):
+        from core.khuon import doc_chien_luoc
+
+        b = doc_chien_luoc(goc, "sang-tao")
+        assert b is not None
+        assert b.du_lieu.get("can_ban_goc") is False
+
+
 class TestBaKenhNhatTrenDiaThat:
     """TL4 và TL6 chạy remake, TL5 chạy cover — đúng như đã chốt 19/08/2026."""
 

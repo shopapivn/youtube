@@ -417,3 +417,156 @@ def test_lam_lai_clip_chi_luu_cho_chay_lo(qt_app, tmp_path, monkeypatch):
     assert tab._chu(dong, _CotBang.VIDEO) == "máy quay lùi ra", (
         "mô tả clip sửa phải ghi lại vào bảng")
     assert app.da_chay == [], "clip làm lại chỉ ghi lại, chờ Chạy cả loạt"
+
+
+# ── 10. Gộp một khung: cột Kết quả + chi tiết thu gọn ────────────────────────
+
+def test_bang_co_cot_ket_qua_du_bay_cot(qt_app, tmp_path):
+    """Chủ dự án 22/08: mỗi dòng tự đủ, có cột Kết quả xem trước ngay trên dòng."""
+    from ui_qt.trang_anh_video import _CotBang
+
+    tab, _app = _dung_hang_loat(str(tmp_path))
+    assert tab.bang.columnCount() == 7, "thêm cột Kết quả → bảng đủ 7 cột"
+    assert _CotBang.TIEU_DE[_CotBang.KET_QUA] == "Kết quả"
+    assert tab.bang.horizontalHeaderItem(_CotBang.KET_QUA).text() == "Kết quả"
+
+
+def test_chieu_cao_dong_co_dinh_khong_phinh_theo_prompt(qt_app, tmp_path):
+    """Mô tả dài không được kéo dòng cao ngoằng — chiều cao dòng khoá cứng.
+
+    Chủ dự án 22/08 (kèm ảnh dòng bị vỡ): cố định chiều cao, muốn xem hết prompt
+    thì mở "Làm lại" mới hiện.
+    """
+    from PyQt5.QtWidgets import QHeaderView
+    from ui_qt.trang_anh_video import _CotBang
+
+    tab, _app = _dung_hang_loat(str(tmp_path))
+    tab.bang.setRowCount(0)
+    dai = "mưa đêm, " * 200  # prompt rất dài
+    dong = tab.them_dong(dai)
+
+    dv = tab.bang.verticalHeader()
+    assert dv.sectionResizeMode(0) == QHeaderView.Fixed, "chiều cao dòng phải cố định"
+    assert not tab.bang.wordWrap(), "tắt xuống dòng để ô mô tả không phình"
+    assert tab.bang.rowHeight(dong) <= 80, (
+        "dòng phải giữ thấp dù prompt dài — thấy được {0}px".format(
+            tab.bang.rowHeight(dong)))
+
+
+def test_chi_tiet_mac_dinh_dong_bat_thi_mo(qt_app, tmp_path):
+    """Lưới thẻ chi tiết mặc định ĐÓNG; bấm nút gạt thì mở ra."""
+    tab, _app = _dung_hang_loat(str(tmp_path))
+    assert tab.thu_vien.isHidden(), "chi tiết phải đóng sẵn, tập trung vào bảng"
+    tab._bat_chi_tiet()
+    assert not tab.thu_vien.isHidden(), "bấm nút gạt thì lưới chi tiết hiện ra"
+    assert tab._nut_chi_tiet.text().startswith("▾"), "mở thì mũi tên xuống"
+    tab._bat_chi_tiet()
+    assert tab.thu_vien.isHidden(), "bấm lần nữa thì đóng lại"
+
+
+def test_nut_chi_tiet_hien_dem_tien_do(qt_app, tmp_path):
+    """Đóng chi tiết thì nút gạt hiện gọn số đã xong (6/8 xong…)."""
+    from core.jobs import STATUS_DONE
+
+    tab, _app = _dung_hang_loat(str(tmp_path))
+    for u in ("u0", "u1", "u2"):
+        tab.thu_vien.them(u, "cảnh " + u, False)
+    tab.thu_vien.cap_nhat(_BanGhi("u0", STATUS_DONE, _Spec("u0")))
+    tab._cap_nhat_nut_chi_tiet()
+    assert "(1/3 xong)" in tab._nut_chi_tiet.text()
+
+
+def test_o_ket_qua_hien_lam_lai_khi_co_ket_qua(qt_app, tmp_path):
+    """Ô kết quả của dòng: có ảnh/clip xong mới hiện link Làm lại."""
+    from ui_qt.trang_anh_video import _CotBang, _OKetQuaDong
+
+    tab, _app = _dung_hang_loat(str(tmp_path))
+    o = tab.bang.cellWidget(0, _CotBang.KET_QUA)
+    assert isinstance(o, _OKetQuaDong)
+    assert not o._lam_lai.isVisible(), "chưa có kết quả thì chưa có Làm lại"
+    o.dat_ket_qua(str(tmp_path / "khong-co.mp4"), True)
+    assert o.video and not o._lam_lai.isHidden(), "xong thì hiện Làm lại"
+
+
+# ── 11. Làm lại NGAY TRÊN DÒNG: đổi ảnh vs chỉ đổi video ─────────────────────
+
+class _KhoTaiLen:
+    @staticmethod
+    def upload_file(duong):
+        return "https://tai-len.test/" + os.path.basename(str(duong))
+
+
+class _ClientGia:
+    uploads = _KhoTaiLen()
+
+
+def test_lam_lai_dong_anh_doi_lam_lai_ca_chuoi(qt_app, tmp_path, monkeypatch):
+    """Chuỗi: đổi mô tả ẢNH → làm lại ảnh (thay thẻ cũ) và nối tiếp sang video."""
+    from ui_qt.trang_anh_video import CD_CHUOI, _CotBang
+    from core.pricing import KIND_IMAGE
+
+    tab, app = _dung_hang_loat(str(tmp_path))
+    tab._dat_che_do(CD_CHUOI)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc", "máy quay đẩy tới từ từ")
+    o = tab._o_ket_qua(dong)
+    o.uid_anh = "anh-cu"
+    o.mo_ta_anh = "cảnh gốc"
+    o.mo_ta_video = "máy quay đẩy tới từ từ"
+
+    monkeypatch.setattr(
+        tab, "_hoi_sua_canh",
+        lambda _d: ("cảnh gốc trời mưa", "máy quay đẩy tới từ từ", True))
+    tab._lam_lai_dong(o)
+
+    assert app.da_chay, "đổi mô tả ảnh phải gửi tạo lại ảnh"
+    spec = app.da_chay[-1][0][0]
+    assert spec.kind == KIND_IMAGE, "làm lại ảnh trước, rồi mới nối video"
+    assert spec.content == "cảnh gốc trời mưa"
+    assert dong in tab._ep_noi, "ảnh mới xong tự nối sang video dù ô nối tắt"
+
+
+def test_lam_lai_dong_chi_video_doi_khong_dung_anh(qt_app, tmp_path, monkeypatch):
+    """Chuỗi: ẢNH không đổi, chỉ mô tả VIDEO đổi → làm lại MỖI clip, giữ ảnh."""
+    from ui_qt.trang_anh_video import CD_CHUOI
+    from core.pricing import KIND_VIDEO
+
+    tab, app = _dung_hang_loat(str(tmp_path))
+    tab._app.client = _ClientGia()
+    tab._dat_che_do(CD_CHUOI)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc", "máy quay đẩy tới từ từ")
+    o = tab._o_ket_qua(dong)
+    o.uid_anh = "anh-cu"
+    o.mo_ta_anh = "cảnh gốc"
+    o.uid_video = "video-cu"
+    o.mo_ta_video = "máy quay đẩy tới từ từ"
+    o.anh = str(tmp_path / "canh1.png")   # ảnh đã tạo, đường dẫn cục bộ
+
+    monkeypatch.setattr(
+        tab, "_hoi_sua_canh",
+        lambda _d: ("cảnh gốc", "máy quay lùi ra thật chậm", True))
+    tab._lam_lai_dong(o)
+
+    assert app.da_chay, "chỉ đổi video vẫn phải gửi tạo lại clip"
+    kinds = [s.kind for chay in app.da_chay for s in chay[0]]
+    assert KIND_VIDEO in kinds, "phải có việc video"
+    from core.pricing import KIND_IMAGE
+    assert KIND_IMAGE not in kinds, "KHÔNG được tạo lại ảnh — đúng lời khách"
+
+
+def test_lam_lai_dong_huy_khong_gui(qt_app, tmp_path, monkeypatch):
+    """Huỷ hộp sửa: không gửi gì, bảng giữ nguyên."""
+    from ui_qt.trang_anh_video import CD_CHUOI, _CotBang
+
+    tab, app = _dung_hang_loat(str(tmp_path))
+    tab._dat_che_do(CD_CHUOI)
+    tab.bang.setRowCount(0)
+    dong = tab.them_dong("cảnh gốc", "máy quay đẩy tới")
+    o = tab._o_ket_qua(dong)
+
+    monkeypatch.setattr(tab, "_hoi_sua_canh", lambda _d: ("", "", False))
+    tab._lam_lai_dong(o)
+
+    assert app.da_chay == [], "huỷ thì không gửi gì"
+    assert tab._chu(dong, _CotBang.ANH) == "cảnh gốc", "huỷ thì giữ nguyên bảng"

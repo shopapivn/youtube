@@ -147,6 +147,11 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Muốn ảnh bám một nhân vật? Chọn “Ảnh tham chiếu cho cả loạt”, hoặc "
             "bấm “＋ ảnh” ở từng dòng để chọn ảnh riêng cho dòng đó.",
             "Chọn tỉ lệ, engine, chỗ lưu rồi bấm “Chạy cả loạt”.",
+            "Xong tới đâu, mỗi dòng tự hiện ảnh/clip bé ở cột “Kết quả” — bấm "
+            "vào là mở xem cỡ lớn, khỏi phải mở thư mục dò tìm.",
+            "Chưa ưng một dòng? Bấm “Làm lại” ngay trên dòng đó: đổi mô tả ẢNH "
+            "thì tôi làm lại cả ảnh lẫn clip; chỉ đổi mô tả VIDEO thì tôi làm "
+            "lại mỗi clip, giữ nguyên ảnh — không tốn tiền tạo lại ảnh.",
         ],
         "luu_y": [
             "Ba việc, ba chế độ: “Tạo ảnh” chỉ ra ảnh; “Tạo video” làm clip "
@@ -161,8 +166,11 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "“Dán danh sách” dán theo đúng chế độ đang chọn: ở “Tạo video” mỗi "
             "dòng là mô tả video, hai chế độ kia mỗi dòng là mô tả ảnh. Muốn "
             "điền cả hai trên một dòng thì ngăn bằng dấu | .",
-            "Thanh tiến độ dưới lưới ảnh cho biết cả loạt xong tới đâu; cảnh "
-            "nào hỏng thì thanh chuyển đỏ để bạn thấy ngay.",
+            "Cả loạt gói gọn trong MỘT bảng để bạn nhìn tổng quan. Muốn soi kỹ "
+            "từng thẻ để tuỳ chỉnh thì bấm “Xem chi tiết kết quả” ở dưới — mặc "
+            "định đóng, và nút đó cũng cho biết cả loạt xong tới đâu (mấy/mấy).",
+            "Thanh tiến độ đầy đủ nằm trong phần chi tiết; cảnh nào hỏng thì "
+            "thanh chuyển đỏ để bạn thấy ngay.",
             "Hai cột trạng thái bên phải cho biết từng cảnh đang tới đâu.",
         ],
     },
@@ -216,6 +224,19 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "ngay trong tool. Nút “Nhân bản” chép nguyên một kênh — chỉ dùng "
             "khi bạn muốn bản thứ hai của một kênh đã sửa nhiều; làm kênh mới "
             "thì dùng “Tạo kênh mới”.",
+            "Nút “Sửa khuôn” (trong hộp Tạo kênh và Quản lý kênh) là chỗ tạo "
+            "và sửa chính bốn mảnh dựng nên kênh: ngách, bộ vẽ, bộ văn hoá và "
+            "chiến lược. Chọn loại → chọn bộ có sẵn hoặc “➕ Tạo mới…” → điền "
+            "các ô có nhãn tiếng Việt → Lưu. Không phải mở tệp nào gõ tay nữa. "
+            "Bộ mới hiện ngay trong ô chọn khi bạn tạo kênh.",
+            "Thêm bộ văn hoá / tiếng mới thì phải điền “số ký tự mỗi phút” ĐO "
+            "THẬT từ giọng bạn dùng (lấy số ký tự kịch bản chia số phút file "
+            "mp3). Để 0 thì tool không cho lưu — đúng vậy, vì lấy nhầm số là "
+            "hỏng độ dài video.",
+            "Chiến lược “Sáng tạo — tự viết” không cần link đối thủ: bạn dán "
+            "thẳng ý tưởng hoặc dàn ý vào ô tư liệu (để trống cũng chạy, khi "
+            "đó AI viết chỉ từ tiêu đề). Chiến lược “Cover” thì cần link — hộp "
+            "Tạo kênh nhắc ngay dưới ô chọn chiến lược.",
             "Nhà cung cấp trả clip 1280×720, và trước đây video ra đúng cỡ đó. "
             "Muốn to hơn thì vào “Quản lý kênh” → thẻ “Dựng video” → chọn "
             "1080p, 1440p hay 4K. Không tốn thêm đồng nào, chỉ tốn thời gian "
@@ -287,6 +308,10 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "workspace/su-co.log, chỉ là không hiện lên màn hình.",
             "Video ra: nhà cung cấp trả clip 1280×720, nhỏ hơn cả 1080p. Tôi "
             "phóng lên cỡ bạn chọn ở bước dựng cuối. Mặc định 4K.",
+            "Công suất gửi: chọn tôi đẩy việc lên máy chủ mạnh cỡ nào lúc bắt "
+            "đầu một mẻ. Mặc định như hiện nay (tăng tốc từ từ); Tối đa đẩy cả "
+            "mẻ gần như một phát — hợp khi bạn nhập cả nghìn ảnh/clip và muốn "
+            "xong nhanh nhất.",
             "Agent xây tool (thẻ dưới cùng): cài sẵn một trợ lý lập trình chạy "
             "ngay trong thư mục tool, để bạn nhờ nó sửa chính cái tool này. "
             "Chọn nguồn (ví ShopAPI hay gói Claude/ChatGPT bạn có sẵn), bấm "
@@ -315,6 +340,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "chọn gói riêng của bạn thì KHÔNG trừ ví ShopAPI đồng nào. Cấu "
             "hình chỉ có tác dụng trong thư mục tool này. Trợ lý được toàn "
             "quyền sửa file trong thư mục tool — nó không hỏi duyệt từng bước.",
+            "Công suất gửi Tối đa KHÔNG tốn thêm tiền — vẫn đúng bấy nhiêu "
+            "việc, chỉ là tiền bị trừ dồn nhanh hơn. Dù chọn mức nào, máy chủ "
+            "báo quá tải thì tôi tự chậm lại, nên bạn không làm hỏng gì được.",
         ],
     },
 }

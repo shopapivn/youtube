@@ -974,13 +974,19 @@ class TrangTuDong(QWidget):
                     luot.thu_muc))
 
     def _hong(self, loi: BaseException) -> None:
-        # Lưới an toàn: MAT_MANG không bao giờ thoát ra vì retry vô hạn, nhưng nếu
-        # lọt tới đây thì log-only thay vì dialog — đây là lỗi mạng chập chờn, không
-        # cần khách làm gì.
-        from core.su_co import MAT_MANG, phan_loai  # noqa: PLC0415
-        if phan_loai(loi) == MAT_MANG:
-            self._ghi("[LỖI] Mạng chập chờn — đã thử lại nhưng vẫn không kết nối được. "
-                      "Kiểm tra VPN hoặc wifi rồi chạy lại.")
+        # Lưới an toàn cuối. `run_bg` đã tự chờ-rồi-thử-lại các lỗi TẠM (mạng
+        # chập, 429, máy chủ bận) mà KHÔNG báo ra; lọt được tới đây nghĩa là đã
+        # thử mãi vẫn không xong. Vẫn KHÔNG dựng hộp lỗi cho loại tạm — khách
+        # từng tưởng "Mạng bị gián đoạn" là tool hỏng. Chỉ ghi một dòng nhật ký
+        # rồi để họ bấm "Chạy tiếp" khi mạng về.
+        #
+        # Dùng CHUNG `tu_xu_ly_ngam` — đúng bộ phân loại dựng ra câu "Mạng bị
+        # gián đoạn" — nên không còn cảnh một nơi gọi là mạng, nơi kia lại không.
+        from core.errors import tu_xu_ly_ngam  # noqa: PLC0415
+        if tu_xu_ly_ngam(loi):
+            self._ghi("[MẠNG] Mạng chập chờn — đã tự thử lại nhiều lần mà chưa "
+                      "kết nối được. Kiểm tra VPN/wifi rồi bấm “Chạy tiếp”, "
+                      "phần đã làm vẫn giữ nguyên.")
         else:
             self._app.show_error(loi)
         self._ket_thuc()

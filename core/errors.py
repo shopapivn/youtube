@@ -39,7 +39,8 @@ from shopapi import (
 
 from .config import DASHBOARD_BILLING_URL, DASHBOARD_KEYS_URL, redact
 
-__all__ = ["ErrorAdvice", "describe", "is_retryable", "retry_after_seconds"]
+__all__ = ["ErrorAdvice", "describe", "is_retryable", "tu_xu_ly_ngam",
+           "retry_after_seconds"]
 
 
 @dataclass(frozen=True)
@@ -277,6 +278,13 @@ _TEN_LOI_MANG = frozenset({
     "ConnectError", "RemoteProtocolError", "SSLError", "SSLEOFError",
     "WriteError", "WriteTimeout", "PoolTimeout", "NetworkError",
     "gaierror", "herror", "SSLZeroReturnError", "SSLSyscallError",
+    # Thêm 22/08/2026: khách gửi ảnh khâu 7 (ảnh bìa) chết vì "Mạng bị gián
+    # đoạn". Đây là hai lỗi socket ở tầng OS mà `describe` gọi là mạng (qua
+    # `isinstance OSError`) nhưng tên lớp lại vắng ở đây, nên `phan_loai` cho
+    # rơi vào `CHET` — thoát khỏi retry vô hạn rồi hiện hộp lỗi. Cả hai đều là
+    # đứt/nghẽn đường truyền, KHÔNG lẫn với `FileNotFoundError`/`PermissionError`
+    # (vẫn ngoài danh sách này để không đợi 14 phút cho một tệp không có).
+    "BrokenPipeError", "TimeoutError", "timeout",
 })
 
 
@@ -295,6 +303,24 @@ def _la_loi_mang(exc: BaseException) -> bool:
 def is_retryable(exc: BaseException) -> bool:
     """Lỗi này có đáng thử lại không (dùng cho vòng lặp chạy nền)."""
     return describe(exc).retryable
+
+
+def tu_xu_ly_ngam(exc: BaseException) -> bool:
+    """Lỗi TẠM mà tool nên **tự chờ rồi thử lại, KHÔNG hiện hộp lỗi**.
+
+    Chủ dự án 22/08/2026 (kèm ảnh hộp "Bạn gửi hơi nhanh"): *"bỏ mấy cái thông
+    báo này đi, khách hàng tưởng lỗi, thay vì đó thì tool tự retry tự xử lý"*.
+
+    Đây là những lỗi tự khỏi sau vài giây và KHÔNG cần khách làm gì: quá tần
+    suất (429), máy chủ bận (5xx), chờ quá lâu, đứt mạng. Cố tình TÁCH khỏi
+    `retryable` chung: `retryable` còn bật cho job hỏng / job quá giờ — những
+    thứ khách cần biết để bấm "Chạy lại dòng lỗi", nên vẫn phải hiện ra.
+    """
+    if isinstance(exc, (RateLimitError, APITimeoutError, APIConnectionError)):
+        return True
+    if isinstance(exc, APIStatusError) and getattr(exc, "status", 0) >= 500:
+        return True
+    return isinstance(exc, (OSError, EOFError)) or _la_loi_mang(exc)
 
 
 def retry_after_seconds(exc: BaseException, attempt: int, *, base: float = 2.0, cap: float = 60.0) -> float:

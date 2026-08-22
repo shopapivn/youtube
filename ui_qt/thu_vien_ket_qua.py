@@ -55,7 +55,7 @@ from core.jobs import (
 from . import theme
 from .widgets import HangXuongDong, nhan, nut_phu
 
-__all__ = ["ThuVienKetQua", "TheKetQua", "TRAN_THE", "mo_file"]
+__all__ = ["ThuVienKetQua", "TheKetQua", "AnhXemNho", "TRAN_THE", "mo_file"]
 
 #: Bao nhiêu thẻ giữ trên màn hình. Vẽ cả một lô 500 việc là treo cửa sổ; phần
 #: cũ hơn không mất đi đâu cả, vẫn nằm trong thư mục kết quả.
@@ -164,6 +164,86 @@ def _cao_theo_ty_le(ty_le: str) -> int:
     except (ValueError, AttributeError):
         return _cao_xem_truoc(0, 0)
     return _cao_xem_truoc(w, h)
+
+
+class AnhXemNho(QLabel):
+    """Ảnh/clip xem trước **bé**, bấm là mở bằng chương trình mặc định.
+
+    Dùng trong ô "Kết quả" của mỗi dòng bảng Hàng loạt: nhìn thẳng vào dòng là
+    biết cảnh ra sao, không phải tụt xuống lưới thẻ dò tìm. Video lấy một khung
+    hình bằng FFmpeg ở luồng nền — y hệt `TheKetQua`, chỉ khác là nhỏ hơn.
+    """
+    #: Luồng nền rút xong khung hình clip -> đường dẫn PNG. Phải đi qua tín hiệu
+    #: chứ không gọi thẳng: Qt cấm sờ vào widget từ luồng khác luồng vẽ.
+    khung_xong = pyqtSignal(str)
+
+    def __init__(self, cao: int = 48, cha=None):
+        super().__init__(cha)
+        self.khung_xong.connect(self._dat_khung)
+        self._cao = cao
+        self._duong_dan = ""
+        self._la_video = False
+        self._da_ve = ""
+        self.setFixedHeight(cao)
+        self.setMinimumWidth(cao)
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(
+            "background:{0}; border:1px solid {1}; border-radius:6px;"
+            " color:{2}; font-size:11px;".format(
+                theme.THE_MO, theme.VIEN, theme.CHU_MO))
+
+    def dat(self, duong_dan: str, la_video: bool) -> None:
+        """Chỉ định file kết quả. Nạp ảnh **một lần** cho mỗi đường dẫn mới."""
+        self._la_video = la_video
+        if not duong_dan or self._da_ve == duong_dan:
+            return
+        self._duong_dan = duong_dan
+        self._ve()
+
+    def _ve(self) -> None:
+        if not self._duong_dan:
+            return
+        if self._la_video:
+            self.setText("clip")
+            self._da_ve = self._duong_dan
+            self._xin_khung_hinh(self._duong_dan)
+            return
+        anh = QPixmap(self._duong_dan)
+        if anh.isNull():
+            return
+        self._da_ve = self._duong_dan
+        self._ve_pixmap(anh)
+
+    def _ve_pixmap(self, anh: QPixmap) -> None:
+        thu = anh.scaledToHeight(self._cao, Qt.SmoothTransformation)
+        self.setText("")
+        self.setPixmap(thu)
+        self.setFixedWidth(max(self._cao, thu.width()))
+
+    def _xin_khung_hinh(self, duong_video: str) -> None:
+        def lam() -> None:
+            try:
+                png = _cho_khung_hinh(duong_video)
+                if png:
+                    self.khung_xong.emit(png)
+            except Exception:  # noqa: BLE001 — luồng nền không được làm sập
+                pass
+
+        threading.Thread(target=lam, daemon=True).start()
+
+    def _dat_khung(self, duong_png: str) -> None:
+        anh = QPixmap(duong_png)
+        if not anh.isNull():
+            self._ve_pixmap(anh)
+
+    @property
+    def duong_dan(self) -> str:
+        return self._duong_dan
+
+    def mouseReleaseEvent(self, su_kien) -> None:  # noqa: N802 — tên do Qt quy định
+        mo_file(self._duong_dan)
+        super().mouseReleaseEvent(su_kien)
 
 
 class TheKetQua(QFrame):
@@ -590,3 +670,11 @@ class ThuVienKetQua(QWidget):
     @property
     def so_the(self) -> int:
         return len(self._thu_tu)
+
+    def tom_tat_tien_do(self):
+        """`(số việc xong, tổng số việc)` — cho nút gạt ngoài lấy đếm mà không
+        phải dựng lại thanh tiến độ. Nút "Xem chi tiết" dùng số này để khách
+        vẫn biết "xong chưa" dù phần chi tiết đang đóng."""
+        tong = len(self._thu_tu)
+        xong = len([u for u in self._thu_tu if u in self._xong])
+        return xong, tong

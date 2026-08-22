@@ -395,6 +395,26 @@ class JobManager:
         self._records: List[JobRecord] = []
         self._in_flight = 0
 
+    def ap_luong(self, max_by_kind: Dict[str, int]) -> None:
+        """Đổi điểm khởi đầu số job song song mỗi loại **lúc đang chạy**.
+
+        Gọi khi khách đổi mốc công suất trong Cài đặt. Với mỗi loại: kẹp số mới
+        trong `HARD_CAPS`, nới/thu cổng ngay (`CongVao.dat_suc_chua` không cắt
+        ngang job đã tốn tiền), và reseed vòng tự dò từ điểm mới — nên chọn
+        "Tối đa" là loạt kế tiếp bùng thẳng ở trần cứng rồi bám trần thật máy chủ.
+        """
+        for kind in HARD_CAPS:
+            if kind not in max_by_kind:
+                continue
+            n = max(1, min(HARD_CAPS[kind], int(max_by_kind[kind])))
+            self._max_by_kind[kind] = n
+            cong = self._cong.get(kind)
+            if cong is not None:
+                cong.dat_suc_chua(n)
+            self._nhip[kind] = NhipDo(bat_dau=n)
+        # Có chỗ mới -> đánh thức dispatcher để nó nhả job xuống pool ngay.
+        self._co_viec.set()
+
     # ── Truy vấn ─────────────────────────────────────────────────────────────
 
     @property

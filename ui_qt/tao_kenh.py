@@ -73,9 +73,10 @@ class HopTaoKenh(QDialog):
             doc.addWidget(nhan("Chưa có khuôn", "h2"))
             doc.addWidget(self._phu(
                 "Thư mục CHANNEL/_KHUON/ thiếu khuôn nên tôi chưa dựng được "
-                "kênh mới. Thử cập nhật lại tool; nếu vẫn vậy thì dùng nút "
-                "“Nhân bản” để chép một kênh sẵn có."))
+                "kênh mới. Bấm “Sửa khuôn” rồi chọn “➕ Tạo mới…” để soạn "
+                "ngách / bộ vẽ / bộ văn hoá đầu tiên ngay trong tool."))
             hang = HangXuongDong()
+            hang.addWidget(nut_chinh("Sửa khuôn", self._sua_khuon, rong=140))
             hang.addWidget(nut_phu("Đóng", self.reject, rong=110))
             doc.addLayout(hang)
             return
@@ -144,6 +145,11 @@ class HopTaoKenh(QDialog):
         self._chon_cl, self._mo_ta_cl = self._o_chon(
             v, "Chiến lược — lấy nội dung từ đâu, làm gì với nó",
             self._chien_luoc)
+        # Chiến lược cần bản gốc (như Cover) thì phải có link đối thủ mới chạy.
+        # Nhắc ngay đây, không để khách tạo xong mới vỡ ra ở lúc chạy.
+        self._nhan_cl_canh = self._phu("")
+        v.addWidget(self._nhan_cl_canh)
+        self._chon_cl.currentIndexChanged.connect(lambda _i: self._ve_canh_cl())
 
         # ── Độ dài và giọng đọc ──────────────────────────────────────────────
         hang_dai = HangXuongDong()
@@ -188,11 +194,13 @@ class HopTaoKenh(QDialog):
         self._nut_tao = nut_chinh("Tạo kênh", self._tao)
         self._nut_tao.setFixedWidth(160)
         cuoi.addWidget(self._nut_tao)
+        cuoi.addWidget(nut_phu("Sửa khuôn", self._sua_khuon, rong=120))
         cuoi.addWidget(nut_phu("Đóng", self.reject, rong=110))
         doc.addLayout(cuoi)
 
         self._ve_anh()
         self._ve_do_dai()
+        self._ve_canh_cl()
         self._ve_tinh_trang()
 
     # ── Dựng ô ───────────────────────────────────────────────────────────────
@@ -299,6 +307,66 @@ class HopTaoKenh(QDialog):
     def _bo_anh(self) -> None:
         self._anh_rieng = ""
         self._ve_anh()
+
+    def _ve_canh_cl(self) -> None:
+        """Nhắc khi chiến lược đang chọn cần link video đối thủ (can_ban_goc)."""
+        bo = self._bo_dang_chon(self._chon_cl, self._chien_luoc)
+        can = bool(bo and bo.du_lieu.get("can_ban_goc"))
+        if can:
+            self._nhan_cl_canh.setText(
+                "⚠ Chiến lược này cần link video đối thủ thì mới chạy — dán "
+                "link ở ô tư liệu lúc chạy. Kênh vẫn tạo được ngay bây giờ.")
+            self._nhan_cl_canh.setStyleSheet("color:{0};".format(theme.VANG))
+        else:
+            self._nhan_cl_canh.setText("")
+            self._nhan_cl_canh.setStyleSheet("")
+
+    # ── Sửa khuôn ngay trong tool ────────────────────────────────────────────
+
+    def _sua_khuon(self) -> None:
+        from .soan_khuon import HopSoanKhuon  # noqa: PLC0415
+
+        hop = HopSoanKhuon(self._app, self)
+        hop.exec_()
+        if not hop.da_thay_doi:
+            return
+        # Nhánh "Chưa có khuôn" dựng hộp rỗng, không có ô chọn để nạp lại —
+        # đóng đi để lần mở sau dựng lại đầy đủ với khuôn vừa thêm.
+        if not hasattr(self, "_chon_nganh"):
+            self._app.show_message(
+                "Đã thêm khuôn",
+                "Đã lưu khuôn mới. Mở lại “Tạo kênh” để dùng nó.")
+            self.reject()
+            return
+        self._nap_lai_khuon()
+
+    def _nap_lai_khuon(self) -> None:
+        goc = self._app.base_dir
+        self._nganh[:] = liet_ke_nganh(goc)
+        self._ve[:] = liet_ke_ve(goc)
+        self._van_hoa[:] = liet_ke_van_hoa(goc)
+        self._chien_luoc[:] = liet_ke_chien_luoc(goc)
+        self._nap_combo(self._chon_nganh, self._nganh, self._mo_ta_nganh)
+        self._nap_combo(self._chon_ve, self._ve, self._mo_ta_ve)
+        self._nap_combo(self._chon_vh, self._van_hoa, self._mo_ta_vh)
+        self._nap_combo(self._chon_cl, self._chien_luoc, self._mo_ta_cl)
+        self._ve_anh()
+        self._ve_do_dai()
+        self._ve_canh_cl()
+        self._ve_tinh_trang()
+
+    @staticmethod
+    def _nap_combo(o: QComboBox, ds: List[Bo], nhan_mo_ta: QLabel) -> None:
+        ma_cu = o.currentData()
+        o.blockSignals(True)
+        o.clear()
+        for bo in ds:
+            o.addItem(bo.nhan, bo.ma)
+        i = o.findData(ma_cu)
+        o.setCurrentIndex(i if i >= 0 else 0)
+        o.blockSignals(False)
+        j = o.currentIndex()
+        nhan_mo_ta.setText(ds[j].mo_ta if 0 <= j < len(ds) else "")
 
     # ── Tạo ──────────────────────────────────────────────────────────────────
 

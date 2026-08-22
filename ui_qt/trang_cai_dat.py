@@ -41,7 +41,15 @@ DO_PHAN_GIAI = ("4K", "1440p", "1080p", GIU_NGUYEN)
 #: `cai_dat.MAC_DINH` mà quên dựng ô cho nó thì bài kiểm đỏ. Thiếu chốt ấy thì
 #: một ngày nào đó có tuỳ chọn chỉ sửa được bằng cách mở tệp JSON — đúng thứ
 #: tab này sinh ra để dẹp.
-MUC_RIENG = ("do_phan_giai",)
+MUC_RIENG = ("do_phan_giai", "muc_song_song")
+
+#: Các mốc công suất gửi việc, `(khoá lưu, nhãn ngắn hiện trên ô chọn)`.
+#: Thứ tự = thứ tự hiện ra, từ nhẹ tới mạnh nhất.
+MUC_SONG_SONG = (
+    ("mac_dinh", "Mặc định"),
+    ("nhanh", "Nhanh"),
+    ("toi_da", "Tối đa"),
+)
 
 #: `(khoá, nhãn, câu giải thích)`. Thứ tự trên màn hình theo đúng thứ tự này.
 MUC = (
@@ -121,6 +129,7 @@ class TrangCaiDat(QWidget):
             "Cài đặt", "Những thứ bạn cài một lần rồi thôi."))
         doc.addWidget(self._the_cap_nhat())
         doc.addWidget(self._the_video())
+        doc.addWidget(self._the_song_song())
         doc.addWidget(self._the_thu_muc())
         doc.addWidget(self._the_thu_vien())
         doc.addWidget(self._the_agent())
@@ -188,6 +197,56 @@ class TrangCaiDat(QWidget):
 
     def _doi_dpg(self, ten: str) -> None:
         if not cai_dat.dat(self._app.base_dir, "do_phan_giai", ten):
+            self._app.show_message(
+                "Không lưu được cài đặt",
+                "Tôi không ghi được vào thư mục workspace. Bạn kiểm tra xem ổ "
+                "đĩa còn chỗ trống không.")
+
+    def _the_song_song(self) -> QWidget:
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 16, 20, 18)
+        v.setSpacing(6)
+        v.addWidget(nhan("Công suất gửi", "h2"))
+        v.addWidget(self._phu(
+            "Máy chủ nhận được rất nhiều việc một lúc và tự xếp hàng. Đây là mức "
+            "tôi đẩy việc lên lúc bắt đầu một mẻ."))
+
+        hang = HangXuongDong()
+        hang.addWidget(nhan("Mức gửi:", "phu"))
+        self._o_ss = QComboBox()
+        for _khoa, nhan_o in MUC_SONG_SONG:
+            self._o_ss.addItem(nhan_o)
+        dang = cai_dat.doc(self._app.base_dir).get("muc_song_song", "mac_dinh")
+        self._o_ss.setCurrentIndex(max(0, self._chi_so_muc(dang)))
+        self._o_ss.setFixedWidth(150)
+        self._o_ss.currentIndexChanged.connect(self._doi_ss)
+        hang.addWidget(self._o_ss)
+        v.addLayout(hang)
+
+        # Nói thật về tiền: mốc không đổi tổng tiền, chỉ đổi tốc độ tiêu.
+        v.addWidget(self._phu(
+            "Mặc định là như hiện nay: tăng tốc từ từ, an toàn cho máy yếu và "
+            "mạng chậm.\n"
+            "Tối đa đẩy cả mẻ đi gần như một phát — hợp khi bạn nhập cả nghìn "
+            "ảnh hay clip và muốn xong nhanh nhất. Nó KHÔNG tốn thêm tiền (vẫn "
+            "đúng bấy nhiêu việc), chỉ là tiền bị trừ dồn nhanh hơn.\n"
+            "Dù chọn mức nào, nếu máy chủ báo quá tải thì tôi tự chậm lại — bạn "
+            "không làm hỏng gì được."))
+        return khung
+
+    @staticmethod
+    def _chi_so_muc(khoa: str) -> int:
+        for i, (k, _n) in enumerate(MUC_SONG_SONG):
+            if k == khoa:
+                return i
+        return 0
+
+    def _doi_ss(self, chi_so: int) -> None:
+        if not 0 <= chi_so < len(MUC_SONG_SONG):
+            return
+        khoa = MUC_SONG_SONG[chi_so][0]
+        if not self._app.dat_muc_song_song(khoa):
             self._app.show_message(
                 "Không lưu được cài đặt",
                 "Tôi không ghi được vào thư mục workspace. Bạn kiểm tra xem ổ "

@@ -35,7 +35,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.errors import describe  # noqa: E402
+from core.errors import describe, tu_xu_ly_ngam  # noqa: E402
 from core.su_co import CHET, MAT_MANG, TAM_NGHI, nhip_cho, phan_loai  # noqa: E402
 
 #: Mười ba loại đo được trên máy thật.
@@ -51,6 +51,11 @@ LOI_MANG = [
     ConnectionResetError(10054, "forcibly closed by the remote host"),
     ConnectionAbortedError(10053, "an established connection was aborted"),
     RemoteDisconnected("Remote end closed connection without response"),
+    # Thêm 22/08/2026 — khâu 7 (ảnh bìa) chết vì hai lỗi socket ở tầng OS mà tên
+    # lớp trước đây vắng khỏi danh sách, nên rơi vào `CHET`.
+    BrokenPipeError(32, "broken pipe"),
+    TimeoutError(110, "connection timed out"),
+    socket.timeout("timed out"),
 ]
 
 
@@ -95,3 +100,21 @@ def test_loi_boc_trong_loi_khac_van_nhan_ra():
     ngoai = RuntimeError("gọi API hỏng")
     ngoai.__cause__ = goc
     assert phan_loai(ngoai) == MAT_MANG
+
+
+@pytest.mark.parametrize("loi", LOI_MANG, ids=lambda e: type(e).__name__)
+def test_tu_xu_ly_ngam_bat_moi_loi_mang(loi):
+    """Mọi lỗi mạng đều là loại tool tự chờ-thử-lại NGẦM, không hiện hộp lỗi.
+
+    Đây là bất biến mà `run_bg` (thử lại cả việc) và `_hong` ở tab Tự động
+    (ghi nhật ký thay vì dựng hộp lỗi) cùng dựa vào — khách 22/08 không muốn
+    thấy "Mạng bị gián đoạn" hiện lên như thể tool hỏng.
+    """
+    assert tu_xu_ly_ngam(loi) is True
+
+
+def test_tu_xu_ly_ngam_KHONG_bat_loi_tep():
+    """Tệp không có / không đủ quyền KHÔNG phải lỗi tạm — phải hiện ra ngay."""
+    from shopapi import AuthenticationError  # noqa: PLC0415
+
+    assert tu_xu_ly_ngam(AuthenticationError("khoá hỏng")) is False

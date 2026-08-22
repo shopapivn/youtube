@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import queue
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -32,9 +33,9 @@ from PyQt5.QtWidgets import (
 )
 
 from core.api import build_client, fetch_prices, wallet_micro
-from core import du_an
+from core import cai_dat, du_an
 from core.config import CONFIG_FILENAME, Config, load_config, save_config
-from core.errors import describe
+from core.errors import describe, retry_after_seconds, tu_xu_ly_ngam
 from core.jobs import JobManager, JobSpec
 from core.money import format_vnd
 from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
@@ -270,6 +271,8 @@ class CuaSoChinh(QWidget):
             self.client = build_client(self.config)
             self.jobs = JobManager(lambda: self.client, self.events,
                                    max_workers=self.config.max_concurrent_jobs,
+                                   max_by_kind=self._luong_khoi_dau(),
+                                   tu_do_nhip=self.config.tu_do_nhip,
                                    session_path=self.session_path)
 
         ngang = QHBoxLayout(self)
@@ -562,6 +565,11 @@ class CuaSoChinh(QWidget):
         QMessageBox.critical(self, loi_khuyen.title,
                              "{0}\n\n{1}".format(loi_khuyen.message, loi_khuyen.action))
 
+    #: Số lần thử lại NGẦM tối đa cho một lời gọi nền gặp lỗi tạm. Rate-limit và
+    #: máy chủ bận tự khỏi trong vài giây; sáu lần (giãn cách tăng dần, tôn trọng
+    #: `Retry-After`) phủ tới hơn một phút — quá đó thì là sự cố thật, mới hiện.
+    _THU_LAI_NEN_TOI_DA = 6
+
     def run_bg(self, viec: Callable[[], Any], *,
                on_ok: Optional[Callable[[Any], None]] = None,
                on_err: Optional[Callable[[BaseException], None]] = None) -> None:
@@ -569,17 +577,45 @@ class CuaSoChinh(QWidget):
 
         Kết quả đi qua tín hiệu Qt chứ không gọi thẳng: gọi thẳng từ luồng nền là
         chạm widget từ ngoài luồng vẽ, Qt cho chạy một lúc rồi sập không đoán trước.
+
+        Lỗi TẠM (quá tần suất, máy chủ bận, mạng chập) thì **tự chờ rồi thử lại
+        tại đây, không báo ra** — khách từng tưởng hộp "Bạn gửi hơi nhanh" là
+        hỏng. Chỉ khi thử mãi vẫn không xong (sự cố thật) mới đưa lên `on_err`.
         """
         def chay() -> None:
-            try:
-                ket = viec()
-            except BaseException as loi:  # noqa: BLE001 — chuyển nguyên vẹn về luồng vẽ
-                self._bao_ve(on_err or self.show_error, loi)
-            else:
-                if on_ok is not None:
-                    self._bao_ve(on_ok, ket)
+            lan = 0
+            while True:
+                try:
+                    ket = viec()
+                except BaseException as loi:  # noqa: BLE001 — chuyển về luồng vẽ
+                    if (tu_xu_ly_ngam(loi) and lan < self._THU_LAI_NEN_TOI_DA
+                            and not self._dang_dong):
+                        cho = retry_after_seconds(loi, lan)
+                        lan += 1
+                        if self._ngu_nen(cho):
+                            return  # cửa sổ đóng giữa chừng — thôi
+                        continue
+                    self._bao_ve(on_err or self.show_error, loi)
+                    return
+                else:
+                    if on_ok is not None:
+                        self._bao_ve(on_ok, ket)
+                    return
 
         threading.Thread(target=chay, daemon=True, name="shopapi-bg").start()
+
+    def _ngu_nen(self, giay: float) -> bool:
+        """Ngủ `giay` giây ở luồng nền, tỉnh ngay khi cửa sổ đóng.
+
+        Trả `True` nếu bị cắt vì cửa sổ đóng — bên gọi nên dừng hẳn."""
+        con = float(giay)
+        while con > 0:
+            if self._dang_dong:
+                return True
+            buoc = min(0.2, con)
+            time.sleep(buoc)
+            con -= buoc
+        return self._dang_dong
 
     def _bao_ve(self, ham, gia_tri) -> None:
         """Chỉ phát tín hiệu khi cửa sổ còn sống.
@@ -675,8 +711,25 @@ class CuaSoChinh(QWidget):
         if self.jobs is None:
             self.jobs = JobManager(lambda: self.client, self.events,
                                    max_workers=self.config.max_concurrent_jobs,
+                                   max_by_kind=self._luong_khoi_dau(),
+                                   tu_do_nhip=self.config.tu_do_nhip,
                                    session_path=self.session_path)
         self.refresh_prices()
+
+    def _luong_khoi_dau(self) -> Dict[str, int]:
+        """Số job song song khởi đầu mỗi loại, theo mốc công suất khách đã chọn."""
+        muc = cai_dat.doc(self.base_dir).get("muc_song_song", "mac_dinh")
+        return cai_dat.luong_khoi_dau(muc)
+
+    def dat_muc_song_song(self, muc: str) -> bool:
+        """Lưu mốc công suất và áp NGAY nếu hàng đợi đang sống.
+
+        Trả về ghi được xuống đĩa hay không, để tab Cài đặt báo nếu hỏng.
+        """
+        ok = cai_dat.dat(self.base_dir, "muc_song_song", muc)
+        if self.jobs is not None:
+            self.jobs.ap_luong(cai_dat.luong_khoi_dau(muc))
+        return ok
 
     def refresh_prices(self) -> None:
         if self.client is None:

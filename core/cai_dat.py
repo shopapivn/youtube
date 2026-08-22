@@ -28,9 +28,43 @@ import os
 import threading
 from typing import Any, Dict
 
-__all__ = ["doc", "ghi", "dat", "MAC_DINH", "duong_tep"]
+from .config import DEFAULT_CONCURRENCY, HARD_CAPS
+
+__all__ = [
+    "doc", "ghi", "dat", "MAC_DINH", "duong_tep",
+    "luong_khoi_dau", "MUC_SONG_SONG",
+]
 
 TEN_TEP = "cai-dat.json"
+
+#: Điểm khởi đầu số job chạy song song mỗi loại, theo từng mốc công suất.
+#:
+#: ═══ VÌ SAO MỐC CHỈ ĐỔI "ĐIỂM KHỞI ĐẦU" ═══
+#:
+#: `core.jobs` luôn bật vòng tự dò (`tu_do_nhip`): dù bắt đầu ở đâu, cổng mỗi loại
+#: cũng tự climb tới trần thật máy chủ (`GET /v1/me`) và không bao giờ vượt
+#: `HARD_CAPS`. Nên mốc không đổi *trần* — nó đổi **độ mạnh của loạt gửi ĐẦU TIÊN**:
+#:
+#:   * "mac_dinh" — bắt đầu khiêm tốn rồi tăng dần. An toàn, đúng như hiện nay.
+#:   * "nhanh"    — bắt đầu cao hơn hẳn, ít phút chờ tăng tốc.
+#:   * "toi_da"   — bắt đầu ngay ở trần cứng: đẩy cả nghìn việc một phát.
+#:
+#: Tổng tiền KHÔNG đổi (cùng số việc), chỉ tiêu NHANH hơn. Máy chủ vẫn tự phanh
+#: khi gặp 429/503 vì vòng tự dò vẫn chạy ở mọi mốc.
+MUC_SONG_SONG: Dict[str, Dict[str, int]] = {
+    "mac_dinh": dict(DEFAULT_CONCURRENCY),          # {tts:3, image:8, video:8}
+    "nhanh": {"tts": 8, "image": 64, "video": 24},
+    "toi_da": dict(HARD_CAPS),                       # {tts:16, image:384, video:64}
+}
+
+
+def luong_khoi_dau(muc: str) -> Dict[str, int]:
+    """Đổi tên mốc công suất -> số job song song khởi đầu mỗi loại.
+
+    Mốc lạ (file sửa tay gõ sai, bản cũ chưa biết mốc này) rơi về "mac_dinh" —
+    nhanh quá tay do một chữ gõ sai còn tệ hơn chậm.
+    """
+    return dict(MUC_SONG_SONG.get(muc, MUC_SONG_SONG["mac_dinh"]))
 
 #: Mọi tuỳ chọn và giá trị mặc định của nó.
 MAC_DINH: Dict[str, Any] = {
@@ -130,6 +164,16 @@ MAC_DINH: Dict[str, Any] = {
     # hai đều là thời gian máy khách, **không tốn thêm đồng API nào** — nên
     # đánh đổi này nghiêng hẳn về phía nên bật.
     "do_phan_giai": "4K",
+
+    # Mốc công suất gửi việc lên máy chủ: "mac_dinh" | "nhanh" | "toi_da".
+    #
+    # ═══ VÌ SAO MẶC ĐỊNH LÀ "mac_dinh" ═══
+    #
+    # Chủ dự án chốt: *"mặc định để như bây giờ… kéo về max thì đẩy 1 phát hết"*.
+    # Đây chỉ đổi ĐIỂM KHỞI ĐẦU của số job song song mỗi loại — vòng tự dò trong
+    # `core/jobs.py` vẫn tự climb tới trần thật máy chủ ở mọi mốc, nên mốc không
+    # đổi tổng tiền, chỉ đổi tốc độ tiêu. Xem `luong_khoi_dau` và `MUC_SONG_SONG`.
+    "muc_song_song": "mac_dinh",
 }
 
 _KHOA = threading.Lock()

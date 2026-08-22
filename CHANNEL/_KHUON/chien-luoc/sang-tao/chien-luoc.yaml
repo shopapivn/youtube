@@ -1,0 +1,34 @@
+# ============================================================================
+#  CHIẾN LƯỢC SÁNG TẠO — tự viết, không cần bản gốc
+# ============================================================================
+#  Ba chiến lược đứng cạnh nhau, khác nhau ở chỗ LẤY NỘI DUNG TỪ ĐÂU:
+#
+#    Remake    có link đối thủ → viết lại một bài tương tự.
+#    Cover     có link đối thủ → mổ ra, làm HAY HƠN bản gốc.
+#    Sáng tạo  KHÔNG có bản gốc → bạn đưa ý tưởng/dàn ý, AI triển khai thành
+#              kịch bản gốc của bạn.
+#
+#  Vì không có bản gốc, Sáng tạo đè HAI tệp để gỡ mọi câu chữ nhắc tới "bản
+#  gốc" ra khỏi dây chuyền:
+#
+#    `2-viet.md`  viết từ Ý TƯỞNG của bạn (không phải viết lại của đối thủ).
+#    `3-sua.md`   soát chất lượng bản vừa viết, KHÔNG so với bản gốc nào cả —
+#                 nếu để nguyên bước sửa của Remake, nó lôi bài về đúng cái dàn
+#                 ý thô bạn đưa vào, hỏng cả phần AI vừa triển khai.
+#
+#  Không có `2a-phan-tich.md`: không có bản gốc thì không có gì để phân tích.
+#
+#  ── Đưa ý tưởng vào đâu ─────────────────────────────────────────────────────
+#
+#  Chỗ ô "tư liệu" như mọi chiến lược khác. Remake/Cover dán LINK đối thủ vào
+#  đó; Sáng tạo dán thẳng Ý TƯỞNG / DÀN Ý / GHI CHÚ của bạn. Để trống cũng chạy
+#  được — khi đó AI viết chỉ từ tiêu đề.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY — tool quét và chặn.
+# ============================================================================
+
+ten: "Sáng tạo — tự viết, không cần bản gốc"
+mo_ta: "Bạn đưa ý tưởng hoặc dàn ý của mình (hoặc chỉ tiêu đề), AI triển khai thành kịch bản gốc. Không cần link đối thủ."
+
+# Không cần bản gốc — Tạo kênh sẽ không nhắc bạn dán link đối thủ.
+can_ban_goc: false
