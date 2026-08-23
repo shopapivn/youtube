@@ -30,11 +30,11 @@ import os
 import shutil
 from typing import Dict, List, Optional, Tuple
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QScrollArea,
+    QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QScrollArea,
     QSpinBox, QStackedWidget, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -302,30 +302,139 @@ THU_MUC_MAU = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 #: Đuôi ảnh mẫu chấp nhận, theo thứ tự ưu tiên.
 _DUOI_MAU = (".png", ".jpg", ".jpeg", ".webp")
 
-#: Một CẢNH THỬ trung tính, ghép sau `image_style` khi tạo ảnh mẫu. Cùng một
-#: cảnh cho mọi phong cách để khách so được đúng cái KHÁC là nét vẽ, không phải
-#: nội dung. Tránh mọi thứ prompt cấm (chữ, watermark…).
-CANH_THU_MAU = ("a single friendly person sitting calmly at a small table with "
-                "a cup, warm simple room, centred medium shot")
+#: Đuôi video mẫu chấp nhận.
+_DUOI_VIDEO = (".mp4", ".webm", ".mov")
+
+#: BA CẢNH THỬ trung tính, ghép sau `image_style` khi tạo ảnh mẫu. Cùng một bộ
+#: cảnh cho mọi phong cách để khách so đúng cái KHÁC là nét vẽ, không phải nội
+#: dung — nhưng nhiều cảnh để khách thấy phong cách "cân" nhiều chủ đề ra sao.
+#: Tránh mọi thứ prompt cấm (chữ, watermark…).
+CANH_THU_MAU_NHIEU = (
+    ("a single friendly person sitting calmly at a small table with a cup, "
+     "warm simple room, centred medium shot"),
+    ("a cozy small wooden house beside a quiet lake at golden hour, distant "
+     "mountains, wide establishing shot"),
+    ("a bowl of steaming food on a rustic table by a window, soft daylight, "
+     "close-up"),
+)
+
+#: Cảnh thử mặc định (ảnh đầu) — giữ tên cũ cho nút "Tạo ảnh mẫu" và bài kiểm.
+CANH_THU_MAU = CANH_THU_MAU_NHIEU[0]
+
+#: Lời tả chuyển động cho VIDEO mẫu — nhẹ nhàng để khoe nét vẽ, không giật.
+DONG_THU_MAU = ("gentle slow camera push-in, soft ambient motion, calm mood")
+
+
+def _thu_muc_slug(slug: str) -> str:
+    """Thư mục con chứa mọi ảnh + video mẫu của một phong cách."""
+    return os.path.join(THU_MUC_MAU, slug)
+
+
+def _loc_bo_mau(ten: List[str]) -> List[str]:
+    """Trong một thư mục mẫu, giữ BỘ ĐÃ ĐẶT TÊN CẶP (`01`, `02`…) nếu có.
+
+    Nút "Tạo ảnh + video mẫu…" chạy qua hàng đợi nên tệp ra mang tên
+    `001_<slug>.jpg`; bộ ship kèm tool thì đã đổi thành `01.jpg`/`01.mp4` để ảnh
+    và video cùng cảnh ghép được cặp. Bấm nút thêm một lần nữa là thư mục có cả
+    hai bộ — không lọc thì mỗi thẻ hiện 6 ảnh, khách tưởng phong cách có sáu
+    cảnh và ô ▶ mất hình đại diện. Bộ đặt tên cặp thắng vì nó là bộ có video.
+    """
+    cap = [t for t in ten if os.path.splitext(t)[0].isdigit()]
+    return cap if cap else ten
+
+
+def _anh_mau_cua(i: int, slug: str) -> List[str]:
+    """Mọi ảnh mẫu của phong cách thứ `i` (slug `slug`), theo thứ tự tên file.
+
+    Ưu tiên thư mục con `mau_phong_cach/<slug>/*.jpg…` (bố cục mới, nhiều ảnh).
+    Không có thì lui về bố cục cũ: `<slug>.<đuôi>` phẳng, rồi `{i+1:03d}_*`.
+    """
+    thu_muc = _thu_muc_slug(slug)
+    if slug and os.path.isdir(thu_muc):
+        ten = _loc_bo_mau([t for t in sorted(os.listdir(thu_muc))
+                           if os.path.splitext(t)[1].lower() in _DUOI_MAU])
+        if ten:
+            return [os.path.join(thu_muc, t) for t in ten]
+    if slug:
+        for duoi in _DUOI_MAU:
+            p = os.path.join(THU_MUC_MAU, slug + duoi)
+            if os.path.isfile(p):
+                return [p]
+    if not os.path.isdir(THU_MUC_MAU):
+        return []
+    dau = "{0:03d}_".format(i + 1)
+    ra = [os.path.join(THU_MUC_MAU, t) for t in sorted(os.listdir(THU_MUC_MAU))
+          if t.startswith(dau) and os.path.splitext(t)[1].lower() in _DUOI_MAU]
+    return ra
 
 
 def _duong_anh_mau(i: int, slug: str) -> str:
-    """Đường tới ảnh mẫu của phong cách thứ `i` (slug `slug`), "" nếu chưa có.
+    """Ảnh mẫu ĐẦU TIÊN của phong cách (ảnh thu nhỏ trên thẻ), "" nếu chưa có."""
+    anh = _anh_mau_cua(i, slug)
+    return anh[0] if anh else ""
 
-    Ưu tiên `<slug>.<đuôi>`; không có thì thử `{i+1:03d}_*` — tên
-    `core.batch.safe_filename` sinh ra khi chạy nút "Tạo ảnh mẫu" qua hàng đợi.
+
+def _video_mau_cua_nhieu(slug: str) -> List[str]:
+    """Mọi video mẫu của một phong cách, theo thứ tự tên file.
+
+    Video của cảnh thứ *j* đặt tên khớp ảnh của cảnh ấy (`01.jpg` ↔ `01.mp4`)
+    nên ảnh nào cũng có clip cùng cảnh, và cửa sổ xem to lấy ngay ảnh làm hình
+    đại diện cho clip — khỏi phải trích khung hình.
     """
-    for duoi in _DUOI_MAU:
-        p = os.path.join(THU_MUC_MAU, slug + duoi)
-        if os.path.isfile(p):
-            return p
-    if not os.path.isdir(THU_MUC_MAU):
-        return ""
-    dau = "{0:03d}_".format(i + 1)
-    for ten in sorted(os.listdir(THU_MUC_MAU)):
-        if ten.startswith(dau) and os.path.splitext(ten)[1].lower() in _DUOI_MAU:
-            return os.path.join(THU_MUC_MAU, ten)
-    return ""
+    thu_muc = _thu_muc_slug(slug)
+    if not slug or not os.path.isdir(thu_muc):
+        return []
+    ten = _loc_bo_mau([t for t in sorted(os.listdir(thu_muc))
+                       if os.path.splitext(t)[1].lower() in _DUOI_VIDEO])
+    return [os.path.join(thu_muc, t) for t in ten]
+
+
+def _video_mau_cua(slug: str) -> str:
+    """Video mẫu ĐẦU TIÊN của phong cách, "" nếu chưa có."""
+    ds = _video_mau_cua_nhieu(slug)
+    return ds[0] if ds else ""
+
+
+def _mau_xem_duoc(i: int, slug: str) -> List[Tuple[str, bool, str, str]]:
+    """Danh sách mọi thứ xem được của một phong cách, xếp theo TỪNG CẢNH.
+
+    Trả về `(đường_tệp, là_video, ảnh_đại_diện, nhãn)` theo thứ tự
+    ảnh cảnh 1 → video cảnh 1 → ảnh cảnh 2 → video cảnh 2 → …
+
+    Xếp lẫn ảnh với video vào **một dải duy nhất** là có lý do: bản trước tách
+    ra hai thẻ "Ảnh mẫu" / "Video mẫu", khách phải biết là có thẻ thứ hai mới
+    bấm sang — mà thẻ thì trông như phần trang trí. Cùng một dải thì bấm ô nào
+    xem ô đó, không cần hiểu thêm gì.
+
+    Ảnh và video cùng cảnh khớp nhau theo TÊN (`02.jpg` ↔ `02.mp4`); tệp lẻ
+    (chỉ có ảnh, hoặc chỉ có video) vẫn được đưa vào cuối, không bị bỏ rơi.
+
+    Bộ ship kèm tool chỉ có MỘT video mỗi phong cách (cảnh 1) cho nhẹ git, nên
+    nhãn lúc ấy là "▶ Video" trần — đánh số "▶ Video 1" khi chỉ có một cái thì
+    khách đi tìm Video 2 không có.
+    """
+    anhs = _anh_mau_cua(i, slug)
+    videos = _video_mau_cua_nhieu(slug)
+    theo_ten = {os.path.splitext(os.path.basename(p))[0]: p for p in anhs}
+
+    def nhan_video(so: int) -> str:
+        return "▶ Video" if len(videos) < 2 else "▶ Video {0}".format(so)
+
+    ra: List[Tuple[str, bool, str, str]] = []
+    for j, p in enumerate(anhs):
+        ten = os.path.splitext(os.path.basename(p))[0]
+        ra.append((p, False, p, "Ảnh {0}".format(j + 1)))
+        for v in videos:
+            if os.path.splitext(os.path.basename(v))[0] == ten:
+                ra.append((v, True, p, nhan_video(j + 1)))
+                break
+    da_co = {p for p, _v, _t, _n in ra}
+    for k, v in enumerate(videos):          # video không khớp ảnh nào
+        if v in da_co:
+            continue
+        ten = os.path.splitext(os.path.basename(v))[0]
+        ra.append((v, True, theo_ten.get(ten, ""), nhan_video(k + 1)))
+    return ra
 
 
 def _chon_slug_tu_tra_loi(tra: str, slugs: List[str]) -> Optional[str]:
@@ -347,38 +456,63 @@ def _chon_slug_tu_tra_loi(tra: str, slugs: List[str]) -> Optional[str]:
 #: Cỡ ảnh xem trước trong một thẻ phong cách.
 _ANH_THE = (150, 90)
 
+#: Khổ ảnh trên dải xem trong cửa sổ xem to. Bốn ô (3 ảnh + 1 video) phải nằm
+#: gọn MỘT hàng, không thì khách phải cuộn mới thấy có video.
+_ANH_THE_NHO = (90, 52)
+
+
+def _nho(chu: str) -> QLabel:
+    """Câu giải thích nhỏ, chữ xám, tự xuống dòng và co được xuống 1px.
+
+    `setMinimumWidth(1)` là chỗ dễ quên: nhãn tự xuống dòng vẫn đòi bằng bề
+    rộng của TỪ dài nhất, đủ để kéo cửa sổ rộng quá mép màn hình.
+    """
+    nh = nhan(chu, "phu")
+    nh.setMinimumWidth(1)
+    return nh
+
 
 class _TheHinh(QFrame):
-    """Một thẻ phong cách bấm được: ảnh mẫu + tên tiếng Việt (chữ tự xuống dòng).
+    """Một thẻ bấm được: ảnh + nhãn tiếng Việt (chữ tự xuống dòng).
 
     Bấm vào phát tín hiệu `bam`; `dat_chon(True)` vẽ viền xanh cho biết đang
-    chọn. Chưa có ảnh mẫu thì hiện khung xám "Ảnh mẫu chưa tạo" — không vỡ giao
+    chọn. Chưa có ảnh thì hiện khung xám "Ảnh mẫu chưa tạo" — không vỡ giao
     diện, và là dấu hiệu để chủ dự án bấm nút Tạo ảnh mẫu.
+
+    Hai khổ: khổ thường cho lưới phong cách, khổ `nho=True` cho dải xem trong
+    cửa sổ xem to (bốn ô một hàng thì khổ thường tràn mép).
+
+    `so_anh`/`so_video` chỉ để hiện gợi ý "bấm để xem to" — cho khách biết một
+    thẻ còn nhiều ảnh và video ở bên trong.
     """
 
     bam = pyqtSignal()
 
     def __init__(self, ten: str, mo_ta: str, duong_anh: str,
+                 so_anh: int = 0, so_video: int = 0, nho: bool = False,
                  cha: Optional[QWidget] = None):
         super().__init__(cha)
         self._chon = False
-        self.setFixedWidth(168)
+        self._ten = ten
+        kho = _ANH_THE_NHO if nho else _ANH_THE
+        self.setFixedWidth(100 if nho else 168)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(mo_ta or ten)
         v = QVBoxLayout(self)
-        v.setContentsMargins(6, 6, 6, 6)
-        v.setSpacing(4)
+        le = 4 if nho else 6
+        v.setContentsMargins(le, le, le, le)
+        v.setSpacing(2 if nho else 4)
 
         anh = QLabel()
         anh.setAlignment(Qt.AlignCenter)
-        anh.setFixedSize(*_ANH_THE)
+        anh.setFixedSize(*kho)
         px = QPixmap(duong_anh) if duong_anh else QPixmap()
         if not px.isNull():
-            anh.setPixmap(px.scaled(_ANH_THE[0], _ANH_THE[1],
+            anh.setPixmap(px.scaled(kho[0], kho[1],
                                     Qt.KeepAspectRatioByExpanding,
                                     Qt.SmoothTransformation))
         else:
-            anh.setText("Ảnh mẫu\nchưa tạo")
+            anh.setText("Ảnh mẫu\nchưa tạo" if not nho else "—")
             anh.setStyleSheet(
                 "color:{0}; background:{1}; border:1px dashed {2};"
                 "border-radius:6px;".format(theme.CHU_MO, theme.NEN, theme.VIEN))
@@ -388,8 +522,26 @@ class _TheHinh(QFrame):
         cap.setWordWrap(True)
         cap.setAlignment(Qt.AlignCenter)
         cap.setMinimumWidth(1)
-        cap.setStyleSheet("color:{0}; font-weight:600;".format(theme.CHU))
+        cap.setStyleSheet("color:{0}; font-weight:600;{1}".format(
+            theme.CHU, " font-size:11px;" if nho else ""))
         v.addWidget(cap)
+
+        if not px.isNull() and not nho:
+            phu = []
+            if so_anh > 1:
+                phu.append("🔍 {0} ảnh".format(so_anh))
+            elif so_anh == 1:
+                phu.append("🔍 xem to")
+            if so_video > 1:
+                phu.append("▶ {0} video".format(so_video))
+            elif so_video == 1:
+                phu.append("▶ video")
+            if phu:
+                g = QLabel("  ·  ".join(phu))
+                g.setAlignment(Qt.AlignCenter)
+                g.setStyleSheet("color:{0}; font-size:11px;".format(
+                    theme.CHU_MO))
+                v.addWidget(g)
         self._ve_vien()
 
     def _ve_vien(self) -> None:
@@ -405,6 +557,144 @@ class _TheHinh(QFrame):
 
     def mousePressEvent(self, _e) -> None:      # noqa: N802 — Qt đặt tên
         self.bam.emit()
+
+
+class _XemPhongCach(QDialog):
+    """Cửa sổ xem TO một phong cách: một ô lớn + MỘT dải ảnh và video lẫn nhau.
+
+    Khách bấm một thẻ phong cách là mở cửa sổ này để xem kỹ sản phẩm đầu ra —
+    đúng ý "click vào xem được to". Bấm "Lưu" thì phát tín hiệu `chon` rồi đóng;
+    bên gọi lo việc điền các ô style.
+
+    **Không có tab.** Bản trước tách "Ảnh mẫu" và "Video mẫu" thành hai thẻ:
+    khách phải biết là có thẻ thứ hai mới bấm sang, mà một cái tab trông không
+    khác gì đường viền trang trí. Giờ ảnh và video nằm chung một dải ở dưới ô
+    lớn — chỉ một thao tác để học, và video không còn chỗ nào để lẩn.
+
+    **Không có trình chiếu nhúng.** Bản trước nhúng `QMediaPlayer` kèm ba nút
+    "▶ Chạy lại", "⏸ Tạm dừng", "Mở bằng máy". Chủ dự án, 23/08/2026: *"ấn vào
+    là nó mở, đơn giản hiệu quả đi"*. Bấm ô ▶ giờ mở tệp bằng đúng trình xem
+    video máy khách đang cài — bấm một cái là xem, không phải học thêm nút nào,
+    và cửa sổ hết phải mang theo bộ giải mã của Windows (máy thiếu codec thì
+    khung nhúng chỉ đen thui, còn trình xem của máy thì chắc chắn chạy được).
+    Ô lớn lúc ấy hiện ảnh cùng cảnh để khách biết mình vừa bấm cảnh nào.
+    """
+
+    chon = pyqtSignal()
+
+    #: Khổ ô xem lớn. Ảnh/video mẫu đều 16:9 nên 480×270 vừa khít, không viền đen.
+    _KHO_TO = (480, 270)
+
+    def __init__(self, ten: str, mo_ta: str,
+                 muc: List[Tuple[str, bool, str, str]],
+                 cha: Optional[QWidget] = None):
+        super().__init__(cha)
+        self.setWindowTitle("Phong cách: " + ten)
+        # 580px: ô lớn 480px + lề, và dải bốn ô nhỏ (3 ảnh + 1 video) rộng
+        # 418px — dải phải nằm MỘT hàng, không thì khách cuộn mới thấy ô ▶.
+        self.setMinimumWidth(580)
+        self._muc = list(muc)
+        self._dang = ""
+        self._dai: List[_TheHinh] = []
+        v = QVBoxLayout(self)
+        v.setContentsMargins(14, 12, 14, 12)
+        v.setSpacing(8)
+
+        tieu = QLabel(ten)
+        tieu.setStyleSheet(
+            "color:{0}; font-size:17px; font-weight:700;".format(theme.CHU))
+        v.addWidget(tieu)
+        if mo_ta:
+            mt = QLabel(mo_ta)
+            mt.setWordWrap(True)
+            mt.setMinimumWidth(1)
+            mt.setStyleSheet("color:{0};".format(theme.CHU_MO))
+            v.addWidget(mt)
+
+        self._anh_to = QLabel()
+        self._anh_to.setFixedHeight(self._KHO_TO[1])
+        self._anh_to.setAlignment(Qt.AlignCenter)
+        self._anh_to.setWordWrap(True)
+        self._anh_to.setStyleSheet(
+            "color:{0}; background:{1}; border:1px solid {2}; "
+            "border-radius:8px;".format(theme.CHU_MO, theme.NEN, theme.VIEN))
+        v.addWidget(self._anh_to)
+
+        if self._muc:
+            v.addWidget(_nho(
+                "Bấm một ô để xem lớn — ô ▶ là video 8 giây, bấm vào là máy "
+                "bạn mở nó ra xem:"))
+            dai = HangXuongDong()
+            for idx, (_p, la_video, thumb, nhan_o) in enumerate(self._muc):
+                goi = "Bấm để máy bạn mở video này" if la_video \
+                    else "Bấm để xem lớn"
+                t = _TheHinh(nhan_o, goi, thumb, nho=True)
+                t.bam.connect(lambda _i=idx: self._xem(_i))
+                dai.addWidget(t)
+                self._dai.append(t)
+            v.addLayout(dai)
+
+        v.addWidget(nut_chinh("Lưu", self._da_chon, rong=200))
+
+        if self._muc:
+            self._xem(0)
+        else:
+            self._anh_to.setText(
+                "Phong cách này chưa có ảnh mẫu.\nBạn vẫn chọn được — "
+                "lời tả vẫn điền đủ.")
+        self._vua_man_hinh()
+
+    def _vua_man_hinh(self) -> None:
+        """Mở ra không được cao hơn màn hình — không thì nút Lưu nằm ngoài mép.
+
+        Màn 1366×768 vẫn là loại phổ biến nhất; trừ thanh tác vụ và thanh tiêu
+        đề còn khoảng 660px.
+        """
+        goi = self.sizeHint()
+        try:
+            from PyQt5.QtWidgets import QApplication  # noqa: PLC0415
+            man = QApplication.desktop().availableGeometry(self)
+            tran = max(man.height() - 60, 400)
+        except Exception:                     # noqa: BLE001 — không có màn hình
+            tran = 660
+        self.resize(max(goi.width(), 580), min(goi.height(), tran))
+
+    # ── Ô lớn ────────────────────────────────────────────────────────────────
+
+    def _xem(self, i: int) -> None:
+        """Bấm ô thứ `i`: ảnh thì hiện ở ô lớn, video thì mở bằng máy khách.
+
+        Ô video vẫn cho ô lớn một hình — ảnh cùng cảnh — vì bỏ trống thì khách
+        tưởng bấm hỏng trong lúc trình xem của máy còn đang mở lên.
+        """
+        if not (0 <= i < len(self._muc)):
+            return
+        for j, t in enumerate(self._dai):
+            t.dat_chon(j == i)
+        duong, la_video, thumb, _nhan = self._muc[i]
+        self._dang = duong
+        self._dat_anh_lon(thumb if la_video else duong)
+        if la_video:
+            self._mo_bang_may(duong)
+
+    def _dat_anh_lon(self, duong: str) -> None:
+        px = QPixmap(duong) if duong else QPixmap()
+        if px.isNull():
+            self._anh_to.setPixmap(QPixmap())
+            self._anh_to.setText("Không mở được ảnh này.")
+            return
+        self._anh_to.setPixmap(px.scaled(
+            self._KHO_TO[0], self._KHO_TO[1],
+            Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    def _mo_bang_may(self, duong: str) -> None:
+        """Giao tệp cho trình xem video máy khách đang cài."""
+        from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
+        QDesktopServices.openUrl(QUrl.fromLocalFile(duong))
+
+    def _da_chon(self) -> None:
+        self.chon.emit()
+        self.accept()
 
 
 class HopKenh(QDialog):
@@ -769,25 +1059,24 @@ class HopKenh(QDialog):
     # ── Bước 3: Hình ảnh & nhân vật ──────────────────────────────────────────
 
     def _trang_hinh(self, *, tao: bool) -> QWidget:
-        w, v = self._trang_moi()
-        v.addWidget(self._phu(
-            "Kênh nhìn như thế nào, và ai là nhân vật chính. Điền sẵn theo kiểu "
-            "vẽ bạn chọn — sửa lại nếu muốn khác."))
+        """Bước 3 — CHỈ hai việc bày ra mặt: chọn phong cách, tải ảnh nhân vật.
 
+        Chủ dự án, 23/08/2026: *"mày cần xem lại cách thiết kế để nó đơn giản,
+        dễ dùng, hiện tại nhiều thứ và phức tạp khó hiểu."* Bản trước bày cả ô
+        "Lời tả phong cách" (một dòng tiếng Anh dài) và đường link "bộ vẽ nâng
+        cao" ngay giữa trang, nên người mới đọc từ trên xuống gặp bốn thứ phải
+        quyết trong khi chỉ cần quyết một. Hai thứ đó chuyển hết vào "⚙ Chỉnh
+        sâu" — vẫn còn nguyên, vẫn sửa được, nhưng ai không cần thì không thấy.
+
+        `_o_style` và `_o_ve_khac` vẫn được dựng như cũ (chỉ đổi chỗ), vì đường
+        lưu và chế độ sửa đọc thẳng từ chúng.
+        """
+        w, v = self._trang_moi()
         v.addWidget(nhan("Kênh nhìn như thế nào", "h2"))
         v.addWidget(self._phu(
-            "Bấm vào phong cách bạn thích — nhìn ảnh mẫu là biết video sẽ trông "
-            "thế nào. Tool tự điền lời tả và đồng bộ nó sang mọi prompt tạo ảnh, "
-            "video và ảnh bìa, để cả kênh nhìn cùng một kiểu."))
-
-        # Nhờ AI nhìn ảnh khách có sẵn rồi chọn phong cách gần nhất.
-        hang_doan = HangXuongDong()
-        hang_doan.addWidget(nut_phu(
-            "🔎 Tôi có ảnh mẫu — tự chọn giúp", self._doan_phong_tu_anh,
-            rong=300))
-        v.addLayout(hang_doan)
-        self._nhan_doan = self._phu("")
-        v.addWidget(self._nhan_doan)
+            "Bấm một thẻ để xem to — mỗi phong cách có 3 ảnh mẫu và một video "
+            "mẫu (bấm ô ▶ là máy bạn mở video ra xem). Ưng thì bấm “Lưu”. Xem "
+            "miễn phí, mẫu có sẵn trong tool."))
 
         # Lưới thẻ phong cách (ảnh + tên). Bọc widget con cho co ≤760px + cuộn.
         self._the_phong: List[_TheHinh] = []
@@ -797,9 +1086,13 @@ class HopKenh(QDialog):
         luoi.setSpacing(8)
         cot = 3
         for i, (ten, kv) in enumerate(PHONG_CACH):
+            slug = str(kv.get("slug", ""))
+            anhs = _anh_mau_cua(i, slug)
             the = _TheHinh(ten, str(kv.get("_mo_ta", "")),
-                           _duong_anh_mau(i, str(kv.get("slug", ""))))
-            the.bam.connect(lambda _i=i: self._chon_phong(_i))
+                           anhs[0] if anhs else "",
+                           so_anh=len(anhs),
+                           so_video=len(_video_mau_cua_nhieu(slug)))
+            the.bam.connect(lambda _i=i: self._xem_phong(_i))
             luoi.addWidget(the, i // cot, i % cot)
             self._the_phong.append(the)
         i_tuy = len(PHONG_CACH)               # thẻ "Tùy chỉnh" đứng cuối
@@ -811,17 +1104,24 @@ class HopKenh(QDialog):
         self._the_phong.append(the_tuy)
         v.addWidget(luoi_wrap)
 
+        # Câu "Đang chọn: …" — nổi hơn chữ phụ, vì đây là cái duy nhất cho biết
+        # bấm vừa rồi có ăn hay không (thẻ được chọn nằm cao hơn, dễ ngoài tầm
+        # mắt sau khi cuộn xuống).
         self._nhan_phong = self._phu("")
+        self._nhan_phong.setStyleSheet(
+            "color:{0}; background:{1}; border-radius:6px; padding:6px 8px;"
+            .format(theme.CHU, theme.NHAN_NHAT))
         v.addWidget(self._nhan_phong)
-        v.addWidget(self._phu(
-            "Phong cách này được ghép vào cuối MỌI prompt tạo ảnh và tạo video "
-            "của kênh (và ảnh bìa), lặp ở từng cảnh — nhờ vậy cả video nhìn "
-            "cùng một kiểu chứ không mỗi cảnh một phách. Nhân vật thì do ảnh "
-            "bạn tải bên dưới giữ cho giống nhau."))
-        v.addWidget(self._phu("Lời tả phong cách (sửa được nếu muốn khác):"))
-        self._o_style = QLineEdit()
-        self._o_style.setMinimumWidth(1)
-        v.addWidget(self._o_style)
+
+        # Nhờ AI nhìn ảnh khách có sẵn rồi chọn phong cách gần nhất. Đặt SAU
+        # lưới: đường chính là tự xem rồi bấm, đây chỉ là lối đỡ khi bí.
+        hang_doan = HangXuongDong()
+        hang_doan.addWidget(nut_phu(
+            "🔎 Tôi có ảnh mẫu — tự chọn giúp", self._doan_phong_tu_anh,
+            rong=300))
+        v.addLayout(hang_doan)
+        self._nhan_doan = self._phu("")
+        v.addWidget(self._nhan_doan)
 
         v.addWidget(nhan("Ảnh nhân vật", "h2"))
         v.addWidget(self._phu(
@@ -838,7 +1138,7 @@ class HopKenh(QDialog):
         hang.addWidget(nut_phu("Bỏ ảnh vừa tải", self._bo_anh, rong=150))
         v.addLayout(hang)
 
-        # ── Chỉnh sâu: các khoá hình còn lại (cho người rành) ────────────────
+        # ── Chỉnh sâu: lời tả + các khoá hình còn lại (cho người rành) ────────
         nut_sau = nut_phu("⚙ Chỉnh sâu phong cách hình", rong=280)
         nut_sau.setCheckable(True)
         v.addWidget(nut_sau)
@@ -849,6 +1149,19 @@ class HopKenh(QDialog):
         hop_sau.setVisible(False)
         nut_sau.toggled.connect(hop_sau.setVisible)
         v.addWidget(hop_sau)
+
+        o_lt = self._phu("Lời tả phong cách (sửa được nếu muốn khác):")
+        o_lt.setToolTip(
+            "Câu này được ghép vào cuối MỌI prompt tạo ảnh và tạo video của "
+            "kênh (kể cả ảnh bìa), lặp ở từng cảnh — nhờ vậy cả video nhìn cùng "
+            "một kiểu chứ không mỗi cảnh một phách.\n"
+            "Nhân vật thì do ảnh bạn tải bên trên giữ cho giống nhau.")
+        vs.addWidget(o_lt)
+        self._o_style = QLineEdit()
+        self._o_style.setMinimumWidth(1)
+        self._o_style.setToolTip(o_lt.toolTip())
+        vs.addWidget(self._o_style)
+
         vs.addWidget(self._phu(
             "Các khoá hình nâng cao (tên tiếng Anh). Điền sẵn từ mẫu — bỏ trống "
             "một khoá là giữ nguyên của mẫu."))
@@ -862,19 +1175,17 @@ class HopKenh(QDialog):
             vs.addWidget(o)
             self._o_ve_khac[k] = o
 
-        # Nút cho CHỦ DỰ ÁN: tạo bộ ảnh mẫu một lần rồi ship kèm tool. Nằm trong
-        # "Chỉnh sâu" (kín) để khách không bấm nhầm — mỗi lần bấm tạo 12 ảnh.
-        vs.addWidget(self._phu(
-            "Ảnh mẫu cho các thẻ phong cách ở trên. Bấm MỘT LẦN để tạo (tốn ví, "
-            "tạo 12 ảnh), sau đó ảnh nằm sẵn trong tool cho mọi khách xem miễn "
-            "phí. Chỉ chủ tool cần bấm."))
-        vs.addWidget(nut_phu("Tạo ảnh mẫu cho các phong cách…",
-                             self._tao_anh_mau, rong=300))
+        vs.addWidget(nut_phu("Tạo/sửa bộ vẽ nâng cao…", self._sua_khuon,
+                             rong=260))
 
-        v.addWidget(self._phu(
-            "Muốn dựng hẳn một bộ vẽ mới dùng lại cho nhiều kênh? "))
-        v.addWidget(nut_phu("Tạo/sửa bộ vẽ nâng cao…", self._sua_khuon,
-                            rong=260))
+        # Nút cho CHỦ DỰ ÁN: tạo bộ mẫu một lần rồi ship kèm tool. Nằm trong
+        # "Chỉnh sâu" (kín) để khách không bấm nhầm — mỗi lần bấm là trừ ví.
+        vs.addWidget(self._phu(
+            "Ảnh và video mẫu cho các thẻ phong cách ở trên. Bấm MỘT LẦN để tạo "
+            "(tốn ví: mỗi phong cách 3 ảnh + 1 video), sau đó chúng nằm sẵn "
+            "trong tool cho mọi khách xem miễn phí. Chỉ chủ tool cần bấm."))
+        vs.addWidget(nut_phu("Tạo ảnh + video mẫu…",
+                             self._tao_anh_mau, rong=240))
         v.addStretch(1)
         return w
 
@@ -883,6 +1194,25 @@ class HopKenh(QDialog):
         for k, o in self._o_ve_khac.items():
             o.setText(str(src.get(k, "") or ""))
         self._dong_bo_the(str(src.get("image_style", "") or ""))
+
+    def _xem_phong(self, i: int) -> None:
+        """Bấm một thẻ → mở cửa sổ XEM TO (ảnh và video chung một dải) rồi Lưu.
+
+        Chưa có mẫu nào thì bỏ qua cửa sổ, chọn luôn — để không kẹt người dùng ở
+        màn hình trống khi chủ tool chưa kịp tạo bộ mẫu.
+        """
+        if not (0 <= i < len(PHONG_CACH)):
+            self._chon_phong(i)
+            return
+        ten, kv = PHONG_CACH[i]
+        slug = str(kv.get("slug", ""))
+        muc = _mau_xem_duoc(i, slug)
+        if not muc:
+            self._chon_phong(i)
+            return
+        hop = _XemPhongCach(ten, str(kv.get("_mo_ta", "")), muc, self)
+        hop.chon.connect(lambda _i=i: self._chon_phong(_i))
+        hop.exec_()
 
     def _chon_phong(self, i: int) -> None:
         """Người dùng BẤM một thẻ → điền năm khoá hình từ bảng + đánh dấu thẻ.
@@ -893,11 +1223,12 @@ class HopKenh(QDialog):
         self._danh_dau_the(i)
         if i >= len(PHONG_CACH):
             self._nhan_phong.setText(
-                "Tự tả phong cách vào ô bên dưới — prompt ảnh và video sẽ theo "
-                "đúng lời bạn viết.")
+                "✓ Đang chọn: Tùy chỉnh — mở “⚙ Chỉnh sâu” rồi tự tả vào ô "
+                "“Lời tả phong cách”; prompt ảnh và video theo đúng lời bạn viết.")
             return
-        _ten, kv = PHONG_CACH[i]
-        self._nhan_phong.setText(str(kv.get("_mo_ta", "")))
+        ten, kv = PHONG_CACH[i]
+        self._nhan_phong.setText("✓ Đang chọn: {0} — {1}".format(
+            ten, str(kv.get("_mo_ta", ""))))
         self._o_style.setText(str(kv.get("image_style", "")))
         for k, o in self._o_ve_khac.items():
             if k in kv:
@@ -923,11 +1254,14 @@ class HopKenh(QDialog):
                 break
         if khop is not None:
             self._danh_dau_the(khop)
-            self._nhan_phong.setText(str(PHONG_CACH[khop][1].get("_mo_ta", "")))
+            self._nhan_phong.setText("✓ Đang chọn: {0} — {1}".format(
+                PHONG_CACH[khop][0],
+                str(PHONG_CACH[khop][1].get("_mo_ta", ""))))
         else:
             self._danh_dau_the(len(PHONG_CACH))     # thẻ "Tùy chỉnh"
             self._nhan_phong.setText(
-                "Phong cách riêng của mẫu này — sửa chữ bên dưới nếu muốn.")
+                "✓ Đang chọn: Tùy chỉnh — phong cách riêng của mẫu này. Muốn "
+                "khác thì mở “⚙ Chỉnh sâu” sửa ô “Lời tả phong cách”.")
 
     def _ve_hinh(self) -> None:
         """Điền sẵn phong cách hình từ kiểu vẽ đang chọn (chế độ tạo)."""
@@ -1038,7 +1372,8 @@ class HopKenh(QDialog):
             if str(kv.get("slug", "")) == slug:
                 self._chon_phong(i)
                 self._nhan_doan.setText(
-                    "Tôi thấy ảnh của bạn gần nhất với: " + ten)
+                    "Tôi thấy ảnh của bạn gần nhất với: {0} — đã chọn sẵn. "
+                    "Bấm thẻ “{0}” ở lưới trên để xem to cho chắc.".format(ten))
                 return
         self._nhan_doan.setText(
             "Chưa chắc phong cách nào hợp — bạn chọn tay ở lưới trên nhé.")
@@ -1046,36 +1381,64 @@ class HopKenh(QDialog):
     # ── Nút cho CHỦ DỰ ÁN: tạo bộ ảnh mẫu một lần rồi ship kèm tool ──────────
 
     def _tao_anh_mau(self) -> None:
-        """Tạo 12 ảnh mẫu (một ảnh mỗi phong cách) vào `mau_phong_cach/`.
+        """Tạo bộ ẢNH + VIDEO mẫu cho MỌI phong cách vào `mau_phong_cach/<slug>/`.
 
-        Chỉ chủ dự án bấm, một lần. Mỗi ảnh là `image_style` của phong cách +
-        cùng một CẢNH THỬ trung tính, để khách so đúng cái KHÁC là nét vẽ. Chạy
-        nền qua `start_batch` (nó tự lo nhịp hỏi job, tự kiểm ví/khoá).
+        Chỉ chủ dự án bấm, một lần. Mỗi phong cách: một ảnh cho mỗi CẢNH THỬ
+        trung tính, và MỘT video của cảnh đầu — để khách xem to mà hình dung
+        được cả ảnh tĩnh lẫn lúc chuyển động. Chạy nền qua `start_batch` (nó tự
+        lo nhịp hỏi job, tự kiểm ví/khoá). Kết quả rơi vào thư mục con theo slug
+        nên gallery bắt được ngay.
+
+        **Một video mỗi phong cách, không phải ba.** Bộ ba video 720p nặng
+        105 MB, quá nặng để đưa vào git và để khách tải về; một video là đủ trả
+        lời câu "phong cách này khi chuyển động ra sao".
+
+        Tên tệp do hàng đợi sinh (`001_…`) nên ảnh và video **chưa ghép cặp theo
+        cảnh**; muốn ô ▶ mượn đúng ảnh cảnh ấy làm hình đại diện, và muốn nhẹ đủ
+        để commit, thì sau khi chạy hãy đổi tên thành `01.jpg`/`01.mp4`,
+        `02.jpg`, `03.jpg` rồi nén lại (ảnh ngang 960px, video 640×360). Bộ mẫu
+        đang ship đã làm đúng vậy: cả 12 phong cách gói lại còn 5,6 MB.
         """
         if self._app.client is None:
             self._app.bao_can_khoa()
             return
+        so_canh = len(CANH_THU_MAU_NHIEU)
         tra = QMessageBox.question(
-            self, "Tạo ảnh mẫu cho các phong cách",
-            "Việc này tạo {0} ảnh (một ảnh mỗi phong cách) và TRỪ VÍ. Chỉ cần "
-            "chạy MỘT LẦN: ảnh sẽ nằm sẵn trong tool cho mọi khách xem miễn "
-            "phí. Tạo bây giờ?".format(len(PHONG_CACH)),
+            self, "Tạo ảnh + video mẫu cho các phong cách",
+            "Việc này tạo {0} ảnh và {1} video mẫu (mỗi phong cách {2} ảnh + 1 "
+            "video) và TRỪ VÍ. Chỉ cần chạy MỘT LẦN: ảnh/video sẽ nằm sẵn trong "
+            "tool cho mọi khách xem miễn phí. Tạo bây giờ?".format(
+                len(PHONG_CACH) * so_canh, len(PHONG_CACH), so_canh),
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if tra != QMessageBox.Yes:
             return
         from core.jobs import JobSpec  # noqa: PLC0415
-        from core.pricing import KIND_IMAGE, hold_for_image  # noqa: PLC0415
+        from core.pricing import (ENGINE_VEO3, KIND_IMAGE,  # noqa: PLC0415
+                                  KIND_VIDEO, VIDEO_DURATION_BY_ENGINE,
+                                  hold_for_image, hold_for_video)
 
         specs = []
         for i, (_ten, kv) in enumerate(PHONG_CACH):
+            slug = str(kv.get("slug", "")) or "{0:03d}".format(i + 1)
             style = str(kv.get("image_style", "")).strip()
-            mo_ta = (style + ", " + CANH_THU_MAU) if style else CANH_THU_MAU
+            thu_muc = _thu_muc_slug(slug)
+            for j, canh in enumerate(CANH_THU_MAU_NHIEU):
+                mo_ta = (style + ", " + canh) if style else canh
+                specs.append(JobSpec(
+                    kind=KIND_IMAGE, content=mo_ta, label=slug, index=j + 1,
+                    params={"n": 1, "aspect_ratio": "16:9"},
+                    out_dir=thu_muc,
+                    estimate_micro=hold_for_image(1, self._app.prices)))
+            canh1 = CANH_THU_MAU_NHIEU[0]
+            dong = (style + ", " + canh1 + ", " + DONG_THU_MAU) if style \
+                else (canh1 + ", " + DONG_THU_MAU)
             specs.append(JobSpec(
-                kind=KIND_IMAGE, content=mo_ta,
-                label=str(kv.get("slug", "")) or _ten, index=i + 1,
-                params={"n": 1, "aspect_ratio": "16:9"},
-                out_dir=THU_MUC_MAU,
-                estimate_micro=hold_for_image(1, self._app.prices)))
+                kind=KIND_VIDEO, content=dong, label=slug, index=so_canh + 1,
+                params={"engine": ENGINE_VEO3,
+                        "duration": VIDEO_DURATION_BY_ENGINE.get(ENGINE_VEO3),
+                        "aspect_ratio": "16:9"},
+                out_dir=thu_muc,
+                estimate_micro=hold_for_video(ENGINE_VEO3, self._app.prices)))
         self._app.start_batch(specs, folder=THU_MUC_MAU)
 
     # ── Bước 5: Dựng video — nơi DUY NHẤT sửa nhạc / phụ đề / độ phân giải ────

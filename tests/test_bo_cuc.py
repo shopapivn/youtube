@@ -253,6 +253,131 @@ def test_chon_slug_tu_tra_loi():
     assert _chon_slug_tu_tra_loi("", slugs) is None
 
 
+# ── Cửa sổ "xem to" một phong cách ───────────────────────────────────────────
+#
+# Cửa sổ này là chỗ khách thật sự QUYẾT ĐỊNH chọn phong cách nào, nên nút "Lưu"
+# bị cắt mất là mất luôn cả tính năng. Bản đầu xếp ảnh lớn 360px CHỒNG LÊN khung
+# video 300px theo chiều dọc: cộng cả tiêu đề, dải ảnh nhỏ và hàng nút thì cần
+# hơn 800px chiều cao — trên màn 1366×768 nút nằm dưới mép dưới màn hình, khách
+# không bấm tới. Bản sau tách hai thẻ "Ảnh mẫu" / "Video mẫu" cho thấp lại,
+# nhưng khách không biết là có thẻ thứ hai nên chả ai xem video.
+#
+# Bản này: MỘT ô lớn hiện ảnh + MỘT dải ô nhỏ lẫn ảnh với video, và bấm ô ▶ là
+# giao tệp cho trình xem video của máy khách (chủ dự án, 23/08/2026: "ấn vào là
+# nó mở, đơn giản hiệu quả đi"). Không còn `QMediaPlayer` nhúng, không còn ba
+# nút Chạy lại / Tạm dừng / Mở bằng máy.
+#
+# Các bài dưới KHÔNG được để `_mo_bang_may` chạy thật: nó bật trình xem video
+# của máy chạy test lên. Bài nào bấm ô ▶ thì thay hàm ấy bằng một hàm ghi lại.
+
+
+@pytest.fixture(scope="module")
+def hop_xem_phong(cua_so):
+    """Mở cửa sổ xem to cho phong cách ĐẦU TIÊN CÓ ĐỦ ảnh + video mẫu.
+
+    Có video thì dải mới có ô ▶ — tức mới đo được trường hợp rộng nhất. Chặn
+    luôn `_mo_bang_may` cho cả module: dựng hộp là đã `_xem(0)`, và bài nào bấm
+    ô ▶ cũng không được mở trình xem thật.
+    """
+    from ui_qt.kenh import PHONG_CACH, _XemPhongCach, _mau_xem_duoc
+
+    cs, app = cua_so
+    for i, (ten, kv) in enumerate(PHONG_CACH):
+        slug = str(kv.get("slug", ""))
+        muc = _mau_xem_duoc(i, slug)
+        if muc and any(la_video for _p, la_video, _t, _n in muc):
+            hop = _XemPhongCach(ten, str(kv.get("_mo_ta", "")), muc, cs)
+            hop._da_mo = []
+            hop._mo_bang_may = hop._da_mo.append
+            app.processEvents()
+            yield hop, app
+            hop.close()
+            return
+    pytest.skip("chưa có phong cách nào đủ cả ảnh lẫn video mẫu")
+
+
+def test_cua_so_xem_to_vua_man_hinh(hop_xem_phong):
+    hop, _app = hop_xem_phong
+    goi = hop.minimumSizeHint()
+    assert goi.width() <= TRAN_RONG, \
+        "cửa sổ xem to cần {0}px bề rộng".format(goi.width())
+    assert goi.height() <= TRAN_CAO, \
+        "cửa sổ xem to cần {0}px chiều cao — nút Lưu bị cắt".format(
+            goi.height())
+
+
+def test_cua_so_xem_to_anh_va_video_chung_mot_dai(hop_xem_phong):
+    """Một dải duy nhất, đủ ô cho cả ảnh lẫn video, và có ít nhất một ô ▶.
+
+    Ô ▶ nằm ngay cạnh ảnh mới là điều khách thấy được; đẩy video sang thẻ khác
+    thì coi như không có video.
+    """
+    hop, _app = hop_xem_phong
+    assert len(hop._dai) == len(hop._muc)
+    nhan_o = [t._ten for t in hop._dai]
+    assert any(n.startswith("▶") for n in nhan_o), nhan_o
+    assert any(not n.startswith("▶") for n in nhan_o), nhan_o
+    # Mở ra là đang xem ảnh — ô lớn có hình thật.
+    assert not hop._anh_to.pixmap().isNull(), "ô ảnh lớn đang rỗng"
+    assert sum(1 for t in hop._dai if t._chon) == 1, \
+        "phải có đúng một ô được đánh dấu"
+
+
+def test_cua_so_xem_to_khong_nhung_trinh_chieu(hop_xem_phong):
+    """Không dựng `QMediaPlayer`, không có nút Chạy lại / Tạm dừng.
+
+    Chủ dự án, 23/08/2026: "ấn vào là nó mở, đơn giản hiệu quả đi". Khung nhúng
+    kéo theo bộ giải mã của Windows (máy thiếu codec chỉ thấy ô đen) và ba cái
+    nút phải học; trình xem của máy thì chắc chắn chạy được.
+    """
+    from PyQt5.QtWidgets import QPushButton
+
+    hop, _app = hop_xem_phong
+    assert not hasattr(hop, "_player"), "vẫn còn trình chiếu nhúng"
+    chu_nut = [b.text() for b in hop.findChildren(QPushButton)]
+    assert not [c for c in chu_nut if "Chạy lại" in c or "Tạm dừng" in c], \
+        chu_nut
+
+
+def test_cua_so_xem_to_bam_luu_thi_phat_tin_hieu(hop_xem_phong):
+    """Bấm "Lưu" → phát `chon` để bên gọi điền các ô style."""
+    hop, app = hop_xem_phong
+    da = []
+    hop.chon.connect(lambda: da.append(1))
+    hop._da_chon()
+    app.processEvents()
+    assert da == [1], "bấm Lưu mà không phát tín hiệu thì chọn xong không có gì"
+
+
+def test_bam_o_video_thi_may_mo_dung_tep(hop_xem_phong):
+    """Bấm ô ▶ = giao đúng tệp video cho trình xem của máy, một cái bấm là xong.
+
+    Ô lớn vẫn phải có hình (ảnh cùng cảnh) — bỏ trống thì khách tưởng bấm hỏng
+    trong lúc trình xem còn đang mở lên.
+    """
+    hop, app = hop_xem_phong
+    i_video = [j for j, (_p, v, _t, _n) in enumerate(hop._muc) if v]
+    hop._da_mo.clear()
+    hop._xem(i_video[0])
+    app.processEvents()
+    assert hop._da_mo == [hop._muc[i_video[0]][0]], hop._da_mo
+    assert hop._dai[i_video[0]]._chon
+    assert not hop._anh_to.pixmap().isNull(), "bấm ô ▶ mà ô lớn trống trơn"
+
+
+def test_doi_o_anh_thi_doi_anh_lon(hop_xem_phong):
+    """Bấm ô ảnh khác → ô lớn đổi hình, không mở trình xem nào."""
+    hop, app = hop_xem_phong
+    i_anh = [j for j, (_p, v, _t, _n) in enumerate(hop._muc) if not v]
+    if len(i_anh) < 2:
+        pytest.skip("phong cách này chỉ có một ảnh mẫu")
+    hop._da_mo.clear()
+    hop._xem(i_anh[1])
+    app.processEvents()
+    assert hop._dai[i_anh[1]]._chon and not hop._dai[i_anh[0]]._chon
+    assert not hop._anh_to.pixmap().isNull()
+    assert hop._da_mo == [], "bấm ô ảnh mà lại bật trình xem video"
+
 
 def test_di_het_nam_buoc_khong_tran_760px(hop_tao_kenh):
     """Bấm Tiếp đi hết 5 bước — không bước nào đẩy nút ra ngoài mép 760px.
