@@ -201,7 +201,7 @@ def test_chon_phong_cach_thi_dien_san_loi_ta(hop_tao_kenh):
     thay_anh = set()
     thay_video = set()
     for i in range(len(PHONG_CACH)):
-        hop._c_phong.setCurrentIndex(i)
+        hop._chon_phong(i)
         app.processEvents()
         assert hop._o_style.text().strip(), "phong cách rỗng lời tả ảnh"
         thay_anh.add(hop._o_style.text())
@@ -217,6 +217,8 @@ def test_moi_phong_cach_du_khoa_dong_bo_prompt(hop_tao_kenh):
     đuôi mỗi prompt ảnh + video. Rỗng một khoá là một phong cách nhìn nhạt hơn
     hẳn các phong cách khác mà khách không hiểu vì sao.
     """
+    import re
+
     from ui_qt.kenh import PHONG_CACH
 
     thieu = []
@@ -225,6 +227,31 @@ def test_moi_phong_cach_du_khoa_dong_bo_prompt(hop_tao_kenh):
             if not (kv.get(khoa) or "").strip():
                 thieu.append("{0}: {1}".format(ten, khoa))
     assert not thieu, "phong cách thiếu khoá: {0}".format("; ".join(thieu))
+
+    # Mỗi phong cách cần một `slug` duy nhất, kebab-case (đặt tên file ảnh mẫu +
+    # cho AI trả về khi đoán từ ảnh khách tải lên).
+    slugs = [kv.get("slug", "") for _t, kv in PHONG_CACH]
+    assert all(slugs), "có phong cách thiếu slug"
+    assert len(set(slugs)) == len(slugs), "slug trùng nhau"
+    for s in slugs:
+        assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", s), "slug không kebab: " + s
+
+
+def test_chon_slug_tu_tra_loi():
+    """Hàm thuần rút slug từ câu trả lời AI — không gọi mạng."""
+    from ui_qt.kenh import PHONG_CACH, _chon_slug_tu_tra_loi
+
+    slugs = [kv.get("slug", "") for _t, kv in PHONG_CACH]
+    assert "anime-net-phang" in slugs
+    # Trả lời sạch → đúng slug.
+    assert _chon_slug_tu_tra_loi("anime-net-phang", slugs) == "anime-net-phang"
+    # Trả lời lẫn chữ thừa → vẫn rút được.
+    assert _chon_slug_tu_tra_loi(
+        "Tôi nghĩ là pixar-3d nhé", slugs) == "pixar-3d"
+    # Trả lời rác → None (khách chọn tay).
+    assert _chon_slug_tu_tra_loi("không biết", slugs) is None
+    assert _chon_slug_tu_tra_loi("", slugs) is None
+
 
 
 def test_di_het_nam_buoc_khong_tran_760px(hop_tao_kenh):

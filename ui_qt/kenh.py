@@ -30,12 +30,12 @@ import os
 import shutil
 from typing import Dict, List, Optional, Tuple
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
-    QLabel, QLineEdit, QPlainTextEdit, QScrollArea, QSpinBox, QStackedWidget,
-    QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QFileDialog, QFrame, QGridLayout,
+    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QScrollArea,
+    QSpinBox, QStackedWidget, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from core.kenh import (BUOC_PROMPT, GIU_NGUYEN, TEP_KENH, TEP_STYLE,
@@ -98,7 +98,9 @@ _VIEC_PROMPT = {
 #: và `8-thumbnail.md` cắm vào ĐUÔI của TỪNG prompt ảnh/video/thumbnail, nên
 #: chọn một lần là cả kênh nhìn nhất quán. Nội dung để tiếng Anh vì prompt gửi
 #: AI bằng tiếng Anh; chỉ cái nhãn là tiếng Việt. `_mo_ta` là dòng tiếng Việt
-#: hiện dưới ô chọn, KHÔNG phải khoá — không bao giờ ghi ra style.yaml.
+#: hiện dưới ô chọn, `slug` là mã ngắn ổn định để đặt tên ảnh mẫu + cho AI trả
+#: về đúng một phong cách. Cả hai KHÔNG phải khoá `KHOA_VE` — không bao giờ ghi
+#: ra style.yaml (chỉ năm khoá hình mới ghi).
 #:
 #: Rút gọn từ các bộ tham khảo trong THAM-KHAO (visual-skills, OpenMontage,
 #: vox-director): mỗi phong cách = một câu tả nét vẽ + một câu tả chuyển động +
@@ -111,6 +113,7 @@ _GIU_NEN = ("the background keeps its colour and texture for the whole clip "
 
 PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
     ("Hoạt hình 3D (Pixar)", {
+        "slug": "pixar-3d",
         "_mo_ta": "Phim hoạt hình 3D bóng mượt, ánh sáng mềm — vui, dễ "
         "thương. Hợp kênh kể chuyện ấm áp, thiếu nhi, gia đình.",
         "image_style": "stylised 3D animated film still, Pixar-like, soft "
@@ -125,6 +128,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "high contrast, punchy lighting",
     }),
     ("Anime (nét phẳng)", {
+        "slug": "anime-net-phang",
         "_mo_ta": "Anime cel-shading, màu phẳng, nét sạch — kiểu phim Nhật. "
         "Hợp kênh truyện tình cảm, học đường, phiêu lưu.",
         "image_style": "clean cel-shaded anime illustration, crisp lineart, "
@@ -139,6 +143,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "rim light, high saturation",
     }),
     ("Màu nước cổ tích (Ghibli)", {
+        "slug": "mau-nuoc-ghibli",
         "_mo_ta": "Màu nước mềm, ấm áp, không khí truyện cổ tích Ghibli. "
         "Hợp kênh chữa lành, thiền, chuyện đời nhẹ nhàng.",
         "image_style": "soft watercolor storybook illustration, painterly "
@@ -153,6 +158,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "composition, readable focal point",
     }),
     ("Điện ảnh thực tế", {
+        "slug": "dien-anh-thuc-te",
         "_mo_ta": "Ảnh thật như phim điện ảnh: hạt phim, xoá phông, ánh sáng "
         "đẹp. Hợp kênh tâm lý người thật, phóng sự, kể chuyện đời.",
         "image_style": "photoreal cinematic still, shallow depth of field, "
@@ -167,6 +173,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "single subject, shallow focus",
     }),
     ("Truyện tranh / graphic novel", {
+        "slug": "truyen-tranh",
         "_mo_ta": "Nét mực đậm, màu phẳng, kiểu truyện tranh phương Tây. "
         "Hợp kênh hành động, siêu anh hùng, kể chuyện gay cấn.",
         "image_style": "graphic novel illustration, bold black ink outlines, "
@@ -181,6 +188,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "high contrast",
     }),
     ("Tranh cắt giấy", {
+        "slug": "tranh-cat-giay",
         "_mo_ta": "Giấy cắt xếp lớp, bóng đổ mềm — mộc mạc, thủ công. "
         "Hợp kênh kể chuyện thiếu nhi, cổ tích, giáo dục nhẹ.",
         "image_style": "layered paper-cutout collage art, visible paper "
@@ -195,6 +203,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "clear focal subject",
     }),
     ("Pixel art retro", {
+        "slug": "pixel-art",
         "_mo_ta": "Điểm ảnh 16-bit, màu hạn chế — hoài niệm game xưa. "
         "Hợp kênh game, retro, chuyện vui theo phong cách game.",
         "image_style": "16-bit pixel art, limited palette, clean dithering, "
@@ -209,6 +218,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "contrast palette",
     }),
     ("Cyberpunk neon", {
+        "slug": "cyberpunk-neon",
         "_mo_ta": "Đèn neon, phản chiếu ướt, tương phản cao — kiểu tương lai "
         "tối. Hợp kênh khoa học viễn tưởng, công nghệ, bí ẩn.",
         "image_style": "neon-lit cyberpunk scene, wet reflective surfaces, "
@@ -223,6 +233,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "silhouette, high contrast",
     }),
     ("Sơn dầu cổ điển", {
+        "slug": "son-dau-co-dien",
         "_mo_ta": "Tranh sơn dầu, thấy nét cọ — trang trọng, cổ điển. "
         "Hợp kênh lịch sử, danh nhân, chuyện xưa trang nghiêm.",
         "image_style": "classical oil painting, visible brushstrokes, rich "
@@ -237,6 +248,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "strong subject",
     }),
     ("Vector tối giản", {
+        "slug": "vector-toi-gian",
         "_mo_ta": "Hình khối phẳng, sạch, tối giản — hợp video giải thích. "
         "Hợp kênh kiến thức, tài chính, hướng dẫn.",
         "image_style": "flat minimalist vector illustration, clean geometric "
@@ -251,6 +263,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "negative space, clear label area",
     }),
     ("Thủy mặc (mực tàu)", {
+        "slug": "thuy-mac",
         "_mo_ta": "Mực tàu, nhiều khoảng trống, nét loang — Á Đông tĩnh lặng. "
         "Hợp kênh cổ trang, thiền, triết lý phương Đông.",
         "image_style": "Chinese ink wash painting, expressive brush strokes, "
@@ -265,6 +278,7 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "space, single red accent",
     }),
     ("Đen trắng noir", {
+        "slug": "den-trang-noir",
         "_mo_ta": "Đen trắng tương phản mạnh, bóng gắt — bí ẩn, kịch tính. "
         "Hợp kênh hình sự, trinh thám, chuyện rùng rợn.",
         "image_style": "high-contrast black-and-white noir, hard directional "
@@ -279,6 +293,118 @@ PHONG_CACH: List[Tuple[str, Dict[str, str]]] = [
         "single dramatic subject",
     }),
 ]
+
+#: Thư mục chứa ẢNH MẪU của từng phong cách. Ship kèm tool nên khách thấy ngay,
+#: miễn phí. Chủ dự án tạo một lần bằng nút "Tạo ảnh mẫu" rồi commit thư mục này.
+THU_MUC_MAU = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "mau_phong_cach")
+
+#: Đuôi ảnh mẫu chấp nhận, theo thứ tự ưu tiên.
+_DUOI_MAU = (".png", ".jpg", ".jpeg", ".webp")
+
+#: Một CẢNH THỬ trung tính, ghép sau `image_style` khi tạo ảnh mẫu. Cùng một
+#: cảnh cho mọi phong cách để khách so được đúng cái KHÁC là nét vẽ, không phải
+#: nội dung. Tránh mọi thứ prompt cấm (chữ, watermark…).
+CANH_THU_MAU = ("a single friendly person sitting calmly at a small table with "
+                "a cup, warm simple room, centred medium shot")
+
+
+def _duong_anh_mau(i: int, slug: str) -> str:
+    """Đường tới ảnh mẫu của phong cách thứ `i` (slug `slug`), "" nếu chưa có.
+
+    Ưu tiên `<slug>.<đuôi>`; không có thì thử `{i+1:03d}_*` — tên
+    `core.batch.safe_filename` sinh ra khi chạy nút "Tạo ảnh mẫu" qua hàng đợi.
+    """
+    for duoi in _DUOI_MAU:
+        p = os.path.join(THU_MUC_MAU, slug + duoi)
+        if os.path.isfile(p):
+            return p
+    if not os.path.isdir(THU_MUC_MAU):
+        return ""
+    dau = "{0:03d}_".format(i + 1)
+    for ten in sorted(os.listdir(THU_MUC_MAU)):
+        if ten.startswith(dau) and os.path.splitext(ten)[1].lower() in _DUOI_MAU:
+            return os.path.join(THU_MUC_MAU, ten)
+    return ""
+
+
+def _chon_slug_tu_tra_loi(tra: str, slugs: List[str]) -> Optional[str]:
+    """Rút đúng MỘT slug hợp lệ từ câu trả lời của AI. Không nhận ra thì None.
+
+    Hàm THUẦN (không mạng) để bài kiểm chạy được: câu trả lời có thể lẫn chữ
+    thừa, nên tìm slug xuất hiện trong đó; khớp trước tiên slug dài nhất để
+    "anime-net-phang" không bị "anime"… nuốt (phòng khi thêm slug con sau này).
+    """
+    t = (tra or "").strip().lower()
+    if not t:
+        return None
+    for s in sorted(slugs, key=len, reverse=True):
+        if s.lower() in t:
+            return s
+    return None
+
+
+#: Cỡ ảnh xem trước trong một thẻ phong cách.
+_ANH_THE = (150, 90)
+
+
+class _TheHinh(QFrame):
+    """Một thẻ phong cách bấm được: ảnh mẫu + tên tiếng Việt (chữ tự xuống dòng).
+
+    Bấm vào phát tín hiệu `bam`; `dat_chon(True)` vẽ viền xanh cho biết đang
+    chọn. Chưa có ảnh mẫu thì hiện khung xám "Ảnh mẫu chưa tạo" — không vỡ giao
+    diện, và là dấu hiệu để chủ dự án bấm nút Tạo ảnh mẫu.
+    """
+
+    bam = pyqtSignal()
+
+    def __init__(self, ten: str, mo_ta: str, duong_anh: str,
+                 cha: Optional[QWidget] = None):
+        super().__init__(cha)
+        self._chon = False
+        self.setFixedWidth(168)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(mo_ta or ten)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(6, 6, 6, 6)
+        v.setSpacing(4)
+
+        anh = QLabel()
+        anh.setAlignment(Qt.AlignCenter)
+        anh.setFixedSize(*_ANH_THE)
+        px = QPixmap(duong_anh) if duong_anh else QPixmap()
+        if not px.isNull():
+            anh.setPixmap(px.scaled(_ANH_THE[0], _ANH_THE[1],
+                                    Qt.KeepAspectRatioByExpanding,
+                                    Qt.SmoothTransformation))
+        else:
+            anh.setText("Ảnh mẫu\nchưa tạo")
+            anh.setStyleSheet(
+                "color:{0}; background:{1}; border:1px dashed {2};"
+                "border-radius:6px;".format(theme.CHU_MO, theme.NEN, theme.VIEN))
+        v.addWidget(anh, 0, Qt.AlignCenter)
+
+        cap = QLabel(ten)
+        cap.setWordWrap(True)
+        cap.setAlignment(Qt.AlignCenter)
+        cap.setMinimumWidth(1)
+        cap.setStyleSheet("color:{0}; font-weight:600;".format(theme.CHU))
+        v.addWidget(cap)
+        self._ve_vien()
+
+    def _ve_vien(self) -> None:
+        mau = theme.NHAN if self._chon else theme.VIEN
+        nen = theme.NHAN_NHAT if self._chon else theme.THE
+        self.setStyleSheet(
+            "_TheHinh {{ border:2px solid {0}; border-radius:8px; "
+            "background:{1}; }}".format(mau, nen))
+
+    def dat_chon(self, tf: bool) -> None:
+        self._chon = bool(tf)
+        self._ve_vien()
+
+    def mousePressEvent(self, _e) -> None:      # noqa: N802 — Qt đặt tên
+        self.bam.emit()
 
 
 class HopKenh(QDialog):
@@ -650,15 +776,41 @@ class HopKenh(QDialog):
 
         v.addWidget(nhan("Kênh nhìn như thế nào", "h2"))
         v.addWidget(self._phu(
-            "Chọn một phong cách — tool tự điền lời tả và đồng bộ nó sang mọi "
-            "prompt tạo ảnh, video và ảnh bìa, để cả kênh nhìn cùng một kiểu."))
-        self._c_phong = QComboBox()
-        for i, (ten, _kv) in enumerate(PHONG_CACH):
-            self._c_phong.addItem(ten, i)
-        self._c_phong.addItem("Tùy chỉnh (tự tả)…", None)
-        self._c_phong.currentIndexChanged.connect(
-            lambda _i: self._doi_phong_cach())
-        v.addWidget(self._c_phong)
+            "Bấm vào phong cách bạn thích — nhìn ảnh mẫu là biết video sẽ trông "
+            "thế nào. Tool tự điền lời tả và đồng bộ nó sang mọi prompt tạo ảnh, "
+            "video và ảnh bìa, để cả kênh nhìn cùng một kiểu."))
+
+        # Nhờ AI nhìn ảnh khách có sẵn rồi chọn phong cách gần nhất.
+        hang_doan = HangXuongDong()
+        hang_doan.addWidget(nut_phu(
+            "🔎 Tôi có ảnh mẫu — tự chọn giúp", self._doan_phong_tu_anh,
+            rong=300))
+        v.addLayout(hang_doan)
+        self._nhan_doan = self._phu("")
+        v.addWidget(self._nhan_doan)
+
+        # Lưới thẻ phong cách (ảnh + tên). Bọc widget con cho co ≤760px + cuộn.
+        self._the_phong: List[_TheHinh] = []
+        luoi_wrap = QWidget()
+        luoi = QGridLayout(luoi_wrap)
+        luoi.setContentsMargins(0, 0, 0, 0)
+        luoi.setSpacing(8)
+        cot = 3
+        for i, (ten, kv) in enumerate(PHONG_CACH):
+            the = _TheHinh(ten, str(kv.get("_mo_ta", "")),
+                           _duong_anh_mau(i, str(kv.get("slug", ""))))
+            the.bam.connect(lambda _i=i: self._chon_phong(_i))
+            luoi.addWidget(the, i // cot, i % cot)
+            self._the_phong.append(the)
+        i_tuy = len(PHONG_CACH)               # thẻ "Tùy chỉnh" đứng cuối
+        the_tuy = _TheHinh(
+            "Tùy chỉnh (tự tả)",
+            "Tự viết lời tả — prompt ảnh/video sẽ theo đúng chữ bạn gõ.", "")
+        the_tuy.bam.connect(lambda: self._chon_phong(i_tuy))
+        luoi.addWidget(the_tuy, i_tuy // cot, i_tuy % cot)
+        self._the_phong.append(the_tuy)
+        v.addWidget(luoi_wrap)
+
         self._nhan_phong = self._phu("")
         v.addWidget(self._nhan_phong)
         v.addWidget(self._phu(
@@ -710,6 +862,15 @@ class HopKenh(QDialog):
             vs.addWidget(o)
             self._o_ve_khac[k] = o
 
+        # Nút cho CHỦ DỰ ÁN: tạo bộ ảnh mẫu một lần rồi ship kèm tool. Nằm trong
+        # "Chỉnh sâu" (kín) để khách không bấm nhầm — mỗi lần bấm tạo 12 ảnh.
+        vs.addWidget(self._phu(
+            "Ảnh mẫu cho các thẻ phong cách ở trên. Bấm MỘT LẦN để tạo (tốn ví, "
+            "tạo 12 ảnh), sau đó ảnh nằm sẵn trong tool cho mọi khách xem miễn "
+            "phí. Chỉ chủ tool cần bấm."))
+        vs.addWidget(nut_phu("Tạo ảnh mẫu cho các phong cách…",
+                             self._tao_anh_mau, rong=300))
+
         v.addWidget(self._phu(
             "Muốn dựng hẳn một bộ vẽ mới dùng lại cho nhiều kênh? "))
         v.addWidget(nut_phu("Tạo/sửa bộ vẽ nâng cao…", self._sua_khuon,
@@ -721,51 +882,52 @@ class HopKenh(QDialog):
         self._o_style.setText(str(src.get("image_style", "") or ""))
         for k, o in self._o_ve_khac.items():
             o.setText(str(src.get(k, "") or ""))
-        self._dong_bo_combo(str(src.get("image_style", "") or ""))
+        self._dong_bo_the(str(src.get("image_style", "") or ""))
 
-    def _doi_phong_cach(self) -> None:
-        """Người dùng đổi ô chọn phong cách → điền năm khoá hình từ bảng.
+    def _chon_phong(self, i: int) -> None:
+        """Người dùng BẤM một thẻ → điền năm khoá hình từ bảng + đánh dấu thẻ.
 
-        "Tùy chỉnh" (data = None) thì để nguyên các ô cho người dùng tự tả.
+        `i == len(PHONG_CACH)` là thẻ "Tùy chỉnh": chỉ đánh dấu, để nguyên các ô
+        cho người dùng tự tả.
         """
-        d = self._c_phong.currentData()
-        if d is None:
+        self._danh_dau_the(i)
+        if i >= len(PHONG_CACH):
             self._nhan_phong.setText(
                 "Tự tả phong cách vào ô bên dưới — prompt ảnh và video sẽ theo "
                 "đúng lời bạn viết.")
             return
-        _ten, kv = PHONG_CACH[d]
-        self._nhan_phong.setText(kv.get("_mo_ta", ""))
-        self._o_style.setText(kv.get("image_style", ""))
+        _ten, kv = PHONG_CACH[i]
+        self._nhan_phong.setText(str(kv.get("_mo_ta", "")))
+        self._o_style.setText(str(kv.get("image_style", "")))
         for k, o in self._o_ve_khac.items():
             if k in kv:
-                o.setText(kv[k])
+                o.setText(str(kv[k]))
 
-    def _dong_bo_combo(self, image_style: str) -> None:
-        """Đặt ô chọn về phong cách khớp `image_style` mà KHÔNG điền đè lại.
+    def _danh_dau_the(self, i: int) -> None:
+        """Vẽ viền chọn cho đúng một thẻ (theo chỉ số), bỏ chọn các thẻ khác."""
+        for j, the in enumerate(self._the_phong):
+            the.dat_chon(j == i)
+
+    def _dong_bo_the(self, image_style: str) -> None:
+        """Đánh dấu thẻ khớp `image_style` mà KHÔNG điền đè lại các ô.
 
         Dùng khi nạp sẵn từ mẫu (Bước 1) hay từ kênh (chế độ sửa): các ô đã
-        được `_dat_hinh` điền rồi, đây chỉ chỉnh ô chọn cho khớp. Không khớp
-        mục nào thì để "Tùy chỉnh" và giữ nguyên chữ của mẫu/kênh.
+        được `_dat_hinh` điền rồi, đây chỉ chỉnh thẻ được chọn cho khớp. Không
+        khớp mục nào thì về thẻ "Tùy chỉnh" và giữ nguyên chữ của mẫu/kênh.
         """
         goc = (image_style or "").strip()
         khop = None
-        for j in range(self._c_phong.count()):
-            d = self._c_phong.itemData(j)
-            if d is not None and PHONG_CACH[d][1].get(
-                    "image_style", "").strip() == goc:
-                khop = j
+        for i, (_ten, kv) in enumerate(PHONG_CACH):
+            if str(kv.get("image_style", "")).strip() == goc:
+                khop = i
                 break
-        self._c_phong.blockSignals(True)
         if khop is not None:
-            self._c_phong.setCurrentIndex(khop)
-            self._nhan_phong.setText(
-                PHONG_CACH[self._c_phong.itemData(khop)][1].get("_mo_ta", ""))
+            self._danh_dau_the(khop)
+            self._nhan_phong.setText(str(PHONG_CACH[khop][1].get("_mo_ta", "")))
         else:
-            self._c_phong.setCurrentIndex(self._c_phong.count() - 1)
+            self._danh_dau_the(len(PHONG_CACH))     # thẻ "Tùy chỉnh"
             self._nhan_phong.setText(
                 "Phong cách riêng của mẫu này — sửa chữ bên dưới nếu muốn.")
-        self._c_phong.blockSignals(False)
 
     def _ve_hinh(self) -> None:
         """Điền sẵn phong cách hình từ kiểu vẽ đang chọn (chế độ tạo)."""
@@ -809,6 +971,113 @@ class HopKenh(QDialog):
         self._ve_anh_nv()
         if self._che_do == "tao":
             self._ve_anh()
+
+    # ── Nhờ AI nhìn ảnh khách có sẵn rồi chọn phong cách gần nhất ────────────
+
+    def _doan_phong_tu_anh(self) -> None:
+        """Khách tải 1–3 ảnh → nhờ AI nói phong cách nào gần nhất → chọn thẻ đó.
+
+        Một lời gọi API DUY NHẤT do khách chủ động bấm — không vòng lặp, không
+        hỏi dày. Đọc file + hoá data URL ngay trên luồng vẽ, việc gọi mạng đẩy
+        xuống `run_bg`; kết quả về luồng vẽ mới chạm tới các thẻ.
+        """
+        if self._app.client is None:
+            self._app.bao_can_khoa()
+            return
+        duongs, _ = QFileDialog.getOpenFileNames(
+            self, "Chọn 1–3 ảnh mẫu của bạn", "",
+            "Ảnh (*.png *.jpg *.jpeg *.webp);;Mọi loại file (*)")
+        if not duongs:
+            return
+        duongs = duongs[:3]
+        from core.auto_khau import _anh_thanh_data_url  # noqa: PLC0415
+
+        phan = [{"type": "text", "text": self._loi_nhac_doan()}]
+        try:
+            for d in duongs:
+                with open(d, "rb") as f:
+                    url = _anh_thanh_data_url(f.read())
+                phan.append({"type": "image_url", "image_url": {"url": url}})
+        except OSError:
+            self._nhan_doan.setText(
+                "Chưa đọc được ảnh bạn chọn — bạn chọn tay ở lưới trên nhé.")
+            return
+
+        tin = [{"role": "user", "content": phan}]
+        client = self._app.client
+        slugs = [str(kv.get("slug", "")) for _t, kv in PHONG_CACH]
+        self._nhan_doan.setText("Đang xem ảnh của bạn…")
+
+        def viec():
+            from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+            return goi_van_ban(client, tin, toi_da_token=64)
+
+        self._app.run_bg(
+            viec,
+            on_ok=lambda tra: self._nhan_doan_xong(tra, slugs),
+            on_err=lambda _e: self._nhan_doan.setText(
+                "Chưa đọc được ảnh, bạn chọn tay ở lưới trên nhé."))
+
+    def _loi_nhac_doan(self) -> str:
+        """Lời nhắc buộc AI trả về ĐÚNG MỘT slug trong danh sách — dễ parse."""
+        dong = "\n".join(
+            "- {0} = {1}".format(kv.get("slug", ""), ten)
+            for ten, kv in PHONG_CACH)
+        return (
+            "Nhìn (các) ảnh sau và cho biết phong cách vẽ nào dưới đây GẦN "
+            "NHẤT. Chỉ trả về đúng một mã (phần bên trái dấu =), không thêm "
+            "chữ nào khác.\n" + dong)
+
+    def _nhan_doan_xong(self, tra: str, slugs: List[str]) -> None:
+        slug = _chon_slug_tu_tra_loi(tra, slugs)
+        if slug is None:
+            self._nhan_doan.setText(
+                "Chưa chắc phong cách nào hợp — bạn chọn tay ở lưới trên nhé.")
+            return
+        for i, (ten, kv) in enumerate(PHONG_CACH):
+            if str(kv.get("slug", "")) == slug:
+                self._chon_phong(i)
+                self._nhan_doan.setText(
+                    "Tôi thấy ảnh của bạn gần nhất với: " + ten)
+                return
+        self._nhan_doan.setText(
+            "Chưa chắc phong cách nào hợp — bạn chọn tay ở lưới trên nhé.")
+
+    # ── Nút cho CHỦ DỰ ÁN: tạo bộ ảnh mẫu một lần rồi ship kèm tool ──────────
+
+    def _tao_anh_mau(self) -> None:
+        """Tạo 12 ảnh mẫu (một ảnh mỗi phong cách) vào `mau_phong_cach/`.
+
+        Chỉ chủ dự án bấm, một lần. Mỗi ảnh là `image_style` của phong cách +
+        cùng một CẢNH THỬ trung tính, để khách so đúng cái KHÁC là nét vẽ. Chạy
+        nền qua `start_batch` (nó tự lo nhịp hỏi job, tự kiểm ví/khoá).
+        """
+        if self._app.client is None:
+            self._app.bao_can_khoa()
+            return
+        tra = QMessageBox.question(
+            self, "Tạo ảnh mẫu cho các phong cách",
+            "Việc này tạo {0} ảnh (một ảnh mỗi phong cách) và TRỪ VÍ. Chỉ cần "
+            "chạy MỘT LẦN: ảnh sẽ nằm sẵn trong tool cho mọi khách xem miễn "
+            "phí. Tạo bây giờ?".format(len(PHONG_CACH)),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if tra != QMessageBox.Yes:
+            return
+        from core.jobs import JobSpec  # noqa: PLC0415
+        from core.pricing import KIND_IMAGE, hold_for_image  # noqa: PLC0415
+
+        specs = []
+        for i, (_ten, kv) in enumerate(PHONG_CACH):
+            style = str(kv.get("image_style", "")).strip()
+            mo_ta = (style + ", " + CANH_THU_MAU) if style else CANH_THU_MAU
+            specs.append(JobSpec(
+                kind=KIND_IMAGE, content=mo_ta,
+                label=str(kv.get("slug", "")) or _ten, index=i + 1,
+                params={"n": 1, "aspect_ratio": "16:9"},
+                out_dir=THU_MUC_MAU,
+                estimate_micro=hold_for_image(1, self._app.prices)))
+        self._app.start_batch(specs, folder=THU_MUC_MAU)
+
     # ── Bước 5: Dựng video — nơi DUY NHẤT sửa nhạc / phụ đề / độ phân giải ────
 
     def _trang_dung_video(self, cai: Dict[str, object], thu_muc: str) -> QWidget:
