@@ -39,7 +39,7 @@ __all__ = [
     "CHE_DO_KE", "CHE_DO_CAN_ANH_NV",
     "dung_workflow", "dung_boi_canh", "cau_thieu_gi", "duong_workbook",
     "canh_de_xem", "dan_de_xem", "tom_tat_dan", "bia_de_xem", "nhac_de_xem",
-    "boi_canh_de_xem",
+    "boi_canh_de_xem", "man_de_xem", "ke_hoach_de_xem",
 ]
 
 #: Engine dựng video, và trần độ dài clip của nó. Người dùng chọn engine nào thì
@@ -523,6 +523,23 @@ def nhac_de_xem(hang: Sequence[Sequence[Any]]) -> List[Dict[str, str]]:
     ra = _bang_de_xem(hang, ("music_id", "start_time", "end_time",
                              "suno_prompt", "mood"), "music_id")
     ra.sort(key=lambda m: float(m["start_time"] or 0))
+    return ra
+
+
+def man_de_xem(hang: Sequence[Sequence[Any]]) -> List[Dict[str, str]]:
+    """Sheet `story` → các màn (loại 2, 3) theo thứ tự."""
+    ra = _bang_de_xem(hang, ("segment_id", "name", "message", "emotion", "motif",
+                             "srt_from", "srt_to", "arc"), "segment_id")
+    ra.sort(key=lambda m: float(m["segment_id"] or 0))
+    return ra
+
+
+def ke_hoach_de_xem(hang: Sequence[Sequence[Any]]) -> List[Dict[str, str]]:
+    """Sheet `director_plan` → các beat theo màn rồi theo số beat."""
+    ra = _bang_de_xem(hang, ("segment_id", "beat", "srt_from", "srt_to", "purpose",
+                             "characters", "location", "shot_size", "camera",
+                             "element_motion", "emotion"), "segment_id")
+    ra.sort(key=lambda b: (float(b["segment_id"] or 0), float(b["beat"] or 0)))
     return ra
 
 

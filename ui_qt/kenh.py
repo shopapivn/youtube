@@ -67,7 +67,8 @@ _NHAN_PROMPT = {
     "1-tieu-de.md": "Tiêu đề + thumb",
     "2a-phan-tich.md": "Phân tích gốc",
     "2-viet.md": "Content",
-    "3-sua.md": "Review",
+    "2b-cham.md": "Chấm & chọn",
+    "3-sua.md": "Rà soát",
     "4-do-dai.md": "Độ dài",
     "5-hoan-thien.md": "Hoàn thiện",
     "6-seo.md": "SEO",
@@ -82,7 +83,11 @@ _VIEC_PROMPT = {
     "1-tieu-de.md": "đặt tiêu đề video và chữ in trên ảnh thumbnail.",
     "2a-phan-tich.md": "đọc video gốc, chỉ ra chỗ hay và chưa hay trước khi viết.",
     "2-viet.md": "viết kịch bản lời đọc (content) cho video.",
-    "3-sua.md": "review lại content, đối chiếu và sửa chỗ hụt cho đạt tiêu chuẩn.",
+    "2b-cham.md": "chấm các bản content đã viết và chọn MỘT bản — đây là tiêu "
+                  "chí chọn, sửa theo gu kênh của bạn (chỉ chạy khi “Viết mấy "
+                  "bản” > 1).",
+    "3-sua.md": "rà soát content trước khi đọc: sửa lệch tiếng, tách câu, chèn "
+                "thẻ cảm xúc — không viết lại.",
     "4-do-dai.md": "nắn kịch bản cho đúng độ dài bạn đặt.",
     "5-hoan-thien.md": "đọc lại lần cuối cho lời đọc mượt.",
     "6-seo.md": "viết mô tả, hashtag và từ khoá để đăng YouTube.",
@@ -987,6 +992,33 @@ class HopKenh(QDialog):
             self._nhan_cl_canh = self._phu("")
             v.addWidget(self._nhan_cl_canh)
 
+        # ═══ VIẾT MẤY BẢN RỒI CHẤM CHỌN MỘT ═══
+        #
+        # Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các lần
+        # tức là chọn bản tốt nhất"* — và muốn đặt được ngay trên GUI. Số bản
+        # ghi vào `kenh.yaml` (`so_ban_nhap`); tiêu chí chọn chính là thẻ
+        # "Chấm & chọn" bên dưới (`2b-cham.md`), sửa như mọi prompt khác.
+        v.addWidget(nhan("Viết mấy bản rồi chấm chọn một", "h2"))
+        hang_ban = HangXuongDong()
+        hang_ban.addWidget(nhan("Số bản content viết mỗi video:", "phu"))
+        self._o_so_ban = QSpinBox()
+        self._o_so_ban.setRange(1, 5)
+        self._o_so_ban.setFixedWidth(70)
+        self._o_so_ban.setValue(
+            int(getattr(getattr(self, "_kenh", None), "so_ban_nhap", 1) or 1))
+        self._o_so_ban.setToolTip(
+            "1 = viết một bản, không chấm (mặc định — mỗi bản là một lượt gọi "
+            "AI).\n3 = viết ba bản rồi AI chấm theo thẻ “Chấm & chọn”, lấy bản "
+            "tốt nhất; ba bản và lý do chọn nằm trong thư mục lượt để bạn "
+            "xem lại.\nMáy viết content bằng thuê bao Claude thì đặt 3 không "
+            "tốn thêm gì; đi ví ShopAPI thì tốn gấp số bản.")
+        hang_ban.addWidget(self._o_so_ban)
+        v.addLayout(hang_ban)
+        v.addWidget(self._phu(
+            "Tiêu chí chọn bản tốt nhất bạn sửa ở thẻ “Chấm & chọn” bên dưới — "
+            "tool tính sẵn độ dài và mức trùng nguyên văn với bản gốc rồi đưa "
+            "cho AI chấm."))
+
         v.addWidget(nhan("Các prompt", "h2"))
         self._tab_prompt = QTabWidget()
         self._tab_prompt.setUsesScrollButtons(True)   # nhiều thẻ thì cuộn, không kéo rộng
@@ -1605,6 +1637,7 @@ class HopKenh(QDialog):
             ("am_luong_nhac", "{0:.2f}".format(self._o_am.value() / 100.0)),
             ("do_phan_giai", "" if self._o_dpg.currentText() == THEO_CHUNG
              else self._o_dpg.currentText()),
+            ("so_ban_nhap", str(self._o_so_ban.value())),
         ):
             chu = _dat_khoa_yaml(chu, khoa, gt)
         if sua:

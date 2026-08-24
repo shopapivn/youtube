@@ -289,6 +289,15 @@ class TrangGiongNoi(QWidget):
         d1.addWidget(self._nut_cai_dat)
         v.addLayout(d1)
 
+        # Đồng bộ với kênh: giọng của kênh ↔ ô Voice ID. Khách thử giọng ở
+        # đây ưng rồi "Lưu vào kênh" là tab Tự động đọc bằng giọng đó.
+        from .kenh_chon import HangKenh  # noqa: PLC0415
+
+        v.addWidget(HangKenh(
+            self._app, nap=self._nap_giong_tu_kenh, luu=self._luu_giong_vao_kenh,
+            mach_nap="Lấy Voice ID của kênh vào ô trên.",
+            mach_luu="Ghi Voice ID ở ô trên thành giọng của kênh."))
+
         d2 = QHBoxLayout()
         d2.setSpacing(8)
         d2.addStretch(1)
@@ -301,6 +310,26 @@ class TrangGiongNoi(QWidget):
 
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_TTS))
         return khung
+
+    def _nap_giong_tu_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import doc_giong  # noqa: PLC0415
+
+        giong = doc_giong(self._app.base_dir, ma)
+        if not giong:
+            self._app.show_message(
+                "Kênh chưa có giọng",
+                "Kênh “{0}” chưa khai Voice ID. Dán mã vào ô trên rồi bấm “Lưu "
+                "vào kênh”.".format(ma))
+            return
+        self._ma_giong.setText(giong)
+
+    def _luu_giong_vao_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import ghi_giong  # noqa: PLC0415
+
+        giong = self._ma_giong.text().strip()
+        if not giong:
+            raise ValueError("Ô Voice ID đang trống — dán mã giọng vào trước.")
+        ghi_giong(self._app.base_dir, ma, giong)
 
     # ── Bước 3: lưu vào đâu, rồi chạy ────────────────────────────────────────
 

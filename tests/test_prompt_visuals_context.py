@@ -169,3 +169,43 @@ def test_ghi_cot_thumbnail_va_music(tmp_path):
         wb.close()
     assert bia[0]["img_prompt"] == "MOI" and bia[0]["thumb_text"] == "HOOK"
     assert nhac[0]["suno_prompt"] == "NHAC MOI"
+
+
+# ── 5. Đổi tên tệp tham chiếu thành đường dẫn thật (ảnh tham chiếu tự tạo) ──
+
+def test_ghi_duong_tham_chieu_thay_dung_ten_giu_ten_chua_co(tmp_path):
+    from ui_qt.trang_prompt_visuals import TrangPromptVisuals
+
+    pw = _pw_run()
+    out = tmp_path / "scene-prompts.xlsx"
+    pw.render_workbook(out, {
+        "scenes": [{"scene_id": 1, "img_prompt": "a", "video_prompt": "b",
+                    "reference_files": '["nv1.png", "loc1.png"]'},
+                   {"scene_id": 2, "img_prompt": "c", "video_prompt": "d",
+                    "reference_files": ""}],
+        "characters": [], "thumbnails": [
+            {"thumb_id": 1, "version_desc": "x", "img_prompt": "p",
+             "reference_files": '["nv1.png"]'}]})
+    anh = str(tmp_path / "loc1.png")
+    assert TrangPromptVisuals._ghi_duong_tham_chieu(str(out), {"loc1.png": anh}) == ""
+    wb = load_workbook(str(out), read_only=True, data_only=True)
+    try:
+        hang = [list(r) for r in wb["scenes"].iter_rows(values_only=True)]
+        bia = [list(r) for r in wb["thumbnail"].iter_rows(values_only=True)]
+    finally:
+        wb.close()
+    c = hang[0].index("reference_files")
+    assert hang[1][c] == "nv1.png, " + anh      # loc1 thành đường thật, nv1 chờ
+    assert not hang[2][c]                         # ô trống giữ trống
+    # Lượt hai: nv1 về → thay nốt, đường cũ giữ nguyên.
+    nv = str(tmp_path / "nv1.png")
+    TrangPromptVisuals._ghi_duong_tham_chieu(str(out), {"nv1.png": nv})
+    wb = load_workbook(str(out), read_only=True, data_only=True)
+    try:
+        hang = [list(r) for r in wb["scenes"].iter_rows(values_only=True)]
+        bia = [list(r) for r in wb["thumbnail"].iter_rows(values_only=True)]
+    finally:
+        wb.close()
+    assert hang[1][c] == nv + ", " + anh
+    cb = bia[0].index("reference_files")
+    assert bia[1][cb] == nv

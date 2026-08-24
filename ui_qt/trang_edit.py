@@ -256,8 +256,33 @@ class TrangDungVideo(QWidget):
                 "lại nếu vừa lắp card mới.")
         doc.addWidget(self._gpu)
 
+        # Đồng bộ với kênh: đốt phụ đề + độ phân giải là thứ kênh cài một lần
+        # (`kenh.yaml`). Nạp để dựng lẻ đúng nết kênh; lưu để tab Tự động theo.
+        from .kenh_chon import HangKenh  # noqa: PLC0415
+
+        doc.addWidget(HangKenh(
+            self._app, nap=self._nap_tu_kenh, luu=self._luu_vao_kenh,
+            mach_nap="Lấy cách dựng của kênh (đốt phụ đề, độ phân giải, có "
+                     "nhạc nền) vào các ô trên.",
+            mach_luu="Ghi đốt phụ đề và độ phân giải ở trên vào kênh."))
+
         doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
         return hop
+
+    def _nap_tu_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import doc_dung  # noqa: PLC0415
+
+        cai = doc_dung(self._app.base_dir, ma)
+        self._phu_de.setChecked(bool(cai["dot_phu_de"]))
+        if cai["do_phan_giai"] and self._do_phan_giai.findText(cai["do_phan_giai"]) >= 0:
+            self._do_phan_giai.setCurrentText(cai["do_phan_giai"])
+        self._nhac.setChecked(bool(cai["nhac_nen"]))
+
+    def _luu_vao_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import ghi_dung  # noqa: PLC0415
+
+        ghi_dung(self._app.base_dir, ma, dot_phu_de=self._phu_de.isChecked(),
+                 do_phan_giai=self._do_phan_giai.currentText())
 
     def _may_co_gpu(self) -> bool:
         """Máy này có card NVIDIA dùng được cho video không (đọc từ SETUP)."""

@@ -47,7 +47,7 @@ from core.prompt_visuals import (
     CHE_DO_CAN_ANH_NV, CHE_DO_KE, LOI_NHAC_XAY_PHONG_CACH, PhongCach,
     bia_de_xem, boi_canh_de_xem, canh_de_xem, cau_thieu_gi, chi_dan_tu_bo,
     chi_dan_tu_tra_loi_ai, dan_de_xem, dung_boi_canh, dung_workflow,
-    liet_ke_phong_cach, nhac_de_xem, tom_tat_dan,
+    ke_hoach_de_xem, liet_ke_phong_cach, man_de_xem, nhac_de_xem, tom_tat_dan,
 )
 from core.validate import check_image, check_video
 
@@ -112,6 +112,8 @@ class TrangPromptVisuals(QWidget):
         self._thu_cho_noi: Dict[int, Tuple[str, str]] = {}
         #: Ảnh khách tải lên đi kèm phong cách đang chọn (khi AI xây từ ảnh).
         self._anh_mau_chon: List[str] = []
+        #: Ảnh tham chiếu đang tạo: khoá việc → (id nhân vật/bối cảnh, Excel).
+        self._tc_dang_cho: Dict[str, Tuple[str, str]] = {}
 
         # ═══ MÀN HÌNH ĐẦU CHỈ CÓ BA THẺ ═══
         #
@@ -397,6 +399,19 @@ class TrangPromptVisuals(QWidget):
                                     rong=230)
         self._nut_xoa_mau.hide()
         vc.addWidget(self._nut_xoa_mau, 0, Qt.AlignLeft)
+
+        # ═══ ĐỒNG BỘ VỚI KÊNH CỦA TAB TỰ ĐỘNG ═══
+        #
+        # Chiều ngược của ô "Phong cách đã lưu" ở Bước 1: phong cách khách dựng
+        # ở đây (kể cả AI xây từ ảnh, prompt sửa tay, ảnh nhân vật) ghi vào
+        # `style.yaml` + `nv/nv1.png` của kênh — tab Tự động dùng ngay.
+        from .kenh_chon import HangKenh  # noqa: PLC0415
+
+        vc.addWidget(HangKenh(
+            self._app, nap=self._nap_style_tu_kenh, luu=self._luu_style_vao_kenh,
+            mach_nap="Dùng đúng phong cách và ảnh nhân vật của kênh.",
+            mach_luu="Ghi prompt phong cách ở ô trên vào style.yaml của kênh, "
+                     "và ảnh nhân vật (nếu có) thành nv/nv1.png."))
         self._khoi_nang_cao.hide()
         v.addWidget(self._khoi_nang_cao)
 
@@ -740,6 +755,35 @@ class TrangPromptVisuals(QWidget):
         """Bỏ phong cách chọn ở Bước 1 → hai tab Bước 2 mở lại để chọn tay."""
         self._chon_tu_dong()
 
+    def _nap_style_tu_kenh(self, ma: str) -> None:
+        self._nap_phong_cach()
+        i = self._o_kenh.findData("kenh:" + ma)
+        if i < 0:
+            raise ValueError("Kênh “{0}” chưa có style.yaml có khoá hình.".format(ma))
+        self._o_kenh.setCurrentIndex(i)
+
+    def _luu_style_vao_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import (  # noqa: PLC0415
+            chep_nhan_vat, chi_dan_thanh_khoa, ghi_style,
+        )
+
+        khoa = chi_dan_thanh_khoa(self._o_chi_dan.toPlainText())
+        if not khoa:
+            raise ValueError(
+                "Ô prompt phong cách đang trống hoặc không có dòng “Image "
+                "style: …” nào để ghi. Chọn một phong cách trước.")
+        da = ghi_style(self._app.base_dir, ma, khoa)
+        chu = "Đã ghi {0} khoá hình vào kênh {1}".format(len(da), ma)
+        if self._anh_nv and os.path.isfile(self._anh_nv):
+            chep_nhan_vat(self._app.base_dir, ma, self._anh_nv)
+            chu += " + ảnh nhân vật nv1.png"
+        self._ghi(chu + ".")
+        self._nap_phong_cach()
+
+    def kenh_da_doi(self) -> None:
+        """Kênh vừa đổi ở tab khác → làm mới ô “Phong cách đã lưu”."""
+        self._nap_phong_cach()
+
     # ── Mẫu đã lưu ───────────────────────────────────────────────────────────
 
     def _ap_mau(self, ten: str) -> None:
@@ -1037,6 +1081,13 @@ class TrangPromptVisuals(QWidget):
         self._bang_dan = self._bang_sua(
             ["Mã", "Vai / tên", "Mô tả cố định (tiếng Anh)"], co_dinh={0: 60, 1: 150},
             khong_sua=(0, 1, 2))
+        # Kế hoạch đạo diễn (loại 2, 3): khách thấy phim được chia màn ra sao,
+        # mỗi beat ai/ở đâu/cỡ cảnh gì — đọc để hiểu, không sửa ở đây.
+        self._bang_dao_dien = self._bang_sua(
+            ["Màn", "Beat", "Dòng", "Mục đích", "Ai", "Ở đâu", "Cỡ cảnh · máy",
+             "Điều thay đổi"],
+            co_dinh={0: 44, 1: 44, 2: 70, 4: 80, 5: 60, 6: 120},
+            khong_sua=(0, 1, 2, 3, 4, 5, 6, 7))
 
         self._tab_xem = QTabWidget()
         self._tab_xem.setMinimumWidth(1)
@@ -1052,6 +1103,15 @@ class TrangPromptVisuals(QWidget):
         self._tab_xem.addTab(khung_bia, "Ảnh bìa")
         self._tab_xem.addTab(self._bang_nhac, "Nhạc Suno")
         self._tab_xem.addTab(self._bang_dan, "Nhân vật & bối cảnh")
+        khung_dd = QWidget()
+        khung_dd.setMinimumWidth(1)
+        vd = QVBoxLayout(khung_dd)
+        vd.setContentsMargins(0, 6, 0, 0)
+        vd.setSpacing(6)
+        self._nhan_man = self._chu_phu("")
+        vd.addWidget(self._nhan_man)
+        vd.addWidget(self._bang_dao_dien)
+        self._tab_xem.addTab(khung_dd, "Đạo diễn")
         v.addWidget(self._tab_xem)
 
         hang2 = HangXuongDong()
@@ -1205,6 +1265,11 @@ class TrangPromptVisuals(QWidget):
         spec = getattr(du_lieu, "spec", None)
         khoa = str(getattr(spec, "idempotency_key", "") or "")
         if not khoa:
+            return
+        if khoa in self._tc_dang_cho:
+            self._thu_vien.cap_nhat(du_lieu)
+            if str(getattr(du_lieu, "status", "")) == STATUS_DONE:
+                self._nhan_anh_tham_chieu(khoa, du_lieu)
             return
         if khoa in self._thu_dong_anh:
             self._thu_vien.cap_nhat(du_lieu)
@@ -1388,6 +1453,21 @@ class TrangPromptVisuals(QWidget):
              d.get("english_prompt", "")] for d in dan] + [
             [l["id"], l.get("name", ""), l.get("english_prompt", "")]
             for l in so["boi_canh"]])
+        man = so["man"]
+        if man:
+            self._nhan_man.setText("Cung truyện: {0}  ·  {1} màn: {2}".format(
+                man[0].get("arc") or "—", len(man),
+                "  →  ".join("{0}. {1} ({2})".format(
+                    m["segment_id"], m["name"], m["emotion"]) for m in man)))
+        else:
+            self._nhan_man.setText(
+                "Không có kế hoạch đạo diễn: cách kể “Một nhân vật cố định” chạy "
+                "như tab Tự động, chỉ loại 2 và 3 mới lên kế hoạch màn.")
+        self._dien_bang(self._bang_dao_dien, [
+            [b["segment_id"], b["beat"], "{0}–{1}".format(b["srt_from"], b["srt_to"]),
+             b["purpose"], b["characters"] or "—", b["location"] or "—",
+             "{0} · {1}".format(b["shot_size"], b["camera"]), b["element_motion"]]
+            for b in so["ke_hoach"]])
         self._nut_luu.setEnabled(bool(canh))
         self._cap_nhat_thu()
 
@@ -1411,7 +1491,9 @@ class TrangPromptVisuals(QWidget):
                     "dan": dan_de_xem(hang_cua("characters")),
                     "bia": bia_de_xem(hang_cua("thumbnail")),
                     "nhac": nhac_de_xem(hang_cua("music")),
-                    "boi_canh": boi_canh_de_xem(hang_cua("locations"))}
+                    "boi_canh": boi_canh_de_xem(hang_cua("locations")),
+                    "man": man_de_xem(hang_cua("story")),
+                    "ke_hoach": ke_hoach_de_xem(hang_cua("director_plan"))}
         finally:
             wb.close()
 
@@ -1696,6 +1778,13 @@ class TrangPromptVisuals(QWidget):
                     dich = self._chep_ra(duong_xlsx, ten)
                     if anh_nv:
                         self._dat_anh_nv_canh_excel(dich, anh_nv)
+                    # Loại 2, 3: ảnh tham chiếu (chân dung nv2…, bối cảnh loc…)
+                    # tự tạo ngay — chủ dự án 24/08/2026: *"tự tạo luôn khi bấm
+                    # Tạo prompt"*. Gửi từ luồng giao diện qua hàng đợi chung.
+                    can_tao = self._nhan_vat_can_anh(dv, trang_thai)
+                    if can_tao:
+                        self._app.goi_tren_luong_ve(
+                            lambda d=dich, ds=can_tao: self._tao_anh_tham_chieu(d, ds))
                     ra.append(dich)
                     self._khau_nen("node_succeeded", "excel")
                     self._ghi_nen("  xong: đã tạo {0}".format(os.path.basename(dich)))
@@ -1748,8 +1837,6 @@ class TrangPromptVisuals(QWidget):
         """
         import shutil  # noqa: PLC0415
 
-        from openpyxl import load_workbook  # noqa: PLC0415
-
         dich = os.path.join(os.path.dirname(duong_xlsx), "nv1.png")
         try:
             if os.path.abspath(anh_nv) != os.path.abspath(dich):
@@ -1757,6 +1844,38 @@ class TrangPromptVisuals(QWidget):
         except OSError as loi:
             self._ghi_nen("  (không chép được ảnh nhân vật: {0})".format(str(loi)[:80]))
             return
+        loi = self._ghi_duong_tham_chieu(duong_xlsx, {"nv1.png": dich})
+        if loi:
+            self._ghi_nen("  (không ghi được đường ảnh nhân vật: {0})".format(loi))
+
+    @staticmethod
+    def _ghi_duong_tham_chieu(duong_xlsx: str, theo_ten: Dict[str, str]) -> str:
+        """Đổi tên tệp (`nv2.png`, `loc1.png`) trong `reference_files` thành
+        đường dẫn thật, ở cả sheet `scenes` lẫn `thumbnail`. Trả về câu lỗi
+        hoặc "" khi xong.
+
+        Ô có thể là danh sách JSON (`["nv1.png","loc1.png"]`) hay chuỗi cách
+        nhau dấu phẩy (đã ghi đường dẫn từ lần trước). Ghi ra dạng dấu phẩy —
+        đúng dạng tab Hàng loạt đọc; tên chưa có ảnh giữ nguyên để lần sau
+        ảnh về còn thay tiếp.
+        """
+        import json  # noqa: PLC0415
+
+        from openpyxl import load_workbook  # noqa: PLC0415
+
+        def doi(chu: str) -> str:
+            chu = str(chu or "").strip()
+            if not chu:
+                return chu
+            try:
+                muc = json.loads(chu) if chu.startswith("[") else None
+            except ValueError:
+                muc = None
+            if not isinstance(muc, list):
+                muc = [m.strip() for m in chu.split(",") if m.strip()]
+            return ", ".join(theo_ten.get(os.path.basename(str(m)), str(m))
+                             for m in muc)
+
         try:
             wb = load_workbook(duong_xlsx)
             try:
@@ -1770,17 +1889,98 @@ class TrangPromptVisuals(QWidget):
                     cot = tieu.index("reference_files")
                     for hang in ws.iter_rows(min_row=2):
                         o = hang[cot]
-                        chu = str(o.value or "")
-                        if "nv1.png" in chu:
-                            o.value = dich
+                        moi = doi(o.value)
+                        if moi != str(o.value or ""):
+                            o.value = moi
                 tmp = duong_xlsx + ".tmp"
                 wb.save(tmp)
             finally:
                 wb.close()
             os.replace(tmp, duong_xlsx)
         except Exception as loi:  # noqa: BLE001 — ghi hỏng thì Excel vẫn dùng được
-            self._ghi_nen("  (không ghi được đường ảnh nhân vật: {0})".format(
-                str(loi)[:80]))
+            return str(loi)[:120]
+        return ""
+
+    # ── Ảnh tham chiếu tự tạo (loại 2, 3) ────────────────────────────────────
+    #
+    # Chân dung nv2… và ảnh bối cảnh loc… — mỗi cái một việc ảnh qua hàng đợi
+    # chung; xong tấm nào thì chép thành `<id>.png` cạnh Excel và ghi đường
+    # dẫn thật vào `reference_files` của mọi cảnh dùng nó. Tab Hàng loạt gắn
+    # chúng làm ảnh tham chiếu → nhân vật và nơi chốn giữ nguyên qua cả phim.
+
+    @staticmethod
+    def _nhan_vat_can_anh(dv, trang_thai) -> List[Tuple[str, str]]:
+        """`[(id, sheet_prompt)]` của nhân vật/bối cảnh chưa có ảnh trong manifest."""
+        import json  # noqa: PLC0415
+
+        nut = getattr(trang_thai, "nodes", {}) or {}
+        buoc = nut.get("prompt")
+        if buoc is None or getattr(buoc, "status", "") != "succeeded":
+            return []
+        ma = (getattr(buoc, "outputs", {}) or {}).get("scenes")
+        if not ma:
+            return []
+        try:
+            duong = str(dv.artifacts.path(ma if isinstance(ma, str) else ma[0]))
+            with open(duong, "r", encoding="utf-8") as f:
+                m = json.load(f)
+        except Exception:  # noqa: BLE001 — không đọc được manifest thì thôi
+            return []
+        ra: List[Tuple[str, str]] = []
+        for c in (m.get("characters") or []) + (m.get("locations") or []):
+            if c.get("co_dinh") or not str(c.get("sheet_prompt") or "").strip():
+                continue
+            ra.append((str(c["id"]), str(c["sheet_prompt"])))
+        return ra
+
+    def _tao_anh_tham_chieu(self, duong_xlsx: str, ds: List[Tuple[str, str]]) -> None:
+        """LUỒNG GIAO DIỆN: gửi việc ảnh cho từng id, ghi sổ để nhận về."""
+        if self._app.client is None:
+            self._ghi("Không tạo được ảnh tham chiếu: chưa đăng nhập ShopAPI.")
+            return
+        thu_muc = os.path.join(os.path.dirname(duong_xlsx), "tham-chieu")
+        specs: List[JobSpec] = []
+        for so, (ma_id, prompt) in enumerate(ds, start=1):
+            van_de = check_image([prompt], n=1, aspect_ratio="16:9")
+            if van_de:
+                self._ghi("Ảnh tham chiếu {0}: prompt chưa đạt — {1}".format(
+                    ma_id, "; ".join(van_de)))
+                continue
+            spec = JobSpec(
+                kind=KIND_IMAGE, content=prompt, label="Tham chiếu {0}".format(ma_id),
+                index=so, params={"n": 1, "aspect_ratio": "16:9"},
+                out_dir=thu_muc,
+                estimate_micro=hold_for_image(1, self._app.prices))
+            self._tc_dang_cho[spec.idempotency_key] = (ma_id, duong_xlsx)
+            self._thu_vien.them(spec.idempotency_key, "Tham chiếu {0}: {1}".format(
+                ma_id, prompt), False, ty_le="16:9")
+            specs.append(spec)
+        if not specs:
+            return
+        self._ghi("Đang tạo {0} ảnh tham chiếu ({1}) — xong tấm nào ghi vào "
+                  "Excel tấm đó.".format(len(specs), ", ".join(i for i, _p in ds)))
+        self._app.start_batch(specs, folder=thu_muc)
+
+    def _nhan_anh_tham_chieu(self, khoa: str, du_lieu) -> None:
+        """Một ảnh tham chiếu xong → chép thành `<id>.png` cạnh Excel + ghi đường."""
+        import shutil  # noqa: PLC0415
+
+        ma_id, duong_xlsx = self._tc_dang_cho.pop(khoa)
+        files = list(getattr(du_lieu, "files", ()) or ())
+        if not files:
+            return
+        dich = os.path.join(os.path.dirname(duong_xlsx), "{0}.png".format(ma_id))
+        try:
+            shutil.copyfile(files[0], dich)
+        except OSError as loi:
+            self._ghi("Ảnh tham chiếu {0}: không chép được ({1})".format(ma_id, loi))
+            return
+        loi = self._ghi_duong_tham_chieu(duong_xlsx, {"{0}.png".format(ma_id): dich})
+        self._ghi("Ảnh tham chiếu {0} xong{1}.".format(
+            ma_id, " — lỗi ghi Excel: " + loi if loi else ", đã gắn vào các cảnh dùng nó"))
+        if not self._tc_dang_cho:
+            self._ghi("Đủ ảnh tham chiếu. Excel đã trỏ tới ảnh thật — sang tab Ảnh & "
+                      "Video → Hàng loạt là nhân vật/bối cảnh giữ nguyên cả phim.")
 
     def _dung(self) -> None:
         if self._huy is not None:

@@ -93,7 +93,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "vào bước sau.",
             "Chọn chỗ lưu .txt rồi bấm chạy.",
         ],
-        "luu_y": ["Cả hai lối đều gọi mô hình ngôn ngữ nên đều trừ ví."],
+        "luu_y": [
+            "Cả hai lối đều gọi mô hình ngôn ngữ nên đều trừ ví.",
+            "Hàng “Kênh” ở tab Template nối với tab Tự động: chọn kênh là tám "
+            "tệp lời nhắc của kênh hiện thành các bước để sửa ngay; “Lưu vào "
+            "kênh” ghi các bước trùng tên bước chuẩn về đúng tệp — lần chạy Tự "
+            "động tới dùng ngay. Giữ nguyên các ô <<…>> trong lời nhắc.",
+        ],
     },
     "voice": {
         "tieu_de": "Voice",
@@ -104,7 +110,12 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Tab “Text”: dán chữ vào ô — cả ô là một bài.",
             "Dán Voice ID rồi bấm chạy. Các cài đặt ít dùng nằm sau nút .",
         ],
-        "luu_y": ["Mặc định lưu .mp3.", "Tính tiền theo số ký tự."],
+        "luu_y": [
+            "Mặc định lưu .mp3.", "Tính tiền theo số ký tự.",
+            "Hàng “Kênh” dưới ô Voice ID: chọn kênh là giọng của kênh điền vào "
+            "ngay; nghe thử ưng giọng nào thì “Lưu vào kênh” — tab Tự động đọc "
+            "bằng giọng đó từ lần chạy tới.",
+        ],
     },
     # Tab này có hai tab con làm hai việc khác hẳn nhau, nên **mỗi tab con một
     # hướng dẫn riêng** — chủ dự án, 12/08/2026: *"họ dùng tab nào thì là hướng
@@ -316,11 +327,18 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "vật cố định + nhân vật & bối cảnh tham chiếu” (có ảnh nv1, AI dựng "
             "thêm nv2… và các bối cảnh loc1… để cả video nhất quán). Chọn kênh "
             "ở ô “Phong cách đã lưu” thì ảnh nhân vật của kênh được lấy sẵn.",
-            "Bước 4 (hiện ra sau khi xong) có bốn tab: “Cảnh” (prompt ảnh + "
+            "Với cách kể loại 2 và 3, tool làm như một ĐẠO DIỄN: đọc cả bài để "
+            "chia màn và chọn cung truyện, dựng dàn nhân vật + bối cảnh, lên kế "
+            "hoạch từng beat (ai, ở đâu, cỡ cảnh, điều thay đổi), rồi mới viết "
+            "prompt theo kế hoạch đó — và TỰ TẠO ảnh tham chiếu (chân dung nv2…, "
+            "ảnh bối cảnh loc…) đặt cạnh Excel, gắn vào từng cảnh, để nhân vật "
+            "và nơi chốn giữ nguyên qua cả phim. Ảnh tham chiếu tốn ví như ảnh "
+            "thường (thường 3–6 tấm).",
+            "Bước 4 (hiện ra sau khi xong) có năm tab: “Cảnh” (prompt ảnh + "
             "video từng cảnh, kèm lời đọc dịch tiếng Việt), “Ảnh bìa” (3 prompt "
             "+ tiêu đề và chữ bìa đề xuất), “Nhạc Suno” (mỗi track ~105 giây), "
-            "“Nhân vật & bối cảnh”. Bấm vào ô để sửa, rồi “Lưu chỉnh sửa vào "
-            "Excel” — ghi cả ba sheet.",
+            "“Nhân vật & bối cảnh”, “Đạo diễn” (màn và kế hoạch beat). Bấm vào "
+            "ô để sửa, rồi “Lưu chỉnh sửa vào Excel” — ghi cả ba sheet.",
             "Bước 5: bấm “Tạo thử ảnh + video” để xem 1–3 cảnh đầu thành hình "
             "thật. Chưa ưng thì đổi phong cách hoặc sửa prompt rồi thử lại; "
             "ưng rồi mang file Excel sang tab Ảnh & Video → Hàng loạt chạy hết.",

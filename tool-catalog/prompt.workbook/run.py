@@ -24,7 +24,7 @@ if str(_STUDIO) not in sys.path:
     sys.path.insert(0, str(_STUDIO))
 
 from core.chia_canh import (  # noqa: E402
-    DUOI_CAM, KHUON_MAC_DINH, chia_theo_nghia, loi_nhac_chia,
+    DUOI_CAM, KHUON_MAC_DINH, bang_phu_de, chia_theo_nghia, loi_nhac_chia,
 )
 from core.goi_van_ban import goi_van_ban, loc_json  # noqa: E402
 from core.srt_scenes import (  # noqa: E402
@@ -47,7 +47,7 @@ SCENE_COLUMNS = [
 
 #: Sheet `locations` — dung cot cua VE3_SUITE (`excel_manager.LOCATIONS_SHEET`).
 LOCATION_HEADERS = ["id", "name", "english_prompt", "location_lock",
-                    "lighting_default", "image_file", "status"]
+                    "lighting_default", "image_file", "status", "sheet_prompt"]
 
 #: Sheet `thumbnail` — cot cua tab Tu dong (`auto_khau.COT_THUMB`) + hai cot
 #: rieng: chu hook va tieu de de xuat (tab nay khong co tieu de san).
@@ -72,15 +72,129 @@ CHE_DO_TU_XAY = "tu_xay"
 #: Mot track Suno dai chung nay (giay) — xem `9-nhac.md`.
 GIAY_MOI_TRACK = 105
 
+#: Sheet `story`: phan tich phim + cac MAN (segment). Sheet `director_plan`:
+#: ke hoach dao dien tung beat trong man. Ca hai chi co o loai 2, 3.
+STORY_HEADERS = ["segment_id", "name", "message", "emotion", "motif",
+                 "srt_from", "srt_to", "genre", "arc", "context_lock"]
+PLAN_HEADERS = ["segment_id", "beat", "srt_from", "srt_to", "purpose",
+                "characters", "location", "shot_size", "camera",
+                "element_motion", "emotion", "motif", "status"]
+
+#: ═══ ĐẠO DIỄN CHO LOẠI 2, 3 — HỌC TỪ VE3, ViMax, vox-director ═══
+#:
+#: Chu du an 24/08/2026: *"o 2 option kia can dong bo nhieu, no nhu 1 bo phim
+#: co su lien ket… san pham dau ra nhu 1 bo phim giup khan gia khong the roi
+#: mat"*. Truoc day loai 2/3 chi co casting roi chia canh thang — tram canh la
+#: tram an du roi, khong man, khong mach. Nay lam TU TREN XUONG nhu VE3:
+#:
+#:   A. doc phim   → the loai, cung truyen, the gioi hinh, CAC MAN (segment)
+#:   B. casting    → nhan vat (dac diem co dinh/thay duoc, chan dung tham chieu)
+#:                   + boi canh (mo ta co dinh + anh thiet lap)
+#:   C. ke hoach   → moi man mot ke hoach beat: ai, o dau, co canh, chuyen dong
+#:   D. viet prompt → moi khuc nhan ke hoach cua dung nhung dong SRT ay
+_KHUON_PHIM = """You are the showrunner of a narrated video. Read the WHOLE
+narration and plan it like a film before any shot is written.
+
+## Narration
+{transcript}
+
+## Context
+{context}
+
+## Decide
+1. `genre` (e.g. psychology explainer, personal story, history) and `arc` —
+   pick one narrative arc that fits: hook_payoff, man_in_hole, timeline,
+   three_act, story_spine, myth_buster, listicle, how_it_works.
+2. `context_lock`: ONE paragraph fixing the visual world for every scene —
+   era, place, time of day range, weather/mood, recurring colour accents.
+3. `segments`: split the narration into 3–8 ACTS by meaning (using the SRT
+   line numbers). Each act has a `name`, the `message` it lands, the dominant
+   `emotion`, and ONE visual `motif` that recurs inside the act (an object,
+   a gesture, a weather) — the motif is what makes an act feel like one piece.
+   Acts are contiguous and cover every line; the FIRST act must open with a
+   hook within its first scene.
+4. `characters_mentioned` and `locations_mentioned`: names or roles the
+   narration keeps coming back to (people, places), for the casting step.
+
+## Return JSON only, no commentary
+```json
+{{"genre": "...", "arc": "...", "context_lock": "...",
+ "segments": [{{"segment_id": 1, "name": "...", "message": "...",
+                "emotion": "...", "motif": "...", "srt_from": 1, "srt_to": 12}}],
+ "characters_mentioned": ["..."], "locations_mentioned": ["..."]}}
+```
+"""
+
+_KHUON_KE_HOACH = """You are the DIRECTOR planning act {so}/{tong} of a narrated
+video: "{ten}". Message of this act: {message}. Emotion: {emotion}. Visual
+motif to recur: {motif}.
+
+## Visual world (hold it)
+{context_lock}
+
+{cast}
+
+## The narration of this act (each line: `index | start -> end | text`)
+{srt}
+
+## Plan the beats — one beat per IDEA, each {min_sec}–{max_sec} seconds
+A beat is NOT a line: work out each beat's length from the timestamps and
+merge short lines that belong to one thought until the beat is at least
+{min_sec} seconds; split a long line where the thought turns. Fewer, fuller
+beats beat many thin ones.
+For every beat give:
+- `srt_from`/`srt_to` — contiguous, covering every line of this act, no gaps;
+- `purpose` — what this beat does for the story (establish / show the pain /
+  turn / reveal / land the point);
+- `characters` — ids from the cast that are IN FRAME ("" if none) and
+  `location` — a location id ("" if a fresh place); reuse the recurring
+  places, do not stage two consecutive beats in the same place unless the
+  narration stays there;
+- `shot_size` from EST_WIDE, WIDE, MEDIUM, CLOSE, DETAIL — build intensity
+  toward the act's turning point (WIDE→MEDIUM→CLOSE), open on a wide when a
+  place is new;
+- `camera` from static, push_in, pull_out, pan, tilt, orbit — never the same
+  as the previous beat; reserve `static` for the beat that lands the point;
+- `element_motion` — what physically changes inside the frame by the end of
+  the beat (something enters, breaks, grows, tips, lights up, empties);
+- `emotion` and `motif` (how the act's motif shows up in this beat, or "").
+The first beat of act 1 is the hook: the most arresting image of the video.
+The last beat of the act closes it on the motif.
+
+## Return JSON only, no commentary
+```json
+{{"beats": [{{"srt_from": 1, "srt_to": 3, "purpose": "...", "characters": "nv1",
+             "location": "loc1", "shot_size": "WIDE", "camera": "push_in",
+             "element_motion": "...", "emotion": "...", "motif": "..."}}]}}
+```
+"""
+
+#: Prompt chan dung tham chieu (ViMax): full-body, nhin thang, nen trang, canh
+#: 16:9 — khung hinh nay lam anh tham chieu cho MOI canh co nhan vat ay.
+_DUOI_CHAN_DUNG = (" — full-body front-view reference portrait, standing, arms "
+                   "relaxed at sides, neutral expression, gazing straight ahead, "
+                   "centered on a plain pure white background, 16:9 canvas, no "
+                   "text, no letters, no watermark")
+_DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, "
+                  "centered, 16:9 composition, no text, no letters, no watermark")
+
 #: Bao nhieu ky tu loi doc dua cho luot viet anh bia / nhac.
 BIA_KY_TU = 6000
+
+#: Toi da bao nhieu GIAY tieng trong mot khuc chia canh. Chu du an 24/08/2026:
+#: *"neu ma no dai thi phai co ke hoach chia de api song song nhieu luong cho
+#: nhanh"*. 100 giay ≈ 12–20 canh moi luot goi, tra ve trong duoi mot phut;
+#: video 10 phut thanh ~6 khuc chay song song thay vi 2–3 khuc nang.
+GIAY_MOI_KHUC = 100.0
 CREATIVE = ("scene_kind", "subject_mode", "primary_subject", "primary_action", "visual_anchor",
             "must_not_show", "img_prompt", "video_prompt", "characters_used", "location_used")
 
 #: Cot cua sheet `characters` — trung ten voi VE3_SUITE va voi tab Tu dong
 #: (`core/auto_khau.COT_NHAN_VAT`), de file mo thang bang VE3 duoc.
 CHARACTER_HEADERS = ["id", "role", "name", "english_prompt", "vietnamese_prompt",
-                     "image_file", "status", "gender", "age", "notes"]
+                     "image_file", "status", "gender", "age", "notes",
+                     # Cot them sau cot VE3: prompt tao anh chan dung tham chieu.
+                     "sheet_prompt"]
 
 #: Tran chu cho mot luot chia canh. Cao vi moi canh keo theo hai loi nhac tieng
 #: Anh chi tiet; hut tran thi JSON dut giua cau va ca khuc phai hoi lai.
@@ -239,7 +353,8 @@ def emit(value: Mapping[str, Any]) -> None:
 
 def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
            chia_fn: Callable = None, cast_fn: Callable = None,
-           bia_fn: Callable = None, nhac_fn: Callable = None) -> Mapping[str, Any]:
+           bia_fn: Callable = None, nhac_fn: Callable = None,
+           phim_fn: Callable = None, ke_hoach_fn: Callable = None) -> Mapping[str, Any]:
     inputs = request.get("inputs") if isinstance(request.get("inputs"), dict) else {}
     srt_path = _path(inputs.get("subtitles"), "subtitles")
     context = _optional_json(inputs.get("context"))
@@ -259,24 +374,50 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
 
     goi = _hop_goi(request, model)
     try:
+        # ═══ DAO DIEN (loai 2, 3): doc phim TRUOC casting, ke hoach TRUOC chia canh ═══
+        dao_dien = (nhat_quan and che_do in (CHE_DO_NV_BOI_CANH, CHE_DO_TU_XAY)
+                    and not (bom_tay and phim_fn is None))
+        phim = _doc_phim(goi, cues, context, phim_fn=phim_fn) if dao_dien else {}
+        boi_canh_cast = dict(context)
+        if phim:
+            boi_canh_cast["film_analysis"] = {
+                k: phim.get(k) for k in ("genre", "arc", "context_lock",
+                                          "characters_mentioned", "locations_mentioned")}
+
         # Dung dan nhan vat + boi canh + phong cach TRUOC khi cat canh, de moi
         # canh sau deu nhac dung mot dan va giu mot tong — y het tab Tu dong.
-        cast = _dan_nhan_vat(goi, cues, context, nhat_quan=nhat_quan,
+        cast = _dan_nhan_vat(goi, cues, boi_canh_cast, nhat_quan=nhat_quan,
                              che_do=che_do, cast_fn=cast_fn, chia_fn=chia_fn)
+        _them_prompt_tham_chieu(cast, context)
         cast_style = _khoi_cast_style(cast)
         nhan_vat_chinh = cast["characters"][0]["id"] if cast["characters"] else ""
 
-        scenes, cach = _canh(cues, engine=engine, context=context, goi=goi,
-                             chia_fn=chia_fn, enrich_fn=enrich_fn,
-                             cast_style=cast_style, nhan_vat_chinh=nhan_vat_chinh)
-        _gan_reference_files(scenes, cast["characters"])
-        _validate_coverage(cues, scenes)
+        ke_hoach = (_ke_hoach_dao_dien(goi, cues, phim, cast, engine=engine,
+                                       ke_hoach_fn=ke_hoach_fn)
+                    if phim.get("segments") else [])
 
-        bia = ({"title": "", "thumb_text": "", "thumbnails": []}
-               if (not lam_bia or (bom_tay and bia_fn is None))
-               else _anh_bia(goi, cues, context, cast, bia_fn=bia_fn))
-        nhac = ([] if (not lam_nhac or (bom_tay and nhac_fn is None))
-                else _nhac_nen(goi, cues, context, cast, nhac_fn=nhac_fn))
+        # ═══ ANH BIA + NHAC CHAY SONG SONG VOI CHIA CANH ═══
+        #
+        # Hai luot nay chi can loi doc + dan nhan vat, khong can bang canh —
+        # de sau chia canh la doi them ~25 giay khong vi ly do gi (do 24/08/2026:
+        # bia 16s + nhac 9s noi duoi). Chu du an: *"chia de api song song
+        # nhieu luong cho nhanh"*.
+        from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+        trong_bia = {"title": "", "thumb_text": "", "thumbnails": []}
+        with ThreadPoolExecutor(max_workers=2) as phu:
+            viec_bia = (None if (not lam_bia or (bom_tay and bia_fn is None))
+                        else phu.submit(_anh_bia, goi, cues, context, cast, bia_fn=bia_fn))
+            viec_nhac = (None if (not lam_nhac or (bom_tay and nhac_fn is None))
+                         else phu.submit(_nhac_nen, goi, cues, context, cast, nhac_fn=nhac_fn))
+            scenes, cach = _canh(cues, engine=engine, context=context, goi=goi,
+                                 chia_fn=chia_fn, enrich_fn=enrich_fn,
+                                 cast_style=cast_style, nhan_vat_chinh=nhan_vat_chinh,
+                                 ke_hoach=ke_hoach)
+            bia = viec_bia.result() if viec_bia is not None else trong_bia
+            nhac = viec_nhac.result() if viec_nhac is not None else []
+        _gan_reference_files(scenes, cast["characters"], cast.get("locations") or [])
+        _validate_coverage(cues, scenes)
 
         workspace = Path(str(request.get("workspace") or "")).resolve(); workspace.mkdir(parents=True, exist_ok=True)
         manifest = {"schema_version": 1, "project_id": str(request.get("workflow_id") or "project"),
@@ -285,6 +426,7 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
                     "settings": {"model": model, "cach_chia": cach, "style": cast["style"],
                                  "che_do_ke": che_do},
                     "characters": cast["characters"], "locations": cast.get("locations") or [],
+                    "story": phim, "director_plan": ke_hoach,
                     "title": bia["title"], "thumb_text": bia["thumb_text"],
                     "thumbnails": bia["thumbnails"], "music": nhac,
                     "scenes": scenes, "coverage": {"cue_count": len(cues), "covered": len(cues), "percent": 100}}
@@ -300,6 +442,205 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
     finally:
         close = getattr(goi, "close", None)
         if callable(close): close()
+
+
+def _doc_phim(goi, cues, context, *, phim_fn=None) -> Dict[str, Any]:
+    """Buoc A: mot luot AI doc ca loi doc → the loai, cung truyen, the gioi hinh, cac man.
+
+    Best-effort: hong thi tra `{}` va noi ra — khong co man thi ve duong cu
+    (casting + chia canh), khong giet luot.
+    """
+    try:
+        if phim_fn is not None:
+            raw = phim_fn(cues, context)
+        else:
+            loi_doc = bang_phu_de(cues)[:60000]
+            boi_canh = json.dumps(context, ensure_ascii=False)[:4000] if context else "(none)"
+            raw = loc_json(goi(_KHUON_PHIM.format(transcript=loi_doc, context=boi_canh),
+                               "phim"))
+        phim = _sach_phim(raw, cues)
+    except Exception as loi:  # noqa: BLE001 — dao dien la phu, hong thi ve duong cu
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": "Chua doc duoc phim de chia man ({0}). Chia canh theo "
+                         "duong cu.".format(str(loi)[:120])})
+        return {}
+    emit({"type": "event", "event": "progress", "progress": 0.0,
+          "message": "Da doc phim: {0} man, cung truyen {1}.".format(
+              len(phim.get("segments") or []), phim.get("arc") or "?")})
+    return phim
+
+
+def _sach_phim(raw, cues) -> Dict[str, Any]:
+    """Chuan hoa: man noi lien nhau, phu het dong SRT (AI khong dem gioi)."""
+    if not isinstance(raw, Mapping):
+        return {}
+    dau, cuoi = int(cues[0]["index"]), int(cues[-1]["index"])
+    ds: List[Dict[str, Any]] = []
+    ke_tiep = dau
+    for item in raw.get("segments") or []:
+        if not isinstance(item, Mapping):
+            continue
+        try:
+            den = int(item.get("srt_to"))
+        except (TypeError, ValueError):
+            continue
+        den = max(ke_tiep, min(den, cuoi))
+        if ke_tiep > cuoi:
+            break
+        ds.append({"segment_id": len(ds) + 1, "name": str(item.get("name") or ""),
+                   "message": str(item.get("message") or ""),
+                   "emotion": str(item.get("emotion") or ""),
+                   "motif": str(item.get("motif") or ""),
+                   "srt_from": ke_tiep, "srt_to": den})
+        ke_tiep = den + 1
+    if ds and ke_tiep <= cuoi:
+        ds[-1]["srt_to"] = cuoi
+    if not ds:
+        return {}
+    return {"genre": str(raw.get("genre") or ""), "arc": str(raw.get("arc") or ""),
+            "context_lock": str(raw.get("context_lock") or ""),
+            "characters_mentioned": [str(x) for x in raw.get("characters_mentioned") or []],
+            "locations_mentioned": [str(x) for x in raw.get("locations_mentioned") or []],
+            "segments": ds}
+
+
+def _them_prompt_tham_chieu(cast, context) -> None:
+    """Moi nhan vat (khong co dinh) va boi canh co `sheet_prompt` — prompt tao
+    ANH THAM CHIEU (chan dung full-body nen trang / anh thiet lap boi canh).
+
+    Anh nay tao ngay sau khi co Excel (chu du an: *"tu tao luon khi bam Tao
+    prompt"*) va duoc gan vao `reference_files` cua tung canh — nhan vat va noi
+    chon giu nguyen qua ca tram canh, thu lam video "nhu mot bo phim".
+    """
+    style = str(context.get("visual_style_directive") or "").strip()
+    duoi_style = (" Style: " + " ".join(style.split())[:400]) if style else ""
+    for c in cast.get("characters") or []:
+        if c.get("co_dinh"):
+            continue
+        c["sheet_prompt"] = c["english_prompt"] + _DUOI_CHAN_DUNG + duoi_style
+    for l in cast.get("locations") or []:
+        l["sheet_prompt"] = l["english_prompt"] + _DUOI_BOI_CANH + duoi_style
+
+
+def _ke_hoach_dao_dien(goi, cues, phim, cast, *, engine, ke_hoach_fn=None) -> List[Dict[str, Any]]:
+    """Buoc C: moi man mot luot AI, chay song song, tra ve danh sach beat da canh lai.
+
+    Man nao hong thi bo qua man do (noi ra) — cac man con lai van co ke hoach.
+    """
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    from core.srt_scenes import max_seconds_for  # noqa: PLC0415
+    from core.chia_canh import MIN_GIAY_CANH  # noqa: PLC0415
+
+    theo_so = {int(c["index"]): c for c in cues}
+    segs = phim.get("segments") or []
+    cast_khoi = _khoi_cast_style(cast)
+    tran = max_seconds_for(engine)
+
+    def mot_man(seg):
+        dong = [theo_so[i] for i in range(int(seg["srt_from"]), int(seg["srt_to"]) + 1)
+                if i in theo_so]
+        if not dong:
+            return []
+        try:
+            if ke_hoach_fn is not None:
+                raw = ke_hoach_fn(seg, dong, cast)
+            else:
+                loi_nhac = _KHUON_KE_HOACH.format(
+                    so=seg["segment_id"], tong=len(segs), ten=seg["name"],
+                    message=seg["message"], emotion=seg["emotion"],
+                    motif=seg["motif"], context_lock=phim.get("context_lock") or "",
+                    cast=cast_khoi or "(no recurring cast)", srt=bang_phu_de(dong),
+                    min_sec=int(MIN_GIAY_CANH), max_sec=int(tran))
+                raw = loc_json(goi(loi_nhac, "man-{0}".format(seg["segment_id"])))
+            return _sach_ke_hoach(raw, seg, dong, tran=float(tran))
+        except Exception as loi:  # noqa: BLE001 — mot man hong khong giet ca phim
+            emit({"type": "event", "event": "progress", "progress": 0.0,
+                  "message": "Man {0} chua co ke hoach dao dien ({1}).".format(
+                      seg["segment_id"], str(loi)[:100])})
+            return []
+
+    with ThreadPoolExecutor(max_workers=min(8, max(1, len(segs)))) as bo:
+        ket = list(bo.map(mot_man, segs))
+    ra = [b for man in ket for b in man]
+    emit({"type": "event", "event": "progress", "progress": 0.0,
+          "message": "Ke hoach dao dien: {0} beat cho {1} man.".format(len(ra), len(segs))})
+    return ra
+
+
+def _sach_ke_hoach(raw, seg, dong, tran: float = 8.0) -> List[Dict[str, Any]]:
+    """Beat noi lien nhau trong man, phu het dong cua man; danh so beat.
+
+    `tran`: tran giay moi canh cua engine — beat dai hon thi tach tai ranh
+    gioi dong (xem `core.chia_canh.tach_dai`).
+    """
+    ds = raw.get("beats") if isinstance(raw, Mapping) else raw
+    if not isinstance(ds, list):
+        return []
+    dau, cuoi = int(dong[0]["index"]), int(dong[-1]["index"])
+    ra: List[Dict[str, Any]] = []
+    ke_tiep = dau
+    for item in ds:
+        if not isinstance(item, Mapping):
+            continue
+        try:
+            den = int(item.get("srt_to"))
+        except (TypeError, ValueError):
+            continue
+        if ke_tiep > cuoi:
+            break
+        den = max(ke_tiep, min(den, cuoi))
+        ra.append({"segment_id": seg["segment_id"], "beat": len(ra) + 1,
+                   "srt_from": ke_tiep, "srt_to": den,
+                   "purpose": str(item.get("purpose") or ""),
+                   "characters": str(item.get("characters") or ""),
+                   "location": str(item.get("location") or ""),
+                   "shot_size": str(item.get("shot_size") or ""),
+                   "camera": str(item.get("camera") or ""),
+                   "element_motion": str(item.get("element_motion") or ""),
+                   "emotion": str(item.get("emotion") or ""),
+                   "motif": str(item.get("motif") or ""), "status": "planned"})
+        ke_tiep = den + 1
+    if ra and ke_tiep <= cuoi:
+        ra[-1]["srt_to"] = cuoi
+    # Beat ngan hon san thi gop — AI hay de "moi dong mot beat" (do 24/08/2026:
+    # 23 beat / 24 dong, co beat 0,7 giay). Cung ham voi khau chia canh.
+    from core.chia_canh import MIN_GIAY_CANH, gop_ngan, tach_dai  # noqa: PLC0415
+
+    theo_so = {int(c["index"]): c for c in dong}
+    ra = gop_ngan(ra, theo_so, "srt_from", "srt_to", MIN_GIAY_CANH)
+    # Beat dai qua tran thi tach tai ranh gioi dong — moi phan mot hinh rieng
+    # thay vi khau chia canh cat doi va dung chung mot tam anh.
+    ra = tach_dai(ra, theo_so, "srt_from", "srt_to", float(tran))
+    for so, b in enumerate(ra, 1):
+        b["beat"] = so
+    return ra
+
+
+def _khoi_ke_hoach(ke_hoach, khuc) -> str:
+    """Khoi `<<DIRECTOR_PLAN>>` cho MOT khuc: cac beat cham vao dong cua khuc ay."""
+    if not ke_hoach or not khuc:
+        return ""
+    dau, cuoi = int(khuc[0]["index"]), int(khuc[-1]["index"])
+    dong: List[str] = []
+    for b in ke_hoach:
+        if int(b["srt_to"]) < dau or int(b["srt_from"]) > cuoi:
+            continue
+        dong.append("- lines {0}-{1}: {2} | who: {3} | where: {4} | {5}, {6} | "
+                    "change: {7} | emotion: {8}{9}".format(
+                        b["srt_from"], b["srt_to"], b["purpose"] or "beat",
+                        b["characters"] or "nobody", b["location"] or "free",
+                        b["shot_size"] or "?", b["camera"] or "?",
+                        b["element_motion"] or "?", b["emotion"] or "?",
+                        " | motif: " + b["motif"] if b["motif"] else ""))
+    if not dong:
+        return ""
+    return ("## DIRECTOR'S PLAN for these lines — follow it\n"
+            "Each beat below is one scene (or a group of scenes). Keep the shot "
+            "size and camera it names, put the named ids in `characters_used` / "
+            "`location_used`, describe a named location EXACTLY as in RECURRING "
+            "LOCATIONS, and make the named change happen in the video prompt.\n"
+            + "\n".join(dong) + "\n")
 
 
 def _giay_video(cues) -> float:
@@ -452,14 +793,14 @@ THEO_DONG_HO = "theo-dong-ho"
 
 
 def _canh(cues, *, engine, context, goi, chia_fn=None, enrich_fn=None,
-          cast_style="", nhan_vat_chinh=""):
+          cast_style="", nhan_vat_chinh="", ke_hoach=None):
     """Cat canh theo nghia; khong duoc thi lui ve dong ho va **noi ra**.
 
     Duong lui phai con, vi khong co no thi mot cu 503 la khach khong nhan duoc
     gi ca. Nhung lui im lang thi con te hon: khach mo file Excel ra, thay du
     111 canh va du loi nhac, khong the nao biet rang canh da bi cat giua cau.
     """
-    chia = chia_fn or _bo_chia(goi, context, engine, cast_style)
+    chia = chia_fn or _bo_chia(goi, context, engine, cast_style, ke_hoach or [])
     try:
         return _canh_theo_nghia(cues, chia, engine, nhan_vat_chinh), THEO_NGHIA
     except Exception as loi:  # noqa: BLE001 — het duong nay thi con duong lui
@@ -487,7 +828,7 @@ def _canh_theo_nghia(cues, chia, engine, nhan_vat_chinh="") -> List[Dict[str, An
     ra: List[Dict[str, Any]] = []
     for canh in chia_theo_nghia(cues, chia, tran=max_seconds_for(engine),
                                 nhan_vat_mac_dinh=nhan_vat_chinh,
-                                duoi=DUOI_CAM):
+                                duoi=DUOI_CAM, giay_moi_khuc=GIAY_MOI_KHUC):
         scene = {key: "" for key in SCENE_COLUMNS}
         for ten, gia_tri in canh.items():
             if ten in scene:
@@ -551,17 +892,32 @@ def _hop_goi(request: Mapping[str, Any], model: str):
                 raise ValueError("Thieu SHOPAPI_API_KEY")
             sys.path.insert(0, str(_STUDIO / "_sdk"))
             from shopapi import ShopAPI
+            # ═══ MOT LOI GOI TREO KHONG DUOC NGON CA LUOT ═══
+            #
+            # Do 24/08/2026 (180 giay tieng Nhat, loai 3): khuc 1 xong sau 44
+            # giay, khuc 2 TREO — tool cho theo thoi gian mac dinh cua SDK, roi
+            # `goi_kien_nhan` doi tiep, tong hon 17 phut, va tool `prompt.workbook`
+            # bi giet o tran 1200 giay: mat ca luot du moi luot goi truoc do da
+            # tra tien. Mot khuc binh thuong het duoi mot phut; cho toi 4 phut la
+            # du rong, qua do la treo — cat, doi khoa moi, goi lai.
             hop["client"] = ShopAPI(
                 api_key=api_key,
                 base_url=os.environ.get("SHOPAPI_BASE_URL", "https://api.shopapi.vn"),
+                timeout=240.0,
                 default_headers={"X-ShopAPI-Client": "shopapi-tool-builder"})
         return hop["client"]
+
+    def ghi(dong: str) -> None:
+        # Cau cho/thu lai cua `goi_van_ban` len man hinh — khach thay "may chu
+        # truc trac tam, thu lai sau 30s" thay vi mot thanh tien do dung im.
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": str(dong)[:160]})
 
     def goi(loi_nhac: str, phan_khoa: str) -> str:
         # Khoa co dinh theo (lan chay, nut, viec): mat phan hoi giua chung thi
         # hoi lai dung khoa ay se nhan lai bai da tra tien, khong tra lan hai.
         return goi_van_ban(khach(), [{"role": "user", "content": loi_nhac}],
-                           mo_hinh=model, toi_da_token=TOKEN_CANH,
+                           mo_hinh=model, toi_da_token=TOKEN_CANH, on_log=ghi,
                            khoa="{0}:{1}:{2}".format(request.get("run_id", "run"),
                                                      request.get("node_id", "workbook"),
                                                      phan_khoa))
@@ -574,12 +930,14 @@ def _hop_goi(request: Mapping[str, Any], model: str):
     return goi
 
 
-def _bo_chia(goi, context, engine, cast_style="") -> Callable:
+def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
     """Ham hoi AI chia mot khuc phu de. `core.chia_canh` lo phan con lai.
 
     `cast_style` la khoi chu "dan nhan vat + phong cach" da dung san o
     `_dan_nhan_vat`. Rong thi `dien_khuon` xoa sach `<<CAST_STYLE>>`, template
     ve dung nhu cu (khong bia nhan vat) — dung hanh vi PV truoc day.
+    `ke_hoach` (loai 2, 3): beat cua dao dien; moi khuc chi nhan beat cham
+    vao dong cua no (xem `_khoi_ke_hoach`).
     """
     tran = max_seconds_for(engine)
     boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else ""
@@ -590,6 +948,7 @@ def _bo_chia(goi, context, engine, cast_style="") -> Callable:
         # be nguyen sang khuc 5 la video mo bai nam lan (xem core/auto_khau).
         loi_nhac = loi_nhac_chia(KHUON_MAC_DINH, khuc, tran, {
             "CONTEXT": boi_canh, "CAST_STYLE": cast_style,
+            "DIRECTOR_PLAN": _khoi_ke_hoach(ke_hoach, khuc),
             "KHUC_THU": thu_tu + 1, "TONG_KHUC": tong_khuc,
             "LA_KHUC_DAU": "yes" if thu_tu == 0 else "no",
             "TY_LE_KHUNG": "16:9 horizontal",
@@ -752,18 +1111,24 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
     return "\n".join(dong)
 
 
-def _gan_reference_files(scenes, characters) -> None:
-    """Moi canh dung nhan vat nao thi tro toi `<id>.png` — dung quy uoc auto/VE3.
+def _gan_reference_files(scenes, characters, locations=()) -> None:
+    """Moi canh dung nhan vat / boi canh nao thi tro toi `<id>.png` — quy uoc VE3.
 
     Khau dung anh o VE3/tab Hang loat bam vao `reference_files` de dinh anh
-    tham chieu, khoa mat mot nguoi xuyen suot. Chi gan id co that trong dan.
+    tham chieu, khoa mat mot nguoi va mot noi chon xuyen suot. Chi gan id co
+    that trong dan. Giao dien doi ten tep thanh duong dan that sau khi anh
+    tham chieu duoc tao ra canh Excel.
     """
-    hop_id = {c["id"] for c in characters}
+    hop_nv = {c["id"] for c in characters}
+    hop_loc = {l["id"] for l in locations}
     for scene in scenes:
         if scene.get("reference_files"):
             continue
         tho = str(scene.get("characters_used") or "").replace(",", " ").split()
-        ids = [i for i in tho if i in hop_id]
+        ids = [i for i in tho if i in hop_nv]
+        loc = str(scene.get("location_used") or "").strip()
+        if loc in hop_loc:
+            ids.append(loc)
         if ids:
             scene["reference_files"] = json.dumps(["{0}.png".format(i) for i in ids])
 
@@ -852,7 +1217,8 @@ def render_workbook(path: Path, manifest: Mapping[str, Any]) -> None:
                    "image_file": "{0}.png".format(cid) if cid else "",
                    "status": "done" if nv.get("co_dinh") else "pending",
                    "gender": nv.get("gender", ""), "age": nv.get("age", ""),
-                   "notes": nv.get("notes", "")}
+                   "notes": nv.get("notes", ""),
+                   "sheet_prompt": nv.get("sheet_prompt", "")}
         for col, header in enumerate(CHARACTER_HEADERS, 1): chars_sheet.cell(row, col, gia_tri.get(header, ""))
 
     loc_sheet = book.create_sheet("locations")
@@ -862,8 +1228,18 @@ def render_workbook(path: Path, manifest: Mapping[str, Any]) -> None:
         gia_tri = dict(lc, image_file="{0}.png".format(lid) if lid else "", status="pending")
         for col, header in enumerate(LOCATION_HEADERS, 1): loc_sheet.cell(row, col, gia_tri.get(header, ""))
 
+    st = book.create_sheet("story")
+    for col, header in enumerate(STORY_HEADERS, 1): st.cell(1, col, header)
+    phim = manifest.get("story") or {}
+    for row, seg in enumerate(phim.get("segments") or [], 2):
+        gia_tri = dict(seg, genre=phim.get("genre", ""), arc=phim.get("arc", ""),
+                       context_lock=phim.get("context_lock", ""))
+        for col, header in enumerate(STORY_HEADERS, 1): st.cell(row, col, gia_tri.get(header, ""))
+
     plan = book.create_sheet("director_plan")
-    for col, header in enumerate(["scene_id", "plan", "status"], 1): plan.cell(1, col, header)
+    for col, header in enumerate(PLAN_HEADERS, 1): plan.cell(1, col, header)
+    for row, b in enumerate(manifest.get("director_plan") or [], 2):
+        for col, header in enumerate(PLAN_HEADERS, 1): plan.cell(row, col, b.get(header, ""))
 
     tb = book.create_sheet("thumbnail")
     for col, header in enumerate(THUMB_HEADERS, 1): tb.cell(1, col, header)

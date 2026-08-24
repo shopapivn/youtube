@@ -43,7 +43,8 @@ from .su_co import LoiNoiDung
 __all__ = [
     "MIN_GIAY_CANH", "CUE_MOI_KHUC", "KHUC_SONG_SONG", "KHUON_MAC_DINH",
     "DUOI_CAM", "dien_khuon", "bang_phu_de", "chia_khuc", "loi_nhac_chia",
-    "canh_lai", "chia_theo_nghia", "ep_duoi", "thong_ke_canh",
+    "canh_lai", "chia_theo_nghia", "ep_duoi", "thong_ke_canh", "gop_ngan",
+    "tach_dai",
 ]
 
 #: Cảnh ngắn nhất, tính bằng giây.
@@ -143,6 +144,7 @@ Frame: **<<TY_LE_KHUNG>>**. Compose for that frame — room to the sides,
 subject off-centre, depth front-to-back.
 
 <<CAST_STYLE>>
+<<DIRECTOR_PLAN>>
 ## Context of this video (script and the chosen visual style — follow it exactly)
 <<CONTEXT>>
 
@@ -268,12 +270,60 @@ _TU_CHAM = re.compile(r"\b(slowly|gently|subtle|subtly|slightly|a little)\b")
 
 
 def ep_duoi(prompt: str, duoi: str = DUOI_CAM) -> str:
-    """Nối `duoi` vào cuối prompt nếu nó chưa có sẵn (không phân biệt hoa thường)."""
+    """Nối `duoi` vào cuối prompt nếu nó chưa có sẵn (không phân biệt hoa thường).
+
+    "Có sẵn" tính theo TỪNG Ý chứ không theo nguyên chuỗi: AI hay viết "no
+    readable text, no letters, no numbers, no watermark" — đủ ý nhưng khác
+    chữ, nối thêm nguyên đuôi nữa là prompt kết bằng hai lần "no watermark"
+    (đo 24/08/2026 trên 30/30 cảnh).
+    """
     p = str(prompt or "").strip()
     d = str(duoi or "").strip()
-    if not p or not d or d.lower() in p.lower():
+    if not p or not d:
+        return p
+    thap = p.lower()
+    if d.lower() in thap:
+        return p
+    if d == DUOI_CAM and "no watermark" in thap and (
+            "no text" in thap or "no readable text" in thap):
         return p
     return "{0}, {1}".format(p.rstrip(".,; "), d)
+
+
+def tach_dai(ds: List[Dict[str, Any]], theo_so: Mapping[int, Mapping[str, Any]],
+             khoa_tu: str, khoa_den: str, tran: float) -> List[Dict[str, Any]]:
+    """Tách mục dài hơn `tran` giây tại RANH GIỚI DÒNG thành các mục ≤ `tran`.
+
+    Dùng cho kế hoạch đạo diễn: beat dài 8,3 giây mà để nguyên thì khâu chia
+    cảnh phải cắt đôi bằng đồng hồ và **dùng chung một tấm ảnh** cho cả hai
+    nửa (đo 24/08/2026: 8/30 cảnh là bản sao của cảnh bên cạnh). Tách ngay ở
+    kế hoạch, mỗi phần giữ nguyên các trường khác, thì khâu chia cảnh viết
+    cho mỗi phần một hình riêng. Mục chỉ có một dòng thì không tách được —
+    để nguyên.
+    """
+    def dai(a: int, b: int) -> float:
+        cac = [theo_so[i] for i in range(a, b + 1) if i in theo_so]
+        if not cac:
+            return 0.0
+        return float(cac[-1]["end"]) - float(cac[0]["start"])
+
+    ra: List[Dict[str, Any]] = []
+    for m in ds:
+        a, b = int(m[khoa_tu]), int(m[khoa_den])
+        if dai(a, b) <= tran or a == b:
+            ra.append(m)
+            continue
+        dau = a
+        for i in range(a, b + 1):
+            if i > dau and dai(dau, i) > tran:
+                phan = dict(m)
+                phan[khoa_tu], phan[khoa_den] = dau, i - 1
+                ra.append(phan)
+                dau = i
+        phan = dict(m)
+        phan[khoa_tu], phan[khoa_den] = dau, b
+        ra.append(phan)
+    return ra
 
 
 def thong_ke_canh(canh: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
@@ -288,7 +338,11 @@ def thong_ke_canh(canh: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
     """
     ds = list(canh or [])
     tinh = sum(1 for c in ds if _TU_TINH.search(str(c.get("img_prompt") or "").lower()))
-    cham = sum(1 for c in ds if _TU_CHAM.search(str(c.get("video_prompt") or "").lower()))
+    # Chỉ soi PHẦN HÀNH ĐỘNG (đầu prompt): đuôi phong cách của kênh bút chì
+    # ghi "gentle hand-drawn pencil motion" ở mọi clip — đo 24/08/2026 ra
+    # 30/30 "chậm" dù chuyển động thật ("tips and leans", "fragments") rất rõ.
+    cham = sum(1 for c in ds
+               if _TU_CHAM.search(str(c.get("video_prompt") or "")[:160].lower()))
 
     def mo_dau(c) -> str:
         return " ".join(str(c.get("img_prompt") or "").lower().split()[:3])
@@ -321,10 +375,30 @@ def bang_phu_de(cue: Sequence[Mapping[str, Any]]) -> str:
 
 
 def chia_khuc(cue: Sequence[Mapping[str, Any]],
-              moi_khuc: int = CUE_MOI_KHUC) -> List[List[Mapping[str, Any]]]:
-    """Cắt danh sách phụ đề thành các khúc vừa một lời gọi."""
+              moi_khuc: int = CUE_MOI_KHUC,
+              giay_moi_khuc: float = 0.0) -> List[List[Mapping[str, Any]]]:
+    """Cắt danh sách phụ đề thành các khúc vừa một lời gọi.
+
+    `giay_moi_khuc` > 0 thì khúc còn bị chặn theo GIÂY tiếng: dòng phụ đề
+    tiếng Nhật dài gấp đôi tiếng Việt, 30 dòng là ba phút tiếng và một lời
+    gọi phải viết ba mươi cảnh — chậm (đo 24/08/2026: một khúc quá 60 giây
+    chờ, hết giờ liên tiếp). Khúc ngắn hơn thì nhiều khúc chạy song song,
+    tổng thời gian ngắn lại vì các khúc chạy cùng lúc.
+    """
     buoc = max(1, int(moi_khuc))
-    return [list(cue[i:i + buoc]) for i in range(0, len(cue), buoc)]
+    if giay_moi_khuc <= 0:
+        return [list(cue[i:i + buoc]) for i in range(0, len(cue), buoc)]
+    ra: List[List[Mapping[str, Any]]] = []
+    hien: List[Mapping[str, Any]] = []
+    for c in cue:
+        if hien and (len(hien) >= buoc or
+                     float(c["end"]) - float(hien[0]["start"]) > giay_moi_khuc):
+            ra.append(hien)
+            hien = []
+        hien.append(c)
+    if hien:
+        ra.append(hien)
+    return ra
 
 
 def loi_nhac_chia(khuon: str, cue: Sequence[Mapping[str, Any]], tran: float,
@@ -429,6 +503,36 @@ def _nhip_may_cho_phan(loi_nhac: str, phan: int, tong: int) -> str:
     return "{0}. {1}".format(loi_nhac.rstrip().rstrip("."), them).strip()
 
 
+def gop_ngan(ds: List[Dict[str, Any]], theo_so: Mapping[int, Mapping[str, Any]],
+             khoa_tu: str, khoa_den: str, san: float) -> List[Dict[str, Any]]:
+    """Gộp mục (cảnh/beat) ngắn hơn `san` giây vào mục liền trước.
+
+    `ds` là danh sách dict nối liền nhau theo chỉ số dòng (`khoa_tu`..`khoa_den`);
+    `theo_so` tra dòng → {start, end}. Mục ngắn nhập vào mục trước (mục trước
+    giữ lời nhắc của nó, chỉ dài thêm — đúng như người dựng tay để hình đứng
+    thêm vài giây khi người đọc nói một câu ngắn). Mục ĐẦU ngắn thì nhập vào
+    mục sau (mục sau giữ lời nhắc). Không đổi thứ tự, không bỏ dòng nào.
+    """
+    def dai(m) -> float:
+        cac = [theo_so[i] for i in range(int(m[khoa_tu]), int(m[khoa_den]) + 1)
+               if i in theo_so]
+        if not cac:
+            return 0.0
+        return float(cac[-1]["end"]) - float(cac[0]["start"])
+
+    ra: List[Dict[str, Any]] = []
+    for m in ds:
+        if ra and dai(m) < san:
+            ra[-1][khoa_den] = m[khoa_den]
+            continue
+        ra.append(m)
+    # Mục đầu ngắn: không có mục trước để nhập vào → nhập vào mục sau.
+    while len(ra) >= 2 and dai(ra[0]) < san:
+        ra[1][khoa_tu] = ra[0][khoa_tu]
+        ra.pop(0)
+    return ra
+
+
 def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
              tran: float, ten_khuc: str = "") -> List[Dict[str, Any]]:
     """Canh lại kết quả AI: phủ hết dòng, không chồng lấn, không quá trần.
@@ -497,6 +601,13 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
     # Còn sót đuôi thì nhập vào cảnh cuối, đừng để mất tiếng.
     if ke_tiep <= cuoi:
         ra[-1]["_den"] = cuoi
+    # ═══ CẢNH NGẮN HƠN SÀN THÌ GỘP — ÉP BẰNG MÃ, KHÔNG TIN AI ═══
+    #
+    # Đo lượt chạy thật 24/08/2026 (150 giây tiếng Nhật, 24 dòng): AI trả về
+    # 24 cảnh, ngắn nhất 0,7 giây, dù lời nhắc nói rõ sàn 3 giây — nó chia
+    # "mỗi dòng một cảnh" theo kế hoạch đạo diễn. Một tấm ảnh 0,7 giây là
+    # một cú nháy trên màn hình, không ai kịp thấy gì.
+    ra = gop_ngan(ra, theo_so, "_tu", "_den", MIN_GIAY_CANH)
 
     xong: List[Dict[str, Any]] = []
     for m in ra:
@@ -557,7 +668,7 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
                     song_song: int = KHUC_SONG_SONG,
                     ghi: Optional[Callable[[str], None]] = None,
                     kiem_dung: Optional[Callable[[], None]] = None,
-                    duoi: str = "",
+                    duoi: str = "", giay_moi_khuc: float = 0.0,
                     ) -> List[Dict[str, Any]]:
     """Chia cả file phụ đề thành cảnh, rồi đánh số và gắn mốc thời gian.
 
@@ -574,7 +685,7 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
     """
     if not cue:
         raise ValueError("không có dòng phụ đề nào để chia cảnh")
-    khuc = chia_khuc(cue, moi_khuc)
+    khuc = chia_khuc(cue, moi_khuc, giay_moi_khuc)
     if ghi is not None:
         ghi("  {0} dòng phụ đề → {1} khúc, AI tự chia cảnh theo nghĩa "
             "({2:.0f}–{3:.0f} giây/cảnh)…".format(

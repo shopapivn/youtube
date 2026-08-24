@@ -197,3 +197,114 @@ def test_workflow_mang_che_do_ke_va_co_bia_nhac():
     assert cfg["thumbnail"] is True and cfg["nhac"] is False
     assert {ma for ma, _t, _m in CHE_DO_KE} == {
         "tu_xay", "mot_nhan_vat", "nhan_vat_va_boi_canh"}
+
+
+# ── Đạo diễn (loại 2, 3): đọc phim → màn → kế hoạch beat → prompt có kế hoạch ─
+
+def _phim_gia(_cues, _ctx):
+    return {"genre": "psychology", "arc": "man_in_hole",
+            "context_lock": "rainy city, cold blue with one warm lamp",
+            "segments": [
+                {"segment_id": 1, "name": "Mo dau", "message": "co don",
+                 "emotion": "quiet", "motif": "unanswered phone",
+                 "srt_from": 1, "srt_to": 4},
+                {"segment_id": 2, "name": "Ket", "message": "chap nhan",
+                 "emotion": "warm", "motif": "lamp", "srt_from": 5, "srt_to": 99}],
+            "characters_mentioned": ["the narrator"], "locations_mentioned": ["kitchen"]}
+
+
+def _ke_hoach_gia(seg, dong, _cast):
+    dau, cuoi = dong[0]["index"], dong[-1]["index"]
+    return {"beats": [
+        {"srt_from": dau, "srt_to": dau, "purpose": "hook", "characters": "nv1",
+         "location": "loc1", "shot_size": "WIDE", "camera": "push_in",
+         "element_motion": "phone lights up", "emotion": "tense", "motif": "phone"},
+        {"srt_from": dau + 1, "srt_to": cuoi + 50, "purpose": "turn", "characters": "",
+         "location": "", "shot_size": "CLOSE", "camera": "static",
+         "element_motion": "light dims", "emotion": "quiet", "motif": ""}]}
+
+
+def test_dao_dien_loai_3_ra_story_va_director_plan(wb, yeu_cau):
+    yeu_cau["config"]["che_do_ke"] = "tu_xay"
+    ra = wb.handle(yeu_cau, cast_fn=_cast_phu_va_boi_canh, chia_fn=_chia_giu_khuc,
+                   phim_fn=_phim_gia, ke_hoach_fn=_ke_hoach_gia)
+    m = ra["scenes"]["json"]
+    # Màn được canh lại phủ hết 10 dòng, không hở.
+    assert [(s["srt_from"], s["srt_to"]) for s in m["story"]["segments"]] == [(1, 4), (5, 10)]
+    assert m["story"]["arc"] == "man_in_hole"
+    # Beat cuối bị kẹp vào cuối màn; beat dài quá trần 8 giây (mỗi dòng 3 giây)
+    # được tách tại ranh giới dòng: 2-4 (9s) → 2-3, 4; 6-10 (15s) → 6-7, 8-9, 10.
+    kh = m["director_plan"]
+    assert [(b["segment_id"], b["beat"], b["srt_from"], b["srt_to"]) for b in kh] == [
+        (1, 1, 1, 1), (1, 2, 2, 3), (1, 3, 4, 4),
+        (2, 1, 5, 5), (2, 2, 6, 7), (2, 3, 8, 9), (2, 4, 10, 10)]
+    st = _sheet(yeu_cau, "story")
+    assert st[0][:2] == ["segment_id", "name"] and st[1][1] == "Mo dau"
+    pl = _sheet(yeu_cau, "director_plan")
+    assert pl[0][0] == "segment_id" and len(pl) == 8
+    # Nhân vật AI dựng và bối cảnh có prompt ảnh tham chiếu; nv cố định thì không.
+    nv = {c["id"]: c for c in m["characters"]}
+    assert "reference portrait" in nv["nv2"]["sheet_prompt"]
+    assert "establishing wide shot" in m["locations"][0]["sheet_prompt"]
+
+
+def test_dao_dien_loai_2_nv1_khong_co_sheet_prompt(wb, yeu_cau):
+    yeu_cau["config"]["che_do_ke"] = "nhan_vat_va_boi_canh"
+    ra = wb.handle(yeu_cau, cast_fn=_cast_phu_va_boi_canh, chia_fn=_chia_giu_khuc,
+                   phim_fn=_phim_gia, ke_hoach_fn=_ke_hoach_gia)
+    nv = {c["id"]: c for c in ra["scenes"]["json"]["characters"]}
+    assert "sheet_prompt" not in nv["nv1"] and "sheet_prompt" in nv["nv2"]
+
+
+def test_loai_1_khong_dao_dien(wb, yeu_cau):
+    goi = {"n": 0}
+
+    def phim_fn(*_a):
+        goi["n"] += 1
+        return _phim_gia(None, None)
+
+    yeu_cau["config"]["che_do_ke"] = "mot_nhan_vat"
+    ra = wb.handle(yeu_cau, chia_fn=_chia_giu_khuc, phim_fn=phim_fn)
+    assert goi["n"] == 0
+    assert ra["scenes"]["json"]["story"] == {} and ra["scenes"]["json"]["director_plan"] == []
+
+
+def test_bom_tay_khong_phim_fn_thi_bo_qua_dao_dien(wb, yeu_cau):
+    yeu_cau["config"]["che_do_ke"] = "tu_xay"
+    ra = wb.handle(yeu_cau, cast_fn=_cast_phu_va_boi_canh, chia_fn=_chia_giu_khuc)
+    assert ra["scenes"]["json"]["story"] == {}
+
+
+def test_khoi_ke_hoach_chi_lay_beat_cham_khuc(wb):
+    kh = [{"segment_id": 1, "beat": 1, "srt_from": 1, "srt_to": 3, "purpose": "hook",
+           "characters": "nv1", "location": "loc1", "shot_size": "WIDE",
+           "camera": "push_in", "element_motion": "x", "emotion": "y", "motif": "m"},
+          {"segment_id": 1, "beat": 2, "srt_from": 4, "srt_to": 9, "purpose": "turn",
+           "characters": "", "location": "", "shot_size": "CLOSE", "camera": "static",
+           "element_motion": "z", "emotion": "w", "motif": ""}]
+    khuc = [{"index": i} for i in range(4, 7)]
+    khoi = wb._khoi_ke_hoach(kh, khuc)
+    assert "DIRECTOR'S PLAN" in khoi and "lines 4-9" in khoi and "lines 1-3" not in khoi
+    assert wb._khoi_ke_hoach([], khuc) == ""
+
+
+def test_reference_files_co_ca_boi_canh(wb):
+    scenes = [{"characters_used": "nv1 nv2", "location_used": "loc1"},
+              {"characters_used": "", "location_used": "loc9"}]
+    wb._gan_reference_files(scenes, [{"id": "nv1"}, {"id": "nv2"}], [{"id": "loc1"}])
+    import json
+    assert json.loads(scenes[0]["reference_files"]) == ["nv1.png", "nv2.png", "loc1.png"]
+    assert not scenes[1].get("reference_files")
+
+
+def test_ke_hoach_gop_beat_ngan(wb):
+    seg = {"segment_id": 1, "name": "x", "message": "", "emotion": "", "motif": "",
+           "srt_from": 1, "srt_to": 3}
+    dong = [{"index": 1, "start": 0.0, "end": 3.0, "text": "a"},
+            {"index": 2, "start": 3.0, "end": 3.6, "text": "b"},
+            {"index": 3, "start": 3.6, "end": 7.0, "text": "c"}]
+    raw = {"beats": [{"srt_from": 1, "srt_to": 1, "purpose": "p1"},
+                     {"srt_from": 2, "srt_to": 2, "purpose": "p2"},
+                     {"srt_from": 3, "srt_to": 3, "purpose": "p3"}]}
+    ra = wb._sach_ke_hoach(raw, seg, dong)
+    assert [(b["beat"], b["srt_from"], b["srt_to"]) for b in ra] == [(1, 1, 2), (2, 3, 3)]

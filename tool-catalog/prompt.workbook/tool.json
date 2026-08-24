@@ -20,7 +20,7 @@
     "thumbnail":{"type":"boolean","default":true},
     "nhac":{"type":"boolean","default":true}
   }},
-  "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 1200,
+  "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 5400,
               "python_modules": ["openpyxl"]},
   "permissions": ["network.shopapi", "workspace.read", "workspace.write", "secret.shopapi"]
 }

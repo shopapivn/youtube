@@ -386,3 +386,74 @@ class TestKhuonDaoDien:
         # để AI đọc thấy `<<KHUC_THU>>`.
         chu = loi_nhac_chia(KHUON_MAC_DINH, [cue(1)], 8.0)
         assert "<<" not in chu
+
+
+# ── Cảnh ngắn hơn sàn thì gộp — đo thật 24/08/2026: cảnh 0,7 giây ─────────
+
+from core.chia_canh import gop_ngan  # noqa: E402
+
+
+class TestGopNgan:
+    def test_canh_lai_gop_canh_ngan_vao_canh_truoc(self):
+        # cue 1,2 dài 3s; cue 3 chỉ 0,5s; cue 4 dài 3s.
+        cues = [cue(1), cue(2),
+                {"index": 3, "start": 6.0, "end": 6.5, "text": "ngan"},
+                {"index": 4, "start": 6.5, "end": 9.5, "text": "cau so 4"}]
+        ra = canh_lai([canh_ai(1, 2), canh_ai(3, 3), canh_ai(4, 4)], cues, 8.0)
+        # Cảnh 3 (0,5s) nhập vào cảnh trước: còn 2 cảnh, phủ đủ 4 dòng.
+        assert [c["_cue"] for c in ra] == [[1, 2, 3], [4]]
+        assert ra[0]["img_prompt"] == "anh 1"
+
+    def test_canh_dau_ngan_nhap_vao_canh_sau(self):
+        cues = [{"index": 1, "start": 0.0, "end": 0.8, "text": "ơ"},
+                {"index": 2, "start": 0.8, "end": 4.0, "text": "cau dai"}]
+        ra = canh_lai([canh_ai(1, 1), canh_ai(2, 2)], cues, 8.0)
+        assert [c["_cue"] for c in ra] == [[1, 2]]
+        assert ra[0]["img_prompt"] == "anh 2"
+
+    def test_gop_ngan_thuan(self):
+        theo_so = {1: {"start": 0, "end": 3}, 2: {"start": 3, "end": 3.5},
+                   3: {"start": 3.5, "end": 7}}
+        ds = [{"srt_from": 1, "srt_to": 1}, {"srt_from": 2, "srt_to": 2},
+              {"srt_from": 3, "srt_to": 3}]
+        ra = gop_ngan(ds, theo_so, "srt_from", "srt_to", 3.0)
+        assert [(m["srt_from"], m["srt_to"]) for m in ra] == [(1, 2), (3, 3)]
+
+
+class TestTachDaiVaDuoi:
+    def test_tach_dai_tai_ranh_gioi_dong(self):
+        from core.chia_canh import tach_dai
+        theo_so = {i: {"start": (i - 1) * 3.0, "end": i * 3.0} for i in range(1, 7)}
+        # Một beat 6 dòng = 18 giây, trần 8 → 3 phần [1-2][3-4][5-6], giữ trường khác.
+        ra = tach_dai([{"srt_from": 1, "srt_to": 6, "purpose": "p"}], theo_so,
+                      "srt_from", "srt_to", 8.0)
+        assert [(m["srt_from"], m["srt_to"], m["purpose"]) for m in ra] == [
+            (1, 2, "p"), (3, 4, "p"), (5, 6, "p")]
+
+    def test_tach_dai_mot_dong_dai_thi_de_nguyen(self):
+        from core.chia_canh import tach_dai
+        theo_so = {1: {"start": 0.0, "end": 12.0}}
+        assert tach_dai([{"srt_from": 1, "srt_to": 1}], theo_so, "srt_from", "srt_to", 8.0) == [
+            {"srt_from": 1, "srt_to": 1}]
+
+    def test_ep_duoi_khong_noi_khi_da_du_y(self):
+        co = "Wide shot, no readable text, no letters, no numbers, no watermark"
+        assert ep_duoi(co, DUOI_CAM) == co
+        assert ep_duoi("Wide shot, no watermark", DUOI_CAM).endswith(DUOI_CAM)
+
+
+class TestChiaKhucTheoGiay:
+    def test_chan_theo_giay_va_theo_so_dong(self):
+        # 10 dòng, mỗi dòng 6 giây (kiểu tiếng Nhật): trần 20 giây → 3 dòng/khúc.
+        cues = [cue(i, 6.0) for i in range(1, 11)]
+        khuc = chia_khuc(cues, 30, giay_moi_khuc=20.0)
+        assert [len(k) for k in khuc] == [3, 3, 3, 1]
+        assert [c["index"] for k in khuc for c in k] == list(range(1, 11))
+
+    def test_khong_dat_giay_thi_nhu_cu(self):
+        cues = [cue(i, 6.0) for i in range(1, 11)]
+        assert [len(k) for k in chia_khuc(cues, 4)] == [4, 4, 2]
+
+    def test_dong_don_le_dai_hon_tran_van_thanh_khuc(self):
+        cues = [cue(1, 50.0), cue(2, 50.0)]
+        assert [len(k) for k in chia_khuc(cues, 30, giay_moi_khuc=20.0)] == [1, 1]

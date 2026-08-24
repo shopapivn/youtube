@@ -108,6 +108,20 @@ class TabTemplate(QWidget):
         d.addWidget(self._nut_xoa_mau)
         doc.addLayout(d)
 
+        # ── Đồng bộ với kênh của tab Tự động ────────────────────────────────
+        #
+        # Tám tệp lời nhắc của kênh nạp thành các bước ở đây để sửa; sửa xong
+        # "Lưu vào kênh" là tab Tự động dùng ngay. Bước nào tên trùng bước
+        # chuẩn (nhãn trong `BUOC_PROMPT`) mới ghi về đúng tệp — bước tự đặt
+        # tên thì giữ ở template riêng, không lọt vào kênh.
+        from .kenh_chon import HangKenh  # noqa: PLC0415
+
+        doc.addWidget(HangKenh(
+            app, nap=self._nap_tu_kenh, luu=self._luu_vao_kenh,
+            mach_nap="Nạp tám tệp lời nhắc của kênh thành các bước ở đây.",
+            mach_luu="Ghi các bước có tên trùng bước chuẩn của kênh về đúng "
+                     "tệp lời nhắc trong CHANNEL/<kênh>/prompt/."))
+
         # ── Đầu vào ──────────────────────────────────────────────────────────
         self._o_dau_vao = QPlainTextEdit()
         self._o_dau_vao.setPlaceholderText(
@@ -196,6 +210,45 @@ class TabTemplate(QWidget):
             self._chon_mau.blockSignals(False)
         self._nut_xoa_mau.setEnabled(True)
         self._nhan_ket.setText("Đã lưu template “{0}”".format(ten.strip()))
+
+    # ── Kênh ↔ các bước ──────────────────────────────────────────────────────
+
+    def _nap_tu_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import doc_prompts  # noqa: PLC0415
+
+        ds = doc_prompts(self._app.base_dir, ma)
+        if not ds:
+            self._app.show_message(
+                "Kênh chưa có lời nhắc",
+                "Kênh “{0}” không có tệp nào trong prompt/.".format(ma))
+            return
+        self.dat_prompt([Buoc(nhan, chu) for _ten, nhan, chu in ds])
+        self._nhan_ket.setText(
+            "Đã nạp {0} bước từ kênh {1}. Lời nhắc của kênh có các ô "
+            "<<...>> do tab Tự động điền — sửa chữ, giữ nguyên các ô đó."
+            .format(len(ds), ma))
+
+    def _luu_vao_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import NHAN_BUOC, ghi_prompts  # noqa: PLC0415
+
+        theo_tep = {}
+        la = []
+        for b in self._buoc:
+            if not b.prompt.strip():
+                continue
+            ten_tep = NHAN_BUOC.get(b.ten.strip())
+            if ten_tep:
+                theo_tep[ten_tep] = b.prompt
+            else:
+                la.append(b.ten.strip() or "(không tên)")
+        if not theo_tep:
+            raise ValueError(
+                "Không bước nào trùng tên bước chuẩn của kênh (ví dụ “Viết kịch "
+                "bản lời đọc”). Bấm “Nạp từ kênh” để lấy đúng tên rồi sửa.")
+        da = ghi_prompts(self._app.base_dir, ma, theo_tep)
+        self._nhan_ket.setText("Đã ghi {0} lời nhắc vào kênh {1}{2}.".format(
+            len(da), ma,
+            "; bỏ qua bước lạ: " + ", ".join(la) if la else ""))
 
     def _xoa_mau(self) -> None:
         mau = self._mau_dang_chon()
