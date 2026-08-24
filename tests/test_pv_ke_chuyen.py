@@ -372,3 +372,31 @@ def test_loi_doc_cho_bia_nhac_casting_la_ca_bai(wb):
     assert wb._loi_doc_mau(cues) == ca_bai
     assert wb.BIA_KY_TU == 0 and not hasattr(wb, "CAST_KY_TU")
     assert wb.TOKEN_CAST >= wb.TOKEN_CANH
+
+
+# ── Từ bị bộ lọc an toàn chặn vô cớ ─────────────────────────────────────────
+
+def test_thay_tu_bi_loc_trong_moi_prompt(wb):
+    assert wb._lam_lanh_prompt("small upright anthropomorphic cat with a sly smile") == \
+        "small upright cat standing upright like a person with a knowing smile"
+    assert wb._lam_lanh_prompt("Slyvia walks") == "Slyvia walks"   # không cắt giữa từ
+    cast = {"characters": [{"id": "nv4", "english_prompt": "anthropomorphic cat", "sheet_prompt": "sly cat"}],
+            "locations": []}
+    scenes = [{"img_prompt": "an anthropomorphic fox", "video_prompt": "sly grin"}]
+    bia = {"thumbnails": [{"img_prompt": "sly cat"}]}
+    wb._lam_lanh_moi_prompt(cast, scenes, bia)
+    assert "anthropomorphic" not in cast["characters"][0]["english_prompt"]
+    assert scenes[0]["img_prompt"] == "an fox standing upright like a person"
+    assert bia["thumbnails"][0]["img_prompt"] == "knowing cat"
+
+
+def test_excel_khong_con_tu_bi_loc(wb, yeu_cau):
+    def cast_fn(_c, _x):
+        return {"style": {}, "characters": [{"id": "nv1", "role": "cat", "english_prompt": "anthropomorphic cat, sly"}],
+                "locations": []}
+
+    yeu_cau["config"]["che_do_ke"] = "tu_xay"
+    ra = wb.handle(yeu_cau, cast_fn=cast_fn, chia_fn=_chia_giu_khuc)
+    m = ra["scenes"]["json"]
+    assert "anthropomorphic" not in m["characters"][0]["english_prompt"]
+    assert all("anthropomorphic" not in s["img_prompt"] and " sly" not in s["img_prompt"] for s in m["scenes"])

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 from pathlib import Path
@@ -295,6 +296,37 @@ be clearly DISTINCT from the existing ones; keep the same visual style.
 ```
 """
 
+#: Tu vo hai nhung bo loc an toan cua nha cung cap anh hay chan vo co. Do
+#: 25/08/2026: anh tham chieu "small upright anthropomorphic cat ... sly small
+#: smile" bi content_rejected HAI lan; bo hai tu la qua ngay. Ca 85 canh cua
+#: video do co 12 canh "anthropomorphic", 23 canh "sly" — thay truoc khi ghi
+#: Excel, khoi de khach gap loi "noi dung bi tu choi" tren mot con meo di hia.
+_TU_BI_LOC = [(re.compile(r"\banthropomorphic\s+(\w+)", re.I), r"\1 standing upright like a person"),
+              (re.compile(r"\banthropomorphic\b", re.I), "standing upright like a person"),
+              (re.compile(r"\bsly\b", re.I), "knowing")]
+
+
+def _lam_lanh_prompt(chu: str) -> str:
+    for mau, thay in _TU_BI_LOC:
+        chu = mau.sub(thay, str(chu or ""))
+    return chu
+
+
+def _lam_lanh_moi_prompt(cast, scenes, bia) -> None:
+    """Thay tu bi loc trong MOI prompt se di ra Excel (dan, boi canh, canh, bia)."""
+    for c in list(cast.get("characters") or []) + list(cast.get("locations") or []):
+        for k in ("english_prompt", "sheet_prompt", "reference_lock", "location_lock"):
+            if c.get(k):
+                c[k] = _lam_lanh_prompt(c[k])
+    for s in scenes:
+        for k in ("img_prompt", "video_prompt", "primary_subject", "primary_action"):
+            if s.get(k):
+                s[k] = _lam_lanh_prompt(s[k])
+    for t in (bia or {}).get("thumbnails") or []:
+        if t.get("img_prompt"):
+            t["img_prompt"] = _lam_lanh_prompt(t["img_prompt"])
+
+
 #: Tu khong mang nghia khi so khop ten nhan vat/noi chon voi dan da co.
 _TU_RONG = {"the", "a", "an", "of", "and", "or", "his", "her", "their", "its",
             "two", "three", "old", "older", "young", "younger", "who", "with",
@@ -466,6 +498,7 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
             nhac = viec_nhac.result() if viec_nhac is not None else []
         _gan_reference_files(scenes, cast["characters"], cast.get("locations") or [])
         _validate_coverage(cues, scenes)
+        _lam_lanh_moi_prompt(cast, scenes, bia)
 
         workspace = Path(str(request.get("workspace") or "")).resolve(); workspace.mkdir(parents=True, exist_ok=True)
         manifest = {"schema_version": 1, "project_id": str(request.get("workflow_id") or "project"),
@@ -1113,8 +1146,6 @@ def _tu_khoa(chu: str) -> List[str]:
 
 
 def re_tach(chu: str) -> List[str]:
-    import re  # noqa: PLC0415
-
     return re.findall(r"[a-z0-9']+", chu.replace("'s", ""))
 
 

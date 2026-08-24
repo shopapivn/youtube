@@ -841,12 +841,19 @@ class CuaSoChinh(QWidget):
         thì cài `nhan_su_kien` (hoặc có thuộc tính `bang`) và tự bỏ qua việc
         không thuộc loại của mình — xem `ui_qt/bang_viec.py`.
         """
-        for trang in self._trang.values():
+        for trang in list(self._trang.values()):
             for nhan_su_kien in (getattr(trang, "nhan_su_kien", None),
                                  getattr(getattr(trang, "bang", None),
                                          "nhan_su_kien", None)):
                 if nhan_su_kien is not None:
-                    nhan_su_kien(loai, du_lieu)
+                    # Bọc RIÊNG từng trang: một trang ném lỗi không được nuốt
+                    # sự kiện của các trang sau nó. Đo 25/08/2026: trang nghe
+                    # thêm sau cùng không thấy một "job done" nào suốt 80 phút
+                    # dù 21 ảnh đã về đĩa — vì vòng bơm bắt lỗi ở ngoài cả vòng.
+                    try:
+                        nhan_su_kien(loai, du_lieu)
+                    except Exception:  # noqa: BLE001
+                        pass
                     break
 
     def closeEvent(self, event) -> None:  # noqa: N802 — tên do Qt quy định
