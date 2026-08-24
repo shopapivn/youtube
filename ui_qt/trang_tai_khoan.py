@@ -1,25 +1,42 @@
-"""Trang Ví & Tài khoản (Qt) — số dư, nạp tiền bằng QR, sổ cái.
+"""Trang Tài khoản (Qt) — đăng nhập, số dư, nạp tiền bằng QR, sổ cái.
 
-Ba việc khách cần làm với tiền, không phải mở trình duyệt:
+Bốn thẻ, đúng thứ tự khách cần:
 
-* **Xem còn bao nhiêu**, và quy ra được bao nhiêu phút giọng / ảnh / clip.
-* **Nạp tiền**: tạo mã QR ngay trong tool, rồi **tự dò xem tiền vào chưa** —
-  khách chuyển khoản xong cứ để yên màn hình, không phải bấm Làm mới.
-* **Xem từng đồng ra vào ví**.
+1. **Đăng nhập** — chưa đăng nhập thì là ô email + mật khẩu; đăng nhập rồi thì
+   thẻ đổi thành *"Đang đăng nhập: email — [Đăng xuất]"*. Không bao giờ hiện cả
+   hai. Chủ dự án 24/08/2026: *"đăng nhập thì phải lưu và có chỗ đăng xuất"* —
+   bản trước đăng nhập xong vẫn trưng nguyên ô email/mật khẩu trống, khách không
+   biết mình đã vào hay chưa.
+2. **Số dư** — con số to, kèm quy ra phút giọng / ảnh / clip.
+3. **Nạp tiền** — chọn mức → bấm Tạo mã QR → **ảnh QR hiện ngay trong tool**
+   cùng ngân hàng, số tài khoản, số tiền, nội dung chuyển khoản. Tool tự dò
+   xem tiền vào chưa, khách cứ để yên màn hình.
+4. **Giao dịch gần đây**.
 
-Nội dung chuyển khoản là thứ quan trọng nhất màn hình: ghi sai thì tiền về tới
-ngân hàng nhưng hệ thống **không biết của ai**, phải nhờ người xử lý tay. Nên nó
-được để chữ to kèm nút Chép, và có dòng nói rõ đừng gõ lại.
+## Hai lỗi bản trước, để không lặp lại
+
+* Máy chủ trả `amount` bằng **µVND** (1₫ = 1.000.000 µVND). Bản trước in thẳng
+  số đó ra nên nạp 100.000₫ hiện thành *"Chuyển 100.000.000.000₫"*. Mọi số
+  tiền từ máy chủ phải qua `format_vnd(parse_micro(...))`.
+* Thông tin ngân hàng nằm **lồng trong `bank`** (`bank.name`,
+  `bank.account_number`, `bank.account_name`), không phải trường phẳng. Đọc sai
+  tên trường thì ra ba dấu gạch "— — —" như khách đã thấy.
+
+Nội dung chuyển khoản vẫn là thứ quan trọng nhất màn hình: ghi sai thì tiền về
+ngân hàng nhưng hệ thống **không biết của ai**. Nên nó chữ to, có nút Chép, và
+QR đã mã hoá sẵn cả số tiền lẫn nội dung để khách khỏi gõ gì.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, Optional
 
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QHBoxLayout, QHeaderView, QLineEdit, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QFormLayout, QHBoxLayout, QHeaderView, QLineEdit, QMessageBox,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.account import (
@@ -27,54 +44,114 @@ from core.account import (
     signed_micro, topup_is_settled, topup_presets,
 )
 from core.api import fetch_balance, wallet_micro
-from core.money import format_vnd
+from core.config import DASHBOARD_KEYS_URL, looks_like_api_key, looks_like_email
+from core.money import format_vnd, parse_micro
 
 from . import theme
-from core.config import DASHBOARD_KEYS_URL, looks_like_api_key, looks_like_email
-
 from .widgets import (
-    DaiUocTinh, HangXuongDong, NhomChon, nhan, nut_chinh, nut_phu, the,
-    tieu_de_trang,
+    HangXuongDong, NhomChon, nhan, nut_chinh, nut_phu, the, tieu_de_trang,
 )
 
 __all__ = ["TrangTaiKhoan"]
 
-#: Nhịp tự dò xem tiền đã vào chưa. Tiền thường về trong khoảng 10 giây.
+#: Nhịp tự dò xem tiền đã vào chưa. `GET /v1/topup/{id}` là lời hỏi rất nhẹ và
+#: SDK ghi rõ "hỏi lại mỗi 3 giây" — khác hẳn `jobs.list()`, đừng lẫn.
 _NHIP_DO_MS = 3000
 
 #: Dò tối đa 5 phút rồi thôi, để không hỏi máy chủ mãi khi khách bỏ đi.
 _SO_NHIP_TOI_DA = 100
 
+#: Cạnh ảnh QR trên màn hình. 220px quét được từ điện thoại cách nửa mét.
+_CANH_QR = 220
+
+#: Mở lại tab thì làm mới số dư, nhưng không dày hơn ngần này giây.
+_GIAN_LAM_MOI_S = 30
+
 
 class TrangTaiKhoan(QWidget):
 
-    # ── Khoá API ─────────────────────────────────────────────────────────────
-
-    #: Ba bước đầu tiên, theo đúng thứ tự phải làm.
+    #: Hai bước đầu tiên — chỉ hiện khi CHƯA đăng nhập. Người đã vào rồi không
+    #: cần đọc lại "bước 1: đăng nhập".
     #:
-    #: Chủ dự án, 13/08/2026: *"có hướng dẫn cụ thể, đang nhiều thứ quá, ví dụ
-    #: 1-2-3 để khách biết làm gì tiếp theo"*.
-    #:
-    #: Tool có bảy tab và mỗi tab một đống nút. Với người làm YouTube không
-    #: viết code, màn hình đầu tiên không trả lời được câu duy nhất họ đang
-    #: hỏi: **giờ bấm gì?** Ba dòng này trả lời đúng câu đó, và không nói gì
-    #: thêm — thêm dòng thứ tư là lại thành một danh sách phải đọc.
-    #:
-    #: Bước 3 KHÔNG kể tên bảy tab: đọc xong bảy cái tên vẫn không biết bắt đầu
-    #: từ đâu. Nó chỉ tên MỘT tab, cái đầu tiên của mạch làm video.
+    #: Chủ dự án 24/08/2026: hai bước là đủ, phần "rồi dùng các tab" chỉ là một
+    #: ghi chú nhỏ — không phải một bước, vì không có gì để bấm ở đây cả.
     BA_BUOC = (
-        ("1", "Đăng nhập bằng email", "Gõ email và mật khẩu shopapi.vn, bấm “Đăng nhập & lấy khoá”."),
-        ("2", "Tool tự tạo khoá", "Đăng nhập xong tôi tự tạo và lưu khoá API cho bạn — khỏi vào web."),
-        ("3", "Nạp tiền & làm video", "Nạp tiền bằng mã QR, rồi sang tab Viết kịch bản."),
+        ("1", "Đăng nhập bằng email", "Gõ email và mật khẩu shopapi.vn rồi bấm “Đăng nhập”. Tool tự lấy khoá và nhớ, lần sau khỏi gõ lại."),
+        ("2", "Nạp tiền", "Chọn mức, bấm “Tạo mã QR”, quét bằng app ngân hàng."),
     )
 
-    def _the_bat_dau(self):
-        """Thẻ “Làm theo 3 bước” — thứ đầu tiên khách nhìn thấy khi mở tool."""
+    #: Ghi chú nhỏ dưới hai bước.
+    GHI_CHU_BUOC = "Xong hai bước này là dùng được mọi tab ở cột bên trái."
+
+    def __init__(self, app):
+        super().__init__()
+        self._app = app
+        self._phieu: Optional[Dict[str, Any]] = None
+        self._so_nhip = 0
+        self._lan_lam_moi = 0.0
+        #: Phiên đăng nhập web đang dựng (chỉ sống trong lúc đăng nhập/tạo khoá).
+        self._phien = None
+        #: Đang chờ khách nhập mã 2 lớp ở bước nào: None / "login" / "step_up".
+        self._cho_ma: Optional[str] = None
+
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(24, 16, 24, 16)
+        doc.setSpacing(10)
+        doc.addWidget(tieu_de_trang("Tài khoản", "Đăng nhập, số dư, nạp tiền.", "wallet"))
+        self._the_ba_buoc = self._dung_the_ba_buoc()
+        doc.addWidget(self._the_ba_buoc)
+        self._the_dang_nhap = self._dung_the_dang_nhap()
+        doc.addWidget(self._the_dang_nhap)
+        self._the_da_vao = self._dung_the_da_vao()
+        doc.addWidget(self._the_da_vao)
+        doc.addWidget(self._dung_the_so_du())
+        doc.addWidget(self._dung_the_nap())
+        doc.addWidget(nhan("Giao dịch gần đây", "h2"))
+        self._bang = QTableWidget(0, 4)
+        self._bang.setHorizontalHeaderLabels(("Thời điểm", "Việc", "Số tiền", "Số dư sau"))
+        self._bang.verticalHeader().setVisible(False)
+        self._bang.setEditTriggers(QTableWidget.NoEditTriggers)
+        dau = self._bang.horizontalHeader()
+        dau.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        dau.setSectionResizeMode(1, QHeaderView.Stretch)
+        dau.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        dau.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        doc.addWidget(self._bang, 1)
+
+        self._dong_ho = QTimer(self)
+        self._dong_ho.timeout.connect(self._do_phieu)
+        self._cap_nhat_trang_thai()
+        self.lam_moi()
+
+    # ── Trạng thái đăng nhập: quyết định thẻ nào hiện ───────────────────────
+
+    def _da_dang_nhap(self) -> bool:
+        return bool(getattr(self._app.config, "is_ready", False))
+
+    def _email(self) -> str:
+        return str(getattr(self._app.config, "account_email", "") or "").strip()
+
+    def _cap_nhat_trang_thai(self) -> None:
+        """Chưa vào: thẻ 2 bước + ô đăng nhập. Vào rồi: thẻ tên + Đăng xuất."""
+        vao = self._da_dang_nhap()
+        self._the_ba_buoc.setVisible(not vao)
+        self._the_dang_nhap.setVisible(not vao)
+        self._the_da_vao.setVisible(vao)
+        self._ve_trang_thai_khoa()
+
+    def showEvent(self, su_kien) -> None:  # noqa: N802 — tên do Qt quy định
+        super().showEvent(su_kien)
+        if time.monotonic() - self._lan_lam_moi >= _GIAN_LAM_MOI_S:
+            self.lam_moi()
+
+    # ── Thẻ 2 bước (chỉ khi chưa đăng nhập) ─────────────────────────────────
+
+    def _dung_the_ba_buoc(self):
         khung = the()
         doc = QVBoxLayout(khung)
         doc.setContentsMargins(20, 12, 20, 12)
         doc.setSpacing(4)
-        doc.addWidget(nhan("Làm theo 3 bước", "h2"))
+        doc.addWidget(nhan("Làm theo 2 bước", "h2"))
         for so, tieu_de, chi_tiet in self.BA_BUOC:
             hang = QHBoxLayout()
             hang.setSpacing(12)
@@ -84,39 +161,37 @@ class TrangTaiKhoan(QWidget):
             o_so.setStyleSheet(
                 "font-size:17px;font-weight:800;color:{0};".format(theme.NHAN))
             hang.addWidget(o_so)
-
-            # MỘT dòng cho mỗi bước, không phải hai. Tách tiêu đề ra một nhãn
-            # riêng đọc thì đẹp nhưng tốn 60px cho ba bước — và trang này đã
-            # chạm trần chiều cao của cửa sổ nhỏ nhất (test bố cục bắt được).
             o_chu = nhan("<b>{0}</b> — {1}".format(tieu_de, chi_tiet), "phu")
-            o_chu.setWordWrap(True)
             o_chu.setMinimumWidth(1)
             hang.addWidget(o_chu, 1)
             doc.addLayout(hang)
+        ghi_chu = nhan(self.GHI_CHU_BUOC, "muted")
+        ghi_chu.setMinimumWidth(1)
+        ghi_chu.setContentsMargins(38, 2, 0, 0)
+        doc.addWidget(ghi_chu)
         return khung
 
-    # ── Đăng nhập bằng email (tool tự tạo khoá hộ) ─────────────────────────────
+    # ── Thẻ đăng nhập (chưa vào) ─────────────────────────────────────────────
 
-    def _the_dang_nhap(self):
-        """Đăng nhập bằng email → tool tự tạo khoá API, khỏi vào web.
+    def _dung_the_dang_nhap(self):
+        """Email + mật khẩu → tool đăng nhập, tự tạo và lưu khoá API hộ.
 
-        Chủ dự án 22/08/2026: *"khách lần đầu chạy họ phải vào web tạo API key rồi
-        quay lại rất phiền… thiết kế tab tài khoản có thể đăng nhập và tạo API
-        key"*. Máy chủ có sẵn `POST /auth/login` và `POST /account/api-keys` (xem
-        `core/auth.py`), nên đây là con đường thẳng nhất: gõ email + mật khẩu, tool
-        đăng nhập rồi tạo và lưu khoá hộ — chữ "khoá API" khách không cần biết.
+        Máy chủ có `POST /auth/login` và `POST /account/api-keys` (`core/auth.py`).
+        Chữ "khoá API" khách không cần biết; nó chỉ lộ ra ở dòng phụ cuối thẻ
+        cho người đã có sẵn khoá và muốn dán tay.
         """
         khung = the()
         v = QVBoxLayout(khung)
         v.setContentsMargins(20, 14, 20, 16)
         v.setSpacing(8)
-        v.addWidget(nhan("Đăng nhập bằng email", "h2"))
+        v.addWidget(nhan("Đăng nhập", "h2"))
         v.addWidget(nhan(
-            "Gõ email và mật khẩu tài khoản shopapi.vn — tôi tự tạo và lưu khoá "
-            "cho bạn, khỏi phải vào web.", "muted"))
+            "Dùng email và mật khẩu tài khoản shopapi.vn. Tôi lưu lại trên máy "
+            "này — lần sau mở tool là vào thẳng.", "muted"))
 
         self._o_email = QLineEdit()
         self._o_email.setPlaceholderText("email của bạn, ví dụ ten@congty.vn")
+        self._o_email.setText(self._email())
         self._o_email.returnPressed.connect(self._tiep_tuc)
         v.addWidget(self._o_email)
 
@@ -126,8 +201,7 @@ class TrangTaiKhoan(QWidget):
         self._o_mat_khau.returnPressed.connect(self._tiep_tuc)
         v.addWidget(self._o_mat_khau)
 
-        # Ô mã 2 lớp: ẩn tới khi máy chủ đòi. Phần lớn khách không bật 2FA nên
-        # bày sẵn ô này chỉ tổ làm màn hình rối và doạ người mới.
+        # Ô mã 2 lớp: ẩn tới khi máy chủ đòi. Phần lớn khách không bật 2FA.
         self._o_ma_2fa = QLineEdit()
         self._o_ma_2fa.setObjectName("mono")
         self._o_ma_2fa.setPlaceholderText("mã 6 số trong ứng dụng xác thực")
@@ -135,13 +209,103 @@ class TrangTaiKhoan(QWidget):
         self._o_ma_2fa.hide()
         v.addWidget(self._o_ma_2fa)
 
-        self._nut_dang_nhap = nut_chinh("Đăng nhập & lấy khoá", self._tiep_tuc)
+        # Không có dấu "&" trong nhãn: Qt coi "&" là phím tắt và NUỐT mất nó —
+        # bản trước hiện "Đăng nhập  lấy khoá" với hai dấu cách ở giữa.
+        self._nut_dang_nhap = nut_chinh("Đăng nhập", self._tiep_tuc)
         v.addWidget(self._nut_dang_nhap)
 
         self._nhan_dang_nhap = nhan("", "muted")
-        self._nhan_dang_nhap.setWordWrap(True)
         v.addWidget(self._nhan_dang_nhap)
+
+        # Đường phụ cho người đã có khoá: MỘT dòng, chữ nhỏ, không phải một thẻ
+        # riêng ngang hàng với đăng nhập như bản trước.
+        d = HangXuongDong()
+        d.addWidget(nhan("Đã có khoá API?", "muted"))
+        self._o_khoa = QLineEdit()
+        self._o_khoa.setObjectName("mono")
+        self._o_khoa.setPlaceholderText("dán khoá sk_… vào đây")
+        self._o_khoa.setEchoMode(QLineEdit.Password)
+        self._o_khoa.setFixedWidth(260)
+        self._o_khoa.setToolTip("Khoá được cất mã hoá theo máy này, không nằm trong mã nguồn.")
+        self._o_khoa.returnPressed.connect(self._luu_khoa)
+        d.addWidget(self._o_khoa)
+        self._nut_hien = nut_phu("Hiện", self._doi_hien_khoa, rong=64)
+        self._nut_hien.setToolTip("Hiện khoá để soát lại")
+        d.addWidget(self._nut_hien)
+        d.addWidget(nut_phu("Lưu khoá", self._luu_khoa, rong=100))
+        self._nut_lay_khoa = nut_phu("Lấy khoá API", self._mo_trang_khoa, rong=120)
+        self._nut_lay_khoa.setToolTip(
+            "Mở trang tạo khoá trên shopapi.vn. Tạo xong, chép khoá rồi quay lại "
+            "dán vào ô bên cạnh.")
+        d.addWidget(self._nut_lay_khoa)
+        v.addLayout(d)
         return khung
+
+    # ── Thẻ đã đăng nhập ─────────────────────────────────────────────────────
+
+    def _dung_the_da_vao(self):
+        khung = the()
+        h = QHBoxLayout(khung)
+        h.setContentsMargins(20, 14, 20, 14)
+        h.setSpacing(12)
+        cot = QVBoxLayout()
+        cot.setSpacing(2)
+        self._nhan_ai = nhan("", "h2")
+        self._nhan_ai.setMinimumWidth(1)
+        cot.addWidget(self._nhan_ai)
+        self._nhan_khoa = nhan("", "muted")
+        self._nhan_khoa.setMinimumWidth(1)
+        cot.addWidget(self._nhan_khoa)
+        h.addLayout(cot, 1)
+        nut = nut_phu("Đăng xuất", self._dang_xuat, rong=110)
+        nut.setToolTip("Xoá khoá và phiên đăng nhập trên máy này, quay về màn hình đăng nhập.")
+        h.addWidget(nut, 0, Qt.AlignTop)
+        return khung
+
+    def _ve_trang_thai_khoa(self) -> None:
+        cau_hinh = self._app.config
+        if not getattr(cau_hinh, "is_ready", False):
+            self._nhan_ai.setText("Chưa đăng nhập")
+            self._nhan_khoa.setText("")
+            return
+        email = self._email()
+        self._nhan_ai.setText(
+            "Đang đăng nhập: {0}".format(email) if email else "Đang dùng khoá API")
+        self._nhan_khoa.setText("Khoá API: {0}".format(cau_hinh.masked_key))
+
+    def _dang_xuat(self) -> None:
+        tra_loi = QMessageBox.question(
+            self, "Đăng xuất khỏi tool?",
+            "Tôi sẽ xoá khoá và phiên đăng nhập trên máy này. Việc đang chạy "
+            "(nếu có) sẽ dừng. Bạn đăng nhập lại bất cứ lúc nào.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if tra_loi != QMessageBox.Yes:
+            return
+        lam = getattr(self._app, "dang_xuat", None)
+        if lam is not None:
+            try:
+                lam()
+            except Exception as loi:  # noqa: BLE001
+                self._app.show_error(loi)
+                return
+        self._phien = None
+        self._cho_ma = None
+        self._dong_ho.stop()
+        self._phieu = None
+        self._khung_phieu.hide()
+        self._trang_thai_nap.setText("")
+        self._o_mat_khau.clear()
+        self._o_ma_2fa.clear()
+        self._o_ma_2fa.hide()
+        self._nut_dang_nhap.setText("Đăng nhập")
+        self._bao_dn("")
+        self._so_du.setText("—")
+        self._quy_doi.setText("")
+        self._bang.setRowCount(0)
+        self._cap_nhat_trang_thai()
+        self.lam_moi()
+
+    # ── Đăng nhập bằng email ─────────────────────────────────────────────────
 
     def _bao_dn(self, chu: str) -> None:
         self._nhan_dang_nhap.setText(chu)
@@ -179,7 +343,7 @@ class TrangTaiKhoan(QWidget):
         """Đăng nhập xong thì tạo khoá luôn — khách chỉ bấm một nút."""
         self._cho_ma = None
         self._o_ma_2fa.clear()
-        self._bao_dn("Đăng nhập xong, đang tạo khoá…")
+        self._bao_dn("Đăng nhập xong, đang lấy khoá…")
         self._tao_khoa()
 
     def _tao_khoa(self) -> None:
@@ -208,13 +372,12 @@ class TrangTaiKhoan(QWidget):
         self._o_mat_khau.clear()
         self._o_ma_2fa.clear()
         self._o_ma_2fa.hide()
-        self._nut_dang_nhap.setText("Đăng nhập & lấy khoá")
+        self._nut_dang_nhap.setText("Đăng nhập")
         self._bao_dn("")
-        self._ve_trang_thai_khoa()
+        self._cap_nhat_trang_thai()
         self._app.show_message(
-            "Xong rồi!",
-            "Tôi đã đăng nhập và tự tạo khoá API cho bạn. Bạn dùng được mọi tab "
-            "ngay bây giờ.")
+            "Đã đăng nhập",
+            "Tool nhớ đăng nhập này trên máy của bạn. Bạn dùng được mọi tab ngay bây giờ.")
         self.lam_moi()
 
     def _loi_xac_thuc(self, loi: BaseException) -> None:
@@ -224,9 +387,8 @@ class TrangTaiKhoan(QWidget):
         if isinstance(loi, TwoFactorRequired):
             self._o_ma_2fa.show()
             if getattr(loi, "stage", "login") == "step_up":
-                # Cạm bẫy đắt nhất: mã TOTP dùng MỘT LẦN. Mã vừa đăng nhập đã tiêu,
-                # tạo khoá cần mã MỚI — không nói rõ thì khách gõ lại mã cũ, bị từ
-                # chối, rồi tưởng tool hỏng (xem chú thích đầu core/auth.py).
+                # Mã TOTP dùng MỘT LẦN. Mã vừa đăng nhập đã tiêu, tạo khoá cần
+                # mã MỚI — không nói rõ thì khách gõ lại mã cũ rồi tưởng tool hỏng.
                 self._cho_ma = "step_up"
                 self._nut_dang_nhap.setText("Tạo khoá")
                 self._bao_dn(
@@ -243,74 +405,14 @@ class TrangTaiKhoan(QWidget):
         self._cho_ma = None
         self._bao_dn(describe_auth_error(loi))
 
-    def _the_khoa(self):
-        """Ô dán khoá API — **cửa vào duy nhất của cả tool**.
-
-        Bản Qt trước đây không có ô này. Hậu quả chỉ lộ ra khi tool bắt đầu được
-        phát hành qua GitHub: bản tải về không kèm `config.json`, nên `client` là
-        `None`, nên mọi trang đều bảo *"vào trang Ví & Tài khoản để đăng nhập"* —
-        và trang Ví thì không có chỗ nào để đăng nhập. Ngõ cụt kín.
-
-        (Bản ZIP cũ do máy chủ gói có sẵn khoá trong `config.json`, nên lỗi này
-        nằm im suốt: đúng loại lỗi chỉ hiện ra khi đổi cách phát hành.)
-        """
-        khung = the()
-        v = QVBoxLayout(khung)
-        v.setContentsMargins(20, 14, 20, 16)
-        v.setSpacing(8)
-        hang = QHBoxLayout()
-        hang.setSpacing(8)
-        hang.addWidget(nhan("Đã có khoá API? Dán vào đây", "h2"))
-        self._nhan_khoa = nhan("", "muted")
-        hang.addWidget(self._nhan_khoa, 1)
-        v.addLayout(hang)
-
-        d = QHBoxLayout()
-        d.setSpacing(8)
-        self._o_khoa = QLineEdit()
-        self._o_khoa.setObjectName("mono")
-        self._o_khoa.setPlaceholderText("dán khoá API của bạn vào đây")
-        self._o_khoa.setEchoMode(QLineEdit.Password)
-        self._o_khoa.returnPressed.connect(self._luu_khoa)
-        d.addWidget(self._o_khoa, 1)
-        self._nut_hien = nut_phu("Hiện", self._doi_hien_khoa, rong=64)
-        self._nut_hien.setToolTip("Hiện khoá để soát lại")
-        d.addWidget(self._nut_hien)
-        d.addWidget(nut_phu("Lưu khoá", self._luu_khoa, rong=120))
-        v.addLayout(d)
-        # Nút mở thẳng trang tạo khoá — chưa vào tool được thì phải qua web một
-        # lần để tạo khoá (máy chủ chỉ hiện khoá đúng một lần lúc tạo, không có
-        # cách lấy lại). Nút này bấm là mở đúng trang, khỏi phải gõ địa chỉ khó.
-        e = QHBoxLayout()
-        e.setSpacing(8)
-        self._nut_lay_khoa = nut_phu("Lấy khoá API", self._mo_trang_khoa, rong=150)
-        self._nut_lay_khoa.setToolTip(
-            "Mở trang tạo khoá trên shopapi.vn. Tạo xong, chép khoá rồi quay lại "
-            "dán vào ô bên trên.")
-        e.addWidget(self._nut_lay_khoa)
-        e.addWidget(nhan("chưa có khoá? bấm đây để tạo trên web rồi chép về", "muted"), 1)
-        v.addLayout(e)
-        # Câu "lấy khoá ở shopapi.vn" đã nằm ở bước 1 của thẻ "Làm theo 3
-        # bước" ngay phía trên. Nói lại lần hai chỉ tốn chiều cao — mà trang
-        # này đã chạm trần cửa sổ nhỏ nhất. Phần "khoá cất mã hoá" chuyển vào
-        # tooltip của ô nhập.
-        self._o_khoa.setToolTip(
-            "Khoá được cất mã hoá theo máy này, không nằm trong mã nguồn.")
-        self._ve_trang_thai_khoa()
-        return khung
+    # ── Dán khoá tay ─────────────────────────────────────────────────────────
 
     def _doi_hien_khoa(self) -> None:
         an = self._o_khoa.echoMode() == QLineEdit.Password
         self._o_khoa.setEchoMode(QLineEdit.Normal if an else QLineEdit.Password)
 
     def _mo_trang_khoa(self) -> None:
-        """Mở trang tạo khoá API trên web bằng trình duyệt mặc định.
-
-        Máy chủ (`shopapi.vn`) chưa có lối đăng nhập / tạo khoá ngay trong tool —
-        khoá chỉ tạo được trên web và **chỉ hiện đúng một lần** lúc tạo. Nên thứ
-        đỡ phiền nhất tôi làm được là bấm một cái mở đúng trang đó, khỏi phải gõ
-        địa chỉ hay tự mò trong dashboard.
-        """
+        """Mở trang tạo khoá API trên web. Khoá chỉ hiện đúng một lần lúc tạo."""
         from PyQt5.QtCore import QUrl  # noqa: PLC0415
         from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
 
@@ -319,14 +421,7 @@ class TrangTaiKhoan(QWidget):
             "Đã mở trang tạo khoá",
             "Tôi vừa mở trang tạo khoá trên trình duyệt. Bạn tạo một khoá mới, "
             "chép lại (khoá chỉ hiện đúng một lần), rồi quay lại đây dán vào ô "
-            "Khoá API và bấm “Lưu khoá”.")
-
-    def _ve_trang_thai_khoa(self) -> None:
-        cau_hinh = self._app.config
-        if cau_hinh.is_ready:
-            self._nhan_khoa.setText("đang dùng {0}".format(cau_hinh.masked_key))
-        else:
-            self._nhan_khoa.setText("chưa có khoá — tool chưa gọi được máy chủ")
+            "“Đã có khoá API?” và bấm “Lưu khoá”.")
 
     def _luu_khoa(self) -> None:
         khoa = self._o_khoa.text().strip()
@@ -334,8 +429,6 @@ class TrangTaiKhoan(QWidget):
             self._app.show_message("Chưa dán khoá", "Dán khoá API vào ô rồi bấm Lưu.")
             return
         if not looks_like_api_key(khoa):
-            # Chặn sớm ở đây thay vì để máy chủ trả 401: khách dán nhầm email,
-            # dán nhầm mật khẩu, hoặc copy thiếu mất mấy ký tự đầu là chuyện thường.
             self._app.show_message(
                 "Khoá trông không đúng",
                 "Khoá API bắt đầu bằng “sk_” và dài vài chục ký tự. "
@@ -347,132 +440,38 @@ class TrangTaiKhoan(QWidget):
             self._app.show_error(loi)
             return
         self._o_khoa.clear()
-        self._ve_trang_thai_khoa()
+        self._cap_nhat_trang_thai()
         self._app.show_message(
             "Đã lưu khoá",
             "Tool đã nối được với máy chủ. Bạn dùng được mọi tab ngay bây giờ.")
         self.lam_moi()
 
+    # ── Số dư ────────────────────────────────────────────────────────────────
 
-    def __init__(self, app):
-        super().__init__()
-        self._app = app
-        self._phieu: Optional[Dict[str, Any]] = None
-        self._so_nhip = 0
-        #: Phiên đăng nhập web đang dựng (chỉ sống trong lúc đăng nhập/tạo khoá).
-        self._phien = None
-        #: Đang chờ khách nhập mã 2 lớp ở bước nào: None / "login" / "step_up".
-        self._cho_ma: Optional[str] = None
-
-        doc = QVBoxLayout(self)
-        doc.setContentsMargins(24, 16, 24, 16)
-        doc.setSpacing(10)
-        doc.addWidget(tieu_de_trang(
-            "Tài khoản", "Đăng nhập, số dư, nạp tiền.", "wallet"))
-        doc.addWidget(self._the_bat_dau())
-        doc.addWidget(self._the_dang_nhap())
-        doc.addWidget(self._the_khoa())
-
-        # ── Số dư ────────────────────────────────────────────────────────────
-        the_so_du = the()
-        v = QVBoxLayout(the_so_du)
+    def _dung_the_so_du(self):
+        khung = the()
+        v = QVBoxLayout(khung)
         v.setContentsMargins(20, 16, 20, 16)
         v.setSpacing(4)
-        v.addWidget(nhan("Số dư khả dụng", "muted"))
+        hang = QHBoxLayout()
+        hang.addWidget(nhan("Số dư khả dụng", "muted"), 1)
+        hang.addWidget(nut_phu("Làm mới", self.lam_moi, rong=100))
+        v.addLayout(hang)
         self._so_du = nhan("—")
         self._so_du.setStyleSheet(
             "font-size:30px;font-weight:700;color:{0};".format(theme.NHAN))
         v.addWidget(self._so_du)
         self._quy_doi = nhan("", "muted")
+        self._quy_doi.setMinimumWidth(1)
         v.addWidget(self._quy_doi)
-        doc.addWidget(the_so_du)
-
-        # ── Nạp tiền ─────────────────────────────────────────────────────────
-        the_nap = the()
-        n = QVBoxLayout(the_nap)
-        n.setContentsMargins(20, 16, 20, 18)
-        n.setSpacing(12)
-        n.addWidget(nhan("Nạp tiền", "h2"))
-        hang = QHBoxLayout()
-        muc = [format_vnd(gia * 1_000_000) for gia in topup_presets(app.prices)]
-        self._muc = NhomChon(muc, muc[0] if muc else "", on_change=self._chon_muc,
-                             xuong_dong=True)
-        hang.addWidget(self._muc)
-        hang.addStretch(1)
-        n.addLayout(hang)
-        # Hàng BIẾT XUỐNG DÒNG, không phải QHBoxLayout.
-        #
-        # Ba thứ trên hàng này — nhãn 153px, ô nhập 160px, nút — cộng lại đẩy
-        # thẻ lên 759px, và cả tab Ví lên 807px trên một cửa sổ rộng 760px.
-        # Hàng ngang cứng không co được nên nó không nén, nó **đẩy mép cửa sổ
-        # ra**: khách kéo hẹp cửa sổ là nút biến mất bên phải.
-        #
-        # Nhãn nút cũng rút từ "Tạo mã QR chuyển khoản" (382px) xuống "Tạo mã
-        # QR". Phần giải thích chuyển vào tooltip — đúng luật trong CLAUDE.md:
-        # chữ trong nút không tự xuống dòng, nhãn dài kéo cả trang rộng ra.
-        hang2 = HangXuongDong()
-        # Mức tối thiểu lấy từ máy chủ (`min_topup` của `GET /v1/pricing`), không
-        # gõ lại: nâng mức trên máy chủ là câu này tự đổi theo.
-        hang2.addWidget(
-            nhan("Hoặc nhập số bất kỳ (tối thiểu {0}):".format(format_vnd(app.prices.min_topup_micro)))
-        )
-        self._o_tien = QLineEdit()
-        self._o_tien.setPlaceholderText("50000")
-        self._o_tien.setFixedWidth(160)
-        hang2.addWidget(self._o_tien)
-        nut_qr = nut_phu("Tạo mã QR", self._tao_phieu, rong=150)
-        nut_qr.setToolTip("Tạo mã QR để chuyển khoản nạp tiền vào ví")
-        hang2.addWidget(nut_qr)
-        # Không `addStretch` — HangXuongDong xếp sát trái sẵn, và nó không có
-        # hàm đó (nó là QLayout tự viết, không phải QHBoxLayout).
-        n.addLayout(hang2)
-
-        self._huong_dan = nhan("", "muted")
-        self._huong_dan.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        n.addWidget(self._huong_dan)
-        self._noi_dung_ck = QLineEdit()
-        self._noi_dung_ck.setReadOnly(True)
-        self._noi_dung_ck.setObjectName("mono")
-        self._noi_dung_ck.setStyleSheet("font-size:16px;font-weight:700;")
-        self._noi_dung_ck.hide()
-        hang3 = QHBoxLayout()
-        hang3.addWidget(self._noi_dung_ck, 1)
-        self._nut_chep = nut_phu("Chép", self._chep, rong=110)
-        self._nut_chep.hide()
-        hang3.addWidget(self._nut_chep)
-        n.addLayout(hang3)
-        self._trang_thai_nap = nhan("", "muted")
-        n.addWidget(self._trang_thai_nap)
-        doc.addWidget(the_nap)
-
-        # ── Sổ cái ───────────────────────────────────────────────────────────
-        hang4 = QHBoxLayout()
-        hang4.addWidget(nhan("Giao dịch gần đây", "h2"))
-        hang4.addStretch(1)
-        hang4.addWidget(nut_phu("Làm mới", self.lam_moi))
-        doc.addLayout(hang4)
-        self._bang = QTableWidget(0, 4)
-        self._bang.setHorizontalHeaderLabels(("Thời điểm", "Việc", "Số tiền", "Số dư sau"))
-        self._bang.verticalHeader().setVisible(False)
-        self._bang.setEditTriggers(QTableWidget.NoEditTriggers)
-        dau = self._bang.horizontalHeader()
-        dau.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        dau.setSectionResizeMode(1, QHeaderView.Stretch)
-        dau.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        dau.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        doc.addWidget(self._bang, 1)
-
-        self._dong_ho = QTimer(self)
-        self._dong_ho.timeout.connect(self._do_phieu)
-        self.lam_moi()
-
-    # ── Số dư và sổ cái ──────────────────────────────────────────────────────
+        return khung
 
     def lam_moi(self) -> None:
         if self._app.client is None:
             self._so_du.setText("—")
-            self._quy_doi.setText("Dán khoá API ở trên để xem số dư.")
+            self._quy_doi.setText("Đăng nhập ở trên để xem số dư.")
             return
+        self._lan_lam_moi = time.monotonic()
         self._app.run_bg(lambda: fetch_balance(self._app.client), on_ok=self._ve_so_du)
         self._app.run_bg(lambda: fetch_ledger(self._app.client, limit=50), on_ok=self._ve_so_cai)
 
@@ -492,6 +491,8 @@ class TrangTaiKhoan(QWidget):
             self._quy_doi.setText("")
 
     def _ve_so_cai(self, trang) -> None:
+        from PyQt5.QtGui import QColor  # noqa: PLC0415
+
         muc = list(getattr(trang, "items", None) or [])
         self._bang.setRowCount(len(muc))
         for dong, ban_ghi in enumerate(muc):
@@ -502,12 +503,106 @@ class TrangTaiKhoan(QWidget):
             for cot, chu in enumerate(o):
                 muc_o = QTableWidgetItem(chu)
                 if cot == 2:
-                    from PyQt5.QtGui import QColor
-
                     muc_o.setForeground(QColor(theme.XANH if tien > 0 else theme.CHU))
                 self._bang.setItem(dong, cot, muc_o)
 
     # ── Nạp tiền ─────────────────────────────────────────────────────────────
+
+    def _dung_the_nap(self):
+        khung = the()
+        n = QVBoxLayout(khung)
+        n.setContentsMargins(20, 16, 20, 18)
+        n.setSpacing(10)
+        n.addWidget(nhan("Nạp tiền", "h2"))
+
+        muc = [format_vnd(gia * 1_000_000) for gia in topup_presets(self._app.prices)]
+        self._muc = NhomChon(muc, muc[0] if muc else "", on_change=self._chon_muc,
+                             xuong_dong=True)
+        n.addWidget(self._muc)
+
+        # Hàng biết xuống dòng: nhãn + ô + nút cứng cộng lại từng đẩy tab này
+        # rộng 807px trên cửa sổ 760px (test bố cục bắt được).
+        hang = HangXuongDong()
+        hang.addWidget(nhan("Hoặc số khác:"))
+        self._o_tien = QLineEdit()
+        self._o_tien.setPlaceholderText(str(topup_presets(self._app.prices)[0]))
+        self._o_tien.setFixedWidth(140)
+        self._o_tien.returnPressed.connect(self._tao_phieu)
+        hang.addWidget(self._o_tien)
+        nut_qr = nut_phu("Tạo mã QR", self._tao_phieu, rong=130)
+        nut_qr.setToolTip(
+            "Tối thiểu {0}. Mã QR đã có sẵn số tiền và nội dung chuyển khoản.".format(
+                format_vnd(self._app.prices.min_topup_micro)))
+        hang.addWidget(nut_qr)
+        n.addLayout(hang)
+
+        # Phiếu nạp: ẩn tới khi bấm Tạo mã QR. Trái là ảnh QR, phải là thông tin
+        # để ai không quét được thì chuyển khoản tay.
+        self._khung_phieu = QWidget()
+        ph = QHBoxLayout(self._khung_phieu)
+        ph.setContentsMargins(0, 6, 0, 0)
+        ph.setSpacing(16)
+        self._anh_qr = nhan("", "muted")
+        self._anh_qr.setFixedSize(_CANH_QR, _CANH_QR)
+        self._anh_qr.setAlignment(Qt.AlignCenter)
+        self._anh_qr.setStyleSheet(
+            "background:{0};border:1px solid {1};border-radius:8px;".format(theme.THE_MO, theme.VIEN))
+        ph.addWidget(self._anh_qr, 0, Qt.AlignTop)
+
+        phai = QVBoxLayout()
+        phai.setSpacing(6)
+        ghi = nhan("Quét mã bằng app ngân hàng — số tiền và nội dung đã điền sẵn. "
+                   "Hoặc chuyển khoản tay theo thông tin dưới đây.", "muted")
+        ghi.setMinimumWidth(1)
+        phai.addWidget(ghi)
+        bang = QFormLayout()
+        bang.setContentsMargins(0, 0, 0, 0)
+        bang.setHorizontalSpacing(12)
+        bang.setVerticalSpacing(4)
+        bang.setLabelAlignment(Qt.AlignRight)
+        self._o_ngan_hang = self._o_doc()
+        self._o_so_tk = self._o_doc(mono=True)
+        self._o_chu_tk = self._o_doc()
+        self._o_so_tien = self._o_doc()
+        bang.addRow("Ngân hàng:", self._o_ngan_hang)
+        bang.addRow("Số tài khoản:", self._o_so_tk)
+        bang.addRow("Chủ tài khoản:", self._o_chu_tk)
+        bang.addRow("Số tiền:", self._o_so_tien)
+        phai.addLayout(bang)
+
+        phai.addWidget(nhan("Nội dung chuyển khoản — phải ĐÚNG chuỗi này, bấm Chép rồi dán:",
+                            "muted"))
+        h3 = QHBoxLayout()
+        h3.setSpacing(8)
+        self._noi_dung_ck = QLineEdit()
+        self._noi_dung_ck.setReadOnly(True)
+        self._noi_dung_ck.setObjectName("mono")
+        self._noi_dung_ck.setStyleSheet("font-size:16px;font-weight:700;")
+        self._noi_dung_ck.setMinimumWidth(1)
+        h3.addWidget(self._noi_dung_ck, 1)
+        self._nut_chep = nut_phu("Chép", self._chep, rong=90)
+        h3.addWidget(self._nut_chep)
+        phai.addLayout(h3)
+        phai.addStretch(1)
+        ph.addLayout(phai, 1)
+        self._khung_phieu.hide()
+        n.addWidget(self._khung_phieu)
+        # Dòng trạng thái nằm NGOÀI khung phiếu: "Tiền đã vào ví!" phải còn
+        # đọc được sau khi khung QR đã ẩn đi.
+        self._trang_thai_nap = nhan("", "muted")
+        self._trang_thai_nap.setMinimumWidth(1)
+        n.addWidget(self._trang_thai_nap)
+        return khung
+
+    @staticmethod
+    def _o_doc(mono: bool = False) -> QLineEdit:
+        """Ô chỉ đọc để khách bôi đen chép được từng dòng — nhãn thường thì không."""
+        o = QLineEdit()
+        o.setReadOnly(True)
+        o.setMinimumWidth(1)
+        if mono:
+            o.setObjectName("mono")
+        return o
 
     def _chon_muc(self, gia_tri: str) -> None:
         chi_so = "".join(ky_tu for ky_tu in gia_tri if ky_tu.isdigit())
@@ -517,48 +612,87 @@ class TrangTaiKhoan(QWidget):
     def _so_tien(self) -> Optional[int]:
         chu = "".join(ky_tu for ky_tu in self._o_tien.text() if ky_tu.isdigit())
         if not chu:
+            # Chưa gõ gì thì lấy mức đang chọn — khách bấm nút là phải ra mã.
+            chu = "".join(ky_tu for ky_tu in self._muc.get() if ky_tu.isdigit())
+        if not chu:
             self._app.show_message("Chưa nhập số tiền", "Chọn một mức, hoặc gõ số tiền muốn nạp.")
             return None
         tien = int(chu)
-        toi_thieu = self._app.prices.min_topup_vnd
-        if tien < toi_thieu:
+        if tien < self._app.prices.min_topup_vnd:
             self._app.show_message(
                 "Số tiền quá nhỏ",
-                "Mức nạp tối thiểu là {0}.".format(format_vnd(self._app.prices.min_topup_micro)),
-            )
+                "Mức nạp tối thiểu là {0}.".format(format_vnd(self._app.prices.min_topup_micro)))
             return None
         return tien
 
     def _tao_phieu(self) -> None:
-        tien = self._so_tien()
-        if tien is None or self._app.client is None:
+        if self._app.client is None:
+            self._app.show_message("Chưa đăng nhập", "Đăng nhập ở thẻ trên rồi mới nạp tiền được.")
             return
+        tien = self._so_tien()
+        if tien is None:
+            return
+        self._dong_ho.stop()
+        self._trang_thai_nap.setStyleSheet("")
+        self._trang_thai_nap.setText("Đang tạo mã QR…")
         self._app.run_bg(lambda: create_topup(self._app.client, tien),
-                         on_ok=self._ve_phieu, on_err=self._app.show_error)
+                         on_ok=self._ve_phieu, on_err=self._loi_phieu)
+
+    def _loi_phieu(self, loi: BaseException) -> None:
+        self._trang_thai_nap.setText("")
+        self._app.show_error(loi)
+
+    @staticmethod
+    def _so_tien_phieu(phieu: Dict[str, Any]) -> str:
+        """`amount` là µVND. Nạp 100.000₫ máy chủ trả `"100000000000"` — in thẳng
+        ra là câu "Chuyển 100.000.000.000₫" khách đã nhìn thấy."""
+        try:
+            return format_vnd(parse_micro(phieu.get("amount") or 0))
+        except (TypeError, ValueError):
+            return str(phieu.get("amount_display") or "—")
 
     def _ve_phieu(self, phieu: Dict[str, Any]) -> None:
         self._phieu = phieu
         self._so_nhip = 0
-        noi_dung = str(phieu.get("transfer_content") or phieu.get("content") or "")
-        self._noi_dung_ck.setText(noi_dung)
-        self._noi_dung_ck.show()
-        self._nut_chep.show()
-        self._huong_dan.setText(
-            "Chuyển {0} tới {1} — {2}, chủ tài khoản {3}.\n"
-            "Nội dung chuyển khoản phải ĐÚNG chuỗi bên dưới. Đừng gõ lại — bấm Chép rồi dán: "
-            "ghi sai thì tiền về ngân hàng nhưng hệ thống không biết của ai.".format(
-                format_vnd(int(phieu.get("amount_micro") or 0)) if phieu.get("amount_micro")
-                else "{0:,}₫".format(int(phieu.get("amount") or 0)).replace(",", "."),
-                phieu.get("bank_account") or "—", phieu.get("bank_name") or "—",
-                phieu.get("account_name") or "—"))
+        bank = phieu.get("bank") if isinstance(phieu.get("bank"), dict) else {}
+        self._o_ngan_hang.setText(str(bank.get("name") or phieu.get("bank_name") or "—"))
+        self._o_so_tk.setText(str(bank.get("account_number") or phieu.get("bank_account") or "—"))
+        self._o_chu_tk.setText(str(bank.get("account_name") or phieu.get("account_name") or "—"))
+        self._o_so_tien.setText(self._so_tien_phieu(phieu))
+        self._noi_dung_ck.setText(str(phieu.get("transfer_content") or phieu.get("content") or ""))
+        self._trang_thai_nap.setStyleSheet("")
         self._trang_thai_nap.setText("Đang chờ tiền vào… cứ để yên màn hình này.")
+        self._anh_qr.setPixmap(QPixmap())
+        self._anh_qr.setText("Đang tải mã QR…")
+        self._khung_phieu.show()
         self._dong_ho.start(_NHIP_DO_MS)
 
+        url = str(phieu.get("qr_image_url") or phieu.get("qr_url") or "")
+        if not url:
+            self._anh_qr.setText("Không có ảnh QR.\nChuyển khoản tay\ntheo thông tin bên phải.")
+            return
+        from core.download import download_bytes  # noqa: PLC0415
+
+        self._app.run_bg(lambda: download_bytes(url), on_ok=self._ve_qr, on_err=self._loi_qr)
+
+    def _ve_qr(self, du_lieu: bytes) -> None:
+        anh = QPixmap()
+        if not anh.loadFromData(du_lieu):
+            self._loi_qr(ValueError("ảnh hỏng"))
+            return
+        self._anh_qr.setText("")
+        self._anh_qr.setPixmap(anh.scaled(_CANH_QR, _CANH_QR, Qt.KeepAspectRatio,
+                                          Qt.SmoothTransformation))
+
+    def _loi_qr(self, _loi: BaseException) -> None:
+        self._anh_qr.setPixmap(QPixmap())
+        self._anh_qr.setText("Không tải được ảnh QR.\nChuyển khoản tay\ntheo thông tin bên phải.")
+
     def _chep(self) -> None:
-        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtWidgets import QApplication  # noqa: PLC0415
 
         QApplication.clipboard().setText(self._noi_dung_ck.text())
-        self._trang_thai_nap.setText("Đã chép nội dung chuyển khoản.")
+        self._trang_thai_nap.setText("Đã chép nội dung chuyển khoản. Đang chờ tiền vào…")
 
     def _do_phieu(self) -> None:
         """Hỏi máy chủ xem tiền vào chưa. Khách không phải bấm Làm mới."""
@@ -569,7 +703,8 @@ class TrangTaiKhoan(QWidget):
         if self._so_nhip > _SO_NHIP_TOI_DA:
             self._dong_ho.stop()
             self._trang_thai_nap.setText(
-                "Tool tạm ngừng tự kiểm tra. Nếu bạn vừa chuyển khoản, bấm “Làm mới”.")
+                "Tôi tạm ngừng tự kiểm tra. Mã vẫn dùng được trong 24 giờ — "
+                "chuyển khoản xong bạn bấm “Làm mới” ở phần Số dư.")
             return
         ma = str(self._phieu.get("id") or self._phieu.get("txn_id") or "")
         if not ma:
@@ -582,10 +717,14 @@ class TrangTaiKhoan(QWidget):
             return
         self._dong_ho.stop()
         self._phieu = None
-        self._noi_dung_ck.hide()
-        self._nut_chep.hide()
-        self._huong_dan.setText("")
-        self._trang_thai_nap.setText("Tiền đã vào ví!")
-        self._trang_thai_nap.setStyleSheet(
-            "color:{0};font-weight:600;".format(theme.XANH))
-        self.lam_moi()
+        if str(phieu.get("status") or "") == "succeeded":
+            self._khung_phieu.hide()
+            self._trang_thai_nap.setText("Tiền đã vào ví!")
+            self._trang_thai_nap.setStyleSheet(
+                "color:{0};font-weight:600;".format(theme.XANH))
+            self.lam_moi()
+        else:
+            self._trang_thai_nap.setText(
+                "Mã này không dùng được nữa (hết hạn hoặc bị huỷ). Bấm “Tạo mã QR” để lấy mã mới.")
+            self._trang_thai_nap.setStyleSheet(
+                "color:{0};font-weight:600;".format(theme.DO))

@@ -709,9 +709,9 @@ class CuaSoChinh(QWidget):
         lệch nhau sau lần sửa đầu tiên.
         """
         self.show_message(
-            "Việc này cần khoá API",
-            "Việc bạn vừa bấm gọi mô hình trên máy chủ nên cần khoá API. "
-            "Dán khoá ở trang Ví & Tài khoản — lấy khoá tại shopapi.vn.\n\n"
+            "Việc này cần đăng nhập",
+            "Việc bạn vừa bấm gọi mô hình trên máy chủ nên cần đăng nhập. "
+            "Vào trang Tài khoản, gõ email và mật khẩu shopapi.vn rồi bấm Đăng nhập.\n\n"
             "Chưa có tài khoản cũng không sao: hai phần này chạy ngay trên máy "
             "bạn, miễn phí, không cần khoá —\n"
             "  • Skill → Lấy dữ liệu đối thủ\n"
@@ -736,6 +736,28 @@ class CuaSoChinh(QWidget):
                                    tu_do_nhip=self.config.tu_do_nhip,
                                    session_path=self.session_path)
         self.refresh_prices()
+
+    def dang_xuat(self) -> None:
+        """Quên khoá API + phiên đăng nhập trên máy này; tool về trạng thái mới tải.
+
+        Chủ dự án 24/08/2026: *"đăng nhập thì phải lưu và có chỗ đăng xuất"*.
+        Đăng xuất là XOÁ CẢ HAI: refresh token lẫn khoá API. Chỉ xoá phiên mà
+        giữ khoá thì tool vẫn gọi được máy chủ bằng tài khoản cũ — khách thấy
+        chữ "đã đăng xuất" nhưng tiền vẫn trừ vào ví cũ, không ai hiểu nổi.
+
+        `POST /auth/logout` gọi ở luồng nền và không chờ: mất mạng không được
+        cản việc quên bí mật trên đĩa.
+        """
+        phien = getattr(self, "account", None)
+        setattr(self, "account", None)
+        self.config.api_key = ""
+        self.config.refresh_token = ""
+        self.config.account_email = ""
+        save_config(self.config_path, self.config)
+        self.client = None
+        self.last_wallet_micro = 0
+        if phien is not None:
+            threading.Thread(target=phien.logout, name="dang-xuat", daemon=True).start()
 
     def _luong_khoi_dau(self) -> Dict[str, int]:
         """Số job song song khởi đầu mỗi loại, theo mốc công suất khách đã chọn."""
