@@ -68,8 +68,8 @@ __all__ = [
     "ACTIVE_STATUSES",
 ]
 
-def _xoa_dau(duong: str) -> None:
-    """Xoá dấu nhà cung cấp ngay khi tệp vừa chạm đĩa.
+def _xoa_dau(duong: str) -> bool:
+    """Xoá dấu nhà cung cấp ngay khi tệp vừa chạm đĩa. Trả về **có sửa tệp hay không**.
 
     ═══ VÌ SAO ĐẶT Ở ĐÂY, KHÔNG PHẢI Ở TỪNG TAB ═══
 
@@ -87,13 +87,17 @@ def _xoa_dau(duong: str) -> None:
     `core/xoa_dau_anh.py`. Hỏng thì im lặng để nguyên: ảnh còn dấu vẫn dùng
     được, còn đánh hỏng một việc khách đã trả tiền vì một bước làm đẹp thì
     không.
+
+    **Câu trả lời được dùng thật, không phải cho vui:** sửa rồi thì bản trên đĩa
+    KHÁC bản trên máy chủ, nên link kết quả không còn dùng lại được làm khung
+    đầu cho clip — xem `JobRecord.urls`.
     """
     try:
         from .xoa_dau_anh import xoa_dau_neu_la_anh  # noqa: PLC0415
 
-        xoa_dau_neu_la_anh(duong)
+        return bool(xoa_dau_neu_la_anh(duong))
     except Exception:  # noqa: BLE001
-        pass
+        return False
 
 
 # ── Trạng thái trong tool (khác trạng thái job của máy chủ) ────────────────────
@@ -152,6 +156,55 @@ NHIP_HOI_TRAN = 20.0
 #: Dispatcher ngủ tối đa ngần này giây giữa hai vòng xét. Đủ ngắn để chỗ vừa
 #: trống được lấp gần như tức thì, đủ dài để không quay vòng nóng.
 NHIP_DIEU_PHOI = 0.25
+
+#: Khoảng cách TỐI THIỂU giữa hai lượt NHẢ job mới của CÙNG một loại (giây).
+#:
+#: ═══ VÌ SAO PHẢI RẢI, KHI CỔNG ĐÃ MỞ ĐÚNG TRẦN ═══
+#:
+#: Cổng mở đúng trần là chuyện SỐ CHỖ. Còn đây là chuyện NHỊP VÀO CHỖ: khi
+#: `NhipDo.moi_vao` nhận lời mời vài trăm chỗ trống một lúc (mẻ MAX vừa bấm
+#: Chạy), vòng `while cong.giu_cho()` bên dưới nhả TOÀN BỘ số đó xuống pool
+#: trong vài mili giây — vài trăm request `POST /v1/.../generations` đập vào
+#: máy chủ cùng một nhịp tim.
+#:
+#: Đo 24/08/2026 (lô 1000 ảnh + 1000 video): cú đấm ~650 job đồng loạt sinh
+#: một loạt `429` dồn trong 30 giây đầu. `429` không giết job (đã có
+#: `_create_with_retry`) nhưng nó làm vòng tự dò CHIA ĐÔI rồi bò lại — tức
+#: trả giá bằng chính thông lượng mà cú đấm định mua. Và đo 16/08/2026 còn
+#: tệ hơn: chỉ 10 request/giây dồn vào lúc máy chủ đang kết sổ đã đẩy 79%
+#: lượt quyết toán tiền vào lỗi 500.
+#:
+#: 0,04 giây = 25 lượt nhả/giây MỖI LOẠI. Chọn số này vì hai đầu đều thoáng:
+#:
+#:   * Nhịp XONG việc thật đo được chỉ ~2 job/giây (ảnh 120/phút) — van 25/giây
+#:     không bao giờ chạm vào trạng thái chạy đều, nó chỉ nắn cú dốc đầu tiên.
+#:   * Mẻ MAX video (288 chỗ) đầy cổng trong ~12 giây, mẻ MAX ảnh (~1000 chỗ)
+#:     trong ~40 giây — vẫn là "bùng thẳng" so với hàng chục phút bò `+1` của
+#:     bản cũ, chỉ thôi đấm một phát.
+#:
+#: Van tính THEO TỪNG LOẠI, không phải tổng: ba nhà máy độc lập (CONTRACT.md
+#: §8.1), bắt video xếp sau ảnh ở một cái van chung là dựng lại đúng ràng buộc
+#: mà máy chủ đã cố ý tháo ra.
+RAI_NHIP_GIAY = 0.04
+
+#: Trần TỔNG số lượt hỏi trạng thái job mỗi giây, tính cho CẢ tool.
+#:
+#: ═══ VÌ SAO PHẢI CÓ TRẦN TỔNG, KHI ĐÃ CÓ `poll_delays` ═══
+#:
+#: `poll_delays` tính nhịp cho MỘT job và tính đúng: đợi ~80% quãng dự tính, rồi
+#: 2s → 3s → 4,5s → … → 30s. Nhưng mỗi job chờ trong luồng riêng của nó, nên
+#: nhịp ấy **nhân với số job đang chờ**. Chạy MAX 1000 ảnh: sau lần đợi đầu, cả
+#: nghìn luồng cùng vào quãng 2–5 giây, tức **hơn 150 lượt hỏi mỗi giây** — mà
+#: đo 16/08/2026 chỉ 10 lượt/giây đã đẩy 79% lượt quyết toán tiền vào lỗi 500,
+#: và máy chủ dùng đúng CPU đó để kết sổ cho chính những job này.
+#:
+#: Nên nhịp mỗi job được **giãn ra** (không bao giờ kẹp lại — xem ghi chú "BỎ
+#: KẸP 5 GIÂY" trong `_wait_for_job`) sao cho tổng không quá trần này.
+TRAN_HOI_MOI_GIAY = 20.0
+
+#: Nhưng đừng giãn quá ngần này giây, dù đông tới đâu: giãn nữa thì ảnh xong rồi
+#: mà cả phút sau tool mới biết, và khâu nối sang video chờ theo.
+GIAN_HOI_TOI_DA = 60.0
 
 
 class CongVao:
@@ -259,6 +312,27 @@ class JobRecord:
     progress: int = 0
     message: str = "Đang chờ tới lượt"
     files: List[str] = field(default_factory=list)
+    #: Link CÔNG KHAI của chính những file kết quả trên, do máy chủ trả về.
+    #:
+    #: ═══ VÌ SAO PHẢI GIỮ LẠI ═══
+    #:
+    #: Chuỗi "ảnh → video" cần một **URL** làm khung hình đầu. Trước bản này tool
+    #: chỉ giữ đường dẫn trên đĩa, nên nó lấy tấm ảnh máy chủ vừa làm ra, **đẩy
+    #: ngược lên** để có URL. Một mẻ 1000 cảnh là 1000 lượt đẩy lên (~1,5 GB)
+    #: cho những tấm ảnh máy chủ đã có sẵn — đúng cái làm kín đường lên và kéo
+    #: 15–25% job hỏng (xem CLAUDE.md luật 5).
+    #:
+    #: Link này sống ~6 giờ, rộng hơn hẳn đời một mẻ chạy. Hết hạn hoặc máy chủ
+    #: không trả link thì tool tự lui về đường đẩy lên như cũ.
+    #:
+    #: ═══ RỖNG KHI BẢN TRÊN ĐĨA ĐÃ BỊ SỬA ═══
+    #:
+    #: Chỉ giữ link cho những tệp mà tool **không sửa gì sau khi tải về**. Ảnh bị
+    #: xoá dấu Gemini là bản trên đĩa khác bản trên máy chủ; dùng lại link ấy làm
+    #: khung đầu clip là đem cái dấu vừa xoá vào tám giây clip. Chỗ đó ghi chuỗi
+    #: rỗng để giữ đúng thứ tự với `files`, và khâu nối tự biết phải đẩy tệp sạch
+    #: trên đĩa lên. Xem `_download_outputs` và `core/xoa_dau_anh.py`.
+    urls: List[str] = field(default_factory=list)
     #: µVND thực trừ, đọc từ job đã xong.
     cost_micro: Optional[str] = None
     #: µVND được hoàn lại (job hỏng luôn hoàn 100%).
@@ -371,6 +445,9 @@ class JobManager:
         }
         #: Lần gần nhất hỏi `GET /v1/me` cho mỗi loại (đồng hồ `monotonic`).
         self._lan_hoi_tran: Dict[str, float] = {kind: 0.0 for kind in HARD_CAPS}
+        #: Mốc `monotonic` sớm nhất được phép nhả job KẾ TIẾP của mỗi loại —
+        #: van rải nhịp chống cú đấm đồng loạt, xem `RAI_NHIP_GIAY`.
+        self._nha_sau: Dict[str, float] = {kind: 0.0 for kind in HARD_CAPS}
         #: Hàng đợi CHƯA GỬI, tách theo loại. Dispatcher chỉ nhả job xuống pool
         #: khi cổng của loại đó còn chỗ — nhờ vậy số luồng thật sự mở ra luôn
         #: bằng số job đang chạy, không phải bằng số job khách đưa vào.
@@ -383,6 +460,9 @@ class JobManager:
         #: kết quả. `None` = không ghi (dùng trong test).
         self._session_path = session_path
         self._last_saved = 0.0
+        #: Bao nhiêu job đang ở quãng "chờ máy chủ trả kết quả" ngay lúc này.
+        #: Dùng để giãn nhịp hỏi cho tổng không vượt `TRAN_HOI_MOI_GIAY`.
+        self._so_dang_hoi = 0
         self._pool: Optional[ThreadPoolExecutor] = None
         self._client: Optional[ShopAPI] = None
         self._stop = threading.Event()
@@ -506,6 +586,13 @@ class JobManager:
             # Nên đặt rộng ở đây không tốn gì, mà lại gỡ được đúng cái bẫy cũ:
             # pool cỡ 3 thì mọi nỗ lực nới trần ở tầng trên đều vô nghĩa, và nó
             # vô nghĩa một cách IM LẶNG — không lỗi, không cảnh báo, chỉ là chậm.
+            #
+            # 23/08/2026: `sum(HARD_CAPS)` giờ ~6992 (image nới lên 6144 cho khớp
+            # máy chủ). Con số đó CHỈ là trần lười — số luồng thật vẫn bị cổng kẹp
+            # về trần `GET /v1/me` (image ~2764, video ~288 cho khách chạy một
+            # mình) NGAY ở lần điều phối đầu, nên lô 1000 việc chỉ mở ~1000 luồng
+            # chứ không bao giờ 6992. Trước đây pool = 464 mới là nút thắt thật:
+            # cổng mở tới trần máy chủ nhưng chỉ 464 job chạy được một lúc.
             self._pool = ThreadPoolExecutor(
                 max_workers=sum(HARD_CAPS.values()), thread_name_prefix="shopapi-job"
             )
@@ -543,6 +630,9 @@ class JobManager:
         """
         while not self._stop.is_set():
             da_nha = False
+            #: Còn bao lâu nữa thì van rải cho nhả tiếp (giây). `None` = không
+            #: loại nào đang bị van giữ, ngủ theo nhịp thường.
+            cho_van: Optional[float] = None
             for kind in list(self._hang_doi):
                 with self._lock:
                     trong = not self._hang_doi[kind]
@@ -551,6 +641,18 @@ class JobManager:
                 self._dong_bo_nhip(kind)
                 cong = self._cong[kind]
                 while cong.giu_cho():
+                    # ═══ VAN RẢI NHỊP — xem `RAI_NHIP_GIAY` ═══
+                    #
+                    # Kiểm SAU `giu_cho` chứ không phải trước: trả chỗ lại thì
+                    # rẻ, còn kiểm trước rồi mới giữ là mở ra một khe đua với
+                    # `ap_luong` đang hạ sức chứa cùng lúc.
+                    bay_gio = time.monotonic()
+                    con_phai_cho = self._nha_sau[kind] - bay_gio
+                    if con_phai_cho > 0:
+                        cong.tra_cho()
+                        if cho_van is None or con_phai_cho < cho_van:
+                            cho_van = con_phai_cho
+                        break
                     with self._lock:
                         if not self._hang_doi[kind]:
                             cong.tra_cho()
@@ -565,9 +667,18 @@ class JobManager:
                             self._hang_doi[kind].appendleft((record, viec))
                         cong.tra_cho()
                         return
+                    self._nha_sau[kind] = bay_gio + RAI_NHIP_GIAY
                     pool.submit(self._chay_giu_cho, record, viec, cong)
                     da_nha = True
-            if not da_nha:
+            if cho_van is not None:
+                # Van đang giữ ít nhất một loại: ngủ ĐÚNG tới lúc van mở chứ
+                # không quay nóng (nhả xong một job lại vòng lên kiểm ngay là
+                # đốt một nhân CPU suốt quãng dốc), và cũng không ngủ trọn
+                # `NHIP_DIEU_PHOI` (van 0,04s mà ngủ 0,25s là tự bóp thông
+                # lượng nhả xuống còn 4/giây).
+                self._co_viec.wait(min(cho_van, NHIP_DIEU_PHOI))
+                self._co_viec.clear()
+            elif not da_nha:
                 self._co_viec.wait(NHIP_DIEU_PHOI)
                 self._co_viec.clear()
         self._xa_hang_doi()
@@ -623,7 +734,7 @@ class JobManager:
             client = self._client
             if client is not None:
                 try:
-                    nhip.dat_tran(client.tran_song_song(kind))
+                    self._doc_loi_moi(nhip, client, kind)
                 except Exception:  # noqa: BLE001
                     # Không hỏi được trần KHÔNG phải lý do dừng chạy. Vòng dò
                     # vẫn còn ba tín hiệu kia (429/503/độ trễ hàng chờ); mất
@@ -634,6 +745,26 @@ class JobManager:
         cong = self._cong.get(kind)
         if cong is not None and moi != cong.suc_chua:
             cong.dat_suc_chua(moi)
+
+    @staticmethod
+    def _doc_loi_moi(nhip, client, kind: str) -> None:
+        """Một lần đọc ``/v1/me``, hai tín hiệu: trần (chặn trên) và chỗ trống.
+
+        Chỗ trống là thứ chữa quãng 42 phút đo được ngày 23/08/2026 — mẻ 1000
+        cảnh chờ vòng dò leo ``+1`` mỗi clip xong (2 phút/clip) trong khi máy chủ
+        suốt buổi báo còn hơn 200 chỗ bỏ không. Xem `NhipDo.moi_vao`.
+
+        Máy chủ bản cũ / SDK bản cũ không có `cho_nha_may_dang_moi` thì rơi về
+        đúng đường cũ, không hỏng.
+        """
+        hoi = getattr(client, "cho_nha_may_dang_moi", None)
+        if hoi is None:
+            nhip.dat_tran(client.tran_song_song(kind))
+            return
+        loi_moi = hoi(kind)
+        # Thứ tự có ý: đặt trần TRƯỚC để `moi_vao` cắt được theo trần mới nhất.
+        nhip.dat_tran(loi_moi.tran)
+        nhip.moi_vao(loi_moi.cho_trong)
 
     def _bao_nhip(self, kind: str, exc: Optional[BaseException]) -> None:
         """Đưa kết quả một job về cho vòng tự dò của đúng loại đó."""
@@ -789,6 +920,9 @@ class JobManager:
                 remaining = self._in_flight
             self._events.put(("balance", None))
             if remaining == 0:
+                # Cả lô đã xong: ghi bằng được, không đợi nhịp. Đây là mốc mà
+                # `_finish` cố ý không ghi bắt buộc nữa (xem ghi chú ở đó).
+                self._save_session(force=True)
                 self._events.put(("done", self.summary()))
 
     def _run_one(self, record: JobRecord) -> None:
@@ -852,6 +986,9 @@ class JobManager:
                 remaining = self._in_flight
             self._events.put(("balance", None))
             if remaining == 0:
+                # Cả lô đã xong: ghi bằng được, không đợi nhịp. Đây là mốc mà
+                # `_finish` cố ý không ghi bắt buộc nữa (xem ghi chú ở đó).
+                self._save_session(force=True)
                 self._events.put(("done", self.summary()))
 
     def _create_with_retry(self, record: JobRecord) -> Optional[Dict[str, Any]]:
@@ -1006,6 +1143,33 @@ class JobManager:
         started = time.monotonic()
         last: Optional[Dict[str, Any]] = None
 
+        with self._lock:
+            self._so_dang_hoi += 1
+        try:
+            return self._vong_hoi(record, job_id, delays, started, last)
+        finally:
+            with self._lock:
+                self._so_dang_hoi = max(0, self._so_dang_hoi - 1)
+
+    def nghi_giua_hai_lan_hoi(self, cho: float) -> float:
+        """Giãn khoảng nghỉ của MỘT job cho tổng cả tool nằm dưới trần.
+
+        Đông thì mỗi job hỏi thưa ra: `số job đang chờ ÷ TRAN_HOI_MOI_GIAY`. Một
+        job chạy lẻ thì mốc này bằng 0,05 giây — không đổi gì so với trước. Nghìn
+        job thì thành 50 giây, tức cả tool vẫn chỉ hỏi 20 lượt/giây.
+
+        Chỉ **giãn ra**, không bao giờ kẹp lại nhịp `poll_delays` đã tính.
+        """
+        dong = max(1, int(self._so_dang_hoi))
+        san = min(dong / TRAN_HOI_MOI_GIAY, GIAN_HOI_TOI_DA)
+        return max(float(cho), san)
+
+    def _vong_hoi(self, record: JobRecord, job_id: str, delays,
+                  started: float, last: Optional[Dict[str, Any]]):
+        """Ruột của `_wait_for_job` — tách ra để bên ngoài đếm được số job đang
+        chờ mà không phải bọc cả vòng lặp trong `try` lồng nhiều tầng."""
+        client = self._client
+        assert client is not None
         while True:
             if self._stop.is_set():
                 self._cancel_on_server(record)
@@ -1039,7 +1203,11 @@ class JobManager:
             # 1.212 lượt `GET /v1/jobs` trong 5 phút (~4 lần/giây). Cùng lúc đó
             # worker trên chính máy ấy tải ảnh tham chiếu về chỉ được 23 KB/s vì
             # đường truyền đã kín — 516 lượt tải hết giờ giữa chừng.
-            if self._sleep(next(delays)):
+            #
+            # `nghi_giua_hai_lan_hoi` chỉ GIÃN thêm khi đang có nhiều job cùng
+            # chờ, để tổng cả tool không vượt `TRAN_HOI_MOI_GIAY`. Chạy một job
+            # lẻ thì nó không đổi gì.
+            if self._sleep(self.nghi_giua_hai_lan_hoi(next(delays))):
                 self._cancel_on_server(record)
                 return None
 
@@ -1088,6 +1256,7 @@ class JobManager:
         os.makedirs(folder, exist_ok=True)
         taken: List[str] = []
         saved: List[str] = []
+        link: List[str] = []
 
         for order, output in enumerate(outputs, start=1):
             if self._stop.is_set():
@@ -1116,10 +1285,24 @@ class JobManager:
                 record.advice = describe(exc)
                 self._finish(record, STATUS_FAILED, str(exc))
                 return
-            _xoa_dau(dest)
+            # ═══ SỬA TỆP RỒI THÌ LINK CŨ KHÔNG CÒN DÙNG LẠI ĐƯỢC ═══
+            #
+            # Xoá dấu là xoá **trên điểm ảnh** của bản trên đĩa. Bản trên máy chủ
+            # vẫn đeo ngôi sao Gemini. Ảnh của cảnh nào cũng là khung đầu của clip
+            # cảnh ấy, nên dùng lại link máy chủ cho một tấm vừa được xoá dấu là
+            # đem dấu vào tám giây clip — và chữa thì phải trả tiền lại cả trăm
+            # clip (xem `core/xoa_dau_anh.py`).
+            #
+            # Không sửa gì (ảnh vốn sạch — lối tạo ảnh KHÔNG có ảnh tham chiếu thì
+            # đo được là sạch) thì hai bản giống nhau, link dùng lại được, và cả
+            # mẻ 1000 cảnh khỏi phải đẩy ngược 1,5 GB lên mạng.
+            link.append("" if _xoa_dau(dest) else url)
             saved.append(dest)
-
         record.files = saved
+        # Giữ link theo ĐÚNG thứ tự `files`, để bên gọi ghép `files[i]` với
+        # `urls[i]` được (chỗ nào không dùng lại được thì là chuỗi rỗng). Bên
+        # dùng vẫn tự kiểm — xem `core.anh_len.link_dung_lai_duoc`.
+        record.urls = list(link)
         cost_note = ""
         if record.cost_micro is not None:
             from .money import format_vnd  # nhập tại chỗ cho gọn phần đầu file
@@ -1193,10 +1376,18 @@ class JobManager:
             progress = 100
         self._update(record, status, message, progress=progress)
         self._log("[{0}] {1} — {2}".format(record.spec.index, record.status_label, message))
-        # Ghi ngay, không đợi nhịp hạn chế: đây là lúc danh sách việc còn dở vừa
-        # thay đổi thật sự. Tải xong mà không ghi lại thì lần mở sau tool vẫn hỏi
-        # "còn kết quả chưa lấy" cho một việc đã nằm sẵn trên ổ cứng.
-        self._save_session(force=True)
+        # ═══ VÌ SAO KHÔNG CÒN `force=True` Ở ĐÂY ═══
+        #
+        # Trước đây mỗi việc xong là một lượt ghi đĩa **bắt buộc**, bỏ qua nhịp
+        # hạn chế. Với một lô 2000 việc thì đó là 2000 lượt kết xuất lại TOÀN BỘ
+        # danh sách việc dở — công O(n²), và đúng lúc máy đang phải vẽ giao diện
+        # cho hàng nghìn sự kiện.
+        #
+        # Ghi theo nhịp (nhiều nhất 1 lần/giây) là đủ: file này chỉ được đọc ở
+        # lần MỞ TOOL sau, nên chậm một giây không ai thấy. Còn hai chỗ chắc chắn
+        # ghi bằng được là lúc **cả lô xong** (xem `_bao_xong`) và lúc **tắt
+        # tool** (`shutdown`) — đó mới là hai mốc thật sự cần đúng từng việc.
+        self._save_session()
 
     def _emit_job(self, record: JobRecord) -> None:
         self._events.put(("job", record))

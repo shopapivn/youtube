@@ -486,6 +486,18 @@ class ThuVienKetQua(QWidget):
         self._the: Dict[str, TheKetQua] = {}
         self._thu_tu = []          # uid theo thứ tự thêm, mới nhất ở cuối
         self._so_canh: Dict[str, int] = {}   # uid → số cảnh (0 nếu không có)
+        # ═══ SỔ ĐẾM TÁCH KHỎI SỐ THẺ VẼ RA ═══
+        #
+        # `_thu_tu`/`_the` chỉ giữ `TRAN_THE` thẻ gần nhất — vẽ cả nghìn thẻ là
+        # treo cửa sổ (Luật 3). Nhưng khách gửi 1000 việc mà thanh tiến độ đọc số
+        # từ `_thu_tu` thì mãi mãi báo "xong 120/120" — đúng lỗi khách gặp
+        # 23/08/2026: *"1000 prompt nó lại chỉ hiển thị 120"*.
+        #
+        # Nên đếm nằm ở một lớp RIÊNG, giữ MỌI uid (chỉ là chuỗi, không phải
+        # widget — nghìn cái vẫn nhẹ tênh), không bao giờ bị cắt theo `TRAN_THE`.
+        # Thanh tiến độ và các số "Ảnh x/n · Video x/n" đọc từ lớp này.
+        self._tat_ca = []                     # MỌI uid đã thêm, không cắt
+        self._video_all: Dict[str, bool] = {} # uid → là video (giữ cả khi thẻ đã cắt)
         self._xong = set()
         self._hong = set()
 
@@ -581,6 +593,11 @@ class ThuVienKetQua(QWidget):
         co_san = self._the.get(uid)
         if co_san is not None:
             return co_san
+        # Ghi vào sổ đếm TRƯỚC khi dựng/cắt thẻ — thẻ có thể bị `_cat_bot` cắt
+        # ngay, nhưng việc vẫn phải được đếm vào tổng.
+        if uid not in self._video_all:
+            self._tat_ca.append(uid)
+        self._video_all[uid] = bool(la_video)
         cu = self._the.get(thay_uid) if thay_uid else None
         if cu is not None:
             vi_tri = max(0, self._luoi.indexOf(cu))
@@ -622,6 +639,11 @@ class ThuVienKetQua(QWidget):
         if uid in self._thu_tu:
             self._thu_tu.remove(uid)
         self._so_canh.pop(uid, None)
+        # Thế chỗ = việc cũ biến mất hẳn, nên rút khỏi cả sổ đếm (khác `_cat_bot`
+        # chỉ cắt thẻ vẽ mà vẫn giữ đếm).
+        if uid in self._tat_ca:
+            self._tat_ca.remove(uid)
+        self._video_all.pop(uid, None)
         self._xong.discard(uid)
         self._hong.discard(uid)
 
@@ -639,8 +661,17 @@ class ThuVienKetQua(QWidget):
                   or getattr(ban_ghi, "uid", ""))
         if not uid:
             return None
+        trang_thai = str(getattr(ban_ghi, "status", ""))
         the_nay = self._the.get(uid)
         if the_nay is None:
+            if uid in self._video_all:
+                # Thẻ đã bị `_cat_bot` cắt khỏi màn hình vì lô quá dài — nhưng
+                # việc VẪN đang chạy. Chỉ cập nhật SỔ ĐẾM, TUYỆT ĐỐI không dựng
+                # lại thẻ: dựng lại mỗi nhịp bơm cho cả nghìn việc là churn làm
+                # treo cửa sổ, đúng thứ `TRAN_THE` sinh ra để tránh.
+                self._ghi_dem(uid, trang_thai)
+                self._ve_dong_lo()
+                return None
             if spec is None:
                 return None
             params = getattr(spec, "params", None) or {}
@@ -648,16 +679,19 @@ class ThuVienKetQua(QWidget):
                                 getattr(spec, "kind", "") == "video",
                                 ty_le=str(params.get("aspect_ratio", "")),
                                 so_canh=int(getattr(spec, "index", 0) or 0))
-        trang_thai = str(getattr(ban_ghi, "status", ""))
         the_nay.cap_nhat(trang_thai,
                          int(getattr(ban_ghi, "progress", 0) or 0),
                          getattr(ban_ghi, "files", ()))
+        self._ghi_dem(uid, trang_thai)
+        self._ve_dong_lo()
+        return the_nay
+
+    def _ghi_dem(self, uid: str, trang_thai: str) -> None:
+        """Ghi kết quả một việc vào sổ đếm (chạy được cả khi thẻ đã bị cắt)."""
         if trang_thai in (STATUS_DONE, STATUS_FAILED):
             self._xong.add(uid)
         if trang_thai == STATUS_FAILED:
             self._hong.add(uid)
-        self._ve_dong_lo()
-        return the_nay
 
     def _dong_con(self, cha, ten: str):
         """Một dòng con của khối tách: nhãn "Ảnh 3/8" + thanh chạy nhỏ.
@@ -678,13 +712,14 @@ class ThuVienKetQua(QWidget):
         return nh, thanh
 
     def _dem_theo_loai(self):
-        """`((ảnh_xong, ảnh_tổng), (video_xong, video_tổng))` theo loại thẻ."""
+        """`((ảnh_xong, ảnh_tổng), (video_xong, video_tổng))` theo loại việc.
+
+        Đếm từ SỔ (`_tat_ca`/`_video_all`), không từ thẻ vẽ ra: thẻ bị `_cat_bot`
+        cắt vẫn phải được tính, nếu không lô 1000 việc lại báo nhầm "tổng 120".
+        """
         av = vv = ax = vx = 0
-        for uid in self._thu_tu:
-            the = self._the.get(uid)
-            if the is None:
-                continue
-            if getattr(the, "_la_video", False):
+        for uid in self._tat_ca:
+            if self._video_all.get(uid, False):
                 vv += 1
                 if uid in self._xong:
                     vx += 1
@@ -708,13 +743,13 @@ class ThuVienKetQua(QWidget):
             + nhat + ", stop:1 " + mau + "); }")
 
     def _ve_dong_lo(self) -> None:
-        tong = len(self._thu_tu)
+        tong = len(self._tat_ca)
         if tong <= 1:
             self._khoi_tien_do.hide()
             self._khoi_tach.hide()
             return
-        xong = len([u for u in self._thu_tu if u in self._xong])
-        hong = len([u for u in self._thu_tu if u in self._hong])
+        xong = len([u for u in self._tat_ca if u in self._xong])
+        hong = len([u for u in self._tat_ca if u in self._hong])
         self._thanh_lo.setRange(0, tong)
         self._thanh_lo.setValue(xong)
         phan_tram = round(xong * 100 / tong) if tong else 0
@@ -775,6 +810,8 @@ class ThuVienKetQua(QWidget):
                 cu.deleteLater()
         self._thu_tu.clear()
         self._so_canh.clear()
+        self._tat_ca.clear()
+        self._video_all.clear()
         self._xong.clear()
         self._hong.clear()
         self._khoi_tien_do.hide()
@@ -790,8 +827,8 @@ class ThuVienKetQua(QWidget):
         """`(số việc xong, tổng số việc)` — cho nút gạt ngoài lấy đếm mà không
         phải dựng lại thanh tiến độ. Nút "Xem chi tiết" dùng số này để khách
         vẫn biết "xong chưa" dù phần chi tiết đang đóng."""
-        tong = len(self._thu_tu)
-        xong = len([u for u in self._thu_tu if u in self._xong])
+        tong = len(self._tat_ca)
+        xong = len([u for u in self._tat_ca if u in self._xong])
         return xong, tong
 
     def tom_tat_theo_loai(self):

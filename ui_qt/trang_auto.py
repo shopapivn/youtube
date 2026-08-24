@@ -899,9 +899,11 @@ class TrangTuDong(QWidget):
         def viec():
             from core.auto_khau import BoiCanh, dung_bo_viec  # noqa: PLC0415
 
+            goi_vi = self._dung_goi_chat()
             bc = BoiCanh(
                 goc=self._app.base_dir, kenh=k,
-                goi_chat=self._dung_goi_chat(),
+                goi_chat=goi_vi,
+                goi_chat_kich_ban=self._dung_goi_chat_kich_ban(goi_vi),
                 client=self._app.client
                 if getattr(self._app, "client", None) is not None
                 else self._dung_client(),
@@ -946,18 +948,18 @@ class TrangTuDong(QWidget):
         def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
                 khoa: str = "", toi_da_token: int = 8192,
                 anh: str = "") -> str:
-            from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+            from core.goi_van_ban import goi_van_ban, khoi_anh  # noqa: PLC0415
 
             def kiem_dung():
                 if self._huy is not None and self._huy.is_set():
                     raise RuntimeError("đã dừng")
 
-            # Có ảnh (đọc chữ trên bìa đối thủ) thì gửi kèm dạng mảng mà cổng
-            # hiểu: một phần chữ + một phần ảnh. Không có ảnh thì giữ nguyên
-            # chuỗi như cũ — không đổi hành vi mọi lượt viết chữ khác.
+            # Có ảnh (đọc chữ trên bìa đối thủ) thì gửi kèm dạng khối ảnh mà cổng
+            # thật sự chuyển tới mô hình — xem `khoi_anh`, cổng chỉ nhận định
+            # dạng ảnh kiểu Anthropic base64. Không có ảnh thì giữ nguyên chuỗi
+            # như cũ — không đổi hành vi mọi lượt viết chữ khác.
             if anh:
-                noi_dung = [{"type": "text", "text": loi_nhac},
-                            {"type": "image_url", "image_url": {"url": anh}}]
+                noi_dung = [{"type": "text", "text": loi_nhac}, khoi_anh(anh)]
             else:
                 noi_dung = loi_nhac
 
@@ -967,6 +969,28 @@ class TrangTuDong(QWidget):
                 on_log=self._ghi_nen, kiem_dung=kiem_dung)
 
         return goi
+
+    def _dung_goi_chat_kich_ban(self, goi_vi):
+        """Đường viết chữ RIÊNG cho khâu kịch bản, hoặc `None` nếu đi ví chung.
+
+        Chỉ khác `None` khi chủ máy bật "Kịch bản viết bằng Claude Code" trong
+        Cài đặt: kịch bản viết bằng thuê bao Claude đã đăng nhập trên máy
+        (không trừ ví), còn lời nhắc ảnh/clip và mọi khâu khác vẫn đi ví
+        ShopAPI. Hỏng — chưa cài, chưa đăng nhập — thì tự lui về `goi_vi`,
+        có ghi nhật ký. Xem `core/viet_max.py`.
+        """
+        from core import cai_dat  # noqa: PLC0415
+        from core.viet_max import dung_goi_chat_max  # noqa: PLC0415
+
+        if not cai_dat.doc(self._app.base_dir).get("kich_ban_bang_claude_code"):
+            return None
+
+        def kiem_dung():
+            if self._huy is not None and self._huy.is_set():
+                raise RuntimeError("đã dừng")
+
+        return dung_goi_chat_max(goi_vi, self._app.base_dir,
+                                 on_log=self._ghi_nen, kiem_dung=kiem_dung)
 
     def _dung(self) -> None:
         if self._huy is not None:

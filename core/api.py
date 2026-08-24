@@ -31,10 +31,13 @@ _TIMEOUT = 60.0
 #: quay ra tải tệp về. Chạm trần 100 thì phần thừa nằm xếp hàng, và xếp quá 60
 #: giây là `PoolTimeout` — một lỗi mạng cho một tấm ảnh **đã trả tiền xong**.
 #:
-#: 256 rộng hơn hẳn trần luồng của tool (`TRAN_LUONG_MAY`), nên hàng đợi kết
-#: nối không bao giờ là chỗ thắt. Kết nối rảnh thì `httpx` tự đóng bớt, nên số
-#: này không phải là số kết nối lúc nào cũng mở.
-_MAX_CONNECTIONS = 256
+#: 23/08/2026 nới 256 → 1024: sau khi trần song song bám đúng máy chủ (image
+#: ~2764, video ~288), một lô lớn có thể mở tới ~1000 luồng cùng gửi/hỏi job một
+#: lúc. Giữ ở 256 thì chính bể kết nối lại thành nút thắt mới — đúng cái bẫy vừa
+#: gỡ ở tầng pool luồng, chỉ dời xuống một tầng. 1024 rộng hơn số luồng thật của
+#: một khách chạy một mình, nên hàng đợi kết nối không bao giờ là chỗ thắt. Kết
+#: nối rảnh thì `httpx` tự đóng bớt, nên số này không phải số lúc nào cũng mở.
+_MAX_CONNECTIONS = 1024
 
 
 def build_client(config: Config) -> ShopAPI:
@@ -54,7 +57,7 @@ def build_client(config: Config) -> ShopAPI:
         http_client=httpx.Client(
             timeout=httpx.Timeout(_TIMEOUT), follow_redirects=True,
             limits=httpx.Limits(max_connections=_MAX_CONNECTIONS,
-                                max_keepalive_connections=32)),
+                                max_keepalive_connections=128)),
     )
     # SDK cho rằng client HTTP truyền từ ngoài vào là của người khác nên không
     # đóng nó. Ở đây chính chúng ta vừa tạo nó, nên chúng ta sở hữu nó — nói rõ

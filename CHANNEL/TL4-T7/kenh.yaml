@@ -34,6 +34,7 @@ che_do_tieu_de: "nguyen_goc"
 engine: "veo3"
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"
-dot_phu_de: true
+dot_phu_de: false
 am_luong_nhac: 0.12
 nhac_nen: ""
+do_phan_giai: ""

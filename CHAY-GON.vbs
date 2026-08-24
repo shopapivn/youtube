@@ -46,40 +46,63 @@ shell.Environment("PROCESS")("LANGUAGE") = "vi_VN:vi"
 shell.Environment("PROCESS")("VEO3TOP_TZ") = "Asia/Ho_Chi_Minh"
 shell.Environment("PROCESS")("VEO3TOP_LOCALE") = "vi-VN"
 
-' ── Tìm pythonw.exe ────────────────────────────────────────────────────────
+' ── Tìm pythonw.exe THẬT (không phải bản giả Microsoft Store) ───────────────
 '
 ' `pythonw.exe` là bản Python KHÔNG mở console — khác đúng một chữ so với
 ' `python.exe`, và đó là toàn bộ điểm của file này.
 '
-' Thứ tự tìm giống SETUP.bat: môi trường ảo của tool trước, rồi mới tới Python
-' của máy. Môi trường ảo trước là để tool luôn chạy bằng đúng bộ thư viện mà
-' SETUP.bat đã cài, không phải bộ nào đó cài lẫn ở ngoài.
+' 24/08/2026: một máy khách đang chạy tốt, qua đêm mở không lên. Nguyên do là
+' `python`/`pythonw` trong PATH bị bản GIẢ trong WindowsApps che mất (một bản
+' cập nhật Windows bật lại "App execution aliases", đẩy bản giả lên trước). Nên
+' KHÔNG dựa vào PATH nữa: tìm thẳng ở đúng chỗ Python đã cài, và bỏ qua mọi thứ
+' nằm trong WindowsApps. Môi trường ảo của tool được ưu tiên trước để chạy đúng
+' bộ thư viện SETUP.bat đã cài, không phải bộ nào đó cài lẫn ở ngoài.
+Dim lad
+lad = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
 pythonw = ""
 
+' 1) Môi trường ảo của tool (nếu có).
 If fso.FileExists(thuMuc & "\.venv\Scripts\pythonw.exe") Then
     pythonw = thuMuc & "\.venv\Scripts\pythonw.exe"
 ElseIf fso.FileExists(thuMuc & "\venv\Scripts\pythonw.exe") Then
     pythonw = thuMuc & "\venv\Scripts\pythonw.exe"
-Else
-    ' Không có môi trường ảo: nhờ `where` tìm trong PATH.
+End If
+
+' 2) Python Install Manager (Python 3.14+): %LOCALAPPDATA%\Python\pythoncore-*
+If pythonw = "" Then pythonw = TimTrongThuMuc(fso, lad & "\Python", "pythoncore-", "pythonw.exe")
+' 3) Bản cài thông thường cho current user: %LOCALAPPDATA%\Programs\Python\Python3*
+If pythonw = "" Then pythonw = TimTrongThuMuc(fso, lad & "\Programs\Python", "Python3", "pythonw.exe")
+
+' 4) Nhờ `where` tìm trong PATH — nhưng BỎ bản giả nằm trong WindowsApps.
+If pythonw = "" Then
     Dim chay, dong
     On Error Resume Next
     Set chay = shell.Exec("cmd /c where pythonw.exe")
     If Err.Number = 0 Then
         Do While Not chay.StdOut.AtEndOfStream
             dong = Trim(chay.StdOut.ReadLine())
-            If pythonw = "" And dong <> "" Then pythonw = dong
+            If pythonw = "" And dong <> "" And InStr(LCase(dong), "windowsapps") = 0 Then
+                pythonw = dong
+            End If
         Loop
     End If
     On Error GoTo 0
 End If
 
+' 5) Chỉ có python.exe (bản gọn không kèm pythonw): vẫn mở được, chỉ thoáng một
+'    ô đen — còn hơn không mở được gì.
+If pythonw = "" Then pythonw = TimTrongThuMuc(fso, lad & "\Python", "pythoncore-", "python.exe")
+If pythonw = "" Then pythonw = TimTrongThuMuc(fso, lad & "\Programs\Python", "Python3", "python.exe")
+
 If pythonw = "" Then
     MsgBox _
-        "Không tìm thấy pythonw.exe." & vbCrLf & vbCrLf & _
-        "Bạn nhấp đúp SETUP.bat một lần để cài Python và thư viện, rồi mở lại file này." & vbCrLf & vbCrLf & _
-        "Nếu đã cài rồi mà vẫn báo lỗi này thì mở CHAY-QT.bat — nó hiện cửa sổ đen và " & _
-        "nói rõ hơn đang thiếu gì.", _
+        "Không tìm thấy Python trên máy." & vbCrLf & vbCrLf & _
+        "Thường gặp nhất: lệnh ""python"" đang trỏ vào bản GIẢ của Microsoft " & _
+        "Store (báo ""Python was not found...""), không phải Python thật — hay " & _
+        "xảy ra sau một bản cập nhật Windows." & vbCrLf & vbCrLf & _
+        "Cách sửa nhanh: nhấp đúp SETUP.bat một lần. Nó tự tìm lại Python thật, " & _
+        "tạo lại lối tắt và mở tool." & vbCrLf & vbCrLf & _
+        "Nếu vẫn lỗi, mở CHAY-QT.bat — nó hiện cửa sổ đen và nói rõ đang thiếu gì.", _
         vbCritical, "My Tool"
     WScript.Quit 1
 End If
@@ -120,3 +143,24 @@ If ma <> 0 Then
     MsgBox chiTiet, vbCritical, "My Tool"
     WScript.Quit ma
 End If
+
+' ── TimTrongThuMuc ─────────────────────────────────────────────────────────
+'
+' Quét các thư mục con của `cha` có tên bắt đầu bằng `tienTo`, trả về đường dẫn
+' tới `exe` trong thư mục con ĐẦU TIÊN chứa nó (hoặc "" nếu không có). Dùng để
+' tìm Python ở đúng chỗ đã cài mà không cần biết số phiên bản (Python311,
+' pythoncore-3.14-64, …).
+Function TimTrongThuMuc(fso, cha, tienTo, exe)
+    TimTrongThuMuc = ""
+    If Not fso.FolderExists(cha) Then Exit Function
+    Dim con, duong
+    For Each con In fso.GetFolder(cha).SubFolders
+        If LCase(Left(con.Name, Len(tienTo))) = LCase(tienTo) Then
+            duong = con.Path & "\" & exe
+            If fso.FileExists(duong) Then
+                TimTrongThuMuc = duong
+                Exit Function
+            End If
+        End If
+    Next
+End Function

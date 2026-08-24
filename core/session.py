@@ -26,7 +26,26 @@ __all__ = ["SESSION_FILENAME", "records_to_data", "data_to_specs", "save_session
 SESSION_FILENAME = "viec-dang-lam.json"
 
 #: Chỉ nhớ ngần này việc gần nhất — file không phình vô hạn sau vài tháng dùng.
-_MAX_REMEMBERED = 500
+#:
+#: Trần cũ là 500, đặt từ thời một lô lớn nhất là 40 clip. Chạy MAX thì một lô
+#: **2000 việc** (1000 ảnh + 1000 clip) là chuyện thường, và trần 500 nghĩa là
+#: 1500 việc đầu bị **quên lặng lẽ** — đúng những việc đã trả tiền mà chưa lấy
+#: được file về, tức đúng thứ tệp này tồn tại để cứu.
+_MAX_REMEMBERED = 4000
+
+#: Cắt mô tả còn ngần này ký tự khi ghi xuống.
+#:
+#: ═══ VÌ SAO CẮT ═══
+#:
+#: Prompt thật của khách dài 2–3 nghìn ký tự. Nhân 4000 việc là ~20 MB kết xuất
+#: lại **mỗi lượt ghi**, mà lượt ghi thì mỗi giây một lần trong suốt mẻ chạy.
+#:
+#: Cắt được vì phần đọc lại (`data_to_specs` → `JobManager.restore`) **không bao
+#: giờ gửi việc lên máy chủ lần nữa** — việc đã tạo và đã trả tiền từ lần chạy
+#: trước; nó chỉ cần `job_id` để đi lấy kết quả về. `idempotency_key` và `label`
+#: đều được ghi riêng, nên tên tệp tải về và chống-trùng-tiền không phụ thuộc
+#: vào đoạn mô tả này.
+_MAX_CONTENT = 300
 
 
 def records_to_data(records: List[Any]) -> List[Dict[str, Any]]:
@@ -45,7 +64,7 @@ def records_to_data(records: List[Any]) -> List[Dict[str, Any]]:
             {
                 "job_id": job_id,
                 "kind": spec.kind,
-                "content": spec.content,
+                "content": spec.content[:_MAX_CONTENT],
                 "params": dict(spec.params),
                 "out_dir": spec.out_dir,
                 "estimate_micro": int(spec.estimate_micro or 0),

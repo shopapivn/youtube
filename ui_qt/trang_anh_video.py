@@ -38,6 +38,7 @@ khác xong. Nên nó nằm ở đây, trong `_ThemVideoTiepTheo`, một chỗ, c
 from __future__ import annotations
 
 import os
+from collections import deque
 from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QEvent
@@ -48,6 +49,7 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
+from core.anh_len import link_dung_lai_duoc, tai_len
 from core.jobs import JobSpec, STATUS_DONE
 from core.pricing import (
     ENGINE_SEEDANCE, ENGINE_VEO3, KIND_IMAGE, KIND_VIDEO, hold_for_image,
@@ -693,6 +695,16 @@ class TabHangLoat(QWidget):
         self._dong_cua_anh: Dict[str, int] = {}
         self._dong_cua_video: Dict[str, int] = {}
         self._cho_noi: Dict[int, str] = {}   # dòng → file ảnh vừa xong, chờ nối
+        #: dòng → link công khai của chính tấm ảnh đó trên máy chủ (nếu có).
+        #:
+        #: Có link thì khâu nối ảnh → video **không đẩy gì lên**: nó dùng thẳng
+        #: link máy chủ vừa trả. Xem `core/anh_len` để biết vì sao đó là chỗ
+        #: đáng tiết kiệm nhất trong cả tool.
+        self._link_noi: Dict[int, str] = {}
+        #: Hàng chờ đẩy ảnh lên cho những dòng KHÔNG có link dùng lại được, và
+        #: số lượt đẩy đang bay. Xem `_chay_hang_tai`.
+        self._hang_tai: deque = deque()
+        self._dang_tai = 0
         #: Những dòng khách **tự tay** bấm "Thành clip".
         #:
         #: Tách khỏi `_cho_noi` vì ô "Ảnh vừa tạo → đầu vào video" chỉ nói về
@@ -1069,6 +1081,14 @@ class TabHangLoat(QWidget):
             return
         self._dat_tham_chieu(nut, list(chon)[: self._TRAN_THAM_CHIEU])
 
+    #: Ký tự VÔ HÌNH hay dính vào đường dẫn khi khách sao chép: dấu định hướng
+    #: bidi (U+202A–U+202E, U+2066–U+2069, U+200E/F), khoảng trắng không bề
+    #: rộng (U+200B–U+200D, U+2060) và BOM (U+FEFF). Mắt không thấy, `strip()`
+    #: không bóc (chúng KHÔNG phải khoảng trắng), còn `os.path.isfile` thì trượt.
+    _KY_TU_AN = dict.fromkeys(
+        [*range(0x200B, 0x2010), *range(0x202A, 0x202F),
+         *range(0x2060, 0x206A), 0xFEFF])
+
     def _tach_duong_tham_chieu(self, chu: str) -> List[str]:
         """Tách ô `reference_files` của Excel thành danh sách đường dẫn có thật.
 
@@ -1076,10 +1096,19 @@ class TabHangLoat(QWidget):
         dưới dạng đường dẫn” của Windows kẹp cả cặp ngoặc kép — bóc luôn để dán
         vào là chạy. Chỉ giữ file có thật; tên trơ trọi (kiểu `nv1.png`) không
         trỏ tới đâu trên máy này nên bỏ qua, khỏi âm thầm gán nhầm.
+
+        ═══ BÓC CẢ KÝ TỰ VÔ HÌNH — ĐO 24/08/2026 ═══
+
+        Hộp Properties của Windows còn kẹp một dấu định hướng `U+202A` VÔ HÌNH
+        trước `C:\\`. File `1000.xlsx` thật của khách dính đúng ký tự đó ở CẢ
+        1000 dòng: mắt nhìn đường dẫn hoàn toàn đúng, file có thật trên đĩa,
+        mà `os.path.isfile` trượt — và nhánh "chỉ giữ file có thật" ở dưới lặng
+        lẽ vứt ảnh nhân vật của cả loạt. Không một dòng lỗi nào; khách chỉ nhận
+        về 1000 cảnh không còn khuôn mặt nhân vật của họ.
         """
         ra: List[str] = []
         for phan in (chu or "").split(","):
-            p = phan.strip().strip('"').strip()
+            p = phan.translate(self._KY_TU_AN).strip().strip('"').strip()
             if p and os.path.isfile(p):
                 ra.append(p)
         return ra[: self._TRAN_THAM_CHIEU]
@@ -1101,6 +1130,8 @@ class TabHangLoat(QWidget):
         self._dong_cua_anh.clear()
         self._dong_cua_video.clear()
         self._cho_noi.clear()
+        self._link_noi.clear()
+        self._hang_tai.clear()
         self._ep_noi.clear()
         self.thu_vien.xoa_het()
         self.them_dong()
@@ -1554,7 +1585,7 @@ class TabHangLoat(QWidget):
 
         self._dat_tt(dong, True, "đang gửi ảnh lên")
         self._app.run_bg(
-            lambda: str(self._app.client.uploads.upload_file(nguon)),
+            lambda: str(tai_len(self._app.client, nguon)),
             on_ok=gui, on_err=self._app.show_error)
 
     def _bao_trong(self) -> None:
@@ -1615,13 +1646,34 @@ class TabHangLoat(QWidget):
         self._chay_that(canh, {})
 
     def _tai_tham_chieu(self, duong_dan) -> Dict[str, str]:
-        """Tải từng ảnh lên, trả `{đường dẫn: URL}`. **Chạy ở luồng nền.**"""
+        """Tải từng ảnh lên, trả `{đường dẫn: URL}`. **Chạy ở luồng nền.**
+
+        Đẩy **song song có trần** (`_TRAN_TAI` lượt) chứ không lần lượt: một loạt
+        1000 dòng mà mỗi dòng một ảnh riêng thì đẩy lần lượt là cả nghìn lượt
+        nối đuôi, và **chưa một việc nào được gửi** trong suốt quãng đó — cùng
+        loại nút thắt với khâu nối ảnh → video (xem `_day_video`).
+
+        `tai_len` nhớ URL theo `(tên, cỡ, mtime)` nên bốn mươi dòng dùng chung
+        một ảnh nhân vật vẫn chỉ tốn đúng một lượt đẩy.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        client = self._app.client
         kho: Dict[str, str] = {}
-        for d in duong_dan:
+        ds = [d for d in duong_dan if d]
+        if not ds:
+            return kho
+
+        def mot(d: str):
             try:
-                kho[d] = str(self._app.client.uploads.upload_file(d))
+                return d, tai_len(client, d)
             except Exception:  # noqa: BLE001 — một ảnh hỏng không dừng cả loạt
-                pass
+                return d, ""
+
+        with ThreadPoolExecutor(max_workers=min(self._TRAN_TAI, len(ds))) as bom:
+            for d, url in bom.map(mot, ds):
+                if url:
+                    kho[d] = str(url)
         return kho
 
     def _chay_that(self, canh, kho_url: Dict[str, str]) -> None:
@@ -1634,6 +1686,8 @@ class TabHangLoat(QWidget):
         self._dong_cua_anh.clear()
         self._dong_cua_video.clear()
         self._cho_noi.clear()
+        self._link_noi.clear()
+        self._hang_tai.clear()
         self._ep_noi.clear()
         for thu_tu, (dong, mo_ta, mo_ta_video) in enumerate(canh, 1):
             urls = [kho_url[d] for d in self._anh_cua_dong(dong)
@@ -1717,6 +1771,11 @@ class TabHangLoat(QWidget):
             files = list(getattr(du_lieu, "files", ()) or ())
             if trang_thai == STATUS_DONE and files:
                 self._cho_noi[dong] = files[0]
+                # Link của CHÍNH tấm ảnh đó trên máy chủ, nếu máy chủ có trả.
+                # Có nó thì khâu nối sang video khỏi đẩy ảnh lên lần nữa.
+                link = list(getattr(du_lieu, "urls", ()) or ())
+                if link and link_dung_lai_duoc(link[0]):
+                    self._link_noi[dong] = str(link[0])
                 o = self._o_ket_qua(dong)
                 if o is not None:
                     o.dat_ket_qua(files[0], False)
@@ -1762,29 +1821,93 @@ class TabHangLoat(QWidget):
                 continue
             if not os.path.isfile(duong_anh):
                 continue
-            cho_tai.append((dong, mo_ta_video, duong_anh))
+            cho_tai.append((dong, mo_ta_video, duong_anh,
+                            self._link_noi.pop(dong, "")))
         if cho_tai:
             self._day_video(cho_tai)
 
     def _day_video(self, cho_tai) -> None:
-        """Tải ảnh lên rồi gửi việc video. Tải ở **luồng nền**."""
-        client = self._app.client
+        """Gửi việc video cho những dòng ảnh vừa xong.
+
+        ═══ VÌ SAO TỪNG DÒNG MỘT, KHÔNG THEO LÔ ═══
+
+        Bản trước gom cả nhóm vào **một** luồng nền, đẩy ảnh lên lần lượt, rồi
+        mới gọi `_gui_video` **một lần cho cả nhóm**. Với 1000 cảnh, nhóm nào
+        cũng dài: mỗi lượt đẩy vài giây × cả trăm dòng, và trong suốt quãng ấy
+        **không một việc video nào được gửi**. Đó đúng là cảnh chủ dự án thấy —
+        *"500 ảnh đã tạo mà chưa thấy video"*. Một lượt đẩy gặp 429 còn tệ hơn:
+        `run_bg` thử lại không giới hạn, cả nhóm ngồi chờ theo.
+
+        Giờ mỗi dòng đi một đường riêng và gửi video NGAY khi có URL của nó:
+
+        * có link máy chủ trả sẵn → gửi luôn, **không đẩy lên gì cả**;
+        * chưa có → vào hàng chờ đẩy, tối đa `_TRAN_TAI` lượt bay cùng lúc, và
+          dòng nào đẩy xong là video của dòng ấy bay ngay, không đợi ai.
+        """
         thu_muc = self._thu_muc.value
-        for dong, _mo_ta, _duong in cho_tai:
+        ngay, can_tai = [], []
+        for dong, mo_ta, duong, link in cho_tai:
+            if link_dung_lai_duoc(link):
+                ngay.append((dong, mo_ta, str(link)))
+            else:
+                can_tai.append((dong, mo_ta, duong))
+        if ngay:
+            # Không tốn một lượt mạng nào ở đây: link đã có sẵn từ việc ảnh.
+            self._gui_video(ngay, thu_muc)
+        if not can_tai:
+            return
+        for dong, _mo_ta, _duong in can_tai:
             self._dat_tt(dong, True, "đang gửi ảnh lên")
-        if client is None:
-            for dong, _mo_ta, _duong in cho_tai:
+        if self._app.client is None:
+            for dong, _mo_ta, _duong in can_tai:
                 self._dat_tt(dong, True, "thiếu khoá API")
             return
+        self._hang_tai.extend(can_tai)
+        self._chay_hang_tai(thu_muc)
 
-        def tai():
-            ra = []
-            for dong, mo_ta, duong in cho_tai:
-                ra.append((dong, mo_ta, client.uploads.upload_file(duong)))
-            return ra
+    #: Bao nhiêu lượt đẩy ảnh được bay cùng lúc.
+    #:
+    #: KHÔNG mở rộng con số này. Đây là đường LÊN của mạng nhà khách, và nó là
+    #: thứ hẹp nhất trong cả dây: đo 16/08/2026 chỉ 463 ảnh/5 phút đã kín đường,
+    #: kéo chặng tải về xuống 23 KB/s và làm 15–25% job hỏng. Sáu lượt vừa đủ để
+    #: không có lúc nào đường lên rảnh mà vẫn còn chỗ cho chặng tải kết quả về.
+    _TRAN_TAI = 6
 
-        self._app.run_bg(tai, on_ok=lambda ds: self._gui_video(ds, thu_muc),
-                         on_err=self._app.show_error)
+    def _chay_hang_tai(self, thu_muc: str) -> None:
+        """Rút hàng chờ ra đẩy, giữ tối đa `_TRAN_TAI` lượt bay cùng lúc.
+
+        Gọi trên **luồng giao diện** (cả lúc xếp hàng lẫn lúc một lượt xong), nên
+        `_dang_tai` không cần khoá.
+        """
+        while self._hang_tai and self._dang_tai < self._TRAN_TAI:
+            dong, mo_ta, duong = self._hang_tai.popleft()
+            self._dang_tai += 1
+            self._app.run_bg(
+                lambda d=duong: tai_len(self._app.client, d),
+                on_ok=lambda url, dg=dong, mt=mo_ta: self._xong_tai(
+                    dg, mt, str(url), thu_muc),
+                on_err=lambda loi, dg=dong: self._loi_tai(dg, loi, thu_muc))
+
+    def _xong_tai(self, dong: int, mo_ta: str, url: str, thu_muc: str) -> None:
+        """Một ảnh đã lên xong → gửi clip của ĐÚNG dòng đó, rồi rút tiếp hàng."""
+        self._dang_tai = max(0, self._dang_tai - 1)
+        if url:
+            self._gui_video([(dong, mo_ta, url)], thu_muc)
+        else:
+            self._dat_tt(dong, True, "thiếu khoá API")
+        self._chay_hang_tai(thu_muc)
+
+    def _loi_tai(self, dong: int, loi: BaseException, thu_muc: str) -> None:
+        """Đẩy ảnh của MỘT dòng không được: ghi vào đúng dòng ấy rồi chạy tiếp.
+
+        Không hiện hộp lỗi và không dừng cả loạt — một mẻ 1000 cảnh mà một tấm
+        ảnh hỏng làm sập cả mẻ thì khách mất cả buổi chạy.
+        """
+        self._dang_tai = max(0, self._dang_tai - 1)
+        from core.errors import describe
+
+        self._dat_tt(dong, True, describe(loi).title.lower()[:40] or "gửi ảnh lỗi")
+        self._chay_hang_tai(thu_muc)
 
     def _gui_video(self, danh_sach, thu_muc: str, thay_uid: str = "") -> None:
         engine = self.engine.currentText()

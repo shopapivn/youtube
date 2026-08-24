@@ -243,6 +243,13 @@ class NhipDo:
         self._leo_nhanh = True
         #: Số mẫu độ trễ vọt LIÊN TIẾP. Xem `XAC_NHAN_TRE`.
         self._tre_lien_tiep = 0
+        #: Lời mời gần nhất của máy chủ: còn bao nhiêu chỗ TRỐNG, và lúc nào.
+        #: Dùng để phân biệt "job chờ lâu vì nghẽn" với "job chờ lâu vì cả lô
+        #: tới cùng lúc" — xem `xong()`.
+        self._cho_trong_moi: Optional[int] = None
+        self._luc_moi = 0.0
+        #: Còn bao nhiêu mẫu độ trễ phải BỎ QUA sau một lần cắt — xem `_giam()`.
+        self._bo_qua_mau_tre = 0
         self._tran: Optional[int] = None if tran is None else max(0, int(tran))
         self._nguong_tre = float(nguong_tre)
         self._tre_toi_thieu = float(tre_toi_thieu)
@@ -307,6 +314,25 @@ class NhipDo:
         vẫn phải dò lên từng bước một.
 
         ``tran = 0`` là máy chủ nói thẳng "nhà máy loại này đang dừng".
+
+        ═══ TRẦN TĂNG VỌT = NHÀ MÁY ĐÃ ĐỔI CỠ → MÉP CŨ HẾT GIÁ TRỊ ═══
+
+        Đo 24/08/2026, lô 1000 clip thật: worker phía nhà máy chết giữa mẻ,
+        trần video tụt về 7. Tool ăn một loạt lỗi trong cơn sập → ``_giam()``
+        tắt ``_leo_nhanh`` — ĐÚNG LUẬT, vì luật nói "mép đã tìm được thì không
+        ai được kéo nhịp về phía trên nó". Nhưng cái mép tìm được lúc ấy là
+        **số đo của cơn sập, không phải của nhà máy**. Nhà máy hồi, trần bật
+        lại 288 (gấp 41 lần), máy chủ mời ``cho_trong=312`` mỗi 20 giây — và
+        lời mời bị bỏ ngoài tai vĩnh viễn theo lằn ranh 1 của ``moi_vao``.
+        Kết quả: ~890 clip xếp hàng trong tool, chảy nhỏ giọt 9 job song song,
+        nhìn y hệt cái bảng "42 phút/100 clip" mà ``moi_vao`` sinh ra để chữa.
+
+        Nên: trần MỚI ≥ 2× trần đã biết ⇒ nhà máy vừa đổi cỡ thật sự (không
+        phải rung rinh vài chỗ do khách khác ra vào) ⇒ mọi mép đo trên nhà máy
+        cũ vô hiệu ⇒ bật lại ``_leo_nhanh`` để lời mời kế tiếp được nghe. Nếu
+        mép cũ hoá ra vẫn thật thì loạt 429 đầu tiên lại tắt nó ngay — trả giá
+        đúng một nhịp dò, đổi lấy việc không bao giờ bò hàng giờ dưới một nhà
+        máy đang rỗng.
         """
         if tran is None:
             return
@@ -316,9 +342,73 @@ class NhipDo:
                 self._tran = 0
                 self._nha_may_dung(CHO_KHI_DUNG)
                 return
+            if self._tran is not None and self._tran > 0 and tran >= 2 * self._tran:
+                self._leo_nhanh = True
             self._tran = tran
             if self._nhip > tran:
                 self._nhip = float(tran)
+
+    def moi_vao(self, cho_trong: Optional[int]) -> None:
+        """Nhà máy đang mời ``cho_trong`` chỗ TRỐNG — vào cuộc ngay ở đó.
+
+        ═══ VÌ SAO CẦN CÁI NÀY — 23/08/2026 ═══
+
+        ``dat_tran()`` cố ý **không** nâng nhịp khi trần tăng, và lý lẽ ấy vẫn
+        đúng: trần là sức chứa CẢ nhà máy chia phần, nó không biết đường mạng của
+        bạn. Nhưng ``cho_trong`` là một câu khác hẳn: *"có bấy nhiêu chỗ đang bỏ
+        không, gửi thêm bấy nhiêu job thì chúng chạy NGAY"*. Đó không phải một
+        mức chặn trên để dò tới, đó là **hàng chờ rỗng đã đo được**.
+
+        Đo trên mẻ 1000 cảnh, máy thật, ngày 23/08/2026:
+
+        ==============  ====================
+        100 clip đầu    **42 phút**
+        100 tiếp        8 phút
+        100 tiếp        4 phút
+        100 tiếp        3 phút
+        ==============  ====================
+
+        Suốt 42 phút ấy máy chủ báo *còn hơn 200 chỗ trống, hàng chờ 6–14 job*.
+        Cả quãng chờ đó không phải nhà máy chật, mà là vòng dò đang leo ``+1``
+        mỗi clip xong từ nhịp 1 — muốn 100 job song song thì phải chờ 100 clip
+        xong trước, mỗi clip 2 phút.
+
+        Ba lằn ranh giữ cho việc này vẫn là điều khiển tắc nghẽn, không phải
+        "bắn đúng bằng trần" (cái mà ``chay_ca_me`` đã bác bỏ có lý):
+
+        1. **Chỉ trong pha leo nhanh.** Đã gặp một tín hiệu nghẽn nào (``429``,
+           ``503``, độ trễ hàng chờ vọt) là ``_giam()`` tắt ``_leo_nhanh`` vĩnh
+           viễn cho cả mẻ, và từ đó lời mời bị bỏ ngoài tai — mép đã tìm được thì
+           không ai được kéo nhịp về lại phía trên nó.
+        2. **Chỉ NÂNG, không bao giờ hạ.** Hạ là việc của ``dat_tran()`` (trần)
+           và ``_giam()`` (nghẽn).
+        3. **Vẫn cắt theo trần** đang biết, y như ``xong()``.
+
+        ``None`` hoặc ``<= 0`` (máy chủ bản cũ không trả chi tiết, hoặc nhà máy
+        đang chật thật) thì không làm gì — vòng dò leo từng bước như cũ.
+        """
+        if cho_trong is None:
+            return
+        cho_trong = int(cho_trong)
+        with self._khoa:
+            # Ghi lại lời mời TRƯỚC mọi lằn ranh: kể cả khi không nâng nhịp, con
+            # số "còn bao nhiêu chỗ trống" vẫn là nhân chứng cho `xong()`.
+            self._cho_trong_moi = cho_trong
+            self._luc_moi = self._dong_ho()
+            if cho_trong <= 0:
+                return
+            if not self._leo_nhanh or self._tham_do:
+                return
+            moi = float(max(self._san, cho_trong))
+            if self._tran is not None:
+                moi = min(moi, float(max(self._tran, self._san)))
+            if moi <= self._nhip:
+                return
+            _LOG.info("nhip: vao cuoc o %.0f — nha may dang moi %d cho trong "
+                      "(dang o %.0f)", moi, cho_trong, self._nhip)
+            self._nhip = moi
+            self._chuoi = 0
+            self._ghi_nho(moi)
 
     def xong(self, cho_hang_doi: Optional[float] = None) -> None:
         """Một job vừa xong êm — tín hiệu TĂNG.
@@ -350,7 +440,38 @@ class NhipDo:
 
             if cho_hang_doi is not None:
                 cho_hang_doi = max(0.0, float(cho_hang_doi))
-                if self._tre_vot(cho_hang_doi):
+                if self._bo_qua_mau_tre > 0:
+                    # ═══ MỘT LẦN CẮT MỖI CỬA SỔ — 24/08/2026 ═══
+                    #
+                    # Job này đã xếp hàng TRƯỚC lần cắt vừa rồi: nó chờ lâu vì
+                    # cái cửa sổ cũ, không phải vì cửa sổ mới còn quá rộng. Đếm
+                    # nó là bằng chứng lần nữa thì cứ hai job xong lại chia đôi
+                    # — đo lô 5: 691 → 1 trong 30 giây. TCP chỉ cắt một lần mỗi
+                    # cửa sổ; ở đây cửa sổ = số job đang bay lúc cắt.
+                    self._bo_qua_mau_tre -= 1
+                    self._mau_cho.append(cho_hang_doi)
+                    self._tre_lien_tiep = 0
+                    return
+                if self._nha_may_con_cho_trong():
+                    # ═══ NHÀ MÁY CÒN GHẾ THÌ CHỜ LÂU KHÔNG PHẢI LÀ NGHẼN — 24/08/2026 ═══
+                    #
+                    # Lô 400 cảnh thật, log của chính lớp này: 122 lần GIAM, KHÔNG
+                    # một 429/503 nào — nhịp ảnh 1382 → 1 trong 10 giây, nhịp
+                    # video 259 → 130 → 64 trong khi máy chủ báo còn hàng trăm
+                    # chỗ trống. Vì sao: cả lô tạo cùng lúc, vài job đầu được
+                    # nhận ngay (nền ~0,3 s), mọi job sau đều phải xếp hàng ở
+                    # máy chủ chờ worker `claim` — mẫu nào cũng "vọt" so với nền,
+                    # cứ hai mẫu là một lần chia đôi. Đó là hình dạng của MỘT LÔ,
+                    # không phải của nhà máy chật.
+                    #
+                    # Máy chủ đã nói thẳng mỗi 20 giây "còn N chỗ trống". Còn chỗ
+                    # trống thì job chờ lâu là độ trễ nhận việc, không phải nghẽn:
+                    # ghi mẫu, xoá chuỗi vọt, và đi tiếp như một job xong êm. Hết
+                    # chỗ trống (hoặc máy chủ bản cũ không nói) thì suy luận như
+                    # cũ — lúc đó chờ lâu mới đúng là nghẽn.
+                    self._mau_cho.append(cho_hang_doi)
+                    self._tre_lien_tiep = 0
+                elif self._tre_vot(cho_hang_doi):
                     # ═══ MỘT MẪU LẺ KHÔNG PHẢI LÀ NGHẼN — 16/08/2026 ═══
                     #
                     # Độ trễ hàng chờ là một phép SUY LUẬN, khác hẳn ``429`` (máy
@@ -518,6 +639,9 @@ class NhipDo:
         # chính lần giảm này), giữ lại là để nó gây thêm một lần giảm nữa ngay
         # ở mẫu vọt kế tiếp — tức chia bốn cho một cơn nghẽn.
         self._tre_lien_tiep = 0
+        # Mọi job đang bay lúc này đều đã xếp hàng dưới cửa sổ CŨ; kết quả của
+        # chúng không được phép kích thêm một lần cắt nào — xem `xong()`.
+        self._bo_qua_mau_tre = max(1, math.ceil(cu))
         self._nhip = max(float(self._san), self._nhip / 2.0)
         self._chuoi = 0
         # Ghi ÉP mức vừa chạm nghẽn: đây là con số đáng giữ nhất trong cả mẻ —
@@ -541,6 +665,16 @@ class NhipDo:
         self._chuoi = 0
         self._dung_toi = self._dong_ho() + cho
         self._tham_do = True
+
+    #: Lời mời "còn chỗ trống" chỉ có giá trị ngần này giây; cũ hơn thì không
+    #: dám dựa vào — máy chủ tính lại trần liên tục theo khách ra vào.
+    HAN_LOI_MOI_GIAY = 60.0
+
+    def _nha_may_con_cho_trong(self) -> bool:
+        """Máy chủ vừa nói còn chỗ trống (lời mời còn mới) — xem `xong()`."""
+        if self._cho_trong_moi is None or self._cho_trong_moi <= 0:
+            return False
+        return self._dong_ho() - self._luc_moi <= self.HAN_LOI_MOI_GIAY
 
     def _tre_vot(self, cho_hang_doi: float) -> bool:
         if not self._mau_cho:

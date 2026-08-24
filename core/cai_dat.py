@@ -54,7 +54,7 @@ TEN_TEP = "cai-dat.json"
 MUC_SONG_SONG: Dict[str, Dict[str, int]] = {
     "mac_dinh": dict(DEFAULT_CONCURRENCY),          # {tts:3, image:8, video:8}
     "nhanh": {"tts": 8, "image": 64, "video": 24},
-    "toi_da": dict(HARD_CAPS),                       # {tts:16, image:384, video:64}
+    "toi_da": dict(HARD_CAPS),                       # {tts:16, image:6144, video:832}
 }
 
 
@@ -164,6 +164,22 @@ MAC_DINH: Dict[str, Any] = {
     # hai đều là thời gian máy khách, **không tốn thêm đồng API nào** — nên
     # đánh đổi này nghiêng hẳn về phía nên bật.
     "do_phan_giai": "4K",
+
+    # Khâu KỊCH BẢN của tab Tự động viết bằng Claude Code trên thuê bao Claude
+    # (Pro/Max) đã đăng nhập sẵn trên máy, thay vì trừ ví ShopAPI.
+    #
+    # ═══ TẮT SẴN ═══
+    #
+    # Chủ dự án, 24/08/2026: *"ở cài đặt tao sẽ có thể chọn phần đó cho kịch
+    # bản, còn khách thì vì họ không có claude code max nên vẫn phải qua key
+    # shopapi"*. Đúng vậy: khách thường không có thuê bao Claude, bật sẵn là
+    # mọi lượt chạy của họ phải thử-rồi-lui vô ích.
+    #
+    # CHỈ khâu kịch bản đi đường này. Lời nhắc ảnh/clip, ảnh, clip, giọng đọc
+    # vẫn đi ví ShopAPI — thuê bao Claude không làm thay được việc của nhà máy.
+    # Máy chưa cài/chưa đăng nhập Claude Code thì tool tự lui về ví, có ghi
+    # nhật ký. Xem `core/viet_max.py`.
+    "kich_ban_bang_claude_code": False,
 
     # Mốc công suất gửi việc lên máy chủ: "mac_dinh" | "nhanh" | "toi_da".
     #

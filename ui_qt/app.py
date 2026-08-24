@@ -766,15 +766,25 @@ class CuaSoChinh(QWidget):
 
     # ── Vòng bơm sự kiện ─────────────────────────────────────────────────────
 
-    def _bom(self) -> None:
-        """Đọc hàng đợi và vẽ. Xử lý theo lô có trần để cửa sổ không khựng.
+    #: Số sự kiện vẽ nhiều nhất trong MỘT nhịp bơm (nhịp 150 ms).
+    #:
+    #: ═══ VÌ SAO 400, KHÔNG PHẢI 60 ═══
+    #:
+    #: Trần cũ 60 tức ~400 sự kiện/giây. Một mẻ 1000 ảnh + 1000 video đẩy ra cỡ
+    #: mười nghìn sự kiện, và mỗi ảnh xong lại phải qua đúng vòng bơm này mới
+    #: được nối sang video (`cuoi_nhip`). Trần thấp thì hàng đợi dài ra, ảnh xong
+    #: rồi mà clip mãi chưa được gửi — nhìn từ ngoài đúng như tool đứng im.
+    #:
+    #: Vẽ được nhiều là nhờ thẻ bị cắt khỏi lưới không dựng lại (`TRAN_THE`), nên
+    #: phần lớn sự kiện giờ chỉ là cộng vào sổ đếm, rẻ hơn hẳn thời trần 60.
+    _TRAN_SU_KIEN_MOI_NHIP = 400
 
-        Một lô 500 job đẩy hàng nghìn sự kiện dồn dập; mỗi nhịp chỉ vẽ tối đa 60.
-        """
+    def _bom(self) -> None:
+        """Đọc hàng đợi và vẽ. Xử lý theo lô có trần để cửa sổ không khựng."""
         if self._dang_dong:
             return
         da_lam = 0
-        while da_lam < 60:
+        while da_lam < self._TRAN_SU_KIEN_MOI_NHIP:
             try:
                 loai, du_lieu = self.events.get_nowait()
             except queue.Empty:

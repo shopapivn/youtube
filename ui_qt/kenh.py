@@ -1325,13 +1325,17 @@ class HopKenh(QDialog):
             return
         duongs = duongs[:3]
         from core.auto_khau import _anh_thanh_data_url  # noqa: PLC0415
+        from core.goi_van_ban import khoi_anh  # noqa: PLC0415
 
+        # Ảnh đi bằng `khoi_anh` — định dạng cổng thật sự chuyển tới mô hình.
+        # Kiểu `image_url` bị cổng lặng lẽ bỏ, AI trả "không thấy ảnh" (phát
+        # hiện 24/08/2026 ở tab Prompt Visuals, cùng một đoạn mã chép từ đây).
         phan = [{"type": "text", "text": self._loi_nhac_doan()}]
         try:
             for d in duongs:
                 with open(d, "rb") as f:
                     url = _anh_thanh_data_url(f.read())
-                phan.append({"type": "image_url", "image_url": {"url": url}})
+                phan.append(khoi_anh(url))
         except OSError:
             self._nhan_doan.setText(
                 "Chưa đọc được ảnh bạn chọn — bạn chọn tay ở lưới trên nhé.")

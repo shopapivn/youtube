@@ -70,7 +70,27 @@ DASHBOARD_LOGIN_URL = "https://shopapi.vn/login"
 #: Trần CỨNG TUYỆT ĐỐI mỗi khách, mỗi loại job — CONTRACT.md §8.1.
 #: Vượt là máy chủ từ chối, nên đây là mức kẹp trên của mọi con số trong file
 #: cấu hình. Không phải mức nên chạy: mức nên chạy do vòng tự dò tìm ra.
-HARD_CAPS: Dict[str, int] = {"tts": 16, "image": 384, "video": 64}
+#:
+#: ═══ PHẢI BÁM ĐÚNG TRẦN MÁY CHỦ, KHÔNG ĐƯỢC THẤP HƠN ═══
+#:
+#: Đo 23/08/2026 (khách báo "MAX mà 1000 ảnh/video chạy mãi không xong"): ba con
+#: số cũ `{16, 384, 64}` đã LẠC HẬU so với máy chủ. `HARD_MAX_CONCURRENT_PER_USER`
+#: bên `queue.constants.ts` giờ là `{tts:16, image:6144, video:832}`, và nhà máy
+#: thật chạy song song ~image 3072 (96 gmail × 32 luồng), ~video 320 (10 × 32).
+#: Một khách chạy một mình được ~90% số đó (`concurrency.service.ts`: trừ 10% dự
+#: phòng) — tức image ~2764, video ~288.
+#:
+#: Ba con số cũ bóp tool xuống dưới nhà máy theo HAI đường IM LẶNG:
+#:   1. Pool luồng của `core/jobs.py` bằng ĐÚNG `sum(HARD_CAPS)`. Cũ = 464 luồng,
+#:      nên dù cổng mở tới trần máy chủ thì cũng chỉ 464 job chạy thật một lúc.
+#:   2. Mốc "toi_da" = `dict(HARD_CAPS)`, nên MAX bắt đầu video ở 64 rồi bò lên —
+#:      mất chục phút mới tới 288. Với lô 1000 video, đó chính là "chạy mãi".
+#:
+#: Bám đúng trần máy chủ ở đây sửa cả hai: pool nới rộng, MAX bùng thẳng. Vòng tự
+#: dò (`NhipDo`) vẫn kẹp mức chạy THẬT về đúng trần `GET /v1/me` trong 20 giây
+#: đầu, nên số luồng mở ra vẫn bằng min(việc-đang-chờ, trần-máy-chủ) chứ không
+#: bao giờ chạm 6144. Vượt trần máy chủ thì máy chủ tự xếp hàng / phanh 429.
+HARD_CAPS: Dict[str, int] = {"tts": 16, "image": 6144, "video": 832}
 
 #: Mức KHỞI ĐẦU mỗi loại — lấy đúng khuyến nghị đo được ở CONTRACT.md §8.1b.
 DEFAULT_CONCURRENCY: Dict[str, int] = {"tts": 3, "image": 8, "video": 8}

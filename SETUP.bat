@@ -328,6 +328,23 @@ if errorlevel 1 (
   echo   -^> Chay lai SETUP.bat khi may co mang. Cac tab khac van dung duoc.
   echo.
 )
+REM Bo nghe tieng (faster-whisper-small, ~0.5GB): tab Prompt Visuals can no de
+REM nghe file mp3/wav ra phu de ngay tren may (mien phi). Tai mot lan ve thang
+REM thu muc tool (models\), cac lan sau dung lai - dung ProgramData hay cache
+REM lung tung o cho khac. Thieu no thi TOOL VAN CHAY, chi tab Prompt Visuals bao
+REM thieu bo nghe, nen o day chi tai va nhac chu khong dung setup lai.
+if exist "%~dp0models\faster-whisper-small\config.json" (
+  echo   - Bo nghe tieng: da co
+) else (
+  echo   - Bo nghe tieng: chua co, dang tai ~0.5GB mot lan ^(can mang^)...
+  %PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from pathlib import Path; from core.model_installer import install, ALLOWED_MODELS; install(Path(os.getcwd()), 'faster-whisper-small', ALLOWED_MODELS['faster-whisper-small']); print('     Da tai xong bo nghe.')"
+  if errorlevel 1 (
+    echo.
+    echo   !!! Chua tai duoc bo nghe tieng. Tab Prompt Visuals se bao thieu.
+    echo   -^> Chay lai SETUP.bat khi may co mang on dinh. Cac tab khac van dung duoc.
+    echo.
+  )
+)
 REM FFmpeg: can cho khau dung video va khau tach phu de. Uu tien ban cai san
 REM tren may; khong co thi lay ban di kem imageio-ffmpeg.
 %PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.dung_video import tim_ffmpeg; p = tim_ffmpeg(); print('  - FFmpeg:', p or 'KHONG THAY'); sys.exit(0 if p else 1)"

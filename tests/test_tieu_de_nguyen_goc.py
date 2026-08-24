@@ -150,8 +150,45 @@ class TestDuongLui:
             noi_dung = _tieu_de_da_ghi(d)
         assert "THUMB: 対抗のタイトル" in noi_dung
 
+    def test_ocr_ke_ca_doan_dai_thi_bo_lay_tieu_de(self):
+        # Cổng nhận ảnh nhưng mô hình "tả ảnh" thay vì đọc dòng chữ → trả cả
+        # đoạn dài. Không tin: chữ bìa lấy tiêu đề đối thủ.
+        goi = _GoiChat(bia="Đây là một ảnh bìa " * 20)
+        lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=lambda u: b"jpeg")
+            _chay(bc, _kenh(), d, {"link": "http://x"})
+            noi_dung = _tieu_de_da_ghi(d)
+        assert "THUMB: 対抗のタイトル" in noi_dung
+        assert len(goi.co_anh) == 1  # có gọi đọc ảnh, nhưng kết quả bị bỏ
 
-class TestSidecarDoiThu:
+    def test_ocr_cau_tu_choi_ngan_thi_bo_lay_tieu_de(self):
+        # Cổng bỏ ảnh lặng lẽ → mô hình trả câu "I don't see any image…" NGẮN
+        # hơn rào dài (đo thật: 111 chữ, lọt qua). Bắt riêng bằng câu từ chối.
+        goi = _GoiChat(bia="I don't see any image attached to your message.")
+        lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=lambda u: b"jpeg")
+            _chay(bc, _kenh(), d, {"link": "http://x"})
+            noi_dung = _tieu_de_da_ghi(d)
+        assert "THUMB: 対抗のタイトル" in noi_dung
+        assert len(goi.co_anh) == 1
+
+    def test_khong_co_tieu_de_doi_thu_thi_khong_vo(self):
+        # nguyen_goc nhưng dán tay lời thoại, không link → không có tiêu đề đối
+        # thủ. Rơi về nết cũ (câu đầu tư liệu), không đọc ảnh, không ném lỗi.
+        goi = _GoiChat()
+        with tempfile.TemporaryDirectory() as d:
+            # Đặt sẵn lời thoại để bỏ qua bước lấy tư liệu.
+            with open(os.path.join(d, "0-tu-lieu.txt"), "w",
+                      encoding="utf-8") as f:
+                f.write("Câu mở đầu làm tiêu đề\n" + "本" * 900)
+            # Kênh không có 1-tieu-de.md → nhánh fallback câu đầu tư liệu.
+            bc = _bc(d, goi, tai_anh=lambda u: b"jpeg")
+            _chay(bc, _kenh(), d, {})
+            noi_dung = _tieu_de_da_ghi(d)
+        assert "TITLE: Câu mở đầu làm tiêu đề" in noi_dung
+        assert goi.co_anh == []
     def test_ghi_va_doc_lai_khi_chay_lai(self):
         lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")
         with tempfile.TemporaryDirectory() as d:
@@ -173,9 +210,27 @@ class TestSidecarDoiThu:
             assert "TITLE: 対抗のタイトル" in _tieu_de_da_ghi(d)
 
 
+class TestKhoiAnh:
+    def test_data_url_thanh_khoi_anthropic_base64(self):
+        from core.goi_van_ban import khoi_anh
+
+        khoi = khoi_anh("data:image/png;base64,AAAB")
+        # Cổng ShopAPI chỉ chuyển ảnh tới mô hình ở đúng dạng Anthropic base64
+        # (đo lượt chạy thật 22/08/2026). Dạng OpenAI image_url bị bỏ lặng.
+        assert khoi == {"type": "image",
+                        "source": {"type": "base64",
+                                   "media_type": "image/png", "data": "AAAB"}}
+
+    def test_thieu_media_type_thi_mac_dinh_jpeg(self):
+        from core.goi_van_ban import khoi_anh
+
+        khoi = khoi_anh("data:;base64,ZZZ")
+        assert khoi["source"]["media_type"] == "image/jpeg"
+
+
 class TestGoiVanBanNhanAnh:
     def test_content_mang_co_phan_anh_len_cong(self):
-        from core.goi_van_ban import goi_van_ban
+        from core.goi_van_ban import goi_van_ban, khoi_anh
 
         bat = {}
 
@@ -190,11 +245,14 @@ class TestGoiVanBanNhanAnh:
                 return _Ph()
 
         content = [{"type": "text", "text": "đọc bìa"},
-                   {"type": "image_url",
-                    "image_url": {"url": "data:image/jpeg;base64,AAA"}}]
+                   khoi_anh("data:image/jpeg;base64,AAA")]
         ra = goi_van_ban(_ClientGia(), [{"role": "user", "content": content}],
                          ngu=lambda _g: None)
         assert ra == "ok"
         gui = bat["json"]["messages"][0]["content"]
         assert isinstance(gui, list)
-        assert any(p.get("type") == "image_url" for p in gui)
+        # Đúng dạng ảnh mà cổng thật sự chuyển tới mô hình.
+        anh = [p for p in gui if p.get("type") == "image"]
+        assert len(anh) == 1
+        assert anh[0]["source"]["type"] == "base64"
+        assert anh[0]["source"]["data"] == "AAA"

@@ -101,6 +101,16 @@ MUC = (
      "trước khi cho chạy hàng loạt.\n"
      "Tốn thêm vài lượt gọi AI viết chữ mỗi lượt chạy — loại rẻ, không phải "
      "loại đắt như ảnh hay clip."),
+    ("kich_ban_bang_claude_code", "Kịch bản viết bằng Claude Code",
+     "Tắt sẵn. Chỉ bật nếu máy này đã cài Claude Code và đăng nhập gói thuê "
+     "bao Claude (Pro/Max) của chính bạn.\n"
+     "Bật thì khâu KỊCH BẢN của tab Tự động viết bằng thuê bao đó — không trừ "
+     "ví ShopAPI cho phần viết chữ. Ảnh, clip, giọng đọc và lời nhắc ảnh/video "
+     "vẫn chạy qua ví ShopAPI như cũ.\n"
+     "Khoá ShopAPI KHÔNG được đưa vào Claude Code: lượt viết chạy bằng phiên "
+     "đăng nhập của máy, trong một thư mục rỗng, không đọc được gì của tool.\n"
+     "Nếu Claude Code chưa cài hoặc chưa đăng nhập, tôi tự quay về ví ShopAPI "
+     "và ghi một dòng vào nhật ký — lượt chạy không hỏng vì nút này."),
     ("doi_cao_do_giong", "Đổi nhẹ cao độ giọng đọc",
      "Tắt sẵn. Đây là nút DUY NHẤT trong nhóm này đụng vào chính nội dung, chứ "
      "không chỉ vào thẻ dữ liệu — nên nó tách riêng.\n"

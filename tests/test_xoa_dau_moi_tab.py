@@ -205,9 +205,40 @@ class TestClipLayKhungDauTuTepDaSach:
             "xoá dấu; dùng lại URL kết quả của job ảnh là clip đeo dấu như cũ")
 
     def test_tab_hang_loat_cung_tai_len_tep_tren_dia(self):
-        chu = (GOC / "ui_qt" / "trang_anh_video.py").read_text(encoding="utf-8")
-        dau = chu.index("def _day_video")
-        than = chu[dau:dau + 1200]
-        assert "upload_file(duong)" in than, (
-            "tab Hàng loạt phải tải lên tệp ảnh đã tải về máy, không phải URL "
-            "kết quả của job ảnh")
+        """Tấm ảnh ĐÃ bị xoá dấu thì khâu nối phải đẩy TỆP trên đĩa lên.
+
+        Bản trên máy chủ vẫn đeo ngôi sao; dùng lại link ấy là đem dấu vào clip.
+        Cơ chế: `_download_outputs` chỉ giữ `record.urls` cho tệp KHÔNG bị sửa,
+        chỗ bị sửa ghi chuỗi rỗng — nên chỉ cần canh đúng chỗ đó.
+        """
+        chu = (GOC / "core" / "jobs.py").read_text(encoding="utf-8")
+        assert 'link.append("" if _xoa_dau(dest) else url)' in chu, (
+            "sửa tệp rồi mà vẫn giữ link máy chủ thì clip đeo lại cái dấu vừa xoá")
+
+    def test_tab_hang_loat_khong_dung_lai_link_cua_anh_da_xoa_dau(self, tmp_path,
+                                                                  monkeypatch):
+        """Canh bằng HÀNH VI, không bằng chuỗi: ảnh bị sửa → không có link."""
+        import queue
+
+        from core.jobs import JobManager, JobRecord, JobSpec
+        from core.pricing import KIND_IMAGE
+
+        hang_doi = JobManager(lambda: None, queue.Queue())
+        monkeypatch.setattr(
+            "core.jobs.download_to",
+            lambda url, dest, should_stop=None: open(dest, "wb").write(b"anh"))
+        monkeypatch.setattr("core.jobs.extract_outputs",
+                            lambda job: list(job["outputs"]))
+
+        def chay(co_dau: bool):
+            monkeypatch.setattr("core.jobs._xoa_dau", lambda _d: co_dau)
+            ban = JobRecord(spec=JobSpec(kind=KIND_IMAGE, content="x",
+                                         label="canh 1", out_dir=str(tmp_path)))
+            hang_doi._download_outputs(
+                ban, {"outputs": [{"url": "https://vi-du/anh.png",
+                                   "content_type": "image/png"}]})
+            return ban
+
+        assert chay(True).urls == [""], "ảnh vừa xoá dấu: KHÔNG được giữ link"
+        assert chay(False).urls == ["https://vi-du/anh.png"], (
+            "ảnh vốn sạch: giữ link để khỏi đẩy ngược cả nghìn tấm lên")

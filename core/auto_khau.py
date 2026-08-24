@@ -39,8 +39,8 @@ import subprocess
 import collections
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .auto import LuotChay, TrangThaiKhau
 from .chia_canh import (bang_phu_de, chia_theo_nghia, dien_khuon,
@@ -255,6 +255,11 @@ class BoiCanh:
     #: Xem ghi chú ở `_goi` trong tệp này — đây là chỗ đã làm hỏng lượt chạy
     #: thật đầu tiên (14/08/2026).
     goi_chat: Callable[..., str]
+    #: Gọi AI viết chữ **riêng cho khâu kịch bản** — để trống thì dùng chung
+    #: `goi_chat`. Có nó khi chủ máy bật "Kịch bản viết bằng Claude Code" trong
+    #: Cài đặt: khâu kịch bản đi qua thuê bao Claude của máy, còn lời nhắc
+    #: ảnh/clip và mọi khâu khác vẫn đi ví ShopAPI. Xem `core/viet_max.py`.
+    goi_chat_kich_ban: Optional[Callable[..., str]] = None
     #: Client ShopAPI cho giọng đọc / ảnh / clip. Có thể là đồ giả khi chạy thử.
     client: Any = None
     on_log: Optional[Callable[[str], None]] = None
@@ -294,6 +299,17 @@ class BoiCanh:
     def nhip(self, luot: LuotChay) -> None:
         if self.on_nhip is not None:
             self.on_nhip(luot)
+
+    def cho_kich_ban(self) -> "BoiCanh":
+        """Bối cảnh dành cho khâu kịch bản: đổi đường viết chữ nếu có đường riêng.
+
+        Trả về **bản sao** chứ không sửa tại chỗ: cùng một `BoiCanh` còn được
+        các khâu khác dùng song song, mà lời nhắc ảnh/clip thì phải tiếp tục đi
+        ví ShopAPI.
+        """
+        if self.goi_chat_kich_ban is None:
+            return self
+        return replace(self, goi_chat=self.goi_chat_kich_ban)
 
     def kiem_dung(self) -> None:
         """Có phải dừng không — vì người bấm Dừng, HOẶC vì cổng đã ngừng nhận.
@@ -400,8 +416,17 @@ def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
             # `goi_chat` cũ không nhận kwarg này, nên không đưa vào lúc viết chữ
             # thường để khỏi phá các nơi gọi khác.
             them = {"anh": anh} if anh else {}
-            return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
-                               khoa=khoa_lan, toi_da_token=toi_da_token, **them)
+            ket = bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
+                              khoa=khoa_lan, toi_da_token=toi_da_token, **them)
+            # ═══ BÓC LỚP VỎ "GỌI CÔNG CỤ" GIẢ ═══
+            #
+            # Có lượt mô hình không trả thẳng lời đọc, mà "diễn" một pha ghi tệp
+            # (```bash … / name write_file / {"content": "…"} / </function…>).
+            # Lời thật nằm trong trường JSON "content"; nếu để nguyên thì bộ đọc
+            # giọng đọc cả vỏ ("んてんてん…"), và bước đo độ dài đếm cả rác. Bóc
+            # ngay tại cửa AI để MỌI bước hưởng, và chỉ bóc khi chắc là vỏ giả.
+            from .lam_sach import go_boc_tool_gia  # noqa: PLC0415
+            return go_boc_tool_gia(ket) if isinstance(ket, str) else ket
         except Exception as loi:  # noqa: BLE001
             if lan == 3:
                 raise
@@ -579,19 +604,39 @@ def _doc_chu(duong: str) -> str:
 # Chạy lại một lượt thì bước lấy lời thoại bị bỏ qua (đã có `0-tu-lieu.txt`),
 # nên `ket.title`/`ket.video_id` không còn. Kênh `nguyen_goc` cần cả hai để
 # lấy nguyên tiêu đề và dựng địa chỉ ảnh bìa. Ghi ra một tệp bên cạnh lời thoại.
-def _ghi_doi_thu(d: str, tieu_de: str, video_id: str) -> None:
+def _ghi_doi_thu(d: str, tieu_de: str, video_id: str, duration_s: int = 0) -> None:
     _ghi_chu(os.path.join(d, "0-doi-thu.txt"),
-             "TITLE: {0}\nVIDEO_ID: {1}\n".format(tieu_de or "", video_id or ""))
+             "TITLE: {0}\nVIDEO_ID: {1}\nDURATION: {2}\n".format(
+                 tieu_de or "", video_id or "", int(duration_s or 0)))
 
 
 def _doc_doi_thu(d: str) -> Dict[str, str]:
-    ra = {"title": "", "video_id": ""}
+    ra = {"title": "", "video_id": "", "duration": "0"}
     for dong in _doc_chu(os.path.join(d, "0-doi-thu.txt")).splitlines():
         if dong.startswith("TITLE:"):
             ra["title"] = dong[len("TITLE:"):].strip()
         elif dong.startswith("VIDEO_ID:"):
             ra["video_id"] = dong[len("VIDEO_ID:"):].strip()
+        elif dong.startswith("DURATION:"):
+            ra["duration"] = dong[len("DURATION:"):].strip() or "0"
     return ra
+
+
+def _muc_tieu_do_dai(k: "Kenh", tu_lieu: str, giay_goc: int) -> int:
+    """Số ký tự nhắm tới cho bước viết.
+
+    Kênh thường: mốc phút cố định (`ky_tu_muc_tieu`). Kênh remake bám gốc
+    (`do_dai_theo_goc`): đo theo SỐ GIÂY video đối thủ × `ky_tu_moi_phut` — thước
+    không phụ thuộc ngôn ngữ, tránh chuyện bản gỡ băng là bản dịch dài gấp đôi.
+    Thiếu số giây thì lui về số ký tự tư liệu; thiếu cả tư liệu (quên đưa link)
+    thì về mốc phút cho an toàn — lấy 0 làm mục tiêu sẽ tắt luôn sàn chống "kịch
+    bản quá ngắn" trong `_kiem_kich_ban_dung_duoc`.
+    """
+    if not (k.do_dai_theo_goc and tu_lieu):
+        return k.ky_tu_muc_tieu
+    if giay_goc > 0 and k.ky_tu_moi_phut > 0:
+        return int(round(giay_goc / 60 * k.ky_tu_moi_phut))
+    return len(tu_lieu)
 
 
 def _tai_anh_thumb(url: str) -> bytes:
@@ -616,6 +661,29 @@ _LOI_NHAC_DOC_BIA = (
     "in trên ảnh, y nguyên từng chữ, không thêm giải thích, không dịch, không "
     "thêm dấu ngoặc. Nếu ảnh không có chữ thì trả về một dòng trống."
 )
+
+#: Chữ bìa dài hơn ngần này thì gần như chắc là AI đã tả ảnh / giải thích thay
+#: vì đọc dòng chữ — chữ bìa thật chỉ vài từ. Dài quá thì bỏ, lấy tiêu đề thay.
+_TOI_DA_CHU_BIA = 120
+
+#: Dấu hiệu mô hình **không thấy ảnh** (câu từ chối), không phải chữ trên bìa.
+#:
+#: Đo lượt chạy thật 22/08/2026: khi ảnh gửi sai định dạng, cổng lặng lẽ bỏ phần
+#: ảnh và mô hình trả "I don't see any image attached…" — đúng 111 chữ, LỌT qua
+#: rào 120 chữ ở trên. Nên bắt thêm bằng câu từ chối: thấy là bỏ, lấy tiêu đề.
+#: Đã sửa định dạng ảnh (xem `goi_van_ban.khoi_anh`) nên đường này hiếm khi chạm
+#: tới, nhưng giữ làm chốt chặn — chữ bìa sai còn hại hơn không có.
+_DAU_TU_CHOI_BIA = (
+    "i don't see", "i do not see", "don't see any image", "no image",
+    "cannot see", "can't see", "unable to see", "please share",
+    "please provide", "chưa thấy ảnh", "không thấy ảnh", "không có ảnh",
+)
+
+
+def _giong_tu_choi(chu: str) -> bool:
+    """Câu này có phải mô hình đang nói 'không thấy ảnh' không?"""
+    thap = chu.lower()
+    return any(dau in thap for dau in _DAU_TU_CHOI_BIA)
 
 
 def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay, video_id: str) -> str:
@@ -647,7 +715,18 @@ def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay, video_id: str) -> str:
     except Exception as loi:  # noqa: BLE001
         bc.ghi("  (không đọc được chữ trên ảnh bìa đối thủ: {0})".format(loi))
         return ""
-    return " ".join((tra or "").split())
+    chu = " ".join((tra or "").split())
+    # Cổng nhận ảnh nhưng mô hình "kể" thay vì "đọc" thì trả về cả đoạn — dài
+    # bất thường so với một dòng chữ bìa. Không tin, để nơi gọi lấy tiêu đề.
+    if len(chu) > _TOI_DA_CHU_BIA:
+        bc.ghi("  (chữ đọc từ ảnh bìa dài bất thường — bỏ, dùng tiêu đề đối thủ)")
+        return ""
+    # Câu từ chối "không thấy ảnh" ngắn hơn rào dài ở trên nên lọt qua — bắt
+    # riêng, kẻo ghi nguyên câu tiếng Anh ấy vào chữ bìa.
+    if _giong_tu_choi(chu):
+        bc.ghi("  (mô hình báo không thấy ảnh bìa — bỏ, dùng tiêu đề đối thủ)")
+        return ""
+    return chu
 
 
 def _giay_srt(moc: Any) -> float:
@@ -1569,8 +1648,12 @@ def _bo_tep(duong: str) -> None:
         pass
 
 
-def _khau_kich_ban(bc: BoiCanh):
+def _khau_kich_ban(bc_goc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
+        # Khâu này — và CHỈ khâu này — được đổi đường viết chữ sang thuê bao
+        # Claude của máy khi chủ máy bật nút ấy. `cho_kich_ban` trả về bản sao,
+        # nên các khâu sau (bảng cảnh, ảnh bìa…) vẫn nhận `bc_goc` nguyên vẹn.
+        bc = bc_goc.cho_kich_ban()
         k = bc.kenh
         d = luot.thu_muc
         duong_kb = os.path.join(d, "1-kich-ban.txt")
@@ -1586,17 +1669,27 @@ def _khau_kich_ban(bc: BoiCanh):
 
                 lay = lay_script
             ket = lay(link, cancel=bc.cancel, cho_phep_nghe=True,
-                      on_log=bc.on_log)
+                      ngon_ngu_uu_tien=k.ngon_ngu, on_log=bc.on_log)
             tu_lieu = getattr(ket, "text", "") or ""
             if not tu_lieu:
                 raise RuntimeError(
                     "không lấy được lời thoại của video tư liệu: {0}".format(
                         getattr(ket, "loi", "") or "không rõ"))
+            # ═══ BỎ KHOẢNG TRẮNG THỪA CHO TIẾNG VIẾT LIỀN ═══
+            #
+            # Phụ đề `json3` của YouTube tách từng "từ" bằng khoảng trắng. Với
+            # tiếng Nhật/Trung/Thái (viết liền, không cách) thì bản gỡ băng phình
+            # ~60% số ký tự so với chữ thật. Dọn ngay để `CHARS_GOC` và mục tiêu
+            # độ dài đo trên chữ THẬT, không phải trên khoảng trắng máy chèn.
+            from .lam_sach import go_cach_cjk  # noqa: PLC0415
+            tu_lieu = go_cach_cjk(tu_lieu, k.ngon_ngu)
             _ghi_chu(os.path.join(d, "0-tu-lieu.txt"), tu_lieu)
-            # Giữ lại tiêu đề + mã video đối thủ: kênh `nguyen_goc` cần chúng, mà
-            # chạy lại thì bước lấy này bị bỏ qua nên `ket` không còn.
+            # Giữ lại tiêu đề + mã video + ĐỘ DÀI video đối thủ: kênh `nguyen_goc`
+            # cần tiêu đề/mã, còn bước đo độ dài cần số giây. Chạy lại thì bước
+            # lấy này bị bỏ qua nên `ket` không còn — đọc lại từ tệp bên cạnh.
             _ghi_doi_thu(d, getattr(ket, "title", "") or "",
-                         getattr(ket, "video_id", "") or "")
+                         getattr(ket, "video_id", "") or "",
+                         getattr(ket, "duration_s", 0) or 0)
             bc.ghi("  tư liệu: {0} chữ.".format(len(tu_lieu.split())))
 
         # ═══ ĐỘ DÀI NHẮM TỚI: THEO PHÚT, HAY THEO VIDEO GỐC ═══
@@ -1606,13 +1699,24 @@ def _khau_kich_ban(bc: BoiCanh):
         # bản gốc: video dài bằng video đối thủ, không bị kéo/nén về mốc cố định.
         # Con số này dẫn dắt bước viết, bước nắn (nếu có) và chốt chặn quá ngắn.
         #
-        # Bám bản gốc CHỈ khi thật có bản gốc. Chạy kênh remake mà quên đưa link
-        # thì `tu_lieu` rỗng — lấy 0 làm mục tiêu sẽ tắt luôn cả sàn chống "kịch
-        # bản quá ngắn" (`_kiem_kich_ban_dung_duoc` bỏ qua khi mục tiêu ≤ 0), tức
-        # một câu AI hỏi lại cũng lọt. Thiếu bản gốc thì quay về mốc phút cho an
-        # toàn, dù đằng nào bài không-bản-gốc cũng chẳng còn là remake.
-        muc_tieu_kt = (len(tu_lieu) if k.do_dai_theo_goc and tu_lieu
-                       else k.ky_tu_muc_tieu)
+        # ═══ ĐO THEO SỐ GIÂY VIDEO, KHÔNG PHẢI SỐ KÝ TỰ BẢN GỠ BĂNG ═══
+        #
+        # Trước đây mục tiêu = số ký tự tư liệu. Nhưng tư liệu có thể là bản DỊCH
+        # (YouTube trả phụ đề tiếng Việt cho video Nhật) — mà một ý tiếng Việt
+        # dài gấp đôi tiếng Nhật. Đo thật link GJjYlTjNV8g (16/08/2026): bản dịch
+        # Việt 16.187 ký tự, bản Nhật gốc chỉ ~4.847. Lấy 16.187 làm mục tiêu thì
+        # bài Nhật viết ra dài gấp rưỡi — video 16 phút thành 26 phút.
+        #
+        # Số giây video là thước KHÔNG phụ thuộc ngôn ngữ: nhân với `ky_tu_moi_
+        # phut` (đo từ bảy video thật của kênh) ra đúng số ký tự tiếng ấy cần cho
+        # ngần ấy phút. 975 giây × 298 ÷ 60 = 4.842 ≈ 4.847 chữ Nhật gốc — khớp.
+        # Thiếu số giây (dán tay bản gỡ băng, không link) thì lui về số ký tự.
+        giay_goc = 0
+        try:
+            giay_goc = int(_doc_doi_thu(d).get("duration") or 0)
+        except (TypeError, ValueError):
+            giay_goc = 0
+        muc_tieu_kt = _muc_tieu_do_dai(k, tu_lieu, giay_goc)
 
         chung = {
             "LANGUAGE": k.giong_van or k.ngon_ngu,
@@ -1773,6 +1877,19 @@ def _khau_kich_ban(bc: BoiCanh):
                     raise RuntimeError("bước “{0}” trả về rỗng".format(nhan))
                 _ghi_chu(nhap, ban_nhap + "\n")
 
+            # ═══ KỊCH BẢN CÓ SẴN THẺ CẢM XÚC THÌ TÁCH LÀM HAI ═══
+            #
+            # Chủ dự án, 24/08/2026: *"kết hợp cái review và cài chèn thẻ cảm
+            # xúc đi… đơn giản hiệu quả để kịch bản ok nhất, đưa vào voice
+            # được luôn"*. Nên bước sửa của kênh có thể trả về bài ĐÃ CÓ THẺ.
+            #
+            # Nhưng `1-kich-ban.txt` còn được khâu phụ đề (ép chữ lên giọng
+            # đọc), khâu ảnh bìa và phép đo độ dài dùng — thẻ lọt vào đó là
+            # `[sighs]` hiện lên màn hình. Nên tách ngay tại đây: bản có thẻ
+            # để riêng cho giọng đọc (`TEP_CO_THE`, khâu giọng đọc tự nhặt,
+            # không gọi AI chèn nữa), bản gỡ thẻ đi tiếp như mọi khi.
+            ban_nhap = _tach_the_cam_xuc(bc, d, ban_nhap)
+
             # ═══ NẮN ĐỘ DÀI: ĐO RỒI NẮN, KHÔNG NẮN MÙ ═══
             #
             # Lượt chạy thật đầu tiên ra 2.933/3.410 ký tự — hụt 14%, tức video
@@ -1855,6 +1972,32 @@ def _khau_kich_ban(bc: BoiCanh):
                 "tieu_de": tieu_de, "chu_bia": chu_bia}
 
     return lam
+
+
+def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:
+    """Bài có thẻ `[…]` thì ghi bản có thẻ ra `TEP_CO_THE`, trả về bản sạch.
+
+    Bài không có thẻ thì trả nguyên văn, không ghi gì — kênh nào không chèn
+    thẻ ở bước sửa vẫn chạy y như cũ. Thẻ lạ (AI bịa) bị gỡ trước khi ghi,
+    cùng cửa lọc với đường chèn riêng (`loc_the_la`).
+    """
+    from .the_cam_xuc import TEP_CO_THE, bo_the, loc_the_la  # noqa: PLC0415
+
+    co_the, da_bo = loc_the_la(ban)
+    sach = bo_the(co_the)
+    if sach == co_the:
+        return ban
+    # Gỡ thẻ để lại khoảng trắng thừa ở đầu câu; dọn cho phụ đề khỏi lệch.
+    sach = "\n".join(dong.strip() for dong in sach.splitlines())
+    sach = re.sub(r"[ \t]{2,}", " ", sach).strip()
+    if da_bo:
+        bc.ghi("  (bỏ thẻ không dùng được: {0})".format(
+            ", ".join(sorted(set(da_bo))[:5])))
+    so_the = len(co_the) - len(bo_the(co_the))
+    _ghi_chu(os.path.join(thu_muc, TEP_CO_THE), co_the.strip() + "\n")
+    bc.ghi("  kịch bản có sẵn thẻ cảm xúc ({0} ký tự thẻ) — bản có thẻ để "
+           "riêng cho giọng đọc, bản sạch cho phụ đề.".format(so_the))
+    return sach
 
 
 def _lech(chu: str, muc_tieu: int) -> float:
@@ -2927,6 +3070,18 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> str:
     """
     tep = os.path.join(luot.thu_muc, TEP_CO_THE)
     da_co = _doc_chu(tep).strip()
+    # ═══ BẢN CÓ THẺ SẴN TRÊN ĐĨA THÌ DÙNG, KHÔNG CẦN BẬT NÚT ═══
+    #
+    # Tệp này giờ có hai nguồn: nút "Chèn thẻ cảm xúc" ở Cài đặt (đường chèn
+    # riêng bên dưới), HOẶC chính bước sửa của kênh trả về bài đã có thẻ
+    # (`_tach_the_cam_xuc`). Nguồn thứ hai là ý của người soạn lời nhắc kênh
+    # — họ đã quyết kênh này đọc có thẻ — nên không bắt họ bật thêm nút nào.
+    # Vẫn kiểm khớp chữ: tệp có thể do bản tool cũ ghi, hoặc khách sửa tay.
+    if da_co:
+        if kiem_the(kich_ban, da_co):
+            bc.ghi("  dùng bản đã có thẻ cảm xúc.")
+            return da_co
+        bc.ghi("  (bản chèn thẻ cũ không khớp kịch bản — bỏ)")
     try:
         from . import cai_dat  # noqa: PLC0415
 
@@ -2935,14 +3090,6 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> str:
         bat = False
     if not bat:
         return kich_ban
-    if da_co:
-        # Kiểm lại bản cũ: tệp có thể do một bản tool cũ ghi ra, hoặc khách sửa
-        # tay. Không khớp kịch bản hiện tại là bỏ, đọc bản sạch — cùng nết với
-        # `_canh_dung_duoc` ở khâu bảng cảnh.
-        if kiem_the(kich_ban, da_co):
-            bc.ghi("  dùng lại bản đã chèn thẻ của lượt trước.")
-            return da_co
-        bc.ghi("  (bản chèn thẻ cũ không khớp kịch bản — bỏ, chèn lại)")
     try:
         bc.ghi("  chèn thẻ cảm xúc cho giọng đọc…")
 
@@ -2958,6 +3105,11 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> str:
         # cổng trống rỗng.
         #
         # Một lượt, hỏng thì thôi. `chen_the` tự lo phần quay về bản sạch.
+        # Thẻ là BƯỚC CUỐI của phần chữ, nên đi cùng đường với kịch bản: máy
+        # nào bật "Kịch bản viết bằng Claude Code" thì chèn thẻ cũng qua đó
+        # (`cho_kich_ban` trả về chính `bc` khi không bật — không đổi gì).
+        bc = bc.cho_kich_ban()
+
         def goi(loi_nhac: str) -> str:
             return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
                                khoa="{0}:chat:the-cam-xuc:{1}".format(
@@ -3322,13 +3474,71 @@ def _khau_clip(bc: BoiCanh):
 
 #: Ba kiểu ảnh bìa khác nhau, không phải ba bản ngẫu nhiên của cùng một kiểu —
 #: chép đúng nết `version_desc` của tool cũ (`portrait_main`, `dramatic_scene`…).
+#:
+#: ⚠ TÊN Ở ĐÂY PHẢI KHỚP TÊN TRONG `prompt/8-thumbnail.md` CỦA KÊNH.
+#:
+#: Đây là chỗ làm chữ bìa mất hẳn trên tấm thứ ba, và triệu chứng không hề chỉ
+#: về đây. Đo trên lượt chạy thật TL4-T7 lượt 0009 (22/08/2026): cả mười một
+#: tệp `8-thumbnail.md` trên đĩa đều xin AI trả về `youtube_ctr`, còn bảng này
+#: gọi tấm thứ ba là `symbolic_object`. Tra `ta_bia["symbolic_object"]` là
+#: **trượt**, nên tấm thứ ba rơi về `_bia_du_phong` — bản ghép cứng vốn không
+#: có một dòng nào yêu cầu chữ. Kết quả: hai tấm có chữ, tấm thứ ba trắng chữ,
+#: và không có lấy một dòng nhật ký nào nói vì sao.
+#:
+#: Nên tên tấm thứ ba đổi về `youtube_ctr` cho khớp lời nhắc, và việc tra thì đi
+#: qua `_lay_ta_bia` — có tên khác thì nhận, AI đặt tên lạ thì lấy theo thứ tự.
 KIEU_THUMB = (
     ("portrait_main", "close-up portrait of the reference character, direct "
                       "emotional gaze, single clear feeling"),
     ("dramatic_scene", "the most emotionally charged moment of the story, "
                        "character small in a meaningful environment"),
-    ("symbolic_object", "one strong symbolic object in the foreground with the "
-                        "character reacting behind it"),
+    ("youtube_ctr", "one strong symbolic object in the foreground with the "
+                    "character reacting behind it"),
+)
+
+#: Tên cũ / tên khác cho cùng một kiểu bìa. Lời nhắc là tệp người dùng sửa được,
+#: nên tên trong đó sẽ lệch — nhận cả họ tên thay vì bắt gõ đúng một chữ.
+_TEN_BIA_KHAC: Dict[str, Tuple[str, ...]] = {
+    "youtube_ctr": ("symbolic_object", "high_ctr", "symbolic"),
+    "portrait_main": ("portrait", "main_portrait"),
+    "dramatic_scene": ("dramatic", "scene"),
+}
+
+
+def _lay_ta_bia(ta_bia: Dict[str, str], ten_kieu: str, so_bia: int) -> str:
+    """Lấy lời nhắc AI đã viết cho tấm bìa này. Không có thì trả "".
+
+    Ba tầng, nới dần: đúng tên → tên khác đã biết → **theo thứ tự**. Tầng cuối
+    là tầng quan trọng nhất: lời nhắc nằm trong tệp người dùng sửa được, nên AI
+    có thể trả về ba cái tên chẳng giống bảng nào. Ba lời nhắc đúng thứ tự vẫn
+    tốt hơn hẳn một bản ghép cứng — miễn là còn đủ ba cái.
+    """
+    if not ta_bia:
+        return ""
+    for ten in (ten_kieu,) + _TEN_BIA_KHAC.get(ten_kieu, ()):
+        if ta_bia.get(ten):
+            return ta_bia[ten]
+    ds = [v for v in ta_bia.values() if v]
+    if len(ds) >= so_bia >= 1:
+        return ds[so_bia - 1]
+    return ""
+
+
+#: Bắt lời nhắc ảnh bìa dùng ĐÚNG chữ bìa, không tự nghĩ chữ khác.
+#:
+#: Kênh remake "gần như giống đối thủ nhất" thì chữ trên bìa là chữ đã đọc được
+#: từ bìa đối thủ — cả công đoạn đọc ảnh chỉ để có đúng dòng chữ ấy. Mà
+#: `8-thumbnail.md` lại bảo AI *"text: <hook in the channel's language>"*, tức
+#: mời nó tự nghĩ một câu hook mới. Đo lượt 0009: tấm thứ hai đội chữ
+#: 「温度が違う理由」 — câu AI tự bịa, không có trên bìa đối thủ.
+_LUAT_CHU_BIA_NGUYEN = (
+    "\n\n## MANDATORY — EXACT THUMBNAIL TEXT\n"
+    "The hook text is FIXED. It must appear on the image EXACTLY as written "
+    "below, character for character:\n\n    {0}\n\n"
+    "Do not translate it, rewrite it, shorten it, extend it or replace it with "
+    "your own wording. In the `TEXT STYLE` block, `text:` must be exactly this "
+    "string. You may only decide which part of it is the small trigger word and "
+    "which part is the huge MAIN word. Add no other text to the image.\n"
 )
 
 
@@ -3354,6 +3564,10 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
         "THUMB_TEXT_FONT": st.get("thumb_text_font", ""),
         "THUMB_TEXT_SHADOW": st.get("thumb_text_shadow", ""),
     })
+    # Kênh lấy nguyên chữ bìa đối thủ thì chữ ấy là **cố định** — chốt lại, kẻo
+    # `8-thumbnail.md` mời AI tự nghĩ một câu hook mới (xem `_LUAT_CHU_BIA_NGUYEN`).
+    if bc.kenh.che_do_tieu_de == "nguyen_goc" and chu_bia.strip():
+        loi_nhac += _LUAT_CHU_BIA_NGUYEN.format(chu_bia.strip())
     try:
         goi = loc_json(_goi(bc, loi_nhac,
                             khoa_viec(luot, "chat", "thumb", tieu_de, chu_bia)))
@@ -3373,12 +3587,30 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
 
 def _bia_du_phong(st: Dict[str, Any], tieu_de: str, chu_bia: str,
                   ta: str) -> str:
-    """Bản ghép cứng, chỉ dùng khi AI không viết được."""
-    return ("{0}\nYouTube thumbnail, {1}. Video topic: {2}. "
-            "Emotional message: {3}. {4} Avoid: {5}".format(
+    """Bản ghép cứng, chỉ dùng khi AI không viết được.
+
+    ═══ BẢN NÀY CŨNG PHẢI XIN CHỮ ═══
+
+    Bản trước chỉ đưa chữ bìa vào làm *"Emotional message"* — một câu tả tâm
+    trạng, không phải một yêu cầu in chữ. Nên tấm nào rơi vào đây là tấm ấy ra
+    lò **không có chữ nào**, trong khi hai tấm kia (do AI viết lời nhắc) đội chữ
+    to đùng. Đo trên lượt 0009: đúng tấm thứ ba như thế.
+
+    Ảnh bìa không chữ thì gần như vô dụng với kênh này, nên bản đường-cùng vẫn
+    phải xin chữ — kèm cả kiểu chữ của kênh nếu có.
+    """
+    kieu_chu = " ".join(m for m in (st.get("thumb_text_font", ""),
+                                    st.get("thumb_text_style", ""),
+                                    st.get("thumb_text_shadow", "")) if m)
+    return ("{0}\nYouTube thumbnail, {1}. Video topic: {2}.\n"
+            "TEXT STYLE (HIGH CTR YOUTUBE):\n"
+            'text: "{3}"\n'
+            "render this text large and dominant, integrated into the "
+            "composition, negative space reserved for it. {4}\n"
+            "no other text, no watermark, no logo. {5} Avoid: {6}".format(
                 st.get("thumbnail_style", st.get("image_style", "")),
-                ta, tieu_de, chu_bia, st.get("reference_lock", ""),
-                st.get("negative_prompt", "")))
+                ta, tieu_de, chu_bia, kieu_chu,
+                st.get("reference_lock", ""), st.get("negative_prompt", "")))
 
 
 def _tep_bia(thu_muc: str, so: int) -> str:
@@ -3426,8 +3658,13 @@ def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
     tep = _tep_bia(thu_muc, so_bia)
     if os.path.exists(tep):
         return so_bia, True
-    loi_nhac = ta_bia.get(ten_kieu) or _bia_du_phong(bc.kenh.style, tieu_de,
-                                                    chu_bia, mac_dinh)
+    loi_nhac = _lay_ta_bia(ta_bia, ten_kieu, so_bia)
+    if not loi_nhac:
+        # Nói ra chứ đừng lặng lẽ: bản ghép cứng ra ảnh khác hẳn hai tấm kia,
+        # và bản trước không ghi gì nên không ai biết vì sao tấm này lệch.
+        bc.ghi("  (không có lời nhắc AI cho ảnh bìa {0} — dùng bản mặc "
+               "định)".format(so_bia))
+        loi_nhac = _bia_du_phong(bc.kenh.style, tieu_de, chu_bia, mac_dinh)
     # Khoá phủ cả ảnh tham chiếu — xem ghi chú ở `_lam_anh_canh`.
     goi = _tao_anh(bc, luot, loi_nhac, hop,
                    khoa_viec(luot, "thumb", so_bia, loi_nhac,

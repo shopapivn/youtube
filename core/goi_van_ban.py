@@ -77,7 +77,7 @@ from .su_co import (
     dau_vet, goi_kien_nhan, nhip_cho, phan_loai,
 )
 
-__all__ = ["goi_van_ban", "loc_json", "MO_HINH_MAC_DINH",
+__all__ = ["goi_van_ban", "loc_json", "khoi_anh", "MO_HINH_MAC_DINH",
            "TOI_DA_TOKEN_MAC_DINH"]
 
 #: Mô hình dùng cho mọi việc viết chữ trong tool.
@@ -261,6 +261,32 @@ def goi_van_ban(
                     kiem_dung()
 
     raise loi_cuoi or RuntimeError("không gọi được AI sau nhiều lần đổi khoá")
+
+
+def khoi_anh(data_url: str) -> Dict[str, Any]:
+    """Dựng khối ảnh cho `messages`, theo ĐÚNG định dạng cổng ShopAPI nhận.
+
+    ═══ CHỈ ĐỊNH DẠNG ANTHROPIC BASE64 MỚI TỚI ĐƯỢC MÔ HÌNH ═══
+
+    Đo trên cổng thật 22/08/2026, cùng một tấm ảnh, bốn cách gửi:
+
+        image_url (OpenAI) + URL công khai   -> mô hình bảo "không thấy ảnh"
+        image_url (OpenAI) + data URL base64 -> "không thấy ảnh"
+        image  (Anthropic) + base64          -> THẤY, đọc được chữ
+        image  (Anthropic) + url             -> "không thấy ảnh"
+
+    Endpoint mang dáng OpenAI (`/v1/chat/completions`) nhưng bên dưới là Claude,
+    và cổng chỉ chuyển tiếp khối ảnh kiểu Anthropic. Gửi kiểu `image_url` thì
+    cổng lặng lẽ bỏ phần ảnh — không lỗi, chỉ là mô hình trả lời như chưa từng
+    có ảnh. Đây là chỗ làm lượt chạy thử đầu tiên ghi nhầm câu "I don't see any
+    image" vào chữ bìa.
+
+    `data_url` là chuỗi `data:<media_type>;base64,<dữ liệu>`.
+    """
+    dau, _, du_lieu = (data_url or "").partition(";base64,")
+    media = dau.split(":", 1)[-1] or "image/jpeg"
+    return {"type": "image",
+            "source": {"type": "base64", "media_type": media, "data": du_lieu}}
 
 
 def loc_json(chu: str) -> Any:

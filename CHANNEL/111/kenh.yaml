@@ -27,3 +27,4 @@ mo_hinh: "claude-sonnet-5"
 dot_phu_de: true
 am_luong_nhac: 0.12
 nhac_nen: ""
+do_phan_giai: ""

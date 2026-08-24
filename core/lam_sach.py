@@ -49,6 +49,7 @@ loạt, lặp lại. Đó là chuyện nội dung, không phải chuyện thẻ 
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -56,7 +57,7 @@ import unicodedata
 from typing import Dict, List, Optional, Tuple
 
 __all__ = [
-    "go_dinh_dang",
+    "go_dinh_dang", "go_boc_tool_gia", "go_cach_cjk",
     "DAU_AI", "KY_TU_AN", "dau_ai_trong", "lam_sach_anh", "lam_sach_video",
     "lam_sach_chu", "lam_sach_tep",
     "CENT_DOI", "co_doi_cao_do", "loc_doi_cao_do", "doi_cao_do",
@@ -510,3 +511,83 @@ def go_dinh_dang(chu: str) -> str:
     chu = _DAM.sub(lambda m: m.group(1) or m.group(2) or "", chu)
     chu = _NGHIENG.sub(r"\1", chu)
     return _TIEU_DE.sub("", chu)
+
+
+#: Dấu hiệu của "vỏ gọi công cụ giả" — mô hình in ra thay vì trả thẳng lời đọc.
+_DAU_VO_TOOL: Tuple[str, ...] = (
+    "write_file", "</function", "```bash", "```sh", "mkdir", "/tmp/",
+    "tool_call", "functions.",
+)
+#: Bắt một trường JSON `"content": "…"` (có xử lý ký tự escape bên trong).
+_TRUONG_CONTENT = re.compile(r'"content"\s*:\s*("(?:[^"\\]|\\.)*")', re.DOTALL)
+
+
+def go_boc_tool_gia(chu: str) -> str:
+    """Bóc lớp vỏ "gọi công cụ" giả, lấy đúng lời đọc bên trong.
+
+    Có lượt mô hình không trả thẳng lời đọc mà "diễn" một pha ghi tệp:
+
+        ```bash
+        mkdir -p /tmp/out
+        ```
+        name write_file
+        {"path": "/tmp/out/x.txt", "content": "金曜日の夜…\\n\\n今日…"}
+        </function_results>
+
+    Lời đọc thật nằm trong trường JSON ``"content"`` (đã escape ``\\n``). Để
+    nguyên thì bộ đọc giọng đọc cả vỏ này — người dùng nghe ra "んてんてん…" và
+    đủ thứ rác — còn bước đo độ dài thì đếm cả vỏ. Bóc ra, `json.loads` tự trả
+    lại ``\\n`` thành xuống dòng thật.
+
+    Chỉ bóc khi **chắc** là vỏ giả: phải có trường ``"content"`` JSON *và* một
+    dấu hiệu vỏ (``write_file``, ```` ```bash ````, ``</function``, ``mkdir``,
+    ``/tmp/``…). Thiếu một trong hai thì trả nguyên văn — kịch bản sạch tình cờ
+    có chữ "content" không bị đụng tới. Có nhiều trường ``"content"`` thì lấy
+    cái DÀI nhất: đó là lời đọc, không phải "path" hay nhãn ngắn.
+    """
+    if not chu or '"content"' not in chu:
+        return chu
+    if not any(d in chu for d in _DAU_VO_TOOL):
+        return chu
+    ung_vien: List[str] = []
+    for m in _TRUONG_CONTENT.finditer(chu):
+        try:
+            gia_tri = json.loads(m.group(1))
+        except ValueError:
+            continue
+        if isinstance(gia_tri, str) and gia_tri.strip():
+            ung_vien.append(gia_tri)
+    if not ung_vien:
+        return chu
+    return max(ung_vien, key=len).strip()
+
+
+#: Thứ tiếng KHÔNG chèn khoảng trắng giữa các từ (viết dính liền tự nhiên).
+#: Tiếng Hàn (`ko`) DÙNG khoảng trắng giữa từ nên KHÔNG nằm đây.
+_TIENG_KHONG_CACH: Tuple[str, ...] = (
+    "ja", "zh", "th", "lo", "km", "my", "yue",
+)
+#: Vùng ký tự CJK/Nhật/Thái… — dùng để chỉ bỏ khoảng trắng CHẠM vào chúng.
+_CHU_DINH_LIEN = (
+    r"　-〿぀-ヿ㐀-䶿一-鿿"
+    r"豈-﫿＀-￯฀-๿຀-໿က-႟"
+)
+_CACH_QUANH_CJK = re.compile(
+    r"(?<=[{0}])\s+|\s+(?=[{0}])".format(_CHU_DINH_LIEN))
+
+
+def go_cach_cjk(chu: str, ngon_ngu: str = "") -> str:
+    """Bỏ khoảng trắng thừa mà YouTube chèn giữa các từ tiếng dính liền.
+
+    Phụ đề `json3` của YouTube tách từng "từ" bằng khoảng trắng — với tiếng
+    Nhật/Trung/Thái (vốn viết liền không cách) thì "日曜日 の 夕方" phình ~60%
+    số ký tự so với "日曜日の夕方" thật. Đo độ dài trên bản phình là sai thước:
+    lấy nó làm mục tiêu thì bài viết ra dài gấp rưỡi.
+
+    Chỉ dọn khi `ngon_ngu` thuộc nhóm tiếng viết liền, và chỉ bỏ khoảng trắng
+    **chạm vào** ký tự dính liền — cụm La-tinh nhúng trong câu ("YouTube",
+    "AI model") giữ nguyên khoảng cách của nó.
+    """
+    if not chu or ngon_ngu.split("-")[0].lower() not in _TIENG_KHONG_CACH:
+        return chu
+    return _CACH_QUANH_CJK.sub("", chu)

@@ -27,6 +27,15 @@ echo --- Python ---------------------------------------------------
 where python 2>nul
 where pythonw 2>nul
 python --version 2>nul
+REM Ban gia Microsoft Store: neu "python" tro vao WindowsApps thi day chinh la
+REM thu pha "mo tool khong len" - no chi mo Store, khong chay gi. Hoi PowerShell
+REM (khong dung `find`: vai may co `find` cua Unix nam truoc, xem ghi chu duoi).
+powershell -NoProfile -Command "$p=(Get-Command python -ErrorAction SilentlyContinue).Source; if($p -like '*WindowsApps*'){Write-Host '  !!! python DANG LA BAN GIA Microsoft Store (WindowsApps) - day la loi mo tool khong len.'}elseif($p){Write-Host ('  python trong PATH -> ' + $p)}else{Write-Host '  python: KHONG co trong PATH'}"
+REM Python THAT o cac cho da cai (khong qua PATH):
+set "PYREAL="
+for /d %%d in ("%LocalAppData%\Python\pythoncore-*") do if exist "%%d\python.exe" set "PYREAL=%%d\python.exe"
+for /d %%d in ("%LocalAppData%\Programs\Python\Python3*") do if exist "%%d\python.exe" set "PYREAL=%%d\python.exe"
+if defined PYREAL (echo   Python that tim thay: %PYREAL%) else (echo   Python that: KHONG thay o cho cai mac dinh)
 echo.
 
 echo --- Loi tat ngoai man hinh chinh ------------------------------

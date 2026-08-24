@@ -21,6 +21,7 @@ from typing import (
     Iterator,
     List,
     Mapping,
+    NamedTuple,
     Optional,
     Sequence,
     Type,
@@ -75,10 +76,31 @@ __all__ = [
     "ShopAPI",
     "AsyncShopAPI",
     "BaseClient",
+    "LoiMoi",
     "NhipDo",
     "poll_delays",
     "parse_retry_after",
 ]
+
+
+class LoiMoi(NamedTuple):
+    """Lời mời của nhà máy, đọc một lần từ ``GET /v1/me``.
+
+    Bốn số đo tại một thời điểm, **không phải hằng số** — xem
+    :meth:`ShopAPI.cho_nha_may_dang_moi`.
+    """
+
+    #: Mức KHÔNG ĐƯỢC VƯỢT cho riêng tài khoản này (``limits.concurrent_jobs``).
+    tran: int
+    #: Số chỗ trống ngay lúc này = sức chứa nhà máy − số job đang chạy. Gửi thêm
+    #: bấy nhiêu job thì chúng chạy NGAY, không phải nằm chờ. ``0`` khi máy chủ
+    #: bản cũ không trả ``concurrent_jobs_detail``.
+    cho_trong: int
+    #: Số job (của mọi khách) đang chạy trong nhà máy loại này.
+    dang_chay: int
+    #: Số job đang nằm chờ ở hàng chờ máy chủ.
+    hang_doi: int
+
 
 #: Mặc định 60 giây mỗi request — SDK_SPEC §1.
 DEFAULT_TIMEOUT = 60.0
@@ -475,6 +497,44 @@ class ShopAPI(BaseClient):
         """
         me = self.request("GET", "/v1/me")
         return int(me["limits"]["concurrent_jobs"][loai])
+
+    def cho_nha_may_dang_moi(self, loai: str) -> "LoiMoi":
+        """Trần **và** số chỗ nhà máy đang mời, trong ĐÚNG MỘT lần đọc ``/v1/me``.
+
+        ``tran_song_song()`` chỉ trả mức **không được vượt**. Nhưng cùng lời đáp
+        ấy máy chủ còn nói ra sức chứa và số job đang chạy, tức là **số chỗ đang
+        trống ngay lúc này** — thứ mà vòng dò cần để biết nên vào cuộc ở đâu.
+
+        Vì sao cần: ``NhipDo`` vào cuộc ở nhịp 1 rồi leo ``+1`` mỗi job xong. Với
+        video mỗi job ~2 phút, muốn chạy 100 job song song phải chờ 100 clip xong
+        trước — đo ngày 23/08/2026 trên mẻ 1000 cảnh: 100 clip đầu mất **42 phút**,
+        rồi 8, 4, 3 phút cho mỗi 100 tiếp theo, trong khi máy chủ suốt buổi vẫn
+        báo còn hơn 200 chỗ trống. Khách trả tiền cho 42 phút chờ một hàng chờ
+        rỗng.
+
+        Trả về ``LoiMoi(tran, cho_trong, dang_chay, hang_doi)``. Mọi trường đều là
+        số đo tại thời điểm gọi — đọc lại mỗi lô, đừng nhớ mãi.
+        """
+        me = self.request("GET", "/v1/me")
+        gioi_han = me["limits"]
+        tran = int(gioi_han["concurrent_jobs"][loai])
+        chi_tiet = (gioi_han.get("concurrent_jobs_detail") or {}).get(loai) or {}
+
+        def _so(ten: str) -> int:
+            try:
+                return max(0, int(chi_tiet.get(ten) or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        # `capacity` là sức chứa nhà máy loại này; `running` là số job (của MỌI
+        # khách) đang chạy trong đó. Hiệu hai số là chỗ trống thật. Máy chủ bản
+        # cũ không trả `concurrent_jobs_detail` -> `cho_trong = 0`, và nơi gọi
+        # rơi về đúng hành vi leo từng bước như trước, không hỏng.
+        suc_chua = _so("capacity")
+        dang_chay = _so("running")
+        cho_trong = max(0, suc_chua - dang_chay) if suc_chua else 0
+        return LoiMoi(tran=tran, cho_trong=cho_trong, dang_chay=dang_chay,
+                      hang_doi=_so("queued"))
 
     def chay_ca_me(
         self,

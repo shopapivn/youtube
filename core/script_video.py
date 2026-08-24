@@ -138,16 +138,23 @@ def co_the_nghe() -> bool:
 # ── Đường 1 & 2: phụ đề đi kèm video ─────────────────────────────────────────
 
 
-def _chon_phu_de(thong_tin: Dict, tu_lam: bool, uu_tien_ngon_ngu_goc: bool = False):
+def _chon_phu_de(thong_tin: Dict, tu_lam: bool, uu_tien_ngon_ngu_goc: bool = False,
+                 ngon_ngu_uu_tien: str = ""):
     """Chọn bản phụ đề hợp nhất. Trả về `(đường dẫn, mã ngôn ngữ)`.
 
     `tu_lam=True` lấy trong `subtitles` (người đăng tự làm), `False` lấy trong
     `automatic_captions` (máy YouTube nghe). Tách hai lần gọi chứ không gộp: hai
     thứ này khác nhau về độ tin, và bảng kết quả phải nói rõ chữ nào từ đâu.
 
-    `uu_tien_ngon_ngu_goc=True` lấy ngôn ngữ gốc của video (bản đầu tiên trong
-    danh sách), không ưu tiên tiếng Việt. Dùng khi muốn transcript gốc chứ không
-    phải bản dịch.
+    `ngon_ngu_uu_tien` (vd `"ja"`) — ưu tiên ĐÚNG thứ tiếng ấy: khớp mã đầy đủ
+    trước (`ja`), rồi khớp tiền tố (`ja-orig`, `ja-JP`). Đây là cách đúng để lấy
+    transcript GỐC của video: `uu_tien_ngon_ngu_goc=True` cũ dựa vào "bản đầu
+    danh sách", nhưng `sorted(kho)` xếp theo abc nên bản đầu là `aa` (Afar) —
+    một bản DỊCH máy, không phải tiếng gốc. Không có thứ tiếng yêu cầu thì rơi
+    về nết cũ (ưu tiên tiếng Việt) để không bao giờ trả rỗng vô cớ.
+
+    `uu_tien_ngon_ngu_goc=True` (giữ cho tương thích) lấy `sorted(kho)` — chỉ
+    còn dùng khi KHÔNG truyền `ngon_ngu_uu_tien`.
 
     Xin định dạng `json3` trước `vtt`: phụ đề máy nghe ở dạng `vtt` là kiểu
     cuộn, mỗi dòng lặp lại gần hết dòng trước, gộp thẳng ra một đoạn dài gấp ba
@@ -156,7 +163,20 @@ def _chon_phu_de(thong_tin: Dict, tu_lam: bool, uu_tien_ngon_ngu_goc: bool = Fal
     kho = thong_tin.get("subtitles" if tu_lam else "automatic_captions") or {}
     if not isinstance(kho, dict):
         return "", ""
-    if uu_tien_ngon_ngu_goc:
+    if ngon_ngu_uu_tien:
+        goc = ngon_ngu_uu_tien.split("-")[0].lower()
+        # Khớp mã đầy đủ trước, rồi khớp tiền tố (ja ~ ja-orig ~ ja-JP). Bỏ trùng
+        # nhưng giữ thứ tự — mã đầy đủ luôn được thử trước biến thể.
+        thu_tu = ([m for m in kho if m.lower() == ngon_ngu_uu_tien.lower()]
+                  + [m for m in kho if m.split("-")[0].lower() == goc])
+        thay, uu = set(), []
+        for m in thu_tu:
+            if m not in thay:
+                thay.add(m)
+                uu.append(m)
+        # Có thứ tiếng yêu cầu thì chỉ dùng nó; không có thì về nết cũ.
+        ngon_ngu = uu or [m for m in UU_TIEN_NGON_NGU if m in kho] or sorted(kho)
+    elif uu_tien_ngon_ngu_goc:
         # Lấy ngôn ngữ gốc: bản đầu tiên trong danh sách (YouTube đặt ngôn ngữ
         # gốc lên đầu). Không ưu tiên tiếng Việt — dùng khi cần transcript gốc.
         ngon_ngu = sorted(kho)
@@ -482,8 +502,13 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
 def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
                cho_phep_nghe: bool = False,
                uu_tien_ngon_ngu_goc: bool = False,
+               ngon_ngu_uu_tien: str = "",
                on_log: Optional[Callable[[str], None]] = None) -> KetScript:
     """Lấy lời thoại của một video, thử lần lượt bốn đường. **Có gọi mạng.**
+
+    `ngon_ngu_uu_tien` (vd `"ja"`) — ưu tiên phụ đề đúng thứ tiếng ấy (transcript
+    GỐC của video). Không có thì rơi về ưu tiên tiếng Việt. Dùng cho kênh remake
+    để lấy đúng lời thoại gốc, so độ dài cùng ngôn ngữ với bản mình viết ra.
 
     `uu_tien_ngon_ngu_goc=True` lấy ngôn ngữ gốc của video (không dịch sang
     tiếng Việt). Mặc định `False` để giữ hành vi cũ (ưu tiên tiếng Việt).
@@ -527,7 +552,8 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
         if cancel is not None and cancel.is_set():
             ket.loi = "đã dừng"
             return ket
-        dia_chi, ma = _chon_phu_de(thong_tin, tu_lam, uu_tien_ngon_ngu_goc)
+        dia_chi, ma = _chon_phu_de(thong_tin, tu_lam, uu_tien_ngon_ngu_goc,
+                                   ngon_ngu_uu_tien)
         if not dia_chi:
             continue
         chu, vi_sao = _tai_chu(dia_chi)
