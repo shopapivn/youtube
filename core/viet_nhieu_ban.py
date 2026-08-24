@@ -26,19 +26,24 @@ __all__ = ["TIEU_CHI_MAC_DINH", "KHUON_CHAM_MAC_DINH", "trung_nguyen_van",
 
 #: Tiêu chí chấm mặc định — theo đúng mục đích của chủ dự án: video được
 #: YouTube đề xuất nhờ giữ chân và bình luận.
+#: Chủ dự án, 25/08/2026: *"mày cần tư duy ở chỗ thời lượng xem để video được
+#: đề xuất"* — nên thứ tự đi theo đường cong giữ chân: 30 giây đầu (rớt nhiều
+#: nhất) → giữa bài (trả thưởng đều, bám cái đã thắng) → đoạn cuối (giữ tới
+#: hết + câu hỏi bình luận) → rồi mới tới các ràng buộc (không chép, độ dài).
 TIEU_CHI_MAC_DINH = (
-    "1. HOOK: 3 câu đầu nêu ngay câu lật / lời hứa của tiêu đề, có một cảnh cụ "
-    "thể người xem thấy chính mình; mở đầu chậm, tả cảnh dài mới vào ý là trừ "
-    "nặng\n"
-    "2. GIỮ CHÂN: mỗi ý có một khoảnh khắc \"đúng là tôi\", có câu mở nút để "
-    "muốn nghe tiếp, chuyển ý không đều đều, câu chốt từng ý mạnh, càng về "
-    "cuối càng có điều đáng đợi\n"
-    "3. BÁM CÁI ĐÃ THẮNG: giữ cấu trúc, nội dung, nghiên cứu, con số, ví dụ, ẩn "
-    "dụ chính của bản gốc — nhưng không chép nguyên văn (trùng trên 45% là gần "
-    "chép, trừ nặng)\n"
-    "4. CTA kéo bình luận: cuối bài có câu hỏi cụ thể, dễ trả lời, gắn với "
-    "trải nghiệm vừa kể; lời mời đăng ký tự nhiên\n"
-    "5. độ dài gần mục tiêu (lệch quá 20% là trừ nặng), tiếng tự nhiên, không "
+    "mục đích duy nhất: THỜI LƯỢNG XEM — người xem ở lại trên 60% thời lượng và "
+    "bình luận. hình dung đường cong giữ chân của từng bản rồi chấm:\n"
+    "1. 30 GIÂY ĐẦU: 3 câu đầu nêu ngay câu lật / lời hứa, kèm một cảnh cụ thể "
+    "người xem thấy chính mình; mở đầu tả cảnh dài, vòng vo là trừ nặng nhất\n"
+    "2. ĐƯỜNG CONG GIỮA BÀI: cứ ~2 phút một cú trả thưởng (ý mới, cảnh \"đúng "
+    "là tôi\", con số gây ngạc nhiên), có câu mở nút, không đoạn trũng; bám cấu "
+    "trúc, ý, nghiên cứu, ẩn dụ chính của bản gốc — bản gốc đã chứng minh giữ "
+    "được người xem\n"
+    "3. ĐOẠN CUỐI: ý mạnh nhất để cuối, câu hỏi cụ thể để bình luận đặt TRƯỚC "
+    "câu kết và gắn với trải nghiệm vừa kể, kết gợi mở; kết nhạt hoặc thiếu "
+    "câu hỏi là trừ\n"
+    "4. KHÔNG CHÉP: trùng nguyên văn trên 45% là gần chép, trừ nặng\n"
+    "5. ĐỘ DÀI gần mục tiêu (lệch quá 20% là trừ nặng); tiếng tự nhiên, không "
     "lệch tiếng, không sót lời dẫn")
 
 #: Khuôn lời nhắc chấm khi nơi gọi không có khuôn riêng. Các ô: `<<SO_BAN>>`,
@@ -52,7 +57,8 @@ KHUON_CHAM_MAC_DINH = (
     "<<SO_DO>>\n\n"
     "trả về DUY NHẤT một JSON, không giải thích ngoài JSON:\n"
     "{\"chon\": \"A\", \"diem\": {\"A\": 7, \"B\": 8}, \"ly_do\": \"hai ba câu "
-    "vì sao bản được chọn hơn các bản kia\"}\n\n"
+    "vì sao bản được chọn hơn các bản kia\", \"cho_de_rot\": \"câu hoặc đoạn "
+    "của bản được chọn dễ làm người xem rời đi nhất, và vì sao\"}\n\n"
     "bản gốc:\n\n<<COMPETITOR_TRANSCRIPT>>\n\n<<CAC_BAN>>")
 
 _LAM = re.compile(r"[\s。、「」『』?？!！・…—.,;:\"'()\[\]]+")
@@ -143,6 +149,10 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
         if 0 <= i_chon < len(ban):
             chon = i_chon
             ly_do = str(ket.get("ly_do") or "")
+            # Chỗ dễ rớt — thứ chủ kênh dùng được ngay khi xem lại bản chọn.
+            cho_rot = str(ket.get("cho_de_rot") or "").strip()
+            if cho_rot:
+                ly_do += "\nChỗ dễ rớt: " + cho_rot
             diem = ket.get("diem") if isinstance(ket.get("diem"), dict) else {}
     except Exception as loi:  # noqa: BLE001 — chấm hỏng thì chọn theo số đo
         noi("  (chấm hỏng: {0} — chọn theo số đo)".format(str(loi)[:80]))
