@@ -1,16 +1,12 @@
-hãy đánh giá kịch bản vừa viết với kịch bản gốc đã viral theo nguyên tắc giống cấu trúc, nội dung, văn phong, cảm xúc nhưng không copy XEM ĐÃ ĐẠT CHƯA?
-chỗ nào chưa đạt thì sửa luôn trong bản trả về.
-xuất dạng file txt để chạy voice elevenlabs có cảm xúc, không bị đều đều, KHÔNG liền nhau, KHÔNG BỊ dính chữ. không có các ghi chú kỹ thuật
-(xuất dạng txt nghĩa là in NGUYÊN VĂN kịch bản ngay trong câu trả lời — không tạo file, không mô tả việc đã làm, không nhận xét)
-chèn thẻ cảm xúc ElevenLabs v3 vào bản txt đó: chèn THƯA, khoảng một thẻ cho 4–6 câu, đặt ngay trước câu nó tác động, chỉ ở chỗ thật sự chuyển cảm xúc, câu lật hoặc chỗ đáng nghỉ. chỉ dùng các thẻ này, không bịa thẻ khác:
+rà soát kịch bản dưới đây để đem đi đọc bằng ElevenLabs. giữ NGUYÊN nội dung và câu chữ — không viết lại, không thêm bớt ý.
+chỉ làm ba việc:
+1. chỗ nào lệch tiếng (không phải <<LANGUAGE>>), sai chính tả hoặc lộn xộn thì sửa cho đúng.
+2. tách câu cho giọng đọc: mỗi câu một dòng, đọc có cảm xúc, không bị đều đều, KHÔNG liền nhau, KHÔNG BỊ dính chữ. không có các ghi chú kỹ thuật.
+3. chèn thẻ cảm xúc ElevenLabs v3: chèn THƯA, khoảng một thẻ cho 4–6 câu, đặt ngay trước câu nó tác động, chỉ ở chỗ thật sự chuyển cảm xúc, câu lật hoặc chỗ đáng nghỉ. chỉ dùng các thẻ này, không bịa thẻ khác:
 [excited] [curious] [thoughtful] [surprised] [sad] [happy] [whispers] [sighs] [exhales] [chuckles] [laughs] [short pause] [long pause]
 
-hai bản dưới có thể khác tiếng nhau — đó là cố ý. bản trả về viết bằng <<LANGUAGE>>, chỉ có kịch bản, đừng hỏi lại.
+trả về NGUYÊN VĂN kịch bản đã rà soát ngay trong câu trả lời — không tạo file, không mô tả việc đã làm, không nhận xét, đừng hỏi lại.
 
-kịch bản gốc đã viral:
-
-<<COMPETITOR_TRANSCRIPT>>
-
-kịch bản vừa viết:
+kịch bản:
 
 <<DRAFT>>

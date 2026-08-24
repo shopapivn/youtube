@@ -1870,9 +1870,14 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                     continue
                 bc.kiem_dung()
                 bc.ghi("  {0}…".format(nhan))
-                ban_nhap = _goi(
-                    bc, _thay(khuon, dict(chung, DRAFT=ban_nhap)),
-                    _khoa_chat(luot, ten)).strip()
+                if ten == "2-viet.md" and k.so_ban_nhap > 1:
+                    # Viết nhiều bản rồi chấm — xem `_viet_nhieu_ban`.
+                    ban_nhap = _viet_nhieu_ban(bc, luot, k, chung, khuon,
+                                               tu_lieu, muc_tieu_kt, d)
+                else:
+                    ban_nhap = _goi(
+                        bc, _thay(khuon, dict(chung, DRAFT=ban_nhap)),
+                        _khoa_chat(luot, ten)).strip()
                 truoc_go = ban_nhap
                 ban_nhap = _go_loi_dan_dau(ban_nhap, k.ngon_ngu)
                 if ban_nhap != truoc_go:
@@ -1987,6 +1992,119 @@ def _khau_kich_ban(bc_goc: BoiCanh):
     return lam
 
 
+def _trung_nguyen_van(moi: str, goc: str, n: int = 10) -> float:
+    """Tỷ lệ chuỗi `n` ký tự của `moi` xuất hiện NGUYÊN VĂN trong `goc` (0..1).
+
+    Bỏ khoảng trắng và dấu câu trước khi so, để "cùng câu, khác dấu phẩy"
+    vẫn tính là trùng. Thước này dùng để CHẤM, không phải để chặn: kênh remake
+    bám bản gốc là chủ đích — nhưng chép nguyên văn nửa bài thì không phải
+    remake nữa.
+    """
+    lam = re.compile(r"[\s。、「」『』?？!！・…—.,;:\"'()\[\]]+")
+    a, b = lam.sub("", moi or ""), lam.sub("", goc or "")
+    if len(a) < n or len(b) < n:
+        return 0.0
+    kho = {b[i:i + n] for i in range(len(b) - n + 1)}
+    tong = len(a) - n + 1
+    return sum(1 for i in range(tong) if a[i:i + n] in kho) / tong
+
+
+#: Tên tệp lưu từng bản viết và bản chấm — để lại trong thư mục lượt cho chủ
+#: kênh soi, không dọn như tệp nháp.
+TEP_BAN_VIET = "1-ban-{0}.txt"
+TEP_CHAM_DIEM = "1-cham-diem.txt"
+
+
+def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
+                    khuon: str, tu_lieu: str, muc_tieu: int, d: str) -> str:
+    """Viết `k.so_ban_nhap` bản rồi chấm, trả về bản được chọn.
+
+    ═══ VÌ SAO ═══
+
+    Chủ dự án, 25/08/2026, sau khi thấy cùng một prompt lượt bám gốc rất tốt
+    (0014–0016) lượt lại thay hết nghiên cứu (0013, 0024): *"cho nó viết nhiều
+    lần, và chấm điểm các lần tức là chọn bản tốt nhất ok nhất khi viết ví dụ
+    3 lần chẳng hạn"*. Làm tay thì chính người viết là người chọn; tool thì
+    lấy bản đầu tiên — nên phải có người chấm thay.
+
+    Chấm bằng AI theo `prompt/2b-cham.md`, kèm **số đo tính sẵn** (độ dài so
+    mục tiêu, mức trùng nguyên văn với bản gốc) để nó không phải đoán. Chấm
+    hỏng — thiếu tệp, JSON lỗi — thì chọn theo số đo: gần mục tiêu độ dài nhất
+    trong các bản không chép quá nửa. Từng bản và bản chấm ghi ra đĩa để chủ
+    kênh soi lại được.
+
+    Mỗi bản dùng một Idempotency-Key riêng (`2-viet.md:banN`), nên chạy tiếp
+    một lượt đứt giữa chừng thì nhặt đúng bản đã viết, không viết lại.
+    """
+    n = max(1, int(getattr(k, "so_ban_nhap", 1) or 1))
+    ban: List[str] = []
+    for i in range(n):
+        nhan = chr(65 + i)
+        tep = os.path.join(d, TEP_BAN_VIET.format(nhan))
+        da_co = _doc_chu(tep).strip()
+        if da_co:
+            bc.ghi("  bản {0} — đã có từ lần trước, dùng lại.".format(nhan))
+            ban.append(da_co)
+            continue
+        bc.kiem_dung()
+        bc.ghi("  viết bản {0}/{1}…".format(nhan, n))
+        chu = _goi(bc, _thay(khuon, dict(chung, DRAFT="")),
+                   _khoa_chat(luot, "2-viet.md:ban{0}".format(i + 1))).strip()
+        chu = _go_loi_dan_dau(chu, k.ngon_ngu)
+        if not chu:
+            bc.ghi("  (bản {0} trả về rỗng — bỏ)".format(nhan))
+            continue
+        _ghi_chu(tep, chu + "\n")
+        ban.append(chu)
+    if not ban:
+        raise RuntimeError("không bản nào viết được")
+    if len(ban) == 1:
+        return ban[0]
+
+    so_do = [(len(b), (len(b) - muc_tieu) / max(1, muc_tieu),
+              _trung_nguyen_van(b, tu_lieu)) for b in ban]
+    bang = "\n".join(
+        "- Bản {0}: {1} ký tự (lệch {2:+.0%} so với mục tiêu {3}), trùng nguyên "
+        "văn bản gốc {4:.0%}".format(chr(65 + i), dai, lech, muc_tieu, trung)
+        for i, (dai, lech, trung) in enumerate(so_do))
+    chon: Optional[int] = None
+    ly_do = ""
+    diem: Any = {}
+    khuon_cham = k.prompt.get("2b-cham.md", "")
+    if khuon_cham.strip():
+        cac_ban = "\n\n".join("=== BẢN {0} ===\n{1}".format(chr(65 + i), b)
+                              for i, b in enumerate(ban))
+        try:
+            bc.kiem_dung()
+            bc.ghi("  chấm {0} bản…".format(len(ban)))
+            tra = _goi(bc, _thay(khuon_cham, dict(
+                chung, SO_BAN=len(ban), SO_DO=bang, CAC_BAN=cac_ban)),
+                _khoa_chat(luot, "2b-cham.md"))
+            goi = loc_json(tra)
+            chu_chon = str(goi.get("chon") or "").strip().upper()[:1]
+            i_chon = ord(chu_chon) - 65 if chu_chon else -1
+            if 0 <= i_chon < len(ban):
+                chon = i_chon
+                ly_do = str(goi.get("ly_do") or "")
+                diem = goi.get("diem") or {}
+        except Exception as loi:  # noqa: BLE001 — chấm hỏng thì chọn theo số đo
+            bc.ghi("  (chấm hỏng: {0} — chọn theo số đo)".format(str(loi)[:80]))
+    if chon is None:
+        # Gần mục tiêu độ dài nhất; bản chép quá nửa bản gốc bị phạt nặng.
+        chon = min(range(len(ban)),
+                   key=lambda i: abs(so_do[i][1]) + (1.0 if so_do[i][2] > 0.5
+                                                     else 0.0))
+        ly_do = ly_do or "chọn theo số đo (không có bản chấm)"
+    _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
+             "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n".format(
+                 bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),
+                 ly_do))
+    bc.ghi("  chọn bản {0}: {1} ký tự, lệch {2:+.0%}, trùng {3:.0%}. {4}".format(
+        chr(65 + chon), so_do[chon][0], so_do[chon][1], so_do[chon][2],
+        ly_do[:120]))
+    return ban[chon]
+
+
 #: Mã tiếng viết bằng chữ KHÔNG Latinh — với những tiếng này, vài dòng đầu
 #: thuần tiếng Anh chắc chắn không phải bài, mà là AI "kể sắp làm gì".
 _TIENG_KHONG_LATINH = frozenset(("ja", "zh", "ko", "th", "ar", "ru", "hi",
@@ -2032,9 +2150,12 @@ def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:
     thẻ ở bước sửa vẫn chạy y như cũ. Thẻ lạ (AI bịa) bị gỡ trước khi ghi,
     cùng cửa lọc với đường chèn riêng (`loc_the_la`).
     """
-    from .the_cam_xuc import TEP_CO_THE, bo_the, loc_the_la  # noqa: PLC0415
+    from .the_cam_xuc import (TEP_CO_THE, bo_the, loc_the_la,  # noqa: PLC0415
+                              thua_the)
 
     co_the, da_bo = loc_the_la(ban)
+    # AI chèn dày gấp đôi lời dặn (đo 4 lượt thật) — chốt bằng mã.
+    co_the = thua_the(co_the)
     sach = bo_the(co_the)
     if sach == co_the:
         return ban
@@ -2044,10 +2165,10 @@ def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:
     if da_bo:
         bc.ghi("  (bỏ thẻ không dùng được: {0})".format(
             ", ".join(sorted(set(da_bo))[:5])))
-    so_the = len(co_the) - len(bo_the(co_the))
+    so_the = len(re.findall(r"\[[a-z][a-z \-]*\]", co_the))
     _ghi_chu(os.path.join(thu_muc, TEP_CO_THE), co_the.strip() + "\n")
-    bc.ghi("  kịch bản có sẵn thẻ cảm xúc ({0} ký tự thẻ) — bản có thẻ để "
-           "riêng cho giọng đọc, bản sạch cho phụ đề.".format(so_the))
+    bc.ghi("  kịch bản có sẵn thẻ cảm xúc ({0} thẻ sau khi thưa bớt) — bản có "
+           "thẻ để riêng cho giọng đọc, bản sạch cho phụ đề.".format(so_the))
     return sach
 
 

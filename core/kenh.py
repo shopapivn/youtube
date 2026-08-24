@@ -66,7 +66,11 @@ BUOC_PROMPT = (
     # bỏ qua — cùng nết với mọi bước không bắt buộc khác.
     ("2a-phan-tich.md", "Đọc bản gốc: hay chỗ nào, chưa hay chỗ nào"),
     ("2-viet.md", "Viết kịch bản lời đọc"),
-    ("3-sua.md", "Đối chiếu và sửa chỗ hụt"),
+    # Chỉ chạy khi kênh khai `so_ban_nhap` > 1: viết nhiều bản rồi chấm, chọn
+    # một. Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các
+    # lần tức là chọn bản tốt nhất"*.
+    ("2b-cham.md", "Chấm các bản viết, chọn bản tốt nhất"),
+    ("3-sua.md", "Rà soát: sửa lệch tiếng, tách câu, chèn thẻ"),
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
     ("6-seo.md", "Mô tả, hashtag, từ khoá"),
@@ -105,6 +109,12 @@ class Kenh:
     #: `phut_muc_tieu` khi ấy không còn dẫn dắt độ dài — để nguyên cũng được.
     #: Thường đi kèm việc BỎ `prompt/4-do-dai.md` để không nắn về mốc cố định.
     do_dai_theo_goc: bool = False
+    #: Bước viết viết mấy bản rồi chấm chọn một. 1 = viết một bản, không chấm
+    #: (mặc định — khách đi ví thì mỗi bản là một lượt trừ tiền). Kênh chạy
+    #: bằng thuê bao Claude đặt 3: ba bản + một lượt chấm, không tốn thêm gì.
+    #: Cần thêm `prompt/2b-cham.md`; thiếu tệp ấy thì chọn theo số đo (độ dài,
+    #: mức trùng nguyên văn).
+    so_ban_nhap: int = 1
     #: Chế độ đặt TIÊU ĐỀ và CHỮ BÌA — bám bản gốc hay đặt lại theo chất kênh.
     #:
     #: `"faithful"` (mặc định) — bám sát tiêu đề đối thủ, chỉ dịch và bản địa
@@ -338,6 +348,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         phut_muc_tieu=_so(cai.get("phut_muc_tieu"), 10.0),
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
+        so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),

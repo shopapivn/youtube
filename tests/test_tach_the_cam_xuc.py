@@ -52,12 +52,14 @@ class TestTachTheCamXuc:
         assert not os.path.exists(os.path.join(str(tmp_path), TEP_CO_THE))
 
     def test_co_the_thi_ban_sach_di_tiep_ban_the_de_rieng(self, tmp_path):
-        ban = ("[curious] 日曜日の午後。\n\n誰にも会わない。\n\n"
-               "[sighs] それでも、心は静かです。")
+        # Thẻ thứ hai cách thẻ đầu 4 câu — đủ thưa để được giữ (`thua_the`).
+        ban = ("[curious] 日曜日の午後。\n\n誰にも会わない。\n\n雨が降る。\n\n"
+               "お茶を淹れる。\n\n[sighs] それでも、心は静かです。")
         nhat_ky = []
         sach = _tach_the_cam_xuc(_bc(nhat_ky), str(tmp_path), ban)
         assert "[" not in sach and "]" not in sach
-        assert sach == "日曜日の午後。\n\n誰にも会わない。\n\nそれでも、心は静かです。"
+        assert sach == ("日曜日の午後。\n\n誰にも会わない。\n\n雨が降る。\n\n"
+                        "お茶を淹れる。\n\nそれでも、心は静かです。")
         with open(os.path.join(str(tmp_path), TEP_CO_THE),
                   encoding="utf-8") as t:
             co_the = t.read()

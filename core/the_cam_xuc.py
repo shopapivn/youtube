@@ -91,8 +91,9 @@ import re
 from typing import List, Optional, Set, Tuple
 
 __all__ = [
-    "THE_CHO_PHEP", "TEP_CO_THE", "CHU_MOI_LUOT_CHEN", "bo_the", "loc_the_la",
-    "kiem_the", "loi_nhac_chen_the", "chia_de_chen", "chen_the",
+    "THE_CHO_PHEP", "TEP_CO_THE", "CHU_MOI_LUOT_CHEN", "CAU_MOI_THE", "bo_the",
+    "loc_the_la", "thua_the", "kiem_the", "loi_nhac_chen_the", "chia_de_chen",
+    "chen_the",
 ]
 
 #: Tên tệp giữ bản kịch bản đã chèn thẻ.
@@ -190,6 +191,48 @@ def loc_the_la(chu: str) -> Tuple[str, List[str]]:
     ra = re.sub(r"[ \t]{2,}", " ", ra)
     ra = re.sub(r"[ \t]+\n", "\n", ra)
     return ra, da_bo
+
+
+#: Thưa nhất là một thẻ mỗi ngần này câu. Đo 24–25/08/2026 trên bốn lượt
+#: thật: dặn "một thẻ cho 4–6 câu" mà AI chèn 29–43 thẻ cho ~150 câu, tức cứ
+#: 2,5–3 câu một thẻ. Giọng đọc đầy thẻ nghe như diễn kịch. Chốt bằng mã.
+CAU_MOI_THE = 4
+
+_KET_CAU = re.compile(r"[。！？!?]")
+
+
+def thua_the(co_the: str, moi_n_cau: int = CAU_MOI_THE) -> str:
+    """Bỏ bớt thẻ để không dày hơn một thẻ mỗi `moi_n_cau` câu.
+
+    Giữ thẻ ĐẦU của mỗi quãng, bỏ thẻ nào đến sớm hơn `moi_n_cau` câu kể từ
+    thẻ được giữ gần nhất. Chỉ bỏ thẻ, không đụng một chữ nào — nên
+    `kiem_the` trước/sau vẫn cho cùng kết quả.
+    """
+    if not co_the:
+        return co_the
+    ra: List[str] = []
+    cuoi = 0
+    cau_tu_the_truoc = None       # None = chưa giữ thẻ nào
+    for khop in _MOT_THE.finditer(co_the):
+        giua = co_the[cuoi:khop.start()]
+        so_cau = len(_KET_CAU.findall(giua))
+        if cau_tu_the_truoc is None:
+            giu = True
+        else:
+            cau_tu_the_truoc += so_cau
+            giu = cau_tu_the_truoc >= moi_n_cau
+        ra.append(giua)
+        if giu:
+            ra.append(khop.group(0))
+            cau_tu_the_truoc = 0
+        else:
+            # Bỏ thẻ kèm đúng một dấu cách ngay sau nó (nếu có) cho khỏi dư.
+            if co_the[khop.end():khop.end() + 1] == " ":
+                cuoi = khop.end() + 1
+                continue
+        cuoi = khop.end()
+    ra.append(co_the[cuoi:])
+    return "".join(ra)
 
 
 def kiem_the(goc: str, co_the: str) -> bool:
@@ -324,6 +367,7 @@ def _chen_mot_khuc(khuc: str, goi_ai, giong_van: str, ngon_ngu: str,
     if da_bo:
         noi("    bỏ thẻ không dùng được: {0}".format(
             ", ".join(sorted(set(da_bo))[:5])))
+    co_the = thua_the(co_the)
     if not kiem_the(khuc, co_the):
         noi("    (một khúc bị AI sửa chữ — khúc đó đọc bản gốc)")
         return khuc, False

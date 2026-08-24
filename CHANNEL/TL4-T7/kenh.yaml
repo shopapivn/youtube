@@ -28,6 +28,12 @@ voice_id: "b34JylakFZPlGS0BnwyY"
 #  Không có bước nắn riêng — chỉ một dòng độ dài trong prompt/2-viet.md.
 phut_muc_tieu: 13
 do_dai_theo_goc: false
+# ── Viết 3 bản rồi chấm chọn một ──────────────────────────────────────────────
+#  Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các lần tức là
+#  chọn bản tốt nhất"*. Máy này chữ đi thuê bao Claude nên 3 bản + 1 lượt chấm
+#  không tốn thêm gì. Khách đi ví để 1. Từng bản và bản chấm nằm trong thư mục
+#  lượt: 1-ban-A/B/C.txt, 1-cham-diem.txt.
+so_ban_nhap: 3
 # ── Tiêu đề & chữ bìa: lấy nguyên của đối thủ ────────────────────────────────
 #  Kênh này lấy NGUYÊN tiêu đề đối thủ, và ĐỌC chữ trên ảnh bìa đối thủ làm chữ
 #  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ
