@@ -48,6 +48,7 @@ __all__ = [
     "load_config",
     "save_config",
     "forget_secrets",
+    "luu_phien_dang_nhap",
     "mask_key",
     "redact",
     "looks_like_api_key",
@@ -542,6 +543,32 @@ def _write_config_file(path: str, config: Config) -> None:
         json.dump(config.to_dict(), handle, ensure_ascii=False, indent=2)
         handle.write("\n")
     os.replace(temp_path, path)
+
+
+def luu_phien_dang_nhap(path: str, config: Config) -> None:
+    """Cất riêng `refresh_token` + `account_email` vào kho, **giữ nguyên khoá API
+    đang có trên đĩa**.
+
+    ═══ VÌ SAO KHÔNG DÙNG `save_config` ═══
+
+    `save_config` ghi ĐÈ cả kho bằng những gì đang có trong RAM. Hàm này được
+    gọi từ `_nho_phien` ở luồng nền, mỗi lần máy chủ xoay refresh token — kể cả
+    từ một tiến trình mà `config.api_key` trong RAM đang rỗng (bản thứ hai của
+    tool vừa mở, script quản trị, khu vận hành đăng nhập bằng phiên web). Ngày
+    24/08/2026 lúc 21:04 kho `secrets.json` bị ghi lại từ 538 xuống 474 byte:
+    còn token + email, **mất khoá API** — đúng dấu vết của đường ghi đè này.
+
+    Nên: đọc kho trên đĩa, chỉ thay hai trường của phiên, ghi lại. Khoá API
+    chỉ có `dat_khoa` (cắm khoá) và `dang_xuat` (xoá chủ ý) được đụng.
+    """
+    store = SecretStore(secrets_path_for(path))
+    data = store.load()
+    data["refresh_token"] = config.refresh_token
+    data["account_email"] = config.account_email
+    if config.api_key and not data.get("api_key"):
+        data["api_key"] = config.api_key  # trên đĩa trống mà RAM có thì bổ sung
+    store.save(data)
+    config.secret_warning = store.warning
 
 
 def forget_secrets(path: str) -> None:

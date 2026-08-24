@@ -34,8 +34,8 @@ from PyQt5.QtWidgets import (
 
 from core.api import build_client, fetch_prices, wallet_micro
 from core import cai_dat, du_an
-from core.config import (CONFIG_FILENAME, Config, load_config, save_config,
-                          sanitize_api_key)
+from core.config import (CONFIG_FILENAME, Config, load_config,
+                         luu_phien_dang_nhap, sanitize_api_key, save_config)
 from core.errors import describe, la_qua_tai, retry_after_seconds, tu_xu_ly_ngam
 from core.jobs import JobManager, JobSpec
 from core.money import format_vnd
@@ -570,8 +570,10 @@ class CuaSoChinh(QWidget):
         self.config.refresh_token = token
         if phien.user is not None and phien.user.email:
             self.config.account_email = phien.user.email
+        # KHÔNG `save_config`: nó ghi đè cả kho bằng RAM, và RAM của tiến trình
+        # này có thể chưa có khoá API — kho trên đĩa sẽ mất khoá (24/08/2026).
         try:
-            save_config(self.config_path, self.config)
+            luu_phien_dang_nhap(self.config_path, self.config)
         except OSError:
             pass
 
