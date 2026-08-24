@@ -43,7 +43,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .auto import LuotChay, TrangThaiKhau
-from .chia_canh import (bang_phu_de, chia_theo_nghia, dien_khuon,
+from .chia_canh import (DUOI_CAM, bang_phu_de, chia_theo_nghia, dien_khuon,
                         loi_nhac_chia)
 # `loc_json` chuyển sang ở cạnh `goi_van_ban` — nơi nào đòi AI trả JSON cũng
 # phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
@@ -2398,8 +2398,10 @@ def _chia_canh_theo_nghia(bc: BoiCanh, luot: LuotChay, cue: List[Dict[str, Any]]
         return _hoi_chia_canh(bc, luot, khuon, list(khuc), thu_tu, tong_khuc,
                               tran)
 
+    # `duoi`: ep "no text, no letters…" vao cuoi moi prompt bang ma — luoi an
+    # toan hoc tu D:\AFFILIATE, phong khi AI quen duoi o mot cang.
     return chia_theo_nghia(cue, hoi, tran=tran, nhan_vat_mac_dinh="nv1",
-                           ghi=bc.ghi, kiem_dung=bc.kiem_dung)
+                           ghi=bc.ghi, kiem_dung=bc.kiem_dung, duoi=DUOI_CAM)
 
 
 def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,

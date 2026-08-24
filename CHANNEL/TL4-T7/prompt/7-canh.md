@@ -30,9 +30,16 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
    exaggerated **visual METAPHOR of what the narration is saying**: swirling
    clocks, cracking glass, tangled threads, a shadow growing, drowning in
    letters, a door closing on light.
-   **NEVER the character merely sitting or standing while the narration plays.**
+   **A scene whose main action is `nv1` merely sitting, standing, resting,
+   lying or looking while the narration plays is REJECTED** — unless the frame
+   also contains a concrete metaphor object that is visibly doing something
+   (a clock melting on the table beside them, a shadow on the wall growing
+   taller than they are). Measured on one real video of this channel: 147 of
+   297 scenes were the character just sitting or standing, and those are the
+   scenes viewers skip.
    Test: if your prompt would still make sense under a DIFFERENT line of
-   narration, it is the wrong prompt — rewrite it.
+   narration, it is the wrong prompt — rewrite it. Write the metaphor object
+   into `visual_anchor`.
 2. **The character does not have to be in every scene.** The strongest scenes
    are often the metaphor alone with no one in it: a palace hall collapsing, a
    river shaped like a chessboard sweeping the pieces sideways, a book bursting
@@ -57,6 +64,12 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
    identity: a slow push-in on a face that slowly turns away is a fine clip; a
    face just sitting there for seven seconds is not.
    Say what changes **first**, then how fast it changes.
+   **Do not write `slowly`, `gently`, `subtle`, `a little` into every clip.**
+   Measured on one real video of this channel: 297 of 297 clips used those
+   words, and the whole video read as one flat wash. At most one clip in three
+   may be slow; in the others the change must be visible within the first two
+   seconds — something enters, breaks, grows, tips, lights up, empties — even
+   at this channel's calm pace.
 6. **Exaggerate the emotion** the way a good animated short does: readable
    posture, readable face, readable gesture — within this channel's register.
 

@@ -42,8 +42,8 @@ from .su_co import LoiNoiDung
 
 __all__ = [
     "MIN_GIAY_CANH", "CUE_MOI_KHUC", "KHUC_SONG_SONG", "KHUON_MAC_DINH",
-    "dien_khuon", "bang_phu_de", "chia_khuc", "loi_nhac_chia", "canh_lai",
-    "chia_theo_nghia",
+    "DUOI_CAM", "dien_khuon", "bang_phu_de", "chia_khuc", "loi_nhac_chia",
+    "canh_lai", "chia_theo_nghia", "ep_duoi", "thong_ke_canh",
 ]
 
 #: Cảnh ngắn nhất, tính bằng giây.
@@ -103,41 +103,142 @@ KHUC_SONG_SONG = 9
 #: nơi gọi **tự dựng được một dàn nhân vật + phong cách** từ chính lời đọc (xem
 #: `prompt.workbook._dung_dan_cast`), nó truyền cả khối chữ ấy vào đây để các
 #: cảnh dùng lại đúng nhân vật đó — không bịa `nv1` khi chưa có dàn.
-KHUON_MAC_DINH = """# DIVIDE THE SRT INTO SCENES BY MEANING, THEN WRITE PROMPTS
+#: ═══ BẢN 24/08/2026: VIẾT LẠI THEO `7-canh.md` CỦA KÊNH VÀ `D:\AFFILIATE` ═══
+#:
+#: Bản cũ chỉ có bảy luật chung ("bám lời", "đổi bối cảnh"). Chủ dự án soi kết
+#: quả: *"prompt tạo ảnh video phải minh hoạ được nội dung"* và chỉ sang tool
+#: AFFILIATE *"làm tốt"*. Đọc prompt của AFFILIATE (`06_excel/run.py`) và
+#: `7-canh.md` của kênh thì cả hai cùng một công thức, và bản cũ ở đây thiếu
+#: đúng những thứ ấy: mỗi cảnh một ẩn dụ hình ảnh của câu đang đọc, mở đầu
+#: bằng cỡ cảnh và đổi liên tục, màu nhấn từng cảnh, clip phải có cái THAY ĐỔI,
+#: cấm vật mang chữ, cấm lưới, đuôi phong cách ở cuối mọi prompt.
+#:
+#: Khác `7-canh.md` ở một chỗ cố ý: KHÔNG nhắc `nv1`/`nv1.png`. Prompt Visuals
+#: không có kênh nên không có ảnh tham chiếu; dàn nhân vật (nếu có) do lượt
+#: casting rút từ chính lời đọc và đưa vào `<<CAST_STYLE>>` kèm mô tả ngoại
+#: hình cố định — cảnh dùng lại đúng mô tả ấy thay vì trỏ vào một tấm ảnh ma.
+KHUON_MAC_DINH = """# YOU ARE THE STORYBOARD DIRECTOR
 
-Read the SRT below, **divide it into scenes by MEANING**, and write an image
-prompt and a video prompt for each scene.
+Read the SRT below, **divide it into scenes by MEANING**, and write one image
+prompt and one video prompt per scene. The pictures exist to ILLUSTRATE what
+the narrator is saying at that exact moment: a viewer with the sound off must
+still be able to guess the line from the picture.
 
 Do not cut on a fixed clock. Cut where the thought changes. One scene = one
 idea the narrator is landing.
 
+## WHERE YOU ARE — this is a long video, cut into pieces
+
+You are writing piece **<<KHUC_THU>> of <<TONG_KHUC>>**. Each piece is a
+separate request; you cannot see the others.
+
+- Is this the FIRST piece? **<<LA_KHUC_DAU>>**
+- If **yes**: your very first scene is the video's opening — make it the hook,
+  the most arresting image of the whole video.
+- If **no**: the video is already running. **Do NOT open a new video.** No
+  establishing shot of the whole setting, no re-introduction of anyone, no
+  "meanwhile". Continue as if the previous shot just ended.
+
+Frame: **<<TY_LE_KHUNG>>**. Compose for that frame — room to the sides,
+subject off-centre, depth front-to-back.
+
 <<CAST_STYLE>>
-## Context of this video
+## Context of this video (script and the chosen visual style — follow it exactly)
 <<CONTEXT>>
+
+## RETENTION — the rules that decide whether anyone keeps watching
+
+1. **Every scene has ONE clear visual hook that IS the line being read** — a
+   transformation, a reveal, or an exaggerated **visual METAPHOR of what the
+   narration says**: swirling clocks, cracking glass, tangled threads, a shadow
+   growing, drowning in letters, a door closing on light, an empty chair at a
+   full table.
+   **A scene whose main action is a person merely sitting, standing, resting,
+   lying or looking while the narration plays is REJECTED** — unless the frame
+   also contains a concrete metaphor object that is visibly doing something.
+   Test: if your prompt would still make sense under a DIFFERENT line of
+   narration, it is the wrong prompt — rewrite it. Write the metaphor object
+   into `visual_anchor`.
+2. **Nobody has to be in every scene.** The strongest scenes are often the
+   metaphor alone: a hall collapsing, a river shaped like a chessboard sweeping
+   the pieces sideways, a book bursting open. Put a person in when the
+   narration is about *them*; leave the frame to the metaphor when it is about
+   an *idea*.
+   If recurring characters are listed above, use ONLY them, keep their
+   appearance EXACTLY as written, and put their ids in `characters_used`. If
+   none are listed, do not invent a recurring person — use silhouettes or an
+   anonymous figure described fresh each time.
+3. **Vary shot size and angle hard** between consecutive scenes. Open every
+   image prompt with the shot itself — `Extreme close-up of…`, `Wide shot
+   of…`, `Top-down view of…`, `Over-the-shoulder shot of…`, `Low angle looking
+   up at…` — and never use the same opening twice in a row.
+4. **Give each scene ONE accent colour, and change it from scene to scene.**
+   The palette stays fixed for the whole video; the accent is the single
+   saturated colour inside it that carries this scene's feeling. Write it into
+   the prompt as `… with <colour> accent`.
+5. **Video prompt = something is measurably DIFFERENT at the end of the clip
+   than at its start.** Name that difference first, then the pace. A hand that
+   was open is now closed; a room that was empty now has someone in it; light
+   that was cold is now warm; the camera that was far is now close.
+   Do not lean on `slowly`, `gently`, `subtle`, `a little` in every clip — a
+   whole video of that reads as one flat wash. At most one clip in three may be
+   slow; the others show a change a viewer notices within the first two
+   seconds (something enters, breaks, grows, tips, lights up, empties).
+6. **Exaggerate the emotion** the way a good animated short does: readable
+   posture, readable face, readable gesture.
+
+## STYLE TAIL — every prompt ends with one
+
+One scene that forgets the tail is one scene that looks like it came from a
+different video. Take the style words from the STYLE / Context blocks above;
+if none is given, choose ONE look for this whole video and hold it.
+
+- image prompt tail: `, <image style>, <palette> with <this scene's accent>
+  accent, <<TY_LE_KHUNG>> composition, <negative list>, no text, no letters,
+  no numbers, no watermark`
+- video prompt tail: `, <motion style>, the background keeps its original
+  colour and texture for the whole clip and must not darken, grey out or shift
+  hue, no text, no letters, no numbers, no watermark`
+
+An image has no motion — never put motion words in an image prompt.
+
+## NOTHING IN THE FRAME MAY CARRY WRITING
+
+Do not put an object in the scene whose whole point is the words on it: an
+open book showing its page, a screen showing a message, a sign, a label, a
+note, a letter, a headline. The `no text` at the end is a negative, and an
+image model weighs a thing you asked for far more than a thing you asked
+against — measured on 1.120 real scenes, prompts that described something
+bearing writing came back with readable words on them. Show the same idea
+through **shape and gesture**: a book held shut against the chest, a screen
+glowing blank, a page torn in half.
+
+## ONE PICTURE PER SCENE — never a grid
+
+Each scene is one single continuous image that then moves, not a layout. Never
+ask for panels, a comic page, split-screen, a diptych, a collage, a storyboard
+sheet or "four vignettes" — a grid cannot move, and its panel numbers come
+back as visible digits. If a line names several things, pick the ONE that
+carries the feeling, or place them together in one space.
+
+## SCENE DIVISION — use the SRT indices
+
+- **<<MAX_SEC>> seconds is a HARD CEILING, not a target.** Work out each
+  scene's length from the timestamps and check it. A longer scene gets chopped
+  into equal pieces with THE SAME PICTURE — split it yourself instead.
+- Every scene lasts between **<<MIN_SEC>> and <<MAX_SEC>> seconds**. Merge
+  short neighbouring lines that belong to one thought; split a long line where
+  the thought turns. Never cut mid-sentence.
+- Cover **every** SRT line exactly once, in order. No gaps, no overlaps.
+  `srt_from` of a scene = `srt_to` of the previous scene + 1.
+- Every image prompt and every video prompt must be **unique** — no two
+  scenes with the same picture or the same motion.
+- `narration_vi`: the scene's narration translated into Vietnamese (copy it
+  as-is if it is already Vietnamese) — the editor reads this to check that
+  the picture matches the words.
 
 ## SRT (each line is `index | start -> end | text`)
 <<SRT>>
-
-## Rules
-
-1. **Each prompt sticks closely to the exact words of that scene's narration.**
-   If the line is about a phone call that never came, the image shows that —
-   not a generic mood shot.
-2. Every scene lasts between **<<MIN_SEC>> and <<MAX_SEC>> seconds**. Merge
-   short neighbouring lines that belong to one thought; split a long line where
-   the thought turns.
-3. Cover **every** SRT line exactly once, in order. No gaps, no overlaps.
-   `srt_from` of a scene = `srt_to` of the previous scene + 1.
-4. Let the content drive a **varied** setting. Consecutive scenes must not
-   repeat the same room, pose and framing — vary distance (close / medium /
-   wide), angle, and location as the story moves.
-5. **Image prompt (English):** the setting, then the subject with a specific
-   pose and expression, then the props that carry the meaning. Concrete, not
-   abstract. No text anywhere in the image.
-6. **Video prompt (English):** motion only — what moves, how slowly, in what
-   direction.
-7. Every image prompt and every video prompt must be **unique**. No copy-paste
-   between scenes.
 
 ## Return JSON only, no commentary
 
@@ -145,11 +246,55 @@ idea the narrator is landing.
 {"scenes": [
   {"srt_from": 1, "srt_to": 3,
    "img_prompt": "...", "video_prompt": "...",
+   "narration_vi": "<Vietnamese translation of this scene's narration>",
+   "characters_used": "", "location_used": "",
    "primary_subject": "...", "primary_action": "...",
-   "visual_anchor": "...", "must_not_show": ""}
+   "visual_anchor": "<the metaphor object of this scene>", "must_not_show": ""}
 ]}
 ```
 """
+
+#: Đuôi cấm gắn vào cuối MỌI prompt ảnh/video, bằng mã chứ không tin AI.
+#:
+#: Học từ `D:\AFFILIATE/06_excel/run.py`: nó kiểm `if NEG_TAIL not in prompt`
+#: rồi nối thêm — vì AI quên đuôi ở một cảnh là cảnh đó có chữ, có watermark.
+DUOI_CAM = "no text, no letters, no numbers, no watermark"
+
+#: Từ báo hiệu nhân vật CHỈ ngồi/đứng (thứ luật 1 cấm) và clip CHỈ chậm (thứ
+#: luật 5 cấm khi lặp ở mọi cảnh). Dùng để đo, không dùng để sửa: đo trên
+#: TL4-T7/0010 (297 cảnh) — 147 cảnh ngồi/đứng, 297/297 clip "slowly/gently".
+_TU_TINH = re.compile(r"\b(sitting|seated|standing|stands|resting|lying)\b")
+_TU_CHAM = re.compile(r"\b(slowly|gently|subtle|subtly|slightly|a little)\b")
+
+
+def ep_duoi(prompt: str, duoi: str = DUOI_CAM) -> str:
+    """Nối `duoi` vào cuối prompt nếu nó chưa có sẵn (không phân biệt hoa thường)."""
+    p = str(prompt or "").strip()
+    d = str(duoi or "").strip()
+    if not p or not d or d.lower() in p.lower():
+        return p
+    return "{0}, {1}".format(p.rstrip(".,; "), d)
+
+
+def thong_ke_canh(canh: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
+    """Đếm ba dấu hiệu prompt yếu trên cả bảng cảnh — để NÓI RA sau khi chia.
+
+    * `tinh`: prompt ảnh mà nhân vật chỉ ngồi/đứng/nằm;
+    * `cham`: prompt video chỉ có chữ chậm/nhẹ;
+    * `lap`: cặp cảnh liền nhau mở đầu bằng cùng ba chữ (cùng cỡ cảnh).
+
+    Không tự sửa và không hỏi lại AI (mỗi lượt hỏi là tiền): con số hiện lên
+    nhật ký để người chạy biết bảng cảnh này "phẳng" tới đâu mà quyết.
+    """
+    ds = list(canh or [])
+    tinh = sum(1 for c in ds if _TU_TINH.search(str(c.get("img_prompt") or "").lower()))
+    cham = sum(1 for c in ds if _TU_CHAM.search(str(c.get("video_prompt") or "").lower()))
+
+    def mo_dau(c) -> str:
+        return " ".join(str(c.get("img_prompt") or "").lower().split()[:3])
+
+    lap = sum(1 for a, b in zip(ds, ds[1:]) if mo_dau(a) and mo_dau(a) == mo_dau(b))
+    return {"tinh": tinh, "cham": cham, "lap": lap, "tong": len(ds)}
 
 
 def dien_khuon(khuon: str, gia_tri: Mapping[str, Any]) -> str:
@@ -383,6 +528,8 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
                 "video_prompt": _nhip_may_cho_phan(
                     str(m.get("video_prompt") or ""), k + 1, so_phan),
                 "characters_used": str(m.get("characters_used") or ""),
+                "location_used": str(m.get("location_used") or ""),
+                "srt_text_vi": str(m.get("narration_vi") or ""),
                 "primary_subject": str(m.get("primary_subject") or ""),
                 "primary_action": str(m.get("primary_action") or ""),
                 "visual_anchor": str(m.get("visual_anchor") or ""),
@@ -410,12 +557,16 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
                     song_song: int = KHUC_SONG_SONG,
                     ghi: Optional[Callable[[str], None]] = None,
                     kiem_dung: Optional[Callable[[], None]] = None,
+                    duoi: str = "",
                     ) -> List[Dict[str, Any]]:
     """Chia cả file phụ đề thành cảnh, rồi đánh số và gắn mốc thời gian.
 
     `hoi(khúc, thứ tự khúc, tổng số khúc)` là **lời gọi AI của nơi gọi**, trả
     về nguyên danh sách cảnh AI đưa ra. Mọi việc còn lại — chia khúc, chạy song
     song, canh lại, đánh số — làm ở đây.
+
+    `duoi` (thường là `DUOI_CAM`) được nối vào cuối MỌI prompt ảnh và video
+    còn thiếu nó — bằng mã, không tin AI nhớ đuôi ở cả trăm cảnh.
 
     Phụ đề dài thì chia khúc rồi chạy song song, ghép lại theo **đúng thứ tự
     khúc**: danh sách cảnh phải liền mạch với phụ đề, mà `ThreadPoolExecutor`
@@ -469,6 +620,9 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
             c["segment_id"] = "seg{0}".format(so - phan_thu + 1)
         if nhan_vat_mac_dinh and not c.get("characters_used"):
             c["characters_used"] = nhan_vat_mac_dinh
+        if duoi:
+            c["img_prompt"] = ep_duoi(c["img_prompt"], duoi)
+            c["video_prompt"] = ep_duoi(c["video_prompt"], duoi)
         c.setdefault("location_used", "")
         c["status_img"] = "pending"
         c["status_vid"] = "pending"
@@ -477,4 +631,8 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
         ghi("  chia được {0} cảnh — ngắn nhất {1:.1f}s, dài nhất {2:.1f}s, "
             "trung bình {3:.1f}s.".format(
                 len(canh), min(dai), max(dai), sum(dai) / max(1, len(dai))))
+        tk = thong_ke_canh(canh)
+        ghi("  chất lượng prompt: {0}/{3} cảnh nhân vật chỉ ngồi/đứng, {1}/{3} "
+            "clip chỉ chậm/nhẹ, {2} cặp cảnh liền nhau cùng cỡ cảnh.".format(
+                tk["tinh"], tk["cham"], tk["lap"], tk["tong"]))
     return canh

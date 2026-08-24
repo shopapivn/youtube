@@ -89,8 +89,9 @@ def diagnose(catalog: Mapping[str, ToolManifest], tool_ids: Iterable[str] = (),
                      download_url=url, requires_network=bool(url)))
     if studio_root is not None:
         root = Path(studio_root).resolve()
+        from .model_installer import duong_model
         for (model_id, repo), tools in sorted(model_tools.items()):
-            if (root / "models" / model_id / "config.json").is_file():
+            if duong_model(root, model_id) is not None:
                 continue
             issues.append(DependencyIssue(
                 model_id, "model", tuple(sorted(tools)), "Thiếu model {0}.".format(model_id),

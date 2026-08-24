@@ -292,16 +292,46 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     },
     "prompt-visuals": {
         "tieu_de": "Prompt Visuals",
-        "tom_tat": "Từ file giọng đọc ra file Excel chứa prompt của từng cảnh.",
+        "tom_tat": "Đưa file giọng đọc (mp3) vào là ra file Excel đủ prompt "
+                   "ảnh + video của từng cảnh — có chỗ thử vài cảnh thật.",
         "buoc": [
-            "Chọn một hay nhiều file giọng đọc (.mp3, .wav…).",
-            "Chọn engine bạn sẽ dùng để dựng video — Veo 3 hay Seedance. Cảnh "
-            "được cắt đúng theo độ dài clip của engine đó.",
-            "Để yên ô “Giữ nhân vật & phong cách xuyên suốt” nếu video có một "
-            "nhân vật chính; tắt đi nếu mỗi cảnh một chủ thể khác nhau.",
-            "Bấm “Tạo prompt”. Mỗi file giọng đọc ra một file Excel.",
+            "Bước 1: bấm “Chọn file mp3…”. Có kịch bản .txt thì bấm “+ kịch "
+            "bản .txt” — prompt chuẩn xác hơn. Đã lưu phong cách lần trước "
+            "(hoặc có kênh ở tab Tự động) thì chọn ở ô “Phong cách đã lưu” — "
+            "Bước 2 dùng đúng phong cách đó, không phải chọn lại.",
+            "Bước 2 (khi chưa chọn ở Bước 1) có hai tab. “Chọn phong cách có "
+            "sẵn”: bấm một thẻ để xem ảnh + video mẫu (miễn phí), rồi bấm "
+            "“Dùng phong cách này”. “AI xây phong cách từ ảnh của bạn”: tải "
+            "1–5 ảnh đúng kiểu bạn muốn, bấm “Nhờ AI xây phong cách” (một "
+            "lượt gọi AI) — mọi cảnh về sau theo đúng kiểu đó. Ưng phong cách "
+            "nào thì bấm “💾 Lưu phong cách này…” để lần sau chọn ở Bước 1. "
+            "“⚙ Nâng cao” mở ô prompt phong cách, sửa thẳng được.",
+            "Bước 3: bấm “Tạo prompt”. Máy tự đoán tiếng trong file, tự giữ "
+            "nhân vật xuyên suốt; ba dòng khâu cho biết đang nghe, đang viết "
+            "prompt hay đang xuất Excel. Video ở đây luôn là Veo 3 (mỗi cảnh "
+            "tối đa 8 giây).",
+            "Ô “Nhân vật” ở Bước 1 chọn cách kể: “AI tự xây nhân vật & bối "
+            "cảnh” (không cần ảnh); “Một nhân vật cố định của kênh” (tải MỘT "
+            "ảnh nv1 — mọi cảnh xoay quanh người đó, như tab Tự động); “Nhân "
+            "vật cố định + nhân vật & bối cảnh tham chiếu” (có ảnh nv1, AI dựng "
+            "thêm nv2… và các bối cảnh loc1… để cả video nhất quán). Chọn kênh "
+            "ở ô “Phong cách đã lưu” thì ảnh nhân vật của kênh được lấy sẵn.",
+            "Bước 4 (hiện ra sau khi xong) có bốn tab: “Cảnh” (prompt ảnh + "
+            "video từng cảnh, kèm lời đọc dịch tiếng Việt), “Ảnh bìa” (3 prompt "
+            "+ tiêu đề và chữ bìa đề xuất), “Nhạc Suno” (mỗi track ~105 giây), "
+            "“Nhân vật & bối cảnh”. Bấm vào ô để sửa, rồi “Lưu chỉnh sửa vào "
+            "Excel” — ghi cả ba sheet.",
+            "Bước 5: bấm “Tạo thử ảnh + video” để xem 1–3 cảnh đầu thành hình "
+            "thật. Chưa ưng thì đổi phong cách hoặc sửa prompt rồi thử lại; "
+            "ưng rồi mang file Excel sang tab Ảnh & Video → Hàng loạt chạy hết.",
         ],
         "luu_y": [
+            "Phong cách đã lưu (kể cả prompt bạn sửa tay ở ⚙ Nâng cao) nằm "
+            "trong ô “Phong cách đã lưu” ở Bước 1; muốn bỏ thì mở ⚙ Nâng cao "
+            "bấm “Xoá phong cách đã lưu này”.",
+            "Bước thử tiêu tiền thật (mỗi cảnh 1 ảnh + 1 clip) — giá hiện "
+            "ngay trên nút, việc lỗi hoàn 100%. Đồ thử nằm trong thư mục con "
+            "“thu-phong-cach”, không lẫn với kết quả chạy loạt.",
             "Lần đầu phải bấm “Tải bộ nghe” — khoảng 0,5 GB, tải một lần rồi "
             "thôi. Việc nghe chạy ngay trên máy bạn.",
             "Bước viết prompt có gọi AI, mỗi 20 cảnh "
@@ -330,20 +360,23 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "wallet": {
-        "tieu_de": "Ví & Tài khoản",
-        "tom_tat": "Đăng nhập bằng email, xem số dư, nạp tiền.",
+        "tieu_de": "Tài khoản",
+        "tom_tat": "Đăng nhập một lần, xem số dư, nạp tiền bằng mã QR.",
         "buoc": [
-            "Gõ email và mật khẩu tài khoản shopapi.vn rồi bấm “Đăng nhập & lấy "
-            "khoá”. Tôi tự tạo và lưu khoá API cho bạn — không phải vào web tạo "
-            "khoá rồi chép sang nữa.",
-            "Chọn mức nạp rồi làm theo hướng dẫn chuyển khoản.",
-            "Số dư và lịch sử trừ tiền đều nằm ở trang này.",
+            "Gõ email và mật khẩu tài khoản shopapi.vn rồi bấm “Đăng nhập”. Tôi "
+            "tự lấy khoá và lưu trên máy này — lần sau mở tool là vào thẳng, "
+            "không phải gõ lại.",
+            "Nạp tiền: chọn mức (hoặc gõ số khác) rồi bấm “Tạo mã QR”. Quét mã "
+            "bằng app ngân hàng — số tiền và nội dung chuyển khoản đã điền sẵn. "
+            "Không quét được thì chuyển tay theo số tài khoản bên cạnh, nhớ bấm "
+            "Chép nội dung chuyển khoản chứ đừng gõ lại.",
+            "Chuyển xong cứ để yên màn hình: tiền vào ví trong khoảng 10 giây và "
+            "tool tự báo “Tiền đã vào ví!”.",
         ],
-        "luu_y": ["Mọi con số về tiền trong tool đều gom về đây, các tab khác "
-                  "chỉ lo phần việc.",
-                  "Chưa có tài khoản, hoặc muốn tự tạo khoá tay thì bấm “Lấy "
-                  "khoá API” để mở thẳng trang shopapi.vn, tạo xong dán khoá vào "
-                  "ô “Đã có khoá API? Dán vào đây”.",
+        "luu_y": ["Muốn dùng tài khoản khác: bấm “Đăng xuất” ở thẻ trên cùng. "
+                  "Tool xoá khoá trên máy này và quay về màn hình đăng nhập.",
+                  "Đã có sẵn khoá API thì dán vào dòng “Đã có khoá API?” dưới ô "
+                  "đăng nhập. Chưa có tài khoản: bấm “Lấy khoá API” để mở web.",
                   "Tài khoản bật xác thực 2 lớp: tool sẽ hiện ô nhập mã 6 số. "
                   "Mã chỉ dùng được một lần, nên bước tạo khoá có thể hỏi bạn "
                   "một mã mới — cứ mở app xác thực lấy mã mới là được."],

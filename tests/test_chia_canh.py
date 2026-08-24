@@ -312,3 +312,77 @@ class TestPromptWorkbookDungChungCachChia:
             assert dau == workbook_tool.SCENE_COLUMNS
         finally:
             sach.close()
+
+
+# ── Bản 24/08/2026: khuôn "đạo diễn storyboard" + đuôi cấm ép bằng mã ────────
+#
+# Chủ dự án: *"prompt tạo ảnh video phải minh hoạ được nội dung"*, chỉ sang
+# `D:\AFFILIATE`. Đo trên TL4-T7/0010: 147/297 cảnh nhân vật chỉ ngồi/đứng,
+# 297/297 clip "slowly/gently". Bài này khoá phần đo được bằng mã: đuôi cấm,
+# thống kê, và khuôn mặc định có đủ các luật + vị trí khúc.
+
+from core.chia_canh import DUOI_CAM, ep_duoi, thong_ke_canh  # noqa: E402
+
+
+class TestDuoiCam:
+    def test_noi_duoi_khi_thieu(self):
+        assert ep_duoi("Wide shot of a door.", DUOI_CAM) == (
+            "Wide shot of a door, " + DUOI_CAM)
+
+    def test_khong_noi_hai_lan(self):
+        co = "Wide shot, No Text, no letters, no numbers, no watermark"
+        assert ep_duoi(co, DUOI_CAM) == co
+
+    def test_rong_thi_giu_rong(self):
+        assert ep_duoi("", DUOI_CAM) == ""
+
+    def test_chia_theo_nghia_ep_duoi_moi_canh(self):
+        cues = [cue(i) for i in range(1, 5)]
+
+        def hoi(khuc, _t, _n):
+            return [canh_ai(1, 2), canh_ai(3, 4)]
+
+        for c in chia_theo_nghia(cues, hoi, tran=8.0, duoi=DUOI_CAM):
+            assert c["img_prompt"].endswith(DUOI_CAM)
+            assert c["video_prompt"].endswith(DUOI_CAM)
+
+
+class TestThongKe:
+    def test_dem_ngoi_dung_cham_va_lap(self):
+        canh = [
+            {"img_prompt": "Wide shot of a man sitting by a window",
+             "video_prompt": "The light slowly warms"},
+            {"img_prompt": "Wide shot of a clock melting",
+             "video_prompt": "The clock face cracks and the hands fall off"},
+            {"img_prompt": "Extreme close-up of a hand",
+             "video_prompt": "Gently, the hand opens"},
+        ]
+        tk = thong_ke_canh(canh)
+        assert tk == {"tinh": 1, "cham": 2, "lap": 1, "tong": 3}
+
+    def test_rong(self):
+        assert thong_ke_canh([]) == {"tinh": 0, "cham": 0, "lap": 0, "tong": 0}
+
+
+class TestKhuonDaoDien:
+    def test_co_du_cac_luat_cua_affiliate_va_7_canh(self):
+        chu = KHUON_MAC_DINH.lower()
+        for dau_hieu in ("metaphor", "rejected", "accent", "different at the end",
+                         "never a grid", "carry writing", "style tail",
+                         "hard ceiling"):
+            assert dau_hieu in chu, dau_hieu
+
+    def test_dien_vi_tri_khuc(self):
+        chu = loi_nhac_chia(KHUON_MAC_DINH, [cue(1)], 8.0, {
+            "KHUC_THU": 3, "TONG_KHUC": 9, "LA_KHUC_DAU": "no",
+            "TY_LE_KHUNG": "16:9 horizontal"})
+        assert "piece **3 of 9**" in chu
+        assert "FIRST piece? **no**" in chu
+        assert "16:9 horizontal composition" in chu
+        assert "<<" not in chu
+
+    def test_khong_dien_thi_don_sach(self):
+        # Nơi gọi cũ không truyền vị trí khúc: chỗ trống phải được dọn, không
+        # để AI đọc thấy `<<KHUC_THU>>`.
+        chu = loi_nhac_chia(KHUON_MAC_DINH, [cue(1)], 8.0)
+        assert "<<" not in chu

@@ -104,9 +104,12 @@ class BuilderService:
                     manifest.tool_id, ", ".join(missing_executables)))
             models = manifest.runtime.get("models", [])
             if isinstance(models, list):
+                # `duong_model` nhìn cả bộ đệm HuggingFace — bản đã tải cho tab
+                # Tự động dùng được ở đây luôn, không bắt tải lần hai.
+                from .model_installer import duong_model
                 missing_models = [str(item.get("id")) for item in models
                                   if isinstance(item, dict) and isinstance(item.get("id"), str)
-                                  and not (self.studio_root / "models" / item["id"] / "config.json").is_file()]
+                                  and duong_model(self.studio_root, item["id"]) is None]
                 if missing_models:
                     missing.append(manifest.tool_id)
                     issues.append("{0}: thieu model {1}.".format(
@@ -183,7 +186,9 @@ class BuilderService:
         if isinstance(models, list) and models and manifest.tool_id == "transcribe.local":
             model_id = models[0].get("id") if isinstance(models[0], dict) else None
             if isinstance(model_id, str):
-                values["WHISPER_MODEL_DIR"] = str(self.studio_root / "models" / model_id)
+                from .model_installer import duong_model
+                co = duong_model(self.studio_root, model_id)
+                values["WHISPER_MODEL_DIR"] = str(co or (self.studio_root / "models" / model_id))
         return values
 
     def _declarative_chat(self, system_prompt: str, user_prompt: str, model: str) -> str:

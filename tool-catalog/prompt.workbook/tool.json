@@ -14,7 +14,11 @@
   ],
   "config_schema": {"type":"object","additionalProperties":false,"properties":{
     "model":{"type":"string","enum":["claude-sonnet-5","claude-opus-5"],"default":"claude-sonnet-5"},
-    "engine":{"type":"string","enum":["veo3","seedance"],"default":"veo3"}
+    "engine":{"type":"string","enum":["veo3","seedance"],"default":"veo3"},
+    "nhat_quan_nhan_vat":{"type":"boolean","default":true},
+    "che_do_ke":{"type":"string","enum":["mot_nhan_vat","nhan_vat_va_boi_canh","tu_xay"],"default":"tu_xay"},
+    "thumbnail":{"type":"boolean","default":true},
+    "nhac":{"type":"boolean","default":true}
   }},
   "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 1200,
               "python_modules": ["openpyxl"]},
