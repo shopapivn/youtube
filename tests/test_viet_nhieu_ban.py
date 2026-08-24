@@ -118,6 +118,37 @@ class TestChamChon:
         assert len(ai.nhan) == 1
 
 
+class TestNutTrenGUI:
+    """Đặt được số bản và tiêu chí chọn ngay trong Quản lý kênh, không mở tệp."""
+
+    def _kenh_py(self):
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(goc, "ui_qt", "kenh.py"), encoding="utf-8") as t:
+            return t.read()
+
+    def test_o_so_ban_luu_vao_kenh_yaml(self):
+        chu = self._kenh_py()
+        assert "self._o_so_ban = QSpinBox()" in chu
+        assert '("so_ban_nhap", str(self._o_so_ban.value()))' in chu
+
+    def test_the_cham_chon_co_ten_de_sua_tieu_chi(self):
+        from ui_qt.kenh import _NHAN_PROMPT, _VIEC_PROMPT
+
+        assert "2b-cham.md" in _NHAN_PROMPT and "2b-cham.md" in _VIEC_PROMPT
+
+    def test_kenh_yaml_doc_so_ban_nhap(self, tmp_path):
+        from core.kenh import doc_kenh
+
+        d = os.path.join(str(tmp_path), "CHANNEL", "K1")
+        os.makedirs(d)
+        with open(os.path.join(d, "kenh.yaml"), "w", encoding="utf-8") as t:
+            t.write("ma: K1\nso_ban_nhap: 3\n")
+        assert doc_kenh(str(tmp_path), "K1").so_ban_nhap == 3
+        with open(os.path.join(d, "kenh.yaml"), "w", encoding="utf-8") as t:
+            t.write("ma: K1\nso_ban_nhap: 99\n")
+        assert doc_kenh(str(tmp_path), "K1").so_ban_nhap == 5, "kẹp 1..5"
+
+
 class TestTrungNguyenVan:
     def test_chep_nguyen_la_100(self):
         assert _trung_nguyen_van(GOC_DOI_THU, GOC_DOI_THU) == 1.0
