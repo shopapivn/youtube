@@ -379,6 +379,25 @@ def _so(gia_tri, mac_dinh: float) -> float:
         return mac_dinh
 
 
+#: Mã tiếng → tên gọi tiếng Việt, để lời nhắc nói "viết bằng tiếng Nhật" thay
+#: vì "viết bằng ja". Chủ dự án, 25/08/2026: *"viết bằng ja thì phải rõ là viết
+#: bằng ngôn ngữ tiếng Nhật"*. Thiếu mã nào thì trả lại chính mã ấy.
+_TEN_TIENG = {
+    "ja": "tiếng Nhật", "vi": "tiếng Việt", "en": "tiếng Anh", "zh": "tiếng Trung",
+    "ko": "tiếng Hàn", "es": "tiếng Tây Ban Nha", "fr": "tiếng Pháp",
+    "de": "tiếng Đức", "pt": "tiếng Bồ Đào Nha", "it": "tiếng Ý", "ru": "tiếng Nga",
+    "th": "tiếng Thái", "id": "tiếng Indonesia", "ms": "tiếng Mã Lai",
+    "ar": "tiếng Ả Rập", "hi": "tiếng Hindi", "tr": "tiếng Thổ Nhĩ Kỳ",
+    "nl": "tiếng Hà Lan", "pl": "tiếng Ba Lan", "tl": "tiếng Philippines",
+}
+
+
+def ten_tieng(ma: str) -> str:
+    """`"ja"` → `"tiếng Nhật"`; mã lạ thì trả nguyên mã (còn hơn trả rỗng)."""
+    chu = str(ma or "").strip().lower()
+    return _TEN_TIENG.get(chu[:2], chu) if chu else ""
+
+
 #: Tên độ phân giải giữ nguyên cỡ nhà cung cấp trả về.
 GIU_NGUYEN = "Giữ nguyên"
 

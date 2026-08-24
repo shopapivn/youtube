@@ -6,7 +6,7 @@ mục đích cuối: khán giả xem hết video (giữ chân cao, trên 60% th�
 3. BÁM CÁI ĐÃ THẮNG: giữ cấu trúc, nội dung, các nghiên cứu, con số, ví dụ, ẩn dụ chính của bản gốc — nhưng không chép nguyên văn (trùng trên 45% là gần chép, trừ nặng)
 4. CTA kéo bình luận: cuối bài có câu hỏi cụ thể, dễ trả lời, gắn với chính trải nghiệm vừa kể (không phải "hãy bình luận" chung chung); lời mời đăng ký tự nhiên
 5. độ dài: mục tiêu <<CHARS>> ký tự, lệch quá 20% là trừ nặng (video phải ra 12–15 phút)
-6. viết bằng <<LANGUAGE>> tự nhiên, không lệch tiếng, không sót lời dẫn
+6. viết bằng <<NGON_NGU>> tự nhiên, không lệch tiếng, không sót lời dẫn
 
 số đo tôi tính sẵn cho từng bản:
 <<SO_DO>>

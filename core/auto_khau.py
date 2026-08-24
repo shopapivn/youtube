@@ -49,7 +49,7 @@ from .chia_canh import (DUOI_CAM, bang_phu_de, chia_theo_nghia, dien_khuon,
 # phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
 # vào đây vì `__all__` của tệp này đã hứa có nó.
 from .goi_van_ban import loc_json
-from .kenh import Kenh, ten_khung
+from .kenh import Kenh, ten_khung, ten_tieng
 from .nang_anh import KHUNG
 from .the_cam_xuc import TEP_CO_THE, chen_the, kiem_the
 from .tron_tieng import co_ne_giong, loc_tron_nhac
@@ -1720,6 +1720,9 @@ def _khau_kich_ban(bc_goc: BoiCanh):
 
         chung = {
             "LANGUAGE": k.giong_van or k.ngon_ngu,
+            # Tên tiếng bằng tiếng Việt ("tiếng Nhật") cho lời nhắc đọc rõ —
+            # `LANGUAGE` ở trên là mô tả giọng văn (tiếng Anh) của kênh.
+            "NGON_NGU": ten_tieng(k.ngon_ngu) or (k.ngon_ngu or ""),
             "CHANNEL": _mo_ta_kenh(k),
             "CHARS": muc_tieu_kt,
             # ═══ MỘT CÁI THƯỚC ĐỂ SO, KHÔNG PHẢI MỘT SỐ ĐỂ ĐẾM ═══
