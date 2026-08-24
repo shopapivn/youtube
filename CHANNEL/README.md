@@ -4,42 +4,37 @@ Mỗi thư mục ở đây là **một kênh**. Tab **Tự động** đọc thư
 làm ra thứ gì: nói tiếng nào, giọng ai đọc, nhân vật trông ra sao, viết theo lối
 nào.
 
-Tool đi kèm **ba kênh mẫu có sẵn** — chép từ dây chuyền đã chạy thật, không phải
-ví dụ dựng cho có:
+Tool đi kèm **một kênh mẫu** — chép từ dây chuyền đã chạy thật, không phải ví dụ
+dựng cho có (24/08/2026: các kênh mẫu khác đã gỡ, hoàn thiện từng kênh một):
 
-| Kênh | Khán giả | Phong cách hình | Dài |
+| Kênh | Khán giả | Phong cách hình | Cách làm |
 |---|---|---|---|
-| `TL1-T1` | Nhật Bản | áo len than, nền kem ấm, nét bút mực | 10 phút |
-| `TL2-T2` | Việt Nam | bút chì trên giấy trắng | 5 phút |
-| `TL3-T3` | Anh/Mỹ | phấn trắng trên bảng đen | 3 phút |
+| `TL4-T7` | Nhật Bản | nhân vật trắng trơn, nền đào ấm | remake: bám cấu trúc video đã thắng, bám độ dài gốc |
 
-Cả ba cùng ngách **tâm lý**. Dùng thẳng được, hoặc chép ra rồi sửa thành ngách
-của bạn.
+Ngách **tâm lý**. Dùng thẳng được, hoặc chép ra rồi sửa thành ngách của bạn.
 
 ## Chạy thử ngay
 
-1. Mở tab **Tự động**, chọn kênh `TL1-T1`.
+1. Mở tab **Tự động**, chọn kênh `TL4-T7`.
 2. Nếu tool báo *"Chưa chọn giọng đọc"* → mở **Quản lý kênh**, thẻ **Cấu hình**,
    điền `voice_id`. Mã giọng lấy ở tab **Voice**.
 3. Dán link video tư liệu, bấm **Chạy**.
 
-`TL3-T3` nhắm 3 phút nên rẻ và nhanh nhất — hợp để chạy thử lần đầu.
-
 ## Một kênh gồm những gì
 
 ```
-TL1-T1/
+TL4-T7/
   kenh.yaml     tiếng gì, dài bao nhiêu, giọng nào, engine nào
   style.yaml    nhìn ra sao: màu, nét vẽ, đạo cụ, bối cảnh văn hoá
   nv/nv1.png    nhân vật tham chiếu — MỌI cảnh phải giống người này
-  prompt/       bảy bước, chạy lần lượt
-    1-tieu-de.md      đặt tiêu đề + chữ ảnh bìa
+  prompt/       các bước, chạy lần lượt; thiếu tệp nào thì bước ấy tự bỏ qua
+    1-tieu-de.md      đặt tiêu đề + chữ ảnh bìa (kênh nguyen_goc không dùng)
     2-viet.md         viết kịch bản
-    3-sua.md          đối chiếu, sửa chỗ hụt
-    4-do-dai.md       nắn đúng độ dài
-    5-hoan-thien.md   đọc lại lần cuối
+    3-sua.md          đối chiếu, sửa, chèn thẻ cảm xúc cho giọng đọc
     6-seo.md          mô tả, hashtag, từ khoá
     7-canh.md         chia cảnh theo nghĩa + viết lời nhắc ảnh/clip
+    8-thumbnail.md    ba lời nhắc ảnh bìa
+    9-nhac.md         lời nhắc nhạc nền (Suno)
 ```
 
 Sửa cả bảy lời nhắc **ngay trong tool**: tab Tự động → **Quản lý kênh**. Không

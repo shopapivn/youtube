@@ -20,10 +20,23 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from core.chia_canh import dien_khuon
 from core.kenh import CHE_DO_TIEU_DE, Kenh, doc_kenh, ten_che_do
 
 GOC = os.path.join(os.path.dirname(__file__), "..")
+
+
+def _kenh_tren_dia(ma: str) -> Kenh:
+    """Đọc kênh thật trong `CHANNEL/`; kho này chưa có kênh ấy thì bỏ qua bài.
+
+    Chủ dự án, 24/08/2026: *"hiện tại mới chỉ xây cho tl4-t7 nên các template
+    khác xóa"* — TL5-T7 không còn trên kho, các bài về nó chờ ngày kênh quay lại.
+    """
+    if not os.path.isdir(os.path.join(GOC, "CHANNEL", ma)):
+        pytest.skip("kho này chưa có kênh " + ma)
+    return doc_kenh(GOC, ma)
 
 
 class TestMacDinh:
@@ -54,7 +67,7 @@ class TestNanTenCheDo:
 
 class TestTL5:
     def test_restyled_va_thoi_luong_co_dinh(self):
-        k = doc_kenh(GOC, "TL5-T7")
+        k = _kenh_tren_dia("TL5-T7")
         assert k.che_do_tieu_de == "restyled", (
             "TL5-T7 đặt lại tiêu đề theo chất kênh, phải là restyled")
         # Thời lượng CỐ ĐỊNH: KHÔNG bám bản gốc.
@@ -66,7 +79,7 @@ class TestTL5:
 
     def test_van_giu_chat_rieng_cover(self):
         # Chất riêng của kênh: chiến lược "Cover", có bước phân tích bản gốc.
-        k = doc_kenh(GOC, "TL5-T7")
+        k = _kenh_tren_dia("TL5-T7")
         assert "Cover" in str(k.chien_luoc.get("ten", ""))
         assert "2a-phan-tich.md" in k.prompt
 
@@ -82,7 +95,7 @@ class TestTL4LayNguyenDoiThu:
 class TestNoiVaoLoiNhac:
     def test_mode_chay_vao_o_placeholder(self):
         # Cờ kênh phải điền đúng vào ô <<MODE>> của lời nhắc tiêu đề.
-        k = doc_kenh(GOC, "TL5-T7")
+        k = _kenh_tren_dia("TL5-T7")
         khuon = k.prompt.get("1-tieu-de.md", "")
         assert "<<MODE>>" in khuon, "lời nhắc tiêu đề phải còn ô <<MODE>>"
         ra = dien_khuon(khuon, {"MODE": k.che_do_tieu_de})
