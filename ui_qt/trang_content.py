@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from PyQt5.QtWidgets import (
     QComboBox, QHBoxLayout, QPlainTextEdit, QScrollArea, QTabWidget, QVBoxLayout,
@@ -150,6 +150,39 @@ class TabTemplate(QWidget):
         d2.addWidget(nut_phu("Mở thư mục",
                              lambda: mo_thu_muc(self._thu_muc.value), rong=134))
         doc.addLayout(d2)
+
+        # ── Viết mấy bản rồi chấm chọn một ───────────────────────────────────
+        #
+        # Chủ dự án, 25/08/2026: *"ở tab viết kịch bản với ở chỗ auto mày nên
+        # có logic cho việc sử dụng cách viết mấy lần và tiêu chí chọn để có
+        # thể tự thiết kế ở GUI"*. Prompt ĐẦU TIÊN được viết N lần, AI chấm
+        # theo ô tiêu chí rồi lấy một bản; các prompt sau chạy tiếp trên bản
+        # ấy. Lõi ở `core/viet_nhieu_ban.py`, dùng chung với tab Tự động.
+        from PyQt5.QtWidgets import QSpinBox  # noqa: PLC0415
+
+        d3 = QHBoxLayout()
+        d3.setSpacing(8)
+        d3.addWidget(nhan("Viết mấy bản:", "phu"))
+        self._o_so_ban = QSpinBox()
+        self._o_so_ban.setRange(1, 5)
+        self._o_so_ban.setFixedWidth(64)
+        self._o_so_ban.setToolTip(
+            "1 = viết một bản (mặc định). 3–5 = prompt đầu tiên được viết "
+            "ngần ấy bản, AI chấm theo ô tiêu chí rồi lấy bản tốt nhất; các "
+            "bản và bản chấm lưu cạnh file kết quả.\nĐi ví ShopAPI thì tốn "
+            "gấp số bản; viết bằng thuê bao Claude thì không tốn thêm.")
+        self._o_so_ban.valueChanged.connect(
+            lambda gt: self._o_tieu_chi.setVisible(gt > 1))
+        d3.addWidget(self._o_so_ban)
+        d3.addStretch(1)
+        doc.addLayout(d3)
+        self._o_tieu_chi = QPlainTextEdit()
+        self._o_tieu_chi.setPlaceholderText(
+            "Tiêu chí chọn bản tốt nhất — để trống là dùng tiêu chí mặc định "
+            "(hook, giữ chân, bám bản gốc, CTA kéo bình luận, độ dài, tiếng).")
+        self._o_tieu_chi.setFixedHeight(64)
+        self._o_tieu_chi.setVisible(False)
+        doc.addWidget(self._o_tieu_chi)
 
         # ── Lưu vào & chạy ───────────────────────────────────────────────────
         self._thu_muc = ChonThuMuc(app.default_output_dir("kich-ban"))
@@ -320,21 +353,38 @@ class TabTemplate(QWidget):
             self._app.show_message("Chưa có prompt nào",
                                    "Viết ít nhất một prompt rồi bấm Chạy.")
             return
-        if self._app.client is None:
+        goi = _dung_goi_mo_hinh(self._app)
+        if goi is None:
             self._app.bao_can_khoa()
             return
         thu_muc = self._thu_muc.value
-        client = self._app.client
+        so_ban = int(self._o_so_ban.value())
+        tieu_chi = self._o_tieu_chi.toPlainText().strip()
         self._khoa(True)
-        self._nhan_ket.setText("Đang chạy {0} prompt…".format(len(mau_prompt)))
+        self._nhan_ket.setText("Đang chạy {0} prompt{1}…".format(
+            len(mau_prompt), " (viết {0} bản, chấm chọn 1)".format(so_ban)
+            if so_ban > 1 else ""))
 
-        def viec() -> str:
+        def viec():
+            from core.viet_nhieu_ban import viet_va_chon  # noqa: PLC0415
+
+            phu: Dict[str, str] = {}
             truoc = dau_vao
-            for mau in mau_prompt:
-                truoc = _goi_mo_hinh(client, ghep_yeu_cau(mau, dau_vao, truoc))
-            return truoc
+            for i, mau in enumerate(mau_prompt):
+                yeu_cau = ghep_yeu_cau(mau, dau_vao, truoc)
+                if i == 0 and so_ban > 1:
+                    # Bản gốc để chấm bám gốc chính là ĐẦU VÀO (thường là
+                    # kịch bản đối thủ dán vào).
+                    truoc, cac_ban, bien_ban = viet_va_chon(
+                        goi, yeu_cau, so_ban, dau_vao, tieu_chi=tieu_chi)
+                    for j, b in enumerate(cac_ban):
+                        phu["ban-{0}".format(chr(65 + j))] = b
+                    phu["cham-diem"] = bien_ban
+                else:
+                    truoc = goi(yeu_cau)
+            return truoc, phu
 
-        self._app.run_bg(viec, on_ok=lambda chu: self._xong(chu, thu_muc),
+        self._app.run_bg(viec, on_ok=lambda ra: self._xong(ra[0], thu_muc, ra[1]),
                          on_err=self._hong)
 
     def _khoa(self, khoa: bool) -> None:
@@ -345,20 +395,28 @@ class TabTemplate(QWidget):
         else:
             self.cap_nhat_nut()
 
-    def _xong(self, chu: str, thu_muc: str) -> None:
+    def _xong(self, chu: str, thu_muc: str,
+              phu: Optional[Dict[str, str]] = None) -> None:
         """Chạy xong là **ghi thẳng ra .txt**.
 
         Bắt bấm thêm một nút Lưu nữa là thêm một chỗ để mất kết quả: khách đóng
         tool, hoặc bấm Chạy lượt sau, là bản vừa xong bay mất.
+
+        `phu` là các bản đã viết + bản chấm (khi viết nhiều bản) — ghi cạnh tệp
+        kết quả, cùng mốc giờ, để người dùng soi lại vì sao chọn bản ấy.
         """
         self._khoa(False)
         chu = clean_voice_text(chu)
         try:
             os.makedirs(thu_muc, exist_ok=True)
-            duong_dan = os.path.join(thu_muc, "kich-ban-{0}.txt".format(
-                time.strftime("%Y%m%d-%H%M%S")))
+            moc = time.strftime("%Y%m%d-%H%M%S")
+            duong_dan = os.path.join(thu_muc, "kich-ban-{0}.txt".format(moc))
             with open(duong_dan, "w", encoding="utf-8") as tep:
                 tep.write(chu + "\n")
+            for ten, noi_dung in (phu or {}).items():
+                with open(os.path.join(thu_muc, "kich-ban-{0}-{1}.txt".format(
+                        moc, ten)), "w", encoding="utf-8") as tep:
+                    tep.write(noi_dung.rstrip("\n") + "\n")
         except OSError as loi:
             self._nhan_ket.setText("Chạy xong nhưng không ghi được file.")
             self._app.show_message("Không lưu được", str(loi))
@@ -372,19 +430,47 @@ class TabTemplate(QWidget):
         self._app.show_error(loi)
 
 
-def _goi_mo_hinh(client, yeu_cau: str) -> str:
-    """Một lượt gọi mô hình. **Chạy ở luồng nền.**
+#: Lời nhắc hệ thống cố ý **cụt lủn**: prompt là của khách, tool không được nhét
+#: thêm yêu cầu về độ dài hay ngôn ngữ vào sau lưng họ. Chỉ giữ đúng một câu
+#: chặn phần thừa — không có nó thì mô hình trả về "Chắc chắn rồi! Đây là…" kèm
+#: một đống markdown, mà đây là chữ để đem đi đọc thành tiếng.
+_CHI_TRA_NOI_DUNG = ("Chỉ trả về đúng nội dung được yêu cầu — không lời dẫn, "
+                     "không giải thích, không markdown.")
 
-    Lời nhắc hệ thống cố ý **cụt lủn**: prompt là của khách, tool không được nhét
-    thêm yêu cầu về độ dài hay ngôn ngữ vào sau lưng họ. Chỉ giữ đúng một câu
-    chặn phần thừa — không có nó thì mô hình trả về "Chắc chắn rồi! Đây là…" kèm
-    một đống markdown, mà đây là chữ để đem đi đọc thành tiếng.
-    """
+
+def _goi_mo_hinh(client, yeu_cau: str) -> str:
+    """Một lượt gọi mô hình qua ví ShopAPI. **Chạy ở luồng nền.**"""
     from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
 
     return goi_van_ban(client, [
-        {"role": "system", "content": "Chỉ trả về đúng nội dung được yêu cầu — không lời dẫn, không giải thích, không markdown."},
+        {"role": "system", "content": _CHI_TRA_NOI_DUNG},
         {"role": "user", "content": yeu_cau}])
+
+
+def _dung_goi_mo_hinh(app):
+    """Hàm `(lời nhắc) -> chữ` cho tab này, hoặc `None` khi chưa có đường nào.
+
+    Máy bật "Kịch bản viết bằng Claude Code" (Cài đặt) thì chữ ở đây cũng đi
+    thuê bao Claude — chủ dự án, 24/08/2026: *"đã nói máy này là claude max 20
+    thì cứ thế mà làm"*. Không bật thì đi ví như trước, và chưa có khoá thì trả
+    `None` để nơi gọi hiện hộp "cần đăng nhập".
+    """
+    from core import cai_dat  # noqa: PLC0415
+
+    try:
+        bat = bool(cai_dat.doc(app.base_dir).get("kich_ban_bang_claude_code"))
+    except Exception:  # noqa: BLE001
+        bat = False
+    if bat:
+        from core.viet_max import co_claude_code, dung_goi_chat_max  # noqa: PLC0415
+
+        if co_claude_code():
+            goi_max = dung_goi_chat_max(app.base_dir)
+            return lambda yeu_cau: goi_max(_CHI_TRA_NOI_DUNG + "\n\n" + yeu_cau)
+    client = getattr(app, "client", None)
+    if client is None:
+        return None
+    return lambda yeu_cau: _goi_mo_hinh(client, yeu_cau)
 
 
 class TrangKichBan(QWidget):

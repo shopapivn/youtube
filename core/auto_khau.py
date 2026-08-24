@@ -1993,20 +1993,10 @@ def _khau_kich_ban(bc_goc: BoiCanh):
 
 
 def _trung_nguyen_van(moi: str, goc: str, n: int = 10) -> float:
-    """Tỷ lệ chuỗi `n` ký tự của `moi` xuất hiện NGUYÊN VĂN trong `goc` (0..1).
+    """Xem `core.viet_nhieu_ban.trung_nguyen_van` — giữ tên cũ cho bài kiểm."""
+    from .viet_nhieu_ban import trung_nguyen_van  # noqa: PLC0415
 
-    Bỏ khoảng trắng và dấu câu trước khi so, để "cùng câu, khác dấu phẩy"
-    vẫn tính là trùng. Thước này dùng để CHẤM, không phải để chặn: kênh remake
-    bám bản gốc là chủ đích — nhưng chép nguyên văn nửa bài thì không phải
-    remake nữa.
-    """
-    lam = re.compile(r"[\s。、「」『』?？!！・…—.,;:\"'()\[\]]+")
-    a, b = lam.sub("", moi or ""), lam.sub("", goc or "")
-    if len(a) < n or len(b) < n:
-        return 0.0
-    kho = {b[i:i + n] for i in range(len(b) - n + 1)}
-    tong = len(a) - n + 1
-    return sum(1 for i in range(tong) if a[i:i + n] in kho) / tong
+    return trung_nguyen_van(moi, goc, n)
 
 
 #: Tên tệp lưu từng bản viết và bản chấm — để lại trong thư mục lượt cho chủ
@@ -2061,47 +2051,26 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     if len(ban) == 1:
         return ban[0]
 
-    so_do = [(len(b), (len(b) - muc_tieu) / max(1, muc_tieu),
-              _trung_nguyen_van(b, tu_lieu)) for b in ban]
-    bang = "\n".join(
-        "- Bản {0}: {1} ký tự (lệch {2:+.0%} so với mục tiêu {3}), trùng nguyên "
-        "văn bản gốc {4:.0%}".format(chr(65 + i), dai, lech, muc_tieu, trung)
-        for i, (dai, lech, trung) in enumerate(so_do))
-    chon: Optional[int] = None
-    ly_do = ""
-    diem: Any = {}
+    from .viet_nhieu_ban import cham_va_chon  # noqa: PLC0415
+
     khuon_cham = k.prompt.get("2b-cham.md", "")
+
+    def goi_cham(loi_nhac: str) -> str:
+        bc.kiem_dung()
+        return _goi(bc, loi_nhac, _khoa_chat(luot, "2b-cham.md"))
+
     if khuon_cham.strip():
-        cac_ban = "\n\n".join("=== BẢN {0} ===\n{1}".format(chr(65 + i), b)
-                              for i, b in enumerate(ban))
-        try:
-            bc.kiem_dung()
-            bc.ghi("  chấm {0} bản…".format(len(ban)))
-            tra = _goi(bc, _thay(khuon_cham, dict(
-                chung, SO_BAN=len(ban), SO_DO=bang, CAC_BAN=cac_ban)),
-                _khoa_chat(luot, "2b-cham.md"))
-            goi = loc_json(tra)
-            chu_chon = str(goi.get("chon") or "").strip().upper()[:1]
-            i_chon = ord(chu_chon) - 65 if chu_chon else -1
-            if 0 <= i_chon < len(ban):
-                chon = i_chon
-                ly_do = str(goi.get("ly_do") or "")
-                diem = goi.get("diem") or {}
-        except Exception as loi:  # noqa: BLE001 — chấm hỏng thì chọn theo số đo
-            bc.ghi("  (chấm hỏng: {0} — chọn theo số đo)".format(str(loi)[:80]))
-    if chon is None:
-        # Gần mục tiêu độ dài nhất; bản chép quá nửa bản gốc bị phạt nặng.
-        chon = min(range(len(ban)),
-                   key=lambda i: abs(so_do[i][1]) + (1.0 if so_do[i][2] > 0.5
-                                                     else 0.0))
-        ly_do = ly_do or "chọn theo số đo (không có bản chấm)"
+        chon, ly_do, diem, bang = cham_va_chon(
+            goi_cham, ban, tu_lieu, khuon_cham=khuon_cham, chung=chung,
+            muc_tieu=muc_tieu, ghi=bc.ghi)
+    else:
+        # Không có prompt chấm → không gọi AI, chọn theo số đo.
+        chon, ly_do, diem, bang = cham_va_chon(
+            None, ban, tu_lieu, muc_tieu=muc_tieu, ghi=bc.ghi)
     _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
              "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n".format(
                  bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),
                  ly_do))
-    bc.ghi("  chọn bản {0}: {1} ký tự, lệch {2:+.0%}, trùng {3:.0%}. {4}".format(
-        chr(65 + chon), so_do[chon][0], so_do[chon][1], so_do[chon][2],
-        ly_do[:120]))
     return ban[chon]
 
 
