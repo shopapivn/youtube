@@ -6,9 +6,10 @@ lặp import.
 
 from __future__ import annotations
 
+import random
 from typing import Iterator, Optional
 
-__all__ = ["poll_delays", "DEFAULT_WAIT_TIMEOUT", "MAX_POLL_INTERVAL"]
+__all__ = ["poll_delays", "DEFAULT_WAIT_TIMEOUT", "MAX_POLL_INTERVAL", "NHIP_THEO_LOAI"]
 
 #: Mặc định chờ tối đa 600 giây — SDK_SPEC §6.
 DEFAULT_WAIT_TIMEOUT = 600.0
@@ -66,9 +67,44 @@ HE_SO_CHO_LAN_DAU = 0.8
 #: rất xa khi hàng chờ dài, và khách không nên mù suốt năm phút.
 CHO_LAN_DAU_TOI_DA = 60.0
 
+#: ═══════════════════════════════════════════════════════════════════════════
+#:  NHỊP HỎI THEO LOẠI JOB — 24/08/2026, CHỦ DỰ ÁN CHỐT
+#: ═══════════════════════════════════════════════════════════════════════════
+#:
+#: *"Ảnh nhanh nhất cũng 30 giây, video nhanh nhất cũng 1 phút"* — nên lần hỏi
+#: ĐẦU không bao giờ sớm hơn mốc đó (hỏi trước là chắc chắn nhận "đang chạy"),
+#: và các lần sau cũng không dày hơn một phần ba thời gian job ngắn nhất.
+#:
+#: Đo lô 1000 ảnh + 1000 video thật cùng ngày: lịch cũ (2s → ×1,5 → 30s) sau
+#: lần hỏi đầu lại quay về 2, 3, 4,5 giây — với 900 clip đang chờ, tool đẩy
+#: **55–106 lượt hỏi/giây** dù có van tổng 20/giây, vì mọi job cùng một lô
+#: đồng pha: chúng cùng được tạo, cùng chờ, cùng hỏi. Van tổng chỉ ép được
+#: trung bình; nhịp đồng pha vẫn thành từng cơn.
+#:
+#: Ba luật, mỗi loại một bộ số ``(chờ lần đầu tối thiểu, bước tối thiểu, bước
+#: tối đa)``, tính bằng giây:
+#:
+#:   * ảnh    (30, 10, 30)   — job ~30–60 s
+#:   * video  (60, 20, 60)   — job ~1–5 phút
+#:   * tts    (30, 10, 30)   — vài chục giây tới vài phút theo độ dài
+#:
+#: và **rải pha**: mỗi khoảng nghỉ nhân với 0,8–1,2 ngẫu nhiên, để nghìn job cùng
+#: lô không cùng hỏi đúng một giây. Không truyền ``kind`` thì lịch cũ giữ nguyên
+#: từng chữ — SDK cũ của khách không đổi hành vi.
+NHIP_THEO_LOAI = {
+    "image": (30.0, 10.0, 30.0),
+    "video": (60.0, 20.0, 60.0),
+    "tts": (30.0, 10.0, 30.0),
+}
+
+#: Biên rải pha: ±20 %.
+RAI_PHA = 0.2
+
 
 def poll_delays(
-    estimated_seconds: Optional[float] = None, poll_interval: Optional[float] = None
+    estimated_seconds: Optional[float] = None,
+    poll_interval: Optional[float] = None,
+    kind: Optional[str] = None,
 ) -> Iterator[float]:
     """Sinh ra khoảng nghỉ trước mỗi lần hỏi lại trạng thái job.
 
@@ -87,6 +123,9 @@ def poll_delays(
 
     Cần biết NGAY thì dùng webhook hoặc SSE (`jobs.stream`) — cả hai đều không
     tốn một lời hỏi nào.
+
+    Truyền ``kind`` (``"image"``/``"video"``/``"tts"``) để lịch bám theo thời
+    gian thật của loại job đó và được rải pha — xem `NHIP_THEO_LOAI`.
     """
     if poll_interval is not None:
         fixed = max(float(poll_interval), 0.0)
@@ -101,9 +140,25 @@ def poll_delays(
             first = min(float(estimated_seconds) * HE_SO_CHO_LAN_DAU, CHO_LAN_DAU_TOI_DA)
         except (TypeError, ValueError):
             first = 2.0
-    yield max(first, 0.0)
 
-    interval = 2.0
+    theo_loai = NHIP_THEO_LOAI.get(str(kind or "").strip().lower())
+    if theo_loai is None:
+        yield max(first, 0.0)
+        interval = 2.0
+        while True:
+            yield interval
+            interval = min(interval * 1.5, MAX_POLL_INTERVAL)
+
+    # Theo loại: không hỏi trước lúc job SỚM NHẤT có thể xong, bước sau không
+    # dày hơn sàn của loại đó, và mọi khoảng nghỉ đều rải pha ±20 %.
+    san_dau, buoc_min, buoc_max = theo_loai
+    yield _rai(max(first, san_dau))
+    interval = buoc_min
     while True:
-        yield interval
-        interval = min(interval * 1.5, MAX_POLL_INTERVAL)
+        yield _rai(interval)
+        interval = min(interval * 1.5, buoc_max)
+
+
+def _rai(giay: float) -> float:
+    """Rải pha một khoảng nghỉ: ±`RAI_PHA`, không bao giờ âm."""
+    return max(0.0, giay * random.uniform(1.0 - RAI_PHA, 1.0 + RAI_PHA))

@@ -1139,7 +1139,13 @@ class JobManager:
         job_id = record.job_id
         assert job_id is not None
 
-        delays = poll_delays(estimated_seconds, None)
+        # Nhịp hỏi bám loại job (ảnh ≥30 s, video ≥60 s) và rải pha — xem
+        # `shopapi._polling.NHIP_THEO_LOAI`. SDK cũ không nhận `kind` thì rơi về
+        # lịch chung như trước.
+        try:
+            delays = poll_delays(estimated_seconds, None, kind=record.spec.kind)
+        except TypeError:
+            delays = poll_delays(estimated_seconds, None)
         started = time.monotonic()
         last: Optional[Dict[str, Any]] = None
 
