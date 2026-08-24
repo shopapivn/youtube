@@ -1037,10 +1037,20 @@ def _mo_kem_moi_truong(lenh, thu_muc: str, api_key: str,
     Vẫn truyền biến môi trường dù đã ghi `settings.json`: khách có thể chưa bấm
     cài cấu hình, hoặc đã bấm trả về như cũ, và khi ấy cửa này vẫn phải chạy.
     """
+    from .tien_trinh_con import CO_TACH_KHOI_JOB  # noqa: PLC0415
+
     mo = mo_tien_trinh or subprocess.Popen
     mt = moi_truong(api_key, base_url) if dung_shopapi else moi_truong_max()
+    # ═══ CỬA SỔ KHÁCH LÀM VIỆC PHẢI SỐNG LÂU HƠN TOOL ═══
+    #
+    # Tool nằm trong job kill-on-close (`core/tien_trinh_con`): con sinh ra
+    # mặc định chết theo tool. Đúng cho ffmpeg, sai cho VS Code và cửa sổ dòng
+    # lệnh — đó là chỗ khách đang gõ. Tệ nhất là VS Code: cả máy chỉ có MỘT
+    # tiến trình, tool mở nó lên rồi đóng tool là mọi cửa sổ VS Code của khách
+    # tắt theo, kể cả dự án khác. Nên hai cửa này tách khỏi job.
     if isinstance(lenh, str):
-        return mo(lenh, cwd=thu_muc, env=mt, shell=True)
+        return mo(lenh, cwd=thu_muc, env=mt, shell=True,
+                  creationflags=CO_TACH_KHOI_JOB)
     # Nhánh danh sách = mở VS Code. Không được kèm một ô đen nháy lên: khách
     # thấy cửa sổ đen chớp rồi tắt là họ tưởng tool hỏng, kể cả khi VS Code mở
     # ra bình thường ngay sau đó.
@@ -1048,7 +1058,7 @@ def _mo_kem_moi_truong(lenh, thu_muc: str, api_key: str,
     # Nhánh chuỗi ở trên thì CỐ Ý có cửa sổ — đó chính là nút "Mở dòng lệnh".
     co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     return mo(list(lenh), cwd=thu_muc, env=mt, close_fds=True,
-              creationflags=co)
+              creationflags=co | CO_TACH_KHOI_JOB)
 
 
 def lenh_cua_so_cmd(chuong_trinh: str, tham_so: Optional[Sequence[str]] = None,

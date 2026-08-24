@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.api import build_client, fetch_prices, wallet_micro
-from core import cai_dat, du_an
+from core import cai_dat, du_an, tien_trinh_con
 from core.config import (CONFIG_FILENAME, Config, load_config,
                          luu_phien_dang_nhap, sanitize_api_key, save_config)
 from core.errors import describe, la_qua_tai, retry_after_seconds, tu_xu_ly_ngam
@@ -238,6 +238,14 @@ class CuaSoChinh(QWidget):
     def __init__(self, base_dir: str):
         super().__init__()
         self.base_dir = base_dir
+        # ═══ KHÔNG ĐỂ TIẾN TRÌNH CON MỒ CÔI ═══
+        #
+        # Vào job kill-on-close TRƯỚC khi sinh bất kỳ tiến trình con nào: từ
+        # đây, ffmpeg / whisper / yt-dlp / claude sinh ra đều chết theo tool,
+        # kể cả khi tool bị Task Manager giết. Rồi dọn xác của lần chạy trước
+        # (máy sập, tắt nguồn — job không kịp làm gì). Xem `core/tien_trinh_con`.
+        tien_trinh_con.vao_job_ket_thuc_cung_tool()
+        tien_trinh_con.don_xac_cu(base_dir)
         self.config_path = os.path.join(base_dir, CONFIG_FILENAME)
         self.config: Config = load_config(self.config_path)
         self.session_path = os.path.join(base_dir, SESSION_FILENAME)
@@ -849,4 +857,7 @@ class CuaSoChinh(QWidget):
                 self.jobs.shutdown()
             except Exception:  # noqa: BLE001
                 pass
+        # Lớp lịch sự: giết tiến trình con đã ghi nhận. Lớp cứng (Job Object)
+        # vẫn giết nốt phần còn lại khi tiến trình này biến mất.
+        tien_trinh_con.dung_tat_ca()
         event.accept()

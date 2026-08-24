@@ -237,7 +237,14 @@ class NutCapNhat:
                 "--wait-pid", str(os.getpid()), "--staged", duong_dan,
                 "--current", goc]
         try:
+            from core.tien_trinh_con import CO_TACH_KHOI_JOB  # noqa: PLC0415
+
             co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+            # Tiến trình tráo PHẢI sống lâu hơn tool: nó đợi tool chết rồi mới
+            # đổi thư mục và mở lại. Tool nằm trong job kill-on-close (xem
+            # `core/tien_trinh_con`), nên phải cho nó tách khỏi job — không thì
+            # tool vừa đóng là nó chết theo, cập nhật không bao giờ xong.
+            co |= CO_TACH_KHOI_JOB
             # `cwd` là thư mục CHA, không phải thư mục cài.
             #
             # Không đặt thì tiến trình tráo thừa hưởng thư mục làm việc của

@@ -258,12 +258,26 @@ def _chay(mo, duong: str, mo_hinh: str, thu_muc: str, ten_anh: str,
         loi_nhac = ("(Ảnh cần đọc nằm ở tệp `{0}` trong thư mục làm việc — mở "
                     "bằng Read trước khi trả lời.)\n\n{1}".format(ten_anh,
                                                                    loi_nhac))
+    from .tien_trinh_con import bo_ghi_nhan, ghi_nhan  # noqa: PLC0415
+
     co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
     tien_trinh = mo(_lenh(duong, mo_hinh, ten_anh), cwd=thu_muc,
                     env=moi_truong, stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, encoding="utf-8", errors="replace",
                     creationflags=co)
+    # Đo 24/08/2026: giết tool giữa lúc `claude` đang viết thì nó vẫn chạy nốt
+    # bảy phút. Ghi nhận để tắt tool là nó tắt, mở tool là dọn xác nếu còn.
+    goc_tool = os.path.dirname(os.path.dirname(thu_muc))
+    ghi_nhan(tien_trinh, goc_tool, "claude")
+    try:
+        return _doi_ket_qua(tien_trinh, loi_nhac, kiem_dung, gio_han)
+    finally:
+        bo_ghi_nhan(tien_trinh, goc_tool)
+
+
+def _doi_ket_qua(tien_trinh, loi_nhac: str, kiem_dung, gio_han: float) -> str:
+    """Đưa lời nhắc, canh dừng, bóc kết quả."""
 
     # ═══ ĐỌC Ở LUỒNG RIÊNG, CANH DỪNG Ở LUỒNG NÀY ═══
     #

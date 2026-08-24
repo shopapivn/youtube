@@ -102,9 +102,14 @@ def nghe_o_tien_trinh_rieng(
     moi["PYTHONPATH"] = goc + os.pathsep + moi.get("PYTHONPATH", "")
     moi["PYTHONIOENCODING"] = "utf-8"
 
+    from .tien_trinh_con import bo_ghi_nhan, ghi_nhan  # noqa: PLC0415
+
     tien_trinh = subprocess.Popen(
         lenh, cwd=goc, env=moi, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    # Bộ nghe chạy vài phút và ăn CPU nặng — đúng loại con mà tool tắt rồi vẫn
+    # sống dai nếu không ai ghi nhận. Xem `core/tien_trinh_con`.
+    ghi_nhan(tien_trinh, goc, "whisper")
     try:
         # Bấm Dừng là giết nó thật, không đợi nghe xong. Hỏi mỗi nửa giây —
         # bộ nghe chạy vài phút nên nửa giây là đủ nhanh với người bấm nút.
@@ -131,6 +136,7 @@ def nghe_o_tien_trinh_rieng(
     finally:
         if tien_trinh.poll() is None:
             tien_trinh.kill()
+        bo_ghi_nhan(tien_trinh, goc)
 
     if het != 0:
         # Tiến trình con tự ghi lý do khi nó còn ném được exception. Không có
