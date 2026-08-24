@@ -447,6 +447,14 @@ def chay(
         if tt.trang_thai in (XONG, BO_QUA):
             if _con_dung_duoc(viec.get(ma), luot, ghi):
                 ghi("   {0} — đã có, bỏ qua.".format(ten_khau(ma)))
+                # Khâu "dừng sau" mà đã xong từ trước thì vẫn phải dừng ở đây —
+                # bản cũ `continue` thẳng, nhảy qua chốt dừng, đi tiếp sang
+                # khâu tốn tiền (đo 25/08/2026: dừng sau giọng đọc mà chạy
+                # sang chia cảnh).
+                if dung_sau and ma == dung_sau:
+                    ghi("[DỪNG] Dừng sau “{0}” theo yêu cầu (khâu này đã có sẵn). "
+                        "Bấm Chạy tiếp là đi tiếp.".format(ten_khau(ma)))
+                    return luot
                 continue
             # Kết quả cũ hỏng. Làm lại khâu này — và bỏ dấu giờ của lần trước,
             # kẻo bảng trạng thái hiện một khoảng thời gian vô nghĩa.

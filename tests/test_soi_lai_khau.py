@@ -171,3 +171,29 @@ class TestKhauBangCanhCoCuaSoi:
     def test_chua_co_tep_thi_khong_phai_viec_cua_cua_nay(self, tmp_path):
         luot = _luot(tmp_path)
         assert self._bo_viec(tmp_path)["bang-canh"].soi_lai(luot) is True
+
+
+class TestDungSauKhauDaXong:
+    """`dung_sau` phải dừng cả khi khâu đó đã xong từ lượt trước.
+
+    Đo 25/08/2026: lượt có kịch bản + giọng đọc sẵn, gọi `chay(dung_sau=
+    "giong-doc")` — bản cũ bỏ qua hai khâu bằng `continue`, nhảy qua chốt dừng,
+    chạy thẳng sang chia cảnh (có tiêu ví).
+    """
+
+    def test_khau_dung_sau_da_xong_thi_khong_chay_khau_ke(self, tmp_path):
+        luot = _luot(tmp_path)
+        luot.tt("kich-ban").trang_thai = XONG
+        luot.tt("giong-doc").trang_thai = XONG
+        da_chay = []
+
+        def lam(ten):
+            def _f(_l, _t):
+                da_chay.append(ten)
+            return _f
+
+        chay(luot, {"kich-ban": lam("kb"), "giong-doc": lam("gd"),
+                    "phu-de": lam("pd"), "chia-canh": lam("cc")},
+             so_lan_thu=1, dung_sau="giong-doc")
+        assert da_chay == [], "đã bảo dừng sau giọng đọc thì không được chạy khâu sau"
+        assert luot.tt("phu-de").trang_thai != XONG

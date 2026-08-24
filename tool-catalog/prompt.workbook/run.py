@@ -107,14 +107,19 @@ narration and plan it like a film before any shot is written.
    three_act, story_spine, myth_buster, listicle, how_it_works.
 2. `context_lock`: ONE paragraph fixing the visual world for every scene —
    era, place, time of day range, weather/mood, recurring colour accents.
-3. `segments`: split the narration into 3–8 ACTS by meaning (using the SRT
-   line numbers). Each act has a `name`, the `message` it lands, the dominant
+3. `segments`: split the narration into ACTS by meaning (using the SRT line
+   numbers). This narration is {phut} minutes long — expect about {so_man}
+   acts (roughly one act per 60–90 seconds; a 3-minute video has ~3, a
+   30-minute one 20+). Follow the meaning, not the number: never merge two
+   different ideas into one act to hit a count, never split one idea in two.
+   Each act has a `name`, the `message` it lands, the dominant
    `emotion`, and ONE visual `motif` that recurs inside the act (an object,
    a gesture, a weather) — the motif is what makes an act feel like one piece.
    Acts are contiguous and cover every line; the FIRST act must open with a
    hook within its first scene.
-4. `characters_mentioned` and `locations_mentioned`: names or roles the
-   narration keeps coming back to (people, places), for the casting step.
+4. `characters_mentioned` and `locations_mentioned`: EVERY person, creature or
+   group that acts in the story, and EVERY distinct place it visits — for the
+   casting step. Do not shorten these lists; a long story has a long cast.
 
 ## Return JSON only, no commentary
 ```json
@@ -178,8 +183,10 @@ _DUOI_CHAN_DUNG = (" — full-body front-view reference portrait, standing, arms
 _DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, "
                   "centered, 16:9 composition, no text, no letters, no watermark")
 
-#: Bao nhieu ky tu loi doc dua cho luot viet anh bia / nhac.
-BIA_KY_TU = 6000
+#: Bao nhieu ky tu loi doc dua cho luot viet anh bia / nhac. 0 = ca bai:
+#: anh bia phai biet cao trao o cuoi, nhac phai theo mach ca video — cat bot
+#: la bia va nhac chi biet phan dau.
+BIA_KY_TU = 0
 
 #: Toi da bao nhieu GIAY tieng trong mot khuc chia canh. Chu du an 24/08/2026:
 #: *"neu ma no dai thi phai co ke hoach chia de api song song nhieu luong cho
@@ -201,12 +208,9 @@ CHARACTER_HEADERS = ["id", "role", "name", "english_prompt", "vietnamese_prompt"
 TOKEN_CANH = 16384
 
 #: Tran chu cho luot "casting" — mot luot doc ca loi doc roi dung dan nhan vat.
-#: Thap hon TOKEN_CANH vi no chi tra ve vai nhan vat, khong phai ca tram canh.
-TOKEN_CAST = 4096
-
-#: Bao nhieu ky tu loi doc dua cho luot casting. Du de nhan ra ai la nhan vat
-#: lap lai ma khong doi ca kich ban vao mot lan goi.
-CAST_KY_TU = 12000
+#: Bang TOKEN_CANH: truyen dai co the 12+ nhan vat, 8+ noi chon, moi muc kem
+#: sheet_prompt — 4096 la dut JSON giua chung.
+TOKEN_CAST = TOKEN_CANH
 
 #: Lời nhắc dựng dàn nhân vật + phong cách từ chính lời đọc. Prompt Visuals
 #: không có kênh nên không có `nv1.png` hay style sẵn — bản này bảo AI **tự rút
@@ -216,19 +220,29 @@ CAST_KY_TU = 12000
 _KHUON_CAST = """You are the casting director AND production designer for a
 narrated video. Read the whole narration transcript below and decide:
 
-1. The RECURRING characters — people/creatures the narration comes back to. For
-   each, write ONE fixed English appearance description (`english_prompt`) that
-   every scene will reuse verbatim so the character never drifts. {fixed_rule}
-   If the video has no recurring character (pure landscape/abstract), return an
-   empty `characters` list — do NOT invent a person.
-2. The RECURRING locations — 2 to 4 places the story keeps returning to (a
-   kitchen, a rainy bus stop, an office desk…). For each, write ONE fixed
-   English description of the PLACE (`english_prompt`, no people in it), a
-   short `location_lock` (what must never change) and `lighting_default`. Give
-   ids `loc1`, `loc2`… If the video has no recurring place (abstract montage),
-   return an empty `locations` list.
+1. The CHARACTERS — every person, creature or group that acts in the story or
+   appears in more than one scene: the hero, the helper, the rival, the
+   parent, the ruler, a crowd ("the villagers" is one id). For each, write ONE
+   fixed English appearance description (`english_prompt`) that every scene
+   will reuse verbatim so the character never drifts, and make the characters
+   clearly DISTINCT from each other (build, age, clothing colour, one signature
+   prop). {fixed_rule}
+   Only a pure landscape/abstract video has an empty `characters` list — do NOT
+   invent a person there, and do NOT drop a character the story uses.
+2. The LOCATIONS — every distinct place the story visits: a cottage, a river
+   bank, a palace hall, a castle, a road, a forest edge. For each, write ONE
+   fixed English description of the PLACE (`english_prompt`, no people in it),
+   a short `location_lock` (what must never change) and `lighting_default`.
+   Give ids `loc1`, `loc2`… A palace and a castle are two places; do not
+   merge distinct settings into one.
 3. ONE consistent visual `style` for the whole video: `image_style`, `palette`,
    `motion`.
+
+## MUST COVER — the story analysis already found these; give each one an id
+Characters mentioned: {phai_co_nv}
+Places mentioned: {phai_co_loc}
+Merge only true duplicates (the same person under two names). Anything on
+these lists that is missing from your answer will be treated as an error.
 
 ## Context
 {context}
@@ -251,6 +265,40 @@ narrated video. Read the whole narration transcript below and decide:
  ]}}
 ```
 """
+
+#: Luot BO SUNG khi casting bo sot: chi xin dung nhung muc con thieu, id tiep
+#: theo dan da co. Do 25/08/2026 (Puss in Boots, 8 phut): buoc doc phim nhan ra
+#: 9 nhan vat + 6 noi, casting tra ve 4 + 4 — mat ca yeu tinh lan cung dien.
+_KHUON_BO_SUNG = """You are completing the cast and location list of a narrated
+video. The list below ALREADY EXISTS — do not repeat or redefine any of it:
+{da_co}
+
+## Still missing — write an entry for EACH of these
+Characters: {thieu_nv}
+Places: {thieu_loc}
+
+Rules: same JSON shape as before; character ids continue from `{nv_tiep}`,
+location ids from `{loc_tiep}`; each `english_prompt` is one fixed English
+appearance/place description reused verbatim by every scene; characters must
+be clearly DISTINCT from the existing ones; keep the same visual style.
+
+## Transcript (for reference)
+{transcript}
+
+## Return JSON only, no commentary
+```json
+{{"characters": [{{"id": "{nv_tiep}", "role": "...", "name": "...",
+                 "english_prompt": "...", "reference_lock": "...",
+                 "gender": "", "age": "", "notes": ""}}],
+ "locations": [{{"id": "{loc_tiep}", "name": "...", "english_prompt": "...",
+                "location_lock": "...", "lighting_default": "..."}}]}}
+```
+"""
+
+#: Tu khong mang nghia khi so khop ten nhan vat/noi chon voi dan da co.
+_TU_RONG = {"the", "a", "an", "of", "and", "or", "his", "her", "their", "its",
+            "two", "three", "old", "older", "young", "younger", "who", "with",
+            "edge", "side"}
 
 #: Luat cho luot casting khi nv1 DA CO DINH (loai 2): AI chi dung nhan vat
 #: PHU tu nv2, khong duoc dinh nghia lai nv1.
@@ -454,9 +502,13 @@ def _doc_phim(goi, cues, context, *, phim_fn=None) -> Dict[str, Any]:
         if phim_fn is not None:
             raw = phim_fn(cues, context)
         else:
-            loi_doc = bang_phu_de(cues)[:60000]
-            boi_canh = json.dumps(context, ensure_ascii=False)[:4000] if context else "(none)"
-            raw = loc_json(goi(_KHUON_PHIM.format(transcript=loi_doc, context=boi_canh),
+            # Ca loi doc, khong cat: cat la mat nhan vat/noi chon o phan sau.
+            loi_doc = bang_phu_de(cues)
+            boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else "(none)"
+            giay = _giay_video(cues)
+            raw = loc_json(goi(_KHUON_PHIM.format(transcript=loi_doc, context=boi_canh,
+                                                  phut="{0:.1f}".format(giay / 60.0),
+                                                  so_man=_so_man_goi_y(giay)),
                                "phim"))
         phim = _sach_phim(raw, cues)
     except Exception as loi:  # noqa: BLE001 — dao dien la phu, hong thi ve duong cu
@@ -650,10 +702,19 @@ def _giay_video(cues) -> float:
         return 0.0
 
 
+def _so_man_goi_y(giay: float) -> int:
+    """So man goi y cho buoc doc phim: ~1 man / 75 giay, it nhat 3, khong tran.
+
+    Chu du an 25/08/2026: *"dung co gi cung o day… kich ban ngan dai khac
+    nhau"* — ban cu ghi chet "3–8 man" nen video 30 phut cung chi 8 man.
+    """
+    return max(3, int(round(float(giay or 0) / 75.0)))
+
+
 def _loi_doc_mau(cues, toi_da: int = BIA_KY_TU) -> str:
-    """Loi doc: 60% dau + 40% rai deu phan sau — du hieu mach ma khong doi ca bai."""
+    """Loi doc dua cho luot anh bia / nhac: ca bai (toi_da <= 0), hoac lay mau."""
     chu = " ".join(str(c.get("text") or "").strip() for c in cues)
-    if len(chu) <= toi_da:
+    if toi_da <= 0 or len(chu) <= toi_da:
         return chu
     dau = int(toi_da * 0.6)
     con = chu[dau:]
@@ -1006,6 +1067,30 @@ def _dan_nhan_vat(goi, cues, context, *, nhat_quan=True, che_do=CHE_DO_TU_XAY,
         # duoc dinh nghia lai nhan vat cua kenh.
         cast["characters"] = nen["characters"] + [
             c for c in cast["characters"] if c["id"] != "nv1"]
+    # ═══ PHU HET DANH SACH BUOC DOC PHIM DA NHAN RA — KIEM BANG MA ═══
+    #
+    # AI hay "rut gon" dan: do 25/08/2026 tra 4/9 nhan vat, 4/6 noi. Con thieu
+    # thi goi DUNG MOT luot bo sung xin nhung muc thieu, roi ghep vao.
+    thieu_nv, thieu_loc = _con_thieu(cast, context)
+    if thieu_nv or thieu_loc:
+        try:
+            ctx_bs = dict(context, bo_sung={"characters": thieu_nv, "locations": thieu_loc})
+            raw2 = (cast_fn(cues, ctx_bs) if cast_fn is not None
+                    else _dung_dan_bo_sung(goi, cues, cast, thieu_nv, thieu_loc))
+            them = _sach_cast(raw2, nv_dau=len(cast["characters"]) + 1)
+            co_nv = {c["id"] for c in cast["characters"]}
+            co_loc = {l["id"] for l in cast["locations"]}
+            cast["characters"] += [c for c in them["characters"] if c["id"] not in co_nv]
+            cast["locations"] += [l for l in them["locations"] if l["id"] not in co_loc]
+            emit({"type": "event", "event": "progress", "progress": 0.0,
+                  "message": "Casting bo sot {0} nhan vat, {1} noi chon — da bo sung "
+                             "them {2} nhan vat, {3} noi.".format(
+                                 len(thieu_nv), len(thieu_loc),
+                                 len(them["characters"]), len(them["locations"]))})
+        except Exception as loi:  # noqa: BLE001 — bo sung hong thi dung dan hien co
+            emit({"type": "event", "event": "progress", "progress": 0.0,
+                  "message": "Chua bo sung duoc dan ({0}); thieu: {1}.".format(
+                      str(loi)[:80], ", ".join(thieu_nv + thieu_loc)[:200])})
     if cast["characters"] or cast["locations"]:
         emit({"type": "event", "event": "progress", "progress": 0.0,
               "message": "Da dung dan {0} nhan vat va {1} boi canh co dinh cho ca "
@@ -1013,13 +1098,74 @@ def _dan_nhan_vat(goi, cues, context, *, nhat_quan=True, che_do=CHE_DO_TU_XAY,
     return cast
 
 
+def _da_nhan_ra(context) -> tuple:
+    """Danh sach nhan vat / noi chon ma buoc doc phim da nhan ra (neu co)."""
+    phim = context.get("film_analysis") if isinstance(context, Mapping) else None
+    if not isinstance(phim, Mapping):
+        return [], []
+    nv = [str(x).strip() for x in (phim.get("characters_mentioned") or []) if str(x).strip()]
+    loc = [str(x).strip() for x in (phim.get("locations_mentioned") or []) if str(x).strip()]
+    return nv, loc
+
+
+def _tu_khoa(chu: str) -> List[str]:
+    return [t for t in re_tach(str(chu or "").lower()) if len(t) > 2 and t not in _TU_RONG]
+
+
+def re_tach(chu: str) -> List[str]:
+    import re  # noqa: PLC0415
+
+    return re.findall(r"[a-z0-9']+", chu.replace("'s", ""))
+
+
+def _duoc_phu(muc: str, dan: List[Mapping[str, Any]], *cot) -> bool:
+    """Mot muc da nhan ra co mat trong dan chua — so khop theo tu khoa."""
+    tk = _tu_khoa(muc)
+    if not tk:
+        return True
+    for c in dan:
+        chu = " ".join(str(c.get(k) or "") for k in cot).lower()
+        if any(t in chu for t in tk):
+            return True
+    return False
+
+
+def _con_thieu(cast, context) -> tuple:
+    nv, loc = _da_nhan_ra(context)
+    thieu_nv = [m for m in nv if not _duoc_phu(m, cast["characters"], "role", "name",
+                                                "english_prompt")]
+    thieu_loc = [m for m in loc if not _duoc_phu(m, cast["locations"], "name",
+                                                  "english_prompt")]
+    return thieu_nv, thieu_loc
+
+
+def _dung_dan_bo_sung(goi, cues, cast, thieu_nv, thieu_loc) -> Mapping[str, Any]:
+    """Luot bo sung: chi xin nhung muc casting bo sot (khoa idempotent `cast-bs`)."""
+    loi_doc = " ".join(str(cue.get("text") or "").strip() for cue in cues)
+    da_co = "\n".join(
+        ["- {0} ({1}): {2}".format(c["id"], c.get("role") or c.get("name"), c["english_prompt"][:160])
+         for c in cast["characters"]]
+        + ["- {0} ({1}): {2}".format(l["id"], l.get("name"), l["english_prompt"][:160])
+           for l in cast["locations"]]) or "(nothing yet)"
+    loi_nhac = _KHUON_BO_SUNG.format(
+        da_co=da_co, thieu_nv=", ".join(thieu_nv) or "(none)",
+        thieu_loc=", ".join(thieu_loc) or "(none)",
+        nv_tiep="nv{0}".format(len(cast["characters"]) + 1),
+        loc_tiep="loc{0}".format(len(cast["locations"]) + 1), transcript=loi_doc)
+    return loc_json(goi(loi_nhac, "cast-bs"))
+
+
 def _dung_dan_cast(goi, cues, context, co_san) -> Mapping[str, Any]:
     """Goi AI mot lan (`goi(..., "cast")`, khoa idempotent) de rut dan + boi canh + style."""
-    loi_doc = " ".join(str(cue.get("text") or "").strip() for cue in cues)[:CAST_KY_TU]
-    boi_canh = json.dumps(context, ensure_ascii=False)[:4000] if context else "(khong co)"
+    # Ca loi doc, khong cat (ban cu cat 12.000 ky tu: video dai mat nhan vat cuoi).
+    loi_doc = " ".join(str(cue.get("text") or "").strip() for cue in cues)
+    boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else "(khong co)"
     fixed = _LUAT_NV1_CO_DINH.format(mo_ta=co_san[0]["english_prompt"]) if co_san else ""
+    nv, loc = _da_nhan_ra(context)
     loi_nhac = _KHUON_CAST.format(context=boi_canh, transcript=loi_doc,
-                                  fixed_rule=fixed, nv_dau="nv2" if co_san else "nv1")
+                                  fixed_rule=fixed, nv_dau="nv2" if co_san else "nv1",
+                                  phai_co_nv=", ".join(nv) or "(not analysed — decide from the transcript)",
+                                  phai_co_loc=", ".join(loc) or "(not analysed — decide from the transcript)")
     return loc_json(goi(loi_nhac, "cast"))
 
 

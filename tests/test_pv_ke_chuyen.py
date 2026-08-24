@@ -308,3 +308,67 @@ def test_ke_hoach_gop_beat_ngan(wb):
                      {"srt_from": 3, "srt_to": 3, "purpose": "p3"}]}
     ra = wb._sach_ke_hoach(raw, seg, dong)
     assert [(b["beat"], b["srt_from"], b["srt_to"]) for b in ra] == [(1, 1, 2), (2, 3, 3)]
+
+
+# ── Casting phải phủ hết danh sách bước đọc phim đã nhận ra ─────────────────
+
+def test_casting_bo_sot_thi_goi_bo_sung(wb, yeu_cau):
+    goi = {"n": 0}
+
+    def cast_fn(_cues, ctx):
+        goi["n"] += 1
+        if "bo_sung" in ctx:
+            # Lượt bổ sung: chỉ xin những mục thiếu.
+            assert ctx["bo_sung"]["characters"] == ["the ogre / giant"]
+            assert ctx["bo_sung"]["locations"] == ["the king's palace"]
+            return {"characters": [{"id": "nv3", "role": "the ogre", "english_prompt": "a huge ogre"}],
+                    "locations": [{"id": "loc3", "name": "King's Palace", "english_prompt": "marble hall"}]}
+        return {"style": {}, "characters": [
+                    {"id": "nv1", "role": "the youngest son", "english_prompt": "a young man"},
+                    {"id": "nv2", "role": "the cat", "english_prompt": "a cat in boots"}],
+                "locations": [{"id": "loc1", "name": "The Miller's Cottage", "english_prompt": "cottage"},
+                              {"id": "loc2", "name": "The River", "english_prompt": "river"}]}
+
+    def phim_fn(*_a):
+        return {"genre": "fable", "arc": "hook_payoff", "context_lock": "x",
+                "segments": [{"segment_id": 1, "name": "a", "message": "", "emotion": "",
+                              "motif": "", "srt_from": 1, "srt_to": 99}],
+                "characters_mentioned": ["youngest son", "the cat", "the ogre / giant"],
+                "locations_mentioned": ["the miller's cottage", "the river", "the king's palace"]}
+
+    yeu_cau["config"]["che_do_ke"] = "tu_xay"
+    ra = wb.handle(yeu_cau, cast_fn=cast_fn, chia_fn=_chia_giu_khuc, phim_fn=phim_fn,
+                   ke_hoach_fn=_ke_hoach_gia)
+    m = ra["scenes"]["json"]
+    assert goi["n"] == 2
+    assert [c["id"] for c in m["characters"]] == ["nv1", "nv2", "nv3"]
+    assert [l["id"] for l in m["locations"]] == ["loc1", "loc2", "loc3"]
+
+
+def test_casting_du_thi_khong_goi_them(wb):
+    cast = {"characters": [{"id": "nv1", "role": "the cat Puss", "name": "", "english_prompt": ""}],
+            "locations": [{"id": "loc1", "name": "The Ogre's Castle", "english_prompt": ""}]}
+    ctx = {"film_analysis": {"characters_mentioned": ["the cat (Puss in Boots)"],
+                             "locations_mentioned": ["the ogre's castle"]}}
+    assert wb._con_thieu(cast, ctx) == ([], [])
+    ctx2 = {"film_analysis": {"characters_mentioned": ["the two older brothers"],
+                              "locations_mentioned": ["the king's palace"]}}
+    assert wb._con_thieu(cast, ctx2) == (["the two older brothers"], ["the king's palace"])
+
+
+# ── Không ghi cứng theo độ dài kịch bản ─────────────────────────────────────
+
+def test_so_man_theo_do_dai_khong_tran(wb):
+    assert wb._so_man_goi_y(0) == 3
+    assert wb._so_man_goi_y(180) == 3
+    assert wb._so_man_goi_y(480) == 6
+    assert wb._so_man_goi_y(1800) == 24
+
+
+def test_loi_doc_cho_bia_nhac_casting_la_ca_bai(wb):
+    cues = [{"index": i, "start": i * 3.0, "end": i * 3.0 + 3.0, "text": "cau {0} ".format(i) + "x" * 300}
+            for i in range(1, 80)]
+    ca_bai = " ".join(c["text"].strip() for c in cues)
+    assert wb._loi_doc_mau(cues) == ca_bai
+    assert wb.BIA_KY_TU == 0 and not hasattr(wb, "CAST_KY_TU")
+    assert wb.TOKEN_CAST >= wb.TOKEN_CANH
