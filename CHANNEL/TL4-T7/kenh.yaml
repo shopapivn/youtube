@@ -16,16 +16,18 @@ ma: "TL4-T7"
 ten: "心理のとまり木 — tâm lý, người sống lệch nhịp"
 ngon_ngu: "ja"
 giong_van: "Japanese — natural, polite but conversational (ていねい体). Warm, intimate, curious."
-ky_tu_moi_phut: 298
+#  Đo lại 24/08/2026 trên SÁU lượt có giọng đọc thật của chính kênh này (0005–0013):
+#  275–341, trung bình 302 (đếm theo len() cả xuống dòng, đúng cách tool đếm).
+ky_tu_moi_phut: 302
 chu_bia_hoa: false
 voice_id: "b34JylakFZPlGS0BnwyY"
-phut_muc_tieu: 20
-# ── Remake "gần như giống đối thủ nhất" ──────────────────────────────────────
-#  Kênh này bám ĐỘ DÀI VIDEO GỐC, không nắn về mốc phút cố định: bài viết ra dài
-#  đúng bằng lời thoại video đối thủ. Vì thế `phut_muc_tieu` ở trên không còn dẫn
-#  dắt độ dài (để lại chỉ cho hộp Quản lý kênh hiển thị), và thư mục prompt/ đã
-#  BỎ tệp 4-do-dai.md để không có bước nắn.
-do_dai_theo_goc: true
+# ── Độ dài: LUÔN về 12–15 phút, bất kể video gốc dài hay ngắn ─────────────────
+#  Chủ dự án, 24/08/2026: *"kịch bản đối thủ có thể ngắn hoặc dài hơn nhưng nó
+#  sẽ luôn để content của kênh về khoảng 12-15 phút"*. Mục tiêu đặt 13 phút
+#  (≈3.930 ký tự): AI có nết viết dôi 10–30%, dôi từ 13 vẫn nằm trong 12–15.
+#  Không có bước nắn riêng — chỉ một dòng độ dài trong prompt/2-viet.md.
+phut_muc_tieu: 13
+do_dai_theo_goc: false
 # ── Tiêu đề & chữ bìa: lấy nguyên của đối thủ ────────────────────────────────
 #  Kênh này lấy NGUYÊN tiêu đề đối thủ, và ĐỌC chữ trên ảnh bìa đối thủ làm chữ
 #  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ

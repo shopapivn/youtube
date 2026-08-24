@@ -163,24 +163,20 @@ class TestVietBangMax:
         assert ra == "x"
 
 
-# ── Bộ chuyển: Claude Code trước, ví sau ─────────────────────────────────────
+# ── Bộ chuyển: CHỈ Claude Code, hỏng thì thử lại — không rẽ ví ───────────────
 
 
 class TestDungGoiChatMax:
-    def _vi(self, nhat_ky):
-        def goi_vi(loi_nhac, mo_hinh="m", khoa="", toi_da_token=0, anh=""):
-            nhat_ky.append(("vi", loi_nhac, anh))
-            return "chữ từ ví"
+    """Chủ dự án, 24/08/2026: *"lỗi thì phải retry đủ không thể gãy thế được
+    nhá, đã nói máy này là claude max 20 thì cứ thế mà làm đừng cho nó đi
+    nhầm"* — sau khi lượt 0020/0022 rẽ sang ví vì một cú thoát lỗi lẻ."""
 
-        return goi_vi
+    KHONG_NGU = {"ngu": lambda _g: None}
 
     def test_thuong_thi_di_claude_code(self, tmp_path):
-        goi_dau = []
-        goi = dung_goi_chat_max(
-            self._vi(goi_dau), str(tmp_path),
-            viet=lambda ln, **_k: "chữ từ Max")
+        goi = dung_goi_chat_max(str(tmp_path), viet=lambda ln, **_k: "chữ từ Max",
+                                **self.KHONG_NGU)
         assert goi("viết") == "chữ từ Max"
-        assert goi_dau == []
 
     def test_thue_bao_luon_dung_model_manh_nhat(self, tmp_path):
         """Thuê bao tính tiền theo tháng — model to nhất cùng giá với bé nhất.
@@ -194,7 +190,7 @@ class TestDungGoiChatMax:
             nhan.update(k)
             return "x"
 
-        goi = dung_goi_chat_max(self._vi([]), str(tmp_path), viet=viet)
+        goi = dung_goi_chat_max(str(tmp_path), viet=viet, **self.KHONG_NGU)
         goi("viết", mo_hinh="claude-sonnet-5")
         assert nhan["mo_hinh"] == MO_HINH_TOT_NHAT
 
@@ -206,40 +202,47 @@ class TestDungGoiChatMax:
             nhan.update(k)
             return "chữ bìa từ Max"
 
-        goi = dung_goi_chat_max(self._vi([]), str(tmp_path), viet=viet)
+        goi = dung_goi_chat_max(str(tmp_path), viet=viet, **self.KHONG_NGU)
         assert goi("đọc bìa", anh="data:image/jpeg;base64,xxx") == "chữ bìa từ Max"
         assert nhan["anh"] == "data:image/jpeg;base64,xxx"
 
-    def test_kem_anh_hong_thi_ve_vi_van_kem_anh(self, tmp_path):
-        """Lui về ví thì ảnh phải đi theo — ví không có ảnh là đọc bìa rỗng."""
-        goi_dau = []
+    def test_hong_le_thi_thu_lai_roi_duoc(self, tmp_path):
+        """Lượt 0020: một cú thoát lỗi lẻ. Thử lại là qua, không được rẽ ví."""
+        ket = iter([RuntimeError("thoát mã 1"), "chữ từ Max"])
 
-        def hong(*_a, **_k):
-            raise RuntimeError("không mở được ảnh")
+        def thay_doi(*_a, **_k):
+            r = next(ket)
+            if isinstance(r, Exception):
+                raise r
+            return r
 
-        goi = dung_goi_chat_max(self._vi(goi_dau), str(tmp_path), viet=hong)
-        assert goi("đọc bìa", anh="data:image/png;base64,yyy") == "chữ từ ví"
-        assert goi_dau[0] == ("vi", "đọc bìa", "data:image/png;base64,yyy")
+        dong, cho = [], []
+        goi = dung_goi_chat_max(str(tmp_path), viet=thay_doi, on_log=dong.append,
+                                ngu=cho.append)
+        assert goi("viết") == "chữ từ Max"
+        assert cho == [15.0], "phải đợi 15 giây trước khi thử lại lần đầu"
+        assert any("không chuyển sang ví" in d for d in dong)
 
-    def test_hong_thi_lui_ve_vi_va_nho_luon(self, tmp_path):
-        goi_dau = []
+    def test_hong_mai_thi_nem_loi_ro_khong_re_vi(self, tmp_path):
         so_lan = {"n": 0}
 
         def hong(*_a, **_k):
             so_lan["n"] += 1
-            raise RuntimeError("máy chưa cài Claude Code")
+            raise RuntimeError("chưa đăng nhập")
 
-        dong = []
-        goi = dung_goi_chat_max(self._vi(goi_dau), str(tmp_path), viet=hong,
-                                on_log=dong.append)
-        assert goi("lần một") == "chữ từ ví"
-        assert goi("lần hai") == "chữ từ ví"
-        # Hỏng một lần là nhớ: lần hai đi thẳng ví, không thử lại vô ích.
-        assert so_lan["n"] == 1
-        # Và phải nói thật với người đang nhìn nhật ký.
-        assert any("Claude Code" in d for d in dong)
+        cho = []
+        goi = dung_goi_chat_max(str(tmp_path), viet=hong, ngu=cho.append)
+        with pytest.raises(RuntimeError) as loi:
+            goi("viết")
+        # Đủ kiên nhẫn: 5 lần, nhịp giãn dần 15/30/60/120.
+        assert so_lan["n"] == 5
+        assert cho == [15.0, 30.0, 60.0, 120.0]
+        # Và câu lỗi nói rõ vì sao KHÔNG chuyển ví, kèm việc cần làm.
+        chu = str(loi.value)
+        assert "KHÔNG chuyển sang ví" in chu and "Cài đặt" in chu
+        assert "chưa đăng nhập" in chu
 
-    def test_bam_dung_khong_bi_nuot_thanh_lui_ve_vi(self, tmp_path):
+    def test_bam_dung_la_dung_ngay_khong_doi_het_nhip(self, tmp_path):
         class Dung(Exception):
             pass
 
@@ -249,10 +252,12 @@ class TestDungGoiChatMax:
         def hong(*_a, **_k):
             raise RuntimeError("đứt giữa chừng")
 
-        goi = dung_goi_chat_max(self._vi([]), str(tmp_path), viet=hong,
-                                kiem_dung=kiem)
+        cho = []
+        goi = dung_goi_chat_max(str(tmp_path), viet=hong, kiem_dung=kiem,
+                                ngu=cho.append)
         with pytest.raises(Dung):
             goi("viết")
+        assert cho == [], "bấm Dừng thì không được ngồi đợi nhịp thử lại"
 
 
 # ── Đấu vào khâu kịch bản ────────────────────────────────────────────────────

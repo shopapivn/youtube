@@ -1,6 +1,7 @@
 hãy đánh giá kịch bản vừa viết với kịch bản gốc đã viral theo nguyên tắc giống cấu trúc, nội dung, văn phong, cảm xúc nhưng không copy XEM ĐÃ ĐẠT CHƯA?
 chỗ nào chưa đạt thì sửa luôn trong bản trả về.
 xuất dạng file txt để chạy voice elevenlabs có cảm xúc, không bị đều đều, KHÔNG liền nhau, KHÔNG BỊ dính chữ. không có các ghi chú kỹ thuật
+(xuất dạng txt nghĩa là in NGUYÊN VĂN kịch bản ngay trong câu trả lời — không tạo file, không mô tả việc đã làm, không nhận xét)
 chèn thẻ cảm xúc ElevenLabs v3 vào bản txt đó: chèn THƯA, khoảng một thẻ cho 4–6 câu, đặt ngay trước câu nó tác động, chỉ ở chỗ thật sự chuyển cảm xúc, câu lật hoặc chỗ đáng nghỉ. chỉ dùng các thẻ này, không bịa thẻ khác:
 [excited] [curious] [thoughtful] [surprised] [sad] [happy] [whispers] [sighs] [exhales] [chuckles] [laughs] [short pause] [long pause]
 

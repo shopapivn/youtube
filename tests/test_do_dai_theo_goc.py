@@ -8,7 +8,14 @@ và chốt chặn "quá ngắn" đều lấy theo số ký tự bản gốc, kh�
 Bài kiểm chốt hai thứ:
   1. `_nan_do_dai` nắn theo `muc_tieu` được truyền vào, không theo `ky_tu_muc_tieu`.
   2. Không truyền `muc_tieu` thì vẫn lấy theo phút — nết cũ, các kênh khác không đổi.
-  3. Cấu hình thật của TL4-T7 đúng: bật cờ, và đã bỏ tệp nắn `4-do-dai.md`.
+  3. Cấu hình thật của TL4-T7: từ 24/08/2026 KHÔNG bám độ dài gốc nữa.
+
+Chủ dự án, 24/08/2026: *"kịch bản đối thủ có thể ngắn hoặc dài hơn nhưng nó sẽ
+luôn để content của kênh về khoảng 12-15 phút… không cần thêm 1 prompt mà chỉ
+đơn giản thêm 1 dòng ở prompt viết"*. Nên TL4-T7 quay về mốc phút cố định
+(13 phút, đo 302 ký tự/phút trên sáu lượt thật), độ dài nói ngay trong
+`2-viet.md`, và không có `4-do-dai.md`. Cờ `do_dai_theo_goc` vẫn còn trong mã
+cho kênh nào cần.
 """
 
 from __future__ import annotations
@@ -82,12 +89,17 @@ class TestNanTheoMucTieuTruyenVao:
 
 
 class TestCauHinhTL4:
-    def test_TL4_bam_ban_goc_va_bo_buoc_nan(self):
+    def test_TL4_ve_moc_12_15_phut_bang_mot_dong_trong_prompt_viet(self):
         goc = os.path.join(os.path.dirname(__file__), "..")
         k = doc_kenh(goc, "TL4-T7")
-        assert k.do_dai_theo_goc is True, "TL4-T7 phải bật do_dai_theo_goc"
-        assert "4-do-dai.md" not in k.prompt, (
-            "kênh bám bản gốc thì bỏ bước nắn 4-do-dai.md")
+        assert k.do_dai_theo_goc is False, (
+            "24/08/2026: kênh luôn về 12–15 phút, không bám độ dài gốc nữa")
+        assert 12 <= k.phut_muc_tieu <= 15
+        # 12–15 phút ở 302 ký tự/phút là 3.600–4.500 ký tự.
+        assert 3600 <= k.ky_tu_muc_tieu <= 4500, k.ky_tu_muc_tieu
+        # Một dòng độ dài trong prompt viết — KHÔNG có prompt nắn riêng.
+        assert "<<CHARS>>" in k.prompt.get("2-viet.md", "")
+        assert "4-do-dai.md" not in k.prompt
 
     def test_mac_dinh_cac_kenh_khac_van_theo_phut(self):
         # Cờ mặc định phải là False để không đổi hành vi kênh cũ.

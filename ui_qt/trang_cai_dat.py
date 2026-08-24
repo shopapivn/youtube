@@ -109,8 +109,9 @@ MUC = (
      "vẫn chạy qua ví ShopAPI như cũ.\n"
      "Khoá ShopAPI KHÔNG được đưa vào Claude Code: lượt viết chạy bằng phiên "
      "đăng nhập của máy, trong một thư mục rỗng, không đọc được gì của tool.\n"
-     "Nếu Claude Code chưa cài hoặc chưa đăng nhập, tôi tự quay về ví ShopAPI "
-     "và ghi một dòng vào nhật ký — lượt chạy không hỏng vì nút này."),
+     "Bật rồi thì kịch bản CHỈ đi Claude Code: trục trặc tôi thử lại nhiều "
+     "lần, không lặng lẽ chuyển sang ví. Máy chưa cài Claude Code thì tôi báo "
+     "ngay lúc bấm Chạy để bạn cài hoặc tắt nút này."),
     ("doi_cao_do_giong", "Đổi nhẹ cao độ giọng đọc",
      "Tắt sẵn. Đây là nút DUY NHẤT trong nhóm này đụng vào chính nội dung, chứ "
      "không chỉ vào thẻ dữ liệu — nên nó tách riêng.\n"

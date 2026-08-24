@@ -597,6 +597,11 @@ class TrangTuDong(QWidget):
 
     # ── Kênh ─────────────────────────────────────────────────────────────────
 
+    def kenh_da_doi(self) -> None:
+        """Một tab lẻ vừa "Lưu vào kênh" (xem `ui_qt/kenh_chon.py`) → làm mới
+        ô chọn kênh và dòng trạng thái, không bắt mở lại tool."""
+        self._nap_kenh()
+
     def _nap_kenh(self) -> None:
         cu = self._chon_kenh.currentText()
         self._chon_kenh.blockSignals(True)
@@ -899,11 +904,10 @@ class TrangTuDong(QWidget):
         def viec():
             from core.auto_khau import BoiCanh, dung_bo_viec  # noqa: PLC0415
 
-            goi_vi = self._dung_goi_chat()
             bc = BoiCanh(
                 goc=self._app.base_dir, kenh=k,
-                goi_chat=goi_vi,
-                goi_chat_kich_ban=self._dung_goi_chat_kich_ban(goi_vi),
+                goi_chat=self._dung_goi_chat(),
+                goi_chat_kich_ban=self._dung_goi_chat_kich_ban(),
                 client=self._app.client
                 if getattr(self._app, "client", None) is not None
                 else self._dung_client(),
@@ -970,27 +974,33 @@ class TrangTuDong(QWidget):
 
         return goi
 
-    def _dung_goi_chat_kich_ban(self, goi_vi):
+    def _dung_goi_chat_kich_ban(self):
         """Đường viết chữ RIÊNG cho khâu kịch bản, hoặc `None` nếu đi ví chung.
 
         Chỉ khác `None` khi chủ máy bật "Kịch bản viết bằng Claude Code" trong
         Cài đặt: kịch bản viết bằng thuê bao Claude đã đăng nhập trên máy
         (không trừ ví), còn lời nhắc ảnh/clip và mọi khâu khác vẫn đi ví
-        ShopAPI. Hỏng — chưa cài, chưa đăng nhập — thì tự lui về `goi_vi`,
-        có ghi nhật ký. Xem `core/viet_max.py`.
+        ShopAPI. Hỏng thì THỬ LẠI, không rẽ sang ví — chủ dự án 24/08/2026:
+        *"đã nói máy này là claude max 20 thì cứ thế mà làm đừng cho nó đi
+        nhầm"*. Xem `core/viet_max.py`.
         """
         from core import cai_dat  # noqa: PLC0415
-        from core.viet_max import dung_goi_chat_max  # noqa: PLC0415
+        from core.viet_max import co_claude_code, dung_goi_chat_max  # noqa: PLC0415
 
         if not cai_dat.doc(self._app.base_dir).get("kich_ban_bang_claude_code"):
             return None
+        if not co_claude_code():
+            raise RuntimeError(
+                "Cài đặt đang bật “Kịch bản viết bằng Claude Code” nhưng máy "
+                "này chưa cài Claude Code. Cài ở Cài đặt → Agent xây tool, hoặc "
+                "tắt nút đó để viết bằng ví ShopAPI.")
 
         def kiem_dung():
             if self._huy is not None and self._huy.is_set():
                 raise RuntimeError("đã dừng")
 
-        return dung_goi_chat_max(goi_vi, self._app.base_dir,
-                                 on_log=self._ghi_nen, kiem_dung=kiem_dung)
+        return dung_goi_chat_max(self._app.base_dir, on_log=self._ghi_nen,
+                                 kiem_dung=kiem_dung)
 
     def _dung(self) -> None:
         if self._huy is not None:

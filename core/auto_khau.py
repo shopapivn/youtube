@@ -1873,6 +1873,11 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 ban_nhap = _goi(
                     bc, _thay(khuon, dict(chung, DRAFT=ban_nhap)),
                     _khoa_chat(luot, ten)).strip()
+                truoc_go = ban_nhap
+                ban_nhap = _go_loi_dan_dau(ban_nhap, k.ngon_ngu)
+                if ban_nhap != truoc_go:
+                    bc.ghi("  (bỏ {0} ký tự lời dẫn tiếng Anh AI in trước bài)"
+                           .format(len(truoc_go) - len(ban_nhap)))
                 if not ban_nhap:
                     raise RuntimeError("bước “{0}” trả về rỗng".format(nhan))
                 _ghi_chu(nhap, ban_nhap + "\n")
@@ -1902,6 +1907,14 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # Nên: đo, nói chênh lệch cụ thể, nắn, đo lại — tối đa ba vòng.
             truoc_nan = ban_nhap
             ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap, muc_tieu_kt)
+            if ban_nhap != truoc_nan:
+                # Bước sửa có thể đã để lại bản CÓ THẺ (`_tach_the_cam_xuc`),
+                # nhưng thẻ ấy đặt trên bản chữ vừa bị nắn lại — không còn khớp.
+                # Bỏ đi cho rõ; khâu giọng đọc sẽ chèn lại trên bản cuối (nếu
+                # khách bật thẻ), thay vì đọc nhầm một bản đã cũ.
+                from .the_cam_xuc import TEP_CO_THE  # noqa: PLC0415
+
+                _bo_tep(os.path.join(d, TEP_CO_THE))
 
             # ═══ ĐỌC LẠI CHỈ KHI ĐÃ NẮN ═══
             #
@@ -1972,6 +1985,44 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 "tieu_de": tieu_de, "chu_bia": chu_bia}
 
     return lam
+
+
+#: Mã tiếng viết bằng chữ KHÔNG Latinh — với những tiếng này, vài dòng đầu
+#: thuần tiếng Anh chắc chắn không phải bài, mà là AI "kể sắp làm gì".
+_TIENG_KHONG_LATINH = frozenset(("ja", "zh", "ko", "th", "ar", "ru", "hi",
+                                 "he", "el", "ka", "bn", "uk", "fa", "ur"))
+
+
+def _go_loi_dan_dau(ban: str, ngon_ngu: str) -> str:
+    """Bỏ đoạn dẫn tiếng Anh AI in TRƯỚC bài, với kênh viết chữ không Latinh.
+
+    Đo 24/08/2026, lượt 0019: bước sửa trả về *"I'll read the situation,
+    verify the two scripts against each other, then produce the fixed txt
+    with tags. Let me first…"* rồi mới tới tiếng Nhật. Chốt độ dài không bắt
+    được (tổng vẫn đủ dài), và 374 ký tự tiếng Anh ấy đi thẳng vào giọng đọc.
+
+    Chỉ làm với tiếng viết chữ không Latinh: ở đó, dòng không có lấy một chữ
+    cái ngoài ASCII thì không thể là lời đọc. Kênh tiếng Việt/Anh không phân
+    biệt được nên không đụng. Cắt tới dòng đầu tiên có chữ bản ngữ; đầu bài
+    phải trông như văn tiếng Anh (từ ba từ Latinh) mới cắt — một dòng thẻ
+    `[short pause]` đứng đầu thì để yên.
+    """
+    if (ngon_ngu or "").strip().lower()[:2] not in _TIENG_KHONG_LATINH:
+        return ban
+    dong = (ban or "").splitlines()
+
+    def co_chu_ban_ngu(d: str) -> bool:
+        return any((not c.isascii()) and c.isalpha() for c in d)
+
+    i = 0
+    while i < len(dong) and not co_chu_ban_ngu(dong[i]):
+        i += 1
+    if i == 0 or i >= len(dong):
+        return ban          # không có gì để cắt, hoặc cả bài không có bản ngữ
+    dau = "\n".join(dong[:i])
+    if len(re.findall(r"[A-Za-z]{2,}", dau)) < 3:
+        return ban
+    return "\n".join(dong[i:]).lstrip()
 
 
 def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:

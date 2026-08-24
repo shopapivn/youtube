@@ -9,8 +9,35 @@ from __future__ import annotations
 
 import os
 
-from core.auto_khau import BoiCanh, _tach_the_cam_xuc
+from core.auto_khau import BoiCanh, _go_loi_dan_dau, _tach_the_cam_xuc
 from core.the_cam_xuc import TEP_CO_THE, kiem_the
+
+
+class TestGoLoiDanDau:
+    """Lượt 0019 (24/08): bài tiếng Nhật mở đầu bằng "I'll read the situation…"."""
+
+    LOI_DAN = ("I'll read the situation, verify the two scripts against each "
+               "other, then produce the fixed txt with tags.\n\nLet me first "
+               "check the draft.\n\n")
+    BAI = "[curious] 金曜日の夜、スマホが震える。\n\n誰にも会わなくていい。"
+
+    def test_cat_loi_dan_tieng_anh_truoc_bai_nhat(self):
+        assert _go_loi_dan_dau(self.LOI_DAN + self.BAI, "ja") == self.BAI
+
+    def test_bai_sach_thi_khong_dong(self):
+        assert _go_loi_dan_dau(self.BAI, "ja") == self.BAI
+
+    def test_dong_the_dung_dau_thi_de_yen(self):
+        bai = "[short pause]\n" + self.BAI
+        assert _go_loi_dan_dau(bai, "ja") == bai
+
+    def test_kenh_tieng_viet_khong_dung(self):
+        bai = "I'll do it.\n\nHôm nay trời đẹp."
+        assert _go_loi_dan_dau(bai, "vi") == bai
+
+    def test_ca_bai_khong_co_ban_ngu_thi_khong_vut(self):
+        bai = "Only english here.\nStill english."
+        assert _go_loi_dan_dau(bai, "ja") == bai
 
 
 def _bc(nhat_ky):

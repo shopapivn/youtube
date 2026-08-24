@@ -89,7 +89,8 @@ class TestTL4LayNguyenDoiThu:
         # Chủ dự án, 22/08/2026: TL4-T7 lấy nguyên tiêu đề + chữ bìa đối thủ.
         k = doc_kenh(GOC, "TL4-T7")
         assert k.che_do_tieu_de == "nguyen_goc"
-        assert k.do_dai_theo_goc is True, "TL4-T7 vẫn bám độ dài bản gốc"
+        # 24/08/2026: độ dài về mốc 12–15 phút cố định, không bám bản gốc.
+        assert k.do_dai_theo_goc is False
 
 
 class TestNoiVaoLoiNhac:

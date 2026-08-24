@@ -44,8 +44,10 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shutil
 import subprocess
 import threading
+import time
 import uuid
 from typing import Any, Callable, List, Optional
 
@@ -97,7 +99,10 @@ CHI_DAO_VIET = (
     "từ chữ đầu tới chữ cuối, và KHÔNG có gì khác: không dùng công cụ, không "
     "ghi hay mở tệp, không tóm tắt việc đã làm, không hỏi lại, không lời dẫn "
     "trước hay sau, không rào ```. Nếu lời nhắc bảo ghi kết quả ra tệp hoặc "
-    "đặt tên tệp, hãy hiểu là: in TOÀN BỘ nội dung tệp ấy làm câu trả lời.")
+    "đặt tên tệp, hãy hiểu là: in TOÀN BỘ nội dung tệp ấy làm câu trả lời. "
+    "Câu trả lời phải BẮT ĐẦU NGAY bằng chữ đầu tiên của văn bản — không có "
+    "câu mở đầu kiểu \"I'll…\", \"Let me…\", \"Here is…\", không kể lại bạn "
+    "sắp làm gì.")
 
 #: Lời dặn thêm khi lời gọi KÈM ẢNH (đọc chữ trên ảnh bìa đối thủ).
 #:
@@ -235,7 +240,14 @@ def viet_bang_max(
     if not duong and mo_tien_trinh is None:
         raise RuntimeError("máy chưa cài Claude Code")
 
-    thu_muc = os.path.join(goc, THU_MUC_RONG)
+    # ═══ MỖI LƯỢT GỌI MỘT THƯ MỤC RIÊNG ═══
+    #
+    # Claude Code ghi sổ phiên theo thư mục làm việc. Đo 24/08/2026: chạy tuần
+    # tự thì không sao, chạy 3–4 lượt SONG SONG trong cùng `workspace/viet-max`
+    # là có lượt thoát mã 1 không một dòng lý do (0020, 0022). Cho mỗi lượt
+    # một thư mục con rồi xoá sau — vừa hết giẫm nhau, vừa không để ảnh bìa
+    # đối thủ nằm lại.
+    thu_muc = os.path.join(goc, THU_MUC_RONG, uuid.uuid4().hex[:8])
     os.makedirs(thu_muc, exist_ok=True)
 
     ten_anh = _ghi_anh_tam(thu_muc, anh) if anh else ""
@@ -244,11 +256,7 @@ def viet_bang_max(
                      mo_hinh, thu_muc, ten_anh, loi_nhac, kiem_dung, gio_han,
                      moi_truong_max())
     finally:
-        if ten_anh:
-            try:
-                os.remove(os.path.join(thu_muc, ten_anh))
-            except OSError:
-                pass
+        shutil.rmtree(thu_muc, ignore_errors=True)
 
 
 def _chay(mo, duong: str, mo_hinh: str, thu_muc: str, ten_anh: str,
@@ -268,7 +276,8 @@ def _chay(mo, duong: str, mo_hinh: str, thu_muc: str, ten_anh: str,
                     creationflags=co)
     # Đo 24/08/2026: giết tool giữa lúc `claude` đang viết thì nó vẫn chạy nốt
     # bảy phút. Ghi nhận để tắt tool là nó tắt, mở tool là dọn xác nếu còn.
-    goc_tool = os.path.dirname(os.path.dirname(thu_muc))
+    # `thu_muc` = <gốc>/workspace/viet-max/<mã lượt> → lùi ba cấp là gốc tool.
+    goc_tool = os.path.dirname(os.path.dirname(os.path.dirname(thu_muc)))
     ghi_nhan(tien_trinh, goc_tool, "claude")
     try:
         return _doi_ket_qua(tien_trinh, loi_nhac, kiem_dung, gio_han)
@@ -316,51 +325,80 @@ def _doi_ket_qua(tien_trinh, loi_nhac: str, kiem_dung, gio_han: float) -> str:
             str(hop["nem"])[:200]))
     if tien_trinh.returncode != 0:
         # stderr là chỗ Claude Code nói vì sao: chưa đăng nhập, hết hạn mức…
+        # Có lượt cả stderr lẫn stdout đều trống (đo 24/08/2026, mã 1) — ghi
+        # rõ "không nói lý do" thay vì một dấu hai chấm rồi trống trơn.
+        ly_do = str(hop.get("loi") or hop.get("ra") or "").strip()[:200]
         raise RuntimeError("Claude Code thoát lỗi (mã {0}): {1}".format(
-            tien_trinh.returncode,
-            str(hop.get("loi") or hop.get("ra") or "")[:200].strip()))
+            tien_trinh.returncode, ly_do or "không nói lý do"))
     return _boc_ket_qua(str(hop.get("ra") or ""))
 
 
-def dung_goi_chat_max(goi_vi: Callable[..., str], goc: str, *,
+#: Nhịp chờ giữa hai lần thử lại Claude Code, giây. Giãn dần: sự cố thường
+#: gặp là ngưỡng tạm thời của thuê bao hoặc một cú thoát lỗi lẻ — mười lăm
+#: giây là qua; ngưỡng dài hơn thì hai phút cho nó thở.
+NHIP_THU_LAI = (15.0, 30.0, 60.0, 120.0)
+
+
+def dung_goi_chat_max(goc: str, *,
                       on_log: Optional[Callable[[str], None]] = None,
                       kiem_dung: Optional[Callable[[], None]] = None,
                       viet: Optional[Callable[..., str]] = None,
+                      so_lan: int = 1 + len(NHIP_THU_LAI),
+                      ngu: Callable[[float], None] = time.sleep,
                       ) -> Callable[..., str]:
-    """Dựng hàm `goi_chat` cho khâu kịch bản: Claude Code trước, ví sau.
+    """Dựng hàm `goi_chat` cho khâu kịch bản: **chỉ Claude Code**, hỏng thì thử lại.
 
-    `goi_vi` là hàm gọi ví ShopAPI sẵn có (cùng chữ ký với `goi()` trong
-    `trang_auto._dung_goi_chat`) — nó là đường lui, và là đường DUY NHẤT cho
-    lời gọi kèm ảnh: đọc chữ trên ảnh bìa đối thủ cần mắt của cổng ShopAPI,
-    Claude Code headless không nhận ảnh qua stdin.
+    ═══ KHÔNG CÓ ĐƯỜNG LUI VỀ VÍ ═══
 
-    `viet` thay được để bài kiểm không cần Claude Code thật.
+    Bản đầu lui về ví ShopAPI khi Claude Code hỏng, để lượt chạy không chết.
+    Chủ dự án, 24/08/2026, sau khi thấy lượt 0020 và 0022 rẽ sang ví vì một
+    cú thoát lỗi lẻ: *"lỗi thì phải retry đủ không thể gãy thế được nhá, đã
+    nói máy này là claude max 20 thì cứ thế mà làm đừng cho nó đi nhầm"*.
+
+    Đúng: rẽ sang ví là **trả tiền cho thứ đã trả tiền tháng**, và người đang
+    nhìn nhật ký không nhất thiết thấy. Nên ở đây: thử lại `so_lan` lần theo
+    `NHIP_THU_LAI`, vẫn hỏng thì **ném lỗi nói rõ** — `_goi` bên `auto_khau`
+    còn thử lại bốn lần nữa, và `core/auto.chay` thử lại cả khâu ba lần. Đủ
+    kiên nhẫn cho mọi sự cố tạm; sự cố thật (chưa đăng nhập, chưa cài) thì
+    khách thấy đúng câu ấy trên màn hình thay vì thấy ví vơi đi.
+
+    `viet` và `ngu` thay được để bài kiểm không cần Claude Code thật và không
+    phải ngồi đợi thật.
     """
     viet_that = viet or viet_bang_max
-    #: Hỏng một lần vì "máy chưa cài" hay "chưa đăng nhập" thì các lượt sau
-    #: cũng hỏng y hệt — nhớ lại để cả mẻ không phải thử-rồi-lui ở từng bước.
-    hong_han = threading.Event()
 
     def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
             khoa: str = "", toi_da_token: int = 8192, anh: str = "") -> str:
-        if hong_han.is_set():
-            return goi_vi(loi_nhac, mo_hinh=mo_hinh, khoa=khoa,
-                          toi_da_token=toi_da_token, anh=anh)
-        try:
-            # `mo_hinh` nhận vào là model của đường ví — đường thuê bao cố ý
-            # KHÔNG dùng nó: xem ghi chú ở `MO_HINH_TOT_NHAT`. Ảnh (đọc chữ
-            # bìa) cũng đi đường này — xem `CHI_DAO_ANH`.
-            return viet_that(loi_nhac, goc=goc, mo_hinh=MO_HINH_TOT_NHAT,
-                             kiem_dung=kiem_dung, anh=anh)
-        except Exception as loi:  # noqa: BLE001 — nói thật rồi lui về ví
-            # Khách bấm Dừng thì phải dừng thật, không phải "lui về ví".
-            if kiem_dung is not None:
-                kiem_dung()
-            hong_han.set()
-            if on_log is not None:
-                on_log("  (Claude Code không viết được: {0} — dùng ví "
-                       "ShopAPI cho phần còn lại)".format(str(loi)[:120]))
-            return goi_vi(loi_nhac, mo_hinh=mo_hinh, khoa=khoa,
-                          toi_da_token=toi_da_token, anh=anh)
+        loi_cuoi: Optional[BaseException] = None
+        for lan in range(max(1, so_lan)):
+            try:
+                # `mo_hinh` nhận vào là model của đường ví — đường thuê bao
+                # cố ý KHÔNG dùng nó: xem `MO_HINH_TOT_NHAT`. Ảnh (đọc chữ
+                # bìa) cũng đi đường này — xem `CHI_DAO_ANH`.
+                return viet_that(loi_nhac, goc=goc, mo_hinh=MO_HINH_TOT_NHAT,
+                                 kiem_dung=kiem_dung, anh=anh)
+            except Exception as loi:  # noqa: BLE001 — thử lại, không rẽ ví
+                # Khách bấm Dừng thì dừng thật, không đợi hết nhịp.
+                if kiem_dung is not None:
+                    kiem_dung()
+                loi_cuoi = loi
+                con = lan < so_lan - 1
+                cho = NHIP_THU_LAI[min(lan, len(NHIP_THU_LAI) - 1)]
+                if on_log is not None:
+                    on_log("  Claude Code không viết được (lần {0}/{1}): {2}"
+                           "{3}".format(lan + 1, so_lan, str(loi)[:120],
+                                        " — thử lại sau {0:.0f} giây, không "
+                                        "chuyển sang ví.".format(cho)
+                                        if con else "."))
+                if con:
+                    ngu(cho)
+                    if kiem_dung is not None:
+                        kiem_dung()
+        raise RuntimeError(
+            "Claude Code không viết được sau {0} lần thử ({1}). Máy này đặt "
+            "viết kịch bản bằng thuê bao Claude nên tôi KHÔNG chuyển sang ví. "
+            "Kiểm tra Claude Code còn đăng nhập không, hoặc tắt nút “Kịch bản "
+            "viết bằng Claude Code” trong Cài đặt.".format(
+                so_lan, str(loi_cuoi)[:160]))
 
     return goi
