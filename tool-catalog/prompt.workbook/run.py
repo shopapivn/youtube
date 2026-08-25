@@ -232,13 +232,22 @@ narrated video. Read the whole narration transcript below and decide:
    fixed English appearance description (`english_prompt`) that every scene
    will reuse verbatim so the character never drifts, and make the characters
    clearly DISTINCT from each other (build, age, clothing colour, one signature
-   prop). If a character's LOOK CHANGES during the story (a cat is given a hat
+   prop). The description MUST include the FULL costume and the props that
+   SAY THE ROLE at first glance — a king: a golden crown AND a royal robe with
+   fur trim; a queen: gown and circlet; a princess: gown and tiara; a soldier:
+   uniform; a miller: apron. A face and a beard alone are not a king: the
+   image generator dressed a crownless "jolly old man" as a beggar (25/08/2026).
+   Every human character needs: face, hair, build, complete outfit with
+   colours, footwear, one signature prop. If a character's LOOK CHANGES during the story (a cat is given a hat
    and boots, a peasant puts on royal clothes, a king loses his crown), give
    `stages` — a list in story order, each `{{"when": "<the story moment>",
    "outfit": "<clothes and props at that stage>"}}`; the first stage is the
    look at the START. Then `english_prompt` describes only face, body and
    fur/skin (no clothes) — every stage becomes its own reference image with the
-   same face. Characters that never change have no `stages`.
+   same face. Characters that never change have no `stages`. A character that
+   TRANSFORMS (an ogre becomes a lion, then a mouse; a frog becomes a prince)
+   also gets `stages` — one per form, `outfit` describing the whole new body —
+   because each form needs its own reference picture or the scenes invent it.
    Describe what image generators get wrong by default, in POSITIVE words:
    for an animal, the exact fur pattern ("solid plain golden-yellow fur without
    any stripes", not just "yellow cat"), "bare paws" when it wears no shoes,
@@ -249,6 +258,10 @@ narrated video. Read the whole narration transcript below and decide:
    a single figure: two brothers are two ids (each with his own look); a crowd
    (guards, villagers, courtiers) is ONE representative member, and the scene
    prompt says how many of them appear. Never an id that means "the two…".
+   Image generators REJECT any animal wearing footwear (boots, shoes,
+   slippers — measured 25/08/2026 on a cat, every wording). Never give an
+   animal footwear even if the story says boots: the narration may say
+   "boots", the picture gives it a beret, a vest, a scarf or a satchel instead.
    Never copy the signature look of a famous copyrighted character (a cat in a
    feathered musketeer hat and tall boots, a mouse in red shorts, a blue
    hedgehog…): image generators reject it. Invent a fresh, simple look instead
@@ -256,7 +269,7 @@ narrated video. Read the whole narration transcript below and decide:
    video. When the story itself hands a character a famous look, keep ONLY
    the item the plot needs (the cat gets boots because it asks for boots) and
    drop the copyrighted flourish (no feathered hat of any colour or shape on
-   that cat — a plain cap or nothing on the head). Use FAMILY-FRIENDLY wording in every description — this is for
+   that cat — a plain cap or nothing on the head; and no boots on it, see above). Use FAMILY-FRIENDLY wording in every description — this is for
    children and for image generators with strict safety filters: no weapons
    (guards carry ceremonial staffs, not halberds or swords), no "brutal",
    "hulking", "menacing", "ashen", "iron-studded"; a villain is "very big,
@@ -269,6 +282,12 @@ narrated video. Read the whole narration transcript below and decide:
    a short `location_lock` (what must never change) and `lighting_default`.
    Give ids `loc1`, `loc2`… A palace and a castle are two places; do not
    merge distinct settings into one.
+   ONE id = ONE camera-able place: the OUTSIDE of a castle (gate, walls,
+   towers) and its INSIDE (hall, throne room) are TWO locations with two ids;
+   a cottage interior and its doorstep are two. A location reference is a
+   single view, and a scene set "in the castle hall" must not be locked to a
+   picture of the castle gate (measured 25/08/2026: 10 of 32 castle scenes
+   mismatched for exactly this).
 3. ONE consistent visual `style` for the whole video: `image_style`, `palette`,
    `motion`.
 
@@ -537,6 +556,12 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
                              "canh; ca video doi boi canh {2} lan / {3} canh.".format(
                                  doi["boi_canh"], doi["nhan_vat"], _so_lan_doi_boi_canh(scenes),
                                  len(scenes))})
+        if chia_fn is None:
+            # ═══ PHÁ CẢNH LẶP ═══ (chỉ khi chạy thật; bài kiểm bơm chia_fn không gọi AI)
+            so_lap = _pha_lap_canh(scenes, goi)
+            if so_lap:
+                emit({"type": "event", "event": "progress", "progress": 0.0,
+                      "message": "Doi khung hinh {0} canh lap voi canh truoc.".format(so_lap)})
         _gan_reference_files(scenes, cast["characters"], cast.get("locations") or [])
         _validate_coverage(cues, scenes)
         _lam_lanh_moi_prompt(cast, scenes, bia)
@@ -1372,6 +1397,109 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
         for ten, gt in duoi:
             dong.append("{0}: {1}".format(ten, gt))
     return "\n".join(dong)
+
+
+# ── Cảnh lặp: cùng cỡ khung, cùng người, cùng chỗ, cảnh này nối cảnh kia ───────
+#
+# Đo 25/08/2026 (story-3d/0001, 123 cảnh): 105/122 cặp cảnh liền nhau trùng
+# hơn 50% từ; 45 cảnh mở bằng "Medium shot", 21 "Wide shot"; tám cảnh 5–12 là
+# cùng cậu bé + mèo ở cùng bậc cửa, cùng cỡ khung. Người xem thấy "cảnh lặp
+# lại". Luật 3 trong lời nhắc chia cảnh đã bảo đổi khung hình mà AI vẫn không
+# đổi — nên mã phải đo và bắt sửa, không tin lời hứa.
+_NGUONG_LAP = 0.6
+_TIEN_TRINH_KHUNG = ("extreme close-up (eyes, paws, hands, one object)", "close-up",
+                     "medium shot", "over-the-shoulder shot", "low-angle shot",
+                     "high-angle / top-down view", "wide shot", "insert of a prop or detail",
+                     "POV shot (what the character sees)", "reaction shot of the listener")
+
+
+def _mo_dau_khung(prompt: str) -> str:
+    """Cụm mở đầu nói cỡ khung: 'medium shot', 'close-up', 'wide shot'…"""
+    dau = re.split(r"\b(of|on|at|:)\b", str(prompt or "").strip().lower(), maxsplit=1)[0]
+    return re.sub(r"[^a-z\- ]", "", dau).strip()[:40]
+
+
+def _tu_than(prompt: str) -> set:
+    than = str(prompt or "").split("REFERENCE IMAGES", 1)[0].lower()
+    return set(re.findall(r"[a-z]{4,}", than))
+
+
+def _canh_lap(scenes) -> List[int]:
+    """Chỉ số các cảnh LẶP cảnh liền trước: cùng cụm mở đầu, hoặc trùng > 60% từ."""
+    ra = []
+    for i in range(1, len(scenes)):
+        a, b = scenes[i - 1], scenes[i]
+        pa, pb = str(a.get("img_prompt") or ""), str(b.get("img_prompt") or "")
+        cung_khung = _mo_dau_khung(pa) and _mo_dau_khung(pa) == _mo_dau_khung(pb)
+        A, B = _tu_than(pa), _tu_than(pb)
+        j = len(A & B) / max(1, len(A | B))
+        if cung_khung or j > _NGUONG_LAP:
+            ra.append(i)
+    return ra
+
+
+_KHUON_PHA_LAP = """These image prompts are CONSECUTIVE scenes of one animated film, and each one
+repeats the framing of the scene before it (same shot size, same people, same place) — the
+viewer sees the same picture again and again. Rewrite ONLY the scenes listed under "REWRITE"
+so that no two consecutive scenes share a shot size/angle. Use a real film progression and
+vary the staging: {tien_trinh}. Keep for every scene: the same characters (their ids in
+parentheses, e.g. (nv1), stay), the same place id, the same story beat/action, the same style
+words at the end. Change the camera, the distance, the angle, what is in the foreground, and
+which part of the action we see. Family-friendly wording. Return ONLY JSON:
+{{"<scene_id>": {{"img_prompt": "...", "video_prompt": "..."}}}} — video_prompt is the same
+shot in motion (one small camera move, one small action), under 60 words.
+
+CONTEXT (previous scene of each rewritten one, do not change these):
+{ngu_canh}
+
+REWRITE:
+{can_sua}"""
+
+
+def _pha_lap_canh(scenes, goi, *, moi_lan: int = 20) -> int:
+    """Tìm cảnh lặp khung với cảnh trước và nhờ AI đổi khung (một lượt gọi mỗi ≤20 cảnh).
+
+    Bản viết lại chỉ được nhận khi vẫn giữ đúng các id nhân vật/bối cảnh của
+    cảnh gốc — lệch id là bỏ, giữ nguyên bản cũ. Trả về số cảnh đã đổi.
+    """
+    lap = _canh_lap(scenes)
+    if not lap or goi is None:
+        return 0
+    doi = 0
+    for dau in range(0, len(lap), moi_lan):
+        nhom = lap[dau:dau + moi_lan]
+        ngu_canh = "\n".join("[{0}] {1}".format(scenes[i - 1].get("scene_id"),
+                                                  str(scenes[i - 1].get("img_prompt") or "")[:400])
+                              for i in nhom)
+        can_sua = "\n".join("[{0}] {1}\n    video: {2}".format(
+            scenes[i].get("scene_id"), str(scenes[i].get("img_prompt") or "")[:600],
+            str(scenes[i].get("video_prompt") or "")[:200]) for i in nhom)
+        loi_nhac = _KHUON_PHA_LAP.format(tien_trinh="; ".join(_TIEN_TRINH_KHUNG),
+                                         ngu_canh=ngu_canh, can_sua=can_sua)
+        try:
+            tra = loc_json(goi(loi_nhac, "pha-lap-{0}".format(dau)))
+        except Exception:  # noqa: BLE001 — không đổi được thì giữ nguyên
+            continue
+        if not isinstance(tra, dict):
+            continue
+        for i in nhom:
+            sc = scenes[i]
+            moi = tra.get(str(sc.get("scene_id")))
+            if not isinstance(moi, dict):
+                continue
+            img = str(moi.get("img_prompt") or "").strip()
+            vid = str(moi.get("video_prompt") or "").strip()
+            if len(img) < 30:
+                continue
+            cu_id = set(re.findall(r"\b(?:nv|loc)\d+[a-z]?\b", str(sc.get("img_prompt") or "")))
+            moi_id = set(re.findall(r"\b(?:nv|loc)\d+[a-z]?\b", img))
+            if cu_id and moi_id != cu_id:
+                continue
+            sc["img_prompt"] = img
+            if len(vid) >= 10:
+                sc["video_prompt"] = vid
+            doi += 1
+    return doi
 
 
 def _gan_reference_files(scenes, characters, locations=()) -> None:

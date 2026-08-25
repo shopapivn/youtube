@@ -352,3 +352,50 @@ class TestSuaCanhTheoDoMoi:
 
         assert dd.sua_canh_theo_do_moi([{"scene_id": 1, "reference_files": "[]", "img_prompt": "x"}],
                                         "nv1b", "boots", "vest", goi_ai) == 0
+
+
+class TestSoiChanDung:
+    def test_chan_dung_thieu_vuong_mien_thi_ve_lai_va_giu_ban_hon(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = {"characters": [{"id": "nv5", "role": "the king", "english_prompt": "a jolly old king with a golden crown and red robe",
+                               "sheet_prompt": "portrait of the king"}], "locations": []}
+        goi = []
+
+        def tao_anh(ma_id, prompt, dich):
+            goi.append(prompt)
+            with open(dich, "wb") as f:
+                f.write(b"lan%d" % len(goi))
+
+        def cham(anh, mo_ta, vai):
+            assert vai == "the king" and "crown" in mo_ta
+            return (3, "golden crown, royal robe") if open(anh, "rb").read() == b"lan1" else (5, "")
+
+        assert dd.tao_tham_chieu(bc, luot, man, tao_anh=tao_anh, cham=cham) == []
+        assert len(goi) == 2 and "MUST clearly show: golden crown, royal robe" in goi[1]
+        tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
+        assert (tc / "nv5.png").read_bytes() == b"lan2"           # bản vẽ lại tốt hơn được dùng
+        assert (tc / "nv5.png.lan1.png").exists()
+        assert any("3/5" in d for d in bc._nhat_ky)
+
+    def test_ban_ve_lai_khong_hon_thi_giu_tam_dau(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = {"characters": [{"id": "nv5", "role": "the king", "english_prompt": "a king", "sheet_prompt": "p"}],
+               "locations": [{"id": "loc1", "sheet_prompt": "a hall"}]}
+        n = {"k": 0}
+
+        def tao_anh(ma_id, prompt, dich):
+            n["k"] += 1
+            with open(dich, "wb") as f:
+                f.write(b"x")
+
+        cham_goi = []
+
+        def cham(anh, mo_ta, vai):
+            cham_goi.append(vai)
+            return (3, "crown")
+
+        assert dd.tao_tham_chieu(bc, luot, man, tao_anh=tao_anh, cham=cham) == []
+        assert n["k"] == 3                           # nv5 hai lần, loc1 một lần (bối cảnh không chấm)
+        assert cham_goi == ["the king", "the king"]
+        tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
+        assert (tc / "nv5.png").exists() and not (tc / "nv5.png.lan2.png").exists()

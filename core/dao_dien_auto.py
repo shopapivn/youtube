@@ -161,7 +161,9 @@ def _doc_dan(luot: Any) -> Dict[str, Any]:
 def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
                    canh: Optional[List[Dict[str, Any]]] = None,
                    tao_anh: Optional[Callable[[str, str, str], None]] = None,
-                   goi_ai: Optional[Callable[[str], str]] = None) -> List[str]:
+                   goi_ai: Optional[Callable[[str], str]] = None,
+                   cham: Optional[Callable[[str, str, str], Tuple[Optional[int], str]]] = None
+                   ) -> List[str]:
     """Ảnh tham chiếu từng nhân vật / bối cảnh vào `<lượt>/tham-chieu/<id>.png`.
 
     Đã có thì bỏ qua (chạy tiếp không tốn tiền). Bị bộ lọc từ chối → viết lại
@@ -199,6 +201,8 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
         return []
     bc.ghi("  tạo {0} ảnh tham chiếu: {1}".format(len(viec), ", ".join(v[0] for v in viec)))
     lam = tao_anh or _dung_tao_anh_that(bc, luot)
+    cham = cham if cham is not None else _dung_cham_chan_dung_that(bc)
+    mo_ta_cua = {str(c.get("id")): c for c in list(man.get("characters") or [])}
     thieu: List[Tuple[str, str]] = []
     khoa = threading.Lock()
 
@@ -206,6 +210,7 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
         ma_id, prompt, dich = v
         try:
             lam(ma_id, prompt, dich)
+            _soi_chan_dung(bc, ma_id, prompt, dich, mo_ta_cua.get(ma_id), lam, cham)
             bc.ghi("    tham chiếu {0}: xong".format(ma_id))
         except Exception as loi:  # noqa: BLE001 — thiếu một tham chiếu không được giết cả lượt
             bc.ghi("    tham chiếu {0}: bị từ chối cả sau khi viết lại ({1}).".format(
@@ -423,6 +428,61 @@ def _dung_goi_ai_that(bc: Any) -> Callable[[str], str]:
                            mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"), toi_da_token=2048)
 
     return goi_ai
+
+
+#: Chân dung dưới điểm này thì vẽ lại một lần, nhấn đúng thứ còn thiếu.
+DIEM_CHAN_DUNG_DAT = 4
+
+
+def _soi_chan_dung(bc: Any, ma_id: str, prompt: str, dich: str, nv: Optional[Dict[str, Any]],
+                   lam: Callable[[str, str, str], None],
+                   cham: Callable[[str, str, str], Tuple[Optional[int], str]]) -> None:
+    """Chấm chân dung vừa vẽ so với mô tả + vai; thiếu thì vẽ lại MỘT lần và giữ tấm cao điểm hơn.
+
+    Chỉ nhân vật (bối cảnh không có "vai"). `cham(anh, mo_ta, vai) -> (điểm, thiếu)`.
+    """
+    if nv is None:
+        return
+    mo_ta = str(nv.get("english_prompt") or "")
+    vai = str(nv.get("role") or nv.get("name") or ma_id)
+    diem, thieu = cham(dich, mo_ta, vai)
+    if diem is None or diem >= DIEM_CHAN_DUNG_DAT:
+        return
+    bc.ghi("    tham chiếu {0}: chân dung {1}/5 — thiếu: {2}. Vẽ lại, nhấn đúng chỗ thiếu…"
+           .format(ma_id, diem, (thieu or "?")[:100]))
+    prompt_moi = prompt.rstrip() + "\nThe portrait MUST clearly show: " + (thieu or mo_ta[:200]) + "."
+    dich2 = dich + ".lan2.png"
+    try:
+        lam(ma_id, prompt_moi, dich2)
+    except Exception as loi:  # noqa: BLE001 — vẽ lại hỏng thì giữ tấm đầu
+        bc.ghi("    tham chiếu {0}: vẽ lại không được ({1}) — giữ tấm đầu.".format(ma_id, str(loi)[:80]))
+        return
+    diem2, _ = cham(dich2, mo_ta, vai)
+    if diem2 is not None and diem2 > diem:
+        os.replace(dich, dich + ".lan1.png")
+        os.replace(dich2, dich)
+        bc.ghi("    tham chiếu {0}: bản vẽ lại {1}/5 — dùng bản này.".format(ma_id, diem2))
+    else:
+        try:
+            os.remove(dich2)
+        except OSError:
+            pass
+        bc.ghi("    tham chiếu {0}: bản vẽ lại không hơn ({1}/5) — giữ tấm đầu.".format(
+            ma_id, diem2 if diem2 is not None else "?"))
+
+
+def _dung_cham_chan_dung_that(bc: Any) -> Callable[[str, str, str], Tuple[Optional[int], str]]:
+    from .cham_anh import cham_chan_dung  # noqa: PLC0415
+    from .goi_van_ban import goi_van_ban  # noqa: PLC0415
+
+    def goi(noi_dung):
+        return goi_van_ban(bc.client, [{"role": "user", "content": noi_dung}],
+                           mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"), toi_da_token=300)
+
+    def cham(anh: str, mo_ta: str, vai: str) -> Tuple[Optional[int], str]:
+        return cham_chan_dung(goi, anh, mo_ta, vai)
+
+    return cham
 
 
 class _HopRong:

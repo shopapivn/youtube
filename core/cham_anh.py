@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import base64
 import os
-from typing import Callable, List, Optional, Sequence
+from typing import Tuple, Callable, List, Optional, Sequence
 
 __all__ = ["NGUONG_LAM_LAI", "LOI_NHAC_CHAM", "cham_anh", "dung_cham_anh", "data_url"]
 
@@ -74,6 +74,36 @@ def cham_anh(goi, anh: str, tham_chieu: Sequence[str], mo_ta: str = "") -> Optio
     except Exception:  # noqa: BLE001 — chấm hỏng thì coi như không chấm
         return None
     return diem if 0 <= diem <= 5 else None
+
+
+LOI_NHAC_CHAN_DUNG = """This image is meant to be the REFERENCE PORTRAIT of a character in an animated film.
+Role in the story: {vai}.
+Intended description: {mo_ta}
+Judge whether the portrait shows THIS character as described, and whether a viewer would recognise the ROLE at first glance (a king must look like a king: crown, royal robe…).
+Score: 5 = matches the description and the role is obvious; 4 = matches, one small detail off; 3 = the character is there but an important item is missing or wrong (no crown on a king, different colour outfit, extra items); 2 = mostly a different look; 1 = a different character or the role is unrecognisable.
+Return JSON only: {{"diem": <1-5>, "thieu": "<what is missing or wrong, as a short list to ADD to the drawing prompt, or empty>"}}"""
+
+
+def cham_chan_dung(goi, anh: str, mo_ta: str, vai: str = "") -> Tuple[Optional[int], str]:
+    """Chân dung tham chiếu có đúng mô tả và đúng VAI không? → (điểm 1–5 hoặc None, thiếu gì).
+
+    Đo 25/08/2026 (story-3d/0001): dàn tả vua chỉ có "râu bạc, mặt hồng, cười
+    tươi" — máy vẽ ra một ông già áo vá như ăn mày, và cả 30 cảnh cung vua đi
+    theo. Chân dung sai thì mọi cảnh sai; phải chấm ngay tấm đầu tiên.
+    """
+    from .goi_van_ban import khoi_anh, loc_json  # noqa: PLC0415
+
+    if not anh or not os.path.isfile(anh):
+        return None, ""
+    noi_dung = [{"type": "text", "text": LOI_NHAC_CHAN_DUNG.format(
+        vai=str(vai or "character")[:120], mo_ta=str(mo_ta or "")[:900])}, khoi_anh(data_url(anh))]
+    try:
+        d = loc_json(str(goi(noi_dung) or ""))
+        diem = int(d.get("diem"))
+        thieu = str(d.get("thieu") or "").strip()
+    except Exception:  # noqa: BLE001
+        return None, ""
+    return (diem if 1 <= diem <= 5 else None), thieu[:300]
 
 
 def dung_cham_anh(lay_client: Callable[[], object], *, mo_hinh: str = "claude-sonnet-5"):
