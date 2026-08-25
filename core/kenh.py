@@ -125,6 +125,14 @@ class Kenh:
     #: Cần thêm `prompt/2b-cham.md`; thiếu tệp ấy thì chọn theo số đo (độ dài,
     #: mức trùng nguyên văn).
     so_ban_nhap: int = 1
+    #: Cách kể bằng hình cho khâu bảng cảnh + ảnh (chủ dự án 25/08/2026, kênh
+    #: truyện cổ tích): "" / "mot_nhan_vat" = đường cũ (một nhân vật cố định
+    #: `nv1.png`, lời nhắc `7-canh.md`); "tu_xay" = AI đọc phim, tự dựng dàn
+    #: nhân vật (có giai đoạn trang phục) + bối cảnh, kế hoạch đạo diễn, ảnh
+    #: tham chiếu từng nhân vật — cùng dây chuyền với tab Prompt Visuals;
+    #: "nhan_vat_va_boi_canh" = như tu_xay nhưng giữ `nv1.png` của kênh làm
+    #: nhân vật chính. Kênh không khai khoá này đi đúng đường cũ.
+    che_do_ke: str = ""
     #: Sau khi chấm chọn bản, HOÀN THIỆN chính bản đó theo nhận xét của bộ
     #: chấm: sửa điểm yếu, phát huy điểm mạnh, làm mượt (`prompt/2c-hoan-thien.md`,
     #: hai lượt gọi nữa: hoàn thiện + chấm so lại). Chủ dự án, 25/08/2026:
@@ -367,6 +375,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
+        che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),

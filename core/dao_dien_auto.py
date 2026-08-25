@@ -1,0 +1,295 @@
+"""Tab Tự động dùng dây chuyền ĐẠO DIỄN của Prompt Visuals khi kênh khai `che_do_ke`.
+
+═══ VÌ SAO ═══
+
+Chủ dự án 25/08/2026 dựng kênh "Truyện cổ tích" (story-3d) — một truyện có
+mèo, cậu út, vua, hoàng hậu, công chúa, yêu tinh, năm bảy bối cảnh — rồi bấm
+Tự động và nhận về video kiểu TL4-T7: **một** nhân vật cố định `nv1.png`,
+mọi cảnh xoay quanh nó. Trong khi tab Prompt Visuals đã có cả dây chuyền: đọc
+phim → dàn nhân vật (có giai đoạn trang phục) + bối cảnh → kế hoạch đạo diễn
+→ chia cảnh → khối khoá tham chiếu → ảnh tham chiếu từng nhân vật. Khách phải
+chạy hai tab, chép mp3 qua lại. *"Tao chỉ dán link là ra video"* — nên nối.
+
+═══ CHỈ MỞ KHI KÊNH KHAI ═══
+
+Nhánh này chỉ chạy khi `kenh.yaml` có `che_do_ke: tu_xay` (hoặc
+`nhan_vat_va_boi_canh`). Kênh không khai — TL4-T7 và mọi kênh đang chạy thật —
+đi đúng đường cũ, không thêm một lượt gọi AI hay ảnh nào. Đây là điều kiện
+phiên giữ khâu kịch bản đặt ra, và đúng.
+
+═══ DÙNG LẠI, KHÔNG CHÉP ═══
+
+Không chép lại dây chuyền: gọi thẳng `tool-catalog/prompt.workbook/run.py`
+trong cùng tiến trình (`handle(request)`), đúng cái tab Prompt Visuals chạy.
+Mọi nguyên lý đã đo hôm nay (khoá tham chiếu, bối cảnh đi theo truyện, giai
+đoạn trang phục, viết lại prompt bị chặn, không chép dáng có bản quyền…) tự
+động có mặt ở đây. Sửa một chỗ là cả hai tab đổi theo.
+
+Không Qt. Gọi mạng chỉ ở `chay_dao_dien` (AI chia cảnh) và `tao_tham_chieu`
+(ảnh) — bài kiểm bơm hàm giả cho cả hai.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+__all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chieu",
+           "duong_tham_chieu_canh", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
+
+#: Các giá trị `che_do_ke` mở nhánh đạo diễn.
+CHE_DO_DAO_DIEN = ("tu_xay", "nhan_vat_va_boi_canh")
+
+#: Tệp dàn nhân vật + bối cảnh + kế hoạch của lượt (cạnh `4-canh.json`).
+TEP_DAN = "4-canh-dan.json"
+#: Thư mục ảnh tham chiếu của lượt: `<lượt>/tham-chieu/<id>.png`.
+THU_MUC_THAM_CHIEU = "tham-chieu"
+#: Mấy ảnh tham chiếu tạo cùng lúc.
+SONG_SONG_THAM_CHIEU = 4
+
+_KHOA_NAP = threading.Lock()
+_RUN: Dict[str, Any] = {}
+
+
+def che_do_dao_dien(kenh: Any) -> bool:
+    """Kênh này đi nhánh đạo diễn không (`kenh.yaml: che_do_ke`)?"""
+    return str(getattr(kenh, "che_do_ke", "") or "").strip() in CHE_DO_DAO_DIEN
+
+
+def _nap_run(goc: str):
+    """Nạp `tool-catalog/prompt.workbook/run.py` một lần cho cả tiến trình."""
+    with _KHOA_NAP:
+        if "mod" not in _RUN:
+            duong = os.path.join(goc, "tool-catalog", "prompt.workbook", "run.py")
+            spec = importlib.util.spec_from_file_location("prompt_workbook_run", duong)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)  # type: ignore[union-attr]
+            _RUN["mod"] = mod
+        return _RUN["mod"]
+
+
+def _dam_bao_khoa_api(goc: str) -> None:
+    """`run.py` lấy khoá từ biến môi trường (nó vốn chạy như tiến trình con)."""
+    if os.environ.get("SHOPAPI_API_KEY", "").strip():
+        return
+    from .config import CONFIG_FILENAME, load_config  # noqa: PLC0415
+
+    cfg = load_config(os.path.join(goc, CONFIG_FILENAME))
+    if getattr(cfg, "api_key", ""):
+        os.environ["SHOPAPI_API_KEY"] = str(cfg.api_key)
+    if getattr(cfg, "base_url", ""):
+        os.environ["SHOPAPI_BASE_URL"] = str(cfg.base_url)
+
+
+def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
+                  ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Phụ đề + kịch bản của lượt → (danh sách cảnh, dàn) bằng dây chuyền đạo diễn.
+
+    Ghi `4-canh-dan.json` (dàn, bối cảnh, kế hoạch, cung truyện). `handle` chỉ
+    để bài kiểm bơm hàm giả; thật thì là `run.handle` của prompt.workbook.
+    """
+    from .prompt_visuals import chi_dan_tu_bo, dung_boi_canh  # noqa: PLC0415
+
+    k = bc.kenh
+    d = luot.thu_muc
+    srt = os.path.join(d, "3-phu-de.srt")
+    if not os.path.isfile(srt):
+        raise RuntimeError("chưa có phụ đề để đạo diễn chia cảnh")
+    kich_ban = ""
+    try:
+        with open(os.path.join(d, "1-kich-ban.txt"), encoding="utf-8") as f:
+            kich_ban = f.read()
+    except OSError:
+        pass
+    che_do = str(k.che_do_ke or "").strip()
+    co_dinh = None
+    if che_do == "nhan_vat_va_boi_canh":
+        co_dinh = {"image_file": "nv1.png",
+                   "english_prompt": str((k.style or {}).get("default_character_prompt") or "")}
+    boi_canh = dung_boi_canh(kich_ban, chi_dan=chi_dan_tu_bo(k.style), che_do_ke=che_do,
+                             nhan_vat_co_dinh=co_dinh)
+    ctx = os.path.join(d, "4-boi-canh.json")
+    with open(ctx, "w", encoding="utf-8") as f:
+        json.dump(boi_canh, f, ensure_ascii=False, indent=1)
+    request = {
+        "inputs": {"subtitles": {"path": srt}, "context": {"path": ctx}},
+        "config": {"engine": str(k.engine or "veo3"), "model": str(k.mo_hinh or "claude-sonnet-5"),
+                   "che_do_ke": che_do, "nhat_quan_nhan_vat": True,
+                   # Tab Tự động có khâu ảnh bìa và nhạc riêng — đừng tốn hai lượt nữa.
+                   "thumbnail": False, "nhac": False},
+        "workspace": d, "workflow_id": "auto-{0}-{1}".format(k.ma, luot.ma_luot),
+    }
+    if handle is None:
+        _dam_bao_khoa_api(bc.goc)
+        mod = _nap_run(bc.goc)
+
+        def _emit(du_lieu: Dict[str, Any]) -> None:
+            if isinstance(du_lieu, dict) and du_lieu.get("type") == "event":
+                bc.ghi("    đạo diễn: {0}".format(str(du_lieu.get("message") or "")[:160]))
+
+        mod.emit = _emit
+        handle = mod.handle
+    bc.ghi("  đạo diễn ({0}): đọc phim → dàn nhân vật → kế hoạch → chia cảnh…".format(che_do))
+    ra = handle(request)
+    man = dict(((ra or {}).get("scenes") or {}).get("json") or {})
+    canh = list(man.get("scenes") or [])
+    if not canh:
+        raise RuntimeError("đạo diễn không trả về cảnh nào")
+    with open(os.path.join(d, TEP_DAN), "w", encoding="utf-8") as f:
+        json.dump({kh: man.get(kh) for kh in ("characters", "locations", "director_plan", "story", "settings")},
+                  f, ensure_ascii=False, indent=1)
+    bc.ghi("  đạo diễn xong: {0} cảnh, {1} nhân vật, {2} bối cảnh.".format(
+        len(canh), len(man.get("characters") or []), len(man.get("locations") or [])))
+    return canh, man
+
+
+def _doc_dan(luot: Any) -> Dict[str, Any]:
+    try:
+        with open(os.path.join(luot.thu_muc, TEP_DAN), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
+                   tao_anh: Optional[Callable[[str, str, str], None]] = None) -> List[str]:
+    """Ảnh tham chiếu từng nhân vật / bối cảnh vào `<lượt>/tham-chieu/<id>.png`.
+
+    Đã có thì bỏ qua (chạy tiếp không tốn tiền). Bị bộ lọc từ chối → viết lại
+    lời nhắc một lần (`core.viet_lai_prompt`) rồi thử lại; vẫn hỏng thì ghi rõ
+    và đi tiếp — trả về danh sách id còn thiếu để khâu báo cho khách.
+    `tao_anh(ma_id, prompt, dich)` chỉ để bài kiểm bơm hàm giả.
+    """
+    man = man if man is not None else _doc_dan(luot)
+    d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
+    os.makedirs(d, exist_ok=True)
+    viec: List[Tuple[str, str, str]] = []
+    for c in list(man.get("characters") or []) + list(man.get("locations") or []):
+        ma_id = str(c.get("id") or "").strip()
+        if not ma_id:
+            continue
+        dich = os.path.join(d, ma_id + ".png")
+        if os.path.exists(dich):
+            continue
+        if c.get("co_dinh"):
+            # Nhân vật của kênh: chép `nv1.png` sẵn có, không vẽ lại.
+            nguon = (bc.kenh.anh_nv or [None])[0]
+            if nguon and os.path.isfile(nguon):
+                shutil.copyfile(nguon, dich)
+            continue
+        prompt = str(c.get("sheet_prompt") or c.get("english_prompt") or "").strip()
+        if prompt:
+            viec.append((ma_id, prompt, dich))
+    if not viec:
+        return []
+    bc.ghi("  tạo {0} ảnh tham chiếu: {1}".format(len(viec), ", ".join(v[0] for v in viec)))
+    lam = tao_anh or _dung_tao_anh_that(bc, luot)
+    thieu: List[str] = []
+    khoa = threading.Lock()
+
+    def mot(v: Tuple[str, str, str]) -> None:
+        ma_id, prompt, dich = v
+        try:
+            lam(ma_id, prompt, dich)
+            bc.ghi("    tham chiếu {0}: xong".format(ma_id))
+        except Exception as loi:  # noqa: BLE001 — thiếu một tham chiếu không được giết cả lượt
+            bc.ghi("    tham chiếu {0}: KHÔNG tạo được ({1}) — các cảnh có {0} sẽ "
+                   "không có ảnh tham chiếu.".format(ma_id, str(loi)[:120]))
+            with khoa:
+                thieu.append(ma_id)
+
+    with ThreadPoolExecutor(max_workers=SONG_SONG_THAM_CHIEU) as pool:
+        list(pool.map(mot, viec))
+    return thieu
+
+
+class _HopRong:
+    """Hộp tham chiếu trống: ảnh tham chiếu tự nó không có tham chiếu."""
+
+    def lay(self) -> List[str]:
+        return []
+
+    def lam_moi(self, _cu: List[str]) -> List[str]:
+        return []
+
+
+def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[[str, str, str], None]:
+    from .auto_khau import _tai_ket_qua, _tao_anh, khoa_viec  # noqa: PLC0415
+    from .goi_van_ban import goi_van_ban  # noqa: PLC0415
+    from .viet_lai_prompt import la_bi_tu_choi, viet_lai_prompt  # noqa: PLC0415
+
+    def goi_ai(loi_nhac: str) -> str:
+        return goi_van_ban(bc.client, [{"role": "user", "content": loi_nhac}],
+                           mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"), toi_da_token=2048)
+
+    def lam(ma_id: str, prompt: str, dich: str) -> None:
+        hop = _HopRong()
+        try:
+            goi = _tao_anh(bc, luot, prompt, hop, khoa_viec(luot, "tc", ma_id, prompt),
+                           ten_hien="tham chiếu " + ma_id)
+        except Exception as loi:  # noqa: BLE001
+            if not la_bi_tu_choi("", str(loi)):
+                raise
+            moi = viet_lai_prompt(goi_ai, prompt, str(loi))
+            if not moi or moi.strip() == prompt.strip():
+                raise
+            bc.ghi("    tham chiếu {0}: bị từ chối — đã viết lại, thử lại…".format(ma_id))
+            goi = _tao_anh(bc, luot, moi, hop, khoa_viec(luot, "tc", ma_id, moi, "vl"),
+                           ten_hien="tham chiếu " + ma_id)
+        if isinstance(goi, tuple):
+            goi = goi[0]
+        _tai_ket_qua(bc, goi, 0, dich)
+
+    return lam
+
+
+def duong_tham_chieu_canh(luot: Any, c: Dict[str, Any]) -> List[str]:
+    """Đường dẫn thật của các ảnh tham chiếu một cảnh khai trong `reference_files`."""
+    tho = c.get("reference_files") or ""
+    try:
+        ten = json.loads(tho) if isinstance(tho, str) else list(tho)
+    except ValueError:
+        ten = [x.strip() for x in str(tho).split(",")]
+    d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
+    ra = []
+    for t in ten or []:
+        p = os.path.join(d, os.path.basename(str(t).strip()))
+        if os.path.isfile(p):
+            ra.append(p)
+    return ra
+
+
+class ThamChieuCanh:
+    """Hộp tham chiếu theo TỪNG CẢNH — cùng bề mặt với `auto_khau.ThamChieu`.
+
+    `lay()` trả URL của các ảnh tham chiếu (tải lên qua `core.anh_len.tai_len`,
+    nhớ theo tệp nên hai cảnh cùng nhân vật chỉ tốn một lượt tải); `lam_moi()`
+    quên bộ nhớ rồi tải lại khi máy chủ báo chữ ký hết hạn.
+    """
+
+    def __init__(self, bc: Any, duong: List[str]) -> None:
+        self._bc = bc
+        self._duong = list(duong)
+        self._khoa = threading.Lock()
+        self._url: Optional[List[str]] = None
+
+    def lay(self) -> List[str]:
+        from .anh_len import tai_len  # noqa: PLC0415
+
+        with self._khoa:
+            if self._url is None:
+                self._url = [u for u in (tai_len(self._bc.client, p) for p in self._duong) if u]
+            return list(self._url)
+
+    def lam_moi(self, _cu: List[str]) -> List[str]:
+        from .anh_len import tai_len, xoa_nho  # noqa: PLC0415
+
+        with self._khoa:
+            xoa_nho()
+            self._url = [u for u in (tai_len(self._bc.client, p) for p in self._duong) if u]
+            return list(self._url)

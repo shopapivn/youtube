@@ -27,3 +27,8 @@ mo_hinh: "claude-sonnet-5"
 dot_phu_de: true
 am_luong_nhac: 0.12
 nhac_nen: ""
+
+# Cách kể bằng hình: AI đọc phim, tự dựng dàn nhân vật (có giai đoạn trang
+# phục) + bối cảnh + kế hoạch đạo diễn + ảnh tham chiếu từng nhân vật — cùng
+# dây chuyền với tab Prompt Visuals. Bỏ dòng này là về đường một nhân vật nv1.png.
+che_do_ke: tu_xay

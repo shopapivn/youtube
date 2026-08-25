@@ -2604,6 +2604,39 @@ def _khau_bang_canh(bc: BoiCanh):
         if not srt.strip():
             raise RuntimeError("chưa có phụ đề để cắt cảnh")
 
+        # ═══ NHÁNH ĐẠO DIỄN — chỉ khi kenh.yaml khai `che_do_ke` ═══
+        #
+        # Kênh truyện nhiều nhân vật (story-3d) đi dây chuyền của Prompt Visuals:
+        # dàn nhân vật có giai đoạn + bối cảnh + kế hoạch + ảnh tham chiếu từng
+        # nhân vật. Kênh không khai thì đường cũ y nguyên (xem core/dao_dien_auto).
+        from .dao_dien_auto import (  # noqa: PLC0415
+            TEP_DAN, chay_dao_dien, che_do_dao_dien, tao_tham_chieu,
+        )
+
+        if che_do_dao_dien(bc.kenh):
+            canh = None
+            man: Dict[str, Any] = {}
+            if os.path.exists(goi_json) and os.path.exists(os.path.join(d, TEP_DAN)):
+                canh = _canh_dung_duoc(json.loads(_doc_chu(goi_json)), bc)
+                try:
+                    man = json.loads(_doc_chu(os.path.join(d, TEP_DAN)))
+                except ValueError:
+                    man = {}
+            if not canh:
+                canh, man = chay_dao_dien(bc, luot)
+                _ghi_chu(goi_json, json.dumps(canh, ensure_ascii=False, indent=1))
+            thieu = tao_tham_chieu(bc, luot, man)
+            if thieu:
+                bc.ghi("  [CHÚ Ý] thiếu ảnh tham chiếu: {0} — cảnh có chúng sẽ "
+                       "mỗi cảnh một kiểu. Sửa mô tả trong 4-canh-dan.json rồi "
+                       "“Làm lại khâu này”.".format(", ".join(thieu)))
+            _viet_xlsx(dich, canh, bc.kenh, ke_hoach=list(man.get("director_plan") or []),
+                       dan=list(man.get("characters") or []),
+                       boi_canh=list(man.get("locations") or []))
+            return {"so_canh": len(canh), "so_nhan_vat": len(man.get("characters") or []),
+                    "so_boi_canh": len(man.get("locations") or []),
+                    "thieu_tham_chieu": thieu}
+
         if os.path.exists(goi_json):
             canh = _canh_dung_duoc(json.loads(_doc_chu(goi_json)), bc)
         if not os.path.exists(goi_json) or not canh:
@@ -2895,7 +2928,9 @@ COT_KE_HOACH = ("chuong", "srt_from", "srt_to", "title", "place", "time_light",
 
 
 def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh,
-               ke_hoach: Optional[List[Dict[str, Any]]] = None) -> None:
+               ke_hoach: Optional[List[Dict[str, Any]]] = None,
+               dan: Optional[List[Dict[str, Any]]] = None,
+               boi_canh: Optional[List[Dict[str, Any]]] = None) -> None:
     from openpyxl import Workbook  # noqa: PLC0415
     from openpyxl.styles import Font, PatternFill  # noqa: PLC0415
 
@@ -2909,20 +2944,51 @@ def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh,
     for hang, c in enumerate(canh, 2):
         for cot, ten in enumerate(COT_CANH, 1):
             gia_tri = c.get(ten, "")
-            if ten == "reference_files" and not gia_tri:
+            # Đường cũ: mọi cảnh mặc định trỏ `nv1.png`. Nhánh đạo diễn (có
+            # `dan`) thì mỗi cảnh tự khai — cảnh không có tham chiếu để trống.
+            if ten == "reference_files" and not gia_tri and dan is None:
                 gia_tri = json.dumps(["nv1.png"])
+            if isinstance(gia_tri, (list, dict)):
+                gia_tri = json.dumps(gia_tri, ensure_ascii=False)
             ws.cell(hang, cot, gia_tri)
 
     nv = sach.create_sheet("characters")
     for cot, ten in enumerate(COT_NHAN_VAT, 1):
         nv.cell(1, cot, ten)
-    nv.cell(2, 1, "nv1")
-    nv.cell(2, 2, "protagonist")
-    nv.cell(2, 3, "Reference")
-    nv.cell(2, 4, str(k.style.get("default_character_prompt", "")))
-    nv.cell(2, 6, str(k.style.get("reference_lock", "")))
-    nv.cell(2, 7, "nv1.png")
-    nv.cell(2, 8, "done")
+    if dan:
+        # Dàn do đạo diễn dựng: mỗi nhân vật (kể cả giai đoạn `nv4b`) một dòng,
+        # ảnh tham chiếu `<id>.png` trong `<lượt>/tham-chieu/`. Cột thêm:
+        # `sheet_prompt` (lời nhắc vẽ chân dung tham chiếu).
+        nv.cell(1, len(COT_NHAN_VAT) + 1, "sheet_prompt")
+        for hang, c in enumerate(dan, 2):
+            for cot, ten in enumerate(COT_NHAN_VAT, 1):
+                gia = c.get(ten, "")
+                if ten == "image_file" and not gia:
+                    gia = "{0}.png".format(c.get("id", ""))
+                if ten == "status" and not gia:
+                    gia = "done"
+                nv.cell(hang, cot, gia if not isinstance(gia, (list, dict)) else json.dumps(gia))
+            nv.cell(hang, len(COT_NHAN_VAT) + 1, str(c.get("sheet_prompt") or ""))
+    else:
+        nv.cell(2, 1, "nv1")
+        nv.cell(2, 2, "protagonist")
+        nv.cell(2, 3, "Reference")
+        nv.cell(2, 4, str(k.style.get("default_character_prompt", "")))
+        nv.cell(2, 6, str(k.style.get("reference_lock", "")))
+        nv.cell(2, 7, "nv1.png")
+        nv.cell(2, 8, "done")
+    if boi_canh:
+        lo = sach.create_sheet("locations")
+        cot_loc = ("id", "name", "english_prompt", "location_lock", "lighting_default",
+                   "image_file", "sheet_prompt")
+        for cot, ten in enumerate(cot_loc, 1):
+            lo.cell(1, cot, ten)
+        for hang, l in enumerate(boi_canh, 2):
+            for cot, ten in enumerate(cot_loc, 1):
+                gia = l.get(ten, "")
+                if ten == "image_file" and not gia:
+                    gia = "{0}.png".format(l.get("id", ""))
+                lo.cell(hang, cot, gia if not isinstance(gia, (list, dict)) else json.dumps(gia))
 
     tb = sach.create_sheet("thumbnail")
     for cot, ten in enumerate(COT_THUMB, 1):
@@ -3349,6 +3415,25 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         goi = goi_clip(url_anh, ":tc2")
     _tai_ket_qua(bc, goi, 0, dich)
     _kiem_media(bc, dich)
+
+
+def _hop_cho_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], hop: "ThamChieu"):
+    """Nhánh đạo diễn: mỗi cảnh dùng đúng ảnh tham chiếu nó khai (`reference_files`
+    → `<lượt>/tham-chieu/<id>.png`). Đường cũ: hộp `nv1.png` chung như trước."""
+    from .dao_dien_auto import ThamChieuCanh, che_do_dao_dien, duong_tham_chieu_canh  # noqa: PLC0415
+
+    if not che_do_dao_dien(bc.kenh):
+        return hop
+    duong = duong_tham_chieu_canh(luot, c)
+    return ThamChieuCanh(bc, duong) if duong else _HopTrong()
+
+
+class _HopTrong:
+    def lay(self) -> List[str]:
+        return []
+
+    def lam_moi(self, _cu: List[str]) -> List[str]:
+        return []
 
 
 def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
@@ -3795,7 +3880,7 @@ def _khau_anh(bc: BoiCanh):
             tep = os.path.join(thu_muc, "{0}.png".format(so_canh))
             san_co = os.path.exists(tep)
             if not san_co:
-                _lam_anh_canh(bc, luot, x, tep, hop, so=so)
+                _lam_anh_canh(bc, luot, x, tep, _hop_cho_canh(bc, luot, x, hop), so=so)
             else:
                 # Ảnh có sẵn trên đĩa từ lượt chạy trước — có thể là lượt chạy
                 # bằng bản tool chưa biết xoá dấu. Xoá lại ở đây thì lượt cũ
