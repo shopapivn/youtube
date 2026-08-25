@@ -223,3 +223,57 @@ class TestXlsxCoDan:
         ws = wb.worksheets[0]
         dau = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
         assert json.loads(ws.cell(2, dau.index("reference_files") + 1).value) == ["nv1.png"]
+
+
+class TestThietKeLai:
+    def test_tu_choi_hai_lan_thi_thiet_ke_lai_va_tao_lai(self, tmp_path):
+        from core.prompt_visuals import DUOI_CHAN_DUNG
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = json.loads(json.dumps(MAN))
+        lock = "REFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv1, the hero: a grey cat with a feathered hat\n"
+        man["characters"] = [
+            {"id": "nv1", "name": "Cat", "role": "hero", "english_prompt": "a grey cat with a feathered hat",
+             "sheet_prompt": "a grey cat with a feathered hat" + DUOI_CHAN_DUNG + " Style: 3D"},
+            {"id": "nv1b", "name": "Cat", "role": "hero",
+             "english_prompt": "a grey cat with a feathered hat; outfit at this stage: boots",
+             "sheet_prompt": "a grey cat with a feathered hat; outfit at this stage: boots" + DUOI_CHAN_DUNG + " Style: 3D"},
+        ]
+        canh = [{"scene_id": 1, "img_prompt": "cat by the mill\n" + lock, "video_prompt": "x",
+                 "reference_files": json.dumps(["nv1.png"])}]
+        goi = []
+
+        def tao_anh(ma_id, prompt, dich):
+            goi.append((ma_id, prompt[:40]))
+            if "feathered" in prompt:
+                raise RuntimeError("content_rejected")
+            with open(dich, "wb") as f:
+                f.write(b"png")
+
+        def goi_ai(loi_nhac):
+            assert "feathered hat" in loi_nhac and "REJECTING" in loi_nhac
+            return '{"english_prompt": "a grey cat wearing a small red beret"}'
+
+        thieu = dd.tao_tham_chieu(bc, luot, man, canh=canh, tao_anh=tao_anh, goi_ai=goi_ai)
+        assert thieu == []
+        # Cả hai giai đoạn tạo lại bằng thiết kế mới, giai đoạn b giữ đồ riêng.
+        tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
+        assert (tc / "nv1.png").exists() and (tc / "nv1b.png").exists()
+        assert man["characters"][1]["english_prompt"] == "a grey cat wearing a small red beret; outfit at this stage: boots"
+        assert man["characters"][0]["sheet_prompt"].endswith(" Style: 3D")
+        # Khối khoá trong cảnh đổi theo, và đã ghi ra đĩa.
+        assert "small red beret" in canh[0]["img_prompt"] and "feathered" not in canh[0]["img_prompt"]
+        with open(os.path.join(luot.thu_muc, "4-canh.json"), encoding="utf-8") as f:
+            assert "small red beret" in json.load(f)[0]["img_prompt"]
+        with open(os.path.join(luot.thu_muc, dd.TEP_DAN), encoding="utf-8") as f:
+            assert "beret" in json.load(f)["characters"][0]["english_prompt"]
+
+    def test_thiet_ke_lai_hong_thi_van_bao_thieu(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = json.loads(json.dumps(MAN))
+
+        def tao_anh(ma_id, prompt, dich):
+            raise RuntimeError("content_rejected")
+
+        thieu = dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh, goi_ai=lambda l: "không có json")
+        assert sorted(thieu) == ["loc1", "nv1", "nv2"]
+        assert any("KHÔNG tạo được" in d for d in bc._nhat_ky)

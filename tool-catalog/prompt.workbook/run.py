@@ -239,11 +239,18 @@ narrated video. Read the whole narration transcript below and decide:
    look at the START. Then `english_prompt` describes only face, body and
    fur/skin (no clothes) — every stage becomes its own reference image with the
    same face. Characters that never change have no `stages`.
+   ONE id = ONE individual, because each id becomes one reference portrait of
+   a single figure: two brothers are two ids (each with his own look); a crowd
+   (guards, villagers, courtiers) is ONE representative member, and the scene
+   prompt says how many of them appear. Never an id that means "the two…".
    Never copy the signature look of a famous copyrighted character (a cat in a
    feathered musketeer hat and tall boots, a mouse in red shorts, a blue
    hedgehog…): image generators reject it. Invent a fresh, simple look instead
    (a beret, a scarf, a small vest, plain boots) and keep it for the whole
-   video. Use FAMILY-FRIENDLY wording in every description — this is for
+   video. When the story itself hands a character a famous look, keep ONLY
+   the item the plot needs (the cat gets boots because it asks for boots) and
+   drop the copyrighted flourish (no feathered hat of any colour or shape on
+   that cat — a plain cap or nothing on the head). Use FAMILY-FRIENDLY wording in every description — this is for
    children and for image generators with strict safety filters: no weapons
    (guards carry ceremonial staffs, not halberds or swords), no "brutal",
    "hulking", "menacing", "ashen", "iron-studded"; a villain is "very big,

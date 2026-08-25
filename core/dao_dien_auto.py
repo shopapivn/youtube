@@ -39,6 +39,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .prompt_visuals import goc_cua_id
+
 __all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chieu",
            "duong_tham_chieu_canh", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
 
@@ -157,13 +159,21 @@ def _doc_dan(luot: Any) -> Dict[str, Any]:
 
 
 def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
-                   tao_anh: Optional[Callable[[str, str, str], None]] = None) -> List[str]:
+                   canh: Optional[List[Dict[str, Any]]] = None,
+                   tao_anh: Optional[Callable[[str, str, str], None]] = None,
+                   goi_ai: Optional[Callable[[str], str]] = None) -> List[str]:
     """Ảnh tham chiếu từng nhân vật / bối cảnh vào `<lượt>/tham-chieu/<id>.png`.
 
     Đã có thì bỏ qua (chạy tiếp không tốn tiền). Bị bộ lọc từ chối → viết lại
-    lời nhắc một lần (`core.viet_lai_prompt`) rồi thử lại; vẫn hỏng thì ghi rõ
-    và đi tiếp — trả về danh sách id còn thiếu để khâu báo cho khách.
-    `tao_anh(ma_id, prompt, dich)` chỉ để bài kiểm bơm hàm giả.
+    lời nhắc một lần (`core.viet_lai_prompt`) rồi thử lại; vẫn hỏng thì **nhờ
+    AI thiết kế lại nhân vật** (cùng vai, đổi món đồ đặc trưng — đúng như tab
+    Prompt Visuals), cập nhật khối khoá của mọi cảnh có nó (`canh`, sửa tại
+    chỗ và ghi lại `4-canh.json` + `4-canh-dan.json`), rồi tạo lại một lần
+    nữa. Vẫn hỏng thì ghi rõ và đi tiếp — trả về danh sách id còn thiếu.
+
+    Đo 25/08/2026 (story-3d/0001): AI dựng "mèo đội mũ phớt cắm lông + giày da"
+    → bộ lọc chặn vì giống Puss in Boots; chỉ đổi thiết kế mới qua.
+    `tao_anh(ma_id, prompt, dich)` và `goi_ai(loi_nhac)` chỉ để bài kiểm bơm giả.
     """
     man = man if man is not None else _doc_dan(luot)
     d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
@@ -189,7 +199,7 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
         return []
     bc.ghi("  tạo {0} ảnh tham chiếu: {1}".format(len(viec), ", ".join(v[0] for v in viec)))
     lam = tao_anh or _dung_tao_anh_that(bc, luot)
-    thieu: List[str] = []
+    thieu: List[Tuple[str, str]] = []
     khoa = threading.Lock()
 
     def mot(v: Tuple[str, str, str]) -> None:
@@ -198,14 +208,97 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
             lam(ma_id, prompt, dich)
             bc.ghi("    tham chiếu {0}: xong".format(ma_id))
         except Exception as loi:  # noqa: BLE001 — thiếu một tham chiếu không được giết cả lượt
-            bc.ghi("    tham chiếu {0}: KHÔNG tạo được ({1}) — các cảnh có {0} sẽ "
-                   "không có ảnh tham chiếu.".format(ma_id, str(loi)[:120]))
+            bc.ghi("    tham chiếu {0}: bị từ chối cả sau khi viết lại ({1}).".format(
+                ma_id, str(loi)[:120]))
             with khoa:
-                thieu.append(ma_id)
+                thieu.append((ma_id, str(loi)))
 
     with ThreadPoolExecutor(max_workers=SONG_SONG_THAM_CHIEU) as pool:
         list(pool.map(mot, viec))
-    return thieu
+    if not thieu:
+        return []
+    # ═══ TỪ CHỐI HAI LẦN → THIẾT KẾ LẠI NHÂN VẬT, RỒI TẠO LẠI ═══
+    con_thieu: List[str] = []
+    for ma_id, ly_do in thieu:
+        if os.path.exists(os.path.join(d, ma_id + ".png")):
+            continue  # giai đoạn khác cùng gốc vừa thiết kế lại → đã tạo lại cả cụm
+        if _thiet_ke_lai_va_tao_lai(bc, luot, man, canh, ma_id, ly_do, lam, goi_ai):
+            continue
+        con_thieu.append(ma_id)
+        bc.ghi("    tham chiếu {0}: KHÔNG tạo được — các cảnh có {0} sẽ không có "
+               "ảnh tham chiếu. Sửa mô tả trong 4-canh-dan.json rồi “Làm lại khâu này”."
+               .format(ma_id))
+    return con_thieu
+
+
+def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
+                             canh: Optional[List[Dict[str, Any]]], ma_id: str, ly_do: str,
+                             lam: Callable[[str, str, str], None],
+                             goi_ai: Optional[Callable[[str], str]]) -> bool:
+    """Nhờ AI thiết kế lại `ma_id` (chỉ nhân vật), cập nhật cảnh + dàn, tạo lại tham chiếu."""
+    from .prompt_visuals import DUOI_CHAN_DUNG, doi_thiet_ke_nhan_vat, loi_nhac_thiet_ke_lai  # noqa: PLC0415
+
+    dan = list(man.get("characters") or [])
+    nv = next((c for c in dan if str(c.get("id")) == ma_id), None)
+    if nv is None:
+        return False  # bối cảnh: không có "thiết kế lại", để khách sửa tay
+    if goi_ai is None:
+        goi_ai = _dung_goi_ai_that(bc)
+    bc.ghi("    tham chiếu {0}: nhờ AI thiết kế lại nhân vật (cùng vai, đổi món đồ đặc "
+           "trưng) rồi cập nhật mọi cảnh…".format(ma_id))
+    try:
+        from .goi_van_ban import loc_json  # noqa: PLC0415
+
+        tra = goi_ai(loi_nhac_thiet_ke_lai(nv, ly_do))
+        moi = str((loc_json(tra) or {}).get("english_prompt") or "").strip()
+        if len(moi) < 20:
+            raise ValueError("AI không trả mô tả mới")
+        # Phần đuôi phong cách của lời nhắc chân dung (sau DUOI_CHAN_DUNG) giữ nguyên.
+        duoi = ""
+        sheet = str(nv.get("sheet_prompt") or "")
+        if DUOI_CHAN_DUNG in sheet:
+            duoi = sheet.split(DUOI_CHAN_DUNG, 1)[1]
+        so_canh = doi_thiet_ke_nhan_vat(canh or [], dan, ma_id, moi, duoi_style=duoi)
+        man["characters"] = dan
+        _ghi_lai_canh_va_dan(luot, man, canh)
+        bc.ghi("    đã thiết kế lại {0} ({1} cảnh cập nhật): {2}…".format(ma_id, so_canh, moi[:90]))
+        # Tạo lại MỌI giai đoạn của nhân vật này: nv1 và nv1b cùng đổi mặt/thân.
+        goc = goc_cua_id(ma_id)
+        d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
+        for c in dan:
+            if goc_cua_id(str(c.get("id"))) != goc:
+                continue
+            dich = os.path.join(d, str(c["id"]) + ".png")
+            if os.path.exists(dich):
+                os.replace(dich, dich + ".cu")
+            lam(str(c["id"]), str(c.get("sheet_prompt") or c.get("english_prompt") or ""), dich)
+            bc.ghi("    tham chiếu {0}: xong (thiết kế mới)".format(c["id"]))
+        return True
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("    tham chiếu {0}: thiết kế lại không được ({1}).".format(ma_id, str(loi)[:120]))
+        return False
+
+
+def _ghi_lai_canh_va_dan(luot: Any, man: Dict[str, Any], canh: Optional[List[Dict[str, Any]]]) -> None:
+    d = luot.thu_muc
+    with open(os.path.join(d, TEP_DAN), "w", encoding="utf-8") as f:
+        json.dump({kh: man.get(kh) for kh in ("characters", "locations", "director_plan", "story", "settings")},
+                  f, ensure_ascii=False, indent=1)
+    if canh is not None:
+        tam = os.path.join(d, "4-canh.json.tam")
+        with open(tam, "w", encoding="utf-8") as f:
+            json.dump(canh, f, ensure_ascii=False, indent=1)
+        os.replace(tam, os.path.join(d, "4-canh.json"))
+
+
+def _dung_goi_ai_that(bc: Any) -> Callable[[str], str]:
+    from .goi_van_ban import goi_van_ban  # noqa: PLC0415
+
+    def goi_ai(loi_nhac: str) -> str:
+        return goi_van_ban(bc.client, [{"role": "user", "content": loi_nhac}],
+                           mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"), toi_da_token=2048)
+
+    return goi_ai
 
 
 class _HopRong:

@@ -2625,7 +2625,9 @@ def _khau_bang_canh(bc: BoiCanh):
             if not canh:
                 canh, man = chay_dao_dien(bc, luot)
                 _ghi_chu(goi_json, json.dumps(canh, ensure_ascii=False, indent=1))
-            thieu = tao_tham_chieu(bc, luot, man)
+            thieu = tao_tham_chieu(bc, luot, man, canh=canh)
+            # Thiết kế lại nhân vật có thể đã sửa khối khoá trong `canh`.
+            _ghi_chu(goi_json, json.dumps(canh, ensure_ascii=False, indent=1))
             if thieu:
                 bc.ghi("  [CHÚ Ý] thiếu ảnh tham chiếu: {0} — cảnh có chúng sẽ "
                        "mỗi cảnh một kiểu. Sửa mô tả trong 4-canh-dan.json rồi "
