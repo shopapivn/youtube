@@ -177,8 +177,13 @@ The last beat of the act closes it on the motif.
 
 #: Prompt chan dung tham chieu (ViMax): full-body, nhin thang, nen trang, canh
 #: 16:9 — khung hinh nay lam anh tham chieu cho MOI canh co nhan vat ay.
-_DUOI_CHAN_DUNG = (" — full-body front-view reference portrait, standing, arms "
-                   "relaxed at sides, neutral expression, gazing straight ahead, "
+#: "ONE figure only": do 25/08/2026 (Meo di hia 3D) — mo ta cau ut co "later
+#: transform into fine marquis attire" nen anh tham chieu ve HAI ban cau ut
+#: dung canh nhau, va moi canh sau chep luon bo cuc hai nguoi.
+_DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single figure "
+                   "shown once (never two versions or a before/after side by side), "
+                   "wearing the outfit of its FIRST appearance in the story, standing, "
+                   "arms relaxed at sides, neutral expression, gazing straight ahead, "
                    "centered on a plain pure white background, 16:9 canvas, no "
                    "text, no letters, no watermark")
 _DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, "
@@ -227,7 +232,9 @@ narrated video. Read the whole narration transcript below and decide:
    fixed English appearance description (`english_prompt`) that every scene
    will reuse verbatim so the character never drifts, and make the characters
    clearly DISTINCT from each other (build, age, clothing colour, one signature
-   prop). {fixed_rule}
+   prop). If a character changes outfit during the story, `english_prompt`
+   describes ONLY the first outfit; put the later outfit in `notes` — the
+   scene descriptions will state the change where it happens. {fixed_rule}
    Only a pure landscape/abstract video has an empty `characters` list — do NOT
    invent a person there, and do NOT drop a character the story uses.
 2. The LOCATIONS — every distinct place the story visits: a cottage, a river

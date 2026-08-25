@@ -40,7 +40,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.anh_len import link_dung_lai_duoc, tai_len
-from core.jobs import STATUS_DONE, JobSpec
+from core.jobs import STATUS_CANCELLED, STATUS_DONE, STATUS_FAILED, JobSpec
 from core.money import format_vnd
 from core.pricing import KIND_IMAGE, KIND_VIDEO, hold_for_image, hold_for_video
 from core.prompt_visuals import (
@@ -112,8 +112,14 @@ class TrangPromptVisuals(QWidget):
         self._thu_cho_noi: Dict[int, Tuple[str, str]] = {}
         #: Ảnh khách tải lên đi kèm phong cách đang chọn (khi AI xây từ ảnh).
         self._anh_mau_chon: List[str] = []
-        #: Ảnh tham chiếu đang tạo: khoá việc → (id nhân vật/bối cảnh, Excel).
-        self._tc_dang_cho: Dict[str, Tuple[str, str]] = {}
+        #: Ảnh tham chiếu đang tạo: khoá việc → (id nhân vật/bối cảnh, Excel, prompt).
+        self._tc_dang_cho: Dict[str, Tuple[str, str, str]] = {}
+        #: Id đã được thử lại một lần sau khi bị từ chối — không thử vô hạn.
+        self._tc_da_thu_lai: set = set()
+        #: Id KHÔNG tạo được (bị từ chối cả hai lần) — nói thật với khách thay vì
+        #: báo "đủ". Đo 25/08/2026: mèo đi hia 3D bị bộ lọc nhà cung cấp chặn 15
+        #: cách viết liên tiếp; bản cũ im lặng, khách sẽ chạy cả phim thiếu mèo.
+        self._tc_thieu: List[str] = []
 
         # ═══ MÀN HÌNH ĐẦU CHỈ CÓ BA THẺ ═══
         #
@@ -1268,8 +1274,11 @@ class TrangPromptVisuals(QWidget):
             return
         if khoa in self._tc_dang_cho:
             self._thu_vien.cap_nhat(du_lieu)
-            if str(getattr(du_lieu, "status", "")) == STATUS_DONE:
+            trang_thai = str(getattr(du_lieu, "status", ""))
+            if trang_thai == STATUS_DONE:
                 self._nhan_anh_tham_chieu(khoa, du_lieu)
+            elif trang_thai in (STATUS_FAILED, STATUS_CANCELLED):
+                self._tham_chieu_hong(khoa, du_lieu)
             return
         if khoa in self._thu_dong_anh:
             self._thu_vien.cap_nhat(du_lieu)
@@ -1933,7 +1942,8 @@ class TrangPromptVisuals(QWidget):
             ra.append((str(c["id"]), str(c["sheet_prompt"])))
         return ra
 
-    def _tao_anh_tham_chieu(self, duong_xlsx: str, ds: List[Tuple[str, str]]) -> None:
+    def _tao_anh_tham_chieu(self, duong_xlsx: str, ds: List[Tuple[str, str]],
+                            thu_lai: bool = False) -> None:
         """LUỒNG GIAO DIỆN: gửi việc ảnh cho từng id, ghi sổ để nhận về."""
         if self._app.client is None:
             self._ghi("Không tạo được ảnh tham chiếu: chưa đăng nhập ShopAPI.")
@@ -1951,23 +1961,61 @@ class TrangPromptVisuals(QWidget):
                 index=so, params={"n": 1, "aspect_ratio": "16:9"},
                 out_dir=thu_muc,
                 estimate_micro=hold_for_image(1, self._app.prices))
-            self._tc_dang_cho[spec.idempotency_key] = (ma_id, duong_xlsx)
+            self._tc_dang_cho[spec.idempotency_key] = (ma_id, duong_xlsx, prompt)
             self._thu_vien.them(spec.idempotency_key, "Tham chiếu {0}: {1}".format(
                 ma_id, prompt), False, ty_le="16:9")
             specs.append(spec)
         if not specs:
             return
-        self._ghi("Đang tạo {0} ảnh tham chiếu ({1}) — xong tấm nào ghi vào "
-                  "Excel tấm đó.".format(len(specs), ", ".join(i for i, _p in ds)))
+        if not thu_lai:
+            self._ghi("Đang tạo {0} ảnh tham chiếu ({1}) — xong tấm nào ghi vào "
+                      "Excel tấm đó.".format(len(specs), ", ".join(i for i, _p in ds)))
         self._app.start_batch(specs, folder=thu_muc)
+
+    def _tham_chieu_hong(self, khoa: str, du_lieu) -> None:
+        """Ảnh tham chiếu bị từ chối/hỏng: thử lại MỘT lần, rồi nói thật.
+
+        Bộ lọc của nhà cung cấp ảnh từ chối ngẫu nhiên (đo 25/08/2026: cùng
+        một prompt, lần qua lần không); thử lại một lần cứu được ~1/3. Hỏng
+        lần hai thì ghi rõ id nào thiếu và khách phải làm gì — không được để
+        khách chạy cả phim mà không có nhân vật ấy.
+        """
+        ma_id, duong_xlsx, prompt = self._tc_dang_cho.pop(khoa)
+        ly_do = str(getattr(du_lieu, "message", "") or "").strip()
+        if ma_id not in self._tc_da_thu_lai:
+            self._tc_da_thu_lai.add(ma_id)
+            self._ghi("Ảnh tham chiếu {0} bị từ chối ({1}) — thử lại một lần…".format(
+                ma_id, ly_do[:90] or "máy chủ không nói lý do"))
+            self._tao_anh_tham_chieu(duong_xlsx, [(ma_id, prompt)], thu_lai=True)
+            return
+        self._tc_thieu.append(ma_id)
+        self._ghi("Ảnh tham chiếu {0} KHÔNG tạo được sau hai lần: {1}. Bạn mở Bước 4 → "
+                  "“Nhân vật & bối cảnh”, sửa mô tả của {0} (bớt chi tiết nhạy cảm, tránh "
+                  "giống nhân vật có bản quyền) rồi bấm “Tạo prompt” lại; hoặc tự chọn một "
+                  "ảnh làm tham chiếu ở tab Ảnh & Video → Hàng loạt.".format(
+                      ma_id, ly_do[:160] or "máy chủ không nói lý do"))
+        self._bao_du_tham_chieu()
+
+    def _bao_du_tham_chieu(self) -> None:
+        if self._tc_dang_cho:
+            return
+        if self._tc_thieu:
+            self._ghi("CHƯA ĐỦ ảnh tham chiếu — còn thiếu: {0}. Chạy phim lúc này thì các "
+                      "cảnh có {0} sẽ mỗi cảnh một kiểu.".format(", ".join(self._tc_thieu)))
+            return
+        self._ghi("Đủ ảnh tham chiếu. Excel đã trỏ tới ảnh thật — sang tab Ảnh & "
+                  "Video → Hàng loạt là nhân vật/bối cảnh giữ nguyên cả phim.")
 
     def _nhan_anh_tham_chieu(self, khoa: str, du_lieu) -> None:
         """Một ảnh tham chiếu xong → chép thành `<id>.png` cạnh Excel + ghi đường."""
         import shutil  # noqa: PLC0415
 
-        ma_id, duong_xlsx = self._tc_dang_cho.pop(khoa)
+        ma_id, duong_xlsx, _prompt = self._tc_dang_cho.pop(khoa)
         files = list(getattr(du_lieu, "files", ()) or ())
         if not files:
+            self._tc_thieu.append(ma_id)
+            self._ghi("Ảnh tham chiếu {0}: máy chủ báo xong nhưng không có tệp.".format(ma_id))
+            self._bao_du_tham_chieu()
             return
         dich = os.path.join(os.path.dirname(duong_xlsx), "{0}.png".format(ma_id))
         try:
@@ -1978,9 +2026,7 @@ class TrangPromptVisuals(QWidget):
         loi = self._ghi_duong_tham_chieu(duong_xlsx, {"{0}.png".format(ma_id): dich})
         self._ghi("Ảnh tham chiếu {0} xong{1}.".format(
             ma_id, " — lỗi ghi Excel: " + loi if loi else ", đã gắn vào các cảnh dùng nó"))
-        if not self._tc_dang_cho:
-            self._ghi("Đủ ảnh tham chiếu. Excel đã trỏ tới ảnh thật — sang tab Ảnh & "
-                      "Video → Hàng loạt là nhân vật/bối cảnh giữ nguyên cả phim.")
+        self._bao_du_tham_chieu()
 
     def _dung(self) -> None:
         if self._huy is not None:
