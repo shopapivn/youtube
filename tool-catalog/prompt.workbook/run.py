@@ -239,6 +239,12 @@ narrated video. Read the whole narration transcript below and decide:
    look at the START. Then `english_prompt` describes only face, body and
    fur/skin (no clothes) — every stage becomes its own reference image with the
    same face. Characters that never change have no `stages`.
+   Describe what image generators get wrong by default, in POSITIVE words:
+   for an animal, the exact fur pattern ("solid plain golden-yellow fur without
+   any stripes", not just "yellow cat"), "bare paws" when it wears no shoes,
+   and the exact colour of each garment ("plain brown vest") — otherwise the
+   scene's accent colour recolours the vest and the model adds stripes, boots
+   or a bag from its habits.
    ONE id = ONE individual, because each id becomes one reference portrait of
    a single figure: two brothers are two ids (each with his own look); a crowd
    (guards, villagers, courtiers) is ONE representative member, and the scene
