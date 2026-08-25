@@ -1337,8 +1337,41 @@ TOI_DA_NV_THAM_CHIEU = 2
 
 _KHOA_BOI_CANH = ("The place must match its reference image (same architecture, "
                   "furniture and layout); only framing and lighting change.")
-_KHOA_VIDEO = (" Keep every character exactly as drawn in the first frame — same face, "
-               "outfit, proportions and line style — for the whole clip.")
+#: Khoa cho loi nhac VIDEO — dat o DAU, khong phai cuoi. Do 25/08/2026 (12 clip
+#: Veo 3, AI cham khung cuoi duoc dung): cau khoa o cuoi → 3,00; khoa o dau kem
+#: mo ta tung nhan vat + "khong them, khong bot" → 3,50. Veo nang phan dau.
+_KHOA_VIDEO_DAU = ("IDENTITY LOCK, highest priority for the entire clip: every character keeps "
+                   "the same face, body proportions, outfit and line style as in the first "
+                   "frame; {dan}. Only pose, gesture, expression and camera move. ")
+_KHOA_VIDEO_NV = ("{id} ({vai}) stays exactly as drawn in the first frame — {mo_ta} — nothing "
+                  "added (no extra clothes, cape, jacket, belt, strap, collar, weapon, fur "
+                  "texture or stripes) and nothing removed (hat, boots, bag and every outfit "
+                  "item stay on)")
+_KHOA_VIDEO_CU = (" Keep every character exactly as drawn in the first frame — same face, "
+                  "outfit, proportions and line style — for the whole clip.")
+
+
+def _mo_ta_ngan(c: Mapping[str, Any]) -> str:
+    """Mo ta ngoai hinh, bo duoi phong cach ('black pencil…') cho gon."""
+    chu = str(c.get("english_prompt") or "")
+    for moc in (", black pencil", ", pure black", ", Simple hand-drawn", ", simple hand-drawn"):
+        if moc in chu:
+            chu = chu.split(moc)[0]
+    return chu.strip()
+
+
+def _khoa_video(vid: str, ids, dan: Mapping[str, Any]) -> str:
+    """Dat khoi khoa nhan dang vao DAU loi nhac video (bo cau khoa cu o cuoi neu co)."""
+    goc = str(vid or "").replace(_KHOA_VIDEO_CU, "").strip()
+    if not goc or goc.startswith("IDENTITY LOCK"):
+        return goc
+    nv = [i for i in ids if i in dan]
+    if not nv:
+        return goc
+    phan = "; ".join(_KHOA_VIDEO_NV.format(
+        id=i, vai=dan[i].get("role") or dan[i].get("name") or "character",
+        mo_ta=_mo_ta_ngan(dan[i])) for i in nv)
+    return _KHOA_VIDEO_DAU.format(dan=phan) + goc
 
 
 def _mo_ta_tham_chieu(i: str, dan: Mapping[str, Any], noi: Mapping[str, Any]) -> str:
@@ -1382,9 +1415,7 @@ def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
         if any(i in noi for i in ids):
             dong.append(_KHOA_BOI_CANH)
         s["img_prompt"] = chu + "\n".join(dong)
-        vid = str(s.get("video_prompt") or "")
-        if vid and any(i in dan for i in ids) and "first frame" not in vid:
-            s["video_prompt"] = vid.rstrip() + _KHOA_VIDEO
+        s["video_prompt"] = _khoa_video(s.get("video_prompt"), ids, dan)
 
 
 def _bo_enrich(goi) -> Callable:

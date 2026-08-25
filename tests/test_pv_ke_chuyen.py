@@ -419,7 +419,9 @@ def test_khoa_nhan_dang_noi_ten_voi_anh_tham_chieu(wb):
     assert "reference image 2 = loc9" in p
     assert "nv4 [reference image 1]" in p and "(see reference image 1)" in p
     assert "look EXACTLY like its reference image" in p
-    assert sc[0]["video_prompt"].endswith("for the whole clip.")
+    assert sc[0]["video_prompt"].startswith("IDENTITY LOCK")
+    assert "nv4 (the cat) stays exactly as drawn in the first frame — small cat in a plumed hat and boots" in sc[0]["video_prompt"]
+    assert sc[0]["video_prompt"].endswith("The cat steps forward.")
     # Cảnh không có tham chiếu thì để nguyên.
     assert sc[1]["img_prompt"] == "Empty road" and sc[1]["video_prompt"] == "wind"
     # Gọi lần hai không chồng khối.
