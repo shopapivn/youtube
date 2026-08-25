@@ -232,9 +232,13 @@ narrated video. Read the whole narration transcript below and decide:
    fixed English appearance description (`english_prompt`) that every scene
    will reuse verbatim so the character never drifts, and make the characters
    clearly DISTINCT from each other (build, age, clothing colour, one signature
-   prop). If a character changes outfit during the story, `english_prompt`
-   describes ONLY the first outfit; put the later outfit in `notes` — the
-   scene descriptions will state the change where it happens. {fixed_rule}
+   prop). If a character's LOOK CHANGES during the story (a cat is given a hat
+   and boots, a peasant puts on royal clothes, a king loses his crown), give
+   `stages` — a list in story order, each `{{"when": "<the story moment>",
+   "outfit": "<clothes and props at that stage>"}}`; the first stage is the
+   look at the START. Then `english_prompt` describes only face, body and
+   fur/skin (no clothes) — every stage becomes its own reference image with the
+   same face. Characters that never change have no `stages`. {fixed_rule}
    Only a pure landscape/abstract video has an empty `characters` list — do NOT
    invent a person there, and do NOT drop a character the story uses.
 2. The LOCATIONS — every distinct place the story visits: a cottage, a river
@@ -265,7 +269,9 @@ these lists that is missing from your answer will be treated as an error.
    {{"id": "{nv_dau}", "role": "...", "name": "...",
     "english_prompt": "<fixed appearance, no scene-specific pose>",
     "reference_lock": "<short identity anchor>",
-    "gender": "", "age": "", "notes": ""}}
+    "gender": "", "age": "", "notes": "",
+    "stages": [{{"when": "at the start", "outfit": "..."}},
+               {{"when": "after ...", "outfit": "..."}}]}}
  ],
  "locations": [
    {{"id": "loc1", "name": "...", "english_prompt": "<fixed look of the place>",
@@ -1207,6 +1213,35 @@ def _dung_dan_cast(goi, cues, context, co_san) -> Mapping[str, Any]:
     return loc_json(goi(loi_nhac, "cast"))
 
 
+#: Nhan vat DOI TRANG PHUC giua truyen → moi giai doan mot anh tham chieu rieng.
+#:
+#: Chu du an 25/08/2026 xem video: *"luc dau con meo chua he co mu, giay, mai
+#: sau doan no noi chuyen voi chu no moi duoc cap… doan cuoi cau ut va cong
+#: chua lai khac… voi mot cau chuyen thi nen co DU tham chieu va cac prompt
+#: phai dung DUNG"*. Mot anh tham chieu cho "meo di hia" khong the vua la meo
+#: tran vua la meo mang ung; ep khoa theo mot anh thi nua dau phim sai, khong
+#: khoa thi nua sau phim troi. Tach thanh nv4 (truoc) va nv4b (sau): cung mat,
+#: khac do; canh nao dung id cua giai doan do.
+def _tach_giai_doan(goc: Dict[str, Any], stages) -> List[Dict[str, Any]]:
+    ds = [s for s in (stages or []) if isinstance(s, Mapping) and str(s.get("outfit") or "").strip()]
+    if len(ds) < 2:
+        return [goc]
+    ra = []
+    for k, st in enumerate(ds):
+        c = dict(goc)
+        c["id"] = goc["id"] if k == 0 else "{0}{1}".format(goc["id"], chr(ord("a") + k))
+        c["english_prompt"] = "{0}; outfit at this stage: {1}".format(
+            goc["english_prompt"].rstrip(" ;."), str(st["outfit"]).strip())
+        c["giai_doan"] = k + 1
+        c["giai_doan_khi"] = str(st.get("when") or "").strip()
+        c["goc_id"] = goc["id"]
+        c["notes"] = "{0}Stage {1}/{2} of {3} — {4}.".format(
+            (goc["notes"] + " ") if goc["notes"] else "", k + 1, len(ds), goc["id"],
+            c["giai_doan_khi"] or "unspecified moment")
+        ra.append(c)
+    return ra
+
+
 def _sach_cast(raw, nv_dau: int = 1) -> Dict[str, Any]:
     """Chuan hoa dan cast + boi canh: bo dong thieu mo ta, danh id neu AI bo trong."""
     if not isinstance(raw, Mapping):
@@ -1220,12 +1255,13 @@ def _sach_cast(raw, nv_dau: int = 1) -> Dict[str, Any]:
         if not english:
             continue  # khong co mo ta ngoai hinh thi khong khoa duoc, bo qua
         cid = str(item.get("id") or "").strip() or "nv{0}".format(thu_tu)
-        ra.append({"id": cid, "role": str(item.get("role") or ""),
-                   "name": str(item.get("name") or ""), "english_prompt": english,
-                   "reference_lock": str(item.get("reference_lock") or ""),
-                   "gender": str(item.get("gender") or ""),
-                   "age": str(item.get("age") or ""),
-                   "notes": str(item.get("notes") or "")})
+        goc = {"id": cid, "role": str(item.get("role") or ""),
+               "name": str(item.get("name") or ""), "english_prompt": english,
+               "reference_lock": str(item.get("reference_lock") or ""),
+               "gender": str(item.get("gender") or ""),
+               "age": str(item.get("age") or ""),
+               "notes": str(item.get("notes") or "")}
+        ra.extend(_tach_giai_doan(goc, item.get("stages")))
     boi_canh: List[Dict[str, Any]] = []
     for thu_tu, item in enumerate(raw.get("locations") or [], 1):
         if not isinstance(item, Mapping):
@@ -1261,6 +1297,12 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
                     "figures, props and settings stay simple and in the SAME "
                     "style. The video prompt must never change a character — "
                     "only its expression and action:")
+        co_giai_doan = any(c.get("giai_doan") for c in chars)
+        if co_giai_doan:
+            dong.append("Some characters CHANGE LOOK during the story and therefore have "
+                        "one id PER STAGE (nv4 = before, nv4b = after…). In each scene "
+                        "use the id of the stage that matches that moment of the story — "
+                        "never the other one, never both.")
         for c in chars:
             nhan = c.get("role") or c.get("name") or "character"
             if c.get("co_dinh"):
@@ -1268,6 +1310,10 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
                             "generation time. Refer to it ONLY as `nv1 (nv1.png)`; "
                             "NEVER describe its face, hair, skin, clothes or colours "
                             "— only pose, gesture, expression.".format(c["id"], nhan))
+            elif c.get("giai_doan"):
+                dong.append("- {0} ({1}, STAGE {2}: {3}): {4}".format(
+                    c["id"], nhan, c["giai_doan"], c.get("giai_doan_khi") or "?",
+                    c["english_prompt"]))
             else:
                 dong.append("- {0} ({1}): {2}".format(c["id"], nhan, c["english_prompt"]))
     if locs:

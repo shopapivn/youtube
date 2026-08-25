@@ -442,3 +442,43 @@ def test_khoa_cho_phep_doi_trang_phuc_khi_canh_noi_ro(wb):
     from core.chia_canh import KHUON_MAC_DINH
     assert "not yet wearing" in KHUON_MAC_DINH
     assert "not yet wearing" in wb._KHOA_NHAN_VAT and "everything not mentioned" in wb._KHOA_NHAN_VAT
+
+
+# ── Nhân vật đổi trang phục giữa truyện: mỗi giai đoạn một tham chiếu ───────
+
+def _cast_meo_hai_giai_doan(_c, _x):
+    return {"style": {}, "characters": [
+        {"id": "nv1", "role": "hero", "english_prompt": "a slim young man"},
+        {"id": "nv2", "role": "the cat", "english_prompt": "a chubby orange cat, big green eyes",
+         "stages": [{"when": "at the start", "outfit": "no clothes"},
+                    {"when": "after the hero gives it a hat and boots", "outfit": "red beret, green vest, small brown boots"}]}],
+        "locations": []}
+
+
+def test_tach_giai_doan_thanh_id_rieng_cung_mat(wb):
+    cast = wb._sach_cast(_cast_meo_hai_giai_doan(None, None))
+    ids = [c["id"] for c in cast["characters"]]
+    assert ids == ["nv1", "nv2", "nv2b"]
+    a, b = cast["characters"][1], cast["characters"][2]
+    assert a["english_prompt"].startswith("a chubby orange cat, big green eyes") and "no clothes" in a["english_prompt"]
+    assert "red beret" in b["english_prompt"] and b["goc_id"] == "nv2" and b["giai_doan"] == 2
+    assert "Stage 2/2 of nv2" in b["notes"]
+    khoi = wb._khoi_cast_style(cast)
+    assert "one id PER STAGE" in khoi and "nv2b (the cat, STAGE 2: after the hero gives it a hat and boots)" in khoi
+
+
+def test_canh_dung_id_giai_doan_thi_tham_chieu_va_khoa_theo_giai_doan(wb, yeu_cau):
+    def chia(khuc, _t, _n):
+        c = canh_ai(khuc[0]["index"], khuc[-1]["index"])
+        c["characters_used"] = "nv2b"
+        c["img_prompt"] = "Wide shot of nv2b (nv2b) walking, pencil"
+        return [c]
+
+    yeu_cau["config"]["che_do_ke"] = "tu_xay"
+    ra = wb.handle(yeu_cau, cast_fn=_cast_meo_hai_giai_doan, chia_fn=chia)
+    m = ra["scenes"]["json"]
+    assert [c["id"] for c in m["characters"]] == ["nv1", "nv2", "nv2b"]
+    assert all(c.get("sheet_prompt") for c in m["characters"]), "mỗi giai đoạn phải có prompt ảnh tham chiếu riêng"
+    s = m["scenes"][0]
+    assert json.loads(s["reference_files"]) == ["nv2b.png"]
+    assert "reference image 1 = nv2b" in s["img_prompt"] and "red beret" in s["img_prompt"]
