@@ -133,6 +133,11 @@ class Kenh:
     #: "nhan_vat_va_boi_canh" = như tu_xay nhưng giữ `nv1.png` của kênh làm
     #: nhân vật chính. Kênh không khai khoá này đi đúng đường cũ.
     che_do_ke: str = ""
+    #: ĐỘ DÀI TỰ DO: không nhắm phút, không nắn, không chấm độ dài — bài dài
+    #: ngắn theo câu chuyện. Chủ dự án 25/08/2026 cho kênh truyện cổ tích:
+    #: *"không cần giới hạn thời gian hay ký tự ở prompt"*. Chỉ còn một sàn
+    #: tuyệt đối chống bản rỗng / AI hỏi lại (`SAN_KICH_BAN_TU_DO`).
+    do_dai_tu_do: bool = False
     #: Sau khi chấm chọn bản, HOÀN THIỆN chính bản đó theo nhận xét của bộ
     #: chấm: sửa điểm yếu, phát huy điểm mạnh, làm mượt (`prompt/2c-hoan-thien.md`,
     #: hai lượt gọi nữa: hoàn thiện + chấm so lại). Chủ dự án, 25/08/2026:
@@ -376,6 +381,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
+        do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),

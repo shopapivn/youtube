@@ -21,6 +21,9 @@ ky_tu_moi_phut: 832
 chu_bia_hoa: true
 voice_id: "f5q6kePPoQAjCPYG6moa"
 phut_muc_tieu: 8
+# Độ dài TỰ DO: không nhắm phút, không nắn, không chấm độ dài — truyện dài
+# ngắn theo câu chuyện (chủ dự án 25/08/2026). `phut_muc_tieu` ở trên không dùng.
+do_dai_tu_do: true
 engine: "veo3"
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"

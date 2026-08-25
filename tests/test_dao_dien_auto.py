@@ -399,3 +399,24 @@ class TestSoiChanDung:
         assert cham_goi == ["the king", "the king"]
         tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
         assert (tc / "nv5.png").exists() and not (tc / "nv5.png.lan2.png").exists()
+
+
+class TestKhoaLanChay:
+    def test_run_id_doi_khi_phu_de_doi(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        nhan = []
+
+        def handle(req):
+            nhan.append(req["run_id"])
+            return {"scenes": {"json": MAN}}
+
+        dd.chay_dao_dien(bc, luot, handle=handle)
+        (tmp_path / "0001" / "3-phu-de.srt").write_text("1\n00:00:00,000 --> 00:00:02,000\nkhac\n", encoding="utf-8")
+        dd.chay_dao_dien(bc, luot, handle=handle)
+        assert nhan[0].startswith("story-3d-0001-") and nhan[0] != nhan[1]
+
+    def test_khong_dan_nhan_vat_thi_nem(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = {"scenes": MAN["scenes"], "characters": [], "locations": []}
+        with pytest.raises(RuntimeError, match="dàn nhân vật"):
+            dd.chay_dao_dien(bc, luot, handle=lambda r: {"scenes": {"json": man}})

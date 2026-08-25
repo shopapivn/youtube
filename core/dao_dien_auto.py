@@ -118,8 +118,19 @@ def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
     ctx = os.path.join(d, "4-boi-canh.json")
     with open(ctx, "w", encoding="utf-8") as f:
         json.dump(boi_canh, f, ensure_ascii=False, indent=1)
+    # ═══ KHOÁ IDEMPOTENCY PHẢI ĐỔI KHI NỘI DUNG ĐỔI ═══
+    #
+    # run.py khoá mỗi lượt gọi AI bằng `run_id:node_id:bước`. Không đặt run_id
+    # thì mọi lượt (kể cả sau khi luật tuyển vai đã sửa) dùng chung khoá
+    # "run:workbook" → máy chủ trả "Idempotency-Key đã dùng cho nội dung khác"
+    # và run.py lặng lẽ rơi về "không dàn nhân vật, cắt theo dòng" (đo
+    # 25/08/2026 21:24: 100 cảnh, 0 nhân vật). Khoá phải là băm của phụ đề +
+    # bối cảnh + chính các khuôn lời nhắc: đổi luật là khoá mới; y nguyên thì
+    # nhặt lại kết quả cũ, không tốn thêm.
     request = {
         "inputs": {"subtitles": {"path": srt}, "context": {"path": ctx}},
+        "run_id": _ma_lan_chay(k.ma, luot.ma_luot, srt, ctx, handle is None and _nap_run(bc.goc) or None),
+        "node_id": "auto",
         "config": {"engine": str(k.engine or "veo3"), "model": str(k.mo_hinh or "claude-sonnet-5"),
                    "che_do_ke": che_do, "nhat_quan_nhan_vat": True,
                    # Tab Tự động có khâu ảnh bìa và nhạc riêng — đừng tốn hai lượt nữa.
@@ -142,12 +153,40 @@ def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
     canh = list(man.get("scenes") or [])
     if not canh:
         raise RuntimeError("đạo diễn không trả về cảnh nào")
+    if not man.get("characters"):
+        # run.py có đường lui "không dàn, mọi cảnh tự do" cho tab Prompt Visuals;
+        # ở tab Tự động thì đó là video hỏng chắc chắn (mỗi cảnh một kiểu) — dừng
+        # để khâu thử lại, đừng đem đi tạo 123 ảnh.
+        raise RuntimeError("đạo diễn không dựng được dàn nhân vật — xem dòng 'đạo diễn:' phía trên; "
+                           "thường là máy chủ từ chối khoá trùng hoặc AI trả JSON hỏng")
     with open(os.path.join(d, TEP_DAN), "w", encoding="utf-8") as f:
         json.dump({kh: man.get(kh) for kh in ("characters", "locations", "director_plan", "story", "settings")},
                   f, ensure_ascii=False, indent=1)
     bc.ghi("  đạo diễn xong: {0} cảnh, {1} nhân vật, {2} bối cảnh.".format(
         len(canh), len(man.get("characters") or []), len(man.get("locations") or [])))
     return canh, man
+
+
+def _ma_lan_chay(ma_kenh: str, ma_luot: str, srt: str, ctx: str, mod: Any = None) -> str:
+    """`run_id` cho run.py: băm phụ đề + bối cảnh + các khuôn lời nhắc đang dùng."""
+    import hashlib  # noqa: PLC0415
+
+    h = hashlib.sha1()
+    for duong in (srt, ctx):
+        try:
+            with open(duong, "rb") as f:
+                h.update(f.read())
+        except OSError:
+            pass
+    for ten in ("_KHUON_CAST", "_KHUON_KE_HOACH", "_KHUON_BO_SUNG", "_KHUON_PHIM", "_KHUON_PHA_LAP"):
+        h.update(str(getattr(mod, ten, "") if mod is not None else "").encode("utf-8"))
+    try:
+        from .chia_canh import KHUON_MAC_DINH  # noqa: PLC0415
+
+        h.update(str(KHUON_MAC_DINH).encode("utf-8"))
+    except Exception:  # noqa: BLE001
+        pass
+    return "{0}-{1}-{2}".format(ma_kenh, ma_luot, h.hexdigest()[:10])
 
 
 def _doc_dan(luot: Any) -> Dict[str, Any]:

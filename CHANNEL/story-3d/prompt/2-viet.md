@@ -1,4 +1,4 @@
-Dưới đây là bản kể của một truyện cổ tích (video đối thủ đã có nhiều người xem). Hãy VIẾT LẠI thành một bản kể mới bằng <<NGON_NGU>>, dài khoảng <<PHUT>> phút đọc — tức khoảng <<CHARS>> ký tự — cho TRẺ EM 4–10 tuổi nghe (trước giờ ngủ, hoặc cùng cha mẹ).
+Dưới đây là bản kể của một truyện cổ tích (video đối thủ đã có nhiều người xem). Hãy VIẾT LẠI thành một bản kể mới bằng <<NGON_NGU>> — dài ngắn theo chính câu chuyện, KHÔNG giới hạn phút hay ký tự, kể đủ mọi chặng của truyện gốc, không kéo dài lê thê — cho TRẺ EM 4–10 tuổi nghe (trước giờ ngủ, hoặc cùng cha mẹ).
 Tiêu đề video: <<TITLE>>
 Giọng kể của kênh: <<LANGUAGE>>
 

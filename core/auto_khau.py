@@ -632,6 +632,8 @@ def _muc_tieu_do_dai(k: "Kenh", tu_lieu: str, giay_goc: int) -> int:
     thì về mốc phút cho an toàn — lấy 0 làm mục tiêu sẽ tắt luôn sàn chống "kịch
     bản quá ngắn" trong `_kiem_kich_ban_dung_duoc`.
     """
+    if getattr(k, "do_dai_tu_do", False):
+        return 0  # độ dài tự do: không mục tiêu, không nắn, không chấm lệch
     if not (k.do_dai_theo_goc and tu_lieu):
         return k.ky_tu_muc_tieu
     if giay_goc > 0 and k.ky_tu_moi_phut > 0:
@@ -1792,14 +1794,16 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # `LANGUAGE` ở trên là mô tả giọng văn (tiếng Anh) của kênh.
             "NGON_NGU": ten_tieng(k.ngon_ngu) or (k.ngon_ngu or ""),
             "CHANNEL": _mo_ta_kenh(k),
-            "CHARS": muc_tieu_kt,
+            "CHARS": (muc_tieu_kt if muc_tieu_kt > 0
+                      else "không giới hạn — dài ngắn theo câu chuyện"),
             # ═══ MỘT THƯỚC: PHÚT ĐỌC ═══
             #
             # Chủ dự án, 25/08/2026: *"lúc thì đo bằng độ dài ký tự lúc thì
             # phút"*. Mục tiêu là PHÚT; ký tự chỉ là quy đổi theo giọng đọc
             # của kênh (`ky_tu_moi_phut`). Lời nhắc và bộ chấm nói cả hai,
             # phút trước, ký tự sau trong ngoặc.
-            "PHUT": _phut(muc_tieu_kt, k.ky_tu_moi_phut),
+            "PHUT": (_phut(muc_tieu_kt, k.ky_tu_moi_phut) if muc_tieu_kt > 0
+                     else "tự do (không giới hạn)"),
             "PHUT_GOC": _phut(len(tu_lieu), k.ky_tu_moi_phut),
             # ═══ MỘT CÁI THƯỚC ĐỂ SO, KHÔNG PHẢI MỘT SỐ ĐỂ ĐẾM ═══
             #
@@ -2050,13 +2054,18 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 except OSError:
                     pass
 
-        lech = abs(len(ban_nhap) - muc_tieu_kt) / max(1, muc_tieu_kt)
-        bc.ghi("  kịch bản: {3} ký tự ≈ {4} phút đọc (nhắm {5} phút ≈ {1} ký "
-               "tự, lệch {2:.0%}).".format(
-                   len(ban_nhap), muc_tieu_kt, lech, len(ban_nhap),
-                   _phut(len(ban_nhap), k.ky_tu_moi_phut),
-                   _phut(muc_tieu_kt, k.ky_tu_moi_phut)))
-        _kiem_kich_ban_dung_duoc(len(ban_nhap), muc_tieu_kt, duong_kb)
+        lech = _lech(ban_nhap, muc_tieu_kt)
+        if muc_tieu_kt > 0:
+            bc.ghi("  kịch bản: {3} ký tự ≈ {4} phút đọc (nhắm {5} phút ≈ {1} ký "
+                   "tự, lệch {2:.0%}).".format(
+                       len(ban_nhap), muc_tieu_kt, lech, len(ban_nhap),
+                       _phut(len(ban_nhap), k.ky_tu_moi_phut),
+                       _phut(muc_tieu_kt, k.ky_tu_moi_phut)))
+        else:
+            bc.ghi("  kịch bản: {0} ký tự ≈ {1} phút đọc (độ dài tự do, không nhắm mốc).".format(
+                len(ban_nhap), _phut(len(ban_nhap), k.ky_tu_moi_phut)))
+        _kiem_kich_ban_dung_duoc(len(ban_nhap), muc_tieu_kt, duong_kb,
+                                 tu_do=bool(getattr(k, "do_dai_tu_do", False)))
 
         # SEO — thiếu cũng vẫn ra được video, nên hỏng thì chỉ ghi nhật ký.
         duong_seo = os.path.join(d, "1-seo.txt")
@@ -2311,6 +2320,8 @@ def _lech(chu: str, muc_tieu: int) -> float:
     `muc_tieu` là số ký tự nhắm tới — hoặc `ky_tu_muc_tieu` của kênh (theo
     phút), hoặc độ dài bản gốc khi kênh bật `do_dai_theo_goc`.
     """
+    if muc_tieu <= 0:
+        return 0.0  # độ dài tự do: không có gì để lệch
     return abs(len(chu) - muc_tieu) / max(1, muc_tieu)
 
 
@@ -2348,6 +2359,9 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     # bài kiểm tra gọi thẳng `_nan_do_dai` trông đợi.
     if muc_tieu is None:
         muc_tieu = k.ky_tu_muc_tieu
+    if muc_tieu <= 0:
+        bc.ghi("  độ dài tự do — không nắn độ dài.")
+        return ban_nhap
     if not khuon.strip():
         # ═══ THIẾU TỆP LỜI NHẮC THÌ PHẢI NÓI, ĐỪNG TẮT TRONG IM LẶNG ═══
         #
@@ -3764,10 +3778,12 @@ def _doi_cao_do_giong(bc: BoiCanh, mp3: str) -> bool:
 #: là video ngắn hơn ý muốn — dừng ở đó là cướp của khách một bài dùng được.
 #: Còn hụt quá nửa thì nó không còn là "hơi ngắn", nó là một thứ khác hẳn.
 SAN_DO_DAI_KICH_BAN = 0.45
+#: Sàn tuyệt đối (ký tự) khi kênh để độ dài tự do — dưới mức này không phải kịch bản.
+SAN_KICH_BAN_TU_DO = 1500
 
 
 def _kiem_kich_ban_dung_duoc(so_ky_tu: int, muc_tieu: int,
-                             duong_kb: str = "") -> None:
+                             duong_kb: str = "", tu_do: bool = False) -> None:
     """Kịch bản ngắn tới mức vô lý thì dừng NGAY, đừng đem đi đọc.
 
     ═══ MỘT LƯỢT CHẠY THẬT, 18/08/2026 ═══
@@ -3793,8 +3809,15 @@ def _kiem_kich_ban_dung_duoc(so_ky_tu: int, muc_tieu: int,
     ngắn. AI hỏi lại thì ngắn. AI từ chối thì ngắn. Trả về rỗng thì ngắn. Bị cắt
     giữa chừng thì ngắn. Một phép đo bắt được cả bốn, và không nhầm với văn hay.
     """
-    san = int(muc_tieu * SAN_DO_DAI_KICH_BAN)
-    if muc_tieu <= 0 or so_ky_tu >= san:
+    # Độ dài tự do (mục tiêu 0) vẫn cần sàn: bản rỗng, AI hỏi lại, bị cắt
+    # giữa chừng đều ngắn — sàn tuyệt đối thay cho sàn theo mục tiêu.
+    if tu_do:
+        san = SAN_KICH_BAN_TU_DO
+    elif muc_tieu > 0:
+        san = int(muc_tieu * SAN_DO_DAI_KICH_BAN)
+    else:
+        return  # không biết mục tiêu (dán tay, không link) thì không chặn gì — như cũ
+    if so_ky_tu >= san:
         return
     # ═══ DỜI BẢN HỎNG SANG MỘT BÊN, ĐỪNG ĐỂ NÓ CHẶN LƯỢT SAU ═══
     #
