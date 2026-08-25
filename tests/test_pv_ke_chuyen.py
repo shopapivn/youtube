@@ -433,3 +433,9 @@ def test_excel_moi_canh_co_khoi_khoa(wb, yeu_cau):
     m = ra["scenes"]["json"]
     co_ref = [s for s in m["scenes"] if s.get("reference_files")]
     assert co_ref and all("reference image 1 =" in s["img_prompt"] for s in co_ref)
+
+
+def test_khoa_cho_phep_doi_trang_phuc_khi_canh_noi_ro(wb):
+    from core.chia_canh import KHUON_MAC_DINH
+    assert "not yet wearing" in KHUON_MAC_DINH
+    assert "not yet wearing" in wb._KHOA_NHAN_VAT and "everything not mentioned" in wb._KHOA_NHAN_VAT

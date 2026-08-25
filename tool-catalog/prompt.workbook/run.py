@@ -1328,7 +1328,10 @@ _KHOA_NHAN_VAT = ("Every character listed above must look EXACTLY like its refer
                   "expression change for this scene. The character keeps exactly the "
                   "colours of its reference image: the scene's accent colour must NEVER "
                   "touch the character, its hat, feather, eyes, clothes or props — apply "
-                  "any accent only to the surroundings.")
+                  "any accent only to the surroundings. The ONLY allowed outfit change is "
+                  "one this scene's description states explicitly (e.g. 'not yet wearing "
+                  "the hat and boots', 'hat held in hand'); everything not mentioned "
+                  "stays exactly as in the reference.")
 #: Bao nhieu NHAN VAT duoc gan anh tham chieu cho mot canh (them 1 boi canh).
 TOI_DA_NV_THAM_CHIEU = 2
 

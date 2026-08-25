@@ -170,6 +170,12 @@ subject off-centre, depth front-to-back.
    appearance EXACTLY as written, and put their ids in `characters_used`. If
    none are listed, do not invent a recurring person — use silhouettes or an
    anonymous figure described fresh each time.
+   A reference image of each listed character is attached when the image is
+   generated, so its look is locked. If the STORY changes an outfit item at
+   some point (a character is given boots and a hat, loses a crown, takes off
+   a coat), say so EXPLICITLY in every scene before/after that change — e.g.
+   `nv4, not yet wearing the hat and boots, no sack` — otherwise the image
+   will show the full reference outfit.
 3. **Vary shot size and angle hard** between consecutive scenes. Open every
    image prompt with the shot itself — `Extreme close-up of…`, `Wide shot
    of…`, `Top-down view of…`, `Over-the-shoulder shot of…`, `Low angle looking
