@@ -3815,6 +3815,47 @@ def _bat_lam_sach(bc: BoiCanh) -> bool:
     return bat
 
 
+def _bo_clip_cu_hon_anh(bc: BoiCanh, tep_clip: str, tep_anh: str) -> bool:
+    """Clip CŨ HƠN ảnh của chính nó thì cất đi (`<n>.mp4.cu`) và trả True.
+
+    ═══ VÌ SAO ═══
+
+    Clip của cảnh nào là ảnh cảnh ấy cử động. Khách "Làm lại khâu ảnh" để sửa
+    một tấm xấu, tool tạo ảnh mới — nhưng clip cũ vẫn nằm đó, khâu clip thấy
+    "đã có" nên bỏ qua, và video cuối vẫn là con mèo cũ. Đo 25/08/2026
+    (story-3d/0001): 18 ảnh mèo làm lại lúc 20:05, 18 clip vẫn là bản 19:3x.
+    Ảnh mới hơn clip nghĩa là clip đã lỗi thời — làm lại, không bỏ qua.
+    """
+    try:
+        if not (os.path.exists(tep_clip) and os.path.exists(tep_anh)):
+            return False
+        if os.path.getmtime(tep_clip) >= os.path.getmtime(tep_anh):
+            return False
+        os.replace(tep_clip, tep_clip + ".cu")
+    except OSError:
+        return False
+    bc.ghi("    {0}: ảnh mới hơn clip — làm lại clip (bản cũ giữ ở .cu).".format(
+        os.path.basename(tep_clip)))
+    return True
+
+
+def _nguon_moi_hon_video(tep_video: str, thu_muc_clip: str, mp3: str) -> str:
+    """Tên nguồn (clip hoặc giọng đọc) MỚI HƠN video cuối, hoặc "" nếu video còn đúng."""
+    try:
+        moc = os.path.getmtime(tep_video)
+    except OSError:
+        return ""
+    try:
+        if os.path.exists(mp3) and os.path.getmtime(mp3) > moc:
+            return "giọng đọc"
+        for ten in sorted(os.listdir(thu_muc_clip)) if os.path.isdir(thu_muc_clip) else []:
+            if ten.endswith(".mp4") and os.path.getmtime(os.path.join(thu_muc_clip, ten)) > moc:
+                return "clip " + ten[:-4]
+    except OSError:
+        return ""
+    return ""
+
+
 def _khau_anh(bc: BoiCanh):
     """Khâu ảnh — và thật ra là **cả dây chuyền ảnh → clip**.
 
@@ -3894,7 +3935,7 @@ def _khau_anh(bc: BoiCanh):
             """Ảnh vừa về thì bắn clip của chính nó — không đợi các cảnh khác."""
             so_canh = int(c["scene_id"])
             dich = os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))
-            if os.path.exists(dich):
+            if os.path.exists(dich) and not _bo_clip_cu_hon_anh(bc, dich, tep_anh):
                 them("clip")
                 return
             if clip_tat.is_set() or not os.path.exists(tep_anh):
@@ -3980,9 +4021,9 @@ def _khau_clip(bc: BoiCanh):
         def mot_canh(c):
             so_canh = int(c["scene_id"])
             tep = os.path.join(thu_muc, "{0}.mp4".format(so_canh))
-            if os.path.exists(tep):
-                return so_canh, True
             anh = os.path.join(thu_muc_anh, "{0}.png".format(so_canh))
+            if os.path.exists(tep) and not _bo_clip_cu_hon_anh(bc, tep, anh):
+                return so_canh, True
             _lam_clip(bc, luot, c, anh, tep, giay, so=so)
             return so_canh, False
 
@@ -4242,7 +4283,16 @@ def _khau_dung(bc: BoiCanh):
         d = luot.thu_muc
         dich = os.path.join(d, "8-video.mp4")
         if os.path.exists(dich):
-            return {"da_co": True}
+            moi = _nguon_moi_hon_video(dich, os.path.join(d, "6-clip"),
+                                       os.path.join(d, "2-giong-doc.mp3"))
+            if not moi:
+                return {"da_co": True}
+            bc.ghi("  video đã có nhưng {0} mới hơn nó — dựng lại (bản cũ giữ ở "
+                   "8-video.cu.mp4).".format(moi))
+            try:
+                os.replace(dich, os.path.join(d, "8-video.cu.mp4"))
+            except OSError:
+                pass
         ffmpeg = bc.ffmpeg or _tim_ffmpeg()
         if not ffmpeg:
             raise RuntimeError("máy chưa có FFmpeg")
