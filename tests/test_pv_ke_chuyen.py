@@ -590,7 +590,7 @@ def test_pha_lap_canh_doi_khung_va_giu_id(wb):
     def goi(loi_nhac, phan_khoa):
         goi_lan.append(loi_nhac)
         assert "previous opening: medium shot" in loi_nhac and "[2]" in loi_nhac
-        return '{"2": {"img_prompt": "Over-the-shoulder shot from behind nv1 (nv1) toward the doorstep of loc2, his hand on the step" + "%s", "video_prompt": "hand lifts"}}' % tail
+        return '{"2": {"img_prompt": "Over-the-shoulder shot from behind nv1 (nv1) toward the doorstep of loc2, his hand on the step%s", "video_prompt": "hand lifts"}}' % tail
 
     assert run._pha_lap_canh(scenes, goi) == 1
     assert scenes[1]["img_prompt"].startswith("Over-the-shoulder") and scenes[1]["video_prompt"] == "hand lifts"
