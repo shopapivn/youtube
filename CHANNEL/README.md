@@ -40,7 +40,7 @@ TL4-T7/
     9-nhac.md         lời nhắc nhạc nền (Suno)
 ```
 
-Sửa cả bảy lời nhắc **ngay trong tool**: tab Tự động → **Quản lý kênh**. Không
+Sửa mọi lời nhắc **ngay trong tool**: tab Tự động → **Quản lý kênh**. Không
 phải đi tìm tệp bằng Notepad.
 
 ## Làm kênh mới
@@ -49,7 +49,7 @@ Tab Tự động → **Tạo kênh mới**. Chọn ba ô:
 
 | ô | quyết định gì |
 |---|---|
-| **Ngách** | kể chuyện theo lối nào — mang theo tám tệp lời nhắc |
+| **Ngách** | kể chuyện theo lối nào — mang theo chín tệp lời nhắc |
 | **Vẽ như thế nào** | kênh nhìn ra sao, kèm ảnh nhân vật hợp nét vẽ ấy |
 | **Khán giả** | nói tiếng gì, cho người nước nào xem |
 

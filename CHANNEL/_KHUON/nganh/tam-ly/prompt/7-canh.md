@@ -126,6 +126,10 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
    one place. Open the image prompt with the shot itself — `Extreme close-up
    of…`, `Wide shot of…`, `Top-down view of…`, `Over-the-shoulder shot of…`,
    `Low angle looking up at…` — and never use the same opening twice in a row.
+   One caution: a shot **from behind `nv1`** (over its shoulder, its back to
+   camera) hides the face you just wrote. Use it only when the face is not the
+   point of the scene — measured on a real frame: a guilt beat shot from behind
+   came back as a big white head with no face at all, and the emotion was gone.
 
 8. **Give each scene ONE accent colour, and change it from scene to scene.**
    The palette below stays fixed for the whole video; the accent is the single

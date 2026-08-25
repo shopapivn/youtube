@@ -273,6 +273,14 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "nhạc nền… Mỗi prompt là một câu tool gửi cho Claude (API) để ra "
             "kết quả; đã điền sẵn từ mẫu, bấm vào thẻ để mở ra sửa, không sửa "
             "gì cũng chạy được. Cùng bước này chọn cách lấy nội dung (chiến lược).",
+            "Thẻ “Bản đồ hình” (prompt 7-ke-hoach.md) chạy TRƯỚC khi chia cảnh: "
+            "AI đọc cả kịch bản một lượt rồi chia thành chương — mỗi chương một "
+            "bối cảnh thật (ga tàu, phòng trọ, bếp đêm, văn phòng…), một vật ẩn "
+            "dụ đổi dần, một câu bản lề — rồi mới viết prompt ảnh/video từng "
+            "cảnh theo bản đồ ấy. Nhờ vậy 13 phút video có chương, có chỗ đổi "
+            "cảnh, khán giả thấy đời mình trong hình. Bản đồ nằm ở sheet "
+            "“story_map” trong 4-canh.xlsx của lượt. Xoá thẻ này thì tool vẫn "
+            "chạy, chỉ là chia cảnh không có bản đồ như trước.",
             "Nút “Quản lý kênh” mở đúng năm bước ấy nhưng nạp sẵn kênh đang "
             "chọn, nút cuối là “Lưu”: sửa được cả các prompt, giọng đọc, "
             "nhạc nền, độ phân giải và phong cách hình ngay trong tool. Trong "

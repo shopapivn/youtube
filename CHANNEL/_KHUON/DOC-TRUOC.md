@@ -31,7 +31,7 @@ không biết lập trình không viết nổi mấy khoá ấy — nên họ kh
 
 ## Ba mảnh
 
-Đọc ba kênh mẫu thì thấy chúng khác nhau đúng ở hai trục, còn tám tệp lời nhắc
+Đọc ba kênh mẫu thì thấy chúng khác nhau đúng ở hai trục, còn các tệp lời nhắc
 thì **giống hệt nhau từng byte** ở cả bốn kênh:
 
 ```
@@ -46,7 +46,7 @@ Nên `style.yaml` 21 khoá tách sạch làm hai nửa, mỗi nửa thuộc về
 _KHUON/
   nganh/<mã>/
     nganh.yaml     mấy con số mặc định: độ dài, engine, số ảnh bìa
-    prompt/        TÁM TỆP LỜI NHẮC — phần nặng nhất của khuôn
+    prompt/        CHÍN TỆP LỜI NHẮC (kể cả 7-ke-hoach.md, bản đồ hình) — phần nặng nhất của khuôn
   ve/<mã>/
     ve.yaml        16 khoá HÌNH: image_style, palette, reference_lock, thumb_*…
     nv1.png        nhân vật mẫu vẽ ĐÚNG kiểu này
@@ -94,7 +94,7 @@ không ai đoán ra vì sao.
 ## Không bao giờ đặt khoá API vào đây
 
 Khuôn là thứ người ta chép cho nhau. Tool quét cả `ve.yaml`, `van-hoa/*.yaml`,
-`nganh.yaml` **và tám tệp lời nhắc** trước khi tạo kênh — thấy dạng `sk-…`,
+`nganh.yaml` **và mọi tệp lời nhắc** trước khi tạo kênh — thấy dạng `sk-…`,
 `sk_…`, `AIza…` hay khối private key là chặn, không đẻ ra kênh nào.
 
 Luồng Tự động tiêu tiền qua đúng một cửa: ví ShopAPI mà tool đã đăng nhập. Kênh
