@@ -281,8 +281,43 @@ def _chay(mo, duong: str, mo_hinh: str, thu_muc: str, ten_anh: str,
     ghi_nhan(tien_trinh, goc_tool, "claude")
     try:
         return _doi_ket_qua(tien_trinh, loi_nhac, kiem_dung, gio_han)
+    except RuntimeError as loi:
+        _ghi_loi_cuoi(os.path.dirname(thu_muc), loi, mo_hinh, len(loi_nhac))
+        raise
     finally:
         bo_ghi_nhan(tien_trinh, goc_tool)
+
+
+#: Tệp ghi lại các lần Claude Code thoát lỗi, nằm ở `workspace/viet-max/`.
+TEP_LOI_CUOI = "loi-gan-nhat.txt"
+
+
+def _ghi_loi_cuoi(thu_muc_cha: str, loi: BaseException, mo_hinh: str,
+                  do_dai_loi_nhac: int) -> None:
+    """Nối một mục vào `workspace/viet-max/loi-gan-nhat.txt` (giữ ~40 KB cuối).
+
+    Nhật ký trên màn hình chỉ có 120 ký tự đầu của câu lỗi; stdout/stderr
+    nguyên văn của `claude` nằm ở đây. Không bao giờ để việc ghi này làm hỏng
+    lượt viết.
+    """
+    try:
+        os.makedirs(thu_muc_cha, exist_ok=True)
+        tep = os.path.join(thu_muc_cha, TEP_LOI_CUOI)
+        ra, err = getattr(loi, "chi_tiet", ("", ""))
+        muc = ("\n=== {0} | {1} | lời nhắc {2} ký tự\n{3}\n--- stdout ({4} ký tự):\n{5}"
+               "\n--- stderr ({6} ký tự):\n{7}\n").format(
+                   time.strftime("%Y-%m-%d %H:%M:%S"), mo_hinh, do_dai_loi_nhac,
+                   str(loi)[:300], len(ra), ra[:2000], len(err), err[:2000])
+        cu = ""
+        try:
+            with open(tep, encoding="utf-8") as t:
+                cu = t.read()
+        except OSError:
+            pass
+        with open(tep, "w", encoding="utf-8") as t:
+            t.write((cu + muc)[-40000:])
+    except Exception:  # noqa: BLE001 — ghi sổ lỗi không được làm hỏng gì
+        pass
 
 
 def _doi_ket_qua(tien_trinh, loi_nhac: str, kiem_dung, gio_han: float) -> str:
@@ -328,15 +363,20 @@ def _doi_ket_qua(tien_trinh, loi_nhac: str, kiem_dung, gio_han: float) -> str:
         # Có lượt cả stderr lẫn stdout đều trống (đo 24/08/2026, mã 1) — ghi
         # rõ "không nói lý do" thay vì một dấu hai chấm rồi trống trơn.
         ly_do = str(hop.get("loi") or hop.get("ra") or "").strip()[:200]
-        raise RuntimeError("Claude Code thoát lỗi (mã {0}): {1}".format(
+        loi = RuntimeError("Claude Code thoát lỗi (mã {0}): {1}".format(
             tien_trinh.returncode, ly_do or "không nói lý do"))
+        # Giữ nguyên văn hai luồng cho `_chay` ghi ra tệp — người sửa tool tra
+        # được sau, không phải đoán (đo 25/08/2026, lượt 0049: ba lần mã 1
+        # liền, nhật ký chỉ có "không nói lý do").
+        loi.chi_tiet = (str(hop.get("ra") or ""), str(hop.get("loi") or ""))
+        raise loi
     return _boc_ket_qua(str(hop.get("ra") or ""))
 
 
 #: Nhịp chờ giữa hai lần thử lại Claude Code, giây. Giãn dần: sự cố thường
 #: gặp là ngưỡng tạm thời của thuê bao hoặc một cú thoát lỗi lẻ — mười lăm
 #: giây là qua; ngưỡng dài hơn thì hai phút cho nó thở.
-NHIP_THU_LAI = (15.0, 30.0, 60.0, 120.0)
+NHIP_THU_LAI = (15.0, 30.0, 60.0, 120.0, 300.0)
 
 
 def dung_goi_chat_max(goc: str, *,

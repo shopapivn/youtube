@@ -1690,7 +1690,10 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             _ghi_doi_thu(d, getattr(ket, "title", "") or "",
                          getattr(ket, "video_id", "") or "",
                          getattr(ket, "duration_s", 0) or 0)
-            bc.ghi("  tư liệu: {0} chữ.".format(len(tu_lieu.split())))
+            # Đếm KÝ TỰ, không đếm "chữ" theo dấu cách: tiếng Nhật/Trung không có
+            # dấu cách nên 14.000 ký tự in ra "1 chữ" — chủ dự án tưởng tư liệu rỗng.
+            bc.ghi("  tư liệu: {0} ký tự ≈ {1} phút đọc.".format(
+                len(tu_lieu), _phut(len(tu_lieu), k.ky_tu_moi_phut)))
 
         # ═══ ĐỘ DÀI NHẮM TỚI: THEO PHÚT, HAY THEO VIDEO GỐC ═══
         #

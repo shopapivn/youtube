@@ -234,9 +234,10 @@ class TestDungGoiChatMax:
         goi = dung_goi_chat_max(str(tmp_path), viet=hong, ngu=cho.append)
         with pytest.raises(RuntimeError) as loi:
             goi("viết")
-        # Đủ kiên nhẫn: 5 lần, nhịp giãn dần 15/30/60/120.
-        assert so_lan["n"] == 5
-        assert cho == [15.0, 30.0, 60.0, 120.0]
+        # Đủ kiên nhẫn: 6 lần, nhịp giãn dần 15/30/60/120/300 — tổng hơn 8
+        # phút, đủ cho một cú nghẽn đường truyền hay quá tải phía Anthropic.
+        assert so_lan["n"] == 6
+        assert cho == [15.0, 30.0, 60.0, 120.0, 300.0]
         # Và câu lỗi nói rõ vì sao KHÔNG chuyển ví, kèm việc cần làm.
         chu = str(loi.value)
         assert "KHÔNG chuyển sang ví" in chu and "Cài đặt" in chu
