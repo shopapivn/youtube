@@ -482,3 +482,27 @@ def test_canh_dung_id_giai_doan_thi_tham_chieu_va_khoa_theo_giai_doan(wb, yeu_ca
     s = m["scenes"][0]
     assert json.loads(s["reference_files"]) == ["nv2b.png"]
     assert "reference image 1 = nv2b" in s["img_prompt"] and "red beret" in s["img_prompt"]
+
+
+# ── Kế hoạch đạo diễn có thẩm quyền: cảnh phải dùng đúng bối cảnh + nhân vật ─
+
+def test_ep_canh_theo_ke_hoach_boi_canh_va_nhan_vat(wb):
+    ke_hoach = [{"srt_from": 1, "srt_to": 3, "location": "loc1", "characters": "nv1, nv2"},
+                {"srt_from": 4, "srt_to": 6, "location": "loc2", "characters": "nv2"}]
+    scenes = [{"srt_indices": [1, 2], "location_used": "loc9", "characters_used": "nv1"},
+              {"srt_indices": [3], "location_used": "loc1", "characters_used": "nv2, nv1"},
+              {"srt_indices": [4, 5, 6], "location_used": "", "characters_used": ""},
+              {"srt_indices": [], "location_used": "loc7", "characters_used": ""}]
+    doi = wb._ep_theo_ke_hoach(scenes, ke_hoach)
+    assert [s["location_used"] for s in scenes] == ["loc1", "loc1", "loc2", "loc7"]
+    assert scenes[0]["characters_used"] == "nv1, nv2" and scenes[1]["characters_used"] == "nv2, nv1"
+    assert scenes[2]["characters_used"] == "nv2"
+    assert doi == {"boi_canh": 2, "nhan_vat": 2}
+    assert wb._so_lan_doi_boi_canh(scenes) == 2
+
+
+def test_ke_hoach_khong_con_luat_doi_cho_cho_da_dang(wb):
+    assert "do not stage two consecutive beats in the same place" not in wb._KHUON_KE_HOACH
+    assert "FOLLOWS THE STORY" in wb._KHUON_KE_HOACH
+    khoi = wb._khoi_cast_style({"characters": [], "locations": [{"id": "loc1", "name": "a", "english_prompt": "b"}]})
+    assert "stay in the same place until the narration says" in khoi

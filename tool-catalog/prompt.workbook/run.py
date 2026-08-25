@@ -153,9 +153,12 @@ For every beat give:
 - `purpose` — what this beat does for the story (establish / show the pain /
   turn / reveal / land the point);
 - `characters` — ids from the cast that are IN FRAME ("" if none) and
-  `location` — a location id ("" if a fresh place); reuse the recurring
-  places, do not stage two consecutive beats in the same place unless the
-  narration stays there;
+  `location` — a location id ("" only if the story is truly nowhere). THE PLACE
+  FOLLOWS THE STORY, like a film: a beat stays in the SAME place as the
+  previous beat until the narration says the characters moved (they walk to
+  the river, arrive at the castle, go home). Never cut to another place for
+  variety — vary shot size, angle and what moves in frame instead. A
+  conversation happens in one place from start to end;
 - `shot_size` from EST_WIDE, WIDE, MEDIUM, CLOSE, DETAIL — build intensity
   toward the act's turning point (WIDE→MEDIUM→CLOSE), open on a wide when a
   place is new;
@@ -508,6 +511,13 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
                                  ke_hoach=ke_hoach)
             bia = viec_bia.result() if viec_bia is not None else trong_bia
             nhac = viec_nhac.result() if viec_nhac is not None else []
+        if ke_hoach:
+            doi = _ep_theo_ke_hoach(scenes, ke_hoach)
+            emit({"type": "event", "event": "progress", "progress": 0.0,
+                  "message": "Ep canh theo ke hoach dao dien: sua boi canh {0} canh, nhan vat {1} "
+                             "canh; ca video doi boi canh {2} lan / {3} canh.".format(
+                                 doi["boi_canh"], doi["nhan_vat"], _so_lan_doi_boi_canh(scenes),
+                                 len(scenes))})
         _gan_reference_files(scenes, cast["characters"], cast.get("locations") or [])
         _validate_coverage(cues, scenes)
         _lam_lanh_moi_prompt(cast, scenes, bia)
@@ -1321,10 +1331,11 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
             dong.append("")
         dong.append("## RECURRING LOCATIONS — reuse, do not redesign")
         dong.append("When a scene is set in one of these places, put its id in "
-                    "`location_used` and describe the place EXACTLY as written; "
-                    "leave `location_used` empty elsewhere. Do not stage "
-                    "consecutive scenes in the same place unless the narration "
-                    "stays there:")
+                    "`location_used` and describe the place EXACTLY as written. "
+                    "The place follows the STORY like a film: consecutive scenes "
+                    "stay in the same place until the narration says the "
+                    "characters moved; never change place for variety — change "
+                    "shot size and angle instead:")
         for l in locs:
             dong.append("- {0} ({1}): {2}{3}".format(
                 l["id"], l.get("name") or "place", l["english_prompt"],
@@ -1499,6 +1510,56 @@ def _apply_creative(batch, proposed):
         if not scene["img_prompt"] or not scene["video_prompt"]:
             raise ValueError("Scene {0} thieu img_prompt/video_prompt".format(scene["scene_id"]))
         scene["prompt_json"] = json.dumps({key: scene[key] for key in CREATIVE}, ensure_ascii=False)
+
+
+#: Ke hoach dao dien la KICH BAN PHAN CANH co tham quyen, khong phai goi y.
+#:
+#: Chu du an 25/08/2026: *"nó như là làm phim vậy, cần phải biết là bối cảnh nào
+#: nhân vật nào; không thể nhân vật này ở bối cảnh này, ảnh sau lại ở bối cảnh
+#: khác"*. Buoc chia canh chay theo khuc 100 giay, moi khuc mot luot AI khong
+#: nhin thay khuc khac, nen no hay tu doi cho. Sau khi chia, MA ep lai: canh
+#: nao rơi vao beat nao thi lay dung `location` va `characters` cua beat do.
+def _ep_theo_ke_hoach(scenes, ke_hoach) -> Dict[str, int]:
+    beats = []
+    for b in ke_hoach or []:
+        try:
+            beats.append((set(range(int(b["srt_from"]), int(b["srt_to"]) + 1)), b))
+        except (KeyError, TypeError, ValueError):
+            continue
+    doi = {"boi_canh": 0, "nhan_vat": 0}
+    if not beats:
+        return doi
+    for s in scenes:
+        try:
+            idx = {int(i) for i in (s.get("srt_indices") or [])}
+        except (TypeError, ValueError):
+            idx = set()
+        if not idx:
+            continue
+        trung, b = max(((len(idx & dong), bt) for dong, bt in beats), key=lambda x: x[0])
+        if trung == 0:
+            continue
+        loc = str(b.get("location") or "").strip()
+        if loc and str(s.get("location_used") or "").strip() != loc:
+            s["location_used"] = loc
+            doi["boi_canh"] += 1
+        nv = [x for x in str(b.get("characters") or "").replace(",", " ").split() if x]
+        cu = [x for x in str(s.get("characters_used") or "").replace(",", " ").split() if x]
+        if nv and set(nv) != set(cu):
+            s["characters_used"] = ", ".join(nv)
+            doi["nhan_vat"] += 1
+    return doi
+
+
+def _so_lan_doi_boi_canh(scenes) -> int:
+    """So lan bối cảnh đổi giữa hai cảnh liền nhau — con so de soi 'nhảy chỗ'."""
+    truoc, n = None, 0
+    for s in scenes:
+        loc = str(s.get("location_used") or "").strip()
+        if truoc is not None and loc != truoc:
+            n += 1
+        truoc = loc
+    return n
 
 
 def _validate_coverage(cues, scenes):
