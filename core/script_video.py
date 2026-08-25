@@ -483,8 +483,13 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
         # sau lấy trong bộ nhớ đệm.
         san = os.environ.get("WHISPER_MODEL_DIR", "").strip()
         ten_model = san if san and os.path.isdir(san) else "small"
-        ghi("    đang nghe bằng máy của bạn (lần đầu phải tải bộ nghe ~0,5 GB —"
-            " chỉ tải một lần, các lượt sau dùng lại)…")
+        # Nói đúng trạng thái. Chủ dự án 25/08/2026 đọc câu nhắc chung "lần đầu
+        # phải tải ~0,5 GB" và tưởng tool bắt tải lại dù máy đã có bộ nghe.
+        if _bo_nghe_da_co(ten_model):
+            ghi("    đang nghe bằng máy của bạn (bộ nghe đã có sẵn trên máy)…")
+        else:
+            ghi("    đang nghe bằng máy của bạn — lần đầu: đang tải bộ nghe ~0,5 GB,"
+                " chỉ tải một lần, các lượt sau dùng lại…")
         chu, ma, loi = _nghe_o_tien_trinh_rieng(
             tep[0], ten_model, bool(san and os.path.isdir(san)), ghi)
         if loi:
@@ -494,6 +499,27 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
         return chu, ma, ""
     finally:
         shutil.rmtree(thu_muc, ignore_errors=True)
+
+
+def _bo_nghe_da_co(ten_model: str) -> bool:
+    """Bộ nghe `faster-whisper` đã nằm trên máy chưa (thư mục chỉ định, hoặc bộ đệm HF)?"""
+    if os.path.isdir(ten_model):
+        return True
+    try:
+        from .model_installer import _cac_bo_dem_hf  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return False
+    dau = "faster-whisper-" + str(ten_model).strip().lower()
+    for hub in _cac_bo_dem_hf():
+        try:
+            for ten in os.listdir(str(hub)):
+                if ten.startswith("models--") and ten.lower().endswith(dau):
+                    snap = os.path.join(str(hub), ten, "snapshots")
+                    if os.path.isdir(snap) and os.listdir(snap):
+                        return True
+        except OSError:
+            continue
+    return False
 
 
 # ── Xâu cả bốn đường lại ─────────────────────────────────────────────────────
