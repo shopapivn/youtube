@@ -189,8 +189,14 @@ _DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single f
                    "arms relaxed at sides, neutral expression, gazing straight ahead, "
                    "centered on a plain pure white background, 16:9 canvas, no "
                    "text, no letters, no watermark")
-_DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, "
-                  "centered, 16:9 composition, no text, no letters, no watermark")
+#: "Ngang tam mat, thay mat dat": do 25/08/2026 canh 72/74 — tham chieu lau dai
+#: chup tu xa tren cao, mo hinh dan xe ngua len noc tuong thanh va ve ca nha to
+#: bang cong. Anh thiet lap phai la cho NHAN VAT SE DUNG, nhin tu tam mat nguoi.
+_DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, seen from "
+                  "human eye level standing on the ground of that place, the ground "
+                  "(floor, path, grass, bank) clearly visible across the lower third "
+                  "so characters can later stand on it at correct scale, centered, "
+                  "16:9 composition, no text, no letters, no watermark")
 
 #: Bao nhieu ky tu loi doc dua cho luot viet anh bia / nhac. 0 = ca bai:
 #: anh bia phai biet cao trao o cuoi, nhac phai theo mach ca video — cat bot
@@ -1403,8 +1409,14 @@ _KHOA_NHAN_VAT = ("Every character listed above must look EXACTLY like its refer
 #: Bao nhieu NHAN VAT duoc gan anh tham chieu cho mot canh (them 1 boi canh).
 TOI_DA_NV_THAM_CHIEU = 2
 
+#: "Dung tren mat dat": do 25/08/2026 canh 41/50 — tham chieu boi canh la mat
+#: song, prompt khong noi dung o dau, mo hinh dat meo va cong chua LEN MAT NUOC.
 _KHOA_BOI_CANH = ("The place must match its reference image (same architecture, "
-                  "furniture and layout); only framing and lighting change.")
+                  "furniture and layout); only framing and lighting change. Every "
+                  "character stands, sits or walks on the SOLID GROUND of that place "
+                  "(floor, path, grass, bank, steps) with correct scale and physics — "
+                  "never standing on water, floating in the air or sunk into walls, "
+                  "unless the text explicitly says so.")
 #: Khoa cho loi nhac VIDEO — dat o DAU, khong phai cuoi. Do 25/08/2026 (12 clip
 #: Veo 3, AI cham khung cuoi duoc dung): cau khoa o cuoi → 3,00; khoa o dau kem
 #: mo ta tung nhan vat + "khong them, khong bot" → 3,50. Veo nang phan dau.
@@ -1548,12 +1560,25 @@ def _ep_theo_ke_hoach(scenes, ke_hoach) -> Dict[str, int]:
         if loc and str(s.get("location_used") or "").strip() != loc:
             s["location_used"] = loc
             doi["boi_canh"] += 1
+        # HOP nhan vat cua beat voi nhan vat canh da khai — khong THAY. Do
+        # 25/08/2026 (canh 14): beat ghi thieu meo, ban cu ghi de -> canh mat
+        # tham chieu meo dù prompt co meo -> meo ngau nhien. Cung mot nhan vat
+        # o hai giai doan (nv4/nv4b) thi giu id cua beat (dung thoi diem).
         nv = [x for x in str(b.get("characters") or "").replace(",", " ").split() if x]
         cu = [x for x in str(s.get("characters_used") or "").replace(",", " ").split() if x]
-        if nv and set(nv) != set(cu):
-            s["characters_used"] = ", ".join(nv)
-            doi["nhan_vat"] += 1
+        if nv:
+            goc_beat = {_goc_cua_id(x) for x in nv}
+            hop = list(nv) + [x for x in cu if x not in nv and _goc_cua_id(x) not in goc_beat]
+            if set(hop) != set(cu):
+                s["characters_used"] = ", ".join(hop)
+                doi["nhan_vat"] += 1
     return doi
+
+
+def _goc_cua_id(i: str) -> str:
+    """`nv4b` -> `nv4` (id goc cua giai doan); id thuong tra ve chinh no."""
+    m = re.match(r"^(nv\d+)[a-z]$", str(i or ""))
+    return m.group(1) if m else str(i or "")
 
 
 def _so_lan_doi_boi_canh(scenes) -> int:

@@ -167,3 +167,15 @@ def test_viet_lai_doi_chu_the_thi_bi_loai():
     assert giu_chu_the(goc, goc.replace("soaked linen undershirt", "plain wet shirt"))
     # AI trả bản lạc đề → không dùng, lui về thay từ thô (ở đây không có gì để thay → giữ gốc).
     assert viet_lai_prompt(lambda _l: lac, goc) == goc
+
+
+def test_viet_lai_giu_duoi_phong_cach():
+    from core.viet_lai_prompt import giu_duoi_phong_cach
+    goc = ("Wide shot of the cat peering around a column in the throne hall, stylised 3D animated film still, "
+           "Pixar-like, soft global illumination\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv4b")
+    moi = "Wide shot of the cat peering around a column in the throne hall\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv4b"
+    ra = giu_duoi_phong_cach(goc, moi)
+    assert ra.startswith("Wide shot of the cat peering around a column in the throne hall, stylised 3D animated film still, Pixar-like, soft global illumination")
+    assert ra.endswith("- reference image 1 = nv4b")
+    # Đã có đuôi thì không ghép đôi.
+    assert giu_duoi_phong_cach(goc, goc) == goc

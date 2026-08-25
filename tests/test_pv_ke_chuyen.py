@@ -506,3 +506,23 @@ def test_ke_hoach_khong_con_luat_doi_cho_cho_da_dang(wb):
     assert "FOLLOWS THE STORY" in wb._KHUON_KE_HOACH
     khoi = wb._khoi_cast_style({"characters": [], "locations": [{"id": "loc1", "name": "a", "english_prompt": "b"}]})
     assert "stay in the same place until the narration says" in khoi
+
+
+def test_ep_ke_hoach_HOP_nhan_vat_khong_thay(wb):
+    # Cảnh 14 (25/08): beat ghi thiếu mèo, bản cũ ghi đè → mất tham chiếu mèo.
+    ke_hoach = [{"srt_from": 1, "srt_to": 2, "location": "loc1", "characters": "nv1"}]
+    scenes = [{"srt_indices": [1], "location_used": "loc1", "characters_used": "nv1, nv4"},
+              {"srt_indices": [2], "location_used": "loc1", "characters_used": "nv4b"}]
+    wb._ep_theo_ke_hoach(scenes, ke_hoach)
+    assert scenes[0]["characters_used"] == "nv1, nv4"
+    assert scenes[1]["characters_used"] == "nv1, nv4b"
+    # Beat ghi nv4b (giai đoạn sau) mà cảnh khai nv4 → giữ id của beat, không giữ cả hai.
+    ke_hoach = [{"srt_from": 1, "srt_to": 1, "location": "", "characters": "nv4b"}]
+    scenes = [{"srt_indices": [1], "location_used": "", "characters_used": "nv4, nv1"}]
+    wb._ep_theo_ke_hoach(scenes, ke_hoach)
+    assert scenes[0]["characters_used"] == "nv4b, nv1"
+
+
+def test_khoa_boi_canh_dung_tren_dat_va_anh_thiet_lap_ngang_tam_mat(wb):
+    assert "never standing on water" in wb._KHOA_BOI_CANH and "correct scale" in wb._KHOA_BOI_CANH
+    assert "human eye level" in wb._DUOI_BOI_CANH and "lower third" in wb._DUOI_BOI_CANH

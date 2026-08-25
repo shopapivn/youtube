@@ -92,6 +92,35 @@ def giu_chu_the(goc: str, moi: str) -> bool:
     return len(a & b) / float(len(a)) >= TI_LE_GIU_TU
 
 
+#: Dau hieu mo dau "duoi phong cach" cua mot prompt anh (tool nao cung ket bang
+#: mot trong nhung cum nay). Do 25/08/2026 canh 37: ban viet lai bo mat duoi
+#: "stylised 3D animated film still…" -> anh ra but chi giua phim 3D.
+_MOC_PHONG_CACH = ("stylised 3D animated", "Simple hand-drawn", "simple hand-drawn",
+                   "clean cel-shaded", "flat 2D", "black pencil", "photorealistic",
+                   "watercolor", "watercolour", "oil painting", "pixel art")
+
+
+def duoi_phong_cach(prompt: str) -> str:
+    """Doan tu moc phong cach dau tien toi het dong (bo phan khoa 'REFERENCE IMAGES')."""
+    dau = str(prompt or "").split("\nREFERENCE IMAGES")[0]
+    vi_tri = [dau.find(m) for m in _MOC_PHONG_CACH if m in dau]
+    if not vi_tri:
+        return ""
+    return dau[min(vi_tri):].strip().rstrip(".")
+
+
+def giu_duoi_phong_cach(goc: str, moi: str) -> str:
+    """Ban viet lai thieu duoi phong cach cua ban goc thi ghep lai duoi ay."""
+    duoi = duoi_phong_cach(goc)
+    if not duoi:
+        return moi
+    moc = next((m for m in _MOC_PHONG_CACH if m in duoi), "")
+    if moc and moc in moi:
+        return moi
+    dau, tach, khoa = str(moi).partition("\nREFERENCE IMAGES")
+    return dau.rstrip().rstrip(".") + ", " + duoi + tach + khoa
+
+
 def lam_lanh_tho(prompt: str) -> str:
     """Thay từ thô, không cần AI. Trả về chuỗi có thể KHÔNG đổi nếu không thấy gì."""
     chu = str(prompt or "")
@@ -117,7 +146,7 @@ def viet_lai_prompt(goi: Optional[Callable[[str], str]], prompt: str, ly_do: str
             tra = re.sub(r"^(?:PROMPT:|Rewritten prompt:)\s*", "", tra, flags=re.I).strip("`\" \n")
             if (len(tra) >= max(20, len(goc) // 3) and len(tra) <= max(400, len(goc) * 2)
                     and giu_chu_the(goc, tra)):
-                return tra
+                return giu_duoi_phong_cach(goc, tra)
         except Exception:  # noqa: BLE001 — AI hỏng thì lui về thay từ thô
             pass
     return lam_lanh_tho(goc)
