@@ -3466,12 +3466,64 @@ def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
     # Đo được 15/08/2026: chạy lại khâu ảnh của một lượt cũ là hỏng 100% ngay
     # lượt gọi đầu. Khâu clip đã đưa `dia_chi` vào khoá từ trước; khâu ảnh và
     # khâu ảnh bìa thì quên — cùng một bài học, sót hai chỗ.
-    goi = _tao_anh(bc, luot, c["img_prompt"], hop,
-                   khoa_viec(luot, "img", so_canh, c["img_prompt"],
-                             "|".join(hop.lay())),
-                   ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
+    try:
+        goi = _tao_anh(bc, luot, c["img_prompt"], hop,
+                       khoa_viec(luot, "img", so_canh, c["img_prompt"],
+                                 "|".join(hop.lay())),
+                       ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
+    except Exception as loi:  # noqa: BLE001
+        # ═══ BỘ LỌC TỪ CHỐI → VIẾT LẠI LỜI NHẮC MỘT LẦN, KHÔNG BỎ CẢNH ═══
+        #
+        # Đo 25/08/2026 (story-3d/0001, 123 cảnh): ba cảnh bị chặn chỉ vì chữ
+        # "cheeks flushing", "swing violently", "coy teasing" — không có gì
+        # để chặn, nhưng bộ lọc là máy. Trước đây cảnh ấy bị bỏ ("giữ hình
+        # cảnh trước lâu hơn") dù tab Hàng loạt đã biết viết lại từ 3899466.
+        # Chủ dự án: "prompt bị từ chối thì phải có logic làm lại prompt".
+        moi = _viet_lai_khi_bi_tu_choi(bc, luot, c, loi)
+        if not moi:
+            raise
+        goi = _tao_anh(bc, luot, moi, hop,
+                       khoa_viec(luot, "img", so_canh, moi, "|".join(hop.lay()), "vl"),
+                       ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
     _tai_ket_qua(bc, goi, 0, tep)
     _xoa_dau(bc, tep)
+
+
+_KHOA_SUA_CANH = threading.Lock()
+
+
+def _viet_lai_khi_bi_tu_choi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
+                             loi: Exception) -> str:
+    """Bị bộ lọc chặn thì nhờ AI viết lại lời nhắc ảnh (giữ chủ thể, khối khoá,
+    đuôi phong cách — xem `core/viet_lai_prompt`). Trả về lời nhắc mới, hoặc ""
+    nếu không phải lỗi bộ lọc / viết lại không ra. Lời nhắc mới được ghi lại
+    vào `4-canh.json` để khâu clip và lần "Làm lại" dùng đúng bản đã qua."""
+    from .viet_lai_prompt import la_bi_tu_choi, viet_lai_prompt  # noqa: PLC0415
+
+    if not la_bi_tu_choi("", str(loi)):
+        return ""
+    so_canh = int(c["scene_id"])
+    cu = str(c.get("img_prompt") or "")
+    bc.ghi("    ảnh cảnh {0}: bị bộ lọc từ chối — viết lại lời nhắc rồi thử lại…".format(so_canh))
+
+    def goi_ai(loi_nhac: str) -> str:
+        return bc.goi_chat(loi_nhac, mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"),
+                           khoa=khoa_viec(luot, "vl-img", so_canh, cu), toi_da_token=2048)
+
+    try:
+        moi = viet_lai_prompt(goi_ai, cu, str(loi))
+    except Exception as loi2:  # noqa: BLE001
+        bc.ghi("    ảnh cảnh {0}: không viết lại được ({1}).".format(so_canh, str(loi2)[:100]))
+        return ""
+    if not moi or moi.strip() == cu.strip():
+        return ""
+    c["img_prompt"] = moi
+    with _KHOA_SUA_CANH:
+        try:
+            sua_loi_nhac_canh(luot, so_canh, img_prompt=moi)
+        except Exception:  # noqa: BLE001 — không ghi được cũng vẫn tạo ảnh bằng bản mới
+            pass
+    return moi
 
 
 def _xoa_dau(bc: BoiCanh, tep: str) -> None:
