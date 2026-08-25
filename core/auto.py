@@ -481,8 +481,15 @@ def chay(
         tt.bat_dau = tt.bat_dau or time.time()
         tt.loi = ""
         bao_doi()
-        ghi("[ĐANG] {0}{1}".format(ten_khau(ma),
-                              " (có tiêu ví)" if khau_tieu_tien(ma) else ""))
+        # Khâu nào đi thuê bao Claude của máy (khâu kịch bản khi bật nút ở
+        # Cài đặt) thì nói rõ, đừng in "(có tiêu ví)" theo bảng cứng — chủ dự
+        # án, 25/08/2026: *"sao bước viết content ở máy này lại là dùng api,
+        # tao tưởng đã bảo máy này là dùng claude max"*.
+        if getattr(viec.get(ma), "khong_tieu_vi", False):
+            nhan_tien = " (Claude Max, không tiêu ví)"
+        else:
+            nhan_tien = " (có tiêu ví)" if khau_tieu_tien(ma) else ""
+        ghi("[ĐANG] {0}{1}".format(ten_khau(ma), nhan_tien))
 
         loi_cuoi = ""
         for lan in range(1, max(1, so_lan_thu) + 1):

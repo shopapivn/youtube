@@ -85,3 +85,32 @@ class TestNhanBuoc:
         assert '"đối chiếu và sửa")' not in chu, "nhãn cũ của bước 3 (chú thích thì được)"
         assert "rà soát bản cuối" in chu
         assert "chấm & chọn một bản" in chu
+
+
+class TestNhanTien:
+    """"[ĐANG] Viết kịch bản (có tiêu ví)" in ra trong khi khâu đi Claude Max —
+    chủ dự án tưởng tool đi nhầm đường. Nhãn phải theo đường thật."""
+
+    def test_khau_kich_ban_tu_khai_khong_tieu_vi(self):
+        from core.auto_khau import _khau_kich_ban
+
+        co = BoiCanh(goc=".", kenh=_K(), goi_chat=lambda *_a, **_k: "",
+                     goi_chat_kich_ban=lambda *_a, **_k: "", on_log=lambda _d: None)
+        khong = BoiCanh(goc=".", kenh=_K(), goi_chat=lambda *_a, **_k: "",
+                        on_log=lambda _d: None)
+        assert _khau_kich_ban(co).khong_tieu_vi is True
+        assert _khau_kich_ban(khong).khong_tieu_vi is False
+
+    def test_nhat_ky_noi_claude_max_khi_khau_khai_vay(self, tmp_path):
+        from core.auto import chay
+
+        def lam(_luot, _tt):
+            return "ok"
+
+        lam.khong_tieu_vi = True
+        log = []
+        luot = LuotChay(ma_kenh="K", ma_luot="L", thu_muc=str(tmp_path))
+        chay(luot, {"kich-ban": lam}, on_log=log.append, dung_sau="kich-ban")
+        chu = chr(10).join(log)
+        assert "[ĐANG] Viết kịch bản (Claude Max, không tiêu ví)" in chu
+        assert "(có tiêu ví)" not in chu.split("[ĐANG] Viết kịch bản")[1].split(chr(10))[0]

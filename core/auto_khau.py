@@ -2015,6 +2015,8 @@ def _khau_kich_ban(bc_goc: BoiCanh):
         return {"so_ky_tu": len(ban_nhap), "lech": round(lech, 3),
                 "tieu_de": tieu_de, "chu_bia": chu_bia}
 
+    # Nhãn cho nhật ký của `core/auto.chay`: khâu này có đi ví hay không.
+    lam.khong_tieu_vi = bc_goc.goi_chat_kich_ban is not None
     return lam
 
 
