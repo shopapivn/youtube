@@ -108,7 +108,7 @@ def tai_len(client: Any, duong: str) -> str:
         if cu is not None and (time.time() - cu[1]) < _han(cu[0]):
             return cu[0]
 
-    url = str(client.uploads.upload_file(duong))
+    url = str(_tai_len_thu_lai(client, duong))
 
     # Để lại bản sao ngay trên đĩa máy này: worker chạy cùng máy sẽ đọc bản đó
     # thay vì tải ngược tấm ảnh ta vừa đẩy đi. Hỏng thì nuốt — đây chỉ là lối
@@ -124,6 +124,34 @@ def tai_len(client: Any, duong: str) -> str:
         with _KHOA:
             _NHO[khoa] = (url, time.time())
     return url
+
+
+#: Tối đa mấy lần thử lại khi máy chủ báo "gửi quá nhanh" lúc tải ảnh lên.
+#:
+#: Đo 25/08/2026: một mẻ 81 cảnh × 3 ảnh tham chiếu đụng trần 60 yêu cầu/phút
+#: ngay ở lượt tải đầu; máy chủ nói rõ "thử lại sau 2 giây" mà bản cũ ném lỗi
+#: luôn. Tab Hàng loạt thì nuốt lỗi và **lặng lẽ bỏ ảnh tham chiếu** của dòng
+#: ấy — nhân vật đổi mặt mà không một dòng báo. Chờ đúng như máy chủ bảo rồi
+#: thử lại là xong.
+SO_LAN_THU_TAI = 6
+
+
+def _tai_len_thu_lai(client: Any, duong: str) -> str:
+    from .errors import retry_after_seconds  # noqa: PLC0415
+
+    try:
+        from shopapi import RateLimitError  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 — SDK thiếu lớp này thì không có gì để bắt
+        RateLimitError = ()  # type: ignore[assignment]  # noqa: N806
+    lan = 0
+    while True:
+        try:
+            return str(client.uploads.upload_file(duong))
+        except RateLimitError as exc:  # type: ignore[misc]
+            lan += 1
+            if lan >= SO_LAN_THU_TAI:
+                raise
+            time.sleep(max(1.0, retry_after_seconds(exc, lan - 1, cap=30.0)))
 
 
 def xoa_nho() -> None:
