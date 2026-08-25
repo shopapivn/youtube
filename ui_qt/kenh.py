@@ -68,6 +68,7 @@ _NHAN_PROMPT = {
     "2a-phan-tich.md": "Phân tích gốc",
     "2-viet.md": "Content",
     "2b-cham.md": "Chấm & chọn",
+    "2c-hoan-thien.md": "Hoàn thiện bản chọn",
     "3-sua.md": "Rà soát",
     "4-do-dai.md": "Độ dài",
     "5-hoan-thien.md": "Hoàn thiện",
@@ -86,6 +87,9 @@ _VIEC_PROMPT = {
     "2b-cham.md": "chấm các bản content đã viết và chọn MỘT bản — đây là tiêu "
                   "chí chọn, sửa theo gu kênh của bạn (chỉ chạy khi “Viết mấy "
                   "bản” > 1).",
+    "2c-hoan-thien.md": "hoàn thiện bản đã chọn: sửa điểm yếu, phát huy điểm "
+                        "mạnh bộ chấm chỉ ra, làm mượt — rồi bộ chấm so lại, "
+                        "không hơn thì giữ bản cũ (chỉ chạy khi bật ô bên trên).",
     "3-sua.md": "rà soát content trước khi đọc: sửa lệch tiếng, tách câu, chèn "
                 "thẻ cảm xúc — không viết lại.",
     "4-do-dai.md": "nắn kịch bản cho đúng độ dài bạn đặt.",
@@ -1014,17 +1018,19 @@ class HopKenh(QDialog):
             "tốn thêm gì; đi ví ShopAPI thì tốn gấp số bản.")
         hang_ban.addWidget(self._o_so_ban)
         v.addLayout(hang_ban)
-        # Sau khi chọn bản, vá đúng "chỗ dễ rớt" bộ chấm chỉ ra. Đo 25/08/2026
-        # trên bốn lượt thật: 2 lần vá được nhận (cấy cảnh đời thường vào đoạn
-        # trừu tượng, cắt đoạn rẽ nhánh), 1 lần bộ chấm từ chối bản vá vì nó
-        # bỏ mất một nghiên cứu — hai cửa chốt đều làm việc.
-        self._o_va = QCheckBox("Vá chỗ dễ rớt sau khi chọn bản (thêm 2 lượt gọi AI)")
+        # Sau khi chọn bản, hoàn thiện chính bản đó theo nhận xét của bộ chấm.
+        # Tiền thân là bước "vá một chỗ" — đo 25/08/2026 trên tám lượt thật:
+        # 7 lần bản sửa được bộ chấm chọn, 1 lần bị từ chối vì bỏ mất một
+        # nghiên cứu — hai cửa chốt đều làm việc.
+        self._o_va = QCheckBox("Hoàn thiện bản đã chọn (thêm 2 lượt gọi AI)")
         self._o_va.setChecked(bool(getattr(getattr(self, "_kenh", None),
-                                           "va_cho_rot", False)))
+                                           "hoan_thien", False)))
         self._o_va.setToolTip(
-            "Bộ chấm chỉ ra chỗ người xem dễ rời đi nhất; AI sửa đúng chỗ đó, "
-            "giữ nguyên phần còn lại (máy chốt ≥90% câu), rồi bộ chấm so hai "
-            "bản — bản vá không hơn thì bỏ. Chỉ có thể tốt lên, không xấu đi.")
+            "Bộ chấm ghi điểm mạnh, điểm yếu của bản được chọn; AI sửa điểm "
+            "yếu, phát huy điểm mạnh, làm mượt — giữ cấu trúc và ý (máy chốt: "
+            "không viết lại từ đầu, độ dài ±25%), rồi bộ chấm so hai bản — bản "
+            "mới không hơn thì bỏ. Prompt ở thẻ “Hoàn thiện bản chọn”. Chỉ có "
+            "thể tốt lên, không xấu đi.")
         v.addWidget(self._o_va)
         v.addWidget(self._phu(
             "Tiêu chí chọn bản tốt nhất bạn sửa ở thẻ “Chấm & chọn” bên dưới — "
@@ -1650,7 +1656,7 @@ class HopKenh(QDialog):
             ("do_phan_giai", "" if self._o_dpg.currentText() == THEO_CHUNG
              else self._o_dpg.currentText()),
             ("so_ban_nhap", str(self._o_so_ban.value())),
-            ("va_cho_rot", "true" if self._o_va.isChecked() else "false"),
+            ("hoan_thien", "true" if self._o_va.isChecked() else "false"),
         ):
             chu = _dat_khoa_yaml(chu, khoa, gt)
         if sua:

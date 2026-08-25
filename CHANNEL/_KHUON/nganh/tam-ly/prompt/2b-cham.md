@@ -13,7 +13,7 @@ số đo tôi tính sẵn cho từng bản (phút đọc quy từ số ký tự 
 <<SO_DO>>
 
 trả về DUY NHẤT một JSON, không giải thích ngoài JSON:
-{"chon": "A", "diem": {"A": 7, "B": 8, "C": 6}, "ly_do": "hai ba câu: 30 giây đầu, đường cong giữa bài, đoạn cuối của bản được chọn hơn các bản kia ở đâu", "cho_de_rot": "câu hoặc đoạn nào của bản được chọn dễ làm người xem rời đi nhất, và vì sao"}
+{"chon": "A", "diem": {"A": 7, "B": 8, "C": 6}, "ly_do": "hai ba câu: 30 giây đầu, đường cong giữa bài, đoạn cuối của bản được chọn hơn các bản kia ở đâu", "diem_manh": "hai ba điểm mạnh nhất của bản được chọn — thứ cần giữ và phát huy khi hoàn thiện", "diem_yeu": "hai ba điểm yếu cụ thể của bản được chọn cần sửa (chỉ rõ đoạn nào, thiếu gì)", "cho_de_rot": "câu hoặc đoạn nào của bản được chọn dễ làm người xem rời đi nhất, và vì sao"}
 
 kịch bản gốc đã viral:
 

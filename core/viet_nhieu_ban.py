@@ -21,9 +21,11 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .goi_van_ban import loc_json
 
-__all__ = ["TIEU_CHI_MAC_DINH", "KHUON_CHAM_MAC_DINH", "KHUON_VA", "trung_nguyen_van",
-           "bang_so_do", "cham_va_chon", "viet_va_chon", "nhan_ban",
-           "ty_le_giu_cau", "va_cho_de_rot", "GIU_TOI_THIEU"]
+__all__ = ["TIEU_CHI_MAC_DINH", "KHUON_CHAM_MAC_DINH", "KHUON_VA",
+           "KHUON_HOAN_THIEN", "trung_nguyen_van", "bang_so_do", "cham_va_chon",
+           "viet_va_chon", "nhan_ban", "ty_le_giu_cau", "va_cho_de_rot",
+           "hoan_thien_ban", "tach_cho_rot", "tach_diem", "GIU_TOI_THIEU",
+           "GIU_HOAN_THIEN"]
 
 #: Tiêu chí chấm mặc định — theo đúng mục đích của chủ dự án: video được
 #: YouTube đề xuất nhờ giữ chân và bình luận.
@@ -58,8 +60,10 @@ KHUON_CHAM_MAC_DINH = (
     "<<SO_DO>>\n\n"
     "trả về DUY NHẤT một JSON, không giải thích ngoài JSON:\n"
     "{\"chon\": \"A\", \"diem\": {\"A\": 7, \"B\": 8}, \"ly_do\": \"hai ba câu "
-    "vì sao bản được chọn hơn các bản kia\", \"cho_de_rot\": \"câu hoặc đoạn "
-    "của bản được chọn dễ làm người xem rời đi nhất, và vì sao\"}\n\n"
+    "vì sao bản được chọn hơn các bản kia\", \"diem_manh\": \"hai ba điểm mạnh "
+    "nhất của bản được chọn\", \"diem_yeu\": \"hai ba điểm yếu cụ thể cần sửa\", "
+    "\"cho_de_rot\": \"câu hoặc đoạn của bản được chọn dễ làm người xem rời đi "
+    "nhất, và vì sao\"}\n\n"
     "bản gốc:\n\n<<COMPETITOR_TRANSCRIPT>>\n\n<<CAC_BAN>>")
 
 _LAM = re.compile(r"[\s。、「」『』?？!！・…—.,;:\"'()\[\]]+")
@@ -121,6 +125,12 @@ def _thay(khuon: str, o: Dict[str, Any]) -> str:
     return khuon
 
 
+#: Điền ô nhưng ĐỂ NGUYÊN ô chưa có dữ liệu — khác `chia_canh.dien_khuon`
+#: (xoá sạch ô còn sót). Nơi gọi điền trước phần chung của kênh, rồi
+#: `hoan_thien_ban` điền nốt `<<DRAFT>>`, `<<DIEM_*>>` — xoá sớm là mất bài.
+dien_o_giu_lai = _thay
+
+
 #: Lời nhắc VÁ đúng một chỗ. Ô: `<<CHO_ROT>>`, `<<NGON_NGU>>`,
 #: `<<COMPETITOR_TRANSCRIPT>>`, `<<DRAFT>>`.
 #:
@@ -161,42 +171,87 @@ def ty_le_giu_cau(goc: str, moi: str) -> float:
     return sum(1 for c in cau_goc if c in co) / len(cau_goc)
 
 
-def va_cho_de_rot(goi: Callable[[str], str], ban: str, cho_rot: str, goc: str,
-                  *, ngon_ngu: str = "", ghi: Optional[Callable[[str], None]] = None,
-                  giu_toi_thieu: float = GIU_TOI_THIEU) -> Tuple[str, bool, str]:
-    """Vá một chỗ theo chẩn đoán của bộ chấm. Trả `(bản dùng, có vá không, ghi chú)`.
+#: Lời nhắc HOÀN THIỆN mặc định — nơi gọi có thể đưa khuôn riêng của kênh
+#: (`prompt/2c-hoan-thien.md`). Ô: `<<DIEM_MANH>>`, `<<DIEM_YEU>>`,
+#: `<<NGON_NGU>>`, `<<PHUT>>`, `<<CHARS>>`, `<<COMPETITOR_TRANSCRIPT>>`, `<<DRAFT>>`.
+#:
+#: Chủ dự án, 25/08/2026: *"remake với prompt đơn giản vài lần nó sẽ ra bài ok
+#: nhất, và chỉnh lại bài đó để hoàn thiện các điểm yếu và nổi bật phát huy
+#: điểm tốt, làm mượt lại"*.
+KHUON_HOAN_THIEN = (
+    "kịch bản dưới đây đã được chọn là bản tốt nhất. hãy hoàn thiện chính bản này:\n"
+    "- sửa các điểm yếu: <<DIEM_YEU>>\n"
+    "- phát huy các điểm mạnh: <<DIEM_MANH>>\n"
+    "- làm mượt câu chữ để đọc thành tiếng nghe tự nhiên\n"
+    "giữ nguyên cấu trúc, các ý, nghiên cứu, ẩn dụ và độ dài (khoảng <<PHUT>> phút "
+    "đọc ≈ <<CHARS>> ký tự); không viết lại từ đầu, không thêm ý mới ngoài "
+    "những gì cần để sửa điểm yếu. viết bằng <<NGON_NGU>>.\n"
+    "trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét.\n\n"
+    "bản gốc đã viral (để lấy chất liệu nếu cần):\n\n<<COMPETITOR_TRANSCRIPT>>\n\n"
+    "kịch bản cần hoàn thiện:\n\n<<DRAFT>>")
 
-    Bản vá chỉ được nhận khi giữ ≥ `giu_toi_thieu` câu của bản chọn VÀ không
-    phình quá 35% — ngoài hai điều kiện ấy là AI đã làm quá tay, dùng bản chọn
-    như cũ. Bước này chỉ có thể làm bài tốt lên một chỗ, không thể làm xấu đi.
+#: Hoàn thiện được sửa rộng hơn vá (tối đa ~40% câu), nhưng không được viết
+#: lại từ đầu, và độ dài không lệch quá 25% so với bản chọn.
+GIU_HOAN_THIEN = 0.6
+
+
+def hoan_thien_ban(goi: Callable[[str], str], ban: str, goc: str, *,
+                   diem_manh: str = "", diem_yeu: str = "", ngon_ngu: str = "",
+                   phut: str = "", chars: int = 0, khuon: str = "",
+                   ghi: Optional[Callable[[str], None]] = None,
+                   giu_toi_thieu: float = GIU_HOAN_THIEN,
+                   dai_toi_da: float = 1.25) -> Tuple[str, bool, str]:
+    """Hoàn thiện bản chọn theo nhận xét của bộ chấm. Trả `(bản dùng, có sửa
+    không, ghi chú)`.
+
+    Hai rào chắn bằng mã: giữ ≥ `giu_toi_thieu` câu (không viết lại từ đầu)
+    và độ dài trong 1/`dai_toi_da`…`dai_toi_da` lần bản chọn. Rào chắn thứ ba
+    ở nơi gọi: bộ chấm so hai bản, không hơn thì giữ bản chọn. Bước này chỉ
+    có thể làm bài tốt lên, không thể làm xấu đi.
     """
     def noi(dong: str) -> None:
         if ghi is not None:
             ghi(dong)
 
-    cho_rot = (cho_rot or "").strip()
-    if not cho_rot or not ban.strip():
-        return ban, False, "không có chỗ rớt để vá"
+    diem_manh = (diem_manh or "").strip()
+    diem_yeu = (diem_yeu or "").strip()
+    if not (diem_manh or diem_yeu) or not ban.strip():
+        return ban, False, "không có nhận xét để hoàn thiện"
     try:
-        noi("  vá chỗ dễ rớt…")
-        moi = (goi(_thay(KHUON_VA, {"CHO_ROT": cho_rot, "NGON_NGU": ngon_ngu or "",
-                                    "COMPETITOR_TRANSCRIPT": goc, "DRAFT": ban}))
-               or "").strip()
-    except Exception as loi:  # noqa: BLE001 — vá là việc phụ, hỏng thì thôi
-        noi("  (vá hỏng: {0} — giữ bản chọn)".format(str(loi)[:80]))
-        return ban, False, "vá hỏng: " + str(loi)[:80]
+        noi("  hoàn thiện bản đã chọn…")
+        moi = (goi(_thay(khuon.strip() or KHUON_HOAN_THIEN, {
+            "DIEM_MANH": diem_manh or "(không ghi)", "DIEM_YEU": diem_yeu or "(không ghi)",
+            "NGON_NGU": ngon_ngu or "", "PHUT": phut or "?", "CHARS": chars or "?",
+            "COMPETITOR_TRANSCRIPT": goc, "DRAFT": ban})) or "").strip()
+    except Exception as loi:  # noqa: BLE001 — hoàn thiện là việc phụ, hỏng thì thôi
+        noi("  (hoàn thiện hỏng: {0} — giữ bản chọn)".format(str(loi)[:80]))
+        return ban, False, "hoàn thiện hỏng: " + str(loi)[:80]
     if not moi:
-        return ban, False, "bản vá rỗng"
+        return ban, False, "bản hoàn thiện rỗng"
     giu = ty_le_giu_cau(ban, moi)
-    phinh = len(moi) / max(1, len(ban))
-    if giu < giu_toi_thieu or phinh > 1.35:
-        noi("  (bản vá đổi quá tay: giữ {0:.0%} câu, dài x{1:.2f} — bỏ, dùng bản "
-            "chọn)".format(giu, phinh))
-        return ban, False, "bỏ bản vá: giữ {0:.0%} câu, dài x{1:.2f}".format(
-            giu, phinh)
-    noi("  đã vá: giữ {0:.0%} câu, {1} → {2} ký tự.".format(giu, len(ban), len(moi)))
-    return moi, True, "đã vá: giữ {0:.0%} câu, {1} → {2} ký tự".format(
+    ti_le = len(moi) / max(1, len(ban))
+    if giu < giu_toi_thieu or ti_le > dai_toi_da or ti_le < 1 / dai_toi_da:
+        noi("  (bản hoàn thiện đi quá xa: giữ {0:.0%} câu, dài x{1:.2f} — bỏ, dùng "
+            "bản chọn)".format(giu, ti_le))
+        return ban, False, "bỏ bản hoàn thiện: giữ {0:.0%} câu, dài x{1:.2f}".format(
+            giu, ti_le)
+    noi("  đã hoàn thiện: giữ {0:.0%} câu, {1} → {2} ký tự.".format(
+        giu, len(ban), len(moi)))
+    return moi, True, "đã hoàn thiện: giữ {0:.0%} câu, {1} → {2} ký tự".format(
         giu, len(ban), len(moi))
+
+
+def va_cho_de_rot(goi: Callable[[str], str], ban: str, cho_rot: str, goc: str,
+                  *, ngon_ngu: str = "", ghi: Optional[Callable[[str], None]] = None,
+                  giu_toi_thieu: float = GIU_TOI_THIEU) -> Tuple[str, bool, str]:
+    """Vá đúng MỘT chỗ (bản hẹp của `hoan_thien_ban`, giữ ≥90% câu, phình ≤35%)."""
+    if not (cho_rot or "").strip() or not ban.strip():
+        return ban, False, "không có chỗ rớt để vá"
+    ban_moi, da, ghi_chu = hoan_thien_ban(
+        goi, ban, goc, diem_yeu=cho_rot, ngon_ngu=ngon_ngu, khuon=KHUON_VA.replace(
+            "<<CHO_ROT>>", "<<DIEM_YEU>>"),
+        ghi=ghi, giu_toi_thieu=giu_toi_thieu, dai_toi_da=1.35)
+    return ban_moi, da, ghi_chu.replace("hoàn thiện", "vá")
 
 
 def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
@@ -249,10 +304,15 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
         if 0 <= i_chon < len(ban):
             chon = i_chon
             ly_do = str(ket.get("ly_do") or "")
-            # Chỗ dễ rớt — thứ chủ kênh dùng được ngay khi xem lại bản chọn.
-            cho_rot = str(ket.get("cho_de_rot") or "").strip()
-            if cho_rot:
-                ly_do += "\nChỗ dễ rớt: " + cho_rot
+            # Điểm mạnh / điểm yếu / chỗ dễ rớt — bước hoàn thiện đọc lại từ đây.
+            for khoa, nhan in (("diem_manh", "Điểm mạnh"), ("diem_yeu", "Điểm yếu"),
+                               ("cho_de_rot", "Chỗ dễ rớt")):
+                gt = ket.get(khoa)
+                if isinstance(gt, list):
+                    gt = "; ".join(str(x) for x in gt)
+                gt = str(gt or "").strip()
+                if gt:
+                    ly_do += "\n{0}: {1}".format(nhan, gt)
             diem = ket.get("diem") if isinstance(ket.get("diem"), dict) else {}
     except Exception as loi:  # noqa: BLE001 — chấm hỏng thì chọn theo số đo
         noi("  (chấm hỏng: {0} — chọn theo số đo)".format(str(loi)[:80]))
@@ -267,12 +327,27 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
     return chon, ly_do, diem, bang
 
 
+def _tach_dong(ly_do: str, nhan: str) -> str:
+    """Rút một dòng "<nhãn>: …" khỏi `ly_do` (rỗng nếu không có)."""
+    for dong in (ly_do or "").splitlines():
+        if dong.startswith(nhan + ": "):
+            return dong[len(nhan) + 2:].strip()
+    return ""
+
+
 def tach_cho_rot(ly_do: str) -> str:
     """Rút phần "Chỗ dễ rớt: …" khỏi `ly_do` của bộ chấm (rỗng nếu không có)."""
-    dau = "Chỗ dễ rớt: "
-    if dau not in (ly_do or ""):
-        return ""
-    return ly_do.split(dau, 1)[1].strip()
+    return _tach_dong(ly_do, "Chỗ dễ rớt")
+
+
+def tach_diem(ly_do: str) -> Tuple[str, str]:
+    """`(điểm mạnh, điểm yếu)` từ `ly_do`; chỗ dễ rớt được gộp vào điểm yếu."""
+    manh = _tach_dong(ly_do, "Điểm mạnh")
+    yeu = _tach_dong(ly_do, "Điểm yếu")
+    rot = tach_cho_rot(ly_do)
+    if rot:
+        yeu = (yeu + "; " if yeu else "") + "chỗ dễ rớt: " + rot
+    return manh, yeu
 
 
 def viet_va_chon(goi: Callable[[str], str], loi_nhac: str, so_ban: int, goc: str,

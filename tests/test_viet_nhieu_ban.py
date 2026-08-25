@@ -131,15 +131,16 @@ class TestNutTrenGUI:
         assert "self._o_so_ban = QSpinBox()" in chu
         assert '("so_ban_nhap", str(self._o_so_ban.value()))' in chu
 
-    def test_o_va_cho_rot_luu_vao_kenh_yaml(self):
+    def test_o_hoan_thien_luu_vao_kenh_yaml(self):
         chu = self._kenh_py()
         assert "self._o_va = QCheckBox(" in chu
-        assert '("va_cho_rot", "true" if self._o_va.isChecked() else "false")' in chu
+        assert '("hoan_thien", "true" if self._o_va.isChecked() else "false")' in chu
 
-    def test_the_cham_chon_co_ten_de_sua_tieu_chi(self):
+    def test_the_cham_chon_va_hoan_thien_co_ten_de_sua(self):
         from ui_qt.kenh import _NHAN_PROMPT, _VIEC_PROMPT
 
-        assert "2b-cham.md" in _NHAN_PROMPT and "2b-cham.md" in _VIEC_PROMPT
+        for t in ("2b-cham.md", "2c-hoan-thien.md"):
+            assert t in _NHAN_PROMPT and t in _VIEC_PROMPT, t
 
     def test_kenh_yaml_doc_so_ban_nhap(self, tmp_path):
         from core.kenh import doc_kenh
@@ -153,7 +154,10 @@ class TestNutTrenGUI:
             t.write("ma: K1\nso_ban_nhap: 99\nva_cho_rot: true\n")
         k = doc_kenh(str(tmp_path), "K1")
         assert k.so_ban_nhap == 5, "kẹp 1..5"
-        assert k.va_cho_rot is True
+        assert k.hoan_thien is True, "khoá cũ va_cho_rot vẫn đọc được"
+        with open(os.path.join(d, "kenh.yaml"), "w", encoding="utf-8") as t:
+            t.write("ma: K1\nhoan_thien: true\n")
+        assert doc_kenh(str(tmp_path), "K1").hoan_thien is True
 
 
 class TestTrungNguyenVan:

@@ -70,6 +70,9 @@ BUOC_PROMPT = (
     # một. Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các
     # lần tức là chọn bản tốt nhất"*.
     ("2b-cham.md", "Chấm các bản viết, chọn bản tốt nhất"),
+    # Chỉ chạy khi kênh bật `hoan_thien`: sửa điểm yếu, phát huy điểm mạnh bộ
+    # chấm chỉ ra, làm mượt — rồi bộ chấm so lại, không hơn thì giữ bản chọn.
+    ("2c-hoan-thien.md", "Hoàn thiện bản đã chọn: sửa điểm yếu, phát huy điểm mạnh"),
     ("3-sua.md", "Rà soát: sửa lệch tiếng, tách câu, chèn thẻ"),
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
@@ -115,10 +118,14 @@ class Kenh:
     #: Cần thêm `prompt/2b-cham.md`; thiếu tệp ấy thì chọn theo số đo (độ dài,
     #: mức trùng nguyên văn).
     so_ban_nhap: int = 1
-    #: Sau khi chấm chọn bản, vá đúng "chỗ dễ rớt" mà bộ chấm chỉ ra (một lượt
-    #: gọi nữa, có chốt giữ ≥90% câu). Tắt sẵn — khách đi ví thì đó là một
-    #: lượt chữ nữa; kênh chạy thuê bao bật lên không tốn gì.
-    va_cho_rot: bool = False
+    #: Sau khi chấm chọn bản, HOÀN THIỆN chính bản đó theo nhận xét của bộ
+    #: chấm: sửa điểm yếu, phát huy điểm mạnh, làm mượt (`prompt/2c-hoan-thien.md`,
+    #: hai lượt gọi nữa: hoàn thiện + chấm so lại). Chủ dự án, 25/08/2026:
+    #: *"chỉnh lại bài đó để hoàn thiện các điểm yếu và nổi bật phát huy điểm
+    #: tốt, làm mượt lại"*. Tắt sẵn — khách đi ví thì đó là hai lượt chữ nữa;
+    #: kênh chạy thuê bao bật lên không tốn gì. Khoá cũ `va_cho_rot` trong
+    #: kenh.yaml vẫn được đọc như cờ này.
+    hoan_thien: bool = False
     #: Chế độ đặt TIÊU ĐỀ và CHỮ BÌA — bám bản gốc hay đặt lại theo chất kênh.
     #:
     #: `"faithful"` (mặc định) — bám sát tiêu đề đối thủ, chỉ dịch và bản địa
@@ -353,7 +360,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
-        va_cho_rot=bool(cai.get("va_cho_rot", False)),
+        hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),

@@ -2084,42 +2084,53 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             None, ban, tu_lieu, muc_tieu=muc_tieu, ghi=bc.ghi,
             ky_tu_moi_phut=nhip)
     ban_chon = ban[chon]
-    ghi_va = ""
-    if getattr(k, "va_cho_rot", False):
-        # ═══ VÁ ĐÚNG CHỖ BỘ CHẤM CHỈ RA, RỒI CHO BỘ CHẤM SO LẠI ═══
+    ghi_ht = ""
+    if getattr(k, "hoan_thien", False):
+        # ═══ HOÀN THIỆN BẢN ĐÃ CHỌN, RỒI CHO BỘ CHẤM SO LẠI ═══
         #
-        # Bản vá chỉ được dùng khi (a) giữ ≥90% câu bản chọn (mã chốt) và
-        # (b) chính bộ chấm, so hai bản cạnh nhau, thích bản vá hơn. Hai cửa
-        # để bước này không bao giờ làm bài xấu đi.
-        from .viet_nhieu_ban import tach_cho_rot, va_cho_de_rot  # noqa: PLC0415
+        # Chủ dự án, 25/08/2026: "remake với prompt đơn giản vài lần nó sẽ ra
+        # bài ok nhất, và chỉnh lại bài đó để hoàn thiện các điểm yếu và nổi
+        # bật phát huy điểm tốt, làm mượt lại". Bản hoàn thiện chỉ được dùng
+        # khi (a) không viết lại từ đầu — giữ ≥60% câu, độ dài ±25% (mã chốt)
+        # và (b) chính bộ chấm, so hai bản cạnh nhau, thích bản mới hơn. Hai
+        # cửa để bước này không bao giờ làm bài xấu đi.
+        from .viet_nhieu_ban import (dien_o_giu_lai, hoan_thien_ban,  # noqa: PLC0415
+                                     tach_diem)
 
-        cho_rot = tach_cho_rot(ly_do)
-        if cho_rot:
-            def goi_va(loi_nhac: str) -> str:
+        diem_manh, diem_yeu = tach_diem(ly_do)
+        if diem_manh or diem_yeu:
+            def goi_ht(loi_nhac: str) -> str:
                 bc.kiem_dung()
-                return _goi(bc, loi_nhac, _khoa_chat(luot, "2c-va.md"),
+                return _goi(bc, loi_nhac, _khoa_chat(luot, "2c-hoan-thien.md"),
                             toi_da_token=16384)
 
-            ban_va, da_va, ghi_va = va_cho_de_rot(
-                goi_va, ban_chon, cho_rot, tu_lieu,
-                ngon_ngu=ten_tieng(k.ngon_ngu), ghi=bc.ghi)
-            if da_va:
-                _ghi_chu(os.path.join(d, "1-ban-va.txt"), ban_va + "\n")
+            ban_ht, da_ht, ghi_ht = hoan_thien_ban(
+                goi_ht, ban_chon, tu_lieu, diem_manh=diem_manh, diem_yeu=diem_yeu,
+                ngon_ngu=ten_tieng(k.ngon_ngu), phut=str(chung.get("PHUT", "")),
+                chars=int(muc_tieu or 0),
+                # KHÔNG dùng `_thay` (xoá ô còn sót) — `<<DRAFT>>`, `<<DIEM_*>>`
+                # phải còn nguyên cho `hoan_thien_ban` điền.
+                khuon=dien_o_giu_lai(k.prompt.get("2c-hoan-thien.md", ""),
+                                     dict(chung, SO_BAN=len(ban))),
+                ghi=bc.ghi)
+            if da_ht:
+                _ghi_chu(os.path.join(d, "1-ban-hoan-thien.txt"), ban_ht + "\n")
                 i_hon, ly_do_so, _d, _b = cham_va_chon(
                     goi_cham if khuon_cham.strip() else None,
-                    [ban_chon, ban_va], tu_lieu, khuon_cham=khuon_cham,
+                    [ban_chon, ban_ht], tu_lieu, khuon_cham=khuon_cham,
                     chung=chung, muc_tieu=muc_tieu, ghi=bc.ghi,
                     ky_tu_moi_phut=nhip)
                 if i_hon == 1:
-                    ban_chon = ban_va
-                    ghi_va += " — bộ chấm chọn bản vá: " + ly_do_so[:200]
+                    ban_chon = ban_ht
+                    ghi_ht += " — bộ chấm chọn bản hoàn thiện: " + ly_do_so[:200]
                 else:
-                    ghi_va += " — bộ chấm vẫn thích bản chưa vá: " + ly_do_so[:200]
-                    bc.ghi("  (bản vá không hơn — dùng bản chọn ban đầu)")
+                    ghi_ht += (" — bộ chấm vẫn thích bản chưa hoàn thiện: "
+                               + ly_do_so[:200])
+                    bc.ghi("  (bản hoàn thiện không hơn — dùng bản chọn ban đầu)")
     _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
              "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}".format(
                  bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),
-                 ly_do, ("Vá: " + ghi_va + "\n") if ghi_va else ""))
+                 ly_do, ("Hoàn thiện: " + ghi_ht + "\n") if ghi_ht else ""))
     return ban_chon
 
 
