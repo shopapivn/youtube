@@ -30,7 +30,9 @@ tấm khác là URL cũ tự hết giá trị, không phải nhớ đi xoá cach
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import threading
 import time
 from typing import Any, Dict, Optional, Tuple
@@ -109,6 +111,7 @@ def tai_len(client: Any, duong: str) -> str:
             return cu[0]
 
     url = str(_tai_len_thu_lai(client, duong))
+    _ghi_so_tep_tam(url)
 
     # Để lại bản sao ngay trên đĩa máy này: worker chạy cùng máy sẽ đọc bản đó
     # thay vì tải ngược tấm ảnh ta vừa đẩy đi. Hỏng thì nuốt — đây chỉ là lối
@@ -144,6 +147,7 @@ def _tai_len_thu_lai(client: Any, duong: str) -> str:
     except Exception:  # noqa: BLE001 — SDK thiếu lớp này thì không có gì để bắt
         RateLimitError = ()  # type: ignore[assignment]  # noqa: N806
     lan = 0
+    da_don = False
     while True:
         try:
             return str(client.uploads.upload_file(duong))
@@ -152,6 +156,133 @@ def _tai_len_thu_lai(client: Any, duong: str) -> str:
             if lan >= SO_LAN_THU_TAI:
                 raise
             time.sleep(max(1.0, retry_after_seconds(exc, lan - 1, cap=30.0)))
+        except Exception as exc:  # noqa: BLE001 — chi bat dung ca "kho tam day"
+            if da_don or not _la_het_kho(exc):
+                raise
+            da_don = True
+            if don_kho_tam(client) == 0:
+                raise
+
+
+#: Cau may chu bao kho tam day (core/su_co.HET_KHO dung cung mau chu).
+_DAU_HET_KHO = ("hạn mức lưu trữ", "storage quota", "quota exceeded")
+
+
+def _la_het_kho(exc: BaseException) -> bool:
+    chu = str(exc).lower()
+    return any(d in chu for d in _DAU_HET_KHO)
+
+
+#: Xoa toi da ngan nay tep tam cu nhat mot lan khi kho day.
+SO_TEP_DON_MOI_LAN = 40
+
+
+#: So tep tam da day len, GHI RA DIA — vi moi tien trinh (moi lan mo tool, moi
+#: kich ban chay) co `_NHO` rieng, khong ai nho tep cua lan truoc; kho day thi
+#: chang co gi de xoa. Mot dong JSON moi tep: {"id": "upl_…", "luc": epoch}.
+DUONG_SO_TEP_TAM = os.path.join(
+    os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ShopAPI", "tep-tam-da-day.jsonl")
+
+
+def _ghi_so_tep_tam(url: str) -> None:
+    m = re.search(r"(upl_[A-Za-z0-9]+)", str(url or ""))
+    if not m:
+        return
+    try:
+        os.makedirs(os.path.dirname(DUONG_SO_TEP_TAM), exist_ok=True)
+        with open(DUONG_SO_TEP_TAM, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"id": m.group(1), "luc": time.time()}) + "\n")
+    except OSError:
+        pass
+
+
+def _doc_so_tep_tam() -> list:
+    try:
+        with open(DUONG_SO_TEP_TAM, encoding="utf-8") as f:
+            dong = [json.loads(l) for l in f if l.strip()]
+    except (OSError, ValueError):
+        return []
+    return [d for d in dong if isinstance(d, dict) and d.get("id")]
+
+
+def _ghi_lai_so_tep_tam(dong: list) -> None:
+    try:
+        os.makedirs(os.path.dirname(DUONG_SO_TEP_TAM), exist_ok=True)
+        with open(DUONG_SO_TEP_TAM, "w", encoding="utf-8") as f:
+            for d in dong:
+                f.write(json.dumps(d) + "\n")
+    except OSError:
+        pass
+
+
+def _tep_tam_trong_ban_cuc_bo() -> list:
+    """`(ma upl_…, mtime)` cua cac ban sao cuc bo — chi tep co ten bat dau `upl_`."""
+    try:
+        from .auto_khau import KHO_ANH_CUC_BO  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        return []
+    ra = []
+    try:
+        for ten in os.listdir(KHO_ANH_CUC_BO):
+            if ten.startswith("upl_") and re.fullmatch(r"upl_[A-Za-z0-9]+", ten):
+                try:
+                    ra.append((ten, os.path.getmtime(os.path.join(KHO_ANH_CUC_BO, ten))))
+                except OSError:
+                    continue
+    except OSError:
+        return []
+    return ra
+
+
+def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
+    """Kho tam tren may chu day → xoa nhung tep TOOL NAY da day len, cu nhat truoc.
+
+    Do 25/08/2026: mot luot 81 canh (tham chieu + anh canh lam khung dau clip)
+    day ~500 MB, dung tran "hạn mức lưu trữ tạm 500 MB" va ca lo chet ngay luot
+    tai dau. Tep tam tu het han sau vai gio, nhung khach khong the ngoi doi.
+    Chi xoa tep tool nay nho (`_NHO`) — khong dung tep cua ai khac. Tra ve so
+    tep da xoa.
+    """
+    # Gop ba nguon: so tren dia (moi lan chay truoc), ban sao cuc bo ma
+    # `_luu_ban_cuc_bo` de lai (ten tep = ma upl_… — co ca tep cua cac ban tool
+    # cu chua co so), va bo nho tien trinh nay.
+    ung: Dict[str, float] = {}
+    for d in _doc_so_tep_tam():
+        ung[str(d["id"])] = float(d.get("luc") or 0)
+    for upl, luc in _tep_tam_trong_ban_cuc_bo():
+        ung[upl] = min(luc, ung.get(upl, luc))
+    with _KHOA:
+        for _khoa, (url, luc) in _NHO.items():
+            m = re.search(r"(upl_[A-Za-z0-9]+)", str(url))
+            if m:
+                ung[m.group(1)] = min(float(luc), ung.get(m.group(1), float(luc)))
+    # Di tu cu nhat: tep cu da tu het han tren may chu (404) thi chi xoa khoi
+    # so/ban sao; dem "da xoa" theo tep XOA DUOC THAT, dung khi du `toi_da`
+    # hoac da thu qua nhieu (moi lan thu la mot request).
+    cu = sorted(ung.items(), key=lambda kv: kv[1])
+    da = 0
+    thu = 0
+    xoa = set()
+    for upl, _luc in cu:
+        if da >= max(0, int(toi_da)) or thu >= max(0, int(toi_da)) * 5:
+            break
+        thu += 1
+        try:
+            client.uploads.delete(upl)
+            da += 1
+        except Exception:  # noqa: BLE001 — tep co the da het han; van bo khoi so
+            pass
+        xoa.add(upl)
+        try:
+            from .auto_khau import KHO_ANH_CUC_BO  # noqa: PLC0415
+            os.remove(os.path.join(KHO_ANH_CUC_BO, upl))
+        except Exception:  # noqa: BLE001 — khong co ban sao thi thoi
+            pass
+    with _KHOA:
+        for khoa in [k for k, (url, _l) in _NHO.items() if any(u in str(url) for u in xoa)]:
+            _NHO.pop(khoa, None)
+    _ghi_lai_so_tep_tam([d for d in _doc_so_tep_tam() if str(d.get("id")) not in xoa])
+    return da
 
 
 def xoa_nho() -> None:
