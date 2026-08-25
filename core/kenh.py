@@ -115,6 +115,10 @@ class Kenh:
     #: Cần thêm `prompt/2b-cham.md`; thiếu tệp ấy thì chọn theo số đo (độ dài,
     #: mức trùng nguyên văn).
     so_ban_nhap: int = 1
+    #: Sau khi chấm chọn bản, vá đúng "chỗ dễ rớt" mà bộ chấm chỉ ra (một lượt
+    #: gọi nữa, có chốt giữ ≥90% câu). Tắt sẵn — khách đi ví thì đó là một
+    #: lượt chữ nữa; kênh chạy thuê bao bật lên không tốn gì.
+    va_cho_rot: bool = False
     #: Chế độ đặt TIÊU ĐỀ và CHỮ BÌA — bám bản gốc hay đặt lại theo chất kênh.
     #:
     #: `"faithful"` (mặc định) — bám sát tiêu đề đối thủ, chỉ dịch và bản địa
@@ -349,6 +353,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
+        va_cho_rot=bool(cai.get("va_cho_rot", False)),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),

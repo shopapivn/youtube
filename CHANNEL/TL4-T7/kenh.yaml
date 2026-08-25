@@ -36,6 +36,9 @@ do_dai_theo_goc: false
 #  1-cham-diem.txt. Tiêu chí chấm: prompt/2b-cham.md (hook, giữ chân, bám gốc,
 #  CTA kéo bình luận — theo mục đích YouTube đề xuất).
 so_ban_nhap: 5
+#  Sau khi chọn bản: vá đúng "chỗ dễ rớt" bộ chấm chỉ ra (giữ ≥90% câu, rồi bộ
+#  chấm so lại hai bản — không hơn thì bỏ). Thuê bao nên bật; khách đi ví để false.
+va_cho_rot: true
 # ── Tiêu đề & chữ bìa: lấy nguyên của đối thủ ────────────────────────────────
 #  Kênh này lấy NGUYÊN tiêu đề đối thủ, và ĐỌC chữ trên ảnh bìa đối thủ làm chữ
 #  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ

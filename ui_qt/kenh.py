@@ -1014,6 +1014,18 @@ class HopKenh(QDialog):
             "tốn thêm gì; đi ví ShopAPI thì tốn gấp số bản.")
         hang_ban.addWidget(self._o_so_ban)
         v.addLayout(hang_ban)
+        # Sau khi chọn bản, vá đúng "chỗ dễ rớt" bộ chấm chỉ ra. Đo 25/08/2026
+        # trên bốn lượt thật: 2 lần vá được nhận (cấy cảnh đời thường vào đoạn
+        # trừu tượng, cắt đoạn rẽ nhánh), 1 lần bộ chấm từ chối bản vá vì nó
+        # bỏ mất một nghiên cứu — hai cửa chốt đều làm việc.
+        self._o_va = QCheckBox("Vá chỗ dễ rớt sau khi chọn bản (thêm 2 lượt gọi AI)")
+        self._o_va.setChecked(bool(getattr(getattr(self, "_kenh", None),
+                                           "va_cho_rot", False)))
+        self._o_va.setToolTip(
+            "Bộ chấm chỉ ra chỗ người xem dễ rời đi nhất; AI sửa đúng chỗ đó, "
+            "giữ nguyên phần còn lại (máy chốt ≥90% câu), rồi bộ chấm so hai "
+            "bản — bản vá không hơn thì bỏ. Chỉ có thể tốt lên, không xấu đi.")
+        v.addWidget(self._o_va)
         v.addWidget(self._phu(
             "Tiêu chí chọn bản tốt nhất bạn sửa ở thẻ “Chấm & chọn” bên dưới — "
             "tool tính sẵn độ dài và mức trùng nguyên văn với bản gốc rồi đưa "
@@ -1638,6 +1650,7 @@ class HopKenh(QDialog):
             ("do_phan_giai", "" if self._o_dpg.currentText() == THEO_CHUNG
              else self._o_dpg.currentText()),
             ("so_ban_nhap", str(self._o_so_ban.value())),
+            ("va_cho_rot", "true" if self._o_va.isChecked() else "false"),
         ):
             chu = _dat_khoa_yaml(chu, khoa, gt)
         if sua:

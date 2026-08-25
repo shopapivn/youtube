@@ -2070,11 +2070,43 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         # Không có prompt chấm → không gọi AI, chọn theo số đo.
         chon, ly_do, diem, bang = cham_va_chon(
             None, ban, tu_lieu, muc_tieu=muc_tieu, ghi=bc.ghi)
+    ban_chon = ban[chon]
+    ghi_va = ""
+    if getattr(k, "va_cho_rot", False):
+        # ═══ VÁ ĐÚNG CHỖ BỘ CHẤM CHỈ RA, RỒI CHO BỘ CHẤM SO LẠI ═══
+        #
+        # Bản vá chỉ được dùng khi (a) giữ ≥90% câu bản chọn (mã chốt) và
+        # (b) chính bộ chấm, so hai bản cạnh nhau, thích bản vá hơn. Hai cửa
+        # để bước này không bao giờ làm bài xấu đi.
+        from .viet_nhieu_ban import tach_cho_rot, va_cho_de_rot  # noqa: PLC0415
+
+        cho_rot = tach_cho_rot(ly_do)
+        if cho_rot:
+            def goi_va(loi_nhac: str) -> str:
+                bc.kiem_dung()
+                return _goi(bc, loi_nhac, _khoa_chat(luot, "2c-va.md"),
+                            toi_da_token=16384)
+
+            ban_va, da_va, ghi_va = va_cho_de_rot(
+                goi_va, ban_chon, cho_rot, tu_lieu,
+                ngon_ngu=ten_tieng(k.ngon_ngu), ghi=bc.ghi)
+            if da_va:
+                _ghi_chu(os.path.join(d, "1-ban-va.txt"), ban_va + "\n")
+                i_hon, ly_do_so, _d, _b = cham_va_chon(
+                    goi_cham if khuon_cham.strip() else None,
+                    [ban_chon, ban_va], tu_lieu, khuon_cham=khuon_cham,
+                    chung=chung, muc_tieu=muc_tieu, ghi=bc.ghi)
+                if i_hon == 1:
+                    ban_chon = ban_va
+                    ghi_va += " — bộ chấm chọn bản vá: " + ly_do_so[:200]
+                else:
+                    ghi_va += " — bộ chấm vẫn thích bản chưa vá: " + ly_do_so[:200]
+                    bc.ghi("  (bản vá không hơn — dùng bản chọn ban đầu)")
     _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
-             "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n".format(
+             "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}".format(
                  bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),
-                 ly_do))
-    return ban[chon]
+                 ly_do, ("Vá: " + ghi_va + "\n") if ghi_va else ""))
+    return ban_chon
 
 
 #: Mã tiếng viết bằng chữ KHÔNG Latinh — với những tiếng này, vài dòng đầu
