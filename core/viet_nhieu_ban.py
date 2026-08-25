@@ -260,6 +260,7 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
                  chung: Optional[Dict[str, Any]] = None, muc_tieu: int = 0,
                  ghi: Optional[Callable[[str], None]] = None,
                  ky_tu_moi_phut: int = 0,
+                 ten_ban: Optional[Sequence[str]] = None,
                  ) -> Tuple[int, str, Dict[str, Any], str]:
     """Chấm `ban`, trả về `(chỉ số bản chọn, lý do, điểm, bảng số đo)`.
 
@@ -275,13 +276,21 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
             ghi(dong)
 
     so_do, bang = bang_so_do(ban, goc, muc_tieu, ky_tu_moi_phut)
+    # Tên hiện trong nhật ký. Trong lời nhắc vẫn là A, B, C… (bộ chấm trả
+    # về chữ cái); `ten_ban` chỉ để nhật ký đọc được — so "bản B chưa hoàn
+    # thiện" với "bản B đã hoàn thiện" mà in "chọn bản A" thì không ai hiểu.
+    def ten(i: int) -> str:
+        if ten_ban and i < len(ten_ban):
+            return str(ten_ban[i])
+        return "bản " + nhan_ban(i)
+
     if len(ban) == 1:
         return 0, "chỉ có một bản", {}, bang
     if goi is None:
         chon = min(range(len(ban)),
                    key=lambda i: abs(so_do[i][1]) + (1.0 if so_do[i][2] > 0.5
                                                      else 0.0))
-        noi("  chọn bản {0} theo số đo (không có bản chấm).".format(nhan_ban(chon)))
+        noi("  chọn {0} theo số đo (không có bản chấm).".format(ten(chon)))
         return chon, "chọn theo số đo (không có bản chấm)", {}, bang
     khuon = khuon_cham.strip() or KHUON_CHAM_MAC_DINH
     cac_ban = "\n\n".join("=== BẢN {0} ===\n{1}".format(nhan_ban(i), b)
@@ -296,7 +305,8 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
     chon: Optional[int] = None
     ly_do, diem = "", {}
     try:
-        noi("  chấm {0} bản…".format(len(ban)))
+        noi("  so {0}…".format(" với ".join(ten(i) for i in range(len(ban))))
+            if ten_ban else "  chấm {0} bản…".format(len(ban)))
         tra = goi(_thay(khuon, o))
         ket = loc_json(tra)
         chu = str(ket.get("chon") or "").strip().upper()[:1]
@@ -321,9 +331,10 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
                    key=lambda i: abs(so_do[i][1]) + (1.0 if so_do[i][2] > 0.5
                                                      else 0.0))
         ly_do = ly_do or "chọn theo số đo (không có bản chấm)"
-    noi("  chọn bản {0}: {1} ký tự, lệch {2:+.0%}, trùng {3:.0%}. {4}".format(
-        nhan_ban(chon), so_do[chon][0], so_do[chon][1], so_do[chon][2],
-        ly_do[:120]))
+    noi("  chọn {0}: {1} ký tự ≈ {5} phút, lệch {2:+.0%}, trùng gốc {3:.0%}. {4}"
+        .format(ten(chon), so_do[chon][0], so_do[chon][1], so_do[chon][2],
+                ly_do.splitlines()[0][:160] if ly_do else "",
+                _phut(so_do[chon][0], ky_tu_moi_phut) if ky_tu_moi_phut else "?"))
     return chon, ly_do, diem, bang
 
 

@@ -77,6 +77,13 @@ BUOC_PROMPT = (
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
     ("6-seo.md", "Mô tả, hashtag, từ khoá"),
+    # Bản đồ hình cho CẢ video trước khi chia khúc: chương, bối cảnh, mạch cảm
+    # xúc, câu bản lề. Thiếu tệp thì khâu chia cảnh chạy như trước, không có
+    # bản đồ (xem `core/auto_khau._ke_hoach_hinh`). Thêm 25/08/2026 sau khi soi
+    # 487 cảnh của ba lượt TL4-T7: 9 khúc chia song song không biết nhau nên
+    # mỗi 5 giây một ẩn dụ rời, cả video không có chương, không có chỗ đổi bối
+    # cảnh — thứ giữ chân người xem video dài.
+    ("7-ke-hoach.md", "Bản đồ hình cho cả video: chương, bối cảnh, câu bản lề"),
     ("7-canh.md", "Chia cảnh theo nghĩa, viết lời nhắc ảnh và clip"),
     ("8-thumbnail.md", "Viết lời nhắc ba ảnh bìa"),
     ("9-nhac.md", "Viết lời nhắc nhạc nền"),

@@ -44,7 +44,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .auto import LuotChay, TrangThaiKhau
 from .chia_canh import (DUOI_CAM, bang_phu_de, chia_theo_nghia, dien_khuon,
-                        loi_nhac_chia)
+                        khoi_ke_hoach, loi_nhac_chia, sach_ke_hoach)
 # `loc_json` chuyển sang ở cạnh `goi_van_ban` — nơi nào đòi AI trả JSON cũng
 # phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
 # vào đây vì `__all__` của tệp này đã hứa có nó.
@@ -1868,8 +1868,17 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             #
             # Giờ mỗi bước ghi kết quả ra một tệp nháp. Chạy lại thì nhặt đúng
             # chỗ đứt, y như cách các khâu lớn nhìn đĩa trước khi làm.
-            for ten, nhan in (("2-viet.md", "viết kịch bản"),
-                              ("3-sua.md", "đối chiếu và sửa")):
+            # Nhãn nhật ký nói đúng luồng hiện tại của kênh: viết N bản → chấm
+            # & chọn → hoàn thiện → rà soát. Chủ dự án, 25/08/2026: *"sửa log ở
+            # tự động để nó đúng với luồng logic hiện tại"*.
+            so_ban = max(1, int(getattr(k, "so_ban_nhap", 1) or 1))
+            nhan_viet = ("viết {0} bản kịch bản, rồi chấm & chọn một bản{1}"
+                         .format(so_ban, " và hoàn thiện bản đó"
+                                 if getattr(k, "hoan_thien", False) else "")
+                         if so_ban > 1 else "viết kịch bản")
+            for ten, nhan in (("2-viet.md", nhan_viet),
+                              ("3-sua.md", "rà soát bản cuối: lệch tiếng, tách "
+                                           "câu, chèn thẻ cảm xúc")):
                 khuon = k.prompt.get(ten, "")
                 if not khuon.strip():
                     continue
@@ -2098,7 +2107,13 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                                      tach_diem)
 
         diem_manh, diem_yeu = tach_diem(ly_do)
-        if diem_manh or diem_yeu:
+        if not (diem_manh or diem_yeu):
+            bc.ghi("  (bộ chấm không nêu điểm mạnh/yếu — bỏ qua hoàn thiện)")
+        else:
+            if diem_yeu:
+                bc.ghi("  bộ chấm chê bản {0}: {1}".format(
+                    chr(65 + chon), diem_yeu[:220]))
+
             def goi_ht(loi_nhac: str) -> str:
                 bc.kiem_dung()
                 return _goi(bc, loi_nhac, _khoa_chat(luot, "2c-hoan-thien.md"),
@@ -2115,22 +2130,30 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                 ghi=bc.ghi)
             if da_ht:
                 _ghi_chu(os.path.join(d, "1-ban-hoan-thien.txt"), ban_ht + "\n")
+                ten_goc = "bản {0} chưa hoàn thiện".format(chr(65 + chon))
                 i_hon, ly_do_so, _d, _b = cham_va_chon(
                     goi_cham if khuon_cham.strip() else None,
                     [ban_chon, ban_ht], tu_lieu, khuon_cham=khuon_cham,
                     chung=chung, muc_tieu=muc_tieu, ghi=bc.ghi,
-                    ky_tu_moi_phut=nhip)
+                    ky_tu_moi_phut=nhip,
+                    ten_ban=(ten_goc, "bản {0} đã hoàn thiện".format(
+                        chr(65 + chon))))
                 if i_hon == 1:
                     ban_chon = ban_ht
                     ghi_ht += " — bộ chấm chọn bản hoàn thiện: " + ly_do_so[:200]
                 else:
                     ghi_ht += (" — bộ chấm vẫn thích bản chưa hoàn thiện: "
                                + ly_do_so[:200])
-                    bc.ghi("  (bản hoàn thiện không hơn — dùng bản chọn ban đầu)")
+                    bc.ghi("  (bản hoàn thiện không hơn — dùng {0})".format(
+                        ten_goc))
     _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
              "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}".format(
                  bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),
                  ly_do, ("Hoàn thiện: " + ghi_ht + "\n") if ghi_ht else ""))
+    bc.ghi("  → dùng bản {0}{1}; các bản và bản chấm nằm trong thư mục lượt "
+           "(1-ban-*.txt, 1-cham-diem.txt).".format(
+               chr(65 + chon),
+               " đã hoàn thiện" if "chọn bản hoàn thiện" in ghi_ht else ""))
     return ban_chon
 
 
@@ -2261,9 +2284,11 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         # Kiểm tra ngay nếu đọc dòng này khi đang đi tìm lỗi: bước nắn CHỈ chạy
         # khi kênh có tệp `prompt/4-do-dai.md`.
         if abs(len(ban_nhap) - muc_tieu) > muc_tieu * CHENH_CHO_PHEP:
-            bc.ghi("  (kênh thiếu prompt/4-do-dai.md nên không nắn độ dài "
-                   "được — bài đang {0} ký tự, nhắm {1})".format(
-                       len(ban_nhap), muc_tieu))
+            nhip = int(getattr(k, "ky_tu_moi_phut", 0) or 0)
+            bc.ghi("  (bài {0} ký tự ≈ {2} phút, lệch nhắm {1} phút quá 20% — "
+                   "kênh không có bước nắn độ dài prompt/4-do-dai.md, giữ "
+                   "nguyên)".format(len(ban_nhap), _phut(muc_tieu, nhip),
+                                    _phut(len(ban_nhap), nhip)))
         return ban_nhap
 
     dich = muc_tieu
@@ -2566,8 +2591,15 @@ def _khau_bang_canh(bc: BoiCanh):
             canh = _chia_canh_theo_nghia(bc, luot, cue, khuon)
             _ghi_chu(goi_json, json.dumps(canh, ensure_ascii=False, indent=1))
 
-        _viet_xlsx(dich, canh, bc.kenh)
-        return {"so_canh": len(canh)}
+        ke_hoach: List[Dict[str, Any]] = []
+        tep_kh = os.path.join(d, TEP_KE_HOACH)
+        if os.path.exists(tep_kh):
+            try:
+                ke_hoach = json.loads(_doc_chu(tep_kh)) or []
+            except (ValueError, TypeError):
+                ke_hoach = []
+        _viet_xlsx(dich, canh, bc.kenh, ke_hoach=ke_hoach)
+        return {"so_canh": len(canh), "so_chuong": len(ke_hoach)}
 
     def soi_lai(luot: LuotChay) -> bool:
         """Bảng cảnh đã ghi ra còn dùng được không — hỏi TRƯỚC khi bỏ qua khâu.
@@ -2600,10 +2632,14 @@ def _chia_canh_theo_nghia(bc: BoiCanh, luot: LuotChay, cue: List[Dict[str, Any]]
     from .srt_scenes import max_seconds_for  # noqa: PLC0415
 
     tran = float(max_seconds_for(bc.kenh.engine))
+    # Bản đồ hình cho CẢ bài, lập TRƯỚC khi chia khúc — để 9 khúc chạy song
+    # song cùng một thế giới. Không có (kênh thiếu `7-ke-hoach.md`, hay AI trả
+    # rác) thì `[]`, và các khúc chia y như trước.
+    ke_hoach = _ke_hoach_hinh(bc, luot, cue)
 
     def hoi(khuc, thu_tu, tong_khuc):
         return _hoi_chia_canh(bc, luot, khuon, list(khuc), thu_tu, tong_khuc,
-                              tran)
+                              tran, ke_hoach=ke_hoach)
 
     # `duoi`: ep "no text, no letters…" vao cuoi moi prompt bang ma — luoi an
     # toan hoc tu D:\AFFILIATE, phong khi AI quen duoi o mot cang.
@@ -2611,9 +2647,104 @@ def _chia_canh_theo_nghia(bc: BoiCanh, luot: LuotChay, cue: List[Dict[str, Any]]
                            ghi=bc.ghi, kiem_dung=bc.kiem_dung, duoi=DUOI_CAM)
 
 
+#: Trần chữ cho lượt lập bản đồ hình: mươi chương, mỗi chương vài dòng.
+TOKEN_KE_HOACH = 8192
+
+#: Tệp bản đồ hình trong thư mục lượt. Giữ lại để "chạy tiếp" không hỏi AI
+#: lần hai, và để người dùng mở ra xem video được chia chương ra sao.
+TEP_KE_HOACH = "4-ke-hoach.json"
+
+
+def _doc_tieu_de_luot(luot: LuotChay) -> str:
+    """Tiêu đề đã chốt của lượt (dòng `TITLE:` trong `1-tieu-de.txt`), hoặc rỗng."""
+    chu = _doc_chu(os.path.join(luot.thu_muc, "1-tieu-de.txt"))
+    for dong in chu.splitlines():
+        if dong.strip().upper().startswith("TITLE:"):
+            return dong.split(":", 1)[1].strip()
+    return ""
+
+
+def _ke_hoach_hinh(bc: BoiCanh, luot: LuotChay,
+                   cue: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Lập bản đồ hình cho cả video: chương → bối cảnh, vật ẩn dụ, câu bản lề.
+
+    ═══ VÌ SAO KHÔNG BAO GIỜ ĐƯỢC LÀM HỎNG LƯỢT CHẠY ═══
+
+    Bản đồ là thứ làm video HAY HƠN, không phải thứ làm video CÓ ĐƯỢC. Kênh
+    thiếu `7-ke-hoach.md`, AI trả JSON hỏng, cổng nghẽn — mọi đường hỏng đều
+    trả `[]` và ghi một dòng nhật ký; khâu chia cảnh vẫn chạy, chỉ là không có
+    bản đồ (đúng như mọi lượt trước 25/08/2026). Ném lỗi ở đây là đổi một video
+    kém liền mạch lấy một lượt chạy chết — mà kịch bản và giọng đọc đã trả tiền.
+
+    Lý do có bước này nằm ở `core/chia_canh.sach_ke_hoach`.
+    """
+    khuon = bc.kenh.prompt.get("7-ke-hoach.md", "")
+    if not khuon.strip() or not cue:
+        return []
+    tep = os.path.join(luot.thu_muc, TEP_KE_HOACH)
+    if os.path.exists(tep):
+        try:
+            cu = sach_ke_hoach(json.loads(_doc_chu(tep)), cue)
+        except (ValueError, TypeError):
+            cu = []
+        if cu:
+            bc.ghi("  bản đồ hình có sẵn: {0} chương.".format(len(cu)))
+            return cu
+    st = bc.kenh.style
+    dong = bang_phu_de(cue)
+    tong_giay = 0.0
+    try:
+        tong_giay = float(cue[-1]["end"])
+    except (TypeError, ValueError, KeyError):
+        pass
+    from .chia_canh import CUE_MOI_KHUC  # noqa: PLC0415
+    loi_nhac = dien_khuon(khuon, {
+        "SRT": dong,
+        "DONG_CUOI": cue[-1]["index"],
+        "TONG_GIAY": "{0:.0f}".format(tong_giay),
+        # ~1 chương / 90 giây, ít nhất 3 — cùng lý lẽ với
+        # `prompt.workbook._so_man_goi_y`: đừng ghi chết một con số cho mọi
+        # độ dài.
+        "SO_CHUONG": max(3, int(round(tong_giay / 90.0))),
+        "SO_KHUC": max(1, -(-len(cue) // CUE_MOI_KHUC)),
+        "TITLE": _doc_tieu_de_luot(luot),
+        "AUDIENCE_LANGUAGE": st.get("audience_language", bc.kenh.ngon_ngu),
+        "AUDIENCE_CULTURE_NOTE": st.get("audience_culture_note", ""),
+        "CULTURAL_PROPS": st.get("cultural_props", ""),
+        "CULTURAL_METAPHORS": st.get("cultural_metaphors", ""),
+    })
+    bc.ghi("  lập bản đồ hình cho cả bài ({0} dòng, {1:.0f} giây)…".format(
+        len(cue), tong_giay))
+    for lan in range(2):
+        try:
+            tra = _goi(bc, loi_nhac, khoa_viec(luot, "ke-hoach", 0, dong, lan),
+                       toi_da_token=TOKEN_KE_HOACH)
+            ke_hoach = sach_ke_hoach(loc_json(tra), cue)
+        except Exception as loi:  # noqa: BLE001
+            # Cùng lý lẽ với vòng hỏi lại của `_hoi_chia_canh`: khoá kẹt thì
+            # đổi khoá, không đợi. Xem ghi chú dài ở đó.
+            bc.ghi("  bản đồ hình chưa ra ({0}){1}".format(
+                str(loi)[:70], " — hỏi lại bằng khoá mới." if lan == 0 else "."))
+            continue
+        if not ke_hoach:
+            bc.ghi("  AI trả bản đồ hình không dùng được{0}".format(
+                " — hỏi lại." if lan == 0 else "."))
+            continue
+        _ghi_chu(tep, json.dumps(ke_hoach, ensure_ascii=False, indent=1))
+        bc.ghi("  bản đồ hình: {0} chương — {1}".format(
+            len(ke_hoach), "; ".join(
+                (c.get("place") or c.get("title") or "?")[:40]
+                for c in ke_hoach)))
+        return ke_hoach
+    bc.ghi("  không lập được bản đồ hình — chia cảnh không có bản đồ.")
+    return []
+
+
 def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
                    cue: List[Dict[str, Any]], thu_tu: int, tong_khuc: int,
-                   tran: float) -> List[Dict[str, Any]]:
+                   tran: float,
+                   ke_hoach: Optional[List[Dict[str, Any]]] = None,
+                   ) -> List[Dict[str, Any]]:
     """Hỏi AI chia một khúc phụ đề. Trả về nguyên thứ nó đưa ra.
 
     Canh lại là việc của `core.chia_canh.canh_lai`, không phải của chỗ này.
@@ -2621,6 +2752,9 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
     st = bc.kenh.style
     dong = bang_phu_de(cue)
     loi_nhac = loi_nhac_chia(khuon, cue, tran, {
+        # Phần bản đồ hình chạm vào khúc này (rỗng nếu không có bản đồ —
+        # `dien_khuon` dọn chỗ trống, lời nhắc y như cũ).
+        "KE_HOACH": khoi_ke_hoach(ke_hoach or [], cue),
         "IMAGE_STYLE": st.get("image_style", ""),
         "VIDEO_STYLE": st.get("video_style", ""),
         "PALETTE": st.get("palette", ""),
@@ -2649,8 +2783,11 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
         thu_tu + 1, tong_khuc, len(cue), cue[0]["index"], cue[-1]["index"]))
 
     def mot_lan(lan: int):
+        # Bản đồ nằm trong khoá: đổi bản đồ (làm lại khâu) là lời nhắc khác,
+        # phải là một lượt gọi khác — cùng luật với ảnh tham chiếu ở khâu ảnh.
         tra = _goi(bc, loi_nhac,
-                   khoa_viec(luot, "canh", cue[0]["index"], dong, lan),
+                   khoa_viec(luot, "canh", cue[0]["index"], dong, lan,
+                             loi_nhac if ke_hoach else ""),
                    toi_da_token=TOKEN_CANH)
         try:
             goi = loc_json(tra)
@@ -2727,8 +2864,13 @@ COT_NHAN_VAT = ("id", "role", "name", "english_prompt", "vietnamese_prompt",
 COT_THUMB = ("thumb_id", "version_desc", "img_prompt", "characters_used",
              "location_used", "reference_files", "img_path", "status_img")
 
+#: Sheet `story_map` — bản đồ hình, mỗi chương một dòng.
+COT_KE_HOACH = ("chuong", "srt_from", "srt_to", "title", "place", "time_light",
+                "people", "motif", "emotion", "key_line")
 
-def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh) -> None:
+
+def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh,
+               ke_hoach: Optional[List[Dict[str, Any]]] = None) -> None:
     from openpyxl import Workbook  # noqa: PLC0415
     from openpyxl.styles import Font, PatternFill  # noqa: PLC0415
 
@@ -2760,6 +2902,18 @@ def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh) -> None:
     tb = sach.create_sheet("thumbnail")
     for cot, ten in enumerate(COT_THUMB, 1):
         tb.cell(1, cot, ten)
+
+    # Bản đồ hình — để người dựng mở Excel là thấy video chia chương ra sao,
+    # chương nào ở đâu, câu nào là bản lề. Không có bản đồ thì không có sheet.
+    if ke_hoach:
+        kh = sach.create_sheet("story_map")
+        for cot, ten in enumerate(COT_KE_HOACH, 1):
+            o = kh.cell(1, cot, ten)
+            o.font = Font(bold=True, color="FFFFFF")
+            o.fill = PatternFill("solid", fgColor="4472C4")
+        for hang, c in enumerate(ke_hoach, 2):
+            for cot, ten in enumerate(COT_KE_HOACH, 1):
+                kh.cell(hang, cot, (c or {}).get(ten, ""))
 
     os.makedirs(os.path.dirname(duong) or ".", exist_ok=True)
     tam = duong + ".tam"

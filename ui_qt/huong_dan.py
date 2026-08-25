@@ -213,6 +213,12 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Tám khâu: kịch bản → giọng đọc → phụ đề → bảng cảnh → ảnh → clip "
             "→ ảnh bìa → dựng. Khâu phụ đề và khâu dựng chạy ngay trên máy "
             "bạn.",
+            "Khâu kịch bản, với kênh đặt “Số bản content” > 1, đi bốn bước và "
+            "nhật ký hiện đúng từng bước: viết N bản → chấm & chọn một bản "
+            "(kèm điểm mạnh, điểm yếu) → hoàn thiện bản đó (sửa điểm yếu, phát "
+            "huy điểm mạnh, làm mượt; không hơn thì giữ bản cũ) → rà soát: lệch "
+            "tiếng, tách câu, thẻ cảm xúc. Mọi bản và bản chấm nằm trong thư "
+            "mục lượt: 1-ban-A…E.txt, 1-ban-hoan-thien.txt, 1-cham-diem.txt.",
             "Ở khâu ảnh, tôi gửi hết cả trăm cảnh cùng một lúc, và ảnh của "
             "cảnh nào xong thì làm clip của cảnh đó ngay — nên hàng “clip” và "
             "hàng “ảnh bìa” có thể chạy số trước khi tới lượt chúng.",

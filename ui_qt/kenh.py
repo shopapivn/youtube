@@ -73,6 +73,7 @@ _NHAN_PROMPT = {
     "4-do-dai.md": "Độ dài",
     "5-hoan-thien.md": "Hoàn thiện",
     "6-seo.md": "SEO",
+    "7-ke-hoach.md": "Bản đồ hình",
     "7-canh.md": "Prompt ảnh + video",
     "8-thumbnail.md": "Ảnh thumbnail",
     "9-nhac.md": "Nhạc nền",
@@ -95,6 +96,9 @@ _VIEC_PROMPT = {
     "4-do-dai.md": "nắn kịch bản cho đúng độ dài bạn đặt.",
     "5-hoan-thien.md": "đọc lại lần cuối cho lời đọc mượt.",
     "6-seo.md": "viết mô tả, hashtag và từ khoá để đăng YouTube.",
+    "7-ke-hoach.md": "vẽ bản đồ hình cho CẢ video trước khi chia cảnh: mỗi "
+                     "chương một bối cảnh thật, một vật ẩn dụ, một câu bản lề "
+                     "— để các khúc chia song song cùng một thế giới.",
     "7-canh.md": "chia cảnh và tạo ra các prompt tạo ảnh + video cho từng cảnh.",
     "8-thumbnail.md": "tạo prompt vẽ ba ảnh thumbnail.",
     "9-nhac.md": "tạo prompt chọn nhạc nền.",

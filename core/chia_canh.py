@@ -44,7 +44,7 @@ __all__ = [
     "MIN_GIAY_CANH", "CUE_MOI_KHUC", "KHUC_SONG_SONG", "KHUON_MAC_DINH",
     "DUOI_CAM", "dien_khuon", "bang_phu_de", "chia_khuc", "loi_nhac_chia",
     "canh_lai", "chia_theo_nghia", "ep_duoi", "thong_ke_canh", "gop_ngan",
-    "tach_dai",
+    "tach_dai", "sach_ke_hoach", "khoi_ke_hoach",
 ]
 
 #: Cảnh ngắn nhất, tính bằng giây.
@@ -646,6 +646,9 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
                     str(m.get("video_prompt") or ""), k + 1, so_phan),
                 "characters_used": str(m.get("characters_used") or ""),
                 "location_used": str(m.get("location_used") or ""),
+                # Nét mặt AI viết cho nv1 ở cảnh này — giữ lại để soi được
+                # "cười lúc bị chỉ mặt" mà không phải mở ảnh.
+                "expression": str(m.get("expression") or ""),
                 "srt_text_vi": str(m.get("narration_vi") or ""),
                 "primary_subject": str(m.get("primary_subject") or ""),
                 "primary_action": str(m.get("primary_action") or ""),
@@ -753,3 +756,141 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
             "clip chỉ chậm/nhẹ, {2} cặp cảnh liền nhau cùng cỡ cảnh.".format(
                 tk["tinh"], tk["cham"], tk["lap"], tk["tong"]))
     return canh
+
+
+# ── Bản đồ hình: kế hoạch chương cho CẢ video, chia trước khi chia khúc ──────
+#
+# ═══ VÌ SAO CẦN MỘT LƯỢT LẬP KẾ HOẠCH TRƯỚC ═══
+#
+# Soi 487 cảnh của ba lượt thật TL4-T7 (0018, 0024, 0031) ngày 25/08/2026, xem
+# thẳng ảnh chứ không chỉ đọc prompt:
+#
+#     140/140 cảnh của 0031 đặt trong cùng một sa mạc đào có đồi mây
+#     câu "tối thứ Sáu tan làm, đồng nghiệp rủ đi nhậu" → ảnh: ngã ba đường
+#       trống, không ga, không phố, không đồng nghiệp
+#     9 khúc chia song song, mỗi khúc không biết khúc kia → mỗi 5 giây một ẩn
+#       dụ rời, không có chương, không có chỗ đổi bối cảnh
+#
+# Người xem video dài ở lại vì hai thứ hình ảnh: **thấy đời mình** trong bối
+# cảnh (ga tàu, phòng trọ, konbini) và **nhịp đổi chương** — cứ một hai phút
+# đổi chỗ, đổi giờ, đổi ánh sáng. Cả hai đều cần một cái nhìn TOÀN BÀI, mà
+# từng khúc 30 dòng không có. Nên lập bản đồ trước — một lượt gọi rẻ (vài
+# nghìn chữ vào, vài trăm chữ ra) — rồi phát cho từng khúc phần chương của nó.
+#
+# Hai hàm dưới đây thuần: không gọi mạng, không đọc tệp. Phần gọi AI nằm ở
+# `core/auto_khau._ke_hoach_hinh`.
+
+#: Trường của một chương trong bản đồ. Thiếu trường nào thì để chuỗi rỗng —
+#: AI hay bỏ sót `time_light` hay `emotion`, và một chương thiếu ánh sáng vẫn
+#: hơn không có chương nào.
+_TRUONG_CHUONG = ("title", "place", "time_light", "people", "motif", "emotion")
+
+
+def sach_ke_hoach(raw: Any, cue: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Dọn bản đồ AI trả về thành danh sách chương **nối liền, phủ hết dòng**.
+
+    Nhận `{"chapters": [...]}` hoặc thẳng danh sách. Chương hở thì kéo chương
+    trước dài ra; chồng thì cắt chương sau; số dòng nằm ngoài phụ đề thì kẹp
+    lại; chương rỗng thì bỏ. Trả về `[]` khi không có gì dùng được — nơi gọi
+    coi đó là "không có bản đồ" và chia cảnh như cũ, chứ không dừng lượt chạy.
+    """
+    if not cue:
+        return []
+    ds = raw.get("chapters") if isinstance(raw, Mapping) else raw
+    if not isinstance(ds, list):
+        return []
+    dau, cuoi = int(cue[0]["index"]), int(cue[-1]["index"])
+    tho: List[Dict[str, Any]] = []
+    for m in ds:
+        if not isinstance(m, Mapping):
+            continue
+        try:
+            a, b = int(m.get("srt_from")), int(m.get("srt_to"))
+        except (TypeError, ValueError):
+            continue
+        a, b = max(dau, a), min(cuoi, b)
+        if b < a:
+            continue
+        chuong: Dict[str, Any] = {"srt_from": a, "srt_to": b}
+        for t in _TRUONG_CHUONG:
+            chuong[t] = " ".join(str(m.get(t) or "").split())
+        try:
+            chuong["key_line"] = int(m.get("key_line") or 0)
+        except (TypeError, ValueError):
+            chuong["key_line"] = 0
+        tho.append(chuong)
+    tho.sort(key=lambda c: (c["srt_from"], c["srt_to"]))
+    ra: List[Dict[str, Any]] = []
+    for c in tho:
+        if ra:
+            c["srt_from"] = max(c["srt_from"], ra[-1]["srt_to"] + 1)
+            if c["srt_from"] > c["srt_to"]:
+                continue
+            if c["srt_from"] > ra[-1]["srt_to"] + 1:
+                ra[-1]["srt_to"] = c["srt_from"] - 1
+        else:
+            c["srt_from"] = dau
+        ra.append(c)
+    if not ra:
+        return []
+    ra[-1]["srt_to"] = max(ra[-1]["srt_to"], cuoi)
+    for so, c in enumerate(ra, start=1):
+        c["chuong"] = so
+        if not (c["srt_from"] <= c["key_line"] <= c["srt_to"]):
+            c["key_line"] = 0
+    return ra
+
+
+def _dong_chuong(c: Mapping[str, Any], tong: int) -> str:
+    phan = ["- Chapter {0} of {1} \"{2}\" — lines {3}–{4}".format(
+        c.get("chuong", "?"), tong, c.get("title") or "untitled",
+        c["srt_from"], c["srt_to"])]
+    for nhan, khoa in (("place", "place"), ("light", "time_light"),
+                       ("people", "people"), ("motif", "motif"),
+                       ("emotion", "emotion")):
+        if c.get(khoa):
+            phan.append("{0}: {1}".format(nhan, c[khoa]))
+    if c.get("key_line"):
+        phan.append("turns at line {0}: give that scene the biggest visual "
+                    "change of the chapter".format(c["key_line"]))
+    return " | ".join(phan)
+
+
+def khoi_ke_hoach(ke_hoach: Sequence[Mapping[str, Any]],
+                  khuc: Sequence[Mapping[str, Any]]) -> str:
+    """Khối `<<KE_HOACH>>` cho MỘT khúc: chương chạm vào dòng của khúc ấy.
+
+    Kèm một dòng về chương liền trước (đã chiếu, đừng dựng lại) và chương liền
+    sau (khúc khác viết, đừng mở) — để khúc biết mình đang ở đâu trong bài mà
+    không phải đọc cả bản đồ. Không có bản đồ thì trả chuỗi rỗng, và
+    `dien_khuon` dọn chỗ trống đi: lời nhắc y như khi chưa có tính năng này.
+    """
+    if not ke_hoach or not khuc:
+        return ""
+    dau, cuoi = int(khuc[0]["index"]), int(khuc[-1]["index"])
+    trong = [i for i, c in enumerate(ke_hoach)
+             if not (int(c["srt_to"]) < dau or int(c["srt_from"]) > cuoi)]
+    if not trong:
+        return ""
+    tong = len(ke_hoach)
+    dong = ["## STORY MAP — the chapters your lines belong to (follow it)",
+            "The whole video was planned first so that every piece lives in one "
+            "world. Stay inside each chapter's place, hour and light; when a "
+            "chapter boundary falls inside your lines, change the place exactly "
+            "there. Put the chapter's place, in the same words for every scene "
+            "of that chapter, into `location_used`.", ""]
+    dong.extend(_dong_chuong(ke_hoach[i], tong) for i in trong)
+    if trong[0] > 0:
+        t = ke_hoach[trong[0] - 1]
+        dong.append("")
+        dong.append("Before your lines (already shown — do not restage it): "
+                    "chapter {0} \"{1}\"{2}.".format(
+                        t.get("chuong", "?"), t.get("title") or "untitled",
+                        " in " + t["place"] if t.get("place") else ""))
+    if trong[-1] < tong - 1:
+        s = ke_hoach[trong[-1] + 1]
+        dong.append("After your lines (another writer does it — do not start "
+                    "it): chapter {0} \"{1}\"{2}.".format(
+                        s.get("chuong", "?"), s.get("title") or "untitled",
+                        " moves to " + s["place"] if s.get("place") else ""))
+    return "\n".join(dong) + "\n"

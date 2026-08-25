@@ -32,6 +32,9 @@ TL4-T7/
     2-viet.md         viết kịch bản
     3-sua.md          đối chiếu, sửa, chèn thẻ cảm xúc cho giọng đọc
     6-seo.md          mô tả, hashtag, từ khoá
+    7-ke-hoach.md     bản đồ hình cho CẢ video: mỗi chương một bối cảnh thật,
+                      một vật ẩn dụ, một câu bản lề (thiếu thì bước dưới chạy
+                      không có bản đồ)
     7-canh.md         chia cảnh theo nghĩa + viết lời nhắc ảnh/clip
     8-thumbnail.md    ba lời nhắc ảnh bìa
     9-nhac.md         lời nhắc nhạc nền (Suno)
