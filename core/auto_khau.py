@@ -3466,7 +3466,19 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         url_anh = _url_anh_canh(bc, luot, so_canh, anh, bo_qua_nho=True)
         goi = goi_clip(url_anh, ":tc2")
     _tai_ket_qua(bc, goi, 0, dich)
-    _kiem_media(bc, dich)
+    try:
+        _kiem_media(bc, dich)
+    except LoiNoiDung as loi:
+        # ═══ TỆP HỎNG TỪ NGUỒN → LÀM LẠI BẰNG KHOÁ MỚI, MỘT LẦN ═══
+        #
+        # Tải lại cùng job là nhận lại đúng tệp hỏng ấy (máy chủ giữ bản đã
+        # hỏng). Đo 25/08/2026: clip 99, 106, 110 của story-3d/0001 đều cụt
+        # giữa tệp dù tải đủ byte. Chỉ một job mới mới cho tệp lành.
+        bc.ghi("    cảnh {0}: clip tải về hỏng ({1}) — tạo lại bằng khoá mới."
+               .format(so_canh, str(loi)[:80]))
+        goi = goi_clip(url_anh, ":hong2")
+        _tai_ket_qua(bc, goi, 0, dich)
+        _kiem_media(bc, dich)
 
 
 def _hop_cho_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], hop: "ThamChieu"):

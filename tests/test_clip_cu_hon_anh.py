@@ -118,3 +118,29 @@ def test_kiem_media_giai_ma_ca_tep(tmp_path, monkeypatch):
         _ak._kiem_media(bc, str(tep))
     assert not tep.exists()
     assert "-xerror" in goi[0] and "-t" not in goi[0]          # cả tệp, không chỉ 0,1 giây
+
+
+def test_clip_tai_ve_hong_thi_tao_lai_khoa_moi(tmp_path, monkeypatch):
+    """Tệp hỏng từ nguồn: tải lại cùng job vô ích — phải là job mới (khoá ':hong2')."""
+    khoa = []
+
+    def tao_job_gia(bc, ham, **kw):
+        khoa.append(kw.get("idempotency_key", ""))
+        return {"id": "job%d" % len(khoa)}
+
+    def kiem_gia(bc, duong):
+        if len(khoa) == 1:
+            raise _ak.LoiNoiDung("tệp tải về không mở được: Invalid NAL")
+
+    monkeypatch.setattr(_ak, "_tao_job", tao_job_gia)
+    monkeypatch.setattr(_ak, "_cho_job", lambda bc, job, **kw: job)
+    monkeypatch.setattr(_ak, "_url_anh_canh", lambda *a, **k: "https://u/anh.png")
+    monkeypatch.setattr(_ak, "_tai_ket_qua", lambda bc, goi, i, dich: open(dich, "wb").write(b"v"))
+    monkeypatch.setattr(_ak, "_kiem_media", kiem_gia)
+    monkeypatch.setattr(_ak, "khoa_viec", lambda luot, *a: "k")
+    bc = _NS(kenh=_NS(engine="veo3"), client=_NS(videos=_NS(create=None)), ghi=lambda d: None)
+    luot = _NS(thu_muc=str(tmp_path), ma_luot="0001", ma_kenh="x")
+    c = {"scene_id": 7, "video_prompt": "cat walks"}
+    (tmp_path / "7.png").write_bytes(b"png")
+    _ak._lam_clip(bc, luot, c, str(tmp_path / "7.png"), str(tmp_path / "7.mp4"), 8)
+    assert khoa == ["k", "k:hong2"]
