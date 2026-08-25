@@ -1340,13 +1340,15 @@ _KHOA_BOI_CANH = ("The place must match its reference image (same architecture, 
 #: Khoa cho loi nhac VIDEO — dat o DAU, khong phai cuoi. Do 25/08/2026 (12 clip
 #: Veo 3, AI cham khung cuoi duoc dung): cau khoa o cuoi → 3,00; khoa o dau kem
 #: mo ta tung nhan vat + "khong them, khong bot" → 3,50. Veo nang phan dau.
-_KHOA_VIDEO_DAU = ("IDENTITY LOCK, highest priority for the entire clip: every character keeps "
-                   "the same face, body proportions, outfit and line style as in the first "
-                   "frame; {dan}. Only pose, gesture, expression and camera move. ")
-_KHOA_VIDEO_NV = ("{id} ({vai}) stays exactly as drawn in the first frame — {mo_ta} — nothing "
-                  "added (no extra clothes, cape, jacket, belt, strap, collar, weapon, fur "
-                  "texture or stripes) and nothing removed (hat, boots, bag and every outfit "
-                  "item stay on)")
+#: KHONG ta lai nhan vat trong khoa video. Chu du an 25/08/2026: *"khong mo ta chi
+#: tiet nhan vat ma bao la anh tham chieu di kem"* — do cung 12 clip: khoa kem mo
+#: ta 3,50; khoa chi noi "y het khung dau" 3,67 (9/12 dat >=4). Chu va anh cai nhau
+#: thi mo hinh chon chu; bo chu di la no bam anh.
+_KHOA_VIDEO_DAU = ("IDENTITY LOCK, highest priority for the entire clip: every character stays "
+                   "exactly as drawn in the first frame — same face, eyes, body proportions, "
+                   "outfit, props and line style; nothing is added (no extra clothes, cape, "
+                   "belt, strap, collar, weapon, fur texture or stripes) and nothing is "
+                   "removed. Only pose, gesture, expression and camera move. ")
 _KHOA_VIDEO_CU = (" Keep every character exactly as drawn in the first frame — same face, "
                   "outfit, proportions and line style — for the whole clip.")
 
@@ -1365,13 +1367,9 @@ def _khoa_video(vid: str, ids, dan: Mapping[str, Any]) -> str:
     goc = str(vid or "").replace(_KHOA_VIDEO_CU, "").strip()
     if not goc or goc.startswith("IDENTITY LOCK"):
         return goc
-    nv = [i for i in ids if i in dan]
-    if not nv:
+    if not any(i in dan for i in ids):
         return goc
-    phan = "; ".join(_KHOA_VIDEO_NV.format(
-        id=i, vai=dan[i].get("role") or dan[i].get("name") or "character",
-        mo_ta=_mo_ta_ngan(dan[i])) for i in nv)
-    return _KHOA_VIDEO_DAU.format(dan=phan) + goc
+    return _KHOA_VIDEO_DAU + goc
 
 
 def _mo_ta_tham_chieu(i: str, dan: Mapping[str, Any], noi: Mapping[str, Any]) -> str:
