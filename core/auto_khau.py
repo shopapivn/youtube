@@ -749,17 +749,67 @@ def _kiem_media(bc: BoiCanh, duong: str) -> None:
     ffmpeg = bc.ffmpeg or _tim_ffmpeg()
     if not ffmpeg or not os.path.exists(duong):
         return
-    ket = subprocess.run(
-        [ffmpeg, "-v", "error", "-i", duong, "-f", "null", "-t", "0.1", "-"],
-        capture_output=True, text=True,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if ket.returncode != 0:
+    # ═══ GIẢI MÃ CẢ TỆP, KHÔNG CHỈ 0,1 GIÂY ĐẦU ═══
+    #
+    # 25/08/2026 (story-3d/0001): clip 99 mở được, khung đầu đẹp, nhưng từ
+    # giữa tệp toàn "Invalid NAL unit size" — máy chủ trả tệp cụt mà khai đủ.
+    # Kiểm 0,1 giây đầu cho qua; khâu dựng cắt tới nó mới đổ, ba lần thử đều
+    # đổ ở đúng đoạn ấy. Giải mã hết 8 giây 720p mất chưa tới một giây CPU,
+    # rẻ hơn mọi phút ngồi tìm xem cảnh nào làm hỏng video.
+    loi = _loi_giai_ma(ffmpeg, duong)
+    if loi:
         try:
             os.remove(duong)
         except OSError:
             pass
-        raise LoiNoiDung("tệp tải về không mở được: {0}".format(
-            (ket.stderr or "")[:120]))
+        raise LoiNoiDung("tệp tải về không mở được: {0}".format(loi[:120]))
+
+
+def _loi_giai_ma(ffmpeg: str, duong: str) -> str:
+    """Giải mã cả tệp bằng FFmpeg (`-xerror`: dừng ở lỗi đầu). Rỗng = lành."""
+    ket = subprocess.run(
+        [ffmpeg, "-v", "error", "-xerror", "-i", duong, "-f", "null", "-"],
+        capture_output=True, text=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if ket.returncode == 0:
+        return ""
+    return _loi_ffmpeg(ket.stderr) or "FFmpeg trả mã {0}".format(ket.returncode)
+
+
+def _loai_clip_hong(bc: BoiCanh, ffmpeg: str, thu_muc_clip: str,
+                    canh: Sequence[Dict[str, Any]]) -> List[int]:
+    """Trước khi dựng: soi từng clip, clip hỏng thì cất thành `<n>.mp4.hong`.
+
+    Clip hỏng được coi như THIẾU — video vẫn dựng (cảnh trước giữ hình bù
+    vào), và "Làm lại khâu clip" chỉ tạo lại đúng clip ấy. Trả về danh sách
+    cảnh bị cất.
+    """
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    viec = []
+    for c in canh:
+        so_canh = int(c["scene_id"])
+        tep = os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))
+        if os.path.exists(tep):
+            viec.append((so_canh, tep))
+
+    def mot(v):
+        so_canh, tep = v
+        return so_canh, tep, _loi_giai_ma(ffmpeg, tep)
+
+    hong: List[int] = []
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for so_canh, tep, loi in pool.map(mot, viec):
+            if not loi:
+                continue
+            try:
+                os.replace(tep, tep + ".hong")
+            except OSError:
+                continue
+            hong.append(so_canh)
+            bc.ghi("  clip cảnh {0} hỏng ({1}) — cất sang .hong, dựng như cảnh thiếu; "
+                   "“Làm lại khâu clip” sẽ tạo lại đúng clip này.".format(so_canh, loi[:90]))
+    return hong
 
 
 
@@ -4318,6 +4368,7 @@ def _khau_dung(bc: BoiCanh):
             raise RuntimeError("máy chưa có FFmpeg")
         canh = _doc_canh(luot)
         thu_muc_clip = os.path.join(d, "6-clip")
+        _loai_clip_hong(bc, ffmpeg, thu_muc_clip, canh)
         # ═══ THIẾU VÀI CLIP THÌ VẪN DỰNG, CẢNH TRƯỚC GIỮ HÌNH BÙ VÀO ═══
         #
         # Trước đây thiếu một clip là không dựng, chấm hết. Đã xảy ra thật hai

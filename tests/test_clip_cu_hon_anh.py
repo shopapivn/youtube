@@ -76,3 +76,45 @@ Conversion failed!"""
     assert "Could not write header" in ra and "Conversion failed" in ra
     assert "i8c" not in ra
     assert _loi_ffmpeg("") == ""
+
+
+from types import SimpleNamespace as _NS
+
+from core import auto_khau as _ak
+
+
+def test_loai_clip_hong_cat_sang_hong(tmp_path, monkeypatch):
+    d = tmp_path / "6-clip"; d.mkdir()
+    for n in (1, 2, 3):
+        (d / "{0}.mp4".format(n)).write_bytes(b"x")
+
+    def run_gia(lenh, **kw):
+        tep = lenh[lenh.index("-i") + 1]
+        if tep.endswith("2.mp4"):
+            return _NS(returncode=1, stderr="[h264 @ 0x1] Invalid NAL unit size (-5 > 9)")
+        return _NS(returncode=0, stderr="")
+
+    monkeypatch.setattr(_ak.subprocess, "run", run_gia)
+    bc = _bc()
+    canh = [{"scene_id": 1}, {"scene_id": 2}, {"scene_id": 3}, {"scene_id": 4}]
+    assert _ak._loai_clip_hong(bc, "ffmpeg", str(d), canh) == [2]
+    assert not (d / "2.mp4").exists() and (d / "2.mp4.hong").exists()
+    assert (d / "1.mp4").exists() and (d / "3.mp4").exists()
+    assert any("clip cảnh 2 hỏng" in x and "Invalid NAL" in x for x in bc._nk)
+
+
+def test_kiem_media_giai_ma_ca_tep(tmp_path, monkeypatch):
+    tep = tmp_path / "9.mp4"; tep.write_bytes(b"x")
+    goi = []
+
+    def run_gia(lenh, **kw):
+        goi.append(lenh)
+        return _NS(returncode=1, stderr="Error while decoding stream #0:0: Invalid data found")
+
+    monkeypatch.setattr(_ak.subprocess, "run", run_gia)
+    bc = _NS(ffmpeg="ffmpeg", ghi=lambda d: None)
+    import pytest as _pt
+    with _pt.raises(_ak.LoiNoiDung, match="không mở được"):
+        _ak._kiem_media(bc, str(tep))
+    assert not tep.exists()
+    assert "-xerror" in goi[0] and "-t" not in goi[0]          # cả tệp, không chỉ 0,1 giây
