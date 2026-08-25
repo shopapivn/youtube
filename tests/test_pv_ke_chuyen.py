@@ -573,3 +573,29 @@ def test_khuon_chia_cua_kenh_hay_mac_dinh(wb):
     assert run._khuon_chia({"storyboard_template": "thieu <<SRT>>"}) == KHUON_MAC_DINH
     assert run._khuon_chia({}) == KHUON_MAC_DINH
     assert run._khuon_chia(None) == KHUON_MAC_DINH
+
+
+def test_pha_lap_canh_doi_khung_va_giu_id(wb):
+    run = wb
+    tail = ", stylised 3D animated film still, 16:9, no text"
+    scenes = [
+        {"scene_id": 1, "img_prompt": "Medium shot of nv1 (nv1) on the doorstep of loc2 looking sad" + tail, "video_prompt": "a"},
+        {"scene_id": 2, "img_prompt": "Medium shot of nv1 (nv1) on the doorstep of loc2 looking sadder" + tail, "video_prompt": "b"},
+        {"scene_id": 3, "img_prompt": "Close-up of nv1 (nv1) on the doorstep of loc2 sighing" + tail, "video_prompt": "c"},
+        {"scene_id": 4, "img_prompt": "Wide shot of loc5 the castle gate at dawn" + tail, "video_prompt": "d"},
+    ]
+    assert run._canh_lap(scenes) == [1]            # 3 đổi cỡ khung → không lặp; 4 khác hẳn
+    goi_lan = []
+
+    def goi(loi_nhac, phan_khoa):
+        goi_lan.append(loi_nhac)
+        assert "previous opening: medium shot" in loi_nhac and "[2]" in loi_nhac
+        return '{"2": {"img_prompt": "Over-the-shoulder shot from behind nv1 (nv1) toward the doorstep of loc2, his hand on the step" + "%s", "video_prompt": "hand lifts"}}' % tail
+
+    assert run._pha_lap_canh(scenes, goi) == 1
+    assert scenes[1]["img_prompt"].startswith("Over-the-shoulder") and scenes[1]["video_prompt"] == "hand lifts"
+    assert run._canh_lap(scenes) == []
+    # Bản viết lại đổi id nhân vật → bị bỏ.
+    scenes2 = [dict(scenes[0]), {"scene_id": 2, "img_prompt": scenes[0]["img_prompt"], "video_prompt": "x"}]
+    assert run._pha_lap_canh(scenes2, lambda l, k: '{"2": {"img_prompt": "Close-up of nv9 (nv9) at loc2 smiling%s"}}' % tail) == 0
+    assert scenes2[1]["img_prompt"] == scenes[0]["img_prompt"]

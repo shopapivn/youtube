@@ -1454,15 +1454,20 @@ def _tu_than(prompt: str) -> set:
 
 
 def _canh_lap(scenes) -> List[int]:
-    """Chỉ số các cảnh LẶP cảnh liền trước: cùng cụm mở đầu, hoặc trùng > 60% từ."""
+    """Chỉ số các cảnh LẶP cảnh liền trước — người xem thấy "cùng một bức".
+
+    Lặp = cùng cỡ khung mở đầu VÀ trùng > 50% từ (cùng người, cùng chỗ, cùng
+    cỡ), hoặc trùng > 80% từ bất kể khung. Hai cỡ khung khác nhau của cùng một
+    câu (medium rồi close-up) là cách phim che một câu dài — không phải lặp.
+    """
     ra = []
     for i in range(1, len(scenes)):
         a, b = scenes[i - 1], scenes[i]
         pa, pb = str(a.get("img_prompt") or ""), str(b.get("img_prompt") or "")
-        cung_khung = _mo_dau_khung(pa) and _mo_dau_khung(pa) == _mo_dau_khung(pb)
+        cung_khung = bool(_mo_dau_khung(pa)) and _mo_dau_khung(pa) == _mo_dau_khung(pb)
         A, B = _tu_than(pa), _tu_than(pb)
         j = len(A & B) / max(1, len(A | B))
-        if cung_khung or j > _NGUONG_LAP:
+        if (cung_khung and j > 0.5) or j > 0.8:
             ra.append(i)
     return ra
 
@@ -1478,7 +1483,8 @@ which part of the action we see. Family-friendly wording. Return ONLY JSON:
 {{"<scene_id>": {{"img_prompt": "...", "video_prompt": "..."}}}} — video_prompt is the same
 shot in motion (one small camera move, one small action), under 60 words.
 
-CONTEXT (previous scene of each rewritten one, do not change these):
+CONTEXT (previous scene of each rewritten one, do not change these; each rewritten scene must
+open with a DIFFERENT shot than the one named after "previous opening"):
 {ngu_canh}
 
 REWRITE:
@@ -1491,22 +1497,31 @@ def _pha_lap_canh(scenes, goi, *, moi_lan: int = 20) -> int:
     Bản viết lại chỉ được nhận khi vẫn giữ đúng các id nhân vật/bối cảnh của
     cảnh gốc — lệch id là bỏ, giữ nguyên bản cũ. Trả về số cảnh đã đổi.
     """
-    lap = _canh_lap(scenes)
-    if not lap or goi is None:
+    if goi is None:
         return 0
+    doi = 0
+    for vong in range(2):  # vòng 2 chỉ còn những cảnh AI viết lại mà vẫn lặp
+        lap = _canh_lap(scenes)
+        if not lap:
+            break
+        doi += _viet_lai_canh_lap(scenes, goi, lap, moi_lan, vong)
+    return doi
+
+
+def _viet_lai_canh_lap(scenes, goi, lap, moi_lan: int, vong: int) -> int:
     doi = 0
     for dau in range(0, len(lap), moi_lan):
         nhom = lap[dau:dau + moi_lan]
-        ngu_canh = "\n".join("[{0}] {1}".format(scenes[i - 1].get("scene_id"),
-                                                  str(scenes[i - 1].get("img_prompt") or "")[:400])
-                              for i in nhom)
+        ngu_canh = "\n".join("[{0}] (previous opening: {2}) {1}".format(
+            scenes[i - 1].get("scene_id"), str(scenes[i - 1].get("img_prompt") or "")[:400],
+            _mo_dau_khung(str(scenes[i - 1].get("img_prompt") or "")) or "?") for i in nhom)
         can_sua = "\n".join("[{0}] {1}\n    video: {2}".format(
             scenes[i].get("scene_id"), str(scenes[i].get("img_prompt") or "")[:600],
             str(scenes[i].get("video_prompt") or "")[:200]) for i in nhom)
         loi_nhac = _KHUON_PHA_LAP.format(tien_trinh="; ".join(_TIEN_TRINH_KHUNG),
                                          ngu_canh=ngu_canh, can_sua=can_sua)
         try:
-            tra = loc_json(goi(loi_nhac, "pha-lap-{0}".format(dau)))
+            tra = loc_json(goi(loi_nhac, "pha-lap-{0}-{1}".format(vong, dau)))
         except Exception:  # noqa: BLE001 — không đổi được thì giữ nguyên
             continue
         if not isinstance(tra, dict):

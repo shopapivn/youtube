@@ -51,7 +51,9 @@ subject off-centre, depth front-to-back.
    a REACTION, show the listener's face. Use the id of the right STAGE
    (before / after the character's look changes — the cast list says when).
    Set `location_used` to the place id; stay in the same place until the story
-   says someone travels.
+   says someone travels. Refer to the PLACE by id only too (`loc2`) — never
+   re-describe it (its reference picture and fixed description are attached);
+   say only which part of it we see and what is in the foreground.
 3. **Vary the shot hard between consecutive scenes.** Open every image prompt
    with the shot itself — `Extreme close-up of…`, `Close-up of…`, `Medium
    shot of…`, `Over-the-shoulder shot of…`, `Low angle looking up at…`, `Wide
