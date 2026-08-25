@@ -38,6 +38,7 @@ from core.config import (CONFIG_FILENAME, Config, load_config,
                          luu_phien_dang_nhap, sanitize_api_key, save_config)
 from core.errors import describe, la_qua_tai, retry_after_seconds, tu_xu_ly_ngam
 from core.jobs import JobManager, JobSpec
+from core.viet_lai_prompt import dung_viet_lai
 from core.money import format_vnd
 from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
 from core.session import SESSION_FILENAME
@@ -282,7 +283,11 @@ class CuaSoChinh(QWidget):
                                    max_workers=self.config.max_concurrent_jobs,
                                    max_by_kind=self._luong_khoi_dau(),
                                    tu_do_nhip=self.config.tu_do_nhip,
-                                   session_path=self.session_path)
+                                   session_path=self.session_path,
+                                   # Prompt bị bộ lọc từ chối → AI viết lại → thử lại
+                                   # (chủ dự án 25/08/2026). Dùng cổng chat của
+                                   # chính tài khoản này; chưa đăng nhập thì thay từ thô.
+                                   viet_lai=dung_viet_lai(lambda: self.client))
 
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
@@ -744,7 +749,11 @@ class CuaSoChinh(QWidget):
                                    max_workers=self.config.max_concurrent_jobs,
                                    max_by_kind=self._luong_khoi_dau(),
                                    tu_do_nhip=self.config.tu_do_nhip,
-                                   session_path=self.session_path)
+                                   session_path=self.session_path,
+                                   # Prompt bị bộ lọc từ chối → AI viết lại → thử lại
+                                   # (chủ dự án 25/08/2026). Dùng cổng chat của
+                                   # chính tài khoản này; chưa đăng nhập thì thay từ thô.
+                                   viet_lai=dung_viet_lai(lambda: self.client))
         self.refresh_prices()
 
     def dang_xuat(self) -> None:

@@ -49,6 +49,7 @@ from .config import DEFAULT_CONCURRENCY, HARD_CAPS, redact
 from .download import DownloadError, download_to
 from .errors import ErrorAdvice, describe, retry_after_seconds
 from .pricing import KIND_IMAGE, KIND_TTS, KIND_VIDEO
+from .viet_lai_prompt import SO_LAN_VIET_LAI, la_bi_tu_choi
 
 __all__ = [
     "JobSpec",
@@ -291,6 +292,11 @@ class JobSpec:
     label: str = ""
     #: Sinh MỘT LẦN, giữ nguyên qua mọi lần thử lại → không bao giờ trừ tiền hai lần.
     idempotency_key: str = field(default_factory=lambda: str(uuid.uuid4()))
+    #: Khoá GỬI LÊN MÁY CHỦ khi khác `idempotency_key`. Chỉ dùng sau khi prompt
+    #: bị từ chối và đã được VIẾT LẠI: máy chủ cần khoá mới (khoá cũ trong 24 giờ
+    #: chỉ trả lại đúng câu từ chối cũ), còn giao diện vẫn nhận dòng này qua
+    #: `idempotency_key` như trước. Rỗng = gửi `idempotency_key`.
+    khoa_gui: str = ""
 
     def display_label(self) -> str:
         if self.label:
@@ -421,9 +427,13 @@ class JobManager:
         max_by_kind: Optional[Dict[str, int]] = None,
         tu_do_nhip: bool = True,
         session_path: Optional[str] = None,
+        viet_lai: Optional[Callable[[JobSpec, str], Optional[str]]] = None,
     ) -> None:
         self._client_factory = client_factory
         self._events = events
+        #: Hook viết lại prompt khi bộ lọc từ chối: `(spec, lý do) -> prompt mới`
+        #: hoặc `None`. Xem `core/viet_lai_prompt.dung_viet_lai`. None = không viết lại.
+        self._viet_lai = viet_lai
         self._max_workers = max(1, int(max_workers))
         #: Số chỗ KHỞI ĐẦU mỗi loại job. Khoá thiếu -> lấy `max_workers`.
         self._max_by_kind: Dict[str, int] = {
@@ -942,39 +952,57 @@ class JobManager:
                 )
                 return
 
-            job = self._create_with_retry(record)
-            if job is None:
-                return  # `_create_with_retry` đã ghi trạng thái lỗi/huỷ
+            # Vòng "bị từ chối → viết lại mô tả → thử lại" tối đa SO_LAN_VIET_LAI
+            # lần. Chủ dự án 25/08/2026: *"prompt bị từ chối thì phải có logic
+            # làm lại prompt"*. Job bị từ chối được hoàn tiền, nên mỗi lần thử
+            # lại chỉ tốn thời gian chờ chứ không tốn thêm tiền.
+            so_lan_viet_lai = 0
+            while True:
+                job = self._create_with_retry(record)
+                if job is None:
+                    return  # `_create_with_retry` đã ghi trạng thái lỗi/huỷ
 
-            record.job_id = job.get("id")
-            self._update(record, STATUS_RUNNING, "Máy chủ đã nhận việc, đang xếp hàng…", progress=5)
+                record.job_id = job.get("id")
+                self._update(record, STATUS_RUNNING, "Máy chủ đã nhận việc, đang xếp hàng…", progress=5)
 
-            # Máy chủ ước tính bao lâu thì xong → hỏi lại lần đầu đúng lúc, khỏi
-            # bắn request vô ích trong lúc job còn đang xếp hàng.
-            final = self._wait_for_job(record, job.get("estimated_seconds"))
-            if final is None:
-                return
+                # Máy chủ ước tính bao lâu thì xong → hỏi lại lần đầu đúng lúc, khỏi
+                # bắn request vô ích trong lúc job còn đang xếp hàng.
+                final = self._wait_for_job(record, job.get("estimated_seconds"))
+                if final is None:
+                    return
 
-            status = final.get("status")
-            record.cost_micro = _as_text(final.get("cost"))
-            record.refunded_micro = _as_text(final.get("refunded"))
+                status = final.get("status")
+                record.cost_micro = _as_text(final.get("cost"))
+                record.refunded_micro = _as_text(final.get("refunded"))
 
-            if status == "succeeded":
-                # TÍN HIỆU TĂNG của vòng tự dò. Đo THỜI GIAN NẰM HÀNG CHỜ
-                # (`started_at − created_at`), không phải tổng thời gian job:
-                # một clip 8 giây và một clip 30 giây khác nhau cả phút mà chẳng
-                # nói gì về tắc nghẽn, còn thời gian nằm `queued` thì đúng bằng
-                # định nghĩa của "nhà máy có chỗ trống ngay không".
-                nhip = self._nhip.get(record.spec.kind)
-                if nhip is not None and self._tu_do_nhip:
-                    nhip.xong(cho_hang_doi_cua(final))
-                self._download_outputs(record, final)
-            elif status == "cancelled":
-                self._finish(
-                    record, STATUS_CANCELLED, "Đã huỷ. Toàn bộ tiền tạm giữ đã về lại ví bạn."
-                )
-            else:
-                self._fail_from_job(record, final)
+                if status == "succeeded":
+                    # TÍN HIỆU TĂNG của vòng tự dò. Đo THỜI GIAN NẰM HÀNG CHỜ
+                    # (`started_at − created_at`), không phải tổng thời gian job:
+                    # một clip 8 giây và một clip 30 giây khác nhau cả phút mà chẳng
+                    # nói gì về tắc nghẽn, còn thời gian nằm `queued` thì đúng bằng
+                    # định nghĩa của "nhà máy có chỗ trống ngay không".
+                    nhip = self._nhip.get(record.spec.kind)
+                    if nhip is not None and self._tu_do_nhip:
+                        nhip.xong(cho_hang_doi_cua(final))
+                    self._download_outputs(record, final)
+                    return
+                if status == "cancelled":
+                    self._finish(
+                        record, STATUS_CANCELLED, "Đã huỷ. Toàn bộ tiền tạm giữ đã về lại ví bạn."
+                    )
+                    return
+                moi = self._viet_lai_neu_bi_tu_choi(record, final, so_lan_viet_lai)
+                if moi is None:
+                    self._fail_from_job(record, final)
+                    return
+                so_lan_viet_lai += 1
+                record.spec.content = moi
+                record.spec.khoa_gui = str(uuid.uuid4())
+                record.attempt += 1
+                self._update(
+                    record, STATUS_RUNNING,
+                    "Mô tả bị từ chối → đã viết lại, thử lại lần {0}/{1}…".format(
+                        so_lan_viet_lai, SO_LAN_VIET_LAI), progress=3)
         except Exception as exc:  # noqa: BLE001 — một job hỏng không được kéo sập cả tool
             self._bao_nhip(record.spec.kind, exc)
             advice = describe(exc)
@@ -1102,7 +1130,7 @@ class JobManager:
                 text=spec.content,
                 voice_id=params.get("voice_id", "vi_female_01"),
                 format=params.get("format", "mp3"),
-                idempotency_key=spec.idempotency_key,
+                idempotency_key=spec.khoa_gui or spec.idempotency_key,
             )
         if spec.kind == KIND_IMAGE:
             references = params.get("reference_images") or None
@@ -1111,7 +1139,7 @@ class JobManager:
                 n=int(params.get("n", 1)),
                 aspect_ratio=params.get("aspect_ratio", "16:9"),
                 reference_images=references,
-                idempotency_key=spec.idempotency_key,
+                idempotency_key=spec.khoa_gui or spec.idempotency_key,
             )
         if spec.kind == KIND_VIDEO:
             return client.videos.create(
@@ -1121,7 +1149,7 @@ class JobManager:
                 duration=int(params["duration"]),
                 aspect_ratio=params.get("aspect_ratio", "16:9"),
                 image_url=params.get("image_url") or None,
-                idempotency_key=spec.idempotency_key,
+                idempotency_key=spec.khoa_gui or spec.idempotency_key,
             )
         raise ValueError("Loại job không hỗ trợ: {0}".format(spec.kind))
 
@@ -1329,6 +1357,29 @@ class JobManager:
             "Đã lưu {0} file vào {1}.{2}".format(len(saved), folder, cost_note),
             progress=100,
         )
+
+    def _viet_lai_neu_bi_tu_choi(self, record: JobRecord, job: Dict[str, Any],
+                                 da_viet_lai: int) -> Optional[str]:
+        """Job hỏng vì bộ lọc nội dung và còn lượt → prompt mới; không thì None."""
+        if self._viet_lai is None or da_viet_lai >= SO_LAN_VIET_LAI:
+            return None
+        if record.spec.kind not in (KIND_IMAGE, KIND_VIDEO):
+            return None
+        error = job.get("error") or {}
+        ma = str(error.get("code") or "") if isinstance(error, dict) else ""
+        thong_diep = str(error.get("message") or "") if isinstance(error, dict) else ""
+        if not la_bi_tu_choi(ma, thong_diep) and job.get("status") != "rejected":
+            return None
+        try:
+            moi = self._viet_lai(record.spec, thong_diep)
+        except Exception as exc:  # noqa: BLE001 — viết lại hỏng thì báo lỗi như cũ
+            self._log("Không viết lại được mô tả bị từ chối: {0}".format(exc))
+            return None
+        if not moi or str(moi).strip() == str(record.spec.content).strip():
+            return None
+        self._log("Mô tả của “{0}” bị từ chối — đã viết lại và thử lại.".format(
+            record.spec.display_label()))
+        return str(moi)
 
     def _fail_from_job(self, record: JobRecord, job: Dict[str, Any]) -> None:
         """Job kết thúc ở `failed` / `rejected` — luôn kèm lời trấn an về hoàn tiền."""
