@@ -301,8 +301,7 @@ be clearly DISTINCT from the existing ones; keep the same visual style.
 #: smile" bi content_rejected HAI lan; bo hai tu la qua ngay. Ca 85 canh cua
 #: video do co 12 canh "anthropomorphic", 23 canh "sly" — thay truoc khi ghi
 #: Excel, khoi de khach gap loi "noi dung bi tu choi" tren mot con meo di hia.
-_TU_BI_LOC = [(re.compile(r"\banthropomorphic\s+(\w+)", re.I), r"\1 standing upright like a person"),
-              (re.compile(r"\banthropomorphic\b", re.I), "standing upright like a person"),
+_TU_BI_LOC = [(re.compile(r"\banthropomorphic\b", re.I), "upright humanlike"),
               (re.compile(r"\bsly\b", re.I), "knowing")]
 
 

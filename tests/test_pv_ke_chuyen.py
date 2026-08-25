@@ -387,7 +387,7 @@ def test_thay_tu_bi_loc_trong_moi_prompt(wb):
     bia = {"thumbnails": [{"img_prompt": "sly cat"}]}
     wb._lam_lanh_moi_prompt(cast, scenes, bia)
     assert "anthropomorphic" not in cast["characters"][0]["english_prompt"]
-    assert scenes[0]["img_prompt"] == "an fox standing upright like a person"
+    assert scenes[0]["img_prompt"] == "an upright humanlike fox"
     assert bia["thumbnails"][0]["img_prompt"] == "knowing cat"
 
 
