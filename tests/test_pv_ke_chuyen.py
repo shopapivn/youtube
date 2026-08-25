@@ -10,6 +10,7 @@ Không bài nào gọi mạng: casting, chia cảnh, ảnh bìa, nhạc đều b
 
 from __future__ import annotations
 
+import json
 import os
 
 from openpyxl import load_workbook
@@ -400,3 +401,35 @@ def test_excel_khong_con_tu_bi_loc(wb, yeu_cau):
     m = ra["scenes"]["json"]
     assert "anthropomorphic" not in m["characters"][0]["english_prompt"]
     assert all("anthropomorphic" not in s["img_prompt"] and " sly" not in s["img_prompt"] for s in m["scenes"])
+
+
+# ── Khoá nhận dạng: mô hình vẽ phải biết ảnh tham chiếu nào là ai ───────────
+
+def test_khoa_nhan_dang_noi_ten_voi_anh_tham_chieu(wb):
+    dan = [{"id": "nv4", "role": "the cat", "english_prompt": "small cat in a plumed hat and boots"}]
+    noi = [{"id": "loc9", "name": "The ogre's castle", "english_prompt": "stone castle"}]
+    sc = [{"img_prompt": "Wide shot of nv4 (nv4) facing the ogre inside loc9, pencil sketch",
+           "video_prompt": "The cat steps forward.",
+           "reference_files": json.dumps(["nv4.png", "loc9.png"])},
+          {"img_prompt": "Empty road", "video_prompt": "wind", "reference_files": ""}]
+    wb._khoa_nhan_dang(sc, dan, noi)
+    p = sc[0]["img_prompt"]
+    assert "reference image 1 = nv4, the the cat: small cat in a plumed hat and boots" in p \
+        or "reference image 1 = nv4, the cat" in p
+    assert "reference image 2 = loc9" in p
+    assert "nv4 [reference image 1]" in p and "(see reference image 1)" in p
+    assert "look EXACTLY like its reference image" in p
+    assert sc[0]["video_prompt"].endswith("for the whole clip.")
+    # Cảnh không có tham chiếu thì để nguyên.
+    assert sc[1]["img_prompt"] == "Empty road" and sc[1]["video_prompt"] == "wind"
+    # Gọi lần hai không chồng khối.
+    wb._khoa_nhan_dang(sc, dan, noi)
+    assert sc[0]["img_prompt"].count("REFERENCE IMAGES are attached") == 1
+
+
+def test_excel_moi_canh_co_khoi_khoa(wb, yeu_cau):
+    yeu_cau["config"]["che_do_ke"] = "tu_xay"
+    ra = wb.handle(yeu_cau, cast_fn=_cast_phu_va_boi_canh, chia_fn=_chia_giu_khuc)
+    m = ra["scenes"]["json"]
+    co_ref = [s for s in m["scenes"] if s.get("reference_files")]
+    assert co_ref and all("reference image 1 =" in s["img_prompt"] for s in co_ref)

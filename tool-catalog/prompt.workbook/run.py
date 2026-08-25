@@ -499,6 +499,7 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
         _gan_reference_files(scenes, cast["characters"], cast.get("locations") or [])
         _validate_coverage(cues, scenes)
         _lam_lanh_moi_prompt(cast, scenes, bia)
+        _khoa_nhan_dang(scenes, cast["characters"], cast.get("locations") or [])
 
         workspace = Path(str(request.get("workspace") or "")).resolve(); workspace.mkdir(parents=True, exist_ok=True)
         manifest = {"schema_version": 1, "project_id": str(request.get("workflow_id") or "project"),
@@ -1302,12 +1303,85 @@ def _gan_reference_files(scenes, characters, locations=()) -> None:
         if scene.get("reference_files"):
             continue
         tho = str(scene.get("characters_used") or "").replace(",", " ").split()
-        ids = [i for i in tho if i in hop_nv]
+        # Toi da 2 nhan vat + 1 boi canh. Do 25/08/2026 (20 canh, AI cham do
+        # giong 1–5): gui het 4–6 anh tham chieu → 3,75; chi 2 nhan vat dau + 1
+        # noi → 3,79 va it bi tu choi hon. Nhieu anh qua thi mo hinh lan anh.
+        ids = [i for i in tho if i in hop_nv][:TOI_DA_NV_THAM_CHIEU]
         loc = str(scene.get("location_used") or "").strip()
         if loc in hop_loc:
             ids.append(loc)
         if ids:
             scene["reference_files"] = json.dumps(["{0}.png".format(i) for i in ids])
+
+
+#: Cau khoa nhan dang — chu du an 25/08/2026 xem video: *"nhan vat tham chieu
+#: luc co luc khong, luc thi con meo A luc thi con meo B… lon xon"*. Do tren
+#: Excel that: 63/63 canh co meo deu gan nv4.png, nhung loi nhac chi ghi "(nv4)"
+#: — vo nghia voi mo hinh ve — va moi canh AI ta con meo mot kieu. Mo hinh anh
+#: khong biet anh tham chieu nao la ai, nen no ve lai theo chu. Khoa bang ma:
+#: noi ro "reference image 1 = nv4, the cat: <mo ta nguyen van>" va bat ve y het.
+_KHOA_NHAN_VAT = ("Every character listed above must look EXACTLY like its reference "
+                  "image: the same face and eyes, the same head and body proportions, "
+                  "the same fur or skin, the same outfit and props (hat, boots, bag, "
+                  "crown, beard…), the same pencil-sketch line style. Do NOT redesign, "
+                  "simplify or restyle the character; only its pose, gesture and "
+                  "expression change for this scene. The character keeps exactly the "
+                  "colours of its reference image: the scene's accent colour must NEVER "
+                  "touch the character, its hat, feather, eyes, clothes or props — apply "
+                  "any accent only to the surroundings.")
+#: Bao nhieu NHAN VAT duoc gan anh tham chieu cho mot canh (them 1 boi canh).
+TOI_DA_NV_THAM_CHIEU = 2
+
+_KHOA_BOI_CANH = ("The place must match its reference image (same architecture, "
+                  "furniture and layout); only framing and lighting change.")
+_KHOA_VIDEO = (" Keep every character exactly as drawn in the first frame — same face, "
+               "outfit, proportions and line style — for the whole clip.")
+
+
+def _mo_ta_tham_chieu(i: str, dan: Mapping[str, Any], noi: Mapping[str, Any]) -> str:
+    if i in dan:
+        c = dan[i]
+        return "{0}, the {1}: {2}".format(i, c.get("role") or c.get("name") or "character",
+                                          c.get("english_prompt") or "")
+    l = noi[i]
+    return "{0}, {1}: {2}".format(i, l.get("name") or "place", l.get("english_prompt") or "")
+
+
+def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
+    """Gan vao MOI canh khoi 'REFERENCE IMAGES attached, in this order: …'.
+
+    Thu tu trong khoi = thu tu `reference_files` = thu tu anh duoc gui, nen
+    'reference image 1' luon dung anh. Cac cho ghi `(nv4)` / `nv4` trong loi
+    nhac doi thanh `nv4 [reference image 1]` de mo hinh noi duoc ten voi anh.
+    """
+    dan = {c["id"]: c for c in characters}
+    noi = {l["id"]: l for l in locations}
+    for s in scenes:
+        try:
+            ids = json.loads(s.get("reference_files") or "[]")
+        except ValueError:
+            ids = [x.strip() for x in str(s.get("reference_files") or "").split(",")]
+        ids = [os.path.splitext(os.path.basename(str(i)))[0] for i in ids if str(i).strip()]
+        ids = [i for i in ids if i in dan or i in noi]
+        if not ids or "REFERENCE IMAGES are attached" in str(s.get("img_prompt") or ""):
+            continue
+        chu = str(s.get("img_prompt") or "")
+        for k, i in enumerate(ids, 1):
+            chu = re.sub(r"\(\s*" + re.escape(i) + r"\s*(\(" + re.escape(i) + r"\.png\))?\s*\)",
+                         "(see reference image {0})".format(k), chu)
+            chu = re.sub(r"\b" + re.escape(i) + r"\b(?!\s*\[reference)",
+                         "{0} [reference image {1}]".format(i, k), chu)
+        dong = ["", "REFERENCE IMAGES are attached, in this order:"]
+        for k, i in enumerate(ids, 1):
+            dong.append("- reference image {0} = {1}".format(k, _mo_ta_tham_chieu(i, dan, noi)))
+        if any(i in dan for i in ids):
+            dong.append(_KHOA_NHAN_VAT)
+        if any(i in noi for i in ids):
+            dong.append(_KHOA_BOI_CANH)
+        s["img_prompt"] = chu + "\n".join(dong)
+        vid = str(s.get("video_prompt") or "")
+        if vid and any(i in dan for i in ids) and "first frame" not in vid:
+            s["video_prompt"] = vid.rstrip() + _KHOA_VIDEO
 
 
 def _bo_enrich(goi) -> Callable:
