@@ -953,6 +953,29 @@ THEO_NGHIA = "theo-noi-dung"
 THEO_DONG_HO = "theo-dong-ho"
 
 
+#: Khuôn chia cảnh của KÊNH phải có đủ các chỗ trống này mới dùng được ở
+#: đường đạo diễn (dàn nhân vật, kế hoạch, bối cảnh, phụ đề).
+_CHO_TRONG_KHUON_CHIA = ("<<CAST_STYLE>>", "<<DIRECTOR_PLAN>>", "<<CONTEXT>>", "<<SRT>>",
+                         "<<MAX_SEC>>", "<<KHUC_THU>>")
+
+
+def _khuon_chia(context) -> str:
+    """Khuôn chia cảnh: của kênh (`context["storyboard_template"]`) nếu đủ chỗ trống, không thì mặc định.
+
+    Khuôn mặc định viết cho video người lớn kiểu "ẩn dụ hình" (đồng hồ xoáy,
+    kính vỡ) — sai thể loại cho truyện cổ tích trẻ em, nơi mỗi cảnh phải minh
+    hoạ ĐÚNG câu kể (chủ dự án 25/08/2026: "cảnh lặp, không minh hoạ nội
+    dung"). Kênh nào có `prompt/7-canh.md` đủ chỗ trống thì dùng khuôn của
+    kênh: thể loại nằm ở kênh, không cứng trong mã.
+    """
+    khuon = ""
+    if isinstance(context, Mapping):
+        khuon = str(context.get("storyboard_template") or "")
+    if khuon.strip() and all(ct in khuon for ct in _CHO_TRONG_KHUON_CHIA):
+        return khuon
+    return KHUON_MAC_DINH
+
+
 def _canh(cues, *, engine, context, goi, chia_fn=None, enrich_fn=None,
           cast_style="", nhan_vat_chinh="", ke_hoach=None):
     """Cat canh theo nghia; khong duoc thi lui ve dong ho va **noi ra**.
@@ -1107,7 +1130,7 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
     def chia(khuc, thu_tu, tong_khuc):
         # Vi tri khuc di vao loi nhac: "canh dau la cu hook" chi dung o khuc 1,
         # be nguyen sang khuc 5 la video mo bai nam lan (xem core/auto_khau).
-        loi_nhac = loi_nhac_chia(KHUON_MAC_DINH, khuc, tran, {
+        loi_nhac = loi_nhac_chia(_khuon_chia(context), khuc, tran, {
             "CONTEXT": boi_canh, "CAST_STYLE": cast_style,
             "DIRECTOR_PLAN": _khoi_ke_hoach(ke_hoach, khuc),
             "KHUC_THU": thu_tu + 1, "TONG_KHUC": tong_khuc,

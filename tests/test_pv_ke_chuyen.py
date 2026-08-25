@@ -563,3 +563,13 @@ def test_khoi_dan_bao_ai_chi_goi_bang_id(wb):
 
 def test_casting_yeu_cau_tu_ngu_than_thien_gia_dinh(wb):
     assert "FAMILY-FRIENDLY" in wb._KHUON_CAST and "no weapons" in wb._KHUON_CAST
+
+
+def test_khuon_chia_cua_kenh_hay_mac_dinh(wb):
+    from core.chia_canh import KHUON_MAC_DINH
+    run = wb
+    du = "KENH " + " ".join(run._CHO_TRONG_KHUON_CHIA)
+    assert run._khuon_chia({"storyboard_template": du}) == du
+    assert run._khuon_chia({"storyboard_template": "thieu <<SRT>>"}) == KHUON_MAC_DINH
+    assert run._khuon_chia({}) == KHUON_MAC_DINH
+    assert run._khuon_chia(None) == KHUON_MAC_DINH

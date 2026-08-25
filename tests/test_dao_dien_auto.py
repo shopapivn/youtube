@@ -420,3 +420,38 @@ class TestKhoaLanChay:
         man = {"scenes": MAN["scenes"], "characters": [], "locations": []}
         with pytest.raises(RuntimeError, match="dàn nhân vật"):
             dd.chay_dao_dien(bc, luot, handle=lambda r: {"scenes": {"json": man}})
+
+
+class TestKhuonChiaCuaKenh:
+    def test_khuon_du_cho_trong(self):
+        assert not dd.khuon_du_cho_dao_dien("You are a storyboard director. nv1 (nv1.png) <<SRT>> <<MAX_SEC>>")
+        du = " ".join(dd.CHO_TRONG_KHUON_CHIA)
+        assert dd.khuon_du_cho_dao_dien("khuôn " + du)
+        assert not dd.khuon_du_cho_dao_dien("")
+
+    def test_dua_7_canh_cua_kenh_vao_boi_canh(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        bc.kenh.prompt = {"7-canh.md": "KHUON KENH " + " ".join(dd.CHO_TRONG_KHUON_CHIA)}
+        nhan = {}
+
+        def handle(req):
+            nhan.update(req)
+            return {"scenes": {"json": MAN}}
+
+        dd.chay_dao_dien(bc, luot, handle=handle)
+        with open(nhan["inputs"]["context"]["path"], encoding="utf-8") as f:
+            ctx = json.load(f)
+        assert ctx["storyboard_template"].startswith("KHUON KENH")
+        # Khuôn kiểu TL4 (thiếu chỗ trống) thì không đưa vào.
+        bc.kenh.prompt = {"7-canh.md": "nv1 (nv1.png) <<SRT>>"}
+        dd.chay_dao_dien(bc, luot, handle=handle)
+        with open(nhan["inputs"]["context"]["path"], encoding="utf-8") as f:
+            assert "storyboard_template" not in json.load(f)
+
+    def test_kenh_story_3d_co_khuon_du(self):
+        from core.kenh import doc_kenh
+        goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        k = doc_kenh(goc, "story-3d")
+        assert dd.khuon_du_cho_dao_dien(k.prompt.get("7-canh.md", ""))
+        assert "metaphor" not in k.prompt["7-canh.md"].split("THE RULES")[1].split("STYLE TAIL")[0].lower() or \
+            "not a metaphor" in k.prompt["7-canh.md"]

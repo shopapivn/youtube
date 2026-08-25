@@ -58,6 +58,20 @@ _KHOA_NAP = threading.Lock()
 _RUN: Dict[str, Any] = {}
 
 
+#: `prompt/7-canh.md` của kênh dùng được ở đường đạo diễn khi có đủ các chỗ trống này.
+CHO_TRONG_KHUON_CHIA = ("<<CAST_STYLE>>", "<<DIRECTOR_PLAN>>", "<<CONTEXT>>", "<<SRT>>",
+                        "<<MAX_SEC>>", "<<KHUC_THU>>")
+
+
+def khuon_du_cho_dao_dien(khuon: str) -> bool:
+    """7-canh.md của kênh có đủ chỗ trống cho dàn nhân vật, kế hoạch, bối cảnh, phụ đề không?
+
+    Khuôn kiểu TL4-T7 (một nhân vật nv1, không có <<CAST_STYLE>>) thì không —
+    đường đạo diễn dùng khuôn mặc định của prompt.workbook."""
+    k = str(khuon or "")
+    return bool(k.strip()) and all(ct in k for ct in CHO_TRONG_KHUON_CHIA)
+
+
 def che_do_dao_dien(kenh: Any) -> bool:
     """Kênh này đi nhánh đạo diễn không (`kenh.yaml: che_do_ke`)?"""
     return str(getattr(kenh, "che_do_ke", "") or "").strip() in CHE_DO_DAO_DIEN
@@ -115,6 +129,10 @@ def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
                    "english_prompt": str((k.style or {}).get("default_character_prompt") or "")}
     boi_canh = dung_boi_canh(kich_ban, chi_dan=chi_dan_tu_bo(k.style), che_do_ke=che_do,
                              nhan_vat_co_dinh=co_dinh)
+    khuon_kenh = str((getattr(k, "prompt", None) or {}).get("7-canh.md") or "")
+    if khuon_du_cho_dao_dien(khuon_kenh):
+        # Khuôn chia cảnh của kênh (thể loại: truyện trẻ em minh hoạ đúng câu kể…)
+        boi_canh["storyboard_template"] = khuon_kenh
     ctx = os.path.join(d, "4-boi-canh.json")
     with open(ctx, "w", encoding="utf-8") as f:
         json.dump(boi_canh, f, ensure_ascii=False, indent=1)
