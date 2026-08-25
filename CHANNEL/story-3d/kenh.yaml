@@ -1,5 +1,5 @@
 # ============================================================================
-#  KÊNH THU-VI — Truyện cổ tích
+#  KÊNH story-3d — Truyện cổ tích
 # ============================================================================
 #  Tool tạo tệp này từ khuôn: ngách “Tâm lý” × bộ vẽ “Bút chì giấy trắng” × khán giả
 #  “Việt Nam” × chiến lược “Remake”.
@@ -13,7 +13,7 @@
 #  cửa: ví ShopAPI mà tool đã đăng nhập. Tool có bộ quét, thấy khoá là chặn.
 # ============================================================================
 
-ma: "THU-VI"
+ma: "story-3d"
 ten: "Truyện cổ tích"
 ngon_ngu: "vi"
 giong_van: "Vietnamese fairy-tale narration for children 4–10: warm, gentle, playful storyteller voice; short simple sentences; lively dialogue; sound words; the narrator speaks to the child listener (các bạn nhỏ / các con)."
