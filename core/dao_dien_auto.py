@@ -249,8 +249,27 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
     try:
         from .goi_van_ban import loc_json  # noqa: PLC0415
 
-        tra = goi_ai(loi_nhac_thiet_ke_lai(nv, ly_do))
-        moi = str((loc_json(tra) or {}).get("english_prompt") or "").strip()
+        # Giai đoạn (nv1b) bị chặn thì thường chính BỘ ĐỒ của giai đoạn là thứ
+        # bị chặn (mèo: mũ phớt cắm lông + giày da = Puss in Boots). Luật giai
+        # đoạn giữ đồ riêng khi đổi mặt/thân — nên ở đây phải hỏi AI cả bộ đồ
+        # mới cho đúng giai đoạn ấy: giữ món cốt truyện cần, bỏ món giống bản
+        # quyền. Đo 25/08/2026: thiết kế lại mặt/thân xong, nv1b vẫn bị chặn.
+        la_giai_doan = goc_cua_id(ma_id) != ma_id
+        do_cu = ""
+        if la_giai_doan:
+            phan = str(nv.get("english_prompt") or "").split("; outfit at this stage:")
+            do_cu = phan[1].strip() if len(phan) > 1 else ""
+        loi_nhac = loi_nhac_thiet_ke_lai(nv, ly_do)
+        if la_giai_doan:
+            loi_nhac += ('\nThis is a later STAGE of the character; its current stage outfit is: "{0}". '
+                         'Also return "outfit": a NEW family-friendly outfit for this stage that keeps only '
+                         'the item the plot needs and drops anything resembling a famous character '
+                         '(for a cat that gets boots: plain boots, no hat with a feather, no sword). '
+                         'Return JSON with both "english_prompt" (face/body only, no clothes) and "outfit".'
+                         .format(do_cu[:300]))
+        tra = goi_ai(loi_nhac)
+        goi = loc_json(tra) or {}
+        moi = str(goi.get("english_prompt") or "").strip()
         if len(moi) < 20:
             raise ValueError("AI không trả mô tả mới")
         # Phần đuôi phong cách của lời nhắc chân dung (sau DUOI_CHAN_DUNG) giữ nguyên.
@@ -259,6 +278,12 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
         if DUOI_CHAN_DUNG in sheet:
             duoi = sheet.split(DUOI_CHAN_DUNG, 1)[1]
         so_canh = doi_thiet_ke_nhan_vat(canh or [], dan, ma_id, moi, duoi_style=duoi)
+        do_moi = str(goi.get("outfit") or "").strip().rstrip(".")
+        if la_giai_doan and do_moi:
+            nv["english_prompt"] = moi.rstrip(".") + "; outfit at this stage: " + do_moi
+            if nv.get("sheet_prompt") is not None:
+                nv["sheet_prompt"] = nv["english_prompt"] + DUOI_CHAN_DUNG + duoi
+            so_canh = max(so_canh, _thay_mo_ta_trong_canh(canh or [], ma_id, nv["english_prompt"]))
         man["characters"] = dan
         _ghi_lai_canh_va_dan(luot, man, canh)
         bc.ghi("    đã thiết kế lại {0} ({1} cảnh cập nhật): {2}…".format(ma_id, so_canh, moi[:90]))
@@ -277,6 +302,21 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
     except Exception as loi:  # noqa: BLE001
         bc.ghi("    tham chiếu {0}: thiết kế lại không được ({1}).".format(ma_id, str(loi)[:120]))
         return False
+
+
+def _thay_mo_ta_trong_canh(canh: List[Dict[str, Any]], ma_id: str, mo_ta: str) -> int:
+    """Thay dòng mô tả của `ma_id` trong khối khoá của mọi cảnh (cùng mẫu với core.prompt_visuals)."""
+    import re  # noqa: PLC0415
+
+    n = 0
+    mau = re.compile(r"(reference image \d+ = %s, the [^:\n]+: )[^\n]*" % re.escape(ma_id))
+    for c in canh:
+        chu = str(c.get("img_prompt") or "")
+        moi = mau.sub(lambda mm: mm.group(1) + mo_ta, chu)
+        if moi != chu:
+            c["img_prompt"] = moi
+            n += 1
+    return n
 
 
 def _ghi_lai_canh_va_dan(luot: Any, man: Dict[str, Any], canh: Optional[List[Dict[str, Any]]]) -> None:

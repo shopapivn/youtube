@@ -277,3 +277,45 @@ class TestThietKeLai:
         thieu = dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh, goi_ai=lambda l: "không có json")
         assert sorted(thieu) == ["loc1", "nv1", "nv2"]
         assert any("KHÔNG tạo được" in d for d in bc._nhat_ky)
+
+
+    def test_giai_doan_bi_chan_thi_doi_ca_bo_do_cua_giai_doan(self, tmp_path):
+        from core.prompt_visuals import DUOI_CHAN_DUNG
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = json.loads(json.dumps(MAN))
+        man["characters"] = [
+            {"id": "nv1", "role": "hero", "english_prompt": "a yellow cat",
+             "sheet_prompt": "a yellow cat" + DUOI_CHAN_DUNG + " Style: 3D"},
+            {"id": "nv1b", "role": "hero",
+             "english_prompt": "a yellow cat; outfit at this stage: a feathered hat and boots",
+             "sheet_prompt": "a yellow cat; outfit at this stage: a feathered hat and boots" + DUOI_CHAN_DUNG + " Style: 3D"},
+        ]
+        lock = "REFERENCE IMAGES are attached, in this order:" + chr(10) + \
+            "- reference image 1 = nv1b, the hero: a yellow cat; outfit at this stage: a feathered hat and boots" + chr(10)
+        canh = [{"scene_id": 20, "img_prompt": "cat walks" + chr(10) + lock, "video_prompt": "x",
+                 "reference_files": json.dumps(["nv1b.png"])}]
+        (tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU).mkdir()
+        (tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU / "nv1.png").write_bytes(b"cu")
+        hoi = []
+
+        def tao_anh(ma_id, prompt, dich):
+            if "feathered" in prompt:
+                raise RuntimeError("content_rejected")
+            with open(dich, "wb") as f:
+                f.write(b"png")
+
+        def goi_ai(loi_nhac):
+            hoi.append(loi_nhac)
+            return '{"english_prompt": "a yellow cat with green eyes", "outfit": "plain brown boots and a small red scarf"}'
+
+        thieu = dd.tao_tham_chieu(bc, luot, man, canh=canh, tao_anh=tao_anh, goi_ai=goi_ai)
+        assert thieu == []
+        assert "feathered hat and boots" in hoi[0] and '"outfit"' in hoi[0]     # AI biết đồ cũ của giai đoạn
+        nv1, nv1b = man["characters"]
+        assert nv1["english_prompt"] == "a yellow cat with green eyes"
+        assert nv1b["english_prompt"] == "a yellow cat with green eyes; outfit at this stage: plain brown boots and a small red scarf"
+        assert nv1b["sheet_prompt"].endswith(" Style: 3D") and "feathered" not in nv1b["sheet_prompt"]
+        assert "plain brown boots" in canh[0]["img_prompt"] and "feathered" not in canh[0]["img_prompt"]
+        tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
+        assert (tc / "nv1b.png").read_bytes() == b"png" and (tc / "nv1.png").read_bytes() == b"png"
+        assert (tc / "nv1.png.cu").read_bytes() == b"cu"
