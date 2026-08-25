@@ -77,7 +77,8 @@ def test_kho_tam_day_thi_xoa_tep_cu_cua_minh_roi_thu_lai(monkeypatch, tmp_path):
     anh_len.xoa_nho()
     monkeypatch.setattr(anh_len, "DUONG_SO_TEP_TAM", str(tmp_path / "so.jsonl"))
     # Ba tệp cũ tool này từng đẩy (giả lập bộ nhớ).
-    for i, luc in enumerate((100.0, 50.0, 75.0)):
+    import time as _t3
+    for i, luc in enumerate((_t3.time() - 100, _t3.time() - 150, _t3.time() - 125)):
         anh_len._NHO[("cu%d.png" % i, 1, 1)] = ("https://cdn.shopapi.vn/x/upl_cu%d.jpg?X-Amz=1" % i, luc)
     anh = tmp_path / "c.png"; anh.write_bytes(b"z")
     client = SimpleNamespace(uploads=_UpKho())
@@ -93,7 +94,9 @@ def test_so_tep_tam_tren_dia_dung_duoc_o_tien_trinh_moi(monkeypatch, tmp_path):
     monkeypatch.setattr(anh_len, "DUONG_SO_TEP_TAM", str(so))
     anh_len.xoa_nho()
     # Lần chạy TRƯỚC đã đẩy hai tệp — chỉ còn trên sổ đĩa, không còn trong _NHO.
-    so.write_text('{"id": "upl_lanTruoc1", "luc": 10}\n{"id": "upl_lanTruoc2", "luc": 20}\n', encoding="utf-8")
+    import time as _t2
+    import time as _t2; _n = _t2.time()
+    so.write_text('{"id": "upl_lanTruoc1", "luc": %d}\n{"id": "upl_lanTruoc2", "luc": %d}\n' % (_n - 7200, _n - 3600), encoding="utf-8")
 
     class _Up:
         def __init__(self):
@@ -112,18 +115,3 @@ def test_so_tep_tam_tren_dia_dung_duoc_o_tien_trinh_moi(monkeypatch, tmp_path):
     assert client.uploads.da_xoa == ["upl_lanTruoc1", "upl_lanTruoc2"]
     # Sổ giờ chỉ còn tệp vừa đẩy.
     assert [d["id"] for d in anh_len._doc_so_tep_tam()] == ["upl_moi9"]
-
-
-def test_don_kho_dung_ca_ban_sao_cuc_bo(monkeypatch, tmp_path):
-    from core import auto_khau
-    kho = tmp_path / "anh-cuc-bo"; kho.mkdir()
-    (kho / "upl_cucbo1").write_bytes(b"1"); (kho / "job_x_0").write_bytes(b"2"); (kho / "upl_cucbo2").write_bytes(b"3")
-    import os, time as _t
-    os.utime(str(kho / "upl_cucbo2"), (1, 1))
-    monkeypatch.setattr(auto_khau, "KHO_ANH_CUC_BO", str(kho))
-    monkeypatch.setattr(anh_len, "DUONG_SO_TEP_TAM", str(tmp_path / "so.jsonl"))
-    anh_len.xoa_nho()
-    da_xoa = []
-    client = SimpleNamespace(uploads=SimpleNamespace(delete=lambda u: da_xoa.append(u)))
-    assert anh_len.don_kho_tam(client, toi_da=1) == 1
-    assert da_xoa == ["upl_cucbo2"] and not (kho / "upl_cucbo2").exists() and (kho / "job_x_0").exists()

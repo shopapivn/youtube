@@ -176,6 +176,9 @@ def _la_het_kho(exc: BaseException) -> bool:
 #: Xoa toi da ngan nay tep tam cu nhat mot lan khi kho day.
 SO_TEP_DON_MOI_LAN = 40
 
+#: May chu tu xoa tep tam sau 24 gio (SDK `uploads.delete`: "file tu het han sau 24 gio").
+HAN_TEP_TAM_GIAY = 24 * 3600.0
+
 
 #: So tep tam da day len, GHI RA DIA — vi moi tien trinh (moi lan mo tool, moi
 #: kich ban chay) co `_NHO` rieng, khong ai nho tep cua lan truoc; kho day thi
@@ -215,25 +218,6 @@ def _ghi_lai_so_tep_tam(dong: list) -> None:
         pass
 
 
-def _tep_tam_trong_ban_cuc_bo() -> list:
-    """`(ma upl_…, mtime)` cua cac ban sao cuc bo — chi tep co ten bat dau `upl_`."""
-    try:
-        from .auto_khau import KHO_ANH_CUC_BO  # noqa: PLC0415
-    except Exception:  # noqa: BLE001
-        return []
-    ra = []
-    try:
-        for ten in os.listdir(KHO_ANH_CUC_BO):
-            if ten.startswith("upl_") and re.fullmatch(r"upl_[A-Za-z0-9]+", ten):
-                try:
-                    ra.append((ten, os.path.getmtime(os.path.join(KHO_ANH_CUC_BO, ten))))
-                except OSError:
-                    continue
-    except OSError:
-        return []
-    return ra
-
-
 def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
     """Kho tam tren may chu day → xoa nhung tep TOOL NAY da day len, cu nhat truoc.
 
@@ -243,14 +227,12 @@ def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
     Chi xoa tep tool nay nho (`_NHO`) — khong dung tep cua ai khac. Tra ve so
     tep da xoa.
     """
-    # Gop ba nguon: so tren dia (moi lan chay truoc), ban sao cuc bo ma
-    # `_luu_ban_cuc_bo` de lai (ten tep = ma upl_… — co ca tep cua cac ban tool
-    # cu chua co so), va bo nho tien trinh nay.
+    # Gop hai nguon: so tren dia (moi lan chay truoc) va bo nho tien trinh nay.
+    # KHONG dung ban sao cuc bo `KHO_ANH_CUC_BO`: do la cache chung cua worker
+    # cho MOI khach tren may (do 25/08: 3.467 tep upl_, xoa 600 cai deu 404).
     ung: Dict[str, float] = {}
     for d in _doc_so_tep_tam():
         ung[str(d["id"])] = float(d.get("luc") or 0)
-    for upl, luc in _tep_tam_trong_ban_cuc_bo():
-        ung[upl] = min(luc, ung.get(upl, luc))
     with _KHOA:
         for _khoa, (url, luc) in _NHO.items():
             m = re.search(r"(upl_[A-Za-z0-9]+)", str(url))
@@ -259,7 +241,9 @@ def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
     # Di tu cu nhat: tep cu da tu het han tren may chu (404) thi chi xoa khoi
     # so/ban sao; dem "da xoa" theo tep XOA DUOC THAT, dung khi du `toi_da`
     # hoac da thu qua nhieu (moi lan thu la mot request).
-    cu = sorted(ung.items(), key=lambda kv: kv[1])
+    # May chu giu tep tam 24 gio; cu hon la da tu het han (404), khong tinh.
+    han = time.time() - HAN_TEP_TAM_GIAY
+    cu = sorted(((u, l) for u, l in ung.items() if l >= han), key=lambda kv: kv[1])
     da = 0
     thu = 0
     xoa = set()
