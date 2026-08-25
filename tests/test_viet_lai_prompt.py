@@ -185,3 +185,14 @@ def test_lam_lanh_tho_vu_khi_va_tinh_tu_hung_bao():
     ra = lam_lanh_tho("guards holding halberds, a brutal ogre with an iron-studded tunic and a spear")
     assert "halberd" not in ra and "spear" not in ra and "brutal" not in ra and "iron-studded" not in ra
     assert "wooden staff" in ra and "very big" in ra
+
+
+def test_viet_lai_doi_loai_thi_bi_loai():
+    from core.viet_lai_prompt import giu_chu_the
+    goc = "Low angle of the small cat standing on the stone floor tilting its head with playful doubt, the ogre looming behind, 3D animated film still"
+    cho = goc.replace("small cat", "small dog")
+    assert not giu_chu_the(goc, cho)
+    assert giu_chu_the(goc, goc.replace("playful doubt", "a curious smile"))
+    # Bỏ bớt loài thì được (mèo ngoài khung), thêm loài mới thì không.
+    assert giu_chu_the(goc, "Low angle of the stone floor, the ogre looming above with playful doubt, 3D animated film still")
+    assert not giu_chu_the(goc, goc + ", a rabbit hops past")

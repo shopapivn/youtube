@@ -86,12 +86,33 @@ def _tu_co_nghia(chu: str) -> set:
                          "they", "their", "have", "been", "being", "very", "only", "same")}
 
 
+#: Danh tu chi LOAI / NHAN VAT. Ban viet lai them mot loai khong co trong ban goc
+#: la doi chu the — do 25/08/2026: canh 67 "meo hoi yeu tinh" duoc viet lai thanh
+#: "cho hoi yeu tinh" ma van qua kiem tra ti le tu chung (chi khac mot tu).
+_LOAI = ("cat", "kitten", "kitty", "dog", "puppy", "fox", "wolf", "bear", "lion", "tiger",
+         "rabbit", "bunny", "mouse", "rat", "bird", "owl", "frog", "pig", "horse", "donkey",
+         "goat", "sheep", "cow", "duck", "hen", "rooster", "monkey", "elephant", "dragon",
+         "ogre", "giant", "troll", "witch", "wizard", "fairy", "robot",
+         "boy", "girl", "man", "woman", "king", "queen", "prince", "princess", "knight",
+         "guard", "soldier", "farmer", "miller", "baby", "child")
+
+
+def _loai_trong(chu: str) -> set:
+    tu = set(re.findall(r"[a-z]+", str(chu or "").lower()))
+    return {l for l in _LOAI if l in tu or l + "s" in tu}
+
+
 def giu_chu_the(goc: str, moi: str) -> bool:
-    """Ban viet lai con giu chu the cua ban goc khong (do bang ti le tu chung)?"""
+    """Ban viet lai con giu chu the cua ban goc khong?
+
+    Hai dieu kien: ti le tu co nghia trung du cao, VA khong xuat hien loai /
+    nhan vat moi (meo -> cho, nguoi -> co gai) — doi loai la doi chu the du chi
+    khac mot tu.
+    """
     a, b = _tu_co_nghia(goc), _tu_co_nghia(moi)
-    if not a:
-        return True
-    return len(a & b) / float(len(a)) >= TI_LE_GIU_TU
+    if a and len(a & b) / float(len(a)) < TI_LE_GIU_TU:
+        return False
+    return not (_loai_trong(moi) - _loai_trong(goc))
 
 
 #: Dau hieu mo dau "duoi phong cach" cua mot prompt anh (tool nao cung ket bang
