@@ -3815,6 +3815,24 @@ def _bat_lam_sach(bc: BoiCanh) -> bool:
     return bat
 
 
+def _bo_clip_cu(bc: BoiCanh, tep_clip: str) -> bool:
+    """Ảnh của cảnh vừa được tạo lại → clip cũ (nếu còn) cất đi (`<n>.mp4.cu`), trả True.
+
+    Gọi đúng lúc tool tạo lại ảnh — không so mtime: ảnh còn bị ghi lại sau khi
+    clip đã tạo (xoá dấu, làm sạch thẻ), so mtime là bắt nhầm (25/08/2026: sáu
+    clip bị làm lại vô cớ, 3.000 ₫).
+    """
+    if not os.path.exists(tep_clip):
+        return False
+    try:
+        os.replace(tep_clip, tep_clip + ".cu")
+    except OSError:
+        return False
+    bc.ghi("    {0}: ảnh vừa làm lại — clip cũ lỗi thời, sẽ tạo lại (bản cũ giữ ở .cu)."
+           .format(os.path.basename(tep_clip)))
+    return True
+
+
 def _bo_clip_cu_hon_anh(bc: BoiCanh, tep_clip: str, tep_anh: str) -> bool:
     """Clip CŨ HƠN ảnh của chính nó thì cất đi (`<n>.mp4.cu`) và trả True.
 
@@ -3935,7 +3953,7 @@ def _khau_anh(bc: BoiCanh):
             """Ảnh vừa về thì bắn clip của chính nó — không đợi các cảnh khác."""
             so_canh = int(c["scene_id"])
             dich = os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))
-            if os.path.exists(dich) and not _bo_clip_cu_hon_anh(bc, dich, tep_anh):
+            if os.path.exists(dich):
                 them("clip")
                 return
             if clip_tat.is_set() or not os.path.exists(tep_anh):
@@ -3976,6 +3994,8 @@ def _khau_anh(bc: BoiCanh):
             san_co = os.path.exists(tep)
             if not san_co:
                 _lam_anh_canh(bc, luot, x, tep, _hop_cho_canh(bc, luot, x, hop), so=so)
+                # Ảnh VỪA tạo lại → clip cũ của cảnh này (nếu còn) đã lỗi thời.
+                _bo_clip_cu(bc, os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh)))
             else:
                 # Ảnh có sẵn trên đĩa từ lượt chạy trước — có thể là lượt chạy
                 # bằng bản tool chưa biết xoá dấu. Xoá lại ở đây thì lượt cũ
@@ -4022,7 +4042,7 @@ def _khau_clip(bc: BoiCanh):
             so_canh = int(c["scene_id"])
             tep = os.path.join(thu_muc, "{0}.mp4".format(so_canh))
             anh = os.path.join(thu_muc_anh, "{0}.png".format(so_canh))
-            if os.path.exists(tep) and not _bo_clip_cu_hon_anh(bc, tep, anh):
+            if os.path.exists(tep):
                 return so_canh, True
             _lam_clip(bc, luot, c, anh, tep, giay, so=so)
             return so_canh, False
@@ -4647,12 +4667,39 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     _sh.rmtree(tam, ignore_errors=True)
 
 
+_DAU_LOI_FFMPEG = ("error", "invalid", "failed", "no such", "permission", "denied",
+                   "cannot", "could not", "not found", "unable", "conversion failed")
+
+
+def _loi_ffmpeg(stderr: str) -> str:
+    """Rút những dòng LỖI thật trong stderr của FFmpeg.
+
+    Trước 25/08/2026 tool báo 400 ký tự cuối — với libx264 đó là bảng thống kê
+    ("i8c dc,h,v,p: 35% 23%…"), còn dòng lỗi thật nằm phía trên và bị cắt mất.
+    Hai lần ghép hỏng tối 25/08 không đọc được lý do vì thế.
+    """
+    dong = [d.strip() for d in (stderr or "").splitlines() if d.strip()]
+    loi = [d for d in dong if any(k in d.lower() for k in _DAU_LOI_FFMPEG)
+           and not d.startswith("[libx264")]
+    chon = loi[-4:] if loi else dong[-3:]
+    return " | ".join(chon)[:400]
+
+
 def _chay(ffmpeg: str, tham_so: Sequence[str]) -> None:
     ket = subprocess.run([ffmpeg] + list(tham_so), capture_output=True,
                          text=True,
                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if ket.returncode != 0:
-        raise RuntimeError("FFmpeg hỏng: {0}".format((ket.stderr or "")[-400:]))
+        # Tệp ra viết dở phải bỏ: lần thử lại thấy "đã có" là dùng luôn tệp
+        # cụt — video cuối lặng lẽ thiếu một đoạn.
+        ra = str(tham_so[-1]) if tham_so else ""
+        if ra and not ra.startswith("-") and os.path.isfile(ra):
+            try:
+                os.remove(ra)
+            except OSError:
+                pass
+        raise RuntimeError("FFmpeg hỏng ({0}): {1}".format(
+            os.path.basename(ra) if ra else "?", _loi_ffmpeg(ket.stderr)))
 
 
 # ── Gom lại ──────────────────────────────────────────────────────────────────

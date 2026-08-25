@@ -53,3 +53,26 @@ def test_video_cu_hon_clip_thi_bao_dung_lai(tmp_path):
     assert _nguon_moi_hon_video(str(video), str(tmp_path / "6-clip"), str(mp3)) == "clip 7"
     _cham(mp3, goc + 1)
     assert _nguon_moi_hon_video(str(video), str(tmp_path / "6-clip"), str(mp3)) == "giọng đọc"
+
+
+from core.auto_khau import _bo_clip_cu, _loi_ffmpeg
+
+
+def test_anh_vua_lam_lai_thi_cat_clip_cu(tmp_path):
+    clip = tmp_path / "9.mp4"; clip.write_bytes(b"c")
+    bc = _bc()
+    assert _bo_clip_cu(bc, str(clip))
+    assert not clip.exists() and (tmp_path / "9.mp4.cu").exists()
+    assert not _bo_clip_cu(bc, str(clip))          # không còn gì để cất
+
+
+def test_loi_ffmpeg_lay_dong_loi_khong_lay_thong_ke():
+    stderr = """[libx264 @ 0x1] frame I:12 Avg QP:18
+[mp4 @ 0x2] Could not write header for output file #0 (incorrect codec parameters ?): Invalid argument
+Error initializing output stream 0:0 --
+[libx264 @ 0x1] i8c dc,h,v,p: 35% 23% 21% 21%
+Conversion failed!"""
+    ra = _loi_ffmpeg(stderr)
+    assert "Could not write header" in ra and "Conversion failed" in ra
+    assert "i8c" not in ra
+    assert _loi_ffmpeg("") == ""
