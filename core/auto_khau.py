@@ -1658,6 +1658,21 @@ def _khau_kich_ban(bc_goc: BoiCanh):
         d = luot.thu_muc
         duong_kb = os.path.join(d, "1-kich-ban.txt")
 
+        # ═══ NÓI RÕ ĐI ĐƯỜNG NÀO, NGAY DÒNG ĐẦU ═══
+        #
+        # Chủ dự án, 25/08/2026, đọc nhật ký lượt 0049: *"sao bước viết content
+        # ở máy này lại là dùng api… có thể mày đang viết content bằng
+        # shopapi"*. Một dòng này để ai dán nhật ký lên cũng thấy ngay.
+        if bc_goc.goi_chat_kich_ban is not None:
+            from .viet_max import MO_HINH_TOT_NHAT, NHIP_THU_LAI  # noqa: PLC0415
+
+            bc.ghi("  đường viết chữ: Claude Code (thuê bao Claude Max của máy), "
+                   "model {0}, KHÔNG tiêu ví; hỏng thì thử lại {1} lần rồi mới "
+                   "báo lỗi.".format(MO_HINH_TOT_NHAT, 1 + len(NHIP_THU_LAI)))
+        else:
+            bc.ghi("  đường viết chữ: ví ShopAPI, model {0} (mỗi lượt gọi trừ "
+                   "tiền).".format(k.mo_hinh))
+
         # Tư liệu: lời thoại video đối thủ.
         tu_lieu = _doc_chu(os.path.join(d, "0-tu-lieu.txt"))
         link = str(luot.dau_vao.get("link") or "").strip()
@@ -2066,9 +2081,14 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             continue
         bc.kiem_dung()
         bc.ghi("  viết bản {0}/{1}…".format(nhan, n))
+        bat_dau = time.time()
         chu = _goi(bc, _thay(khuon, dict(chung, DRAFT="")),
                    _khoa_chat(luot, "2-viet.md:ban{0}".format(i + 1))).strip()
         chu = _go_loi_dan_dau(chu, k.ngon_ngu)
+        if chu:
+            bc.ghi("  bản {0}: {1} ký tự ≈ {2} phút, mất {3:.0f} giây.".format(
+                nhan, len(chu), _phut(len(chu), int(getattr(k, "ky_tu_moi_phut", 0)
+                                                     or 0)), time.time() - bat_dau))
         if not chu:
             bc.ghi("  (bản {0} trả về rỗng — bỏ)".format(nhan))
             continue

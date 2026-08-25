@@ -293,3 +293,51 @@ class TestCaiDat:
         from ui_qt.trang_cai_dat import MUC
 
         assert any(k == "kich_ban_bang_claude_code" for k, _n, _g in MUC)
+
+
+class TestChanDoanLoi:
+    """Rớt thì nhật ký phải nói VÌ SAO bằng tiếng người (lượt 0049, 25/08/2026)."""
+
+    def test_chua_dang_nhap(self):
+        from core.viet_max import chan_doan_loi
+
+        loi = RuntimeError("Claude Code thoát lỗi (mã 1): Please log in")
+        assert "CHƯA ĐĂNG NHẬP" in chan_doan_loi(loi, kiem_mang=lambda: True)
+
+    def test_han_muc(self):
+        from core.viet_max import chan_doan_loi
+
+        loi = RuntimeError("x")
+        loi.chi_tiet = ('{"is_error":true,"result":"rate limit reached"}', "")
+        assert "hạn mức" in chan_doan_loi(loi, kiem_mang=lambda: True)
+
+    def test_khong_noi_ly_do_va_mat_mang(self):
+        from core.viet_max import chan_doan_loi
+
+        loi = RuntimeError("Claude Code thoát lỗi (mã 1): không nói lý do")
+        assert "KHÔNG nối được" in chan_doan_loi(loi, kiem_mang=lambda: False)
+
+    def test_khong_noi_ly_do_con_mang(self):
+        from core.viet_max import TEP_LOI_CUOI, chan_doan_loi
+
+        loi = RuntimeError("Claude Code thoát lỗi (mã 1): không nói lý do")
+        ra = chan_doan_loi(loi, kiem_mang=lambda: True)
+        assert "mạng bình thường" in ra and TEP_LOI_CUOI in ra
+
+    def test_nhat_ky_thu_lai_co_dong_vi_sao(self, tmp_path):
+        from core.viet_max import dung_goi_chat_max
+
+        lan = {"n": 0}
+
+        def viet(*_a, **_k):
+            lan["n"] += 1
+            if lan["n"] == 1:
+                raise RuntimeError("Claude Code thoát lỗi (mã 1): không nói lý do")
+            return "chữ"
+
+        dong = []
+        goi = dung_goi_chat_max(str(tmp_path), viet=viet, on_log=dong.append,
+                                ngu=lambda _g: None, kiem_mang=lambda: False)
+        assert goi("viết") == "chữ"
+        assert any(d.startswith("    vì sao: ") and "KHÔNG nối được" in d
+                   for d in dong)

@@ -46,6 +46,7 @@ import json
 import os
 import shutil
 import subprocess
+import socket
 import threading
 import time
 import uuid
@@ -379,12 +380,55 @@ def _doi_ket_qua(tien_trinh, loi_nhac: str, kiem_dung, gio_han: float) -> str:
 NHIP_THU_LAI = (15.0, 30.0, 60.0, 120.0, 300.0)
 
 
+def mang_toi_anthropic(giay: float = 4.0) -> bool:
+    """Máy có mở được kết nối tới máy chủ Anthropic không (một cú bắt tay TCP,
+    không gửi gì, không tốn gì). Dùng để phân biệt "mạng/đường truyền" với
+    "lỗi phía Claude Code" khi nó thoát mà không nói lý do."""
+    try:
+        with socket.create_connection(("api.anthropic.com", 443), timeout=giay):
+            return True
+    except OSError:
+        return False
+
+
+def chan_doan_loi(loi: BaseException, kiem_mang=mang_toi_anthropic) -> str:
+    """Một câu tiếng người giải thích vì sao Claude Code không viết được.
+
+    Đo 25/08/2026, lượt 0049: bốn lần "thoát lỗi (mã 1): không nói lý do" —
+    chủ dự án đọc nhật ký không biết là mạng, hạn mức hay tool đi nhầm đường.
+    Thứ tự xét: lời Claude Code nói (chưa đăng nhập / hạn mức / quá tải) →
+    bắt tay mạng tới Anthropic → còn lại là "lỗi lẻ, xem tệp sổ lỗi".
+    """
+    ra, err = getattr(loi, "chi_tiet", ("", ""))
+    chu = (str(loi) + " " + str(ra) + " " + str(err)).lower()
+    if any(x in chu for x in ("log in", "login", "logged", "authenticat",
+                              "unauthorized", "401", "oauth", "credential")):
+        return ("Claude Code CHƯA ĐĂNG NHẬP — mở tab “Agent xây tool”, gõ /login "
+                "rồi chạy tiếp")
+    if any(x in chu for x in ("rate limit", "usage limit", "hit your limit", "429",
+                              "overloaded", "529", "too many")):
+        return ("hạn mức tạm thời của thuê bao hoặc máy chủ Anthropic quá tải — "
+                "tool đợi rồi thử lại, không cần làm gì")
+    if "chưa viết xong sau" in chu:
+        return "quá giờ chờ — mạng chậm hoặc bài quá dài; tool thử lại"
+    try:
+        co_mang = bool(kiem_mang())
+    except Exception:  # noqa: BLE001
+        co_mang = False
+    if not co_mang:
+        return ("máy KHÔNG nối được tới Anthropic — mạng rớt hoặc đường truyền "
+                "đang kín (máy này đang tải/đẩy gì nặng không?); tool thử lại")
+    return ("mạng bình thường, Claude Code thoát mà không nói lý do — lỗi lẻ, "
+            "tool thử lại; chi tiết ở workspace/viet-max/" + TEP_LOI_CUOI)
+
+
 def dung_goi_chat_max(goc: str, *,
                       on_log: Optional[Callable[[str], None]] = None,
                       kiem_dung: Optional[Callable[[], None]] = None,
                       viet: Optional[Callable[..., str]] = None,
                       so_lan: int = 1 + len(NHIP_THU_LAI),
                       ngu: Callable[[float], None] = time.sleep,
+                      kiem_mang: Callable[[], bool] = mang_toi_anthropic,
                       ) -> Callable[..., str]:
     """Dựng hàm `goi_chat` cho khâu kịch bản: **chỉ Claude Code**, hỏng thì thử lại.
 
@@ -430,6 +474,7 @@ def dung_goi_chat_max(goc: str, *,
                                         " — thử lại sau {0:.0f} giây, không "
                                         "chuyển sang ví.".format(cho)
                                         if con else "."))
+                    on_log("    vì sao: " + chan_doan_loi(loi, kiem_mang))
                 if con:
                     ngu(cho)
                     if kiem_dung is not None:

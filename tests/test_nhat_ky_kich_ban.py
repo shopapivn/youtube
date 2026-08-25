@@ -53,8 +53,8 @@ class TestNhatKyHoanThien:
                         "diem_yeu": "giữa mỏng"}),
             ht, json.dumps({"chon": "B", "ly_do": "mượt hơn"})])
         assert ra == ht
-        _thu_tu(log, "viết bản A/3", "viết bản B/3", "viết bản C/3",
-                "chấm 3 bản", "chọn bản B:", "phút", "bộ chấm chê bản B: giữa mỏng",
+        _thu_tu(log, "viết bản A/3", "bản A: 200 ký tự", "giây.",
+                "viết bản B/3", "viết bản C/3", "chấm 3 bản", "chọn bản B:", "phút", "bộ chấm chê bản B: giữa mỏng",
                 "hoàn thiện bản đã chọn", "đã hoàn thiện: giữ",
                 "so bản B chưa hoàn thiện với bản B đã hoàn thiện",
                 "chọn bản B đã hoàn thiện:", "→ dùng bản B đã hoàn thiện")
