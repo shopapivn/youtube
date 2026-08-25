@@ -42,7 +42,7 @@ import tempfile
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
@@ -449,6 +449,57 @@ def _nghe_o_tien_trinh_rieng(tep: str, ten_model: str, chi_may: bool,
     return str(goi.get("chu") or ""), str(goi.get("ngon_ngu") or ""), ""
 
 
+#: Gói cần cho đường tự nghe. Khớp `requirements.txt`.
+GOI_TU_NGHE = ("faster-whisper>=1.0", "huggingface_hub")
+#: Mỗi tiến trình chỉ tự cài MỘT lần: ba lượt thử của khâu không được pip ba lần.
+_DA_THU_CAI: Dict[str, str] = {}
+
+
+def _nap_duoc_faster_whisper() -> str:
+    """Rỗng nếu nạp được `faster_whisper`; không thì là lý do thật (ngắn)."""
+    try:
+        import importlib  # noqa: PLC0415
+
+        importlib.invalidate_caches()
+        from faster_whisper import WhisperModel  # noqa: PLC0415,F401
+        return ""
+    except ImportError as loi:
+        return str(loi)[:200] or "ImportError"
+
+
+def _tu_cai_faster_whisper(ghi: Callable[[str], None],
+                           chay: Optional[Callable[..., Any]] = None) -> str:
+    """`pip install faster-whisper` bằng đúng Python đang chạy tool. Rỗng = xong.
+
+    Chỉ chạy một lần mỗi tiến trình — lần sau trả lại kết quả cũ. `chay` chỉ
+    để bài kiểm bơm hàm giả thay cho `subprocess.run`.
+    """
+    if "ket" in _DA_THU_CAI:
+        return _DA_THU_CAI["ket"]
+    lenh = [sys.executable, "-m", "pip", "install", *GOI_TU_NGHE,
+            "--disable-pip-version-check", "--quiet"]
+    ghi("    " + " ".join(lenh[2:]))
+    chay = chay or subprocess.run
+    tuy_chon = {"capture_output": True, "timeout": 1200}
+    if os.name == "nt":
+        tuy_chon["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    try:
+        ket = chay(lenh, **tuy_chon)
+    except Exception as loi:  # noqa: BLE001 — pip không chạy được cũng phải nói thật
+        _DA_THU_CAI["ket"] = str(loi)[:200]
+        return _DA_THU_CAI["ket"]
+    if getattr(ket, "returncode", 1) == 0:
+        _DA_THU_CAI["ket"] = ""
+        return ""
+    duoi = (getattr(ket, "stderr", b"") or b"")
+    if isinstance(duoi, bytes):
+        duoi = duoi.decode("utf-8", "replace")
+    dong = [d.strip() for d in duoi.splitlines() if d.strip()]
+    _DA_THU_CAI["ket"] = (dong[-1] if dong else "pip trả mã {0}".format(
+        getattr(ket, "returncode", "?")))[:200]
+    return _DA_THU_CAI["ket"]
+
+
 def _tu_nghe(url: str, ghi: Callable[[str], None],
              cancel: Optional[threading.Event] = None):
     """Tải tiếng của video rồi phiên âm bằng `faster-whisper`. **Chạy trên máy.**
@@ -460,10 +511,25 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
     `av`, mà bắt khách cài ffmpeg chỉ để lấy một đoạn chữ là một cửa để họ bỏ
     cuộc.
     """
-    try:
-        from faster_whisper import WhisperModel  # noqa: PLC0415
-    except ImportError:
-        return "", "", "máy chưa có faster-whisper (phần tự nghe)"
+    loi_nap = _nap_duoc_faster_whisper()
+    if loi_nap:
+        # ═══ THIẾU THƯ VIỆN LÀ CHUYỆN CÀI ĐẶT — KHÔNG TỰ KHỎI SAU 5 GIÂY ═══
+        #
+        # 25/08/2026 một bản tool báo "máy chưa có faster-whisper" ba lần liền
+        # (thử lại sau 5 rồi 15 giây) rồi dừng cả lượt. Thử lại vô ích: thư
+        # viện không tự mọc ra. Việc đúng là CÀI — tool tự cài một lần bằng
+        # đúng Python đang chạy, rồi nạp lại; vẫn hỏng mới nói với khách, kèm
+        # lý do thật (thiếu gói hay DLL hỏng) thay vì một câu chung.
+        ghi("    máy chưa có faster-whisper — đang tự cài (chỉ một lần, cần mạng)…")
+        loi_cai = _tu_cai_faster_whisper(ghi)
+        if loi_cai:
+            return "", "", ("máy chưa có faster-whisper (phần tự nghe), tự cài không "
+                            "được: {0}. Chạy SETUP.bat rồi mở lại tool.".format(loi_cai))
+        loi_nap = _nap_duoc_faster_whisper()
+        if loi_nap:
+            return "", "", ("đã cài faster-whisper nhưng chưa nạp được ({0}) — tắt tool "
+                            "mở lại là dùng được.".format(loi_nap))
+        ghi("    đã cài xong faster-whisper.")
 
     thu_muc = tempfile.mkdtemp(prefix="shopapi-script-")
     try:
