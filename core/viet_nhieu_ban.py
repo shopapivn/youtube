@@ -85,17 +85,33 @@ def trung_nguyen_van(moi: str, goc: str, n: int = 10) -> float:
     return sum(1 for i in range(tong) if a[i:i + n] in kho) / tong
 
 
-def bang_so_do(ban: Sequence[str], goc: str, muc_tieu: int
+def _phut(so_ky_tu: int, ky_tu_moi_phut: int) -> str:
+    return "{0:.1f}".format(so_ky_tu / max(1, int(ky_tu_moi_phut or 1))).replace(
+        ".", ",")
+
+
+def bang_so_do(ban: Sequence[str], goc: str, muc_tieu: int,
+               ky_tu_moi_phut: int = 0
                ) -> Tuple[List[Tuple[int, float, float]], str]:
-    """Số đo từng bản: (độ dài, lệch so mục tiêu, trùng nguyên văn) + bảng chữ."""
+    """Số đo từng bản: (độ dài, lệch so mục tiêu, trùng nguyên văn) + bảng chữ.
+
+    Có `ky_tu_moi_phut` thì bảng nói cả PHÚT ĐỌC — một thước cho cả prompt,
+    bộ chấm và nhật ký (chủ dự án, 25/08/2026: *"lúc thì ký tự lúc thì phút"*).
+    """
     so_do = [(len(b), (len(b) - muc_tieu) / max(1, muc_tieu) if muc_tieu else 0.0,
               trung_nguyen_van(b, goc)) for b in ban]
     dong = []
     for i, (dai, lech, trung) in enumerate(so_do):
-        phan_lech = " (lệch {0:+.0%} so với mục tiêu {1})".format(
-            lech, muc_tieu) if muc_tieu else ""
-        dong.append("- Bản {0}: {1} ký tự{2}, trùng nguyên văn bản gốc {3:.0%}"
-                    .format(nhan_ban(i), dai, phan_lech, trung))
+        phut = " ≈ {0} phút đọc".format(_phut(dai, ky_tu_moi_phut)) \
+            if ky_tu_moi_phut else ""
+        if muc_tieu:
+            phan_lech = " (nhắm {0}{1}, lệch {2:+.0%})".format(
+                "{0} phút ≈ ".format(_phut(muc_tieu, ky_tu_moi_phut))
+                if ky_tu_moi_phut else "", "{0} ký tự".format(muc_tieu), lech)
+        else:
+            phan_lech = ""
+        dong.append("- Bản {0}: {1} ký tự{2}{3}, trùng nguyên văn bản gốc {4:.0%}"
+                    .format(nhan_ban(i), dai, phut, phan_lech, trung))
     return so_do, "\n".join(dong)
 
 
@@ -188,6 +204,7 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
                  khuon_cham: str = "", tieu_chi: str = "",
                  chung: Optional[Dict[str, Any]] = None, muc_tieu: int = 0,
                  ghi: Optional[Callable[[str], None]] = None,
+                 ky_tu_moi_phut: int = 0,
                  ) -> Tuple[int, str, Dict[str, Any], str]:
     """Chấm `ban`, trả về `(chỉ số bản chọn, lý do, điểm, bảng số đo)`.
 
@@ -202,7 +219,7 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
         if ghi is not None:
             ghi(dong)
 
-    so_do, bang = bang_so_do(ban, goc, muc_tieu)
+    so_do, bang = bang_so_do(ban, goc, muc_tieu, ky_tu_moi_phut)
     if len(ban) == 1:
         return 0, "chỉ có một bản", {}, bang
     if goi is None:
@@ -219,6 +236,8 @@ def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],
               "TIEU_CHI": (tieu_chi or "").strip() or TIEU_CHI_MAC_DINH,
               "COMPETITOR_TRANSCRIPT": goc})
     o.setdefault("CHARS", muc_tieu or "không đặt")
+    o.setdefault("PHUT", _phut(muc_tieu, ky_tu_moi_phut)
+                 if (muc_tieu and ky_tu_moi_phut) else "không đặt")
     chon: Optional[int] = None
     ly_do, diem = "", {}
     try:

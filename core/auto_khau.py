@@ -1725,6 +1725,14 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             "NGON_NGU": ten_tieng(k.ngon_ngu) or (k.ngon_ngu or ""),
             "CHANNEL": _mo_ta_kenh(k),
             "CHARS": muc_tieu_kt,
+            # ═══ MỘT THƯỚC: PHÚT ĐỌC ═══
+            #
+            # Chủ dự án, 25/08/2026: *"lúc thì đo bằng độ dài ký tự lúc thì
+            # phút"*. Mục tiêu là PHÚT; ký tự chỉ là quy đổi theo giọng đọc
+            # của kênh (`ky_tu_moi_phut`). Lời nhắc và bộ chấm nói cả hai,
+            # phút trước, ký tự sau trong ngoặc.
+            "PHUT": _phut(muc_tieu_kt, k.ky_tu_moi_phut),
+            "PHUT_GOC": _phut(len(tu_lieu), k.ky_tu_moi_phut),
             # ═══ MỘT CÁI THƯỚC ĐỂ SO, KHÔNG PHẢI MỘT SỐ ĐỂ ĐẾM ═══
             #
             # AI không đếm được ký tự. Bảo nó "khoảng 4.470 ký tự" thì nó viết
@@ -1966,8 +1974,11 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                     pass
 
         lech = abs(len(ban_nhap) - muc_tieu_kt) / max(1, muc_tieu_kt)
-        bc.ghi("  kịch bản: {0} ký tự (nhắm {1}, lệch {2:.0%}).".format(
-            len(ban_nhap), muc_tieu_kt, lech))
+        bc.ghi("  kịch bản: {3} ký tự ≈ {4} phút đọc (nhắm {5} phút ≈ {1} ký "
+               "tự, lệch {2:.0%}).".format(
+                   len(ban_nhap), muc_tieu_kt, lech, len(ban_nhap),
+                   _phut(len(ban_nhap), k.ky_tu_moi_phut),
+                   _phut(muc_tieu_kt, k.ky_tu_moi_phut)))
         _kiem_kich_ban_dung_duoc(len(ban_nhap), muc_tieu_kt, duong_kb)
 
         # SEO — thiếu cũng vẫn ra được video, nên hỏng thì chỉ ghi nhật ký.
@@ -2062,14 +2073,16 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         bc.kiem_dung()
         return _goi(bc, loi_nhac, _khoa_chat(luot, "2b-cham.md"))
 
+    nhip = int(getattr(k, "ky_tu_moi_phut", 0) or 0)
     if khuon_cham.strip():
         chon, ly_do, diem, bang = cham_va_chon(
             goi_cham, ban, tu_lieu, khuon_cham=khuon_cham, chung=chung,
-            muc_tieu=muc_tieu, ghi=bc.ghi)
+            muc_tieu=muc_tieu, ghi=bc.ghi, ky_tu_moi_phut=nhip)
     else:
         # Không có prompt chấm → không gọi AI, chọn theo số đo.
         chon, ly_do, diem, bang = cham_va_chon(
-            None, ban, tu_lieu, muc_tieu=muc_tieu, ghi=bc.ghi)
+            None, ban, tu_lieu, muc_tieu=muc_tieu, ghi=bc.ghi,
+            ky_tu_moi_phut=nhip)
     ban_chon = ban[chon]
     ghi_va = ""
     if getattr(k, "va_cho_rot", False):
@@ -2095,7 +2108,8 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                 i_hon, ly_do_so, _d, _b = cham_va_chon(
                     goi_cham if khuon_cham.strip() else None,
                     [ban_chon, ban_va], tu_lieu, khuon_cham=khuon_cham,
-                    chung=chung, muc_tieu=muc_tieu, ghi=bc.ghi)
+                    chung=chung, muc_tieu=muc_tieu, ghi=bc.ghi,
+                    ky_tu_moi_phut=nhip)
                 if i_hon == 1:
                     ban_chon = ban_va
                     ghi_va += " — bộ chấm chọn bản vá: " + ly_do_so[:200]
@@ -2145,6 +2159,12 @@ def _go_loi_dan_dau(ban: str, ngon_ngu: str) -> str:
     if len(re.findall(r"[A-Za-z]{2,}", dau)) < 3:
         return ban
     return "\n".join(dong[i:]).lstrip()
+
+
+def _phut(so_ky_tu: int, ky_tu_moi_phut: int) -> str:
+    """Quy ký tự ra phút đọc theo giọng của kênh: 3926 ký tự, 302/phút → "13,0"."""
+    return "{0:.1f}".format(so_ky_tu / max(1, int(ky_tu_moi_phut or 1))).replace(
+        ".", ",")
 
 
 def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:
