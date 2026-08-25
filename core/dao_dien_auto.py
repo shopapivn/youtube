@@ -41,7 +41,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .prompt_visuals import goc_cua_id
 
-__all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chieu",
+__all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chieu", "sua_canh_theo_do_moi",
            "duong_tham_chieu_canh", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
 
 #: Các giá trị `che_do_ke` mở nhánh đạo diễn.
@@ -284,6 +284,12 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
             if nv.get("sheet_prompt") is not None:
                 nv["sheet_prompt"] = nv["english_prompt"] + DUOI_CHAN_DUNG + duoi
             so_canh = max(so_canh, _thay_mo_ta_trong_canh(canh or [], ma_id, nv["english_prompt"]))
+            # Thân lời nhắc các cảnh vẫn tả món đồ CŨ ("tips its wide-brim hat",
+            # "boots mid-step") — AI viết cảnh trước khi đổi thiết kế. Khối khoá
+            # đổi rồi mà thân còn tả mũ lông thì ảnh lại vẽ mũ lông (và bị chặn).
+            so_sua = sua_canh_theo_do_moi(canh or [], ma_id, do_cu, do_moi, goi_ai)
+            if so_sua:
+                bc.ghi("    đã viết lại {0} cảnh còn tả đồ cũ của {1}.".format(so_sua, ma_id))
         man["characters"] = dan
         _ghi_lai_canh_va_dan(luot, man, canh)
         bc.ghi("    đã thiết kế lại {0} ({1} cảnh cập nhật): {2}…".format(ma_id, so_canh, moi[:90]))
@@ -302,6 +308,84 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
     except Exception as loi:  # noqa: BLE001
         bc.ghi("    tham chiếu {0}: thiết kế lại không được ({1}).".format(ma_id, str(loi)[:120]))
         return False
+
+
+#: Từ "đồ vật" trong mô tả trang phục — để tìm cảnh còn tả đồ cũ.
+_TU_KHONG_PHAI_DO = {"a", "an", "and", "the", "with", "of", "in", "on", "its", "his", "her", "their",
+                     "small", "little", "tiny", "big", "tall", "wide", "brim", "wide-brim", "soft",
+                     "plain", "single", "one", "pair", "glossy", "leather", "felt", "cloth", "beige",
+                     "brown", "red", "blue", "green", "teal", "burgundy", "golden", "yellow", "white",
+                     "black", "grey", "gray", "for", "this", "stage", "look", "family-friendly",
+                     "simple", "palette", "signature", "garment", "no", "nothing", "not", "that",
+                     "keeps", "only", "item", "plot", "needs", "any", "or", "shaped", "style"}
+
+
+def _do_vat(mo_ta: str) -> List[str]:
+    """Các danh từ đồ vật trong một mô tả trang phục ("hat", "feather", "boots", "sack")."""
+    import re  # noqa: PLC0415
+
+    ra = []
+    for w in re.findall(r"[A-Za-z][A-Za-z-]+", str(mo_ta or "").lower()):
+        if len(w) >= 3 and w not in _TU_KHONG_PHAI_DO and w not in ra:
+            ra.append(w)
+    return ra
+
+
+def sua_canh_theo_do_moi(canh: List[Dict[str, Any]], ma_id: str, do_cu: str, do_moi: str,
+                         goi_ai: Callable[[str], str]) -> int:
+    """Viết lại THÂN lời nhắc (phần trước khối khoá) của các cảnh còn tả đồ cũ của `ma_id`.
+
+    Một lượt gọi AI cho cả loạt: gửi JSON {scene_id: thân lời nhắc ảnh, thân lời
+    nhắc clip}, nhận về bản đã đổi đồ cũ → đồ mới, không đổi gì khác. Trả về số
+    cảnh đã sửa. Không có cảnh nào tả đồ cũ thì không gọi AI.
+    """
+    import re  # noqa: PLC0415
+
+    from .goi_van_ban import loc_json  # noqa: PLC0415
+
+    tu = _do_vat(do_cu)
+    if not tu or not canh:
+        return 0
+    mau = re.compile(r"\b(" + "|".join(re.escape(t) for t in tu) + r")s?\b", re.I)
+    dinh = "REFERENCE IMAGES"
+    can: Dict[str, Dict[str, str]] = {}
+    for c in canh:
+        refs = str(c.get("reference_files") or "")
+        if ma_id not in refs and ma_id not in str(c.get("characters_used") or ""):
+            continue
+        than_anh = str(c.get("img_prompt") or "").split(dinh, 1)[0]
+        than_clip = str(c.get("video_prompt") or "")
+        if mau.search(than_anh) or mau.search(than_clip):
+            can[str(c.get("scene_id"))] = {"img": than_anh.rstrip(), "video": than_clip}
+    if not can:
+        return 0
+    loi_nhac = (
+        "Character {0} was REDESIGNED. Old outfit: \"{1}\". New outfit: \"{2}\".\n"
+        "Rewrite ONLY the mentions of the old outfit items in the prompts below so they match the new "
+        "outfit (e.g. a hat being tipped becomes the new headwear being touched; boots becoming the new "
+        "item; drop items that no longer exist). Keep everything else word-for-word: framing, action, "
+        "place, lighting, style words, ids in parentheses. Family-friendly wording.\n"
+        "Return ONLY JSON of the same shape: {{\"<scene_id>\": {{\"img\": \"...\", \"video\": \"...\"}}}}.\n\n"
+        "{3}").format(ma_id, do_cu[:300], do_moi[:300], json.dumps(can, ensure_ascii=False))
+    tra = loc_json(goi_ai(loi_nhac)) or {}
+    n = 0
+    for c in canh:
+        sid = str(c.get("scene_id"))
+        moi = tra.get(sid) if isinstance(tra, dict) else None
+        if not isinstance(moi, dict) or sid not in can:
+            continue
+        img_moi = str(moi.get("img") or "").strip()
+        vid_moi = str(moi.get("video") or "").strip()
+        goc = str(c.get("img_prompt") or "")
+        if img_moi and len(img_moi) > 20 and dinh in goc:
+            c["img_prompt"] = img_moi + "\n" + dinh + goc.split(dinh, 1)[1]
+            n += 1
+        elif img_moi and len(img_moi) > 20:
+            c["img_prompt"] = img_moi
+            n += 1
+        if vid_moi and len(vid_moi) > 10:
+            c["video_prompt"] = vid_moi
+    return n
 
 
 def _thay_mo_ta_trong_canh(canh: List[Dict[str, Any]], ma_id: str, mo_ta: str) -> int:

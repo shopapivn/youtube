@@ -319,3 +319,36 @@ class TestThietKeLai:
         tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
         assert (tc / "nv1b.png").read_bytes() == b"png" and (tc / "nv1.png").read_bytes() == b"png"
         assert (tc / "nv1.png.cu").read_bytes() == b"cu"
+
+
+class TestSuaCanhTheoDoMoi:
+    def test_chi_sua_canh_co_nhan_vat_va_ta_do_cu(self):
+        lock = chr(10) + "REFERENCE IMAGES are attached, in this order:" + chr(10) + "- reference image 1 = nv1b, the hero: cat"
+        canh = [
+            {"scene_id": 5, "reference_files": json.dumps(["nv1b.png"]),
+             "img_prompt": "nv1b tips its wide-brim hat, boots mid-step" + lock, "video_prompt": "the hat brim lifts"},
+            {"scene_id": 6, "reference_files": json.dumps(["nv1b.png"]),
+             "img_prompt": "nv1b waves happily" + lock, "video_prompt": "waves"},
+            {"scene_id": 7, "reference_files": json.dumps(["nv8.png"]),
+             "img_prompt": "a guard in tall boots" + lock, "video_prompt": "x"},
+        ]
+        hoi = []
+
+        def goi_ai(loi_nhac):
+            hoi.append(loi_nhac)
+            return json.dumps({"5": {"img": "nv1b touches its red beret, vest mid-step", "video": "the beret tilts"}})
+
+        n = dd.sua_canh_theo_do_moi(canh, "nv1b", "a wide-brim felt hat with a feather, leather boots and a cloth sack",
+                                     "a small red beret and a little brown vest", goi_ai)
+        assert n == 1 and len(hoi) == 1
+        assert '"5"' in hoi[0] and '"6"' not in hoi[0] and '"7"' not in hoi[0]   # chỉ cảnh có nv1b và tả đồ cũ
+        assert canh[0]["img_prompt"].startswith("nv1b touches its red beret") and "REFERENCE IMAGES" in canh[0]["img_prompt"]
+        assert canh[0]["video_prompt"] == "the beret tilts"
+        assert canh[2]["img_prompt"].startswith("a guard in tall boots")          # cảnh khác không đụng
+
+    def test_khong_co_canh_nao_thi_khong_goi_ai(self):
+        def goi_ai(l):
+            pytest.fail("không được gọi")
+
+        assert dd.sua_canh_theo_do_moi([{"scene_id": 1, "reference_files": "[]", "img_prompt": "x"}],
+                                        "nv1b", "boots", "vest", goi_ai) == 0
