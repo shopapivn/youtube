@@ -49,6 +49,7 @@ from .config import DEFAULT_CONCURRENCY, HARD_CAPS, redact
 from .download import DownloadError, download_to
 from .errors import ErrorAdvice, describe, retry_after_seconds
 from .pricing import KIND_IMAGE, KIND_TTS, KIND_VIDEO
+from .cham_anh import NGUONG_LAM_LAI
 from .viet_lai_prompt import SO_LAN_VIET_LAI, la_bi_tu_choi
 
 __all__ = [
@@ -428,12 +429,17 @@ class JobManager:
         tu_do_nhip: bool = True,
         session_path: Optional[str] = None,
         viet_lai: Optional[Callable[[JobSpec, str], Optional[str]]] = None,
+        cham_anh: Optional[Callable[[JobRecord], Optional[int]]] = None,
     ) -> None:
         self._client_factory = client_factory
         self._events = events
         #: Hook viết lại prompt khi bộ lọc từ chối: `(spec, lý do) -> prompt mới`
         #: hoặc `None`. Xem `core/viet_lai_prompt.dung_viet_lai`. None = không viết lại.
         self._viet_lai = viet_lai
+        #: Hook chấm ảnh so với ảnh tham chiếu: `(record) -> điểm 0–5` hoặc None.
+        #: Điểm ≤ NGUONG_LAM_LAI thì tạo thêm MỘT ứng viên, giữ tấm cao điểm hơn.
+        #: Xem `core/cham_anh.dung_cham_anh`. None = không chấm.
+        self._cham_anh = cham_anh
         self._max_workers = max(1, int(max_workers))
         #: Số chỗ KHỞI ĐẦU mỗi loại job. Khoá thiếu -> lấy `max_workers`.
         self._max_by_kind: Dict[str, int] = {
@@ -985,6 +991,7 @@ class JobManager:
                     if nhip is not None and self._tu_do_nhip:
                         nhip.xong(cho_hang_doi_cua(final))
                     self._download_outputs(record, final)
+                    self._lam_lai_neu_lech_tham_chieu(record)
                     return
                 if status == "cancelled":
                     self._finish(
@@ -1357,6 +1364,74 @@ class JobManager:
             "Đã lưu {0} file vào {1}.{2}".format(len(saved), folder, cost_note),
             progress=100,
         )
+
+    def _lam_lai_neu_lech_tham_chieu(self, record: JobRecord) -> None:
+        """Ảnh có tham chiếu mà AI chấm ≤ ngưỡng → tạo thêm MỘT ứng viên, giữ tấm hơn.
+
+        Chủ dự án 25/08/2026: *"con mèo có lúc lại là con mèo thường… cậu út và
+        công chúa lại khác"*. Khoá lời nhắc chỉ kéo được tới ~85% cảnh; phần còn
+        lại phải nhìn ảnh mà bắt. Tốn thêm đúng một tấm (50 ₫) cho cảnh lệch.
+        """
+        if self._cham_anh is None or record.status != STATUS_DONE:
+            return
+        if record.spec.kind != KIND_IMAGE or not (record.spec.params or {}).get("tham_chieu_cuc_bo"):
+            return
+        try:
+            diem = self._cham_anh(record)
+        except Exception as exc:  # noqa: BLE001 — chấm hỏng thì giữ ảnh như thường
+            self._log("Không chấm được ảnh “{0}”: {1}".format(record.spec.display_label(), exc))
+            return
+        if diem is None or diem == 0 or diem > NGUONG_LAM_LAI:
+            return
+        cu_files, cu_urls = list(record.files), list(record.urls)
+        self._update(record, STATUS_RUNNING,
+                     "Ảnh lệch tham chiếu ({0}/5) → tạo thêm một tấm để chọn tấm giống hơn…".format(diem),
+                     progress=50)
+        record.spec.khoa_gui = str(uuid.uuid4())
+        record.attempt += 1
+        try:
+            job = self._create_with_retry(record)
+            if job is None:
+                raise RuntimeError("không gửi được ứng viên thứ hai")
+            record.job_id = job.get("id")
+            final = self._wait_for_job(record, job.get("estimated_seconds"))
+            if final is None or final.get("status") != "succeeded":
+                raise RuntimeError("ứng viên thứ hai không thành công")
+            self._download_outputs(record, final)
+            if record.status != STATUS_DONE:
+                raise RuntimeError("không tải được ứng viên thứ hai")
+            diem_moi = self._cham_anh(record)
+        except Exception as exc:  # noqa: BLE001 — giữ tấm đầu, không làm hỏng dòng
+            record.files, record.urls = cu_files, cu_urls
+            self._finish(record, STATUS_DONE,
+                         "Giữ tấm đầu ({0}/5) — không làm lại được: {1}".format(diem, str(exc)[:80]),
+                         progress=100)
+            return
+        moi_files, moi_urls = list(record.files), list(record.urls)
+        if diem_moi is not None and diem_moi > diem:
+            # Tấm mới hơn: bỏ tấm cũ, đặt tấm mới vào ĐÚNG tên tấm cũ để giao diện
+            # và Excel đang trỏ tới tên ấy vẫn đúng.
+            for cu, moi in zip(cu_files, moi_files):
+                try:
+                    os.replace(moi, cu)
+                except OSError:
+                    pass
+            record.files, record.urls = cu_files, moi_urls
+            self._finish(record, STATUS_DONE,
+                         "Ảnh lệch tham chiếu ({0}/5) → đã làm lại, giữ tấm mới ({1}/5).".format(
+                             diem, diem_moi), progress=100)
+        else:
+            for moi in moi_files:
+                if moi not in cu_files:
+                    try:
+                        os.remove(moi)
+                    except OSError:
+                        pass
+            record.files, record.urls = cu_files, cu_urls
+            self._finish(record, STATUS_DONE,
+                         "Ảnh lệch tham chiếu ({0}/5) → đã thử lại ({1}), giữ tấm đầu.".format(
+                             diem, "{0}/5".format(diem_moi) if diem_moi is not None else "không chấm được"),
+                         progress=100)
 
     def _viet_lai_neu_bi_tu_choi(self, record: JobRecord, job: Dict[str, Any],
                                  da_viet_lai: int) -> Optional[str]:

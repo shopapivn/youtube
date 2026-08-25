@@ -421,7 +421,7 @@ class TabThuCong(QWidget):
 
             self._app.run_bg(
                 tai,
-                on_ok=lambda urls: self._gui_that(mo_ta, list(urls), thay),
+                on_ok=lambda urls: self._gui_that(mo_ta, list(urls), thay, anh_copy),
                 on_err=self._app.show_error)
             self.o_nhap.setPlainText("")
             self._anh_tham_chieu = []  # xoá sau khi dùng
@@ -430,10 +430,11 @@ class TabThuCong(QWidget):
         self._gui_that(mo_ta, [], thay)
         self.o_nhap.setPlainText("")
 
-    def _gui_that(self, mo_ta: str, urls: List[str], thay_uid: str = "") -> None:
+    def _gui_that(self, mo_ta: str, urls: List[str], thay_uid: str = "",
+                  cuc_bo=()) -> None:
         thu_muc = self._thu_muc.value
         self._dem += 1
-        spec = self._dung_spec(mo_ta, urls, thu_muc, self._dem)
+        spec = self._dung_spec(mo_ta, urls, thu_muc, self._dem, cuc_bo)
         if spec is None:
             return
         self._cua_toi[spec.idempotency_key] = True
@@ -443,7 +444,7 @@ class TabThuCong(QWidget):
         self._app.start_batch([spec], folder=thu_muc)
 
     def _dung_spec(self, mo_ta: str, urls: List[str], thu_muc: str,
-                   thu_tu: int) -> Optional[JobSpec]:
+                   thu_tu: int, cuc_bo=()) -> Optional[JobSpec]:
         ty_le = self.ty_le.currentText()
         if self.la_video:
             engine = self.engine.currentText()
@@ -470,7 +471,8 @@ class TabThuCong(QWidget):
         return JobSpec(
             kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80], index=thu_tu,
             params={"n": so, "aspect_ratio": ty_le,
-                    "reference_images": urls or None},
+                    "reference_images": urls or None,
+                    "tham_chieu_cuc_bo": list(cuc_bo) or None},
             out_dir=thu_muc, estimate_micro=hold_for_image(so, self._app.prices))
 
     # ── Nhận sự kiện ─────────────────────────────────────────────────────────
@@ -1441,13 +1443,14 @@ class TabHangLoat(QWidget):
             self._app.run_bg(
                 lambda: self._tai_tham_chieu(duong),
                 on_ok=lambda kho: self._gui_mot_canh_that(
-                    dong, mo_ta, [kho[d] for d in duong if d in kho], thay_uid),
+                    dong, mo_ta, [kho[d] for d in duong if d in kho], thay_uid,
+                    cuc_bo=[d for d in duong if d in kho]),
                 on_err=self._app.show_error)
             return
         self._gui_mot_canh_that(dong, mo_ta, [], thay_uid)
 
     def _gui_mot_canh_that(self, dong: int, mo_ta: str, urls,
-                           thay_uid: str = "") -> None:
+                           thay_uid: str = "", cuc_bo=()) -> None:
         ty_le = self.ty_le.currentText()
         van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
                              reference_images=urls)
@@ -1459,7 +1462,8 @@ class TabHangLoat(QWidget):
         spec = JobSpec(
             kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80], index=dong + 1,
             params={"n": 1, "aspect_ratio": ty_le,
-                    "reference_images": list(urls) or None},
+                    "reference_images": list(urls) or None,
+                    "tham_chieu_cuc_bo": list(cuc_bo) or None},
             out_dir=thu_muc,
             estimate_micro=hold_for_image(1, self._app.prices))
         self._dong_cua_anh[spec.idempotency_key] = dong
@@ -1719,7 +1723,11 @@ class TabHangLoat(QWidget):
             spec = JobSpec(
                 kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80], index=thu_tu,
                 params={"n": 1, "aspect_ratio": ty_le,
-                        "reference_images": urls or None},
+                        "reference_images": urls or None,
+                        # Đường dẫn TRÊN MÁY của chính những ảnh ấy — để hàng đợi
+                        # AI chấm ảnh ra so với tham chiếu, lệch thì làm lại.
+                        "tham_chieu_cuc_bo": [d for d in self._anh_cua_dong(dong)
+                                              if d in kho_url] or None},
                 out_dir=thu_muc,
                 estimate_micro=hold_for_image(1, self._app.prices))
             self._dong_cua_anh[spec.idempotency_key] = dong

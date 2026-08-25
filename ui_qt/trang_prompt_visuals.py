@@ -28,6 +28,7 @@ chạy thử ở đây không giành đường của tab Tự động hay Ảnh 
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 from typing import Dict, List, Optional, Tuple
@@ -1229,7 +1230,7 @@ class TrangPromptVisuals(QWidget):
         n = min(int(self._so_thu.currentData() or 1), len(self._canh_hien),
                 self._bang_xem.rowCount())
         thu_muc = self._thu_muc_thu()
-        specs: List[JobSpec] = []
+        viec: List[Tuple[int, str, List[str]]] = []   # (dòng, prompt, ảnh tham chiếu trên máy)
         for dong in range(n):
             mo_ta = self._o(self._bang_xem, dong, self._COT_ANH)
             if not mo_ta:
@@ -1240,23 +1241,70 @@ class TrangPromptVisuals(QWidget):
                     "Cần sửa prompt cảnh {0}".format(dong + 1),
                     "\n".join("• " + v for v in van_de))
                 return
+            viec.append((dong, mo_ta, self._tham_chieu_cua_canh(dong)))
+        if not viec:
+            self._app.show_message(
+                "Các cảnh đầu chưa có prompt ảnh",
+                "Mở Bước 4, điền “Lời nhắc ảnh” cho các cảnh đầu rồi bấm lại.")
+            return
+        # Ảnh tham chiếu của các cảnh thử phải đi kèm — không thì con mèo thử ra
+        # một con mèo khác và khách kết luận sai về phong cách. Tải lên ở luồng
+        # nền (mỗi tệp một lần), rồi mới gửi.
+        can_tai = sorted({p for _d, _m, ds in viec for p in ds})
+        if can_tai and self._app.client is not None:
+            from core.anh_len import tai_len  # noqa: PLC0415
+
+            client = self._app.client
+
+            def tai():
+                kho = {}
+                for p in can_tai:
+                    try:
+                        kho[p] = str(tai_len(client, p) or "")
+                    except Exception:  # noqa: BLE001 — một ảnh hỏng không chặn cả lượt thử
+                        kho[p] = ""
+                return kho
+
+            self._app.run_bg(tai, on_ok=lambda kho: self._gui_thu(viec, thu_muc, kho),
+                             on_err=self._app.show_error)
+            return
+        self._gui_thu(viec, thu_muc, {})
+
+    def _tham_chieu_cua_canh(self, dong: int) -> List[str]:
+        """Đường dẫn ảnh tham chiếu CÓ THẬT trên máy của cảnh ở dòng `dong`."""
+        if dong >= len(self._canh_hien):
+            return []
+        chu = str(self._canh_hien[dong].get("reference_files") or "")
+        ra: List[str] = []
+        try:
+            ds = json.loads(chu) if chu.strip().startswith("[") else chu.split(",")
+        except ValueError:
+            ds = chu.split(",")
+        for p in ds:
+            p = str(p).strip().strip('"')
+            if p and os.path.isfile(p):
+                ra.append(p)
+        return ra[:3]
+
+    def _gui_thu(self, viec, thu_muc: str, kho_url: Dict[str, str]) -> None:
+        specs: List[JobSpec] = []
+        for dong, mo_ta, cuc_bo in viec:
+            urls = [kho_url[p] for p in cuc_bo if kho_url.get(p)]
             spec = JobSpec(
                 kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80],
                 index=dong + 1,
-                params={"n": 1, "aspect_ratio": "16:9"},
+                params={"n": 1, "aspect_ratio": "16:9",
+                        "reference_images": urls or None,
+                        "tham_chieu_cuc_bo": [p for p in cuc_bo if kho_url.get(p)] or None},
                 out_dir=thu_muc,
                 estimate_micro=hold_for_image(1, self._app.prices))
             self._thu_dong_anh[spec.idempotency_key] = dong
             self._thu_vien.them(spec.idempotency_key, mo_ta, False,
                                 ty_le="16:9", so_canh=dong + 1)
             specs.append(spec)
-        if not specs:
-            self._app.show_message(
-                "Các cảnh đầu chưa có prompt ảnh",
-                "Mở Bước 4, điền “Lời nhắc ảnh” cho các cảnh đầu rồi bấm lại.")
-            return
-        self._ghi("Thử phong cách: gửi {0} ảnh, clip sẽ tự nối khi ảnh xong."
-                  .format(len(specs)))
+        co_tc = sum(1 for _d, _m, c in viec if c)
+        self._ghi("Thử phong cách: gửi {0} ảnh{1}, clip sẽ tự nối khi ảnh xong."
+                  .format(len(specs), " ({0} cảnh kèm ảnh tham chiếu)".format(co_tc) if co_tc else ""))
         self._app.start_batch(specs, folder=thu_muc)
 
     # ── Nhận sự kiện job và nối ảnh thử → clip thử ───────────────────────────

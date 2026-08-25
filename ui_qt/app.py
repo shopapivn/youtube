@@ -38,6 +38,7 @@ from core.config import (CONFIG_FILENAME, Config, load_config,
                          luu_phien_dang_nhap, sanitize_api_key, save_config)
 from core.errors import describe, la_qua_tai, retry_after_seconds, tu_xu_ly_ngam
 from core.jobs import JobManager, JobSpec
+from core.cham_anh import dung_cham_anh
 from core.viet_lai_prompt import dung_viet_lai
 from core.money import format_vnd
 from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
@@ -287,7 +288,10 @@ class CuaSoChinh(QWidget):
                                    # Prompt bị bộ lọc từ chối → AI viết lại → thử lại
                                    # (chủ dự án 25/08/2026). Dùng cổng chat của
                                    # chính tài khoản này; chưa đăng nhập thì thay từ thô.
-                                   viet_lai=dung_viet_lai(lambda: self.client))
+                                   viet_lai=dung_viet_lai(lambda: self.client),
+                                   # Ảnh có tham chiếu → AI chấm, lệch thì làm lại một
+                                   # tấm và giữ tấm giống hơn (chủ dự án 25/08/2026).
+                                   cham_anh=dung_cham_anh(lambda: self.client))
 
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
@@ -753,7 +757,10 @@ class CuaSoChinh(QWidget):
                                    # Prompt bị bộ lọc từ chối → AI viết lại → thử lại
                                    # (chủ dự án 25/08/2026). Dùng cổng chat của
                                    # chính tài khoản này; chưa đăng nhập thì thay từ thô.
-                                   viet_lai=dung_viet_lai(lambda: self.client))
+                                   viet_lai=dung_viet_lai(lambda: self.client),
+                                   # Ảnh có tham chiếu → AI chấm, lệch thì làm lại một
+                                   # tấm và giữ tấm giống hơn (chủ dự án 25/08/2026).
+                                   cham_anh=dung_cham_anh(lambda: self.client))
         self.refresh_prices()
 
     def dang_xuat(self) -> None:

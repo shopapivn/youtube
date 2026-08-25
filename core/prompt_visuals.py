@@ -487,6 +487,9 @@ def canh_de_xem(hang: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
             "srt_start": _lay(dong, vi_tri, "srt_start"),
             "srt_end": _lay(dong, vi_tri, "srt_end"),
             "srt_text": _lay(dong, vi_tri, "srt_text"),
+            # Ảnh tham chiếu của cảnh (đường dẫn thật sau khi tab ghi lại) — Bước 5
+            # thử vài cảnh phải gửi kèm, không thì mèo thử ra một con mèo khác.
+            "reference_files": _lay(dong, vi_tri, "reference_files"),
             "srt_text_vi": _lay(dong, vi_tri, "srt_text_vi"),
             "img_prompt": _lay(dong, vi_tri, "img_prompt"),
             "video_prompt": _lay(dong, vi_tri, "video_prompt"),
