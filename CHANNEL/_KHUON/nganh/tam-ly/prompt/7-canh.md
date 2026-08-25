@@ -24,7 +24,18 @@ accused, while the ground cracked under it, while it was startled — and the
 viewer stops believing the story the moment the face contradicts the words.
 So every scene that shows `nv1` states the face in plain words: `mouth a
 small flat line, brows drawn in`, `wide eyes, mouth open in a small o`,
-`eyes closed, easy smile`. Write the mouth shape and the eyes, not an adjective.
+`eyes closed, easy smile`. Write the mouth shape and the eyes, not an adjective
+— and write them **right after the first mention of `nv1`**, not at the end
+of the prompt. Measured on 38 real frames: faces written at the end of a long
+prompt came back as the reference smile in 3 of them; faces written up front
+did not.
+
+**`nv1` wears nothing, ever — even when the narration mentions clothes.** A
+coat is carried over an arm, hung by the door, or sliding off the shoulders
+to the floor; it is never on the body. Measured on real frames: three scenes
+put a coat on `nv1` and for those seconds it read as a different character.
+The same body rule holds for reflections, mirrors and windows: `nv1`'s
+reflection is also pure white (its shadow is dark, and that is fine).
 
 **`nv1` is the ONLY pure-white figure in the whole video.** Other people —
 colleagues, a boss, a crowd, a friend — are plain rounded figures of the same

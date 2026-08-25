@@ -37,8 +37,12 @@ no rhythm. Your map is the only thing those writers share.
    Divide where the IDEA changes — a new point, a new study, a new example —
    never on a clock.
 3. **Chapter 1 is the opening situation**, a concrete moment from the viewer's
-   life, in a real place. **The last chapter is the closing**, where the
-   narration turns to the viewer directly.
+   life, in a real place — and that place is where the FIRST lines actually
+   happen, not where they end up. If the opening travels (station → train →
+   front door), write `place` as `A → B` and name the line where the move
+   happens, so the wave goodbye is drawn at the station and the coat comes
+   off at home — never both at the door. **The last chapter is the closing**,
+   where the narration turns to the viewer directly.
 4. **No two consecutive chapters share a place.** Choose from the everyday
    settings of the audience note below; at least half of all chapters happen
    in real everyday places (apartment, office, train, konbini, cafe, park,
