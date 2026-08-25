@@ -156,3 +156,14 @@ def test_loi_khac_khong_viet_lai(monkeypatch, tmp_path):
     may, rec, _xong, _spec = _chay(monkeypatch, tmp_path, lambda s, l: goi.append(1) or s.content, prompt="ok scene")
     assert rec.status == STATUS_DONE and not goi
     assert threading.active_count() >= 1
+
+
+def test_viet_lai_doi_chu_the_thi_bi_loai():
+    from core.viet_lai_prompt import giu_chu_the
+    goc = ("A slender young man about 19, tousled chestnut-brown hair, standing in the river, "
+           "soaked linen undershirt, stylised 3D animated film still, white background")
+    lac = "A woman browsing books in a sunlit bookstore, photorealistic, warm afternoon light"
+    assert not giu_chu_the(goc, lac)
+    assert giu_chu_the(goc, goc.replace("soaked linen undershirt", "plain wet shirt"))
+    # AI trả bản lạc đề → không dùng, lui về thay từ thô (ở đây không có gì để thay → giữ gốc).
+    assert viet_lai_prompt(lambda _l: lac, goc) == goc

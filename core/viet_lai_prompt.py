@@ -33,9 +33,11 @@ _DAU_TU_CHOI = ("content_rejected", "rejected", "bị từ chối", "bộ lọc 
                 "vi phạm quy định", "safety", "policy")
 
 LOI_NHAC_VIET_LAI = """A text-to-{loai} generator's safety filter REJECTED the prompt below{ly_do}.
-Rewrite it so it passes while keeping the SAME scene, characters, action, composition, camera,
+Rewrite it so it passes while keeping the SAME subject: the same species and characters (a cat
+stays a cat, a young man stays a young man), the same setting, action, composition, camera,
 lighting and art style, and keep EVERY line that mentions "reference image", "REFERENCE IMAGES",
-"IDENTITY LOCK" or "first frame" exactly as it is.
+"IDENTITY LOCK" or "first frame" exactly as it is. A rewrite that changes WHO or WHAT is in the
+picture is wrong — if the only way to pass is to change the subject, return the prompt unchanged.
 Remove or soften only what such filters flag:
 - violence, weapons, blood, injury, threats, fear, death;
 - body horror: bodies dissolving, melting, splitting, transforming mid-shot (show the result
@@ -69,6 +71,27 @@ def la_bi_tu_choi(ma: str, thong_diep: str) -> bool:
     return any(d in chu for d in _DAU_TU_CHOI)
 
 
+#: Ban viet lai phai giu it nhat chung nay phan tu "co nghia" cua ban goc.
+#: Do 25/08/2026: tham chieu nv1b (cau ut dung duoi song) sau hai lan tu choi
+#: duoc AI "viet lai" thanh... mot co gai trong hieu sach — anh that, khac han.
+#: Vong tu dong khong duoc phep doi chu the; lech thi thay tu tho con hon.
+TI_LE_GIU_TU = 0.35
+
+
+def _tu_co_nghia(chu: str) -> set:
+    return {t for t in re.findall(r"[a-z]{4,}", str(chu or "").lower())
+            if t not in ("with", "that", "this", "from", "into", "over", "then", "than", "them",
+                         "they", "their", "have", "been", "being", "very", "only", "same")}
+
+
+def giu_chu_the(goc: str, moi: str) -> bool:
+    """Ban viet lai con giu chu the cua ban goc khong (do bang ti le tu chung)?"""
+    a, b = _tu_co_nghia(goc), _tu_co_nghia(moi)
+    if not a:
+        return True
+    return len(a & b) / float(len(a)) >= TI_LE_GIU_TU
+
+
 def lam_lanh_tho(prompt: str) -> str:
     """Thay từ thô, không cần AI. Trả về chuỗi có thể KHÔNG đổi nếu không thấy gì."""
     chu = str(prompt or "")
@@ -92,7 +115,8 @@ def viet_lai_prompt(goi: Optional[Callable[[str], str]], prompt: str, ly_do: str
             ly = " ({0})".format(str(ly_do).strip()[:200]) if str(ly_do or "").strip() else ""
             tra = str(goi(LOI_NHAC_VIET_LAI.format(loai=loai, ly_do=ly, prompt=goc)) or "").strip()
             tra = re.sub(r"^(?:PROMPT:|Rewritten prompt:)\s*", "", tra, flags=re.I).strip("`\" \n")
-            if len(tra) >= max(20, len(goc) // 3) and len(tra) <= max(400, len(goc) * 2):
+            if (len(tra) >= max(20, len(goc) // 3) and len(tra) <= max(400, len(goc) * 2)
+                    and giu_chu_the(goc, tra)):
                 return tra
         except Exception:  # noqa: BLE001 — AI hỏng thì lui về thay từ thô
             pass
