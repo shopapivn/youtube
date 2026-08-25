@@ -378,8 +378,8 @@ def test_loi_doc_cho_bia_nhac_casting_la_ca_bai(wb):
 # ── Từ bị bộ lọc an toàn chặn vô cớ ─────────────────────────────────────────
 
 def test_thay_tu_bi_loc_trong_moi_prompt(wb):
-    assert wb._lam_lanh_prompt("small upright anthropomorphic cat with a sly smile") == \
-        "small upright cat standing upright like a person with a knowing smile"
+    assert wb._lam_lanh_prompt("small anthropomorphic cat with a sly smile") == \
+        "small upright humanlike cat with a knowing smile"
     assert wb._lam_lanh_prompt("Slyvia walks") == "Slyvia walks"   # không cắt giữa từ
     cast = {"characters": [{"id": "nv4", "english_prompt": "anthropomorphic cat", "sheet_prompt": "sly cat"}],
             "locations": []}
