@@ -259,9 +259,15 @@ narrated video. Read the whole narration transcript below and decide:
    (guards, villagers, courtiers) is ONE representative member, and the scene
    prompt says how many of them appear. Never an id that means "the two…".
    Image generators REJECT any animal wearing footwear (boots, shoes,
-   slippers — measured 25/08/2026 on a cat, every wording). Never give an
-   animal footwear even if the story says boots: the narration may say
-   "boots", the picture gives it a beret, a vest, a scarf or a satchel instead.
+   slippers — measured 25/08/2026 on a cat, every wording) and a cat under a
+   wide-brimmed hat of any kind. Never give an animal footwear even if the
+   story says boots: the narration may say "boots", the picture gives it a
+   beret, a small cap, a vest, a scarf or a satchel instead — never a
+   wide-brimmed or feathered hat on a cat.
+   Write descriptions in POSITIVE terms only — what IS there. Never put
+   "no boots", "without a hat", "no weapons" inside a description: safety
+   filters and image models read the noun, not the negation (a description
+   saying "bare paws, no boots" was rejected; "bare paws" alone passed).
    Never copy the signature look of a famous copyrighted character (a cat in a
    feathered musketeer hat and tall boots, a mouse in red shorts, a blue
    hedgehog…): image generators reject it. Invent a fresh, simple look instead
