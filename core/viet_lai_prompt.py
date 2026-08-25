@@ -61,7 +61,9 @@ _THAY_THO = [
     (re.compile(r"\b(?:dissolv|melt|disintegrat)\w*\b", re.I), "fading"),
     (re.compile(r"\b(?:blood|bloody|gore|corpse|kill(?:s|ed|ing)?|slaughter\w*|stab\w*)\b", re.I), ""),
     (re.compile(r"\b(?:naked|nude|undress\w*|bare-chested)\b", re.I), "in simple clothes"),
-    (re.compile(r"\b(?:sword|dagger|knife|gun|rifle|axe)\b", re.I), "wooden staff"),
+    (re.compile(r"\b(?:sword|dagger|knife|gun|rifle|axe|halberd|spear|pike)s?\b", re.I), "wooden staff"),
+    (re.compile(r"\b(?:brutal|hulking|menacing|savage|fearsome|monstrous|terrifying)\b", re.I), "very big"),
+    (re.compile(r"\biron-studded\b", re.I), "plain"),
 ]
 
 

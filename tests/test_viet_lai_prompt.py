@@ -179,3 +179,9 @@ def test_viet_lai_giu_duoi_phong_cach():
     assert ra.endswith("- reference image 1 = nv4b")
     # Đã có đuôi thì không ghép đôi.
     assert giu_duoi_phong_cach(goc, goc) == goc
+
+
+def test_lam_lanh_tho_vu_khi_va_tinh_tu_hung_bao():
+    ra = lam_lanh_tho("guards holding halberds, a brutal ogre with an iron-studded tunic and a spear")
+    assert "halberd" not in ra and "spear" not in ra and "brutal" not in ra and "iron-studded" not in ra
+    assert "wooden staff" in ra and "very big" in ra

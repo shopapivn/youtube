@@ -559,3 +559,7 @@ def test_loi_nhac_thiet_ke_lai_co_vai_mo_ta_ly_do(wb):
 def test_khoi_dan_bao_ai_chi_goi_bang_id(wb):
     khoi = wb._khoi_cast_style({"characters": [{"id": "nv4", "role": "cat", "english_prompt": "x"}], "locations": []})
     assert "call it ONLY by its id" in khoi and "NEVER describe" in khoi
+
+
+def test_casting_yeu_cau_tu_ngu_than_thien_gia_dinh(wb):
+    assert "FAMILY-FRIENDLY" in wb._KHUON_CAST and "no weapons" in wb._KHUON_CAST

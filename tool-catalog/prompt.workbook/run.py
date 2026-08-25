@@ -243,7 +243,11 @@ narrated video. Read the whole narration transcript below and decide:
    feathered musketeer hat and tall boots, a mouse in red shorts, a blue
    hedgehog…): image generators reject it. Invent a fresh, simple look instead
    (a beret, a scarf, a small vest, plain boots) and keep it for the whole
-   video. {fixed_rule}
+   video. Use FAMILY-FRIENDLY wording in every description — this is for
+   children and for image generators with strict safety filters: no weapons
+   (guards carry ceremonial staffs, not halberds or swords), no "brutal",
+   "hulking", "menacing", "ashen", "iron-studded"; a villain is "very big,
+   grumpy, with a wide mouth", never frightening. {fixed_rule}
    Only a pure landscape/abstract video has an empty `characters` list — do NOT
    invent a person there, and do NOT drop a character the story uses.
 2. The LOCATIONS — every distinct place the story visits: a cottage, a river
