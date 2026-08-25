@@ -599,3 +599,18 @@ def test_pha_lap_canh_doi_khung_va_giu_id(wb):
     scenes2 = [dict(scenes[0]), {"scene_id": 2, "img_prompt": scenes[0]["img_prompt"], "video_prompt": "x"}]
     assert run._pha_lap_canh(scenes2, lambda l, k: '{"2": {"img_prompt": "Close-up of nv9 (nv9) at loc2 smiling%s"}}' % tail) == 0
     assert scenes2[1]["img_prompt"] == scenes[0]["img_prompt"]
+
+
+def test_don_mo_ta_bo_lenh_va_phu_dinh(wb):
+    run = wb
+    chu = ("a small upright kitten with solid plain golden-yellow fur without any stripes or patches, "
+           "bare soft paws with no footwear; describe only fur, face and body here; outfit at this stage: "
+           "no clothes at all, no hat, bare paws, plain golden-yellow fur only")
+    ra = run._don_mo_ta(chu)
+    assert "describe only" not in ra and "no footwear" not in ra and "no hat" not in ra and "no clothes" not in ra
+    assert "without any stripes" in ra                     # hoa văn lông thì giữ
+    assert "bare soft paws" in ra and "outfit at this stage:" in ra and "plain golden-yellow fur only" in ra
+    assert run._don_mo_ta("a jolly king with a golden crown and a red robe") == "a jolly king with a golden crown and a red robe"
+    dan = [{"id": "nv1", "english_prompt": "a cat, no hat", "stages": [{"when": "x", "outfit": "a vest, no boots"}]}]
+    assert run._don_dan(dan) == 1
+    assert dan[0]["english_prompt"] == "a cat" and dan[0]["stages"][0]["outfit"] == "a vest"

@@ -371,8 +371,53 @@ def _lam_lanh_prompt(chu: str) -> str:
     return chu
 
 
+# ── Dọn mô tả nhân vật: bỏ câu-lệnh lọt vào và mệnh đề phủ định ─────────────
+#
+# Đo 25/08/2026 22:15 (chạy thử story-3d): AI chép nguyên hướng dẫn vào mô tả
+# ("describe only face, body and hair here;") và viết phủ định ("no hat, no
+# clothes at all, bare paws with no footwear"). Máy vẽ và bộ lọc đọc DANH TỪ,
+# không đọc chữ "no" — "no boots" vẫn là "boots". Dọn bằng mã, không tin lời hứa.
+_MENH_DE_LENH = re.compile(r"\s*[;,.]?\s*(?:describe|write|use|include|keep|mention)\b[^;.]*?\bhere\b[^;,.]*", re.I)
+_MENH_DE_PHU_DINH = re.compile(r"\s*(?:,|;|\band\b)?\s*(?:with\s+)?(?:no|without|never)\s+(?!(?:any\s+|the\s+)?(?:stripes|spots|patches|markings|pattern))[a-z][a-z\- ]{0,40}?(?=(?:,|;|\.|$|\band\b))", re.I)
+
+
+def _don_mo_ta(chu: str) -> str:
+    """Bỏ câu-lệnh lọt vào và mệnh đề "no X / without X" khỏi một mô tả.
+
+    Giữ "no stripes / no spots" (đó là hoa văn lông, cần nói) — còn "no hat",
+    "no boots", "no clothes at all", "with no footwear" thì bỏ.
+    """
+    t = str(chu or "")
+    t = _MENH_DE_LENH.sub("", t)
+    t = _MENH_DE_PHU_DINH.sub("", t)
+    t = re.sub(r"\s*,\s*,", ",", t)
+    t = re.sub(r":\s*,", ":", t)
+    t = re.sub(r";\s*;", ";", t)
+    t = re.sub(r"\s+", " ", t).strip(" ,;")
+    return t
+
+
+def _don_dan(characters) -> int:
+    """Dọn `english_prompt` (và `outfit` trong `stages`) của cả dàn. Trả về số nhân vật đã đổi."""
+    n = 0
+    for c in characters or []:
+        cu = str(c.get("english_prompt") or "")
+        moi = _don_mo_ta(cu)
+        if moi and moi != cu:
+            c["english_prompt"] = moi
+            n += 1
+        for st in c.get("stages") or []:
+            if isinstance(st, dict) and st.get("outfit"):
+                st["outfit"] = _don_mo_ta(str(st["outfit"]))
+    return n
+
+
 def _lam_lanh_moi_prompt(cast, scenes, bia) -> None:
     """Thay tu bi loc trong MOI prompt se di ra Excel (dan, boi canh, canh, bia)."""
+    _don_dan(cast.get("characters") or [])
+    for c in cast.get("characters") or []:
+        if c.get("sheet_prompt"):
+            c["sheet_prompt"] = _don_mo_ta(str(c["sheet_prompt"]))
     for c in list(cast.get("characters") or []) + list(cast.get("locations") or []):
         for k in ("english_prompt", "sheet_prompt", "reference_lock", "location_lock"):
             if c.get(k):
