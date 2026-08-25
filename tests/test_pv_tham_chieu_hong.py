@@ -20,6 +20,8 @@ class _Trang:
         self._tc_dang_cho = {}
         self._tc_da_thu_lai = set()
         self._tc_thieu = []
+        self._tc_da_thiet_ke_lai = set()
+        self._app = SimpleNamespace(client=None)   # chưa đăng nhập → không thiết kế lại
         self.nhat_ky = []
         self.da_gui = []
         self._thu_vien = SimpleNamespace(cap_nhat=lambda _d: None)

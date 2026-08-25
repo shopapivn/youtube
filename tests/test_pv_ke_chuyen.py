@@ -440,7 +440,8 @@ def test_excel_moi_canh_co_khoi_khoa(wb, yeu_cau):
 
 def test_khoa_cho_phep_doi_trang_phuc_khi_canh_noi_ro(wb):
     from core.chia_canh import KHUON_MAC_DINH
-    assert "not yet wearing" in KHUON_MAC_DINH
+    # Cảnh KHÔNG tả lại nhân vật — chỉ id + tư thế; giai đoạn có id riêng.
+    assert "ONLY by id" in KHUON_MAC_DINH and "one id per stage" in KHUON_MAC_DINH
     assert "not yet wearing" in wb._KHOA_NHAN_VAT and "everything not mentioned" in wb._KHOA_NHAN_VAT
 
 
@@ -526,3 +527,35 @@ def test_ep_ke_hoach_HOP_nhan_vat_khong_thay(wb):
 def test_khoa_boi_canh_dung_tren_dat_va_anh_thiet_lap_ngang_tam_mat(wb):
     assert "never standing on water" in wb._KHOA_BOI_CANH and "correct scale" in wb._KHOA_BOI_CANH
     assert "human eye level" in wb._DUOI_BOI_CANH and "lower third" in wb._DUOI_BOI_CANH
+
+
+# ── Thiết kế nhân vật ở MỘT chỗ: đổi thiết kế là mọi cảnh đổi theo ──────────
+
+def test_doi_thiet_ke_nhan_vat_lan_ra_moi_canh_va_moi_giai_doan(wb):
+    dan = [{"id": "nv4", "role": "the cat", "english_prompt": "orange cat; outfit at this stage: no clothes",
+            "sheet_prompt": "x"},
+           {"id": "nv4b", "role": "the cat", "english_prompt": "orange cat; outfit at this stage: red beret, boots",
+            "sheet_prompt": "x"},
+           {"id": "nv1", "role": "hero", "english_prompt": "a young man", "sheet_prompt": "y"}]
+    sc = [{"img_prompt": "Wide shot of nv4b [reference image 1] waving\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv4b, the the cat: orange cat; outfit at this stage: red beret, boots\n- reference image 2 = nv1, the hero: a young man"},
+          {"img_prompt": "nv1 alone\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv1, the hero: a young man"}]
+    n = wb.doi_thiet_ke_nhan_vat(sc, dan, "nv4b", "grey cat with a white chest", duoi_style=" Style: 3D")
+    assert n == 1
+    assert dan[0]["english_prompt"] == "grey cat with a white chest; outfit at this stage: no clothes"
+    assert dan[1]["english_prompt"] == "grey cat with a white chest; outfit at this stage: red beret, boots"
+    assert dan[1]["sheet_prompt"].startswith("grey cat with a white chest; outfit at this stage: red beret, boots — full-body")
+    assert dan[1]["sheet_prompt"].endswith(" Style: 3D")
+    assert "reference image 1 = nv4b, the the cat: grey cat with a white chest; outfit at this stage: red beret, boots" in sc[0]["img_prompt"]
+    assert dan[2]["english_prompt"] == "a young man" and "a young man" in sc[1]["img_prompt"]
+    assert wb.doi_thiet_ke_nhan_vat(sc, dan, "nv9", "x") == 0
+
+
+def test_loi_nhac_thiet_ke_lai_co_vai_mo_ta_ly_do(wb):
+    p = wb.loi_nhac_thiet_ke_lai({"role": "helper", "english_prompt": "a cat in a feathered hat"}, "content_rejected")
+    assert "Role in the story: helper" in p and "a cat in a feathered hat" in p and "Rejection reason: content_rejected" in p
+    assert '"english_prompt"' in p
+
+
+def test_khoi_dan_bao_ai_chi_goi_bang_id(wb):
+    khoi = wb._khoi_cast_style({"characters": [{"id": "nv4", "role": "cat", "english_prompt": "x"}], "locations": []})
+    assert "call it ONLY by its id" in khoi and "NEVER describe" in khoi

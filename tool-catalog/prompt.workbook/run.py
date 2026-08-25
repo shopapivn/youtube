@@ -24,6 +24,9 @@ _STUDIO = Path(__file__).resolve().parents[2]
 if str(_STUDIO) not in sys.path:
     sys.path.insert(0, str(_STUDIO))
 
+from core.prompt_visuals import (  # noqa: E402,F401 — doi_thiet_ke/loi_nhac dung qua module
+    DUOI_BOI_CANH, DUOI_CHAN_DUNG, doi_thiet_ke_nhan_vat, goc_cua_id, loi_nhac_thiet_ke_lai,
+)
 from core.chia_canh import (  # noqa: E402
     DUOI_CAM, KHUON_MAC_DINH, bang_phu_de, chia_theo_nghia, loi_nhac_chia,
 )
@@ -183,20 +186,8 @@ The last beat of the act closes it on the motif.
 #: "ONE figure only": do 25/08/2026 (Meo di hia 3D) — mo ta cau ut co "later
 #: transform into fine marquis attire" nen anh tham chieu ve HAI ban cau ut
 #: dung canh nhau, va moi canh sau chep luon bo cuc hai nguoi.
-_DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single figure "
-                   "shown once (never two versions or a before/after side by side), "
-                   "wearing the outfit of its FIRST appearance in the story, standing, "
-                   "arms relaxed at sides, neutral expression, gazing straight ahead, "
-                   "centered on a plain pure white background, 16:9 canvas, no "
-                   "text, no letters, no watermark")
-#: "Ngang tam mat, thay mat dat": do 25/08/2026 canh 72/74 — tham chieu lau dai
-#: chup tu xa tren cao, mo hinh dan xe ngua len noc tuong thanh va ve ca nha to
-#: bang cong. Anh thiet lap phai la cho NHAN VAT SE DUNG, nhin tu tam mat nguoi.
-_DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, seen from "
-                  "human eye level standing on the ground of that place, the ground "
-                  "(floor, path, grass, bank) clearly visible across the lower third "
-                  "so characters can later stand on it at correct scale, centered, "
-                  "16:9 composition, no text, no letters, no watermark")
+_DUOI_CHAN_DUNG = DUOI_CHAN_DUNG
+_DUOI_BOI_CANH = DUOI_BOI_CANH
 
 #: Bao nhieu ky tu loi doc dua cho luot viet anh bia / nhac. 0 = ca bai:
 #: anh bia phai biet cao trao o cuoi, nhac phai theo mach ca video — cat bot
@@ -1311,13 +1302,16 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
     if chars:
         dong.append("## RECURRING CHARACTERS — reuse, never redesign")
         dong.append("These are the ONLY recurring characters in this video. When "
-                    "a scene shows one, put its id in `characters_used` and keep "
-                    "its appearance EXACTLY as written here — do NOT re-describe "
-                    "face, hair, clothes or colours per scene. The main character "
-                    "is the centre of every scene it appears in; supporting "
-                    "figures, props and settings stay simple and in the SAME "
-                    "style. The video prompt must never change a character — "
-                    "only its expression and action:")
+                    "a scene shows one, put its id in `characters_used` and, in the "
+                    "prompt text, call it ONLY by its id (e.g. `nv4`) with pose, "
+                    "gesture and expression — NEVER describe its face, hair, fur, "
+                    "clothes, props or colours in a scene: its reference image and "
+                    "the description below are attached automatically, and words "
+                    "you add can only contradict them. The main character is the "
+                    "centre of every scene it appears in; supporting figures, props "
+                    "and settings stay simple and in the SAME style. The video "
+                    "prompt must never change a character — only its expression "
+                    "and action:")
         co_giai_doan = any(c.get("giai_doan") for c in chars)
         if co_giai_doan:
             dong.append("Some characters CHANGE LOOK during the story and therefore have "
@@ -1575,10 +1569,7 @@ def _ep_theo_ke_hoach(scenes, ke_hoach) -> Dict[str, int]:
     return doi
 
 
-def _goc_cua_id(i: str) -> str:
-    """`nv4b` -> `nv4` (id goc cua giai doan); id thuong tra ve chinh no."""
-    m = re.match(r"^(nv\d+)[a-z]$", str(i or ""))
-    return m.group(1) if m else str(i or "")
+_goc_cua_id = goc_cua_id
 
 
 def _so_lan_doi_boi_canh(scenes) -> int:

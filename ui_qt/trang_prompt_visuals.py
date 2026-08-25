@@ -45,10 +45,11 @@ from core.jobs import STATUS_CANCELLED, STATUS_DONE, STATUS_FAILED, JobSpec
 from core.money import format_vnd
 from core.pricing import KIND_IMAGE, KIND_VIDEO, hold_for_image, hold_for_video
 from core.prompt_visuals import (
-    CHE_DO_CAN_ANH_NV, CHE_DO_KE, LOI_NHAC_XAY_PHONG_CACH, PhongCach,
+    CHE_DO_CAN_ANH_NV, CHE_DO_KE, DUOI_CHAN_DUNG, LOI_NHAC_XAY_PHONG_CACH, PhongCach,
     bia_de_xem, boi_canh_de_xem, canh_de_xem, cau_thieu_gi, chi_dan_tu_bo,
-    chi_dan_tu_tra_loi_ai, dan_de_xem, dung_boi_canh, dung_workflow,
-    ke_hoach_de_xem, liet_ke_phong_cach, man_de_xem, nhac_de_xem, tom_tat_dan,
+    chi_dan_tu_tra_loi_ai, dan_de_xem, doi_thiet_ke_nhan_vat, dung_boi_canh,
+    dung_workflow, goc_cua_id, ke_hoach_de_xem, liet_ke_phong_cach,
+    loi_nhac_thiet_ke_lai, man_de_xem, nhac_de_xem, tom_tat_dan,
 )
 from core.validate import check_image, check_video
 
@@ -117,6 +118,8 @@ class TrangPromptVisuals(QWidget):
         self._tc_dang_cho: Dict[str, Tuple[str, str, str]] = {}
         #: Id đã được thử lại một lần sau khi bị từ chối — không thử vô hạn.
         self._tc_da_thu_lai: set = set()
+        #: Nhân vật (id gốc) đã được AI thiết kế lại một lần — không lặp vô hạn.
+        self._tc_da_thiet_ke_lai: set = set()
         #: Id KHÔNG tạo được (bị từ chối cả hai lần) — nói thật với khách thay vì
         #: báo "đủ". Đo 25/08/2026: mèo đi hia 3D bị bộ lọc nhà cung cấp chặn 15
         #: cách viết liên tiếp; bản cũ im lặng, khách sẽ chạy cả phim thiếu mèo.
@@ -2036,6 +2039,16 @@ class TrangPromptVisuals(QWidget):
                 ma_id, ly_do[:90] or "máy chủ không nói lý do"))
             self._tao_anh_tham_chieu(duong_xlsx, [(ma_id, prompt)], thu_lai=True)
             return
+        # Lần hai vẫn hỏng → lỗi ở THIẾT KẾ nhân vật (dáng giống nhân vật có bản
+        # quyền, chi tiết nhạy cảm), không phải ở một câu. Nhờ AI thiết kế lại
+        # MỘT lần: sửa ở dàn, mã chèn lại khối khoá của mọi cảnh, tạo lại tham
+        # chiếu. Chủ dự án 25/08/2026: *"chỗ api để xây prompt không nên cứng
+        # mà phải chỉnh được nguyên lý… sẽ có nhiều câu chuyện cổ tích"*.
+        goc = goc_cua_id(ma_id)
+        if goc not in self._tc_da_thiet_ke_lai and self._app.client is not None:
+            self._tc_da_thiet_ke_lai.add(goc)
+            self._thiet_ke_lai_tham_chieu(duong_xlsx, ma_id, ly_do)
+            return
         self._tc_thieu.append(ma_id)
         self._ghi("Ảnh tham chiếu {0} KHÔNG tạo được sau hai lần: {1}. Bạn mở Bước 4 → "
                   "“Nhân vật & bối cảnh”, sửa mô tả của {0} (bớt chi tiết nhạy cảm, tránh "
@@ -2043,6 +2056,83 @@ class TrangPromptVisuals(QWidget):
                   "ảnh làm tham chiếu ở tab Ảnh & Video → Hàng loạt.".format(
                       ma_id, ly_do[:160] or "máy chủ không nói lý do"))
         self._bao_du_tham_chieu()
+
+    def _thiet_ke_lai_tham_chieu(self, duong_xlsx: str, ma_id: str, ly_do: str) -> None:
+        """LUỒNG GIAO DIỆN: nhờ AI thiết kế lại nhân vật (luồng nền) rồi tạo lại tham chiếu."""
+        from core.goi_van_ban import goi_van_ban, loc_json  # noqa: PLC0415
+
+        client = self._app.client
+        self._ghi("Ảnh tham chiếu {0} bị từ chối hai lần — nhờ AI thiết kế lại nhân vật "
+                  "(cùng vai, đổi món đồ đặc trưng) rồi cập nhật mọi cảnh…".format(ma_id))
+
+        def lam():
+            dan = self._doc_sheet(duong_xlsx, "characters")
+            nv = next((c for c in dan if str(c.get("id")) == ma_id), None)
+            if nv is None:
+                raise ValueError("không thấy {0} trong sheet characters".format(ma_id))
+            tra = goi_van_ban(client, [{"role": "user", "content": loi_nhac_thiet_ke_lai(nv, ly_do)}],
+                              mo_hinh=MO_HINH_PV, toi_da_token=1024)
+            moi = str(loc_json(tra).get("english_prompt") or "").strip()
+            if len(moi) < 20:
+                raise ValueError("AI không trả mô tả mới")
+            return self._ap_thiet_ke_lai_xlsx(duong_xlsx, ma_id, moi)
+
+        def xong(ket):
+            ds, so_canh = ket
+            self._ghi("Đã thiết kế lại {0} ({1} ảnh tham chiếu, {2} cảnh cập nhật): {3}…".format(
+                ma_id, len(ds), so_canh, (ds[0][1] if ds else "")[:90]))
+            self._nap_xem(self._da_xong)
+            self._tao_anh_tham_chieu(duong_xlsx, ds, thu_lai=True)
+
+        def hong(loi):
+            self._tc_thieu.append(ma_id)
+            self._ghi("Không thiết kế lại được {0} ({1}). Bạn mở Bước 4 → “Nhân vật & bối "
+                      "cảnh”, sửa mô tả rồi bấm “Tạo prompt” lại.".format(ma_id, str(loi)[:120]))
+            self._bao_du_tham_chieu()
+
+        self._app.run_bg(lam, on_ok=xong, on_err=hong)
+
+    @staticmethod
+    def _doc_sheet(duong: str, ten: str) -> List[Dict[str, str]]:
+        """Một sheet → danh sách dict theo tiêu đề cột (chỉ đọc)."""
+        from openpyxl import load_workbook  # noqa: PLC0415
+
+        wb = load_workbook(duong, read_only=True, data_only=True)
+        try:
+            if ten not in wb.sheetnames:
+                return []
+            hang = [list(r) for r in wb[ten].iter_rows(values_only=True)]
+        finally:
+            wb.close()
+        if not hang:
+            return []
+        tieu = [str(c or "").strip() for c in hang[0]]
+        return [{tieu[i]: ("" if v is None else str(v)) for i, v in enumerate(d) if i < len(tieu)}
+                for d in hang[1:]]
+
+    @staticmethod
+    def _ap_thiet_ke_lai_xlsx(duong: str, ma_id: str, english_prompt_moi: str):
+        """Áp thiết kế mới vào Excel: dàn (mọi giai đoạn của nhân vật) + khối khoá mọi cảnh.
+
+        Trả `([(id, sheet_prompt_mới)…], số_cảnh_cập_nhật)`. Thuần Excel, không mạng.
+        """
+        dan = TrangPromptVisuals._doc_sheet(duong, "characters")
+        canh = TrangPromptVisuals._doc_sheet(duong, "scenes")
+        goc = goc_cua_id(ma_id)
+        mau = next((c for c in dan if goc_cua_id(str(c.get("id"))) == goc), None)
+        duoi_style = ""
+        if mau and DUOI_CHAN_DUNG in str(mau.get("sheet_prompt") or ""):
+            duoi_style = str(mau["sheet_prompt"]).split(DUOI_CHAN_DUNG, 1)[1]
+        truoc = {str(s.get("scene_id")): str(s.get("img_prompt") or "") for s in canh}
+        doi_thiet_ke_nhan_vat(canh, dan, ma_id, english_prompt_moi, duoi_style=duoi_style)
+        sua_dan = {str(c["id"]): {"english_prompt": c["english_prompt"], "sheet_prompt": c["sheet_prompt"]}
+                   for c in dan if goc_cua_id(str(c.get("id"))) == goc}
+        TrangPromptVisuals._ghi_cot_vao_xlsx(duong, "characters", "id", sua_dan)
+        sua_canh = {str(s["scene_id"]): (s["img_prompt"], str(s.get("video_prompt") or ""))
+                    for s in canh if str(s.get("img_prompt") or "") != truoc.get(str(s.get("scene_id")))}
+        if sua_canh:
+            TrangPromptVisuals._ghi_prompt_vao_xlsx(duong, sua_canh)
+        return [(i, v["sheet_prompt"]) for i, v in sua_dan.items()], len(sua_canh)
 
     def _bao_du_tham_chieu(self) -> None:
         if self._tc_dang_cho:

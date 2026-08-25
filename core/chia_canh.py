@@ -166,16 +166,16 @@ subject off-centre, depth front-to-back.
    the pieces sideways, a book bursting open. Put a person in when the
    narration is about *them*; leave the frame to the metaphor when it is about
    an *idea*.
-   If recurring characters are listed above, use ONLY them, keep their
-   appearance EXACTLY as written, and put their ids in `characters_used`. If
-   none are listed, do not invent a recurring person — use silhouettes or an
-   anonymous figure described fresh each time.
-   A reference image of each listed character is attached when the image is
-   generated, so its look is locked. If the STORY changes an outfit item at
-   some point (a character is given boots and a hat, loses a crown, takes off
-   a coat), say so EXPLICITLY in every scene before/after that change — e.g.
-   `nv4, not yet wearing the hat and boots, no sack` — otherwise the image
-   will show the full reference outfit.
+   If recurring characters are listed above, use ONLY them and put their ids
+   in `characters_used`. In the prompt text refer to each of them ONLY by id
+   (`nv4`, `nv7b`…) plus pose, gesture and expression — NEVER re-describe its
+   face, fur, hair, clothes, props or colours: a reference image and a fixed
+   description block are attached automatically at generation time, and any
+   description you add can only contradict them. If none are listed, do not
+   invent a recurring person — use silhouettes or an anonymous figure
+   described fresh each time.
+   Characters whose look changes during the story have one id per stage (the
+   cast list says when each stage applies) — use the id of the right stage.
 3. **Vary shot size and angle hard** between consecutive scenes. Open every
    image prompt with the shot itself — `Extreme close-up of…`, `Wide shot
    of…`, `Top-down view of…`, `Over-the-shoulder shot of…`, `Low angle looking

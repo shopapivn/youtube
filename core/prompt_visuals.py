@@ -29,10 +29,14 @@ phong cách mà tab Tự động dùng. Phần dựng chỉ dẫn từ một b�
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 __all__ = [
+    "DUOI_CHAN_DUNG", "DUOI_BOI_CANH", "goc_cua_id", "LOI_NHAC_THIET_KE_LAI", "loi_nhac_thiet_ke_lai",
+    "doi_thiet_ke_nhan_vat",
     "ENGINE", "MO_HINH", "NGON_NGU", "MA_MODEL_NGHE", "MAU_HINH",
     "KHOA_CHI_DAN", "PhongCach", "chi_dan_tu_bo", "liet_ke_phong_cach",
     "LOI_NHAC_XAY_PHONG_CACH", "chi_dan_tu_tra_loi_ai",
@@ -582,3 +586,85 @@ def tom_tat_dan(nhan_vat: Sequence[Mapping[str, Any]]) -> str:
         cid = str(c.get("id") or "").strip() or "?"
         phan.append("{0}{1}".format(cid, " ({0})".format(nhan) if nhan else ""))
     return "Dàn nhân vật giữ xuyên suốt: " + ", ".join(phan)
+
+DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single figure "
+                   "shown once (never two versions or a before/after side by side), "
+                   "wearing the outfit of its FIRST appearance in the story, standing, "
+                   "arms relaxed at sides, neutral expression, gazing straight ahead, "
+                   "centered on a plain pure white background, 16:9 canvas, no "
+                   "text, no letters, no watermark")
+#: "Ngang tam mat, thay mat dat": do 25/08/2026 canh 72/74 — tham chieu lau dai
+#: chup tu xa tren cao, mo hinh dan xe ngua len noc tuong thanh va ve ca nha to
+#: bang cong. Anh thiet lap phai la cho NHAN VAT SE DUNG, nhin tu tam mat nguoi.
+DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, seen from "
+                  "human eye level standing on the ground of that place, the ground "
+                  "(floor, path, grass, bank) clearly visible across the lower third "
+                  "so characters can later stand on it at correct scale, centered, "
+                  "16:9 composition, no text, no letters, no watermark")
+
+
+def goc_cua_id(i: str) -> str:
+    """`nv4b` -> `nv4` (id goc cua giai doan); id thuong tra ve chinh no."""
+    m = re.match(r"^(nv\d+)[a-z]$", str(i or ""))
+    return m.group(1) if m else str(i or "")
+
+
+#: Thiet ke nhan vat nam o MOT cho (dan). Canh chi goi id; khoi khoa do ma chen
+#: mo ta. Nen doi thiet ke = sua dan + chen lai khoi khoa cua moi canh — khong
+#: sua tay tung canh. Chu du an 25/08/2026: *"cho api de xay prompt khong nen
+#: cung ma phai chinh duoc nguyen ly… se co nhieu cau chuyen co tich"*.
+LOI_NHAC_THIET_KE_LAI = """The image generator's safety filter keeps REJECTING the reference portrait of this
+character, so its design must change. Role in the story: {vai}. Current description:
+{mo_ta}
+{ly_do}
+Redesign it: keep the same species, age, body type and face traits and the same role; change the
+signature outfit and props to a fresh, simple, family-friendly look that does NOT resemble any
+famous copyrighted character (no feathered musketeer hat + boots on a cat, no red shorts on a
+mouse, no blue hedgehog…), no weapons, nothing revealing. One or two signature colours, one
+signature prop. Keep the art style words that are already in the description.
+Return JSON only: {{"english_prompt": "<new fixed appearance, one paragraph, no pose>"}}"""
+
+
+def loi_nhac_thiet_ke_lai(nhan_vat: Mapping[str, Any], ly_do: str = "") -> str:
+    return LOI_NHAC_THIET_KE_LAI.format(
+        vai=nhan_vat.get("role") or nhan_vat.get("name") or "character",
+        mo_ta=str(nhan_vat.get("english_prompt") or ""),
+        ly_do=("Rejection reason: " + str(ly_do).strip()[:200]) if str(ly_do or "").strip() else "")
+
+
+def doi_thiet_ke_nhan_vat(scenes, characters, ma_id: str, english_prompt_moi: str,
+                          duoi_style: str = "") -> int:
+    """Doi thiet ke MOT nhan vat (ca cac giai doan cua no) va chen lai khoi khoa moi canh.
+
+    Tra ve so canh da cap nhat. `english_prompt` cua giai doan k giu phan
+    "outfit at this stage" cu neu co — thiet ke moi thay phan mat/than, giai
+    doan van giu do rieng.
+    """
+    moi = str(english_prompt_moi or "").strip().rstrip(".")
+    if not moi:
+        return 0
+    goc = goc_cua_id(ma_id)
+    da_doi = []
+    for c in characters:
+        if goc_cua_id(c["id"]) != goc:
+            continue
+        phan = str(c.get("english_prompt") or "").split("; outfit at this stage:")
+        c["english_prompt"] = moi + ("; outfit at this stage:" + phan[1] if len(phan) > 1 else "")
+        if c.get("sheet_prompt") is not None:
+            c["sheet_prompt"] = c["english_prompt"] + DUOI_CHAN_DUNG + duoi_style
+        da_doi.append(c)
+    if not da_doi:
+        return 0
+    dan = {c["id"]: c for c in characters}
+    n = 0
+    for s in scenes:
+        chu = str(s.get("img_prompt") or "")
+        cu = chu
+        for c in da_doi:
+            chu = re.sub(r"(reference image \d+ = %s, the [^:\n]+: )[^\n]*" % re.escape(c["id"]),
+                         lambda mm, c=c: mm.group(1) + c["english_prompt"], chu)
+        if chu != cu:
+            s["img_prompt"] = chu
+            n += 1
+    del dan
+    return n
