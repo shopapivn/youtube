@@ -241,7 +241,12 @@ narrated video. Read the whole narration transcript below and decide:
    "outfit": "<clothes and props at that stage>"}}`; the first stage is the
    look at the START. Then `english_prompt` describes only face, body and
    fur/skin (no clothes) — every stage becomes its own reference image with the
-   same face. Characters that never change have no `stages`. {fixed_rule}
+   same face. Characters that never change have no `stages`.
+   Never copy the signature look of a famous copyrighted character (a cat in a
+   feathered musketeer hat and tall boots, a mouse in red shorts, a blue
+   hedgehog…): image generators reject it. Invent a fresh, simple look instead
+   (a beret, a scarf, a small vest, plain boots) and keep it for the whole
+   video. {fixed_rule}
    Only a pure landscape/abstract video has an empty `characters` list — do NOT
    invent a person there, and do NOT drop a character the story uses.
 2. The LOCATIONS — every distinct place the story visits: a cottage, a river
