@@ -8,7 +8,7 @@ from core.auto import CHO, XONG, dat_lam_lai, moi_luot
 def _luot(tmp_path):
     luot = moi_luot(str(tmp_path), "k", "0001", {"link": "x"})
     os.makedirs(luot.thu_muc, exist_ok=True)
-    for t in ("1-kich-ban.txt", "1-kich-ban-the.txt", "1-nhap-2.txt", "1-ban-A.txt", "1-seo.txt",
+    for t in ("1-kich-ban.txt", "1-kich-ban-the.txt", "1-nhap-2.txt", "1-ban-A.txt", "1-cham-diem.txt", "1-seo.txt",
               "2-giong-doc.mp3", "3-phu-de.srt", "4-canh.json", "4-canh-dan.json", "8-video.mp4"):
         open(os.path.join(luot.thu_muc, t), "w").write("cu")
     os.makedirs(os.path.join(luot.thu_muc, "2-doan")); os.makedirs(os.path.join(luot.thu_muc, "5-anh"))
@@ -24,7 +24,7 @@ def test_lam_lai_kich_ban_cat_ca_chuoi_sau(tmp_path):
     doi = dat_lam_lai(luot, "kich-ban")
     assert "kich-ban" in doi and "giong-doc" in doi and luot.tt("kich-ban").trang_thai == CHO
     d = luot.thu_muc
-    for t in ("1-kich-ban.txt", "1-kich-ban-the.txt", "1-nhap-2.txt", "1-ban-A.txt", "1-seo.txt",
+    for t in ("1-kich-ban.txt", "1-kich-ban-the.txt", "1-nhap-2.txt", "1-ban-A.txt", "1-cham-diem.txt", "1-seo.txt",
               "2-giong-doc.mp3", "2-doan", "3-phu-de.srt", "4-canh.json", "4-canh-dan.json", "8-video.mp4"):
         assert not os.path.exists(os.path.join(d, t)), t
     kho = os.path.join(d, "_lam-lai"); assert os.path.isdir(kho)

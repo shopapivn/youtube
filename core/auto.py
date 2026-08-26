@@ -362,7 +362,7 @@ def dat_lam_lai(luot: LuotChay, ma: str, *, ca_sau: bool = True) -> List[str]:
 #: lời nhắc viết, bấm làm lại kịch bản, tool trả đúng bài cũ 4.483 ký tự rồi
 #: đem đi đọc). Ảnh/clip/bìa KHÔNG nằm đây: luật của chúng là chỉ làm phần thiếu.
 _KET_QUA_CAT = {
-    "kich-ban": ("1-kich-ban*.txt", "1-nhap-*.txt", "1-ban-*.txt", "1-seo.txt", "1-tieu-de.txt"),
+    "kich-ban": ("1-kich-ban*.txt", "1-nhap-*.txt", "1-ban-*.txt", "1-cham-diem.txt", "1-seo.txt", "1-tieu-de.txt"),
     "giong-doc": ("2-giong-doc*.mp3", "2-giong-doc.mp3.txt", "2-doan"),
     "phu-de": ("3-phu-de.srt",),
     "bang-canh": ("4-canh.json", "4-canh.xlsx", "4-canh-dan.json", "4-boi-canh.json",
