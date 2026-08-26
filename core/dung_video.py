@@ -138,6 +138,10 @@ class CaiDatDung:
     am_luong_nhac: float = AM_LUONG_NHAC
     thu_muc_ra: str = ""
     tang_toc_gpu: bool = False  # bật thì dùng GPU encode (nhanh hơn, chất lượng hơi kém)
+    #: Thư mục cài tool — cần để đọc kết quả tự kiểm (`workspace/`). Để trống
+    #: thì đọc từ thư mục đang đứng, và đó là chỗ đã sai một lần: tool chạy từ
+    #: lối tắt trên Desktop thì "thư mục đang đứng" không phải chỗ cài.
+    goc: str = ""
 
 
 def tim_ffmpeg() -> str:
@@ -824,16 +828,77 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
 
 
 def _tham_so_video(cai: CaiDatDung) -> List[str]:
-    """Tham số `-c:v` + preset cho tab Dựng video, theo lựa chọn tăng tốc GPU."""
-    if getattr(cai, "tang_toc_gpu", False):
-        try:
-            from core.phan_cung import doc_ket_qua
-            pc = doc_ket_qua(".")
-            if pc and pc.gpu_nvidia and "h264_nvenc" in pc.ffmpeg_encoders:
-                return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20",
-                        "-pix_fmt", "yuv420p"]
-        except Exception:  # noqa: BLE001 — dò hỏng thì lui về CPU
-            pass
+    """Tham số `-c:v` + preset cho tab Dựng video, theo lựa chọn tăng tốc GPU.
+
+    Hỏi **bài tự kiểm** trước (`core/tu_kiem_dung.py`) rồi mới tới bảng khảo
+    sát phần cứng: bảng khảo sát chỉ đọc tên encoder, mà `h264_nvenc` có tên
+    trên mọi bản FFmpeg dựng cho Windows kể cả máy không có card nào. Bài tự
+    kiểm thì đã **encode thật một lượt** rồi mới trả lời.
+    """
+    if getattr(cai, "tang_toc_gpu", False) and _gpu_dung_duoc(getattr(cai, "goc", "")):
+        return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20",
+                "-pix_fmt", "yuv420p"]
     # Mặc định an toàn: CPU
     return ["-c:v", "libx264", "-preset", "medium", "-crf", "20",
             "-pix_fmt", "yuv420p"]
+
+
+def _gpu_dung_duoc(goc: str) -> bool:
+    goc = goc or "."
+    try:
+        from .tu_kiem_dung import doc_ket_qua as doc_kiem  # noqa: PLC0415
+
+        kiem = doc_kiem(goc)
+        if kiem is not None:
+            return bool(kiem.gpu_dung_duoc)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from .phan_cung import doc_ket_qua  # noqa: PLC0415
+
+        pc = doc_ket_qua(goc)
+        return bool(pc and pc.gpu_nvidia and "h264_nvenc" in pc.ffmpeg_encoders)
+    except Exception:  # noqa: BLE001 — dò hỏng thì lui về CPU
+        return False
+
+
+def phuong_an_dung(cai: CaiDatDung) -> List[Tuple[str, CaiDatDung]]:
+    """Các nấc dựng, từ đủ nhất tới trơ nhất. `(lý do lui, cài đặt)`.
+
+    ═══ MÁY NÀO CŨNG PHẢI RA ĐƯỢC VIDEO ═══
+
+    Chủ dự án, 26/08/2026: *"có máy có gpu có máy có cpu... phải có logic gì để
+    đảm bảo máy cài xong phải chạy được edit"*.
+
+    Ba thứ hay chết trên máy khách, và cả ba đều **không đáng để mất cả video**:
+
+    * card NVIDIA có tên trong FFmpeg nhưng driver không encode nổi;
+    * bản FFmpeg thiếu libass nên không đốt được phụ đề;
+    * bộ lọc trộn nhạc thiếu trên bản FFmpeg rút gọn.
+
+    Trước đây hỏng cái nào cũng là hỏng cả lượt: khách đã trả tiền cho giọng
+    đọc và ảnh rồi nhận về một dòng "LỖI". Giờ hỏng thì **bỏ đúng cái hỏng, giữ
+    phần còn lại**, và nói thẳng đã bỏ cái gì — video thiếu nhạc nền vẫn là
+    video đăng được, còn không có video thì không.
+
+    Thứ tự bỏ: GPU trước (bỏ đi chỉ chậm hơn, không mất gì), rồi nhạc nền, rồi
+    phụ đề — phụ đề bỏ sau cùng vì nó là thứ người xem thấy.
+    """
+    from dataclasses import replace as _thay  # noqa: PLC0415
+
+    ra: List[Tuple[str, CaiDatDung]] = [("", cai)]
+    dang = cai
+    if getattr(cai, "tang_toc_gpu", False):
+        dang = _thay(dang, tang_toc_gpu=False)
+        ra.append(("card NVIDIA trên máy này không dựng được — dựng lại bằng CPU, "
+                   "chậm hơn nhưng chất lượng không kém", dang))
+    if cai.nhac_nen:
+        dang = _thay(dang, nhac_nen=False)
+        ra.append(("bản FFmpeg trên máy này không trộn được nhạc nền — dựng "
+                   "video không có nhạc", dang))
+    if cai.phu_de:
+        dang = _thay(dang, phu_de=False)
+        ra.append(("bản FFmpeg trên máy này không chèn được phụ đề vào hình — "
+                   "dựng video không có phụ đề, file .srt vẫn còn để bạn tải "
+                   "lên YouTube riêng", dang))
+    return ra

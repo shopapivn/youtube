@@ -392,6 +392,26 @@ echo   - Khao sat phan cung...
 if errorlevel 1 (
   echo   - Khao sat phan cung that bai. Tool van chay duoc, chi dung che do CPU.
 )
+REM --- Tu kiem khau dung video ----------------------------------------------
+REM Khao sat o tren chi DOC TEN encoder trong "ffmpeg -encoders". Cai ten
+REM h264_nvenc co mat tren MOI ban FFmpeg dung cho Windows, ke ca may khong co
+REM card NVIDIA nao - nen doc ten khong chung minh duoc gi. Buoc nay DUNG THAT
+REM mot video hai giay bang dung duong ma tab Dung video se di. Mat vai giay,
+REM chay hoan toan tren may, khong ton tien.
+echo   - Thu dung mot video hai giay...
+%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.tu_kiem_dung import kiem_va_ghi; k = kiem_va_ghi('.'); print('     dung duoc:', k.chay_duoc, '- phu de:', k.dot_phu_de, '- nhac nen:', k.tron_nhac, '- GPU:', k.gpu_dung_duoc, '- moi phut video 1080p mat:', k.giay_moi_phut, 'giay'); sys.exit(0 if k.chay_duoc else 1)"
+if errorlevel 1 (
+  echo.
+  echo   !!! MAY NAY CHUA DUNG DUOC VIDEO.
+  echo.
+  echo   Cac tab khac van dung binh thuong, rieng tab Dung video se bao loi.
+  echo   Thuong la do ban FFmpeg tren may thieu bo ma hoa. Cach chua:
+  echo     1^) Go FFmpeg dang co tren may ra khoi PATH, roi chay lai SETUP.bat
+  echo        - tool se dung ban di kem ^(imageio-ffmpeg^).
+  echo     2^) Hoac tai FFmpeg ban day du tu https://ffmpeg.org roi cai lai.
+  echo   Trong tool: tab Dung video -^> Tuy chon -^> "Kiem tra may" de thu lai.
+  echo.
+)
 echo.
 
 REM --- [5/5] Thu mo tool that ------------------------------------------------

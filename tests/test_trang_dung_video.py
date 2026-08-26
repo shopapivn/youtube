@@ -166,6 +166,78 @@ class TestThemTay:
         assert [d.ten for d in t._du_an] == ["video-dau-tien"]
 
 
+def _kiem_gia(goc, *, gpu=True):
+    """Ghi sẵn kết quả tự kiểm, như thể SETUP vừa chạy xong trên máy này."""
+    import json
+
+    duong = os.path.join(goc, "workspace", "kiem-dung-video.json")
+    os.makedirs(os.path.dirname(duong), exist_ok=True)
+    with open(duong, "w", encoding="utf-8") as tep:
+        json.dump({"ffmpeg": "ffmpeg-gia", "chay_duoc": True, "dot_phu_de": True,
+                   "tron_nhac": True, "gpu_dung_duoc": gpu,
+                   "giay_moi_phut": 20.0, "loi": [], "luc_do": 0.0}, tep)
+
+
+class TestLuiNacKhiHong:
+    """Máy hỏng một thứ thì bỏ thứ đó, khách vẫn có video."""
+
+    def _du_an_du(self, goc):
+        d = os.path.join(goc, "PROJECTS", "video-dau-tien")
+        return d
+
+    def test_GPU_hong_thi_dung_lai_bang_CPU(self, trang, monkeypatch):
+        """Bài tự kiểm bảo card chạy được, tới lúc dựng thật thì không.
+
+        Có thật: kiểm lúc cài thì card rảnh, tới lúc dựng thì driver vừa cập
+        nhật, hoặc game đang chiếm sạch bộ nhớ card.
+        """
+        t, _app, goc = trang
+        _kiem_gia(goc, gpu=True)
+        t._gpu.setEnabled(True)
+        t._gpu.setChecked(True)
+        da_chay = []
+
+        def gia(lenh):
+            da_chay.append(lenh)
+            if "h264_nvenc" in lenh:
+                return 1, "Cannot load nvcuda.dll"
+            # Giả bộ dựng xong: tạo tệp đích.
+            with open(lenh[-1], "wb") as tep:
+                tep.write(b"video gia")
+            return 0, ""
+
+        monkeypatch.setattr(t, "_chay_lenh", gia)
+        monkeypatch.setattr("ui_qt.trang_edit.doc_thoi_luong", lambda *a, **k: 6.0)
+        monkeypatch.setattr("ui_qt.trang_edit.co_ne_giong", lambda *a, **k: False)
+        t._ffmpeg = "ffmpeg-gia"
+        t._chay()
+        chu = t._log.toPlainText()
+        assert "h264_nvenc" in " ".join(da_chay[0]), "lượt đầu phải thử GPU"
+        assert "libx264" in " ".join(da_chay[1]), "lượt sau phải lui về CPU"
+        assert "dựng lại bằng CPU" in chu
+        assert "xong sau" in chu
+
+    def test_khong_dot_duoc_phu_de_thi_van_ra_video(self, trang, monkeypatch):
+        t, _app, _goc = trang
+
+        def gia(lenh):
+            if "subtitles=" in " ".join(lenh):
+                return 1, "No such filter: subtitles"
+            with open(lenh[-1], "wb") as tep:
+                tep.write(b"video gia")
+            return 0, ""
+
+        monkeypatch.setattr(t, "_chay_lenh", gia)
+        monkeypatch.setattr("ui_qt.trang_edit.doc_thoi_luong", lambda *a, **k: 6.0)
+        monkeypatch.setattr("ui_qt.trang_edit.co_ne_giong", lambda *a, **k: False)
+        t._ffmpeg = "ffmpeg-gia"
+        t._chay()
+        chu = t._log.toPlainText()
+        assert "không chèn được phụ đề" in chu
+        assert "xong sau" in chu
+        assert "Kết thúc: 1 xong, 0 lỗi" in chu
+
+
 class TestKhongTranMep:
     """Đo `minimumSizeHint` chứ không phải `sizeHint` — xem `test_bo_cuc.py`:
     trang *muốn* rộng bao nhiêu không quan trọng, miễn nó co xuống được."""

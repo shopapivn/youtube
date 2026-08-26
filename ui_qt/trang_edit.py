@@ -37,8 +37,8 @@ from PyQt5.QtGui import QColor
 
 from core.dung_video import (
     DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_bang_canh,
-    doc_thoi_luong, giay_tung_hinh, lenh_ffmpeg, phu_de_tu_txt, quet_thu_muc,
-    thoi_luong_moi_anh, tim_ffmpeg,
+    doc_thoi_luong, giay_tung_hinh, lenh_ffmpeg, phu_de_tu_txt, phuong_an_dung,
+    quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
 )
 from core.tron_tieng import co_ne_giong
 
@@ -161,10 +161,34 @@ class TrangDungVideo(QWidget):
                       "imageio-ffmpeg để dùng bản đi kèm.")
             self._nut_chay.setEnabled(False)
         self._doi_phu_de()
+        self._bao_may_yeu()
         # Quét sẵn dự án đang mở: chỉ là đọc danh sách file, không tốn tiền và
         # không gọi mạng. Bắt khách bấm "Quét lại" để thấy thứ tool tự biết chỗ
         # là thêm một bước thừa ngay ở cửa.
         self._quet_im(self._goc.value)
+
+    def _bao_may_yeu(self) -> None:
+        """Máy đã kiểm và có vấn đề thì nói ngay lúc mở tab, đừng đợi hỏng.
+
+        Chỉ đọc tệp kết quả, không chạy lại bài kiểm: mở tab mà đứng vài giây
+        là khách tưởng tool treo.
+        """
+        try:
+            from core.tu_kiem_dung import doc_ket_qua  # noqa: PLC0415
+
+            kiem = doc_ket_qua(getattr(self._app, "base_dir", "."))
+        except Exception:  # noqa: BLE001
+            return
+        if kiem is None or not self._ffmpeg:
+            return
+        if not kiem.chay_duoc:
+            self._ghi("MÁY NÀY CHƯA DỰNG ĐƯỢC VIDEO: {0}".format(kiem.tom_tat()))
+        elif not kiem.dot_phu_de or not kiem.tron_nhac:
+            self._ghi(kiem.tom_tat())
+        elif kiem.cham:
+            self._ghi("Máy bạn dựng khá chậm: mỗi phút video 1080p mất khoảng "
+                      "{0:.0f} giây. Chọn 4K sẽ lâu hơn nữa.".format(
+                          kiem.giay_moi_phut))
 
     # ── Quét ─────────────────────────────────────────────────────────────────
 
@@ -426,8 +450,62 @@ class TrangDungVideo(QWidget):
                      "nhạc nền) vào các ô trên.",
             mach_luu="Ghi đốt phụ đề và độ phân giải ở trên vào kênh."))
 
-        doc.addWidget(nut_phu("Xong", hop.accept, rong=96))
+        # ═══ MÁY NÀY CÓ DỰNG NỔI KHÔNG — THỬ THẬT MỘT LẦN ═══
+        #
+        # Chủ dự án, 26/08/2026: *"có máy có gpu có máy có cpu... phải có logic
+        # gì để đảm bảo máy cài xong phải chạy được edit"*. SETUP chạy bài này
+        # sau khi cài; nút đây để khách tự chạy lại khi nghi ngờ, và để câu trả
+        # lời nằm ngay chỗ họ đang đứng thay vì bắt mở lại SETUP.
+        self._nhan_kiem = nhan(self._chu_kiem(), "muted")
+        doc.addWidget(self._nhan_kiem)
+        hang_kiem = QHBoxLayout()
+        self._nut_kiem = nut_phu("Kiểm tra máy", self._kiem_may, rong=140)
+        hang_kiem.addWidget(self._nut_kiem)
+        hang_kiem.addStretch(1)
+        hang_kiem.addWidget(nut_phu("Xong", hop.accept, rong=96))
+        doc.addLayout(hang_kiem)
         return hop
+
+    # ── Máy này dựng nổi không ───────────────────────────────────────────────
+
+    def _chu_kiem(self) -> str:
+        from core.tu_kiem_dung import doc_ket_qua  # noqa: PLC0415
+
+        kiem = doc_ket_qua(getattr(self._app, "base_dir", "."))
+        if kiem is None:
+            return ("Chưa kiểm máy này lần nào. Bấm “Kiểm tra máy” — tôi dựng "
+                    "thử một video hai giây, mất vài giây, không tốn tiền.")
+        return kiem.tom_tat()
+
+    def _kiem_may(self) -> None:
+        from core.tu_kiem_dung import kiem_va_ghi  # noqa: PLC0415
+
+        goc = getattr(self._app, "base_dir", ".")
+        self._nut_kiem.setEnabled(False)
+        self._nhan_kiem.setText("Đang dựng thử một video hai giây…")
+        self._ghi("Đang kiểm máy: dựng thử một video hai giây.")
+
+        def viec():
+            dong = []
+            ket = kiem_va_ghi(goc, on_log=dong.append)
+            return ket, dong
+
+        def rang(ket_qua):
+            ket, dong = ket_qua
+            for d in dong:
+                self._ghi(d.strip())
+            self._nhan_kiem.setText(ket.tom_tat())
+            self._ghi(ket.tom_tat())
+            self._nut_kiem.setEnabled(True)
+            self._gpu.setEnabled(bool(ket.gpu_dung_duoc))
+            if not ket.gpu_dung_duoc:
+                self._gpu.setChecked(False)
+
+        def hong(loi):
+            self._nut_kiem.setEnabled(True)
+            self._nhan_kiem.setText("Kiểm hỏng: {0}".format(loi))
+
+        self._app.run_bg(viec, on_ok=rang, on_err=hong)
 
     def _nap_tu_kenh(self, ma: str) -> None:
         from core.dong_bo_kenh import doc_dung  # noqa: PLC0415
@@ -445,10 +523,25 @@ class TrangDungVideo(QWidget):
                  do_phan_giai=self._do_phan_giai.currentText())
 
     def _may_co_gpu(self) -> bool:
-        """Máy này có card NVIDIA dùng được cho video không (đọc từ SETUP)."""
+        """Máy này có card NVIDIA **dựng được thật** không.
+
+        Hỏi bài tự kiểm trước (`core/tu_kiem_dung.py`) — nó đã encode thật một
+        lượt rồi mới trả lời. Chưa kiểm bao giờ thì đành tin bảng khảo sát của
+        SETUP, và bảng ấy chỉ đọc tên encoder: `h264_nvenc` có tên trên mọi bản
+        FFmpeg dựng cho Windows, kể cả máy không có card nào. Tin nhầm thì chỉ
+        tốn một lượt dựng hỏng rồi tự lui về CPU (`phuong_an_dung`).
+        """
+        base = getattr(self._app, "base_dir", ".")
+        try:
+            from core.tu_kiem_dung import doc_ket_qua as doc_kiem  # noqa: PLC0415
+
+            kiem = doc_kiem(base)
+            if kiem is not None:
+                return bool(kiem.gpu_dung_duoc)
+        except Exception:  # noqa: BLE001
+            pass
         try:
             from core.phan_cung import doc_ket_qua
-            base = getattr(self._app, "base_dir", ".")
             pc = doc_ket_qua(base)
             return bool(pc and pc.gpu_nvidia and "h264_nvenc" in pc.ffmpeg_encoders)
         except Exception:  # noqa: BLE001
@@ -475,7 +568,8 @@ class TrangDungVideo(QWidget):
             phu_de=self._phu_de.isChecked(), co_chu=self._co_chu.value(),
             mau_chu=self._mau.currentText(), vi_tri=self._vi_tri.currentText(),
             nhac_nen=self._nhac.isChecked(), thu_muc_ra=self._ra.value,
-            tang_toc_gpu=self._gpu.isChecked())
+            tang_toc_gpu=self._gpu.isChecked(),
+            goc=getattr(self._app, "base_dir", ""))
 
     def _chay(self) -> None:
         if self._dang_chay:
@@ -546,21 +640,36 @@ class TrangDungVideo(QWidget):
                                     "giây hình cho {3:.0f} giây tiếng.".format(
                                         du_an.ten, len(tung_canh),
                                         sum(tung_canh), giay))
-                        lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich,
-                                           ne_giong=ne, giay=tung_canh)
-                    else:
-                        if du_an.bang_canh:
-                            dong.append("{0}: bảng cảnh không khớp với số "
-                                        "ảnh/clip đang có — chia đều thời "
-                                        "lượng.".format(du_an.ten))
-                        moi_anh = thoi_luong_moi_anh(giay, len(du_an.hinh))
-                        lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich,
-                                           giay_moi_anh=moi_anh, ne_giong=ne)
+                    elif du_an.bang_canh:
+                        dong.append("{0}: bảng cảnh không khớp với số ảnh/clip "
+                                    "đang có — chia đều thời lượng.".format(du_an.ten))
+                    moi_anh = thoi_luong_moi_anh(giay, len(du_an.hinh))
+                    lam = lambda c: (  # noqa: E731 — cùng một lệnh, khác cài đặt
+                        lenh_ffmpeg(du_an, c, ffmpeg, dich, ne_giong=ne,
+                                    giay=tung_canh)
+                        if tung_canh else
+                        lenh_ffmpeg(du_an, c, ffmpeg, dich,
+                                    giay_moi_anh=moi_anh, ne_giong=ne))
+                    lam(cai)  # soi trước: thiếu file thì ném ngay, khỏi chạy
                 except ValueError as van_de:
                     dong.append("{0}: {1}".format(du_an.ten, van_de))
                     loi += 1
                     continue
-                ma, loi_chu = self._chay_lenh(lenh)
+                # ═══ HỎNG MỘT THỨ THÌ BỎ THỨ ĐÓ, ĐỪNG BỎ CẢ VIDEO ═══
+                #
+                # Card NVIDIA hỏng driver, bản FFmpeg thiếu libass, thiếu bộ
+                # lọc trộn nhạc — cả ba đều làm FFmpeg chết ngay, và trước đây
+                # là mất cả lượt. Video thiếu nhạc nền vẫn đăng được; không có
+                # video thì không.
+                ma, loi_chu = 1, ""
+                for vi_sao, cai_thu in phuong_an_dung(cai):
+                    if self._xin_dung.is_set():
+                        break
+                    if vi_sao:
+                        dong.append("{0}: {1}.".format(du_an.ten, vi_sao))
+                    ma, loi_chu = self._chay_lenh(lam(cai_thu))
+                    if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
+                        break
                 if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
                     xong += 1
                     dong.append("{0}: xong sau {1:.0f} giây → {2}".format(
@@ -569,6 +678,8 @@ class TrangDungVideo(QWidget):
                     loi += 1
                     dong.append("{0}: LỖI — {1}".format(
                         du_an.ten, (loi_chu or "FFmpeg dừng bất thường").strip()[-300:]))
+                    dong.append("   Bấm “Tuỳ chọn” → “Kiểm tra máy” để biết máy "
+                                "bạn còn thiếu gì.")
             return xong, loi, dong
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
