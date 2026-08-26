@@ -1725,7 +1725,11 @@ def _gan_reference_files(scenes, characters, locations=()) -> None:
 #: — vo nghia voi mo hinh ve — va moi canh AI ta con meo mot kieu. Mo hinh anh
 #: khong biet anh tham chieu nao la ai, nen no ve lai theo chu. Khoa bang ma:
 #: noi ro "reference image 1 = nv4, the cat: <mo ta nguyen van>" va bat ve y het.
-_KHOA_NHAN_VAT = ("Every character listed above must look EXACTLY like its reference "
+_KHOA_NHAN_VAT = ("Take every character's look ONLY from its reference image — face, eyes, "
+                  "head and body proportions, SIZE relative to the others, fur or skin, "
+                  "outfit and props. Do NOT invent or infer any of these from the words of "
+                  "this prompt; the words say only WHO is in the picture and WHAT they do. "
+                  "Every character listed above must look EXACTLY like its reference "
                   "image: the same face and eyes, the same head and body proportions, "
                   "the same fur or skin, the same outfit and props (hat, boots, bag, "
                   "crown, beard…), the same pencil-sketch line style. Do NOT redesign, "
@@ -1784,12 +1788,20 @@ def _khoa_video(vid: str, ids, dan: Mapping[str, Any]) -> str:
 
 
 def _mo_ta_tham_chieu(i: str, dan: Mapping[str, Any], noi: Mapping[str, Any]) -> str:
+    """Mot dong trong khoi khoa: CHI ten + vai, KHONG ta ngoai hinh.
+
+    Chu du an 26/08/2026: *"khong mo ta chi tiet ma chi co trong prompt dung media
+    id cua anh nhan vat do, vi neu mo ta chi tiet thi no se bi sai"*. Do cung ngay
+    (mau canh 5-12 hoathinh-3d): moi lan ve lai, may doc cau ta roi tuong tuong ra
+    mot con meo khac - luc tron map, luc cao gay. Chu va anh danh nhau thi may
+    nghe chu. Bo chu di thi no bam anh. Loi nhac CLIP da bo ta tu 25/08 (3,50 ->
+    3,67); day la nua con lai.
+    """
     if i in dan:
         c = dan[i]
-        return "{0}, the {1}: {2}".format(i, c.get("role") or c.get("name") or "character",
-                                          c.get("english_prompt") or "")
+        return "{0}, the {1}".format(i, c.get("role") or c.get("name") or "character")
     l = noi[i]
-    return "{0}, {1}: {2}".format(i, l.get("name") or "place", l.get("english_prompt") or "")
+    return "{0}, {1}".format(i, l.get("name") or "place")
 
 
 def _khoa_nhan_dang(scenes, characters, locations=()) -> None:

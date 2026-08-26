@@ -288,10 +288,12 @@ def _cu_may(tmp_path, lam_anh_hong=None, lam_clip_hong=None):
         nhat["anh"].append((os.path.basename(tep), [os.path.basename(r) for r in refs], prompt[:40]))
         open(tep, "wb").write(b"anh")
 
-    def lam_clip(c, anh, tho):
+    def lam_clip(c, anh, tho, anh_cuoi=None):
         if lam_clip_hong and len(nhat["clip"]) + 1 in lam_clip_hong:
             raise RuntimeError("clip hỏng")
-        nhat["clip"].append((os.path.basename(tho), c["video_prompt"])); open(tho, "wb").write(b"tho")
+        nhat["clip"].append((os.path.basename(tho), c["video_prompt"], os.path.basename(anh),
+                             os.path.basename(anh_cuoi) if anh_cuoi else None))
+        open(tho, "wb").write(b"tho")
 
     def cat_tu(nguon, dich, bat_dau, giay):
         nhat["cat"].append((os.path.basename(dich), round(bat_dau, 2), round(giay, 2))); open(dich, "wb").write(b"cut")
@@ -339,7 +341,8 @@ class TestCuMayDai:
             assert "no stripes" in dau and "background" in dau
         # đoạn diễn tiếp: máy ĐỨNG YÊN (bốn đoạn trôi nhẹ cộng lại thành zoom)
         assert "locked off" in nc.DAU_CLIP_NOI_TIEP_DAI and "does not move" in nc.DAU_CLIP_NOI_TIEP_DAI
-        assert "SIZE relative to" in nc.NEO_KHUNG
+        assert "SIZE relative to" not in "" and "nobody changes size" in nc.DUOI_KHUNG_CUOI
+        assert "camera has NOT moved" in nc.DUOI_KHUNG_CUOI
 
     def test_bo_chi_dao_may(self):
         assert nc.bo_chi_dao_may("framed over nv2's shoulder, nv1 recoils sharply, camera eases in slightly") == "nv1 recoils sharply"
@@ -347,45 +350,38 @@ class TestCuMayDai:
         assert nc.bo_chi_dao_may("Close-up of nv2 bowing, no camera move") == "nv2 bowing"
         assert nc.bo_chi_dao_may("nv1 laughs") == "nv1 laughs"
 
-    def test_prompt_neo_khung(self):
-        goc = "Medium shot of nv1 running at loc1, 3D style\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv1"
-        p = nc.prompt_neo_khung(goc)
-        assert p.startswith(nc.NEO_KHUNG) and "running" not in p and "reference image 1 = nv1" in p
-
     def test_mot_cu_may_hai_doan_roi_cat_tung_canh(self, tmp_path):
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
         canh = [_c(1, "loc1", giay=4.6), _c(2, "loc1", giay=3.2), _c(3, "loc1", giay=5.0)]
         assert ct.chay(canh) == 3
-        assert [x[0] for x in nhat["anh"]] == ["1.png", "1-1.png"]
+        # 12,8 s -> 2 đoạn; 3 khung: mở cú máy, cuối đoạn 0 (= đầu đoạn 1), cuối đoạn 1
+        assert [x[0] for x in nhat["anh"]] == ["1.png", "1-1.png", "1-2.png"]
         assert nhat["anh"][0] == ("1.png", ["nv1.png", "loc1.png"], nc.prompt_noi_canh(canh[0]["img_prompt"], False)[:40])
-        assert [x[0] for x in nhat["clip"]] == ["1-0.mp4", "1-1.mp4"]
+        # khung cuối vẽ kèm CHÍNH khung đầu của đoạn, lời nhắc "cùng cú máy"
+        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1.png"]
+        assert nhat["anh"][2][1] == ["nv1.png", "loc1.png", "1-1.png"]
+        assert nhat["anh"][1][2] == nc.prompt_khung_cuoi(canh[1]["img_prompt"])[:40]
+        # clip ghim hai đầu
+        assert [(x[0], x[2], x[3]) for x in nhat["clip"]] == [
+            ("1-0.mp4", "1.png", "1-1.png"), ("1-1.mp4", "1-1.png", "1-2.png")]
         assert nhat["clip"][0][1].startswith(nc.DAU_CLIP_KHUNG_DAU) and nhat["clip"][1][1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI)
         assert nhat["cat"] == [("1-0-cat.mp4", 0.0, 6.4), ("1-1-cat.mp4", 0.0, 6.4),
                                ("1.mp4", 0.0, 4.6), ("2.mp4", 4.6, 3.2), ("3.mp4", 7.8, 5.0)]
         assert nhat["noi"] == [["1-0-cat.mp4", "1-1-cat.mp4"]] and (clip_d / "_doan" / "1.mp4").exists()
-        assert nhat["anh"][1][2] == nc.NEO_KHUNG[:40]   # đoạn 1: ảnh neo vẽ lại khung cuối đoạn 0
         # chạy lại: không làm gì thêm
         n = {k: len(v) for k, v in nhat.items() if k != "ghi"}
         assert ct.chay(canh) == 3 and {k: len(v) for k, v in nhat.items() if k != "ghi"} == n
 
-    def test_neo_lai_moi_doan(self, tmp_path):
-        """Mặc định TOI_DA_NOI_TIEP_DAI = 0: đoạn nào cũng neo lại bằng ảnh có tham chiếu,
-        nhưng lời nhắc clip vẫn là "diễn tiếp, máy đứng yên" từ đoạn 2 trở đi."""
+    def test_moi_doan_deu_co_hai_khung(self, tmp_path):
+        """Khung cuối đoạn k CHÍNH LÀ khung đầu đoạn k+1 — vẽ một lần, dùng hai lần."""
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
-        canh = [_c(i, "loc1", giay=8.0) for i in range(1, 5)]   # 32 s → 4 đoạn
+        canh = [_c(i, "loc1", giay=8.0) for i in range(1, 5)]   # 32 s -> 4 đoạn
         assert ct.chay(canh) == 4
-        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-1.png", "1-2.png", "1-3.png"]
-        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1-0-cuoi.png"] and nhat["anh"][1][2] == nc.NEO_KHUNG[:40]
+        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-1.png", "1-2.png", "1-3.png", "1-4.png"]
+        assert [(x[2], x[3]) for x in nhat["clip"]] == [
+            ("1.png", "1-1.png"), ("1-1.png", "1-2.png"), ("1-2.png", "1-3.png"), ("1-3.png", "1-4.png")]
         assert nhat["clip"][0][1].startswith(nc.DAU_CLIP_KHUNG_DAU)
         assert all(x[1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI) for x in nhat["clip"][1:])
-
-    def test_noi_thang_khung_cuoi_khi_bat_lai(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(nc, "TOI_DA_NOI_TIEP_DAI", 1)
-        ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
-        canh = [_c(i, "loc1", giay=8.0) for i in range(1, 5)]
-        assert ct.chay(canh) == 4
-        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-2.png"]   # 1-1, 1-3 chép thẳng
-        assert (clip_d / "_doan" / "1-1.png").read_bytes() == b"khung"
 
     def test_clip_hong_giua_chung_thi_cat_phan_da_co(self, tmp_path):
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path, lam_clip_hong={2})
@@ -393,3 +389,9 @@ class TestCuMayDai:
         assert ct.chay(canh) == 1
         assert ct.loi == ["clip đoạn 1-1"] and nhat["noi"] == [["1-0-cat.mp4"]]
         assert [x[0] for x in nhat["cat"]] == ["1-0-cat.mp4", "1.mp4"]
+
+    def test_anh_khung_cuoi_hong_thi_dung_chuoi(self, tmp_path):
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path, lam_anh_hong={2})
+        canh = [_c(1, "loc1", giay=6.0), _c(2, "loc1", giay=6.0)]
+        assert ct.chay(canh) == 0
+        assert ct.loi == ["ảnh đoạn 1-0"] and nhat["clip"] == []

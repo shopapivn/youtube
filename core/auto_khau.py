@@ -3158,6 +3158,42 @@ def sua_loi_nhac_canh(luot: LuotChay, so_canh: int, *,
     raise RuntimeError("không thấy cảnh {0} trong bảng".format(so_canh))
 
 
+def don_canh_de_lam_lai(luot: LuotChay, cac_canh: Sequence[int], *,
+                        ca_anh: bool) -> Tuple[int, int]:
+    """Xoá tệp ảnh/clip của **đúng những cảnh này**, để hai khâu ấy làm lại chúng.
+
+    Khâu ảnh và khâu clip nhìn đĩa trước: cảnh nào còn tệp thì bỏ qua. Nên "tạo
+    lại cảnh 7 và 19" không phải là chạy lại cả khâu — chỉ cần xoá tệp của hai
+    cảnh ấy, 117 cảnh kia vẫn nằm nguyên và **không trả tiền lần thứ hai**.
+
+    `ca_anh=True`: xoá cả ảnh lẫn clip. Phải xoá clip theo, vì clip lấy ảnh làm
+    khung đầu — giữ clip cũ là giữ một đoạn chuyển động của tấm ảnh không còn
+    nữa. `ca_anh=False`: giữ ảnh, chỉ dựng lại chuyển động.
+
+    Cảnh chưa từng có ảnh vẫn đưa vào danh sách được: không có tệp thì bỏ qua,
+    khâu ảnh sẽ tự làm. Xoá không được (tệp đang mở trong trình xem video) thì
+    ném `OSError` để người gọi nói ra, chứ không im lặng bỏ qua — im lặng ở đây
+    nghĩa là khâu ảnh thấy tệp cũ, bỏ qua cảnh, và người dùng ngồi đợi một tấm
+    ảnh không bao giờ đổi.
+    """
+    thu_muc_anh = os.path.join(luot.thu_muc, "5-anh")
+    thu_muc_clip = os.path.join(luot.thu_muc, "6-clip")
+    xoa_anh = xoa_clip = 0
+    for so in sorted({int(s) for s in cac_canh}):
+        can = [(os.path.join(thu_muc_clip, "{0}.mp4".format(so)), "clip")]
+        if ca_anh:
+            can.append((os.path.join(thu_muc_anh, "{0}.png".format(so)), "anh"))
+        for duong, loai in can:
+            if not os.path.isfile(duong):
+                continue
+            os.remove(duong)
+            if loai == "anh":
+                xoa_anh += 1
+            else:
+                xoa_clip += 1
+    return xoa_anh, xoa_clip
+
+
 class ThamChieu:
     """Giữ URL ảnh nhân vật cho **cả mẻ song song**, và chỉ làm mới **một lần**.
 
@@ -3442,12 +3478,16 @@ def _giay_clip(bc: BoiCanh) -> int:
 
 def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
               dich: str, giay: int, so: Optional[SoTheoDoi] = None,
-              khung_dau: bool = False) -> None:
+              khung_dau: bool = False, anh_cuoi: Optional[str] = None) -> None:
     """Tạo clip cho một cảnh, tải về, mở thử bằng FFmpeg.
 
     `khung_dau=True` gửi thêm `frame_mode: start_frame`: khung hình đầu của clip
     CHÍNH LÀ ảnh (Flow "Frames"). Khoá idempotency đổi theo, vì clip cũ cùng
     prompt nhưng làm ở chế độ nguyên liệu là một sản phẩm khác.
+
+    `anh_cuoi` gửi thêm `image_url_end`: clip bị ghim CẢ HAI đầu — nó bắt đầu
+    đúng bằng `anh` và kết thúc đúng bằng `anh_cuoi`, engine chỉ làm phần chuyển
+    động ở giữa. Đo 26/08/2026: chỉ ghim một đầu thì sau 8 giây nhân vật đã đổi.
 
     Tách ra khỏi khâu clip vì giờ có **hai** nơi gọi: dây chuyền ở khâu ảnh
     (ảnh nào xong là bắn clip của nó ngay) và khâu clip (làm nốt phần còn
@@ -3481,6 +3521,7 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
     # đổi mặt giữa các cảnh. Cổng nhận URL, không nhận đường dẫn máy — xem
     # `_url_anh_canh`.
     url_anh = _url_anh_canh(bc, luot, so_canh, anh)
+    url_cuoi = _url_anh_canh(bc, luot, so_canh, anh_cuoi) if (khung_dau and anh_cuoi and os.path.exists(anh_cuoi)) else ""
 
     def goi_clip(dia_chi, hau_to=""):
         job = _tao_job(
@@ -3488,10 +3529,13 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
             prompt=c["video_prompt"], engine=bc.kenh.engine,
             duration=giay, aspect_ratio="16:9",
             image_url=dia_chi or None,
-            extra_body=({"frame_mode": "start_frame"} if khung_dau else None),
+            extra_body=(dict({"frame_mode": "start_frame"},
+                             **({"image_url_end": url_cuoi} if url_cuoi else {}))
+                        if khung_dau else None),
             idempotency_key=khoa_viec(luot, "vid", so_canh,
                                       c["video_prompt"], dia_chi,
-                                      giay) + (":kd" if khung_dau else "") + hau_to)
+                                      giay) + (":kd" if khung_dau else "")
+            + (":kc" + url_cuoi[-12:] if url_cuoi else "") + hau_to)
         return _cho_job(bc, job, ten_viec="cảnh {0}".format(so_canh), so=so)
 
     try:
@@ -4254,8 +4298,9 @@ def _khau_anh_noi_canh(bc: BoiCanh):
             _lam_anh_canh(bc, luot, c2, tep, ThamChieuCanh(bc, refs), so=so)
             _bo_clip_cu(bc, os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))
 
-        def lam_clip(c, anh, tho):
-            _lam_clip(bc, luot, c, anh, tho, giay, so=so, khung_dau=bool(bc.kenh.khung_dau))
+        def lam_clip(c, anh, tho, anh_cuoi=None):
+            _lam_clip(bc, luot, c, anh, tho, giay, so=so, khung_dau=bool(bc.kenh.khung_dau),
+                      anh_cuoi=anh_cuoi)
 
         def cat(tho, clip, giay_canh):
             from .noi_canh import bat_dau_cat  # noqa: PLC0415

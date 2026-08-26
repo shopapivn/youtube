@@ -414,9 +414,12 @@ def test_khoa_nhan_dang_noi_ten_voi_anh_tham_chieu(wb):
           {"img_prompt": "Empty road", "video_prompt": "wind", "reference_files": ""}]
     wb._khoa_nhan_dang(sc, dan, noi)
     p = sc[0]["img_prompt"]
-    assert "reference image 1 = nv4, the the cat: small cat in a plumed hat and boots" in p \
-        or "reference image 1 = nv4, the cat" in p
-    assert "reference image 2 = loc9" in p
+    # KHÔNG tả ngoại hình trong khối khoá — chỉ id + vai. Chữ và ảnh cãi nhau thì
+    # mô hình nghe chữ rồi bịa ra một nhân vật khác (chủ dự án + đo 26/08/2026).
+    assert "reference image 1 = nv4, the the cat" in p
+    assert "plumed hat" not in p and "small cat in a" not in p
+    assert "reference image 2 = loc9, The ogre's castle" in p and "stone castle" not in p
+    assert "ONLY from its reference image" in p and "Do NOT invent" in p
     assert "nv4 [reference image 1]" in p and "(see reference image 1)" in p
     assert "look EXACTLY like its reference image" in p
     assert sc[0]["video_prompt"].startswith("IDENTITY LOCK")
@@ -482,7 +485,10 @@ def test_canh_dung_id_giai_doan_thi_tham_chieu_va_khoa_theo_giai_doan(wb, yeu_ca
     assert all(c.get("sheet_prompt") for c in m["characters"]), "mỗi giai đoạn phải có prompt ảnh tham chiếu riêng"
     s = m["scenes"][0]
     assert json.loads(s["reference_files"]) == ["nv2b.png"]
-    assert "reference image 1 = nv2b" in s["img_prompt"] and "red beret" in s["img_prompt"]
+    # Trang phục của giai đoạn nằm trong ẢNH tham chiếu riêng của nó (nv2b.png),
+    # không nằm trong chữ — xem `_mo_ta_tham_chieu`.
+    assert "reference image 1 = nv2b" in s["img_prompt"] and "red beret" not in s["img_prompt"]
+    assert "red beret" in [c for c in m["characters"] if c["id"] == "nv2b"][0]["sheet_prompt"]
 
 
 # ── Kế hoạch đạo diễn có thẩm quyền: cảnh phải dùng đúng bối cảnh + nhân vật ─

@@ -53,7 +53,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
            "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO", "CuMayDai", "chia_doan", "prompt_doan", "hanh_dong_clip",
-           "prompt_neo_khung", "noi_cac_clip", "bo_chi_dao_may", "THU_MUC_DOAN", "GIAY_CLIP_VEO", "TOI_DA_NOI_TIEP_DAI"]
+           "prompt_khung_cuoi", "noi_cac_clip", "bo_chi_dao_may", "THU_MUC_DOAN", "GIAY_CLIP_VEO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -345,7 +345,7 @@ class ChuoiNoiCanh:
 
     def __init__(self, *, thu_muc_anh: str, thu_muc_clip: str, thu_muc_tham_chieu: str,
                  lam_anh: Callable[[Dict[str, Any], str, List[str], str], None],
-                 lam_clip: Callable[[Dict[str, Any], str, str], None],
+                 lam_clip: Callable[..., None],
                  cat: Callable[[str, str, float], None],
                  trich_khung: Callable[[str, str], str],
                  ghi: Callable[[str], None], kiem_dung: Callable[[], None] = lambda: None,
@@ -485,17 +485,6 @@ def chay_cac_chuoi(chuoi: Sequence[Sequence[Dict[str, Any]]], lam_chuoi: Callabl
 # một dòng chuyển động.
 GIAY_CLIP_VEO = 8.0
 THU_MUC_DOAN = "_doan"
-#: Mấy đoạn được nối THẲNG từ khung cuối (không vẽ lại) trước khi phải NEO LẠI
-#: bằng ảnh có tham chiếu.
-#:
-#: 0 = neo lại ở MỌI đoạn. Đo 26/08/2026 trên chính chuỗi cảnh 5–11 (mẫu 44 s):
-#: với 1, con mèo con to dần qua từng đoạn cho tới khi cao gần bằng cậu bé đang
-#: ngồi, màu lúc kem lúc cam, lúc mọc vằn — vì mỗi khung cuối lệch một chút,
-#: đoạn sau lại lấy chính khung lệch ấy làm chuẩn nên sai số cộng dồn. Ảnh neo
-#: vẽ lại đúng khung cuối (đo: gần như trùng khít) nhưng kéo nhân vật về đúng
-#: ảnh tham chiếu, nên neo mỗi đoạn là chặn sai số ở đúng một đoạn. Giá: thêm
-#: một ảnh (~50 ₫) mỗi 8 giây phim.
-TOI_DA_NOI_TIEP_DAI = 0
 _DAU_KHOA_VIDEO = "IDENTITY LOCK"
 _MOC_DUOI_CLIP = (", smooth 3D animated motion", ", smooth 2D", ", the background keeps its original",
                   ", no text", ", cinematic", ", soft physics")
@@ -530,16 +519,6 @@ DAU_CLIP_NOI_TIEP_DAI = (
     "The camera is locked off: it does not move, pan, tilt, zoom, orbit or drift, and the framing at the end "
     "of the clip is exactly the framing at the start. Lively, clearly visible motion from the characters the "
     "whole time, never a frozen pose. " + _KHUNG_CHUNG)
-NEO_KHUNG = (
-    "Recreate the LAST attached reference image EXACTLY — identical framing, camera distance and angle, "
-    "background, buildings, props, plants, lighting and every character's position and pose, as if it were "
-    "the very same frame. The ONLY change: restore each character to look exactly like its own reference "
-    "image — correct face, fur or skin colour (no stripes or patches that its reference does not have), "
-    "outfit, body proportions and, above all, its correct SIZE relative to the other characters and to the "
-    "scene (a small animal stays small). Add nothing, remove nothing, do not reframe, do not move anything "
-    "in the background.")
-
-
 def hanh_dong_clip(video_prompt: str):
     """(hành động + máy quay, đuôi phong cách) của một lời nhắc clip — bỏ khối IDENTITY LOCK
     ở đầu (ở chế độ khung đầu, nhân vật đã nằm trong khung; Veo cần hành động, không cần tả người)."""
@@ -613,12 +592,25 @@ def prompt_doan(doan: Dict[str, Any], noi_tiep: bool) -> str:
     return (DAU_CLIP_NOI_TIEP_DAI if noi_tiep else DAU_CLIP_KHUNG_DAU) + than + duoi
 
 
-def prompt_neo_khung(img_prompt: str) -> str:
-    """Lời nhắc ảnh NEO LẠI ở chế độ cú máy dài: bỏ hẳn phần hành động/cỡ khung (đó là việc
-    của clip), chỉ 'vẽ lại đúng khung cuối' + khối khoá tham chiếu."""
+#: Đuôi cho ảnh KHUNG CUỐI của một đoạn: cùng cú máy với khung đầu, chỉ nhân vật
+#: diễn tiếp. Có cả hai khung thì Veo không còn quãng nào để tự nghĩ ra nhân vật khác.
+DUOI_KHUNG_CUOI = (
+    "\nThis picture is the SAME shot as the LAST attached reference image (the first frame of this shot): "
+    "identical framing, camera distance and angle, identical background, buildings, props, plants and "
+    "lighting — the camera has NOT moved and nothing in the background has moved. Only the characters have "
+    "moved on to the moment described above (pose, gesture, expression). Take every character's look ONLY "
+    "from its own reference image; nobody changes size, body shape, colour or species.")
+
+
+def prompt_khung_cuoi(img_prompt: str) -> str:
+    """Lời nhắc ảnh KHUNG CUỐI: bỏ cụm cỡ khung (khung đầu đã quyết), giữ khối khoá,
+    nối đuôi 'cùng cú máy, chỉ nhân vật diễn tiếp'."""
     p = bo_duoi_noi_canh(img_prompt)
-    _dau, tach, khoa = p.partition("\nREFERENCE IMAGES")
-    return NEO_KHUNG + tach + khoa
+    dau, tach, khoa = p.partition("\nREFERENCE IMAGES")
+    p = bo_cum_co_khung(dau) + tach + khoa
+    if len(p) + len(DUOI_KHUNG_CUOI) > TRAN_PROMPT:
+        p = rut_khoi_khoa(p)
+    return p + DUOI_KHUNG_CUOI
 
 
 def noi_cac_clip(ffmpeg: str, nguon: Sequence[str], dich: str,
@@ -650,6 +642,15 @@ class CuMayDai(ChuoiNoiCanh):
         super().__init__(**kw)
         self.cat_tu, self.noi_clip = cat_tu, noi_clip
 
+    def duong_khung(self, chuoi, k: int) -> str:
+        """Khung số k của một cú máy. Khung 0 = ảnh mở cảnh (thư mục ảnh cảnh);
+        khung k>0 nằm ở `_doan/<mã>-<k>.png` — nó vừa là khung CUỐI của đoạn k-1
+        vừa là khung ĐẦU của đoạn k, nên chỉ vẽ một lần."""
+        if k == 0:
+            return os.path.join(self.thu_muc_anh, "{0}.png".format(int(chuoi[0]["scene_id"])))
+        return os.path.join(self.thu_muc_clip, THU_MUC_DOAN,
+                            "{0}-{1}.png".format(int(chuoi[0]["scene_id"]), k))
+
     def chay(self, chuoi: Sequence[Dict[str, Any]]) -> int:
         chuoi = list(chuoi)
         if not chuoi:
@@ -658,63 +659,51 @@ class CuMayDai(ChuoiNoiCanh):
         ma = int(chuoi[0]["scene_id"])
         tm = os.path.join(self.thu_muc_clip, THU_MUC_DOAN)
         os.makedirs(tm, exist_ok=True)
-        self.ghi("    chuỗi {0}: {1} cảnh, {2:.1f} s → {3} đoạn × {4:.1f} s, một cú máy.".format(
+        self.ghi("    chuỗi {0}: {1} cảnh, {2:.1f} s → {3} đoạn × {4:.1f} s, một cú máy, ghim cả hai đầu.".format(
             ma, len(chuoi), doan[-1]["bat_dau"] + doan[-1]["giay"], len(doan), doan[0]["giay"]))
-        khung_truoc: Optional[str] = None
-        so_noi_tiep = 0
         cat_xong: List[str] = []
         for d in doan:
             self.kiem_dung()
             k = d["k"]
-            c0 = d["canh"][0]
-            sid = int(c0["scene_id"])
-            anh = (os.path.join(self.thu_muc_anh, "{0}.png".format(sid)) if k == 0
-                   else os.path.join(tm, "{0}-{1}.png".format(ma, k)))
+            c_dau, c_cuoi = d["canh"][0], d["canh"][-1]
+            f0, f1 = self.duong_khung(chuoi, k), self.duong_khung(chuoi, k + 1)
             tho = os.path.join(tm, "{0}-{1}.mp4".format(ma, k))
             cat = os.path.join(tm, "{0}-{1}-cat.mp4".format(ma, k))
-            khung = os.path.join(tm, "{0}-{1}-cuoi.png".format(ma, k))
-            # Lời nhắc theo VỊ TRÍ trong cú máy: đoạn 2 trở đi luôn là "diễn tiếp,
-            # máy đứng yên", dù khung đầu của nó là bản chép thẳng hay ảnh neo vẽ lại.
-            noi_tiep = k > 0
-            if not os.path.exists(anh):
-                if khung_truoc and so_noi_tiep < TOI_DA_NOI_TIEP_DAI:
-                    shutil.copyfile(khung_truoc, anh)
-                    so_noi_tiep += 1
-                    self.ghi("    đoạn {0}-{1}: diễn tiếp từ khung cuối đoạn trước.".format(ma, k))
+            hong = False
+            for so_khung, (tep, c, dau_chuoi) in enumerate(((f0, c_dau, True), (f1, c_cuoi, False))):
+                if os.path.exists(tep):
+                    continue
+                if dau_chuoi and k == 0:
+                    refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, None)
+                    prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), False)
+                    self.ghi("    đoạn {0}-{1}: vẽ khung mở cú máy.".format(ma, k))
                 else:
-                    if khung_truoc:
-                        refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c0, khung_truoc)
-                        prompt = prompt_neo_khung(str(c0.get("img_prompt") or ""))
-                        self.ghi("    đoạn {0}-{1}: neo lại nhân vật (vẽ lại đúng khung cuối, tham chiếu đủ).".format(ma, k))
-                    else:
-                        refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c0, None)
-                        prompt = prompt_noi_canh(str(c0.get("img_prompt") or ""), False)
-                    so_noi_tiep = 0
-                    try:
-                        self.lam_anh(c0, anh, refs, prompt)
-                    except Exception as loi:  # noqa: BLE001
-                        self.ghi("    đoạn {0}-{1}: ảnh hỏng ({2}) — chuỗi dừng ở đây.".format(ma, k, str(loi)[:100]))
-                        self.loi.append("ảnh đoạn {0}-{1}".format(ma, k))
-                        break
+                    # Khung cuối: cùng cú máy với khung đầu — gửi kèm CHÍNH khung đầu.
+                    refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, f0)
+                    prompt = prompt_khung_cuoi(str(c.get("img_prompt") or ""))
+                    self.ghi("    đoạn {0}-{1}: vẽ khung cuối (cùng bố cục khung đầu).".format(ma, k))
+                try:
+                    self.lam_anh(c, tep, refs, prompt)
+                except Exception as loi:  # noqa: BLE001
+                    self.ghi("    đoạn {0}-{1}: ảnh hỏng ({2}) — chuỗi dừng ở đây.".format(ma, k, str(loi)[:100]))
+                    self.loi.append("ảnh đoạn {0}-{1}".format(ma, k))
+                    hong = True
+                    break
                 self.bao_anh()
+            if hong:
+                break
             if not os.path.exists(cat):
                 try:
                     if not os.path.exists(tho):
-                        c_clip = dict(c0, video_prompt=prompt_doan(d, noi_tiep))
-                        self.lam_clip(c_clip, anh, tho)
+                        c_clip = dict(c_dau, video_prompt=prompt_doan(d, k > 0))
+                        self.lam_clip(c_clip, f0, tho, f1)
                     self.cat_tu(tho, cat, 0.0, d["giay"])
                 except Exception as loi:  # noqa: BLE001
                     self.ghi("    đoạn {0}-{1}: clip hỏng ({2}) — chuỗi dừng ở đây.".format(ma, k, str(loi)[:100]))
                     self.loi.append("clip đoạn {0}-{1}".format(ma, k))
                     break
-            if not os.path.exists(khung):
-                try:
-                    self.trich_khung(cat, khung)
-                except Exception as loi:  # noqa: BLE001
-                    self.ghi("    đoạn {0}-{1}: không lấy được khung cuối ({2}) — nối từ ảnh đoạn.".format(ma, k, str(loi)[:80]))
-                    khung = anh
-            khung_truoc = khung
             cat_xong.append(cat)
+
         if not cat_xong:
             return 0
         du = len(cat_xong) == len(doan)
