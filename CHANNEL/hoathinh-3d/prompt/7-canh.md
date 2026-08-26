@@ -12,12 +12,15 @@ speaker, a new arrival, a new place. One scene = one story beat.
 
 ## PACING — two numbers the tool reads; change them to change the rhythm
 
-MIN_SECONDS_PER_SCENE: 3
+MIN_SECONDS_PER_SCENE: 6
 MAX_SECONDS_PER_SCENE: 8
 
-One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
-scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
-same picture, so keep scenes short and change the picture often.
+One scene = one shot of the film, and the machine films exactly
+<<CLIP_SEC>> seconds at a time. So write scenes that are ALREADY about
+<<CLIP_SEC>> seconds long: then one scene is one shot, with nothing to
+merge or cut apart afterwards. Let a beat breathe — the characters can
+act two or three moves inside one shot — instead of chopping every
+sentence into its own picture.
 
 ## WHERE YOU ARE — this is a long video, cut into pieces
 

@@ -62,7 +62,13 @@ THU_MUC_THO = "_tho"
 #: dính mờ chuyển cảnh của máy sinh video).
 LUI_KHUNG_CUOI = 0.08
 #: Tối đa mấy chuỗi chạy cùng lúc (mỗi chuỗi giữ một clip đang chờ ở máy chủ).
-SONG_SONG_CHUOI = 6
+#:
+#: Trong một chuỗi thì BẮT BUỘC tuần tự: khung cuối đoạn này là khung đầu đoạn
+#: sau. Nên số này chính là toàn bộ khả năng chạy song song của khâu hình —
+#: 6 là quá dè dặt: cổng cho 832 video cùng lúc (`config.HARD_CAPS`), nhà máy
+#: có 6–10 tài khoản Flow. Đo 26/08/2026: phim 38 giây chạy 43 phút với 2 chuỗi,
+#: trong đó một clip kẹt 22 phút — nhiều chuỗi hơn thì lúc chờ không phí.
+SONG_SONG_CHUOI = 12
 
 DUOI_NOI_CANH = (
     "\nThe LAST attached reference image is the final frame of the previous shot of this same "
