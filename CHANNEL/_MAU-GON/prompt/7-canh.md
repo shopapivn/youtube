@@ -96,6 +96,11 @@ the tail is a **negative**, and the model does not parse the "not" — it draws
 what you named. Show the idea through **shape and gesture** instead: a book
 held shut against the chest, a screen glowing blank, a page torn in half.
 
+Streets are where this leaks: a konbini, a shopfront, a neon sign or a vending
+machine drags lettering in even when you never asked for it. When a scene is
+outdoors, say so — `shop signs and neon are plain glowing colour panels with
+no lettering` — or frame the shot so the signs are out of it.
+
 ## ONE PICTURE PER SCENE — never a grid
 
 One continuous image that then moves, not a layout: no panels, no manga page,
