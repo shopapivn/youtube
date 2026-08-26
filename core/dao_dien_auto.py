@@ -426,10 +426,7 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
         if len(moi) < 20:
             raise ValueError("AI không trả mô tả mới")
         # Phần đuôi phong cách của lời nhắc chân dung (sau DUOI_CHAN_DUNG) giữ nguyên.
-        duoi = ""
-        sheet = str(nv.get("sheet_prompt") or "")
-        if DUOI_CHAN_DUNG in sheet:
-            duoi = sheet.split(DUOI_CHAN_DUNG, 1)[1]
+        duoi = _duoi_phong_cach(luot, man, nv)
         so_canh = doi_thiet_ke_nhan_vat(canh or [], dan, ma_id, moi, duoi_style=duoi)
         do_moi = str(goi.get("outfit") or "").strip().rstrip(".")
         if la_giai_doan and do_moi:
@@ -458,8 +455,17 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
             lam(str(c["id"]), str(c.get("sheet_prompt") or c.get("english_prompt") or ""), dich)
             bc.ghi("    tham chiếu {0}: xong (thiết kế mới)".format(c["id"]))
         return True
+    except (NameError, ImportError):
+        # Gõ sai tên hàm / thiếu import là lỗi LẬP TRÌNH, không phải "AI không chịu
+        # thiết kế lại". Nuốt nó ở đây là để một dòng mã sai đội lốt sự cố nội dung
+        # — đo 27/08/2026: `NameError` trong `_duoi_phong_cach` hiện ra thành "thiết
+        # kế lại không được", tool đi tiếp và cả phim mất phong cách mà không ai
+        # biết. (Chỉ hai loại này: `AttributeError`/`TypeError` còn đến từ client
+        # giả của bài kiểm và từ chính SDK, không chắc là lỗi mã.)
+        raise
     except Exception as loi:  # noqa: BLE001
-        bc.ghi("    tham chiếu {0}: thiết kế lại không được ({1}).".format(ma_id, str(loi)[:120]))
+        bc.ghi("    tham chiếu {0}: thiết kế lại không được ({1}: {2}).".format(
+            ma_id, type(loi).__name__, str(loi)[:110]))
         return False
 
 
@@ -641,6 +647,42 @@ class _HopRong:
 
     def lam_moi(self, _cu: List[str]) -> List[str]:
         return []
+
+
+def _duoi_phong_cach(luot: Any, man: Dict[str, Any], nv: Dict[str, Any]) -> str:
+    """Khối "Style: …" phải gắn vào lời nhắc chân dung khi vẽ lại một nhân vật.
+
+    Ba nguồn, theo thứ tự tin cậy:
+      1. Chính lời nhắc chân dung của nhân vật ấy (nếu còn mốc `DUOI_CHAN_DUNG`);
+      2. Lời nhắc của một nhân vật KHÁC trong cùng phim còn giữ được mốc;
+      3. `visual_style_directive` của lượt chạy — nguồn gốc, dựng lại y như
+         `run._them_prompt_tham_chieu`.
+
+    Vì sao cần tới ba: đo 27/08/2026 (phim 0002), bộ lọc chặn con sói nên lời nhắc
+    của nó bị viết lại, mất mốc, `duoi` thành rỗng và ba ảnh sói ra lối 2D trong
+    khi cả phim là 3D. Mất phong cách là hỏng cả phim, không phải hỏng một ảnh.
+    """
+    from .prompt_visuals import DUOI_CHAN_DUNG  # noqa: PLC0415
+
+    sheet = str(nv.get("sheet_prompt") or "")
+    if DUOI_CHAN_DUNG in sheet:
+        duoi = sheet.split(DUOI_CHAN_DUNG, 1)[1]
+        if duoi.strip():
+            return duoi
+    for c in man.get("characters") or []:
+        if c is nv:
+            continue
+        q = str(c.get("sheet_prompt") or "")
+        if DUOI_CHAN_DUNG in q:
+            duoi = q.split(DUOI_CHAN_DUNG, 1)[1]
+            if duoi.strip():
+                return duoi
+    try:
+        with open(os.path.join(luot.thu_muc, "4-boi-canh.json"), encoding="utf-8") as f:
+            style = str(json.load(f).get("visual_style_directive") or "").strip()
+    except (OSError, ValueError):
+        style = ""
+    return (" Style: " + " ".join(style.split())[:400]) if style else ""
 
 
 def _anh_goc(thu_muc: str, goc_id: Optional[str]) -> Optional[List[str]]:

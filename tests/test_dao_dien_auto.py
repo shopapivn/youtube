@@ -554,8 +554,11 @@ class TestThieuAnhThamChieu:
         assert thieu == ["nv5"]
         assert json.loads(canh[0]["reference_files"]) == ["loc1.png"]
         assert "nv5" not in canh[0]["characters_used"]
-        # khối khoá dựng lại: ảnh 1 giờ là loc1, không còn trỏ nhầm
-        assert "reference image 1 = loc1" in canh[0]["img_prompt"]
+        # Khối khoá dựng lại: ảnh 1 giờ là loc1, không còn trỏ nhầm. Ràng
+        # buộc nằm THẲNG trong câu văn (`loc1 (Image 1)`) theo lối OpenStory —
+        # xem `run._GUARD_NHAN_DANG`.
+        assert "loc1 (Image 1)" in canh[0]["img_prompt"]
+        assert "nv5 (Image" not in canh[0]["img_prompt"]
         assert "= nv5" not in canh[0]["img_prompt"]
         assert json.load(open(os.path.join(luot.thu_muc, "4-canh.json"), encoding="utf-8"))[0]["characters_used"] == ""
 
@@ -605,3 +608,27 @@ class TestThieuAnhThamChieu:
 
         dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh, goi_ai=lambda l: "x")
         assert thay["nv5"] == [] and thay["nv5b"] == ["nv5.png"] and thay["nv5c"] == ["nv5.png"]
+
+    def test_thiet_ke_lai_van_giu_phong_cach_phim(self, tmp_path):
+        """Vẽ lại nhân vật mà rơi mất khối "Style:" thì cả phim hai lối vẽ.
+
+        Đo 27/08/2026 (phim 0002): lời nhắc con sói bị bộ lọc bắt viết lại nên mất
+        mốc DUOI_CHAN_DUNG; bản thiết kế lại cắt chuỗi cũ không ra gì, ba ảnh sói ra
+        lối 2D viền nét trong khi cả đàn dê là 3D dựng hình.
+        """
+        from core.prompt_visuals import DUOI_CHAN_DUNG
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        with open(os.path.join(luot.thu_muc, "4-boi-canh.json"), "w", encoding="utf-8") as f:
+            json.dump({"visual_style_directive": "Image style: stylised 3D animated film still, Pixar-like"}, f)
+        nv = {"id": "nv5", "role": "villain", "english_prompt": "a wolf",
+              "sheet_prompt": "a wolf, drawn after a filter rewrite — mốc đã mất"}
+        man = {"characters": [nv], "locations": []}
+        # 1) mất mốc, không có nhân vật khác → lấy từ 4-boi-canh.json
+        d = dd._duoi_phong_cach(luot, man, nv)
+        assert "stylised 3D animated film still" in d and d.startswith(" Style:")
+        # 2) có nhân vật khác còn mốc → mượn đuôi của nó
+        man["characters"] = [nv, {"id": "nv1", "sheet_prompt": "a goat" + DUOI_CHAN_DUNG + " Style: WATERCOLOUR"}]
+        assert dd._duoi_phong_cach(luot, man, nv) == " Style: WATERCOLOUR"
+        # 3) chính nó còn mốc → dùng của nó
+        nv["sheet_prompt"] = "a wolf" + DUOI_CHAN_DUNG + " Style: MINE"
+        assert dd._duoi_phong_cach(luot, man, nv) == " Style: MINE"
