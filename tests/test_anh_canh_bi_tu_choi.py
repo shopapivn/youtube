@@ -81,3 +81,31 @@ def test_viet_lai_khong_ra_thi_nem_loi_goc(tmp_path, monkeypatch):
     bc = _bc(lambda l: "a cat")           # AI trả y nguyên → không có gì để thử lại
     with pytest.raises(RuntimeError, match="content_rejected"):
         auto_khau._lam_anh_canh(bc, luot, c, str(tmp_path / "2.png"), _Hop())
+
+
+def test_lan_ba_thay_tu_tho(tmp_path, monkeypatch):
+    c = {"scene_id": 28, "img_prompt": "the wolf scooping honey toward his open mouth and licking it, at the shop. Style: 3D"}
+    luot = _luot(tmp_path, [c])
+    goi = []
+
+    def tao_anh_gia(bc, luot, prompt, hop, khoa, ten_hien="", so=None):
+        goi.append(prompt)
+        if "mouth" in prompt or "lick" in prompt:
+            raise RuntimeError("content_rejected")
+        return {"id": "job"}
+
+    monkeypatch.setattr(auto_khau, "_tao_anh", tao_anh_gia)
+    monkeypatch.setattr(auto_khau, "_tai_ket_qua", lambda bc, goi_, i, tep: open(tep, "wb").write(b"png"))
+    monkeypatch.setattr(auto_khau, "_xoa_dau", lambda bc, tep: None)
+    # AI viết lại vẫn giữ "mouth" → lần 3 thay từ thô mới qua.
+    bc = _bc(lambda l: "the wolf scooping honey toward his open mouth, at the shop. Style: 3D")
+    auto_khau._lam_anh_canh(bc, luot, c, str(tmp_path / "28.png"), _Hop())
+    assert len(goi) == 3 and "mouth" not in goi[2] and "lick" not in goi[2]
+    assert "toward his face" in goi[2] or "big smile" in goi[2]
+
+
+def test_lam_lanh_tho_thu_truyen():
+    from core.viet_lai_prompt import lam_lanh_tho
+    ra = lam_lanh_tho("the wolf swallows them whole, then licks his lips, fangs showing")
+    assert "swallow" not in ra and "lick" not in ra and "fangs" not in ra
+    assert "hides them in his big round belly" in ra

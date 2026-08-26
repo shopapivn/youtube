@@ -3578,14 +3578,47 @@ def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
         moi = _viet_lai_khi_bi_tu_choi(bc, luot, c, loi)
         if not moi:
             raise
-        goi = _tao_anh(bc, luot, moi, hop,
-                       khoa_viec(luot, "img", so_canh, moi, "|".join(hop.lay()), "vl"),
-                       ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
+        try:
+            goi = _tao_anh(bc, luot, moi, hop,
+                           khoa_viec(luot, "img", so_canh, moi, "|".join(hop.lay()), "vl"),
+                           ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
+        except Exception as loi2:  # noqa: BLE001
+            # Lần 3: thay từ thô (mồm, liếm, nuốt, vũ khí…) — không tốn lượt chữ.
+            # Đo 26/08/2026: bản AI viết lại vẫn giữ "toward his open mouth" và
+            # bị chặn lần nữa; thay thẳng từ mới qua.
+            tho = _lam_lanh_tho_neu_bi_tu_choi(bc, luot, c, moi, loi2)
+            if not tho:
+                raise
+            goi = _tao_anh(bc, luot, tho, hop,
+                           khoa_viec(luot, "img", so_canh, tho, "|".join(hop.lay()), "vl2"),
+                           ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
     _tai_ket_qua(bc, goi, 0, tep)
     _xoa_dau(bc, tep)
 
 
 _KHOA_SUA_CANH = threading.Lock()
+
+
+def _lam_lanh_tho_neu_bi_tu_choi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
+                                 prompt: str, loi: Exception) -> str:
+    """Bị chặn lần hai: thay từ thô (`core.viet_lai_prompt.lam_lanh_tho`). Khác bản
+    cũ thì ghi vào 4-canh.json và trả về; không đổi được gì thì ""."""
+    from .viet_lai_prompt import la_bi_tu_choi, lam_lanh_tho  # noqa: PLC0415
+
+    if not la_bi_tu_choi("", str(loi)):
+        return ""
+    tho = lam_lanh_tho(prompt)
+    if not tho or tho.strip() == prompt.strip():
+        return ""
+    so_canh = int(c["scene_id"])
+    bc.ghi("    ảnh cảnh {0}: vẫn bị chặn — thay từ thô rồi thử lần cuối…".format(so_canh))
+    c["img_prompt"] = tho
+    with _KHOA_SUA_CANH:
+        try:
+            sua_loi_nhac_canh(luot, so_canh, img_prompt=tho)
+        except Exception:  # noqa: BLE001
+            pass
+    return tho
 
 
 def _viet_lai_khi_bi_tu_choi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],

@@ -64,6 +64,14 @@ _THAY_THO = [
     (re.compile(r"\b(?:sword|dagger|knife|gun|rifle|axe|halberd|spear|pike)s?\b", re.I), "wooden staff"),
     (re.compile(r"\b(?:brutal|hulking|menacing|savage|fearsome|monstrous|terrifying)\b", re.I), "very big"),
     (re.compile(r"\biron-studded\b", re.I), "plain"),
+    # Truyện thú cho trẻ em (đo 26/08/2026, hoathinh-3d/0001): sói "paw near his
+    # mouth", "scooping honey toward his open mouth", "licked clean" đều bị chặn
+    # dù vô hại — bộ lọc vấp chữ mồm/liếm/nuốt trên thú. Nói bằng cách khác.
+    (re.compile(r"\b(?:lick(?:s|ed|ing)?|slurp(?:s|ed|ing)?)\b", re.I), "tastes"),
+    (re.compile(r"\b(?:swallow(?:s|ed|ing)?|devour(?:s|ed|ing)?|gobbl(?:es|ed|ing)|gulp(?:s|ed|ing)?)\s+(?:them|him|her|it|the \w+)?\s*(?:whole|up|down)?", re.I), "hides them in his big round belly"),
+    (re.compile(r"\b(?:toward|towards|to|into|near|at)\s+(?:his|her|its|their)\s+(?:open\s+)?(?:mouth|jaws|maw|snout)\b", re.I), "toward his face"),
+    (re.compile(r"\b(?:open|gaping|wide)\s+(?:mouth|jaws|maw)\b", re.I), "big smile"),
+    (re.compile(r"\b(?:tongue|fangs|sharp teeth|claws)\b", re.I), ""),
 ]
 
 
