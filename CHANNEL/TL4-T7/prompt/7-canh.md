@@ -7,6 +7,11 @@ them **visually and concretely**, so the viewer feels the meaning instantly
 and stays. If your prompt would still make sense under a DIFFERENT line of
 narration, it is the wrong prompt — rewrite it.
 
+An image prompt describes the scene, the character, the action, the space, the
+light and the **camera**: open it with the shot — `Extreme close-up of…`,
+`Close-up of…`, `Medium shot of…`, `Wide shot of…`, `Top-down view of…`,
+`Low angle looking up at…` — and change that shot from scene to scene.
+
 1. **The main character is the centre of the picture.** Supporting figures,
    props and setting are described simply — they carry the meaning of the
    line, they do not fill the frame.

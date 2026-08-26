@@ -224,6 +224,12 @@ class TestPromptBaNoi:
         assert "NO TEXT" in chu
         assert "NEVER the character merely sitting or standing" in chu
         assert "DIFFERENT line of narration" in chu
+        # Đo lượt 0051 cắt lại 18:54 ngày 26/08: bỏ luật "mở prompt bằng cỡ
+        # cảnh" thì 97/173 prompt mở bằng "the reference character" — cả video
+        # về một cỡ ngang tầm mắt. Chính bản làm tay của chủ dự án cũng có
+        # "góc máy" trong danh sách phải tả.
+        assert "open it with the shot" in chu
+        assert "Top-down view of" in chu
         # Chốt kỹ thuật đã trả giá mới có
         assert "HARD CEILING" in chu
         assert "NEVER describe its face" in chu
