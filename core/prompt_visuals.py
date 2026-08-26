@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Tuple, Any, Dict, List, Mapping, Optional, Sequence
 
 __all__ = [
     "DUOI_CHAN_DUNG", "DUOI_BOI_CANH", "goc_cua_id", "LOI_NHAC_THIET_KE_LAI", "loi_nhac_thiet_ke_lai",
@@ -42,6 +42,7 @@ __all__ = [
     "LOI_NHAC_XAY_PHONG_CACH", "chi_dan_tu_tra_loi_ai",
     "CHE_DO_KE", "CHE_DO_CAN_ANH_NV",
     "dung_workflow", "dung_boi_canh", "cau_thieu_gi", "duong_workbook",
+    "CHO_TRONG_KHUON_CHIA", "khuon_chia_dung_duoc", "NHIP_CHIA", "nhip_giay",
     "canh_de_xem", "dan_de_xem", "tom_tat_dan", "bia_de_xem", "nhac_de_xem",
     "boi_canh_de_xem", "man_de_xem", "ke_hoach_de_xem",
 ]
@@ -338,9 +339,45 @@ def _mau_chi_dan(ma_mau: str) -> str:
     return ""
 
 
+#: Chỗ trống mà một khuôn chia cảnh PHẢI có thì `prompt.workbook` mới dùng nó
+#: thay khuôn mặc định (`core.chia_canh.KHUON_MAC_DINH`). Thiếu một chỗ là AI
+#: không nhận được phụ đề / dàn nhân vật / kế hoạch — nên thà bỏ khuôn khách
+#: sửa còn hơn chạy với một lời nhắc cụt. Một danh sách, hai nơi đọc: ở đây
+#: (ô Nâng cao kiểm trước khi gửi) và `prompt.workbook/run.py` (`_khuon_chia`).
+CHO_TRONG_KHUON_CHIA = ("<<CAST_STYLE>>", "<<DIRECTOR_PLAN>>", "<<CONTEXT>>",
+                        "<<SRT>>", "<<MAX_SEC>>", "<<KHUC_THU>>")
+
+
+def khuon_chia_dung_duoc(khuon: str) -> bool:
+    """Khuôn chia cảnh khách sửa có đủ chỗ trống để chạy không."""
+    k = str(khuon or "")
+    return bool(k.strip()) and all(ct in k for ct in CHO_TRONG_KHUON_CHIA)
+
+
+#: Mạch chia cảnh — ô "Nâng cao" của Prompt Visuals (chủ dự án 26/08/2026:
+#: *"ví dụ là mạch chia là 3-8s hay là chia kiểu khác"*). Mỗi mục: mã, nhãn,
+#: (sàn, trần) giây. Trần không vượt trần engine (Veo 3: 8 giây) — chỗ gửi
+#: kẹp lại. Mục đầu là mặc định và KHÔNG gửi gì (hành vi cũ y nguyên).
+NHIP_CHIA = (
+    ("noi_dung", "Theo nội dung — 3–8 giây/cảnh (mặc định)", (3.0, 8.0)),
+    ("day", "Cắt dày — 3–5 giây, nhịp nhanh, nhiều ảnh hơn", (3.0, 5.0)),
+    ("vua", "Cắt vừa — 4–6 giây", (4.0, 6.0)),
+    ("thua", "Cắt thưa — 5–8 giây, nhịp chậm, ít ảnh hơn", (5.0, 8.0)),
+)
+
+
+def nhip_giay(ma: str) -> Optional[Tuple[float, float]]:
+    """(sàn, trần) giây của một mạch chia; `None` cho mặc định hoặc mã lạ."""
+    for m, _ten, cap in NHIP_CHIA:
+        if m == ma and m != NHIP_CHIA[0][0]:
+            return float(cap[0]), float(cap[1])
+    return None
+
+
 def dung_boi_canh(kich_ban: str = "", mau_hinh: str = "auto",
                   chi_dan: str = "", che_do_ke: str = "tu_xay",
-                  nhan_vat_co_dinh: Optional[Mapping[str, Any]] = None
+                  nhan_vat_co_dinh: Optional[Mapping[str, Any]] = None,
+                  khuon_chia: str = "", nhip: str = "",
                   ) -> Dict[str, Any]:
     """Gói **kịch bản** (tuỳ chọn) + **phong cách hình ảnh** thành `context`.
 
@@ -359,7 +396,14 @@ def dung_boi_canh(kich_ban: str = "", mau_hinh: str = "auto",
 
     Trả `{}` khi không có gì để gửi — nơi gọi chỉ tạo artifact `context` khi dict
     khác rỗng, để workflow không mọc thêm một node thừa.
+
+    `khuon_chia`: khuôn chia cảnh khách sửa ở Nâng cao — chỉ gửi khi KHÁC khuôn
+    mặc định và đủ chỗ trống (`khuon_chia_dung_duoc`); `nhip`: mã trong
+    `NHIP_CHIA`, mặc định thì không gửi. Cả hai đi vào `context` dưới khoá
+    `storyboard_template` / `scene_pacing` mà `prompt.workbook` đọc.
     """
+    from .chia_canh import KHUON_MAC_DINH  # noqa: PLC0415
+
     ra: Dict[str, Any] = {}
     kb = str(kich_ban or "").strip()
     if kb:
@@ -378,6 +422,12 @@ def dung_boi_canh(kich_ban: str = "", mau_hinh: str = "auto",
         nv.setdefault("id", "nv1")
         nv.setdefault("image_file", "nv1.png")
         ra["fixed_character"] = nv
+    k = str(khuon_chia or "")
+    if k.strip() and k.strip() != KHUON_MAC_DINH.strip() and khuon_chia_dung_duoc(k):
+        ra["storyboard_template"] = k
+    cap = nhip_giay(str(nhip or ""))
+    if cap is not None:
+        ra["scene_pacing"] = {"min_sec": cap[0], "max_sec": cap[1]}
     return ra
 
 

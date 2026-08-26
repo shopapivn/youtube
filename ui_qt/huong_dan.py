@@ -320,27 +320,34 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "tom_tat": "Đưa file giọng đọc (mp3) vào là ra file Excel đủ prompt "
                    "ảnh + video của từng cảnh — có chỗ thử vài cảnh thật.",
         "buoc": [
-            "Bước 1: bấm “Chọn file mp3…”. Có kịch bản .txt thì bấm “+ kịch "
-            "bản .txt” — prompt chuẩn xác hơn. Đã lưu phong cách lần trước "
-            "(hoặc có kênh ở tab Tự động) thì chọn ở ô “Phong cách đã lưu” — "
-            "Bước 2 dùng đúng phong cách đó, không phải chọn lại.",
-            "Bước 2 (khi chưa chọn ở Bước 1) có hai tab. “Chọn phong cách có "
-            "sẵn”: bấm một thẻ để xem ảnh + video mẫu (miễn phí), rồi bấm "
-            "“Dùng phong cách này”. “AI xây phong cách từ ảnh của bạn”: tải "
-            "1–5 ảnh đúng kiểu bạn muốn, bấm “Nhờ AI xây phong cách” (một "
-            "lượt gọi AI) — mọi cảnh về sau theo đúng kiểu đó. Ưng phong cách "
-            "nào thì bấm “💾 Lưu phong cách này…” để lần sau chọn ở Bước 1. "
-            "“⚙ Nâng cao” mở ô prompt phong cách, sửa thẳng được.",
-            "Bước 3: bấm “Tạo prompt”. Máy tự đoán tiếng trong file, tự giữ "
-            "nhân vật xuyên suốt; ba dòng khâu cho biết đang nghe, đang viết "
+            "Bước 1 — Giọng đọc: bấm “Chọn file mp3…”. Có kịch bản .txt thì "
+            "bấm “+ kịch bản .txt” — prompt bám đúng tên riêng, thuật ngữ hơn "
+            "là chỉ nghe từ giọng đọc.",
+            "Bước 2 — Phong cách & nhân vật: mọi thứ về HÌNH ở một chỗ. Ô "
+            "“Dùng lại” chọn kênh đã tạo ở tab Tự động, bộ vẽ trong khuôn hay "
+            "phong cách bạn đã lưu — chọn là xong bước này. Không dùng lại thì "
+            "chọn mới ở hai tab dưới: “Chọn phong cách có sẵn” (bấm thẻ xem ảnh "
+            "+ video mẫu, miễn phí, rồi “Dùng phong cách này”) hoặc “AI xây "
+            "phong cách từ ảnh của bạn” (tải 1–5 ảnh, một lượt gọi AI).",
+            "Ô “Nhân vật” (cùng Bước 2) chọn cách kể: “AI tự xây nhân vật & bối "
+            "cảnh” (không cần ảnh); “Một nhân vật cố định của kênh” (tải MỘT ảnh "
+            "nv1 — mọi cảnh xoay quanh người đó, như tab Tự động); “Nhân vật cố "
+            "định + nhân vật & bối cảnh tham chiếu” (có ảnh nv1, AI dựng thêm "
+            "nv2… và các bối cảnh loc1… để cả video nhất quán). Chọn kênh ở ô "
+            "“Dùng lại” thì ảnh nhân vật của kênh được lấy sẵn.",
+            "“⚙ Nâng cao” (Bước 2) là chỗ xem và sửa ĐÚNG những lời tool gửi AI: "
+            "“Prompt phong cách” (khối ghép vào mọi cảnh); “Mạch chia cảnh” — "
+            "mỗi cảnh dài bao nhiêu giây: theo nội dung 3–8 (mặc định), cắt "
+            "dày 3–5 (nhịp nhanh, nhiều ảnh hơn), cắt vừa 4–6, cắt thưa 5–8; và "
+            "“Prompt chia cảnh” — nguyên lời nhắc AI dùng để chia cảnh và viết "
+            "prompt ảnh/video, sửa thẳng (luật giữ chân, cỡ cảnh, ẩn dụ…), chỉ "
+            "cần giữ các chỗ <<…>> để tool điền phụ đề, nhân vật, kế hoạch; sai "
+            "thì bấm “Khôi phục mặc định”. Bấm “💾 Lưu để dùng lại…” là lưu cả "
+            "phong cách lẫn những gì đã sửa trong Nâng cao thành một mẫu.",
+            "Bước 3 — Tạo prompt: một nút. Máy tự đoán tiếng trong file, tự giữ "
+            "nhân vật xuyên suốt; ba dấu khâu cho biết đang nghe, đang viết "
             "prompt hay đang xuất Excel. Video ở đây luôn là Veo 3 (mỗi cảnh "
             "tối đa 8 giây).",
-            "Ô “Nhân vật” ở Bước 1 chọn cách kể: “AI tự xây nhân vật & bối "
-            "cảnh” (không cần ảnh); “Một nhân vật cố định của kênh” (tải MỘT "
-            "ảnh nv1 — mọi cảnh xoay quanh người đó, như tab Tự động); “Nhân "
-            "vật cố định + nhân vật & bối cảnh tham chiếu” (có ảnh nv1, AI dựng "
-            "thêm nv2… và các bối cảnh loc1… để cả video nhất quán). Chọn kênh "
-            "ở ô “Phong cách đã lưu” thì ảnh nhân vật của kênh được lấy sẵn.",
             "Với cách kể loại 2 và 3, tool làm như một ĐẠO DIỄN: đọc cả bài để "
             "chia màn và chọn cung truyện, dựng dàn nhân vật + bối cảnh, lên kế "
             "hoạch từng beat (ai, ở đâu, cỡ cảnh, điều thay đổi), rồi mới viết "
@@ -348,18 +355,17 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "ảnh bối cảnh loc…) đặt cạnh Excel, gắn vào từng cảnh, để nhân vật "
             "và nơi chốn giữ nguyên qua cả phim. Ảnh tham chiếu tốn ví như ảnh "
             "thường (thường 3–6 tấm).",
-            "Bước 4 (hiện ra sau khi xong) có năm tab: “Cảnh” (prompt ảnh + "
-            "video từng cảnh, kèm lời đọc dịch tiếng Việt), “Ảnh bìa” (3 prompt "
-            "+ tiêu đề và chữ bìa đề xuất), “Nhạc Suno” (mỗi track ~105 giây), "
-            "“Nhân vật & bối cảnh”, “Đạo diễn” (màn và kế hoạch beat). Bấm vào "
-            "ô để sửa, rồi “Lưu chỉnh sửa vào Excel” — ghi cả ba sheet.",
-            "Bước 5: bấm “Tạo thử ảnh + video” để xem 1–3 cảnh đầu thành hình "
-            "thật. Chưa ưng thì đổi phong cách hoặc sửa prompt rồi thử lại; "
-            "ưng rồi mang file Excel sang tab Ảnh & Video → Hàng loạt chạy hết.",
+            "Bước 4 (hiện ra sau khi xong) — Xem, sửa prompt và thử vài cảnh "
+            "thật: năm tab “Cảnh” (prompt ảnh + video từng cảnh, kèm lời đọc "
+            "dịch tiếng Việt), “Ảnh bìa”, “Nhạc Suno”, “Nhân vật & bối cảnh”, "
+            "“Đạo diễn”. Bấm vào ô để sửa rồi “Lưu chỉnh sửa vào Excel”. Ngay "
+            "dưới bảng là “Tạo thử ảnh + video” cho 1–3 cảnh đầu: chưa ưng thì "
+            "đổi phong cách hoặc sửa prompt rồi thử lại; ưng rồi mang file Excel "
+            "sang tab Ảnh & Video → Hàng loạt chạy hết.",
         ],
         "luu_y": [
-            "Phong cách đã lưu (kể cả prompt bạn sửa tay ở ⚙ Nâng cao) nằm "
-            "trong ô “Phong cách đã lưu” ở Bước 1; muốn bỏ thì mở ⚙ Nâng cao "
+            "Phong cách đã lưu (kể cả mạch chia và prompt bạn sửa ở ⚙ Nâng "
+            "cao) nằm trong ô “Dùng lại” ở Bước 2; muốn bỏ thì mở ⚙ Nâng cao "
             "bấm “Xoá phong cách đã lưu này”.",
             "Bước thử tiêu tiền thật (mỗi cảnh 1 ảnh + 1 clip) — giá hiện "
             "ngay trên nút, việc lỗi hoàn 100%. Đồ thử nằm trong thư mục con "

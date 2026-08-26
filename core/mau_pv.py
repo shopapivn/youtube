@@ -32,7 +32,10 @@ __all__ = ["duong_mau", "doc_mau", "luu_mau", "xoa_mau"]
 #: `anh_mau` là danh sách đường ảnh khách tải lên khi nhờ AI xây phong cách —
 #: giữ để lần sau chọn mẫu vẫn có hình minh hoạ (tệp mất thì chỉ mất hình).
 KHOA_MAU = ("ten", "phong_cach", "chi_dan", "anh_mau", "engine", "ngon_ngu",
-            "mo_hinh", "nhat_quan")
+            "mo_hinh", "nhat_quan",
+            # Nâng cao của Prompt Visuals (26/08/2026): mạch chia cảnh và
+            # prompt chia cảnh đã sửa — đi theo mẫu, không phải nhớ lại.
+            "nhip", "khuon_chia")
 
 
 def duong_mau(goc: str) -> str:

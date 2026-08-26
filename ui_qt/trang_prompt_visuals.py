@@ -2,15 +2,17 @@
 
 Chủ dự án, 14/08/2026: *"từ mp3 voice ra srt rồi sau đó chạy ra các prompt trong
 excel"*, làm theo `D:\\VE3_SUITE`. Và 24/08/2026: *"thiết kế theo kiểu giống ở
-bên tự động, kiểu đi từng bước"* — nên trang này bày đúng NĂM BƯỚC, trên xuống
-dưới theo thứ tự làm:
+bên tự động, kiểu đi từng bước"* — nên trang này bày BỐN BƯỚC, trên xuống
+dưới theo thứ tự làm (26/08/2026 gom từ năm: *"mọi thứ hơi khó và trùng lặp
+cũng như loạn quá"* — phong cách từng chọn được ở ba chỗ, nút lưu ở hai):
 
     Bước 1  đưa giọng đọc vào (mp3), kèm kịch bản .txt nếu có
-    Bước 2  chọn phong cách hình ảnh (cùng nguồn với tab Tự động)
+    Bước 2  MỌI thứ về hình: dùng lại kênh/mẫu, hay chọn phong cách mới;
+            nhân vật; ⚙ Nâng cao = đúng lời gửi AI (prompt phong cách, mạch
+            chia cảnh 3–8 hay dày/thưa, prompt chia cảnh) — sửa được, lưu mẫu
     Bước 3  tạo prompt — thấy rõ khâu nào đang chạy, như bảng khâu tab Tự động
-    Bước 4  xem & chỉnh prompt từng cảnh ngay tại chỗ
-    Bước 5  THỬ thật 1–3 cảnh (ảnh + clip) để xem phong cách có ưng không,
-            trước khi mang cả file Excel sang tab Ảnh & Video chạy cả loạt
+    Bước 4  (hiện khi có kết quả) xem & chỉnh prompt từng cảnh, rồi THỬ thật
+            1–3 cảnh (ảnh + clip) trước khi mang Excel sang tab Ảnh & Video
 
 Cột của file Excel sinh ra **trùng tên với bảng của VE3_SUITE** (`scenes`,
 `characters`, `director_plan`, `thumbnail`), nên mở thẳng bằng VE3 được.
@@ -44,11 +46,13 @@ from core.anh_len import link_dung_lai_duoc, tai_len
 from core.jobs import STATUS_CANCELLED, STATUS_DONE, STATUS_FAILED, JobSpec
 from core.money import format_vnd
 from core.pricing import KIND_IMAGE, KIND_VIDEO, hold_for_image, hold_for_video
+from core.chia_canh import KHUON_MAC_DINH
 from core.prompt_visuals import (
-    CHE_DO_CAN_ANH_NV, CHE_DO_KE, DUOI_CHAN_DUNG, LOI_NHAC_XAY_PHONG_CACH, PhongCach,
-    bia_de_xem, boi_canh_de_xem, canh_de_xem, cau_thieu_gi, chi_dan_tu_bo,
-    chi_dan_tu_tra_loi_ai, dan_de_xem, doi_thiet_ke_nhan_vat, dung_boi_canh,
-    dung_workflow, goc_cua_id, ke_hoach_de_xem, liet_ke_phong_cach,
+    CHE_DO_CAN_ANH_NV, CHE_DO_KE, CHO_TRONG_KHUON_CHIA, DUOI_CHAN_DUNG,
+    LOI_NHAC_XAY_PHONG_CACH, NHIP_CHIA, PhongCach, bia_de_xem, boi_canh_de_xem,
+    canh_de_xem, cau_thieu_gi, chi_dan_tu_bo, chi_dan_tu_tra_loi_ai, dan_de_xem,
+    doi_thiet_ke_nhan_vat, dung_boi_canh, dung_workflow, goc_cua_id,
+    ke_hoach_de_xem, khuon_chia_dung_duoc, liet_ke_phong_cach,
     loi_nhac_thiet_ke_lai, man_de_xem, nhac_de_xem, tom_tat_dan,
 )
 from core.validate import check_image, check_video
@@ -74,7 +78,7 @@ DUOI_TIENG = ("*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg")
 
 #: Engine video DUY NHẤT của tab này. Chủ dự án 24/08/2026: *"video thì ở đây
 #: là Veo 3, không dùng Seedance"*. Cảnh được cắt theo trần 8 giây của Veo 3
-#: và clip thử ở Bước 5 cũng gửi Veo 3 — không có ô nào để chọn khác.
+#: và clip thử ở Bước 4 cũng gửi Veo 3 — không có ô nào để chọn khác.
 ENGINE_PV = "veo3"
 
 #: Ba thứ trước đây nằm trong "Tuỳ chọn thêm", nay là số cố định. Chủ dự án
@@ -125,12 +129,17 @@ class TrangPromptVisuals(QWidget):
         #: cách viết liên tiếp; bản cũ im lặng, khách sẽ chạy cả phim thiếu mèo.
         self._tc_thieu: List[str] = []
 
-        # ═══ MÀN HÌNH ĐẦU CHỈ CÓ BA THẺ ═══
+        # ═══ MÀN HÌNH ĐẦU CHỈ CÓ BA THẺ, MỖI THẺ MỘT VIỆC ═══
         #
         # Chủ dự án 24/08/2026: *"tao cần đơn giản, hiệu quả, dễ sử dụng, tối
-        # giản… tinh gọn"*. Bước 4 và 5 là thứ chỉ có nghĩa SAU KHI có kết quả,
-        # nên chúng không xuất hiện cho tới lúc đó — hai thẻ trống với bảng rỗng
-        # là đúng cái làm khách "ngợp" trong ảnh chụp.
+        # giản… tinh gọn"*; 26/08/2026: *"mọi thứ hơi khó và trùng lặp cũng như
+        # loạn quá"*. Bản trước có năm thẻ và phong cách chọn được ở BA chỗ
+        # (ô "đã lưu" ở Bước 1, lưới thẻ ở Bước 2, ô Kênh trong Nâng cao), nút
+        # "Lưu phong cách" ở hai chỗ, còn "Nhân vật" nằm ở Bước 1 dù nó là
+        # chuyện hình ảnh. Giờ: Bước 1 chỉ có file; Bước 2 là MỌI thứ về hình
+        # (phong cách, nhân vật, và Nâng cao: prompt phong cách + mạch chia
+        # cảnh + prompt chia cảnh); Bước 3 một nút; Bước 4 chỉ hiện khi có kết
+        # quả, gồm cả xem/sửa lẫn thử vài cảnh thật.
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(14)
@@ -143,9 +152,6 @@ class TrangPromptVisuals(QWidget):
         self._the_xem_w = self._the_xem()
         self._the_xem_w.hide()
         doc.addWidget(self._the_xem_w)
-        self._the_thu_w = self._the_thu()
-        self._the_thu_w.hide()
-        doc.addWidget(self._the_thu_w)
         doc.addStretch(1)
 
         # Nhật ký gấp sẵn: dòng trạng thái ở Bước 3 đã nói điều khách cần;
@@ -167,11 +173,12 @@ class TrangPromptVisuals(QWidget):
     # ── Dựng giao diện ───────────────────────────────────────────────────────
 
     def _the_nhap(self) -> QWidget:
-        """Bước 1: mọi thứ ĐẦU VÀO một chỗ — mp3 bắt buộc, kịch bản .txt nếu có.
+        """Bước 1: ĐẦU VÀO — mp3 bắt buộc, kịch bản .txt nếu có. Chỉ thế.
 
         Chủ dự án 24/08/2026 vẽ đúng thứ tự khách làm: *"đẩy mp3 rồi txt (nếu
-        có) rồi đến chọn phong cách"*. Kịch bản từng nằm trong "Tuỳ chọn thêm";
-        nằm đó thì người có sẵn .txt không bao giờ thấy chỗ đưa vào.
+        có) rồi đến chọn phong cách"*. Ô "Phong cách đã lưu" và ô "Nhân vật"
+        từng nằm ở đây — hai chuyện về HÌNH lẫn vào bước về TIẾNG, và phong
+        cách thành ra chọn được ở hai chỗ. Chúng đã dọn xuống Bước 2.
         """
         khung = the()
         v = QVBoxLayout(khung)
@@ -197,63 +204,15 @@ class TrangPromptVisuals(QWidget):
         v.addLayout(hang)
         self._nhan_file = self._chu_phu("Chưa chọn file nào.")
         v.addWidget(self._nhan_file)
-        v.addWidget(self._chu_phu(
-            "Kịch bản .txt không bắt buộc — có thì prompt bám đúng tên riêng, "
-            "thuật ngữ trong bài, chuẩn xác hơn chỉ nghe từ giọng đọc."))
-
-        # ═══ PHONG CÁCH ĐÃ LƯU — CHỌN Ở BƯỚC 1 LÀ XONG BƯỚC 2 ═══
-        #
-        # Chủ dự án 24/08/2026: *"dùng lại phải là chọn phong cách; nếu có
-        # chọn 1 mẫu thì bước 2 sẽ thể hiện được phong cách đó, còn nếu khách
-        # không chọn thì sẽ có thể chọn các style"*. Chọn ở đây thì Bước 2 gấp
-        # hai tab lại và chỉ hiện đúng phong cách đã chọn (xem `_dat_chon`).
-        hang_lai = HangXuongDong()
-        hang_lai.addWidget(nhan("Phong cách đã lưu:", "phu"))
-        self._o_kenh = QComboBox()
-        self._o_kenh.setMinimumWidth(1)
-        self._o_kenh.setToolTip(
-            "Phong cách bạn đã lưu ở đây, kênh đã tạo ở tab Tự động, và bộ vẽ "
-            "trong khuôn. Chọn một cái là Bước 2 dùng đúng phong cách đó; để "
-            "trống thì chọn phong cách ở Bước 2.")
-        self._o_kenh.currentIndexChanged.connect(lambda _i: self._chon_tu_combo())
-        hang_lai.addWidget(self._o_kenh)
-        v.addLayout(hang_lai)
-
-        # ═══ CÁCH KỂ CHUYỆN — BA LOẠI, THAM KHẢO VE3_SUITE ═══
-        #
-        # Chủ dự án 24/08/2026: loại 1 một nhân vật cố định của kênh; loại 2
-        # nhân vật cố định + nhân vật/bối cảnh tham chiếu khác; loại 3 AI tự
-        # xây theo nội dung. Loại 1, 2 cần MỘT ảnh nhân vật (nv1.png) — chọn
-        # kênh ở ô trên thì lấy luôn ảnh nhân vật của kênh.
-        hang_nv = HangXuongDong()
-        hang_nv.addWidget(nhan("Nhân vật:", "phu"))
-        self._o_che_do = QComboBox()
-        self._o_che_do.setMinimumWidth(1)
-        for ma, ten, mo_ta in CHE_DO_KE:
-            self._o_che_do.addItem(ten, ma)
-            self._o_che_do.setItemData(self._o_che_do.count() - 1, mo_ta,
-                                       Qt.ToolTipRole)
-        self._o_che_do.currentIndexChanged.connect(lambda _i: self._ve_che_do())
-        hang_nv.addWidget(self._o_che_do)
-        self._nut_anh_nv = nut_phu("Tải ảnh nhân vật…", self._chon_anh_nv,
-                                   rong=170)
-        hang_nv.addWidget(self._nut_anh_nv)
-        self._anh_nv_xem = QLabel()
-        self._anh_nv_xem.setFixedSize(64, 64)
-        self._anh_nv_xem.setAlignment(Qt.AlignCenter)
-        self._anh_nv_xem.hide()
-        hang_nv.addWidget(self._anh_nv_xem)
-        v.addLayout(hang_nv)
-        self._nhan_che_do = self._chu_phu("")
-        v.addWidget(self._nhan_che_do)
-        self._anh_nv = ""
-        self._ve_che_do()
 
         self._khoi_kich_ban = QWidget()
         self._khoi_kich_ban.setMinimumWidth(1)
         vk = QVBoxLayout(self._khoi_kich_ban)
         vk.setContentsMargins(0, 0, 0, 0)
         vk.setSpacing(6)
+        vk.addWidget(self._chu_phu(
+            "Kịch bản .txt không bắt buộc — có thì prompt bám đúng tên riêng, "
+            "thuật ngữ trong bài, chuẩn xác hơn chỉ nghe từ giọng đọc."))
         hang2 = HangXuongDong()
         hang2.addWidget(nut_phu("Nạp từ file .txt…", self._nap_kich_ban,
                                 rong=170))
@@ -317,25 +276,44 @@ class TrangPromptVisuals(QWidget):
         self._ve_che_do()
 
     def _the_phong_cach(self) -> QWidget:
-        """Bước 2: lưới thẻ phong cách CÓ ẢNH + VIDEO MẪU — đúng bộ của hộp Tạo kênh.
+        """Bước 2: MỌI THỨ VỀ HÌNH ở một thẻ — phong cách, nhân vật, và Nâng cao.
 
         Chủ dự án 24/08/2026: *"phải cho khách xem demo các style và cụ thể
-        prompt để khách tự có thể tối ưu"*. Nên ở đây:
+        prompt để khách tự có thể tối ưu"*; 26/08/2026: *"sau khi khách chọn
+        phong cách, chọn all mọi thứ thì ở nâng cao có thể chỉnh được prompt,
+        ví dụ là mạch chia là 3-8s hay là chia kiểu khác"*.
 
-        * lưới thẻ = 14 phong cách của `ui_qt/kenh.py`, mỗi thẻ 3 ảnh + 1 video
-          mẫu ship kèm tool — bấm thẻ là xem to, miễn phí, rồi “Dùng phong cách
-          này”. Khách đã dùng đúng lưới này khi Tạo kênh ở tab Tự động;
-        * ô “Prompt phong cách” hiện ĐÚNG khối chữ sẽ ghép vào mọi cảnh và sửa
-          được — nó là nguồn sự thật: lúc chạy đọc từ ô này, không đọc từ thẻ;
-        * một ô chọn phụ để lấy phong cách của kênh đã tạo / bộ vẽ trong khuôn.
+        Thứ tự từ trên xuống đúng như khách nghĩ:
+
+        1. **Dùng lại** thứ đã có (kênh của tab Tự động, bộ vẽ trong khuôn,
+           phong cách đã lưu) — chọn là xong, hai tab dưới gấp lại;
+        2. hoặc **chọn mới**: lưới thẻ có ảnh + video mẫu / AI xây từ ảnh;
+        3. **Nhân vật**: cách kể + ảnh nhân vật (chuyện hình, nên nằm đây);
+        4. **⚙ Nâng cao** (gấp sẵn): prompt phong cách, **mạch chia cảnh**,
+           **prompt chia cảnh** (đúng lời gửi AI, sửa được), đồng bộ với kênh.
+
+        Một nút "Lưu để dùng lại" duy nhất — bản trước có hai.
         """
         khung = the()
         v = QVBoxLayout(khung)
         v.setContentsMargins(18, 16, 18, 18)
         v.setSpacing(10)
-        v.addWidget(nhan("Bước 2 — Phong cách hình ảnh", "h2"))
+        v.addWidget(nhan("Bước 2 — Phong cách & nhân vật", "h2"))
 
-        # ═══ HAI TAB: CHỌN SẴN / AI XÂY TỪ ẢNH CỦA KHÁCH ═══
+        # ═══ 1. DÙNG LẠI THỨ ĐÃ CÓ ═══
+        hang_lai = HangXuongDong()
+        hang_lai.addWidget(nhan("Dùng lại:", "phu"))
+        self._o_kenh = QComboBox()
+        self._o_kenh.setMinimumWidth(1)
+        self._o_kenh.setToolTip(
+            "Kênh đã tạo ở tab Tự động, bộ vẽ trong khuôn, hay phong cách bạn "
+            "đã lưu ở đây. Chọn một cái là xong Bước 2; để trống thì chọn mới "
+            "ở dưới.")
+        self._o_kenh.currentIndexChanged.connect(lambda _i: self._chon_tu_combo())
+        hang_lai.addWidget(self._o_kenh)
+        v.addLayout(hang_lai)
+
+        # ═══ 2. CHỌN MỚI: HAI TAB ═══
         #
         # Chủ dự án 24/08/2026: *"bước 2 thì có 2 tab: 1 tab là chọn phong cách
         # sẵn và 1 tab là AI xây… cho khách tải vài ảnh và từ đó dùng API để
@@ -356,8 +334,7 @@ class TrangPromptVisuals(QWidget):
         v.addWidget(self._khoi_minh_hoa)
 
         # Câu "Đang chọn" nổi hơn chữ phụ — là thứ duy nhất cho biết cú bấm vừa
-        # rồi có ăn không (thẻ được chọn có thể đã cuộn khuất). Khi khách chọn
-        # phong cách đã lưu ở Bước 1, hai tab gấp lại, còn thẻ minh hoạ + dòng này.
+        # rồi có ăn không (thẻ được chọn có thể đã cuộn khuất).
         self._nhan_phong_cach = self._chu_phu("")
         self._nhan_phong_cach.setStyleSheet(
             "color:{0}; background:{1}; border-radius:6px; padding:6px 8px;"
@@ -372,33 +349,69 @@ class TrangPromptVisuals(QWidget):
         self._nut_tu_dong = nut_phu("Để AI tự chọn", self._chon_tu_dong,
                                     rong=140)
         hang_chon.addWidget(self._nut_tu_dong)
-        self._nut_luu_chung = nut_phu("💾 Lưu phong cách này…", self._luu_mau,
-                                      rong=200)
+        self._nut_luu_chung = nut_phu("💾 Lưu để dùng lại…", self._luu_mau,
+                                      rong=190)
         self._nut_luu_chung.setToolTip(
-            "Lưu phong cách đang chọn (kể cả prompt đã sửa) để lần sau chọn "
-            "ngay ở Bước 1.")
+            "Lưu phong cách đang chọn cùng mọi thứ trong Nâng cao (prompt đã "
+            "sửa, mạch chia, prompt chia cảnh) — lần sau chọn ở ô “Dùng lại”.")
         hang_chon.addWidget(self._nut_luu_chung)
         self._nut_nang_cao = nut_phu("⚙ Nâng cao ▾", lambda: self._bat_tat(
             self._khoi_nang_cao, self._nut_nang_cao, "⚙ Nâng cao"), rong=140)
         self._nut_nang_cao.setToolTip(
-            "Xem và sửa prompt phong cách sẽ ghép vào mọi cảnh; lưu thành mẫu "
-            "để lần sau dùng lại.")
+            "Xem và sửa đúng những lời tool gửi AI: prompt phong cách, mạch "
+            "chia cảnh (3–8 giây hay dày/thưa hơn), prompt chia cảnh.")
         hang_chon.addWidget(self._nut_nang_cao)
         v.addLayout(hang_chon)
 
-        # ═══ NÂNG CAO (gấp sẵn): PROMPT PHONG CÁCH SỬA ĐƯỢC + MẪU ═══
+        # ═══ 3. NHÂN VẬT — BA CÁCH KỂ, THAM KHẢO VE3_SUITE ═══
         #
-        # Chủ dự án: *"cụ thể prompt để khách tự có thể tối ưu"* và *"cho khách
-        # xây template sẵn để lần sau tái sử dụng"*. Một mẫu = phong cách +
-        # prompt phong cách đã tinh chỉnh.
+        # Chủ dự án 24/08/2026: loại 1 một nhân vật cố định của kênh; loại 2
+        # nhân vật cố định + nhân vật/bối cảnh tham chiếu khác; loại 3 AI tự
+        # xây theo nội dung. Loại 1, 2 cần MỘT ảnh nhân vật (nv1.png) — chọn
+        # kênh ở ô "Dùng lại" thì lấy luôn ảnh nhân vật của kênh.
+        hang_nv = HangXuongDong()
+        hang_nv.addWidget(nhan("Nhân vật:", "phu"))
+        self._o_che_do = QComboBox()
+        self._o_che_do.setMinimumWidth(1)
+        for ma, ten, mo_ta in CHE_DO_KE:
+            self._o_che_do.addItem(ten, ma)
+            self._o_che_do.setItemData(self._o_che_do.count() - 1, mo_ta,
+                                       Qt.ToolTipRole)
+        self._o_che_do.currentIndexChanged.connect(lambda _i: self._ve_che_do())
+        hang_nv.addWidget(self._o_che_do)
+        self._nut_anh_nv = nut_phu("Tải ảnh nhân vật…", self._chon_anh_nv,
+                                   rong=170)
+        hang_nv.addWidget(self._nut_anh_nv)
+        self._anh_nv_xem = QLabel()
+        self._anh_nv_xem.setFixedSize(64, 64)
+        self._anh_nv_xem.setAlignment(Qt.AlignCenter)
+        self._anh_nv_xem.hide()
+        hang_nv.addWidget(self._anh_nv_xem)
+        v.addLayout(hang_nv)
+        self._nhan_che_do = self._chu_phu("")
+        v.addWidget(self._nhan_che_do)
+        self._anh_nv = ""
+        self._ve_che_do()
+
+        # ═══ 4. NÂNG CAO (gấp sẵn): ĐÚNG NHỮNG LỜI TOOL GỬI AI ═══
+        #
+        # Chủ dự án: *"cụ thể prompt để khách tự có thể tối ưu"*, *"cho khách
+        # xây template sẵn để lần sau tái sử dụng"*, và 26/08/2026: *"ở nâng
+        # cao có thể chỉnh được prompt, ví dụ là mạch chia là 3-8s hay là chia
+        # kiểu khác"*. Ba thứ, mỗi thứ một ô, đều đi vào lượt chạy:
+        #   prompt phong cách  → `visual_style_directive`
+        #   mạch chia cảnh     → `scene_pacing` (sàn/trần giây mỗi cảnh)
+        #   prompt chia cảnh   → `storyboard_template` (khuôn AI chia cảnh +
+        #                        viết prompt; chỉ gửi khi khác mặc định)
         self._khoi_nang_cao = QWidget()
         self._khoi_nang_cao.setMinimumWidth(1)
         vc = QVBoxLayout(self._khoi_nang_cao)
-        vc.setContentsMargins(0, 0, 0, 0)
+        vc.setContentsMargins(0, 4, 0, 0)
         vc.setSpacing(6)
+        vc.addWidget(nhan("Prompt phong cách", "phu"))
         vc.addWidget(self._chu_phu(
-            "Prompt phong cách (tiếng Anh) ghép vào mọi cảnh — sửa thẳng ở "
-            "đây; để trống = AI tự chọn."))
+            "Khối tiếng Anh ghép vào mọi cảnh — sửa thẳng ở đây; để trống = "
+            "AI tự chọn phong cách theo nội dung."))
         self._o_chi_dan = QPlainTextEdit()
         self._o_chi_dan.setPlaceholderText(
             "Để trống = AI tự chọn phong cách theo nội dung.")
@@ -410,13 +423,48 @@ class TrangPromptVisuals(QWidget):
         self._nut_xoa_mau.hide()
         vc.addWidget(self._nut_xoa_mau, 0, Qt.AlignLeft)
 
+        hang_nhip = HangXuongDong()
+        hang_nhip.addWidget(nhan("Mạch chia cảnh:", "phu"))
+        self._o_nhip = QComboBox()
+        self._o_nhip.setMinimumWidth(1)
+        for ma, ten, _cap in NHIP_CHIA:
+            self._o_nhip.addItem(ten, ma)
+        self._o_nhip.setToolTip(
+            "Mỗi cảnh dài bao nhiêu giây. Cắt dày = nhiều cảnh hơn, nhịp nhanh "
+            "hơn, tốn nhiều ảnh/clip hơn. Trần không vượt 8 giây của Veo 3.")
+        hang_nhip.addWidget(self._o_nhip)
+        vc.addLayout(hang_nhip)
+
+        hang_khuon = HangXuongDong()
+        hang_khuon.addWidget(nhan("Prompt chia cảnh", "phu"))
+        self._nut_khuon_mac_dinh = nut_phu("Khôi phục mặc định",
+                                           self._khoi_phuc_khuon_chia, rong=170)
+        hang_khuon.addWidget(self._nut_khuon_mac_dinh)
+        vc.addLayout(hang_khuon)
+        vc.addWidget(self._chu_phu(
+            "Đây là đúng lời tool gửi AI để chia cảnh và viết prompt ảnh + video "
+            "từng cảnh. Sửa được (luật giữ chân, cỡ cảnh, ẩn dụ…). Giữ nguyên "
+            "các chỗ <<…>> — tool điền phụ đề, nhân vật, kế hoạch vào đó; thiếu "
+            "một chỗ là không chạy."))
+        self._o_khuon_chia = QPlainTextEdit()
+        self._o_khuon_chia.setPlainText(KHUON_MAC_DINH)
+        self._o_khuon_chia.setFixedHeight(180)
+        self._o_khuon_chia.setMinimumWidth(1)
+        self._o_khuon_chia.setStyleSheet("font-size:12px;")
+        self._o_khuon_chia.textChanged.connect(self._ve_trang_thai_khuon)
+        vc.addWidget(self._o_khuon_chia)
+        self._nhan_khuon = self._chu_phu("")
+        vc.addWidget(self._nhan_khuon)
+        self._ve_trang_thai_khuon()
+
         # ═══ ĐỒNG BỘ VỚI KÊNH CỦA TAB TỰ ĐỘNG ═══
         #
-        # Chiều ngược của ô "Phong cách đã lưu" ở Bước 1: phong cách khách dựng
-        # ở đây (kể cả AI xây từ ảnh, prompt sửa tay, ảnh nhân vật) ghi vào
-        # `style.yaml` + `nv/nv1.png` của kênh — tab Tự động dùng ngay.
+        # Chiều ngược của ô "Dùng lại": phong cách khách dựng ở đây (kể cả AI
+        # xây từ ảnh, prompt sửa tay, ảnh nhân vật) ghi vào `style.yaml` +
+        # `nv/nv1.png` của kênh — tab Tự động dùng ngay.
         from .kenh_chon import HangKenh  # noqa: PLC0415
 
+        vc.addWidget(nhan("Đồng bộ với kênh của tab Tự động", "phu"))
         vc.addWidget(HangKenh(
             self._app, nap=self._nap_style_tu_kenh, luu=self._luu_style_vao_kenh,
             mach_nap="Dùng đúng phong cách và ảnh nhân vật của kênh.",
@@ -429,6 +477,32 @@ class TrangPromptVisuals(QWidget):
         self._nap_phong_cach()
         self._chon_tu_dong()
         return khung
+
+    # ── Prompt chia cảnh (Nâng cao) ──────────────────────────────────────────
+
+    def _khoi_phuc_khuon_chia(self) -> None:
+        self._o_khuon_chia.setPlainText(KHUON_MAC_DINH)
+
+    def _khuon_chia_da_sua(self) -> str:
+        """Khuôn chia cảnh khách sửa; rỗng nếu vẫn là mặc định (không gửi gì)."""
+        k = self._o_khuon_chia.toPlainText()
+        return "" if k.strip() == KHUON_MAC_DINH.strip() else k
+
+    def _ve_trang_thai_khuon(self) -> None:
+        k = self._o_khuon_chia.toPlainText()
+        if not self._khuon_chia_da_sua():
+            self._nhan_khuon.setText("Đang dùng prompt mặc định.")
+            self._nhan_khuon.setStyleSheet("")
+            return
+        thieu = [ct for ct in CHO_TRONG_KHUON_CHIA if ct not in k]
+        if thieu:
+            self._nhan_khuon.setText(
+                "⚠ Thiếu chỗ trống {0} — tool sẽ KHÔNG dùng bản sửa này. Thêm "
+                "lại hoặc bấm “Khôi phục mặc định”.".format(", ".join(thieu)))
+            self._nhan_khuon.setStyleSheet("color:{0};".format(theme.VANG))
+        else:
+            self._nhan_khuon.setText("✓ Prompt chia cảnh đã sửa — sẽ dùng bản này.")
+            self._nhan_khuon.setStyleSheet("")
 
     def _tab_chon_san(self) -> QWidget:
         """Tab 1: lưới thẻ có ảnh + video mẫu, xếp dòng theo bề rộng cửa sổ.
@@ -506,12 +580,8 @@ class TrangPromptVisuals(QWidget):
         v.addWidget(self._nhan_xay)
 
         v.addWidget(self._chu_phu(
-            "3. Ưng thì lưu lại — lần sau chọn ngay ở Bước 1, không phải tải "
-            "ảnh nữa."))
-        self._nut_luu_anh = nut_phu("💾 Lưu phong cách này…", self._luu_mau,
-                                    rong=200)
-        self._nut_luu_anh.hide()
-        v.addWidget(self._nut_luu_anh, 0, Qt.AlignLeft)
+            "3. Ưng thì bấm “💾 Lưu để dùng lại…” ở dưới — lần sau chọn ngay ở "
+            "ô “Dùng lại”, không phải tải ảnh nữa."))
         v.addStretch(1)
         return w
 
@@ -612,9 +682,8 @@ class TrangPromptVisuals(QWidget):
                        "AI rút từ {0} ảnh bạn tải lên.".format(so), chi_dan,
                        anh_mau=list(self._anh_mau))
         self._nhan_xay.setText(
-            "✓ Đã xây phong cách từ {0} ảnh. Ưng thì bấm “Lưu phong cách này…” "
-            "để lần sau chọn lại ở Bước 1.".format(so))
-        self._nut_luu_anh.show()
+            "✓ Đã xây phong cách từ {0} ảnh. Ưng thì bấm “💾 Lưu để dùng lại…” "
+            "để lần sau chọn ngay ở ô “Dùng lại”.".format(so))
         self._ghi("Đã xây phong cách từ {0} ảnh.".format(so))
 
     def _xay_hong(self, loi: BaseException) -> None:
@@ -692,9 +761,9 @@ class TrangPromptVisuals(QWidget):
             "✓ Đang chọn: {0}{1}".format(ten, " — " + mo_ta if mo_ta else ""))
         self._o_chi_dan.setPlainText(chi_dan)
         self._nut_xoa_mau.setVisible(ma.startswith("mau:"))
-        # Chọn từ Bước 1 (kênh / bộ vẽ / mẫu đã lưu) thì Bước 2 gấp hai tab,
-        # còn thẻ minh hoạ + dòng "Đang chọn" + nút Đổi; không chọn thì hai
-        # tab mở ra để chọn.
+        # Chọn từ ô "Dùng lại" (kênh / bộ vẽ / mẫu đã lưu) thì hai tab gấp
+        # lại, còn thẻ minh hoạ + dòng "Đang chọn" + nút Đổi; không chọn thì
+        # hai tab mở ra để chọn.
         tu_buoc_1 = ma.startswith(("mau:", "kenh:", "ve:"))
         self._tab.setVisible(not tu_buoc_1)
         self._nut_doi.setVisible(tu_buoc_1)
@@ -834,6 +903,10 @@ class TrangPromptVisuals(QWidget):
         # đó chính là phần công khách bỏ ra mà mẫu sinh ra để giữ.
         if str(mau.get("chi_dan") or "").strip():
             self._o_chi_dan.setPlainText(str(mau["chi_dan"]))
+        i_nhip = self._o_nhip.findData(str(mau.get("nhip") or NHIP_CHIA[0][0]))
+        self._o_nhip.setCurrentIndex(i_nhip if i_nhip >= 0 else 0)
+        self._o_khuon_chia.setPlainText(
+            str(mau.get("khuon_chia") or "").strip() or KHUON_MAC_DINH)
         # Ô chọn đứng ở mục mẫu (không nhảy về phong cách gốc) để khách thấy
         # mình đang dùng mẫu nào, và nút "Xoá mẫu này" biết xoá cái gì.
         self._o_kenh.blockSignals(True)
@@ -842,11 +915,11 @@ class TrangPromptVisuals(QWidget):
             self._o_kenh.setCurrentIndex(i)
         self._o_kenh.blockSignals(False)
         self._nhan_phong_cach.setText(
-            "✓ Phong cách đã lưu: {0}. Mọi cảnh sẽ theo đúng kiểu này — muốn "
+            "✓ Đang dùng lại: {0}. Mọi cảnh sẽ theo đúng kiểu này — muốn "
             "xem/sửa chi tiết thì mở ⚙ Nâng cao.".format(ten))
         self._nut_xoa_mau.show()
-        # Chọn từ Bước 1 rồi thì Bước 2 gấp hai tab lại: chỉ còn dòng trên và
-        # nút Đổi — đúng ý "có chọn mẫu thì bước 2 thể hiện phong cách đó".
+        # Chọn mẫu rồi thì hai tab gấp lại: chỉ còn dòng trên và nút Đổi —
+        # đúng ý "có chọn mẫu thì bước 2 thể hiện phong cách đó".
         self._tab.hide()
         self._nut_doi.show()
         if thieu:
@@ -884,13 +957,17 @@ class TrangPromptVisuals(QWidget):
                 # Ảnh khách tải khi nhờ AI xây — để lần sau chọn mẫu vẫn có
                 # hình minh hoạ, không chỉ một khối chữ.
                 "anh_mau": list(self._anh_mau_chon),
+                # Nâng cao đi theo mẫu: mạch chia và prompt chia cảnh đã sửa
+                # (rỗng = mặc định) — đây là phần công khách bỏ ra.
+                "nhip": str(self._o_nhip.currentData() or ""),
+                "khuon_chia": self._khuon_chia_da_sua(),
             })
         except Exception as loi:  # noqa: BLE001 — lưu hỏng không được giết tab
             self._app.show_error(loi)
             return
         self._nap_phong_cach()
         self._ap_mau(str(ten).strip())
-        self._ghi("Đã lưu phong cách “{0}” — lần sau chọn ở Bước 1.".format(
+        self._ghi("Đã lưu “{0}” — lần sau chọn ở ô “Dùng lại” của Bước 2.".format(
             str(ten).strip()))
 
     def _xoa_mau(self) -> None:
@@ -924,8 +1001,8 @@ class TrangPromptVisuals(QWidget):
         dang_chon = str(self._o_kenh.currentData() or "") or self._chon_ma
         self._o_kenh.blockSignals(True)
         self._o_kenh.clear()
-        self._o_kenh.addItem("(chưa chọn — sẽ chọn phong cách ở Bước 2)"
-                             if (ds or mau) else "(chưa lưu phong cách nào)", "")
+        self._o_kenh.addItem("(không — chọn mới ở dưới)"
+                             if (ds or mau) else "(chưa có gì để dùng lại)", "")
         for p in ds:
             self._o_kenh.addItem(p.ten, p.ma)
             if p.mo_ta:
@@ -1059,7 +1136,7 @@ class TrangPromptVisuals(QWidget):
         v = QVBoxLayout(khung)
         v.setContentsMargins(18, 16, 18, 18)
         v.setSpacing(10)
-        v.addWidget(nhan("Bước 4 — Xem & chỉnh prompt từng cảnh", "h2"))
+        v.addWidget(nhan("Bước 4 — Xem, sửa prompt và thử vài cảnh thật", "h2"))
 
         hang = HangXuongDong()
         self._o_xem = QComboBox()
@@ -1133,51 +1210,42 @@ class TrangPromptVisuals(QWidget):
                                 lambda: mo_thu_muc(self._thu_muc_da_xuat),
                                 rong=170))
         v.addLayout(hang2)
-        return khung
 
-    # ── Bước 5: thử phong cách bằng vài cảnh thật ────────────────────────────
-    #
-    # Chủ dự án 24/08/2026: khách cần *"có chế độ test và ảnh vài video luôn"*
-    # — tức nhìn thấy phong cách mình chọn thành ẢNH THẬT và CLIP THẬT trên
-    # một hai cảnh, trước khi mang cả trăm cảnh sang tab Ảnh & Video.
-    #
-    # Tiền và nhịp: mỗi cảnh thử = 1 ảnh + 1 clip, giá nói TRƯỚC nút bấm. Mọi
-    # việc đi qua `app.start_batch` — cùng hàng đợi, cùng bộ giữ nhịp với các
-    # tab khác, không một vòng hỏi riêng nào. Ảnh xong thì nối sang clip bằng
-    # LINK máy chủ trả sẵn khi còn dùng được (không đẩy lại tấm ảnh lên mạng —
-    # xem CLAUDE.md luật 5), chỉ khi thiếu link mới đẩy đúng một tấm.
-
-    def _the_thu(self) -> QWidget:
-        khung = the()
-        v = QVBoxLayout(khung)
-        v.setContentsMargins(18, 16, 18, 18)
-        v.setSpacing(10)
-        v.addWidget(nhan("Bước 5 — Thử phong cách bằng vài cảnh thật", "h2"))
+        # ═══ THỬ VÀI CẢNH THẬT — cùng thẻ, ngay dưới bảng ═══
+        #
+        # Chủ dự án 24/08/2026: khách cần *"có chế độ test và ảnh vài video
+        # luôn"* — thấy phong cách thành ẢNH THẬT và CLIP THẬT trên một hai
+        # cảnh trước khi mang cả trăm cảnh sang tab Ảnh & Video. Từng là Bước 5
+        # riêng; gộp vào đây vì nó là việc làm NGAY SAU khi xem prompt, trên
+        # chính bảng này, và bớt một thẻ là bớt một chỗ để lạc.
+        #
+        # Tiền và nhịp: mỗi cảnh thử = 1 ảnh + 1 clip, giá nói TRƯỚC nút bấm.
+        # Mọi việc đi qua `app.start_batch` — cùng hàng đợi, cùng bộ giữ nhịp
+        # với các tab khác. Ảnh xong thì nối sang clip bằng LINK máy chủ trả
+        # sẵn khi còn dùng được (không đẩy lại ảnh lên mạng — CLAUDE.md luật 5).
+        v.addWidget(nhan("Thử vài cảnh thật", "phu"))
         v.addWidget(self._chu_phu(
-            "Chưa cần chạy cả loạt: tạo thử ảnh + clip cho một hai cảnh đầu để "
-            "xem phong cách có ưng không. Chưa ưng thì quay lại Bước 2 đổi "
-            "phong cách hoặc Bước 4 sửa prompt rồi thử lại. Ưng rồi thì mang "
-            "file Excel sang tab Ảnh & Video → Hàng loạt để chạy hết."))
-
-        hang = HangXuongDong()
+            "Tạo thử ảnh + clip cho một hai cảnh đầu để xem phong cách có ưng "
+            "không. Chưa ưng thì đổi phong cách hoặc sửa prompt ở trên rồi thử "
+            "lại. Ưng rồi thì mang file Excel sang tab Ảnh & Video → Hàng loạt "
+            "để chạy hết."))
+        hang3 = HangXuongDong()
         self._so_thu = QComboBox()
         for n in (1, 2, 3):
             self._so_thu.addItem("Thử {0} cảnh đầu".format(n), n)
         self._so_thu.setCurrentIndex(1)
         self._so_thu.setMinimumWidth(1)
         self._so_thu.currentIndexChanged.connect(lambda _i: self._ve_gia_thu())
-        hang.addWidget(self._so_thu)
+        hang3.addWidget(self._so_thu)
         self._nut_thu = nut_chinh("Tạo thử ảnh + video", self._thu_phong_cach)
         self._nut_thu.setFixedWidth(220)
         self._nut_thu.setEnabled(False)
-        hang.addWidget(self._nut_thu)
-        v.addLayout(hang)
-
+        hang3.addWidget(self._nut_thu)
+        v.addLayout(hang3)
         # Giá nói trước, cập nhật theo số cảnh và engine đã chọn.
         self._nhan_gia_thu = self._chu_phu(
             "Tạo prompt xong (Bước 3) là thử được ngay tại đây.")
         v.addWidget(self._nhan_gia_thu)
-
         self._thu_vien = ThuVienKetQua(
             "Ảnh và clip thử sẽ hiện ở đây — mỗi cảnh một thẻ ảnh, xong ảnh "
             "thì clip của đúng cảnh đó tự chạy tiếp.")
@@ -1189,7 +1257,7 @@ class TrangPromptVisuals(QWidget):
     def _cap_nhat_thu(self) -> None:
         """Bật/tắt nút thử theo việc đã có cảnh trong bảng Bước 4 hay chưa."""
         if not hasattr(self, "_nut_thu"):
-            return  # thẻ Bước 5 dựng sau thẻ Bước 4 — lượt vẽ đầu chưa có nút
+            return  # nút thử dựng ở cuối thẻ Bước 4 — lượt vẽ đầu chưa có
         self._nut_thu.setEnabled(bool(self._canh_hien))
         self._ve_gia_thu()
 
@@ -1453,11 +1521,10 @@ class TrangPromptVisuals(QWidget):
             self._o_xem.addItem(ten)
         self._o_xem.blockSignals(False)
         self._o_xem.setVisible(len(self._ket_qua_xem) > 1)
-        # Có kết quả thì hai thẻ Bước 4, 5 mới hiện ra — trước đó chúng không
-        # có gì để nói với khách.
+        # Có kết quả thì thẻ Bước 4 mới hiện ra — trước đó nó không có gì để
+        # nói với khách.
         co = bool(self._ket_qua_xem)
         self._the_xem_w.setVisible(co)
-        self._the_thu_w.setVisible(co)
         if co:
             self._o_xem.setCurrentIndex(self._o_xem.count() - 1)
             self._ve_xem()
@@ -1741,8 +1808,22 @@ class TrangPromptVisuals(QWidget):
             self._app.show_message(
                 "Thiếu ảnh nhân vật",
                 "Cách kể bạn chọn cần MỘT ảnh nhân vật chính. Bấm “Tải ảnh nhân "
-                "vật…” ở Bước 1, hoặc đổi sang “AI tự xây nhân vật & bối cảnh”.")
+                "vật…” ở Bước 2, hoặc đổi sang “AI tự xây nhân vật & bối cảnh”.")
             return
+        # Nâng cao: khuôn chia cảnh khách sửa phải đủ chỗ trống — chặn TRƯỚC
+        # khi tốn tiền nghe + gọi AI, và nói rõ thiếu gì thay vì lặng lẽ dùng
+        # mặc định (khách tưởng bản sửa của mình đã chạy).
+        khuon_chia = self._khuon_chia_da_sua()
+        if khuon_chia and not khuon_chia_dung_duoc(khuon_chia):
+            thieu = [ct for ct in CHO_TRONG_KHUON_CHIA if ct not in khuon_chia]
+            self._app.show_message(
+                "Prompt chia cảnh thiếu chỗ trống",
+                "Bản bạn sửa thiếu {0}. Tool điền phụ đề, nhân vật, kế hoạch vào "
+                "các chỗ ấy — thiếu là AI không có gì để chia. Mở ⚙ Nâng cao ở "
+                "Bước 2, thêm lại hoặc bấm “Khôi phục mặc định”.".format(
+                    ", ".join(thieu)))
+            return
+        nhip = str(self._o_nhip.currentData() or "")
         files = list(self._files)
 
         self._huy = threading.Event()
@@ -1760,12 +1841,14 @@ class TrangPromptVisuals(QWidget):
 
         def viec() -> List[str]:
             return self._chay_nen(files, engine, mo_hinh, ngon_ngu, chi_dan,
-                                  kich_ban, nhat_quan, huy, che_do, anh_nv)
+                                  kich_ban, nhat_quan, huy, che_do, anh_nv,
+                                  khuon_chia=khuon_chia, nhip=nhip)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
     def _chay_nen(self, files, engine, mo_hinh, ngon_ngu, chi_dan, kich_ban,
-                  nhat_quan, huy, che_do="tu_xay", anh_nv="") -> List[str]:
+                  nhat_quan, huy, che_do="tu_xay", anh_nv="", khuon_chia="",
+                  nhip="") -> List[str]:
         """LUỒNG NỀN. Không chạm widget — mọi câu chữ đi qua `_ghi_nen`."""
         import json  # noqa: PLC0415
 
@@ -1779,7 +1862,8 @@ class TrangPromptVisuals(QWidget):
         # loạt file (chúng cùng một video). Rỗng thì không tạo artifact, workflow
         # về đúng dạng cũ (chỉ có phụ đề).
         boi_canh = dung_boi_canh(kich_ban, chi_dan=chi_dan, che_do_ke=che_do,
-                                 nhan_vat_co_dinh={"image_file": "nv1.png"})
+                                 nhan_vat_co_dinh={"image_file": "nv1.png"},
+                                 khuon_chia=khuon_chia, nhip=nhip)
         ma_context = ""
         if boi_canh:
             try:
@@ -2181,8 +2265,8 @@ class TrangPromptVisuals(QWidget):
         if ds:
             # Không bật hộp thoại: Bước 4 và 5 vừa hiện ra ngay dưới là câu trả
             # lời; một hộp "OK" chắn giữa chỉ bắt khách bấm thêm một lần.
-            self._ghi("Xong: {0} file Excel — xem và sửa prompt ở Bước 4, thử "
-                      "vài cảnh thật ở Bước 5.".format(len(ds)))
+            self._ghi("Xong: {0} file Excel — xem, sửa prompt và thử vài cảnh "
+                      "thật ở Bước 4.".format(len(ds)))
         else:
             self._ghi("Không tạo được file nào — xem nhật ký bên dưới.")
             if not self._log.isVisible():

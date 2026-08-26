@@ -408,12 +408,18 @@ def chia_khuc(cue: Sequence[Mapping[str, Any]],
 
 
 def loi_nhac_chia(khuon: str, cue: Sequence[Mapping[str, Any]], tran: float,
-                  them: Optional[Mapping[str, Any]] = None) -> str:
-    """Dựng lời nhắc cho một khúc: phụ đề có đánh số + sàn/trần độ dài."""
+                  them: Optional[Mapping[str, Any]] = None,
+                  san: float = MIN_GIAY_CANH) -> str:
+    """Dựng lời nhắc cho một khúc: phụ đề có đánh số + sàn/trần độ dài.
+
+    `san`/`tran` là mạch chia khách chọn (Prompt Visuals → Nâng cao → "Mạch chia
+    cảnh", 26/08/2026): cắt dày 3–5, cắt thưa 5–8… Mặc định là sàn 3 giây và
+    trần của engine như trước.
+    """
     gia_tri: Dict[str, Any] = dict(them or {})
     gia_tri.update({
         "SRT": bang_phu_de(cue),
-        "MIN_SEC": "{0:.0f}".format(MIN_GIAY_CANH),
+        "MIN_SEC": "{0:.0f}".format(float(san)),
         "MAX_SEC": "{0:.0f}".format(float(tran)),
     })
     return dien_khuon(khuon, gia_tri)
@@ -540,7 +546,8 @@ def gop_ngan(ds: List[Dict[str, Any]], theo_so: Mapping[int, Mapping[str, Any]],
 
 
 def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
-             tran: float, ten_khuc: str = "") -> List[Dict[str, Any]]:
+             tran: float, ten_khuc: str = "",
+             san: float = MIN_GIAY_CANH) -> List[Dict[str, Any]]:
     """Canh lại kết quả AI: phủ hết dòng, không chồng lấn, không quá trần.
 
     AI chia theo nghĩa rất tốt, nhưng nó **không đếm giỏi**. Ba lỗi hay gặp và
@@ -613,7 +620,7 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
     # 24 cảnh, ngắn nhất 0,7 giây, dù lời nhắc nói rõ sàn 3 giây — nó chia
     # "mỗi dòng một cảnh" theo kế hoạch đạo diễn. Một tấm ảnh 0,7 giây là
     # một cú nháy trên màn hình, không ai kịp thấy gì.
-    ra = gop_ngan(ra, theo_so, "_tu", "_den", MIN_GIAY_CANH)
+    ra = gop_ngan(ra, theo_so, "_tu", "_den", float(san))
 
     xong: List[Dict[str, Any]] = []
     for m in ra:
@@ -678,6 +685,7 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
                     ghi: Optional[Callable[[str], None]] = None,
                     kiem_dung: Optional[Callable[[], None]] = None,
                     duoi: str = "", giay_moi_khuc: float = 0.0,
+                    san: float = MIN_GIAY_CANH,
                     ) -> List[Dict[str, Any]]:
     """Chia cả file phụ đề thành cảnh, rồi đánh số và gắn mốc thời gian.
 
@@ -698,7 +706,7 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
     if ghi is not None:
         ghi("  {0} dòng phụ đề → {1} khúc, AI tự chia cảnh theo nghĩa "
             "({2:.0f}–{3:.0f} giây/cảnh)…".format(
-                len(cue), len(khuc), MIN_GIAY_CANH, float(tran)))
+                len(cue), len(khuc), float(san), float(tran)))
 
     ket: List[Optional[List[Dict[str, Any]]]] = [None] * len(khuc)
 
@@ -706,7 +714,7 @@ def chia_theo_nghia(cue: Sequence[Mapping[str, Any]],
         if kiem_dung is not None:
             kiem_dung()
         ket[i] = canh_lai(hoi(khuc[i], i, len(khuc)), khuc[i], float(tran),
-                          "khúc {0}/{1}".format(i + 1, len(khuc)))
+                          "khúc {0}/{1}".format(i + 1, len(khuc)), san=float(san))
 
     with ThreadPoolExecutor(
             max_workers=max(1, min(int(song_song), len(khuc)))) as bo:
