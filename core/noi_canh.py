@@ -485,30 +485,59 @@ def chay_cac_chuoi(chuoi: Sequence[Sequence[Dict[str, Any]]], lam_chuoi: Callabl
 # một dòng chuyển động.
 GIAY_CLIP_VEO = 8.0
 THU_MUC_DOAN = "_doan"
-#: Số đoạn diễn tiếp liên tiếp trước khi NEO LẠI bằng ảnh có tham chiếu
-#: (1 → cứ ~16 s neo một lần; mỗi lần neo là một chỗ có thể nhảy nhẹ).
-TOI_DA_NOI_TIEP_DAI = 1
+#: Mấy đoạn được nối THẲNG từ khung cuối (không vẽ lại) trước khi phải NEO LẠI
+#: bằng ảnh có tham chiếu.
+#:
+#: 0 = neo lại ở MỌI đoạn. Đo 26/08/2026 trên chính chuỗi cảnh 5–11 (mẫu 44 s):
+#: với 1, con mèo con to dần qua từng đoạn cho tới khi cao gần bằng cậu bé đang
+#: ngồi, màu lúc kem lúc cam, lúc mọc vằn — vì mỗi khung cuối lệch một chút,
+#: đoạn sau lại lấy chính khung lệch ấy làm chuẩn nên sai số cộng dồn. Ảnh neo
+#: vẽ lại đúng khung cuối (đo: gần như trùng khít) nhưng kéo nhân vật về đúng
+#: ảnh tham chiếu, nên neo mỗi đoạn là chặn sai số ở đúng một đoạn. Giá: thêm
+#: một ảnh (~50 ₫) mỗi 8 giây phim.
+TOI_DA_NOI_TIEP_DAI = 0
 _DAU_KHOA_VIDEO = "IDENTITY LOCK"
 _MOC_DUOI_CLIP = (", smooth 3D animated motion", ", smooth 2D", ", the background keeps its original",
                   ", no text", ", cinematic", ", soft physics")
+#: Khối khoá đặt ở ĐẦU mọi lời nhắc clip của cú máy dài. Vì sao từng câu:
+#:   * "same size relative to…, nobody grows or shrinks" — đo 26/08/2026: con
+#:     mèo con cao dần qua bốn đoạn tới khi gần bằng cậu bé ngồi. Không câu nào
+#:     trong lời nhắc cũ nói về CỠ nhân vật.
+#:   * "no stripes, patches, fur texture" — cùng lần đo: mèo vàng trơn mọc vằn.
+#:     (Câu này vốn có trong khoá video của bảng cảnh, tôi lược mất khi gộp
+#:     hành động — chính là lỗi làm nhận dạng tuột.)
+#:   * "background … stay exactly as in this first frame" — nền/đạo cụ trôi
+#:     theo (đèn lồng, ghế băng, chậu hoa đổi chỗ).
+KHOA_CLIP = (
+    "IDENTITY LOCK, highest priority for the whole clip: every character stays exactly as drawn in this "
+    "first frame — same face, eyes, fur or skin colour, body proportions, and the same SIZE relative to the "
+    "other characters and to the scene; nobody grows, shrinks, ages or changes species. Nothing is added "
+    "(no stripes, patches, fur texture, extra clothes, collar, belt, cape or accessory) and nothing is "
+    "removed. The place, buildings, props, plants and lighting also stay exactly as in this first frame — "
+    "nothing moves, appears or disappears in the background. Only pose, gesture and expression change. ")
+_KHUNG_CHUNG = (
+    "Everyone stays at roughly their current distance from the camera: nobody walks toward, up to or past "
+    "the camera, nothing ever covers or blocks the lens, no extreme close-up. ")
 DAU_CLIP_KHUNG_DAU = (
-    "Animate from this exact first frame as one continuous shot of a 3D animated film: the characters keep "
-    "their exact look from the first frame for the whole clip. Lively, clearly visible motion the whole time "
-    "— the characters act out every beat with full-body movement, gestures and expressions, never a frozen "
-    "pose; the camera moves slowly and smoothly. Everyone stays at roughly their current distance from the "
-    "camera: nobody walks toward, up to or past the camera, nothing ever covers or blocks the lens, no "
-    "extreme close-up. ")
+    KHOA_CLIP + "Animate from this exact first frame as one continuous shot of a 3D animated film: lively, "
+    "clearly visible motion the whole time — the characters act out every beat with full-body movement, "
+    "gestures and expressions, never a frozen pose. " + _KHUNG_CHUNG)
+#: Đoạn 2 trở đi của cùng một cú máy: MÁY ĐỨNG YÊN. Đo 26/08/2026: mỗi đoạn
+#: "trôi nhẹ" một chút, bốn đoạn cộng lại thành một cú zoom vào — người xem thấy
+#: bối cảnh đổi hẳn. Máy đứng yên thì bốn clip ghép lại vẫn là MỘT khung hình.
 DAU_CLIP_NOI_TIEP_DAI = (
-    "One single unbroken take continuing from this exact frame — no cut, no new shot, no jump; the camera "
-    "keeps its framing and may only drift gently; the characters stay who and where they are and keep their "
-    "exact look. Lively, clearly visible motion the whole time, never a frozen pose. Everyone stays at "
-    "roughly their current distance from the camera: nobody walks toward, up to or past the camera, nothing "
-    "ever covers or blocks the lens, no extreme close-up. ")
+    KHOA_CLIP + "One single unbroken take continuing from this exact frame — no cut, no new shot, no jump. "
+    "The camera is locked off: it does not move, pan, tilt, zoom, orbit or drift, and the framing at the end "
+    "of the clip is exactly the framing at the start. Lively, clearly visible motion from the characters the "
+    "whole time, never a frozen pose. " + _KHUNG_CHUNG)
 NEO_KHUNG = (
     "Recreate the LAST attached reference image EXACTLY — identical framing, camera distance and angle, "
-    "background, lighting and every character's position and pose, as if it were the very same frame. The "
-    "ONLY change: restore each character to look exactly like its own reference image (correct face, "
-    "fur/skin colour, outfit, proportions). Add nothing, remove nothing, do not reframe.")
+    "background, buildings, props, plants, lighting and every character's position and pose, as if it were "
+    "the very same frame. The ONLY change: restore each character to look exactly like its own reference "
+    "image — correct face, fur or skin colour (no stripes or patches that its reference does not have), "
+    "outfit, body proportions and, above all, its correct SIZE relative to the other characters and to the "
+    "scene (a small animal stays small). Add nothing, remove nothing, do not reframe, do not move anything "
+    "in the background.")
 
 
 def hanh_dong_clip(video_prompt: str):
@@ -644,6 +673,8 @@ class CuMayDai(ChuoiNoiCanh):
             tho = os.path.join(tm, "{0}-{1}.mp4".format(ma, k))
             cat = os.path.join(tm, "{0}-{1}-cat.mp4".format(ma, k))
             khung = os.path.join(tm, "{0}-{1}-cuoi.png".format(ma, k))
+            # Lời nhắc theo VỊ TRÍ trong cú máy: đoạn 2 trở đi luôn là "diễn tiếp,
+            # máy đứng yên", dù khung đầu của nó là bản chép thẳng hay ảnh neo vẽ lại.
             noi_tiep = k > 0
             if not os.path.exists(anh):
                 if khung_truoc and so_noi_tiep < TOI_DA_NOI_TIEP_DAI:
@@ -651,7 +682,6 @@ class CuMayDai(ChuoiNoiCanh):
                     so_noi_tiep += 1
                     self.ghi("    đoạn {0}-{1}: diễn tiếp từ khung cuối đoạn trước.".format(ma, k))
                 else:
-                    noi_tiep = False
                     if khung_truoc:
                         refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c0, khung_truoc)
                         prompt = prompt_neo_khung(str(c0.get("img_prompt") or ""))

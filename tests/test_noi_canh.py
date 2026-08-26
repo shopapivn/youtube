@@ -332,6 +332,15 @@ class TestCuMayDai:
         assert p.count("no text") == 1
         assert nc.prompt_doan(d, True).startswith(nc.DAU_CLIP_NOI_TIEP_DAI + "nv1 waving")
 
+    def test_moi_loi_nhac_clip_deu_khoa_nhan_dang_co_va_nen(self):
+        for dau in (nc.DAU_CLIP_KHUNG_DAU, nc.DAU_CLIP_NOI_TIEP_DAI):
+            assert dau.startswith("IDENTITY LOCK")
+            assert "SIZE relative to" in dau and "nobody grows" in dau
+            assert "no stripes" in dau and "background" in dau
+        # đoạn diễn tiếp: máy ĐỨNG YÊN (bốn đoạn trôi nhẹ cộng lại thành zoom)
+        assert "locked off" in nc.DAU_CLIP_NOI_TIEP_DAI and "does not move" in nc.DAU_CLIP_NOI_TIEP_DAI
+        assert "SIZE relative to" in nc.NEO_KHUNG
+
     def test_bo_chi_dao_may(self):
         assert nc.bo_chi_dao_may("framed over nv2's shoulder, nv1 recoils sharply, camera eases in slightly") == "nv1 recoils sharply"
         assert nc.bo_chi_dao_may("nv2 rises onto two legs, one paw stroking its whiskers, camera tilts upward following it") ==             "nv2 rises onto two legs, one paw stroking its whiskers"
@@ -347,24 +356,36 @@ class TestCuMayDai:
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
         canh = [_c(1, "loc1", giay=4.6), _c(2, "loc1", giay=3.2), _c(3, "loc1", giay=5.0)]
         assert ct.chay(canh) == 3
-        assert nhat["anh"] == [("1.png", ["nv1.png", "loc1.png"], nc.prompt_noi_canh(canh[0]["img_prompt"], False)[:40])]
+        assert [x[0] for x in nhat["anh"]] == ["1.png", "1-1.png"]
+        assert nhat["anh"][0] == ("1.png", ["nv1.png", "loc1.png"], nc.prompt_noi_canh(canh[0]["img_prompt"], False)[:40])
         assert [x[0] for x in nhat["clip"]] == ["1-0.mp4", "1-1.mp4"]
         assert nhat["clip"][0][1].startswith(nc.DAU_CLIP_KHUNG_DAU) and nhat["clip"][1][1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI)
         assert nhat["cat"] == [("1-0-cat.mp4", 0.0, 6.4), ("1-1-cat.mp4", 0.0, 6.4),
                                ("1.mp4", 0.0, 4.6), ("2.mp4", 4.6, 3.2), ("3.mp4", 7.8, 5.0)]
         assert nhat["noi"] == [["1-0-cat.mp4", "1-1-cat.mp4"]] and (clip_d / "_doan" / "1.mp4").exists()
-        assert (clip_d / "_doan" / "1-1.png").read_bytes() == b"khung"   # diễn tiếp: khung cuối đoạn 0
+        assert nhat["anh"][1][2] == nc.NEO_KHUNG[:40]   # đoạn 1: ảnh neo vẽ lại khung cuối đoạn 0
         # chạy lại: không làm gì thêm
         n = {k: len(v) for k, v in nhat.items() if k != "ghi"}
         assert ct.chay(canh) == 3 and {k: len(v) for k, v in nhat.items() if k != "ghi"} == n
 
-    def test_neo_lai_sau_toi_da_doan(self, tmp_path):
+    def test_neo_lai_moi_doan(self, tmp_path):
+        """Mặc định TOI_DA_NOI_TIEP_DAI = 0: đoạn nào cũng neo lại bằng ảnh có tham chiếu,
+        nhưng lời nhắc clip vẫn là "diễn tiếp, máy đứng yên" từ đoạn 2 trở đi."""
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
         canh = [_c(i, "loc1", giay=8.0) for i in range(1, 5)]   # 32 s → 4 đoạn
         assert ct.chay(canh) == 4
-        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-2.png"]
-        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1-1-cuoi.png"] and nhat["anh"][1][2] == nc.NEO_KHUNG[:40]
-        assert nhat["clip"][2][1].startswith(nc.DAU_CLIP_KHUNG_DAU) and nhat["clip"][3][1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI)
+        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-1.png", "1-2.png", "1-3.png"]
+        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1-0-cuoi.png"] and nhat["anh"][1][2] == nc.NEO_KHUNG[:40]
+        assert nhat["clip"][0][1].startswith(nc.DAU_CLIP_KHUNG_DAU)
+        assert all(x[1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI) for x in nhat["clip"][1:])
+
+    def test_noi_thang_khung_cuoi_khi_bat_lai(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(nc, "TOI_DA_NOI_TIEP_DAI", 1)
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
+        canh = [_c(i, "loc1", giay=8.0) for i in range(1, 5)]
+        assert ct.chay(canh) == 4
+        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-2.png"]   # 1-1, 1-3 chép thẳng
+        assert (clip_d / "_doan" / "1-1.png").read_bytes() == b"khung"
 
     def test_clip_hong_giua_chung_thi_cat_phan_da_co(self, tmp_path):
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path, lam_clip_hong={2})
