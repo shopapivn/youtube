@@ -65,8 +65,9 @@ DUOI_NOI_CANH = (
     "\nThe LAST attached reference image is the final frame of the previous shot of this same "
     "scene. This picture is the NEXT moment: same place, same time of day and lighting, the "
     "characters start exactly where that frame left them (same positions, same clothes, same "
-    "props); only the camera and the action described above change. Every character still "
-    "looks EXACTLY like its own reference image.")
+    "props); only the camera and the action described above change. Frame the picture with the "
+    "shot named at the start of this prompt (its size and angle), not with the framing of that "
+    "previous frame. Every character still looks EXACTLY like its own reference image.")
 
 
 def la_noi_canh(kenh: Any) -> bool:
