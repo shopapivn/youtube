@@ -353,7 +353,52 @@ def dat_lam_lai(luot: LuotChay, ma: str, *, ca_sau: bool = True) -> List[str]:
             tt.trang_thai = CHO
             tt.loi = ""
             doi.append(m)
+    _cat_ket_qua_cu(luot, doi)
     return doi
+
+
+#: Kết quả của những khâu "một sản phẩm": làm lại là làm lại CẢ, nên phải cất
+#: bản cũ đi — khâu thấy tệp còn đó là "đã có, dùng lại" (đo 26/08/2026: đổi
+#: lời nhắc viết, bấm làm lại kịch bản, tool trả đúng bài cũ 4.483 ký tự rồi
+#: đem đi đọc). Ảnh/clip/bìa KHÔNG nằm đây: luật của chúng là chỉ làm phần thiếu.
+_KET_QUA_CAT = {
+    "kich-ban": ("1-kich-ban*.txt", "1-nhap-*.txt", "1-ban-*.txt", "1-seo.txt", "1-tieu-de.txt"),
+    "giong-doc": ("2-giong-doc*.mp3", "2-giong-doc.mp3.txt", "2-doan"),
+    "phu-de": ("3-phu-de.srt",),
+    "bang-canh": ("4-canh.json", "4-canh.xlsx", "4-canh-dan.json", "4-boi-canh.json",
+                  "4-ke-hoach.json", "scene-prompts.xlsx"),
+    "dung": ("8-video.mp4",),
+}
+
+
+def _cat_ket_qua_cu(luot: LuotChay, cac_khau: Sequence[str]) -> List[str]:
+    """Cất (không xoá) kết quả cũ của các khâu vừa được đánh dấu làm lại vào
+    `<lượt>/_lam-lai/<thời điểm>/`. Trả về tên các tệp đã cất."""
+    import glob  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    d = str(getattr(luot, "thu_muc", "") or "")
+    if not d or not os.path.isdir(d):
+        return []
+    mau = [m for k in cac_khau for m in _KET_QUA_CAT.get(k, ())]
+    if not mau:
+        return []
+    tep = []
+    for m in mau:
+        tep.extend(sorted(glob.glob(os.path.join(d, m))))
+    tep = [t for t in dict.fromkeys(tep) if os.path.exists(t)]
+    if not tep:
+        return []
+    kho = os.path.join(d, "_lam-lai", time.strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(kho, exist_ok=True)
+    da_cat = []
+    for t in tep:
+        try:
+            shutil.move(t, os.path.join(kho, os.path.basename(t)))
+            da_cat.append(os.path.basename(t))
+        except OSError:
+            pass
+    return da_cat
 
 
 # ── Chạy ─────────────────────────────────────────────────────────────────────
