@@ -416,12 +416,23 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "tieu_de": "Dựng video",
         "tom_tat": "Ghép các clip và giọng đọc đã có thành video hoàn chỉnh.",
         "buoc": [
-            "Chọn thư mục chứa clip, thư mục giọng đọc, rồi chọn chỗ lưu.",
-            "Bấm dựng và chờ.",
+            "Mở tab là tôi quét sẵn dự án bạn đang làm. Bảng hiện mỗi video "
+            "một dòng, cột cuối nói thẳng: sẵn sàng, hay còn thiếu gì.",
+            "Dòng nào “sẵn sàng” thì bấm “Dựng video” và chờ. Video càng dài, "
+            "độ phân giải càng cao thì càng lâu — máy bạn làm việc chứ không "
+            "phải máy chủ.",
+            "Muốn dựng thư mục khác thì bấm “Chọn…” rồi “Quét lại”.",
         ],
         "luu_y": [
-            "Chạy bằng FFmpeg ngay trên máy bạn — không cần mạng.",
+            "Chạy bằng FFmpeg ngay trên máy bạn — không cần mạng, không trừ tiền.",
             "Tool KHÔNG bao giờ xoá file gốc của bạn.",
+            "Bạn không phải gom file bằng tay: tôi lấy lời đọc trong VOICE, "
+            "ảnh và clip trong VISUAL, phụ đề trong EXCEL của dự án. Thư mục "
+            "bạn tự xếp (mp3 và ảnh nằm chung một chỗ) cũng nhận được.",
+            "Trỏ nhầm vào trong một ngăn (ví dụ …/VISUAL) thì tôi tự lùi ra "
+            "thư mục dự án, không bắt bạn chọn lại.",
+            "Bảng ghi “đã dựng xong” nghĩa là chỗ lưu đã có file cùng tên. "
+            "Muốn dựng lại thì đổi tên hoặc dời file cũ đi.",
         ],
     },
     "wallet": {

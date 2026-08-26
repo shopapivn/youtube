@@ -314,17 +314,28 @@ class ChonThuMuc(QWidget):
     cần đọc. Khách nhìn hai dòng giống hệt nhau và không biết điền cái nào.
     """
 
-    def __init__(self, ban_dau: str, nhan_text: str = "Lưu vào:"):
+    def __init__(self, ban_dau: str, nhan_text: str = "Lưu vào:",
+                 on_doi: Optional[Callable[[str], None]] = None):
         super().__init__()
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
         ngang.setSpacing(8)
         ngang.addWidget(nhan(nhan_text))
         self._mac_dinh = ban_dau
+        self._on_doi = on_doi
         self._o = QLineEdit(ban_dau)
+        # Khách đổi thư mục xong là trang biết ngay, không phải bấm thêm nút
+        # nào. `editingFinished` chứ không phải `textChanged`: gõ tay một đường
+        # dẫn dài mà bắn sau mỗi ký tự là quét đĩa mấy chục lần vô ích.
+        if on_doi is not None:
+            self._o.editingFinished.connect(lambda: self._bao())
         ngang.addWidget(self._o, 1)
         ngang.addWidget(nut_phu("Chọn…", self._chon, rong=92))
         ngang.addWidget(nut_phu("Mở", lambda: mo_thu_muc(self.value), rong=64))
+
+    def _bao(self) -> None:
+        if self._on_doi is not None:
+            self._on_doi(self.value)
 
     @property
     def value(self) -> str:
@@ -345,6 +356,7 @@ class ChonThuMuc(QWidget):
         chon = QFileDialog.getExistingDirectory(self, "Chọn thư mục lưu", self.value)
         if chon:
             self._o.setText(chon)
+            self._bao()
 
 
 class AnhThamChieu(QWidget):

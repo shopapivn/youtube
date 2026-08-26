@@ -24,19 +24,21 @@ import os
 import subprocess
 import threading
 import time
+from dataclasses import replace
 from typing import List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
-    QHeaderView, QPlainTextEdit, QProgressBar, QSpinBox, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QHeaderView, QLineEdit, QPlainTextEdit, QProgressBar, QSpinBox,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 from PyQt5.QtGui import QColor
 
 from core.dung_video import (
-    DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_thoi_luong,
-    lenh_ffmpeg, quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
+    DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_bang_canh,
+    doc_thoi_luong, giay_tung_hinh, lenh_ffmpeg, phu_de_tu_txt, quet_thu_muc,
+    thoi_luong_moi_anh, tim_ffmpeg,
 )
 from core.tron_tieng import co_ne_giong
 
@@ -55,6 +57,8 @@ class TrangDungVideo(QWidget):
         super().__init__()
         self._app = app
         self._du_an: List[DuAn] = []
+        #: Các dòng khách tự chỉ file vào — giữ nguyên qua mỗi lần quét lại.
+        self._chon_tay: List[dict] = []
         self._dang_chay = False
         self._xin_dung = threading.Event()
         self._tien_trinh: Optional[subprocess.Popen] = None
@@ -73,16 +77,24 @@ class TrangDungVideo(QWidget):
         v.setSpacing(8)
         v.addWidget(nhan("Thư mục chứa các dự án", "h2"))
         v.addWidget(nhan(
-            "Mỗi thư mục con là một video. Bên trong cần: một file lời đọc "
-            "(.mp3/.wav), các ảnh hoặc clip, và tuỳ chọn thêm file .srt, "
-            "thư mục nhac/. Tên file đặt sao cũng được.", "muted"))
+            "Để nguyên là dựng dự án đang mở — tool tự lấy lời đọc trong VOICE, "
+            "ảnh và clip trong VISUAL, phụ đề trong EXCEL. Trỏ sang thư mục "
+            "khác cũng được: cần một file lời đọc (.mp3/.wav) và ít nhất một "
+            "ảnh hoặc clip. Tên file đặt sao cũng được.", "muted"))
         d0 = QHBoxLayout()
-        self._goc = ChonThuMuc("", "Thư mục dự án:")
+        # Đổi thư mục là quét luôn — chủ dự án, 26/08/2026: *"sau khi chọn thư
+        # mục có thể nhận diện luôn không cần ấn quét lại chứ"*. Nút "Quét lại"
+        # vẫn còn cho lúc khách vừa chép thêm file vào thư mục đang chọn.
+        self._goc = ChonThuMuc(self._goc_mac_dinh(), "Thư mục dự án:",
+                               on_doi=self._quet_im)
         d0.addWidget(self._goc, 1)
         d0.addWidget(nut_phu("Quét lại", self.quet, rong=120))
         v.addLayout(d0)
+        # Đổi chỗ lưu cũng phải quét lại: cột Trạng thái ghi "đã dựng xong"
+        # theo đúng thư mục này, đổi chỗ mà bảng không đổi là bảng nói dối.
         self._ra = ChonThuMuc(app.default_output_dir("video-hoan-chinh"),
-                              "Video xong lưu vào:")
+                              "Video xong lưu vào:",
+                              on_doi=lambda _d: self._quet_im(self._goc.value))
         v.addWidget(self._ra)
         doc.addWidget(the_tm)
 
@@ -92,6 +104,8 @@ class TrangDungVideo(QWidget):
         self._tom_tat = nhan("chưa quét", "muted")
         d1.addWidget(self._tom_tat)
         d1.addStretch(1)
+        d1.addWidget(nut_phu("Thêm tay", lambda: self._hop_chon_tay.exec_(),
+                             rong=110))
         d1.addWidget(nut_phu("Mở kết quả", lambda: mo_thu_muc(self._ra.value), rong=140))
         doc.addLayout(d1)
         self._bang = QTableWidget(0, len(COT))
@@ -120,6 +134,7 @@ class TrangDungVideo(QWidget):
         # chạy đọc `self._fps.value()` như cũ dù khách chưa mở hộp thoại lần
         # nào — và widget không cha mà `setVisible` là thành một cửa sổ trôi nổi.
         self._hop_tuy_chon = self._dung_hop_tuy_chon()
+        self._hop_chon_tay = self._dung_hop_chon_tay()
 
         # ── Tiến độ + nhật ký ────────────────────────────────────────────────
         self._thanh = QProgressBar()
@@ -146,8 +161,21 @@ class TrangDungVideo(QWidget):
                       "imageio-ffmpeg để dùng bản đi kèm.")
             self._nut_chay.setEnabled(False)
         self._doi_phu_de()
+        # Quét sẵn dự án đang mở: chỉ là đọc danh sách file, không tốn tiền và
+        # không gọi mạng. Bắt khách bấm "Quét lại" để thấy thứ tool tự biết chỗ
+        # là thêm một bước thừa ngay ở cửa.
+        self._quet_im(self._goc.value)
 
     # ── Quét ─────────────────────────────────────────────────────────────────
+
+    def _goc_mac_dinh(self) -> str:
+        """Thư mục dự án đang mở — chỗ sáu tab kia vừa ghi kết quả vào."""
+        try:
+            from core import du_an as _du_an  # noqa: PLC0415
+
+            return _du_an.duong_du_an(self._app.base_dir, self._app.du_an)
+        except Exception:  # noqa: BLE001 — không có thì để trống, khách tự chọn
+            return ""
 
     def quet(self) -> None:
         goc = self._goc.value
@@ -158,22 +186,43 @@ class TrangDungVideo(QWidget):
         if not os.path.isdir(goc):
             self._app.show_message("Không thấy thư mục", goc)
             return
-        self._du_an = quet_thu_muc(goc, thu_muc_ra=self._ra.value,
-                                   can_phu_de=self._phu_de.isChecked())
+        self._quet_im(goc)
+        if not self._du_an:
+            self._app.show_message(
+                "Không thấy dự án nào trong thư mục này",
+                "Thư mục:\n{0}\n\nMột dự án cần một file lời đọc (.mp3/.wav) "
+                "và ít nhất một ảnh hoặc clip. Nếu bạn đã tạo giọng và ảnh "
+                "bằng tool thì trỏ vào thư mục dự án — thư mục CHỨA các ngăn "
+                "VOICE, VISUAL — chứ không phải vào trong một ngăn.".format(goc))
+
+    def _quet_im(self, goc: str) -> None:
+        """Quét và vẽ bảng. Không hộp thoại — dùng được cả lúc trang vừa mở.
+
+        Các dòng "Thêm tay" luôn có mặt, kể cả khi chưa chọn thư mục nào: khách
+        đã tự chỉ file vào thì không được để một lần quét hụt xoá mất.
+        """
+        tim = (quet_thu_muc(goc, thu_muc_ra=self._ra.value,
+                            can_phu_de=self._phu_de.isChecked())
+               if goc and os.path.isdir(goc) else [])
+        self._du_an = tim + self._du_an_chon_tay()
         self._ve_bang()
         self._ghi("Quét {0}: {1} dự án, {2} sẵn sàng.".format(
-            goc, len(self._du_an), sum(1 for d in self._du_an if d.chay_duoc)))
+            goc or "(chưa chọn thư mục)", len(self._du_an),
+            sum(1 for d in self._du_an if d.chay_duoc)))
 
     def _ve_bang(self) -> None:
         self._bang.setRowCount(len(self._du_an))
         for dong, du_an in enumerate(self._du_an):
             mau = (theme.XANH if du_an.da_xong else
                    theme.CHU if du_an.chay_duoc else theme.DO)
+            # Có thì đánh dấu, không có thì gạch ngang. Trước 26/08/2026 cột
+            # "có" bỏ trắng, nên ô trống vừa là "có" vừa là "chưa quét ra" —
+            # nhìn bảng không biết tool đã thấy file lời đọc hay chưa.
             o = (du_an.ten,
                  str(len(du_an.hinh)),
-                 "" if du_an.tieng else "—",
-                 "" if du_an.phu_de else "—",
-                 "" if du_an.nhac else "—",
+                 "✓" if du_an.tieng else "—",
+                 "✓" if du_an.phu_de else "—",
+                 "✓" if du_an.nhac else "—",
                  du_an.trang_thai)
             for cot, chu in enumerate(o):
                 muc = QTableWidgetItem(str(chu))
@@ -188,6 +237,117 @@ class TrangDungVideo(QWidget):
             sum(1 for d in self._du_an if d.da_xong)))
         self._nut_chay.setEnabled(bool(self._ffmpeg) and bool(san_sang)
                                   and not self._dang_chay)
+
+    # ── Thêm dữ liệu tay ─────────────────────────────────────────────────────
+
+    def _dung_hop_chon_tay(self) -> QDialog:
+        """Hộp "Thêm tay" — khách tự chỉ từng thứ vào, không cần đúng thư mục.
+
+        Chủ dự án, 26/08/2026: *"để edit thì cần file excel, thư mục video hoặc
+        ảnh, voice, txt chẳng hạn thì có thể có 1 option để khách thêm các dữ
+        liệu đó vào"*. Quét tự động chỉ đúng khi file nằm đúng chỗ tool quen;
+        ảnh mua ngoài, giọng thu bằng micro, bảng cảnh sửa tay thì nằm mỗi thứ
+        một ổ đĩa.
+        """
+        hop = QDialog(self)
+        hop.setWindowTitle("Thêm dữ liệu dựng video")
+        doc = QVBoxLayout(hop)
+        doc.setContentsMargins(20, 16, 20, 16)
+        doc.setSpacing(10)
+        doc.addWidget(nhan("Chỉ vào từng thứ, tôi ghép lại thành một video.", "muted"))
+
+        hang_ten = QHBoxLayout()
+        hang_ten.addWidget(nhan("Tên video:"))
+        self._ct_ten = QLineEdit()
+        self._ct_ten.setPlaceholderText("để trống thì lấy tên thư mục ảnh")
+        hang_ten.addWidget(self._ct_ten, 1)
+        doc.addLayout(hang_ten)
+
+        self._ct_hinh = _ChonTep("Ảnh/clip:", "", la_thu_muc=True,
+                                 goi_y="thư mục chứa ảnh hoặc clip")
+        self._ct_hinh.setToolTip("Thư mục chứa ảnh hoặc clip của video này.")
+        self._ct_tieng = _ChonTep(
+            "Lời đọc:", "Tệp tiếng (*.mp3 *.wav *.m4a *.aac)", cho_thu_muc=True,
+            goi_y="file .mp3 hoặc .wav")
+        self._ct_tieng.setToolTip("File giọng đọc, hoặc thư mục chứa nó.")
+        self._ct_bang = _ChonTep("Bảng cảnh:", "Bảng cảnh (*.xlsx *.json)",
+                                 goi_y="không có cũng dựng được")
+        self._ct_bang.setToolTip(
+            "File Excel có cột srt_start — nhờ nó tôi biết mỗi cảnh bắt đầu và "
+            "kết thúc ở giây nào. Không có thì tôi chia đều, hình sẽ lệch lời.")
+        self._ct_phu_de = _ChonTep("Phụ đề:", "Phụ đề (*.srt *.txt)",
+                                   goi_y="file .srt, hoặc kịch bản .txt")
+        self._ct_phu_de.setToolTip(
+            "File .srt dùng thẳng. File .txt là kịch bản — tôi ép nó khớp vào "
+            "giọng đọc thành phụ đề, chạy trên máy bạn, không tốn tiền.")
+        self._ct_nhac = _ChonTep("Nhạc nền:", "", la_thu_muc=True,
+                                 goi_y="thư mục nhạc, không có cũng được")
+        for o in (self._ct_hinh, self._ct_tieng, self._ct_bang,
+                  self._ct_phu_de, self._ct_nhac):
+            doc.addWidget(o)
+
+        self._ct_bao = nhan("", "muted")
+        doc.addWidget(self._ct_bao)
+        hang_nut = QHBoxLayout()
+        hang_nut.addWidget(nut_chinh("Thêm vào bảng", self._them_chon_tay), 1)
+        hang_nut.addWidget(nut_phu("Bỏ dòng chọn tay", self._bo_chon_tay, rong=150))
+        hang_nut.addWidget(nut_phu("Đóng", hop.accept, rong=88))
+        doc.addLayout(hang_nut)
+        return hop
+
+    def _them_chon_tay(self) -> None:
+        from core.dung_video import du_an_chon_tay  # noqa: PLC0415
+
+        spec = {
+            "ten": self._ct_ten.text().strip(),
+            "thu_muc_hinh": self._ct_hinh.value,
+            "tieng": self._ct_tieng.value,
+            "bang_canh": self._ct_bang.value,
+            "phu_de": self._ct_phu_de.value,
+            "nhac": self._ct_nhac.value,
+        }
+        if not spec["thu_muc_hinh"] or not spec["tieng"]:
+            self._ct_bao.setText("Cần ít nhất thư mục ảnh/clip và file lời đọc.")
+            return
+        du = du_an_chon_tay(**spec, thu_muc_ra=self._ra.value,
+                            can_phu_de=self._phu_de.isChecked())
+        if not du.chay_duoc:
+            # Thiếu mỗi phụ đề là chuyện sửa được bằng một cái gạt, không phải
+            # đi tìm file. Nói luôn cái gạt ấy ở đâu.
+            if du.thieu == ("phụ đề (.srt)",):
+                self._ct_bao.setText(
+                    "Đang bật “Chèn phụ đề”. Chọn file .srt hoặc kịch bản "
+                    ".txt ở trên, hoặc tắt “Chèn phụ đề” trong nút Tuỳ chọn.")
+            else:
+                self._ct_bao.setText("Chưa dựng được: thiếu " + ", ".join(du.thieu))
+            return
+        self._chon_tay.append(spec)
+        self._ct_bao.setText("Đã thêm “{0}”: {1} ảnh/clip{2}.".format(
+            du.ten, len(du.hinh),
+            ", có bảng cảnh" if du.bang_canh else ", chia đều thời lượng"))
+        self._quet_im(self._goc.value)
+
+    def _bo_chon_tay(self) -> None:
+        if not self._chon_tay:
+            self._ct_bao.setText("Chưa có dòng chọn tay nào.")
+            return
+        so = len(self._chon_tay)
+        self._chon_tay = []
+        self._ct_bao.setText("Đã bỏ {0} dòng chọn tay.".format(so))
+        self._quet_im(self._goc.value)
+
+    def _du_an_chon_tay(self) -> List[DuAn]:
+        """Dựng lại các dòng chọn tay mỗi lần quét — để cột "đã dựng xong" đúng."""
+        from core.dung_video import du_an_chon_tay  # noqa: PLC0415
+
+        ra: List[DuAn] = []
+        for spec in self._chon_tay:
+            try:
+                ra.append(du_an_chon_tay(**spec, thu_muc_ra=self._ra.value,
+                                         can_phu_de=self._phu_de.isChecked()))
+            except Exception:  # noqa: BLE001 — khách xoá mất thư mục là chuyện thường
+                continue
+        return ra
 
     def _dung_hop_tuy_chon(self) -> QDialog:
         """Hộp tuỳ chọn dựng video — chín thứ đặt một lần rồi thôi."""
@@ -299,7 +459,7 @@ class TrangDungVideo(QWidget):
         for w in (self._co_chu, self._mau, self._vi_tri):
             w.setEnabled(bat)
         if self._du_an:
-            self.quet()
+            self._quet_im(self._goc.value)
 
     def _mo_dong(self, chi_muc) -> None:
         dong = chi_muc.row()
@@ -358,10 +518,44 @@ class TrangDungVideo(QWidget):
                 bat_dau = time.time()
                 dich = os.path.join(thu_muc_ra, du_an.ten + ".mp4")
                 giay = doc_thoi_luong(ffmpeg, du_an.tieng)
-                moi_anh = thoi_luong_moi_anh(giay, len(du_an.hinh))
+                # Khách đưa kịch bản `.txt` thay cho `.srt`: ép nó khớp vào
+                # chính giọng đọc rồi mới đốt lên hình. Chạy trên máy, miễn
+                # phí, và file `.srt` để lại cạnh video cho khách tải lên
+                # YouTube riêng nếu muốn.
+                if cai.phu_de and du_an.phu_de.lower().endswith(".txt"):
+                    dong.append("{0}: đang ép kịch bản khớp vào giọng đọc để "
+                                "làm phụ đề (chạy trên máy)…".format(du_an.ten))
+                    srt = phu_de_tu_txt(
+                        du_an.phu_de, du_an.tieng,
+                        os.path.join(thu_muc_ra, du_an.ten + ".srt"),
+                        on_log=dong.append)
+                    du_an = replace(du_an, phu_de=srt)
+                    if not srt:
+                        dong.append("{0}: không làm được phụ đề từ file .txt — "
+                                    "dựng tiếp, không có phụ đề.".format(du_an.ten))
+                # ═══ HÌNH BÁM LỜI, KHÔNG CHIA ĐỀU ═══
+                #
+                # Có bảng cảnh thì mỗi cảnh chiếm đúng khoảng của nó. Không có
+                # thì chia đều — và **nói ra** là đang chia đều, vì đó là lúc
+                # hình chắc chắn trôi khỏi lời và khách cần biết vì sao.
+                tung_canh = giay_tung_hinh(
+                    doc_bang_canh(du_an.bang_canh), du_an.hinh, giay)
                 try:
-                    lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich,
-                                       giay_moi_anh=moi_anh, ne_giong=ne)
+                    if tung_canh:
+                        dong.append("{0}: theo bảng cảnh — {1} cảnh, {2:.0f} "
+                                    "giây hình cho {3:.0f} giây tiếng.".format(
+                                        du_an.ten, len(tung_canh),
+                                        sum(tung_canh), giay))
+                        lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich,
+                                           ne_giong=ne, giay=tung_canh)
+                    else:
+                        if du_an.bang_canh:
+                            dong.append("{0}: bảng cảnh không khớp với số "
+                                        "ảnh/clip đang có — chia đều thời "
+                                        "lượng.".format(du_an.ten))
+                        moi_anh = thoi_luong_moi_anh(giay, len(du_an.hinh))
+                        lenh = lenh_ffmpeg(du_an, cai, ffmpeg, dich,
+                                           giay_moi_anh=moi_anh, ne_giong=ne)
                 except ValueError as van_de:
                     dong.append("{0}: {1}".format(du_an.ten, van_de))
                     loi += 1
@@ -424,7 +618,7 @@ class TrangDungVideo(QWidget):
         self._thanh.setValue(self._thanh.maximum())
         self._khoa(False)
         self._ghi("Kết thúc: {0} xong, {1} lỗi.".format(xong, loi))
-        self.quet()
+        self._quet_im(self._goc.value)
 
     def _hong(self, loi: BaseException) -> None:
         self._khoa(False)
@@ -434,4 +628,58 @@ class TrangDungVideo(QWidget):
         self._log.appendPlainText("[{0}]  {1}".format(time.strftime("%H:%M:%S"), chu))
 
     def doi_du_an(self, _ten: str) -> None:
+        # Đổi dự án thì đổi CẢ HAI ô. Trước 26/08/2026 chỉ ô "lưu vào" đổi
+        # theo, còn ô nguồn để trống — khách đổi dự án xong bấm Quét lại vẫn
+        # thấy dự án cũ, hoặc chẳng thấy gì.
         self._ra.dat(self._app.default_output_dir("video-hoan-chinh"))
+        self._goc.dat(self._goc_mac_dinh())
+        self._quet_im(self._goc.value)
+
+
+class _ChonTep(QWidget):
+    """Ô chọn **một tệp** (hoặc một thư mục): nhãn + đường dẫn + nút Chọn.
+
+    `widgets.ChonThuMuc` chỉ chọn được thư mục. Hộp "Thêm tay" cần trỏ vào
+    từng tệp — file giọng đọc, file Excel, file phụ đề — nên có thêm cái này.
+    Để riêng trong tab thay vì đẩy vào `widgets.py`: chưa tab nào khác cần.
+    """
+
+    def __init__(self, nhan_text: str, loc: str, *, la_thu_muc: bool = False,
+                 cho_thu_muc: bool = False, goi_y: str = ""):
+        super().__init__()
+        self._loc = loc
+        self._la_thu_muc = la_thu_muc
+        self._cho_thu_muc = cho_thu_muc
+        ngang = QHBoxLayout(self)
+        ngang.setContentsMargins(0, 0, 0, 0)
+        ngang.setSpacing(8)
+        nh = nhan(nhan_text)
+        nh.setFixedWidth(88)
+        ngang.addWidget(nh)
+        self._o = QLineEdit()
+        self._o.setPlaceholderText(goi_y)
+        ngang.addWidget(self._o, 1)
+        ngang.addWidget(nut_phu("Chọn…", self._chon, rong=92))
+        if cho_thu_muc:
+            ngang.addWidget(nut_phu("Thư mục…", self._chon_thu_muc, rong=104))
+
+    @property
+    def value(self) -> str:
+        return self._o.text().strip()
+
+    def dat(self, duong_dan: str) -> None:
+        self._o.setText(duong_dan or "")
+
+    def _chon(self) -> None:
+        if self._la_thu_muc:
+            self._chon_thu_muc()
+            return
+        duong, _ = QFileDialog.getOpenFileName(self, "Chọn tệp", self.value,
+                                               self._loc or "Mọi tệp (*)")
+        if duong:
+            self._o.setText(duong)
+
+    def _chon_thu_muc(self) -> None:
+        duong = QFileDialog.getExistingDirectory(self, "Chọn thư mục", self.value)
+        if duong:
+            self._o.setText(duong)
