@@ -283,10 +283,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "chạy, chỉ là chia cảnh không có bản đồ như trước.",
             "Nút “Quản lý kênh” mở đúng năm bước ấy nhưng nạp sẵn kênh đang "
             "chọn, nút cuối là “Lưu”: sửa được cả các prompt, giọng đọc, "
-            "nhạc nền, độ phân giải và phong cách hình ngay trong tool. Trong "
-            "hộp còn nút “Nhân bản” chép nguyên một kênh — chỉ dùng khi bạn "
-            "muốn bản thứ hai của một kênh đã sửa nhiều; làm kênh mới thì dùng "
-            "“Tạo kênh mới”.",
+            "nhạc nền, độ phân giải và phong cách hình ngay trong tool.",
+            "Kênh MẪU của tool (TL4-T7, story-3d…) được cập nhật theo tool: mỗi "
+            "lần cập nhật, bản mẫu mới ghi đè bản trên máy bạn. Muốn tùy chỉnh "
+            "thì bấm “Nhân bản” cạnh ô chọn kênh — bản sao là kênh RIÊNG của "
+            "bạn (mang đủ prompt, phong cách, ảnh nhân vật), cập nhật không "
+            "bao giờ đụng vào. Bấm Lưu trong Quản lý kênh khi đang mở kênh mẫu "
+            "thì tool cũng hỏi và mời nhân bản.",
             "Liên kết “Tạo/sửa bộ vẽ nâng cao…” (nằm trong “⚙ Chỉnh sâu” ở bước "
             "③) là chỗ tạo và sửa "
             "chính bốn mảnh dựng nên kênh: ngách, bộ vẽ, bộ văn hoá và chiến "

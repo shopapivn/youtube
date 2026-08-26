@@ -430,6 +430,9 @@ def dung_kenh(goc: str, ma_kenh: str, *, ma_nganh: str, ma_ve: str,
         if gia is not None:
             cai.append((k, gia))
     cai.append(("nhac_nen", ""))
+    # Kênh khách tự dựng là kênh RIÊNG: cập nhật tool không đụng vào (xem cờ
+    # `kenh_rieng` ở `core/kenh.Kenh` và luật hoà `CHANNEL` ở `core/safe_update`).
+    cai.append(("kenh_rieng", True))
 
     chu_kenh = _khoi(_DAU_KENH.format(
         ma=ma_kenh, ten=cai[1][1], nganh=nganh.nhan, ve=ve.nhan, vh=vh.nhan,

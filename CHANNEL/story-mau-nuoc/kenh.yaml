@@ -7,6 +7,11 @@
 #  content kiểu remake đơn giản cho truyện người lớn (prompt/2-viet.md, 2b-cham.md,
 #  3-sua.md). Nguồn: các kênh kể chuyện đời/drama kiểu "Whispered Truths".
 # ============================================================================
+# ── Kênh MẪU của tool ─────────────────────────────────────────────────────────
+#  Cập nhật tool sẽ GHI ĐÈ kênh này bằng bản mẫu mới hơn. Muốn sửa cho riêng
+#  mình thì bấm "Nhân bản" ở tab Tự động — bản sao có kenh_rieng: true, cập
+#  nhật không đụng vào.
+mau_cua_tool: true
 ma: "story-mau-nuoc"
 ten: "Truyện màu nước (Mỹ)"
 ngon_ngu: "en"

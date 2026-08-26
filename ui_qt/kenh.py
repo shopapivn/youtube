@@ -710,6 +710,66 @@ class _XemPhongCach(QDialog):
         self.accept()
 
 
+class HopNhanBan(QDialog):
+    """Hộp nhỏ: nhân bản một kênh thành kênh RIÊNG của khách.
+
+    Chủ dự án 26/08/2026: kênh mẫu của tool được cập nhật theo tool nên sửa
+    vào đó là bị đè; khách nhân bản ra bản riêng để tùy chỉnh. Hai ô: mã (tên
+    thư mục) và tên hiển thị — điền sẵn, bấm là xong. Đọc `ma_kenh_moi` sau
+    khi hộp đóng.
+    """
+
+    def __init__(self, app, ma_goc: str, cha: Optional[QWidget] = None):
+        super().__init__(cha)
+        self._app = app
+        self._ma_goc = ma_goc
+        self.ma_kenh_moi = ""
+        self.setWindowTitle("Nhân bản kênh “{0}”".format(ma_goc))
+        self.setMinimumWidth(460)
+        k = doc_kenh(app.base_dir, ma_goc)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(18, 16, 18, 16)
+        v.setSpacing(10)
+        v.addWidget(nhan("Nhân bản thành kênh riêng của bạn", "h2"))
+        phu = nhan(
+            "Bản sao mang đủ prompt, phong cách, ảnh nhân vật của “{0}”. Sửa "
+            "thoải mái — cập nhật tool không đụng vào kênh riêng. Kênh mẫu gốc "
+            "vẫn được tool cập nhật.".format(ma_goc), "phu")
+        phu.setWordWrap(True)
+        v.addWidget(phu)
+        hang = HangXuongDong()
+        hang.addWidget(nhan("Mã kênh:", "phu"))
+        self._o_ma = QLineEdit(ma_goc + "-rieng")
+        self._o_ma.setToolTip("Tên thư mục trong CHANNEL/. Không dấu, không khoảng trắng.")
+        hang.addWidget(self._o_ma)
+        v.addLayout(hang)
+        hang2 = HangXuongDong()
+        hang2.addWidget(nhan("Tên kênh:", "phu"))
+        self._o_ten = QLineEdit((k.ten or ma_goc) + " (bản của tôi)")
+        hang2.addWidget(self._o_ten)
+        v.addLayout(hang2)
+        self._nhan_loi = nhan("", "phu")
+        self._nhan_loi.setWordWrap(True)
+        self._nhan_loi.setStyleSheet("color:{0};".format(theme.VANG))
+        v.addWidget(self._nhan_loi)
+        chan = HangXuongDong()
+        chan.addWidget(nut_chinh("Nhân bản", self._nhan_ban))
+        chan.addWidget(nut_phu("Thôi", self.reject, rong=100))
+        v.addLayout(chan)
+
+    def _nhan_ban(self) -> None:
+        from core.kenh import nhan_ban_kenh  # noqa: PLC0415
+
+        try:
+            nhan_ban_kenh(self._app.base_dir, self._ma_goc,
+                          self._o_ma.text(), self._o_ten.text())
+        except (ValueError, OSError) as loi:
+            self._nhan_loi.setText(str(loi))
+            return
+        self.ma_kenh_moi = self._o_ma.text().strip()
+        self.accept()
+
+
 class HopKenh(QDialog):
     """Trình thiết kế kênh theo từng bước — dùng chung cho tạo mới và sửa.
 
@@ -1728,6 +1788,14 @@ class HopKenh(QDialog):
 
     def _luu(self) -> None:
         """Ghi mọi ô đã sửa xuống đĩa, rồi kiểm lại kênh ngay."""
+        # ═══ ĐỊNH LƯU VÀO KÊNH MẪU? HỎI TRƯỚC — CẬP NHẬT SẼ ĐÈ ═══
+        #
+        # Chủ dự án 26/08/2026: kênh mẫu được tool cập nhật, nên công khách sửa
+        # ở đây mất ở lần cập nhật kế tiếp — mà họ không nối được hai chuyện.
+        # Nên hỏi ngay lúc bấm Lưu, và mời nhân bản: bản sao nhận luôn những gì
+        # vừa sửa, còn mẫu để nguyên.
+        if self._kenh.mau_cua_tool and not self._nhan_ban_truoc_khi_luu():
+            return
         thu_muc = self._kenh.duong
         loi: List[str] = []
         for _ten, (o, duong) in self._o_prompt.items():
@@ -1754,14 +1822,54 @@ class HopKenh(QDialog):
             "Kênh “{0}” đã cập nhật. Lần chạy tới sẽ dùng bản mới.".format(
                 self._ma_sua))
 
+    def _nhan_ban_truoc_khi_luu(self) -> bool:
+        """Hỏi: nhân bản rồi lưu vào bản riêng / vẫn lưu vào mẫu / thôi.
+
+        Trả `True` khi được phép ghi tiếp (vào mẫu, hoặc vào bản sao vừa tạo —
+        khi đó `self._ma_sua`, `self._kenh` và đường tệp prompt đã trỏ sang
+        bản sao)."""
+        hop = QMessageBox(self)
+        hop.setIcon(QMessageBox.Warning)
+        hop.setWindowTitle("Đây là kênh mẫu của tool")
+        hop.setText(
+            "“{0}” là kênh MẪU: lần cập nhật tool tới sẽ ghi đè nó bằng bản "
+            "mẫu mới, và những gì bạn sửa ở đây sẽ mất.\n\n"
+            "Nhân bản thành kênh riêng rồi lưu vào đó? Kênh riêng không bao "
+            "giờ bị cập nhật đè.".format(self._ma_sua))
+        nut_nb = hop.addButton("Nhân bản rồi lưu vào bản riêng", QMessageBox.AcceptRole)
+        nut_mau = hop.addButton("Vẫn lưu vào mẫu", QMessageBox.DestructiveRole)
+        hop.addButton("Thôi", QMessageBox.RejectRole)
+        hop.setDefaultButton(nut_nb)
+        hop.exec_()
+        if hop.clickedButton() is nut_mau:
+            return True
+        if hop.clickedButton() is not nut_nb:
+            return False
+        h = HopNhanBan(self._app, self._ma_sua, self)
+        if h.exec_() != QDialog.Accepted or not h.ma_kenh_moi:
+            return False
+        cu, moi = self._kenh.duong, duong_kenh(self._app.base_dir, h.ma_kenh_moi)
+        # Các ô prompt đang trỏ vào tệp của mẫu — trỏ sang bản sao rồi ghi.
+        self._o_prompt = {ten: (o, d.replace(cu, moi, 1) if d.startswith(cu) else d)
+                          for ten, (o, d) in self._o_prompt.items()}
+        self._ma_sua = h.ma_kenh_moi
+        self._kenh = doc_kenh(self._app.base_dir, self._ma_sua)
+        self.ma_kenh_moi = self._ma_sua
+        self.setWindowTitle("Kênh {0}".format(self._ma_sua))
+        return True
+
     def _ve_trang_thai(self) -> None:
-        thieu = kiem_kenh(doc_kenh(self._app.base_dir, self._ma_sua))
+        k = doc_kenh(self._app.base_dir, self._ma_sua)
+        thieu = kiem_kenh(k)
+        mau = ("\n(Kênh MẪU của tool — cập nhật sẽ ghi đè. Bấm Lưu là được mời "
+               "nhân bản thành kênh riêng.)" if k.mau_cua_tool else "")
         if thieu:
-            self._nhan_tt.setText("Chưa chạy được:\n• " + "\n• ".join(thieu))
+            self._nhan_tt.setText("Chưa chạy được:\n• " + "\n• ".join(thieu) + mau)
             self._nhan_tt.setStyleSheet("color:{0};".format(theme.VANG))
         else:
-            self._nhan_tt.setText("Kênh đủ điều kiện chạy.")
-            self._nhan_tt.setStyleSheet("color:{0};".format(theme.XANH))
+            self._nhan_tt.setText("Kênh đủ điều kiện chạy." + mau)
+            self._nhan_tt.setStyleSheet("color:{0};".format(
+                theme.VANG if mau else theme.XANH))
 
 def _doc(duong: str) -> str:
     try:

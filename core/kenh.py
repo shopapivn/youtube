@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 __all__ = [
-    "THU_MUC_KENH", "TEP_KENH", "TEP_STYLE", "BUOC_PROMPT",
+    "THU_MUC_KENH", "TEP_KENH", "TEP_STYLE", "BUOC_PROMPT", "nhan_ban_kenh",
     "TEP_CHIEN_LUOC",
     "Kenh", "duong_kenh", "liet_ke_kenh", "doc_kenh", "kiem_kenh",
     "doc_yaml", "co_mui_khoa", "GIU_NGUYEN", "ten_khung",
@@ -146,6 +146,22 @@ class Kenh:
     #: kênh chạy thuê bao bật lên không tốn gì. Khoá cũ `va_cho_rot` trong
     #: kenh.yaml vẫn được đọc như cờ này.
     hoan_thien: bool = False
+    #: ═══ KÊNH MẪU CỦA TOOL hay KÊNH RIÊNG CỦA KHÁCH ═══
+    #:
+    #: Chủ dự án, 26/08/2026: *"các template đó tao có cập nhật nên nếu khách
+    #: dùng và tùy chỉnh thì khi update sẽ bị đè, nên tao muốn những template
+    #: khách tạo sẽ không bị đè"*. Hai cờ, mỗi cờ một việc:
+    #:
+    #: * `mau_cua_tool: true` — kênh mẫu ship kèm tool. Cập nhật tool **ghi
+    #:   đè** nó (để khách nhận bản mẫu mới hơn). Giao diện gắn nhãn "mẫu" và
+    #:   mời Nhân bản trước khi sửa.
+    #: * `kenh_rieng: true` — kênh khách tạo (Tạo kênh mới) hoặc nhân bản từ
+    #:   mẫu. Cập nhật tool **không bao giờ** đụng vào (`core/safe_update`).
+    #:
+    #: Kênh cũ không có cờ nào (tạo trước 26/08/2026): không phải mẫu, và vì
+    #: bản mới không mang theo thư mục cùng tên nên cập nhật cũng không đụng.
+    mau_cua_tool: bool = False
+    kenh_rieng: bool = False
     #: Chế độ đặt TIÊU ĐỀ và CHỮ BÌA — bám bản gốc hay đặt lại theo chất kênh.
     #:
     #: `"faithful"` (mặc định) — bám sát tiêu đề đối thủ, chỉ dịch và bản địa
@@ -287,6 +303,82 @@ def liet_ke_kenh(goc: str) -> List[str]:
     return sorted(ra)
 
 
+#: Ký tự không được có trong mã kênh (tên thư mục trên Windows).
+_KY_TU_CAM_MA = '<>:"/\\|?*'
+
+
+def kiem_ma_kenh_moi(goc: str, ma: str) -> str:
+    """Câu lỗi nếu `ma` không dùng được làm mã kênh mới; rỗng nếu dùng được."""
+    ma = (ma or "").strip()
+    if not ma:
+        return "Chưa đặt mã kênh. Mã là tên thư mục trong CHANNEL/, ví dụ TL4-T7-rieng."
+    if ma.startswith((".", "_")):
+        return ("Mã kênh không được bắt đầu bằng dấu chấm hay gạch dưới — tool "
+                "coi những thư mục đó là bản nháp và không hiện chúng ra.")
+    xau = [c for c in _KY_TU_CAM_MA if c in ma]
+    if xau:
+        return "Mã kênh không được chứa {0}".format(" ".join(xau))
+    if ma.rstrip() != ma or ma.endswith("."):
+        return "Mã kênh không được kết thúc bằng dấu cách hay dấu chấm."
+    if os.path.exists(duong_kenh(goc, ma)):
+        return ("Đã có kênh “{0}” rồi. Đặt mã khác — tôi không đè lên kênh "
+                "đang có.".format(ma))
+    return ""
+
+
+def nhan_ban_kenh(goc: str, ma_goc: str, ma_moi: str, ten_moi: str = "") -> str:
+    """Chép kênh `ma_goc` thành kênh RIÊNG `ma_moi`. Trả về đường dẫn kênh mới.
+
+    ═══ VÌ SAO CÓ NÚT NÀY ═══
+
+    Chủ dự án, 26/08/2026: *"các template đó tao có cập nhật nên nếu khách
+    dùng và tùy chỉnh thì khi update sẽ bị đè, nên tao muốn những template
+    khách tạo sẽ không bị đè… thêm tính năng nhân bản để khách nhân bản và
+    giữ cho mình để tùy chỉnh"*.
+
+    Bản sao mang đủ mọi thứ của kênh gốc (prompt, style, ảnh nhân vật, nhạc),
+    chỉ khác `kenh.yaml`: `ma`/`ten` mới, bỏ cờ `mau_cua_tool`, thêm
+    `kenh_rieng: true` — từ đó cập nhật tool không đụng vào nữa. Lượt chạy
+    (`PROJECTS/AUTO/<mã>`) không chép: đó là sản phẩm của kênh cũ.
+    """
+    import shutil  # noqa: PLC0415
+    from .dong_bo_kenh import dat_khoa_yaml  # noqa: PLC0415
+
+    ma_goc = (ma_goc or "").strip()
+    ma_moi = (ma_moi or "").strip()
+    nguon = duong_kenh(goc, ma_goc)
+    if not ma_goc or not os.path.isfile(os.path.join(nguon, TEP_KENH)):
+        raise ValueError("Không thấy kênh “{0}” để nhân bản.".format(ma_goc))
+    loi = kiem_ma_kenh_moi(goc, ma_moi)
+    if loi:
+        raise ValueError(loi)
+    dich = duong_kenh(goc, ma_moi)
+    shutil.copytree(nguon, dich, ignore=shutil.ignore_patterns(
+        "__pycache__", "*.tam", "*.pyc"))
+    duong = os.path.join(dich, TEP_KENH)
+    with open(duong, "r", encoding="utf-8") as tep:
+        chu = tep.read()
+    # Bỏ cờ mẫu (nếu có) — bản sao không còn là mẫu của tool.
+    chu = "\n".join(d for d in chu.split("\n")
+                    if not d.strip().startswith("mau_cua_tool:"))
+    chu = dat_khoa_yaml(chu, "ma", ma_moi, nhay=True)
+    if (ten_moi or "").strip():
+        chu = dat_khoa_yaml(chu, "ten", ten_moi.strip(), nhay=True)
+    chu = dat_khoa_yaml(chu, "kenh_rieng", "true")
+    dau = ("# ============================================================================\n"
+           "#  KÊNH RIÊNG CỦA BẠN — nhân bản từ kênh mẫu “{0}”.\n"
+           "#  Sửa thoải mái: cập nhật tool KHÔNG đụng vào kênh này (kenh_rieng: true).\n"
+           "#  Kênh mẫu “{0}” thì được cập nhật theo tool — muốn xem bản mẫu mới\n"
+           "#  có gì hay thì mở nó ở Quản lý kênh rồi chép tay sang đây.\n"
+           "# ============================================================================\n"
+           ).format(ma_goc)
+    tam = duong + ".tam"
+    with open(tam, "w", encoding="utf-8", newline="\n") as tep:
+        tep.write(dau + chu)
+    os.replace(tam, duong)
+    return dich
+
+
 # ── Đọc YAML mà không bắt khách cài thêm gì ──────────────────────────────────
 
 
@@ -383,6 +475,8 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
+        mau_cua_tool=_co(cai.get("mau_cua_tool")),
+        kenh_rieng=_co(cai.get("kenh_rieng")),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),
@@ -404,6 +498,13 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
     kenh.anh_nv = _anh_trong(os.path.join(thu_muc, THU_MUC_NV))
     kenh.prompt = _doc_prompt(os.path.join(thu_muc, THU_MUC_PROMPT))
     return kenh
+
+
+def _co(gia_tri) -> bool:
+    """`true`/`yes`/`1` (bất kể hoa thường) là bật; còn lại là tắt."""
+    if isinstance(gia_tri, bool):
+        return gia_tri
+    return str(gia_tri or "").strip().lower() in ("true", "yes", "1")
 
 
 def _so(gia_tri, mac_dinh: float) -> float:

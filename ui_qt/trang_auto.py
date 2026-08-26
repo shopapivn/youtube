@@ -203,6 +203,13 @@ class TrangTuDong(QWidget):
         self._chon_kenh.currentTextChanged.connect(lambda _t: self._ve_kenh())
         hang.addWidget(self._chon_kenh)
         hang.addWidget(nut_phu("Tạo kênh mới", self._tao_kenh, rong=150))
+        # Kênh mẫu của tool được cập nhật theo tool; muốn tùy chỉnh thì nhân
+        # bản ra kênh riêng (không bị cập nhật đè). Chủ dự án 26/08/2026.
+        self._nut_nhan_ban = nut_phu("Nhân bản", self._nhan_ban_kenh, rong=120)
+        self._nut_nhan_ban.setToolTip(
+            "Chép kênh đang chọn thành kênh riêng của bạn để tùy chỉnh — cập "
+            "nhật tool không đụng vào kênh riêng.")
+        hang.addWidget(self._nut_nhan_ban)
         hang.addWidget(nut_phu("Quản lý kênh", self._mo_quan_ly, rong=150))
         v.addLayout(hang)
 
@@ -630,9 +637,11 @@ class TrangTuDong(QWidget):
             self._nhan_kenh.setStyleSheet("color:{0};".format(theme.VANG))
         else:
             self._nhan_kenh.setText(
-                "{0} · tiếng {1} · {2:.0f} phút (~{3:,} ký tự) · {4}".format(
+                "{0} · tiếng {1} · {2:.0f} phút (~{3:,} ký tự) · {4}{5}".format(
                     k.ten_hien, k.ngon_ngu, k.phut_muc_tieu,
-                    k.ky_tu_muc_tieu, k.engine))
+                    k.ky_tu_muc_tieu, k.engine,
+                    "\nKênh MẪU của tool — cập nhật sẽ ghi đè. Muốn sửa cho "
+                    "riêng mình thì bấm “Nhân bản”." if k.mau_cua_tool else ""))
             self._nhan_kenh.setStyleSheet("color:{0};".format(theme.CHU_MO))
         self._nut_chay.setEnabled(not thieu and not self._dang_chay)
         self._nap_luot()
@@ -703,6 +712,24 @@ class TrangTuDong(QWidget):
         hop = HopKenh(self._app, self._chon_kenh.currentText(), self)
         hop.exec_()
         self._nap_kenh()
+
+    def _nhan_ban_kenh(self) -> None:
+        """Nhân bản kênh đang chọn thành kênh riêng rồi **chọn sẵn kênh ấy**."""
+        from .kenh import HopNhanBan  # noqa: PLC0415
+
+        ma = self._chon_kenh.currentText().strip()
+        if not ma:
+            self._app.show_message("Chưa chọn kênh", "Chọn một kênh rồi bấm Nhân bản.")
+            return
+        hop = HopNhanBan(self._app, ma, self)
+        hop.exec_()
+        if hop.ma_kenh_moi:
+            self._nap_kenh()
+            i = self._chon_kenh.findText(hop.ma_kenh_moi)
+            if i >= 0:
+                self._chon_kenh.setCurrentIndex(i)
+            self._ghi("Đã nhân bản “{0}” thành kênh riêng “{1}” — sửa ở Quản lý "
+                      "kênh, cập nhật tool không đụng vào.".format(ma, hop.ma_kenh_moi))
 
     def _tao_kenh(self) -> None:
         """Tạo kênh mới rồi **chọn sẵn kênh ấy**.

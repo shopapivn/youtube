@@ -62,9 +62,14 @@ riêng* và chọn ảnh của bạn.
 
 Sửa gì sau đó thì vào **Quản lý kênh**.
 
-> Nút **Nhân bản** vẫn còn, nhưng nó chỉ chép nguyên kênh cũ rồi để bạn tự sửa.
-> Dùng nó khi muốn bản thứ hai của một kênh đã sửa nhiều — thứ khuôn không dựng
-> lại được. Làm kênh mới thì dùng **Tạo kênh mới**.
+## Kênh mẫu và kênh riêng
+
+Kênh ship kèm tool (`TL4-T7`, `story-3d`, `hoathinh-3d`, `story-mau-nuoc`) có
+`mau_cua_tool: true` trong `kenh.yaml` — **cập nhật tool sẽ ghi đè** chúng để
+bạn nhận bản mẫu mới hơn. Muốn tùy chỉnh thì bấm **Nhân bản** cạnh ô chọn kênh:
+bản sao mang đủ prompt, phong cách, ảnh nhân vật và có `kenh_rieng: true` —
+cập nhật tool **không bao giờ** đụng vào kênh riêng. Kênh tạo bằng **Tạo kênh
+mới** cũng là kênh riêng.
 
 ### Sửa khuôn, hoặc thêm nét vẽ của riêng bạn
 

@@ -215,20 +215,38 @@ class TestKenhCuaKhach:
     kế tiếp. Không thùng rác, không hỏi lại.
     """
 
-    def _dung_kenh(self, goc: Path, ma: str, loi_nhac: str) -> None:
+    def _dung_kenh(self, goc: Path, ma: str, loi_nhac: str, rieng: bool = False) -> None:
         d = goc / "CHANNEL" / ma / "prompt"
         d.mkdir(parents=True, exist_ok=True)
         (d / "2-viet.md").write_text(loi_nhac, encoding="utf-8")
+        # `kenh_rieng: true` = kênh khách tạo/nhân bản — cập nhật không đụng.
+        # Không cờ = kênh mẫu của tool (hoặc kênh cũ trước 26/08/2026).
+        (d.parent / "kenh.yaml").write_text(
+            "ma: {0}{1}".format(ma, chr(10) + "kenh_rieng: true" if rieng else "") + chr(10),
+            encoding="utf-8")
 
-    def test_loi_nhac_khach_da_sua_KHONG_bi_de(self, san):
+    def test_loi_nhac_khach_da_sua_trong_KENH_RIENG_khong_bi_de(self, san):
         _goc, cai, moi = san
-        self._dung_kenh(cai, "TL1-T1", "LOI NHAC TOI TU SUA")
+        self._dung_kenh(cai, "TL1-T1", "LOI NHAC TOI TU SUA", rieng=True)
         self._dung_kenh(moi, "TL1-T1", "loi nhac mac dinh cua ban moi")
 
         apply_tai_cho(moi, cai)
 
         assert (cai / "CHANNEL" / "TL1-T1" / "prompt" / "2-viet.md").read_text(
             encoding="utf-8") == "LOI NHAC TOI TU SUA"
+
+    def test_kenh_MAU_thi_ban_moi_de_len(self, san):
+        """26/08/2026, chủ dự án: *"các template đó tao có cập nhật nên nếu khách
+        dùng và tùy chỉnh thì khi update sẽ bị đè, nên tao muốn những template
+        khách tạo sẽ không bị đè"* — mẫu đè, riêng giữ (xem test_nhan_ban_kenh)."""
+        _goc, cai, moi = san
+        self._dung_kenh(cai, "TL1-T1", "khach sua thang vao mau")
+        self._dung_kenh(moi, "TL1-T1", "mau moi cua tool")
+
+        apply_tai_cho(moi, cai)
+
+        assert (cai / "CHANNEL" / "TL1-T1" / "prompt" / "2-viet.md").read_text(
+            encoding="utf-8") == "mau moi cua tool"
 
     def test_kenh_khach_tu_tao_van_con(self, san):
         _goc, cai, moi = san
@@ -254,7 +272,7 @@ class TestKenhCuaKhach:
     def test_tep_moi_trong_kenh_cu_cung_duoc_them(self, san):
         """Dừng ở cấp thư mục là tệp mới không bao giờ tới được máy khách."""
         _goc, cai, moi = san
-        self._dung_kenh(cai, "TL1-T1", "cua toi")
+        self._dung_kenh(cai, "TL1-T1", "cua toi", rieng=True)
         self._dung_kenh(moi, "TL1-T1", "mau")
         (moi / "CHANNEL" / "TL1-T1" / "prompt" / "9-nhac.md").write_text(
             "loi nhac moi them o ban sau", encoding="utf-8")

@@ -79,7 +79,62 @@ PRESERVE = (
 #: Nên hoà: tệp nào khách đã có thì để nguyên, tệp nào bản mới có mà máy khách
 #: chưa có thì thêm vào. Kênh mẫu mới xuất hiện, kênh cũ của khách không suy
 #: suyển.
+#:
+#: ═══ 26/08/2026: KÊNH MẪU THÌ ĐÈ, KÊNH RIÊNG THÌ GIỮ ═══
+#:
+#: Luật "không đè thứ khách đã có" có mặt trái: kênh mẫu (`TL4-T7`…) cũng
+#: không bao giờ nhận được bản cải tiến của tool. Chủ dự án: *"các template đó
+#: tao có cập nhật nên nếu khách dùng và tùy chỉnh thì khi update sẽ bị đè,
+#: nên tao muốn những template khách tạo sẽ không bị đè"*. Nên trong `CHANNEL`:
+#:
+#: * thư mục kênh mà `kenh.yaml` của KHÁCH có `kenh_rieng: true` (tạo mới hay
+#:   nhân bản từ mẫu — `core/kenh.nhan_ban_kenh`): chỉ thêm tệp còn thiếu;
+#: * thư mục khác mà bản mới mang theo (kênh mẫu, `_KHUON`, `_MAU-GON`): tệp
+#:   của bản mới **thắng**, tệp khách thêm vào (bộ vẽ riêng…) vẫn để nguyên;
+#: * thứ bản mới không mang theo: không đụng (luật chung ở `apply_tai_cho`).
+#:
+#: Giao diện nói rõ điều này: kênh mẫu có nhãn "mẫu" và nút Nhân bản; Quản lý
+#: kênh hỏi lại trước khi lưu vào mẫu.
 HOA_NHAP = ("CHANNEL", "agent-skills")
+
+
+def _kenh_rieng(thu_muc: Path) -> bool:
+    """`kenh.yaml` trong `thu_muc` có `kenh_rieng: true` không (đọc thô, không
+    cần PyYAML — chạy trong launcher cập nhật, càng ít phụ thuộc càng tốt)."""
+    tep = thu_muc / "kenh.yaml"
+    try:
+        chu = tep.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    for dong in chu.splitlines():
+        d = dong.strip()
+        if d.startswith("kenh_rieng:"):
+            return d.split(":", 1)[1].strip().strip("\"'").lower() in ("true", "yes", "1")
+    return False
+
+
+def _chep_de(nguon: Path, dich: Path) -> None:
+    """Chép `nguon` lên `dich`: tệp của bản mới thắng, tệp thừa ở `dich` giữ nguyên."""
+    dich.mkdir(parents=True, exist_ok=True)
+    for muc in nguon.iterdir():
+        ra = dich / muc.name
+        if muc.is_dir():
+            _chep_de(muc, ra)
+        else:
+            shutil.copy2(muc, ra)
+
+
+def _hoa_channel(nguon: Path, dich: Path) -> None:
+    """Hoà thư mục `CHANNEL`: kênh riêng của khách giữ, kênh mẫu của tool đè."""
+    dich.mkdir(parents=True, exist_ok=True)
+    for muc in nguon.iterdir():
+        ra = dich / muc.name
+        if muc.is_dir() and ra.is_dir() and _kenh_rieng(ra):
+            _chep_thieu(muc, ra)
+        elif muc.is_dir():
+            _chep_de(muc, ra)
+        else:
+            shutil.copy2(muc, ra)
 
 MAX_FILES = 5000
 MAX_UNCOMPRESSED = 2 * 1024 * 1024 * 1024
@@ -234,6 +289,10 @@ def apply_tai_cho(staged: Union[str, Path], current: Union[str, Path], *,
         for muc in list(staged_path.iterdir()):
             dich = current_path / muc.name
             if muc.name in PRESERVE and dich.exists():
+                continue
+            if muc.name == "CHANNEL" and dich.exists():
+                # Kênh riêng của khách giữ nguyên; kênh mẫu của tool cập nhật.
+                _hoa_channel(muc, dich)
                 continue
             if muc.name in HOA_NHAP and dich.exists():
                 # Hoà: chỉ thêm thứ còn thiếu, không đụng thứ khách đã có.
