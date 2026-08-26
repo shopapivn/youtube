@@ -80,7 +80,8 @@ LOI_NHAC_CHAN_DUNG = """This image is meant to be the REFERENCE PORTRAIT of a ch
 Role in the story: {vai}.
 Intended description: {mo_ta}
 Judge whether the portrait shows THIS character as described, and whether a viewer would recognise the ROLE at first glance (a king must look like a king: crown, royal robe…).
-Score: 5 = matches the description and the role is obvious; 4 = matches, one small detail off; 3 = the character is there but an important item is missing or wrong (no crown on a king, different colour outfit, extra items); 2 = mostly a different look; 1 = a different character or the role is unrecognisable.
+Two hard rules: (a) a reference portrait must show exactly ONE figure — a lineup, several copies, a before/after pair or a crowd scores 2 at most ("thieu": "ONE single figure only"); (b) if the description says the character has TRANSFORMED into another creature or form (a giant turned into a lion, a mouse), the portrait must show THAT new form alone — the old form standing next to a small animal scores 1 ("thieu": "show only the new form: …").
+Score: 5 = matches the description and the role is obvious; 4 = matches, one small detail off; 3 = the character is there but an important item is missing or wrong (no crown on a king, different colour outfit, extra items); 2 = mostly a different look, or more than one figure; 1 = a different character, the role is unrecognisable, or a transformation not shown.
 Return JSON only: {{"diem": <1-5>, "thieu": "<what is missing or wrong, as a short list to ADD to the drawing prompt, or empty>"}}"""
 
 

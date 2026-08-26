@@ -19,3 +19,8 @@ def test_thieu_anh_hoac_rac(tmp_path):
     assert cham_chan_dung(lambda n: "x", str(tmp_path / "khong.png"), "a", "b") == (None, "")
     anh = tmp_path / "a.png"; anh.write_bytes(b"png")
     assert cham_chan_dung(lambda n: "không phải json", str(anh), "a", "b") == (None, "")
+
+
+def test_loi_nhac_co_luat_mot_hinh_va_bien_hinh(tmp_path):
+    from core.cham_anh import LOI_NHAC_CHAN_DUNG
+    assert "exactly ONE figure" in LOI_NHAC_CHAN_DUNG and "TRANSFORMED" in LOI_NHAC_CHAN_DUNG

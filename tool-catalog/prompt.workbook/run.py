@@ -1399,6 +1399,27 @@ def _dung_dan_cast(goi, cues, context, co_san) -> Mapping[str, Any]:
 #: tran vua la meo mang ung; ep khoa theo mot anh thi nua dau phim sai, khong
 #: khoa thi nua sau phim troi. Tach thanh nv4 (truoc) va nv4b (sau): cung mat,
 #: khac do; canh nao dung id cua giai doan do.
+#: Đầu mô tả của một giai đoạn BIẾN HÌNH — cả tool nhận ra nhờ dấu này
+#: (`core.prompt_visuals.doi_thiet_ke_nhan_vat` không ghép lại thân cũ vào).
+DAU_BIEN_HINH = "full form: "
+_TU_BIEN_HINH = re.compile(r"\b(whole body|becomes?|turn(?:s|ed)? into|transform(?:s|ed)?|in the form of|shape-?shift)\b", re.I)
+_LOAI_VAT = ("lion", "mouse", "rat", "cat", "dog", "wolf", "fox", "bear", "frog", "toad", "bird", "eagle",
+             "dragon", "snake", "fish", "rabbit", "hare", "goat", "sheep", "horse", "donkey", "pig", "cow",
+             "tiger", "elephant", "monkey", "swan", "duck", "goose", "beetle", "spider", "ogre", "giant",
+             "prince", "princess", "old woman", "old man", "beggar", "statue", "tree", "stone", "cloud")
+
+
+def _la_bien_hinh(than_goc: str, do: str) -> bool:
+    """Giai đoạn này có phải một HÌNH DẠNG khác (biến hình) chứ không phải bộ đồ?"""
+    if _TU_BIEN_HINH.search(do or ""):
+        return True
+    g, d = (than_goc or "").lower(), (do or "").lower()
+    for loai in _LOAI_VAT:
+        if re.search(r"\b%s\b" % re.escape(loai), d) and not re.search(r"\b%s\b" % re.escape(loai), g):
+            return True
+    return False
+
+
 def _tach_giai_doan(goc: Dict[str, Any], stages) -> List[Dict[str, Any]]:
     ds = [s for s in (stages or []) if isinstance(s, Mapping) and str(s.get("outfit") or "").strip()]
     if len(ds) < 2:
@@ -1407,8 +1428,16 @@ def _tach_giai_doan(goc: Dict[str, Any], stages) -> List[Dict[str, Any]]:
     for k, st in enumerate(ds):
         c = dict(goc)
         c["id"] = goc["id"] if k == 0 else "{0}{1}".format(goc["id"], chr(ord("a") + k))
-        c["english_prompt"] = "{0}; outfit at this stage: {1}".format(
-            goc["english_prompt"].rstrip(" ;."), str(st["outfit"]).strip())
+        do = str(st["outfit"]).strip()
+        if k > 0 and _la_bien_hinh(goc["english_prompt"], do):
+            # BIẾN HÌNH (yêu tinh → sư tử → chuột): giai đoạn là một THÂN THỂ khác,
+            # không phải bộ đồ. Ghép thân cũ + "đồ" mới là máy vẽ ra ông khổng lồ
+            # cầm con chuột (đo 26/08/2026, nv15c). Mô tả giai đoạn = hình dạng mới.
+            c["english_prompt"] = "{0}{1} — the transformed form of {2}".format(
+                DAU_BIEN_HINH, do.rstrip(" ;."), goc.get("name") or goc["id"])
+        else:
+            c["english_prompt"] = "{0}; outfit at this stage: {1}".format(
+                goc["english_prompt"].rstrip(" ;."), do)
         c["giai_doan"] = k + 1
         c["giai_doan_khi"] = str(st.get("when") or "").strip()
         c["goc_id"] = goc["id"]

@@ -636,3 +636,22 @@ def test_ap_same_as_gop_ten_khong_them_id(wb):
     # Sau khi gộp, kiểm phủ theo từ khoá thấy "Cối xay bột" đã có → không còn thiếu.
     assert run._duoc_phu("Cối xay bột", cast["locations"], "name", "english_prompt")
     assert run._ap_same_as(cast, None) == 0
+
+
+def test_giai_doan_bien_hinh_la_than_the_moi(wb):
+    run = wb
+    goc = {"id": "nv15", "name": "Giant", "role": "villain", "english_prompt": "a very big rounded giant with a bushy beard", "notes": ""}
+    ra = run._tach_giai_doan(goc, [
+        {"when": "start", "outfit": "mossy-green tunic, big brown boots"},
+        {"when": "shows off", "outfit": "a large rounded lion, tawny fur, fluffy mane, bare paws"},
+        {"when": "tricked", "outfit": "the whole body becomes a tiny grey mouse with a pink tail"},
+    ])
+    assert [c["id"] for c in ra] == ["nv15", "nv15b", "nv15c"]
+    assert ra[0]["english_prompt"].startswith("a very big rounded giant") and "outfit at this stage: mossy-green" in ra[0]["english_prompt"]
+    assert ra[1]["english_prompt"].startswith(run.DAU_BIEN_HINH + "a large rounded lion") and "giant with a bushy beard" not in ra[1]["english_prompt"]
+    assert ra[2]["english_prompt"].startswith(run.DAU_BIEN_HINH) and "transformed form of Giant" in ra[2]["english_prompt"]
+    # Đổi thiết kế thân gốc: giai đoạn biến hình giữ nguyên.
+    from core.prompt_visuals import doi_thiet_ke_nhan_vat
+    doi_thiet_ke_nhan_vat([], ra, "nv15", "a huge round giant with a red beard")
+    assert ra[0]["english_prompt"].startswith("a huge round giant") and "outfit at this stage: mossy-green" in ra[0]["english_prompt"]
+    assert ra[1]["english_prompt"].startswith(run.DAU_BIEN_HINH + "a large rounded lion")

@@ -648,7 +648,10 @@ def doi_thiet_ke_nhan_vat(scenes, characters, ma_id: str, english_prompt_moi: st
     for c in characters:
         if goc_cua_id(c["id"]) != goc:
             continue
-        phan = str(c.get("english_prompt") or "").split("; outfit at this stage:")
+        hien = str(c.get("english_prompt") or "")
+        if hien.lower().startswith("full form:"):
+            continue  # giai đoạn biến hình là thân thể khác — đổi mặt thân gốc không chạm tới
+        phan = hien.split("; outfit at this stage:")
         c["english_prompt"] = moi + ("; outfit at this stage:" + phan[1] if len(phan) > 1 else "")
         if c.get("sheet_prompt") is not None:
             c["sheet_prompt"] = c["english_prompt"] + DUOI_CHAN_DUNG + duoi_style
