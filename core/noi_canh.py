@@ -1,0 +1,301 @@
+"""Chế độ NỐI CẢNH (`kenh.yaml: che_do_ke: noi_canh`): ảnh N → clip N → cắt đúng
+thời lượng → KHUNG CUỐI làm tham chiếu thêm cho ảnh N+1.
+
+═══ VÌ SAO ═══
+
+Chủ dự án 26/08/2026: *"sau ảnh 1 sẽ chờ video 1 xong rồi cắt cảnh cuối cùng
+của video 1 đó để cho thêm ảnh đó làm tham chiếu cùng với nhân vật bối cảnh
+tiếp theo… clip sẽ được cắt luôn theo Excel… prompt ảnh giống như là nối cảnh
+và cần chuyển cảnh có sự liên kết giữa cảnh trước."*
+
+Mỗi cảnh vì thế không còn là một bức tranh dựng mới, mà là **khoảnh khắc kế
+tiếp** của cùng một đoạn phim: cùng chỗ, cùng ánh sáng, nhân vật đứng đúng nơi
+cảnh trước bỏ lại. Đây là cách giữ mạch phim mà tham chiếu nhân vật/bối cảnh
+đứng riêng không làm được (ảnh nào cũng "mới", máy quay nhảy chỗ).
+
+═══ CHUỖI THEO BỐI CẢNH, CHẠY SONG SONG GIỮA CÁC CHUỖI ═══
+
+Nối cảnh là việc TUẦN TỰ: ảnh N+1 phải đợi clip N. Một video 120 cảnh × (ảnh
+40 giây + clip 2–4 phút) là 5–8 giờ nếu nối thành một dây. Nhưng mạch chỉ cần
+liền trong **cùng một chỗ**: sang bối cảnh khác là một đoạn phim mới, cảnh đầu
+của nó dùng tham chiếu bối cảnh như thường. Nên chuỗi = dãy cảnh liên tiếp cùng
+`location_used`; các chuỗi chạy song song, trong chuỗi thì tuần tự. Video 15–19
+lần đổi bối cảnh → 15–19 chuỗi chạy cùng lúc.
+
+═══ CLIP CẮT NGAY, KHUNG CUỐI LÀ KHUNG NGƯỜI XEM THẤY ═══
+
+Clip máy chủ trả về luôn 8 giây (Veo) dù cảnh chỉ 4,6 giây; khâu dựng vốn cắt
+theo thời lượng cảnh. Ở đây cắt **ngay khi tải về** (bản thô giữ ở
+`6-clip/_tho/`), lấy khung cuối của BẢN CẮT — đúng khung cuối cùng người xem
+thấy trước khi sang cảnh sau — làm tham chiếu. Lấy khung ở giây thứ 8 là lấy
+một khoảnh khắc người xem không bao giờ thấy.
+
+═══ THAM CHIẾU: NHÂN VẬT + KHUNG TRƯỚC, BỎ BỐI CẢNH ═══
+
+Cổng ảnh nhận tối đa ba ảnh tham chiếu (2 nhân vật + 1 bối cảnh). Có khung
+trước thì khung ấy **chính là** bối cảnh (đúng góc, đúng ánh sáng, đúng chỗ) —
+nên bỏ ảnh bối cảnh, giữ ≤ 2 nhân vật + khung trước. Dòng mô tả bối cảnh trong
+khối khoá bỏ theo, thay bằng câu nói rõ ảnh cuối là khung trước.
+
+Không Qt. Mọi lời gọi mạng/FFmpeg đều đi qua hàm bơm được — bài kiểm bơm giả.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import threading
+from typing import Any, Callable, Dict, List, Optional, Sequence
+
+__all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh",
+           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "THU_MUC_KHUNG", "THU_MUC_THO"]
+
+#: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
+THU_MUC_KHUNG = "khung"
+THU_MUC_THO = "_tho"
+#: Lấy khung cuối cách hết clip bao nhiêu giây (khung cuối cùng thật sự hay
+#: dính mờ chuyển cảnh của máy sinh video).
+LUI_KHUNG_CUOI = 0.08
+#: Tối đa mấy chuỗi chạy cùng lúc (mỗi chuỗi giữ một clip đang chờ ở máy chủ).
+SONG_SONG_CHUOI = 6
+
+DUOI_NOI_CANH = (
+    "\nThe LAST attached reference image is the final frame of the previous shot of this same "
+    "scene. This picture is the NEXT moment: same place, same time of day and lighting, the "
+    "characters start exactly where that frame left them (same positions, same clothes, same "
+    "props); only the camera and the action described above change. Every character still "
+    "looks EXACTLY like its own reference image.")
+
+
+def la_noi_canh(kenh: Any) -> bool:
+    return str(getattr(kenh, "che_do_ke", "") or "").strip() == "noi_canh"
+
+
+def chuoi_theo_boi_canh(canh: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    """Chia cảnh thành các CHUỖI: dãy cảnh liên tiếp cùng `location_used`.
+
+    Cảnh không ghi bối cảnh nối theo chuỗi đang mở (không tự tách chuỗi mới).
+    """
+    chuoi: List[List[Dict[str, Any]]] = []
+    hien = ""
+    for c in canh:
+        loc = str(c.get("location_used") or "").strip()
+        if not chuoi or (loc and hien and loc != hien):
+            chuoi.append([c])
+        else:
+            chuoi[-1].append(c)
+        if loc:
+            hien = loc
+    return chuoi
+
+
+def _ten_tham_chieu(c: Dict[str, Any]) -> List[str]:
+    tho = c.get("reference_files") or ""
+    try:
+        ten = json.loads(tho) if isinstance(tho, str) else list(tho)
+    except ValueError:
+        ten = [x.strip() for x in str(tho).split(",")]
+    return [os.path.basename(str(t).strip()) for t in (ten or []) if str(t).strip()]
+
+
+def tham_chieu_noi_canh(thu_muc_tham_chieu: str, c: Dict[str, Any],
+                        khung_truoc: Optional[str]) -> List[str]:
+    """Đường dẫn tham chiếu cho ảnh cảnh `c` ở chế độ nối cảnh.
+
+    Có `khung_truoc` → nhân vật (giữ thứ tự) + khung trước, BỎ bối cảnh.
+    Không có (cảnh đầu chuỗi) → đúng như Excel khai.
+    """
+    ra = []
+    for ten in _ten_tham_chieu(c):
+        if khung_truoc and ten.startswith("loc"):
+            continue
+        p = os.path.join(thu_muc_tham_chieu, ten)
+        if os.path.isfile(p):
+            ra.append(p)
+    if khung_truoc and os.path.isfile(khung_truoc):
+        ra.append(khung_truoc)
+    return ra
+
+
+_DONG_LOC = re.compile(r"\n- reference image \d+ = loc\d+[^\n]*")
+
+
+def prompt_noi_canh(img_prompt: str, co_khung_truoc: bool) -> str:
+    """Lời nhắc ảnh cho chế độ nối cảnh: có khung trước thì bỏ dòng bối cảnh trong
+    khối khoá (ảnh bối cảnh không còn được gửi) và nối đuôi `DUOI_NOI_CANH`."""
+    p = str(img_prompt or "").rstrip()
+    if not co_khung_truoc:
+        return p
+    p = _DONG_LOC.sub("", p)
+    return p + DUOI_NOI_CANH
+
+
+def giay_cua_canh(c: Dict[str, Any]) -> float:
+    """Thời lượng cảnh theo Excel (`duration`, hoặc srt_end − srt_start)."""
+    try:
+        d = float(c.get("duration") or 0)
+    except (TypeError, ValueError):
+        d = 0.0
+    if d > 0:
+        return d
+
+    def s(t: str) -> float:
+        h, m, se = str(t).replace(",", ".").split(":")
+        return int(h) * 3600 + int(m) * 60 + float(se)
+
+    try:
+        return max(0.0, s(c["srt_end"]) - s(c["srt_start"]))
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+def cat_clip_theo_canh(ffmpeg: str, nguon: str, dich: str, giay: float,
+                       codec: str = "libx264", opts: Optional[Dict[str, Any]] = None,
+                       chay: Callable[..., Any] = subprocess.run) -> None:
+    """Cắt (hoặc kéo dài bằng giữ khung cuối) clip về đúng `giay` giây, không tiếng.
+
+    Cùng bộ lọc với khâu dựng (`tpad` + `-t`), nên bản cắt ở đây và bản khâu
+    dựng cắt lại là một.
+    """
+    can = max(0.5, float(giay))
+    lenh = [ffmpeg, "-y", "-hide_banner", "-nostats", "-i", nguon,
+            "-vf", "tpad=stop_mode=clone:stop_duration={0:.3f}".format(can),
+            "-t", "{0:.3f}".format(can), "-c:v", codec]
+    for k, v in (opts or {}).items():
+        lenh.extend([k, str(v)])
+    lenh.extend(["-pix_fmt", "yuv420p", "-an", dich])
+    ket = chay(lenh, capture_output=True, text=True,
+               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if getattr(ket, "returncode", 1) != 0:
+        try:
+            os.remove(dich)
+        except OSError:
+            pass
+        raise RuntimeError("cắt clip hỏng: {0}".format(str(getattr(ket, "stderr", ""))[-300:]))
+
+
+def khung_cuoi(ffmpeg: str, clip: str, dich_png: str,
+               chay: Callable[..., Any] = subprocess.run) -> str:
+    """Trích khung CUỐI của clip (cách hết `LUI_KHUNG_CUOI` giây) ra PNG. Trả về đường dẫn."""
+    os.makedirs(os.path.dirname(dich_png) or ".", exist_ok=True)
+    lenh = [ffmpeg, "-y", "-hide_banner", "-nostats", "-sseof", "-{0:.2f}".format(LUI_KHUNG_CUOI),
+            "-i", clip, "-frames:v", "1", "-update", "1", dich_png]
+    ket = chay(lenh, capture_output=True, text=True,
+               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if getattr(ket, "returncode", 1) != 0 or not os.path.isfile(dich_png):
+        # Clip quá ngắn cho -sseof: lấy khung cuối bằng cách đọc cả clip.
+        lenh = [ffmpeg, "-y", "-hide_banner", "-nostats", "-i", clip,
+                "-vf", "select='eq(n,0)+gt(t,0)'", "-vsync", "vfr", "-frames:v", "1", "-update", "1", dich_png]
+        ket = chay(lenh, capture_output=True, text=True,
+                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if getattr(ket, "returncode", 1) != 0 or not os.path.isfile(dich_png):
+            raise RuntimeError("không trích được khung cuối: {0}".format(
+                str(getattr(ket, "stderr", ""))[-200:]))
+    return dich_png
+
+
+class ChuoiNoiCanh:
+    """Chạy MỘT chuỗi tuần tự: ảnh → clip → cắt → khung cuối → cảnh sau.
+
+    Mọi việc tốn tiền/FFmpeg đi qua hàm bơm vào (`lam_anh`, `lam_clip`, `cat`,
+    `trich_khung`) để bài kiểm chạy khô. `ghi` là nhật ký, `kiem_dung` ném
+    `Cancelled` khi người dùng bấm Dừng.
+    """
+
+    def __init__(self, *, thu_muc_anh: str, thu_muc_clip: str, thu_muc_tham_chieu: str,
+                 lam_anh: Callable[[Dict[str, Any], str, List[str], str], None],
+                 lam_clip: Callable[[Dict[str, Any], str, str], None],
+                 cat: Callable[[str, str, float], None],
+                 trich_khung: Callable[[str, str], str],
+                 ghi: Callable[[str], None], kiem_dung: Callable[[], None] = lambda: None,
+                 bao_anh: Callable[[], None] = lambda: None,
+                 bao_clip: Callable[[], None] = lambda: None) -> None:
+        self.thu_muc_anh = thu_muc_anh
+        self.thu_muc_clip = thu_muc_clip
+        self.thu_muc_tham_chieu = thu_muc_tham_chieu
+        self.lam_anh, self.lam_clip, self.cat, self.trich_khung = lam_anh, lam_clip, cat, trich_khung
+        self.ghi, self.kiem_dung = ghi, kiem_dung
+        self.bao_anh, self.bao_clip = bao_anh, bao_clip
+        self.loi: List[str] = []
+
+    def _duong(self, so: int):
+        return (os.path.join(self.thu_muc_anh, "{0}.png".format(so)),
+                os.path.join(self.thu_muc_clip, "{0}.mp4".format(so)),
+                os.path.join(self.thu_muc_clip, THU_MUC_THO, "{0}.mp4".format(so)),
+                os.path.join(self.thu_muc_clip, THU_MUC_KHUNG, "{0}.png".format(so)))
+
+    def chay(self, chuoi: Sequence[Dict[str, Any]]) -> int:
+        """Trả về số cảnh có clip xong trong chuỗi."""
+        khung_truoc: Optional[str] = None
+        xong = 0
+        for c in chuoi:
+            self.kiem_dung()
+            so = int(c["scene_id"])
+            anh, clip, tho, khung = self._duong(so)
+            # ── ảnh ──
+            if not os.path.exists(anh):
+                refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, khung_truoc)
+                prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), bool(khung_truoc))
+                try:
+                    self.lam_anh(c, anh, refs, prompt)
+                except Exception as loi:  # noqa: BLE001
+                    self.ghi("    cảnh {0}: ảnh hỏng ({1}) — chuỗi đứt ở đây, các cảnh sau "
+                             "bắt đầu lại từ tham chiếu bối cảnh.".format(so, str(loi)[:100]))
+                    self.loi.append("ảnh {0}".format(so))
+                    khung_truoc = None
+                    continue
+            self.bao_anh()
+            # ── clip ──
+            if not os.path.exists(clip):
+                if not str(c.get("video_prompt") or "").strip():
+                    khung_truoc = anh
+                    continue
+                try:
+                    os.makedirs(os.path.dirname(tho), exist_ok=True)
+                    self.lam_clip(c, anh, tho)
+                    self.cat(tho, clip, giay_cua_canh(c))
+                except Exception as loi:  # noqa: BLE001
+                    self.ghi("    cảnh {0}: clip hỏng ({1}) — cảnh sau nối từ chính ảnh cảnh này; "
+                             "khâu clip sẽ làm nốt.".format(so, str(loi)[:100]))
+                    self.loi.append("clip {0}".format(so))
+                    khung_truoc = anh
+                    continue
+            # ── khung cuối ──
+            if not os.path.exists(khung):
+                try:
+                    self.trich_khung(clip, khung)
+                except Exception as loi:  # noqa: BLE001
+                    self.ghi("    cảnh {0}: không lấy được khung cuối ({1}) — nối từ ảnh cảnh."
+                             .format(so, str(loi)[:80]))
+                    khung_truoc = anh
+                    self.bao_clip()
+                    xong += 1
+                    continue
+            khung_truoc = khung
+            self.bao_clip()
+            xong += 1
+        return xong
+
+
+def chay_cac_chuoi(chuoi: Sequence[Sequence[Dict[str, Any]]], lam_chuoi: Callable[[Sequence[Dict[str, Any]]], int],
+                   song_song: int = SONG_SONG_CHUOI) -> int:
+    """Chạy các chuỗi song song (mỗi chuỗi tuần tự bên trong). Trả về tổng cảnh có clip."""
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    if not chuoi:
+        return 0
+    tong = 0
+    khoa = threading.Lock()
+
+    def mot(ch):
+        nonlocal tong
+        n = lam_chuoi(ch)
+        with khoa:
+            tong += n
+        return n
+
+    with ThreadPoolExecutor(max_workers=max(1, min(song_song, len(chuoi)))) as pool:
+        list(pool.map(mot, chuoi))
+    return tong

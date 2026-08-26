@@ -45,7 +45,7 @@ __all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chie
            "duong_tham_chieu_canh", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
 
 #: Các giá trị `che_do_ke` mở nhánh đạo diễn.
-CHE_DO_DAO_DIEN = ("tu_xay", "nhan_vat_va_boi_canh")
+CHE_DO_DAO_DIEN = ("tu_xay", "nhan_vat_va_boi_canh", "noi_canh")
 
 #: Tệp dàn nhân vật + bối cảnh + kế hoạch của lượt (cạnh `4-canh.json`).
 TEP_DAN = "4-canh-dan.json"
@@ -123,6 +123,8 @@ def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
     except OSError:
         pass
     che_do = str(k.che_do_ke or "").strip()
+    if che_do == "noi_canh":
+        che_do = "tu_xay"  # run.py chỉ biết tu_xay / nhan_vat_va_boi_canh; nối cảnh là chuyện của khâu ảnh
     co_dinh = None
     if che_do == "nhan_vat_va_boi_canh":
         co_dinh = {"image_file": "nv1.png",

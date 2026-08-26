@@ -4127,6 +4127,100 @@ def _khau_anh(bc: BoiCanh):
     return lam
 
 
+def _la_noi_canh(kenh: Any) -> bool:
+    from .noi_canh import la_noi_canh  # noqa: PLC0415
+
+    return la_noi_canh(kenh)
+
+
+def _khau_anh_noi_canh(bc: BoiCanh):
+    """Khâu ảnh ở chế độ NỐI CẢNH: ảnh N → clip N → cắt → khung cuối → ảnh N+1.
+
+    Xem `core/noi_canh.py`. Chuỗi = dãy cảnh cùng bối cảnh; các chuỗi chạy song
+    song, trong chuỗi tuần tự. Ảnh bìa để khâu thumbnail làm; clip thiếu để khâu
+    clip làm nốt; video cuối vẫn qua khâu dựng (bản cắt ở đây khớp bản khâu dựng
+    cắt lại).
+    """
+    def lam(luot: LuotChay, tt: TrangThaiKhau):
+        from .dao_dien_auto import THU_MUC_THAM_CHIEU, ThamChieuCanh  # noqa: PLC0415
+        from .noi_canh import (  # noqa: PLC0415
+            ChuoiNoiCanh, SONG_SONG_CHUOI, cat_clip_theo_canh, chay_cac_chuoi,
+            chuoi_theo_boi_canh, khung_cuoi,
+        )
+        from .phan_cung import chon_encoder, doc_ket_qua  # noqa: PLC0415
+
+        canh = _doc_canh(luot)
+        thu_muc = os.path.join(luot.thu_muc, "5-anh")
+        thu_muc_clip = os.path.join(luot.thu_muc, "6-clip")
+        thu_muc_tc = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
+        os.makedirs(thu_muc, exist_ok=True)
+        os.makedirs(thu_muc_clip, exist_ok=True)
+        ffmpeg = bc.ffmpeg or _tim_ffmpeg()
+        if not ffmpeg:
+            raise RuntimeError("máy chưa có FFmpeg — chế độ nối cảnh cần FFmpeg để cắt clip và lấy khung cuối")
+        codec, opts = chon_encoder(doc_ket_qua(bc.goc), intermediate=True)
+        giay = _giay_clip(bc)
+        so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
+        chuoi = chuoi_theo_boi_canh(canh)
+        bc.ghi("  nối cảnh: {0} cảnh thành {1} chuỗi theo bối cảnh (chuỗi dài nhất {2} cảnh); "
+               "tối đa {3} chuỗi chạy cùng lúc.".format(
+                   len(canh), len(chuoi), max(len(x) for x in chuoi), SONG_SONG_CHUOI))
+        khoa_dem = threading.Lock()
+        dem = {"anh": 0, "clip": 0}
+        bao = {"anh": dem_tien_do(bc, luot, tt, "ảnh", NHIP_GHI_TIEN_DO),
+               "clip": dem_tien_do(bc, luot, luot.tt("clip"), "clip", NHIP_GHI_TIEN_DO)}
+        for loai in ("anh", "clip"):
+            bao[loai](0, len(canh))
+
+        def them(loai: str):
+            def _t() -> None:
+                with khoa_dem:
+                    dem[loai] += 1
+                    bao[loai](dem[loai], len(canh))
+            return _t
+
+        def lam_anh(c, tep, refs, prompt):
+            c2 = dict(c, img_prompt=prompt)
+            _lam_anh_canh(bc, luot, c2, tep, ThamChieuCanh(bc, refs), so=so)
+            _bo_clip_cu(bc, os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))
+
+        def lam_clip(c, anh, tho):
+            _lam_clip(bc, luot, c, anh, tho, giay, so=so)
+
+        def cat(tho, clip, giay_canh):
+            cat_clip_theo_canh(ffmpeg, tho, clip, giay_canh, codec, opts)
+
+        def trich(clip, khung):
+            return khung_cuoi(ffmpeg, clip, khung)
+
+        loi_chung: List[str] = []
+
+        def lam_chuoi(ch):
+            ct = ChuoiNoiCanh(thu_muc_anh=thu_muc, thu_muc_clip=thu_muc_clip, thu_muc_tham_chieu=thu_muc_tc,
+                              lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich,
+                              ghi=bc.ghi, kiem_dung=bc.kiem_dung, bao_anh=them("anh"), bao_clip=them("clip"))
+            n = ct.chay(ch)
+            with khoa_dem:
+                loi_chung.extend(ct.loi)
+            return n
+
+        try:
+            chay_cac_chuoi(chuoi, lam_chuoi, SONG_SONG_CHUOI)
+        finally:
+            so.dong()
+        thieu_anh = [int(c["scene_id"]) for c in canh
+                     if not os.path.exists(os.path.join(thu_muc, "{0}.png".format(int(c["scene_id"]))))]
+        if thieu_anh:
+            bc.ghi("  ảnh: thiếu {0}/{1} ({2}) — “Làm lại khâu này” làm nốt.".format(
+                len(thieu_anh), len(canh), ", ".join(str(x) for x in thieu_anh[:12])))
+        if dem["clip"] < len(canh):
+            bc.ghi("  còn {0}/{1} clip chưa xong — khâu clip làm nốt.".format(len(canh) - dem["clip"], len(canh)))
+        return {"so_anh": dem["anh"], "so_clip": dem["clip"], "so_chuoi": len(chuoi),
+                "loi": loi_chung[:20]}
+
+    return lam
+
+
 def _khau_clip(bc: BoiCanh):
     """Làm nốt những clip dây chuyền ở khâu ảnh chưa kịp ra.
 
@@ -4818,7 +4912,7 @@ def dung_bo_viec(bc: BoiCanh) -> Dict[str, Callable]:
         "giong-doc": _khau_giong_doc(bc),
         "phu-de": _khau_phu_de(bc),
         "bang-canh": _khau_bang_canh(bc),
-        "anh": _khau_anh(bc),
+        "anh": (_khau_anh_noi_canh(bc) if _la_noi_canh(bc.kenh) else _khau_anh(bc)),
         "clip": _khau_clip(bc),
         "thumbnail": _khau_thumbnail(bc),
         "dung": _khau_dung(bc),

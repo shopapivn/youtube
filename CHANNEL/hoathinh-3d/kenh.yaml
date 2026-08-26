@@ -1,0 +1,38 @@
+# ============================================================================
+#  KÊNH story-3d — Truyện cổ tích
+# ============================================================================
+#  Tool tạo tệp này từ khuôn: ngách “Tâm lý” × bộ vẽ “Bút chì giấy trắng” × khán giả
+#  “Việt Nam” × chiến lược “Remake”.
+#  Sửa thoải mái — từ giờ đây là tệp của bạn, khuôn không đụng vào nữa.
+#
+#  ⚠ `ky_tu_moi_phut` đi theo GIỌNG ĐỌC, không theo ngôn ngữ chung chung.
+#  Giọng f5q6kePPoQAjCPYG6moa (25/08/2026) CHƯA đo — 832 là số của giọng cũ.
+#  Đổi giọng đọc thì đo lại: lấy số ký tự kịch bản chia cho số phút của mp3.
+#
+#  ⚠ KHÔNG BAO GIỜ ĐẶT KHOÁ API VÀO ĐÂY. Tiền của luồng AUTO đi qua đúng một
+#  cửa: ví ShopAPI mà tool đã đăng nhập. Tool có bộ quét, thấy khoá là chặn.
+# ============================================================================
+
+ma: "hoathinh-3d"
+ten: "Hoạt hình 3D (nối cảnh)"
+ngon_ngu: "vi"
+giong_van: "Vietnamese fairy-tale narration for children 4–10: warm, gentle, playful storyteller voice; short simple sentences; lively dialogue; sound words; the narrator speaks to the child listener (các bạn nhỏ / các con)."
+ky_tu_moi_phut: 832
+chu_bia_hoa: true
+voice_id: "f5q6kePPoQAjCPYG6moa"
+phut_muc_tieu: 8
+# Độ dài TỰ DO: không nhắm phút, không nắn, không chấm độ dài — truyện dài
+# ngắn theo câu chuyện (chủ dự án 25/08/2026). `phut_muc_tieu` ở trên không dùng.
+do_dai_tu_do: true
+engine: "veo3"
+so_thumbnail: 3
+mo_hinh: "claude-sonnet-5"
+dot_phu_de: true
+am_luong_nhac: 0.12
+nhac_nen: ""
+
+# Cách kể bằng hình: AI đọc phim, tự dựng dàn nhân vật (có giai đoạn trang
+# phục) + bối cảnh + kế hoạch đạo diễn + ảnh tham chiếu từng nhân vật — cùng
+# dây chuyền với tab Prompt Visuals. Bỏ dòng này là về đường một nhân vật nv1.png.
+# nối cảnh: ảnh N → clip N → cắt đúng thời lượng → khung cuối làm tham chiếu cho ảnh N+1
+che_do_ke: noi_canh
