@@ -44,13 +44,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
-           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "THU_MUC_KHUNG", "THU_MUC_THO"]
+           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -277,8 +278,42 @@ def noi_tiep_khong_cat(truoc: Optional[Dict[str, Any]], c: Dict[str, Any]) -> bo
 
 
 #: Đầu lời nhắc clip khi diễn tiếp không cắt.
-DAU_VIDEO_NOI_TIEP = ("Continue this exact shot without a cut, starting from this frame: the characters "
-                      "keep their positions and the action flows on; ")
+DAU_VIDEO_NOI_TIEP = ("One single unbroken take continuing from this exact frame, no cut, no new shot, the camera "
+                      "holds its framing and may only drift gently; the characters keep their positions and the "
+                      "action flows on: ")
+#: Diễn tiếp video→video tối đa mấy cảnh rồi phải NEO LẠI bằng ảnh có tham chiếu
+#: (đo 26/08/2026: sau 3–4 cảnh diễn tiếp, dê con trắng trôi thành nâu — Veo không
+#: có tham chiếu nhân vật, mỗi bước lệch thêm một chút).
+TOI_DA_NOI_TIEP = 2
+DUOI_NEO_LAI = (
+    "\nThis picture continues the SAME shot as the LAST attached reference image (the previous frame): keep "
+    "its composition, camera distance and angle, and every character's position exactly — only restore each "
+    "character to look EXACTLY like its own reference image (correct fur/skin colour, face, outfit) and "
+    "perform the action described above. No new framing.")
+_MO_DAU_KHUNG = re.compile(
+    r"^\s*(?:extreme\s+)?(?:close-?up(?:\s+shot)?|close\s+shot|medium[\w\s-]*?shot|wide[\w\s-]*?shot|"
+    r"establishing\s+shot|over-the-shoulder(?:\s+shot)?(?:\s+from\s+behind)?|low[\s-]angle(?:\s+shot)?(?:\s+looking\s+up)?|"
+    r"high[\s-]angle(?:\s+shot|\s+view)?(?:\s+looking\s+down)?|top-down\s+view|bird'?s-eye\s+view|pov(?:\s+shot)?|"
+    r"insert(?:\s+shot)?|two-shot|tracking\s+shot|orbiting\s+shot|panning\s+shot|tilting\s+shot)"
+    r"\s*(?:of|on|at|toward|towards)?\s*", re.I)
+
+
+def bo_cum_co_khung(prompt: str) -> str:
+    """Bỏ cụm mở đầu nói cỡ khung/động tác máy ('Medium shot of…,') — dùng cho clip và ảnh
+    DIỄN TIẾP, nơi khung hình đã do khung trước quyết định."""
+    p = str(prompt or "")
+    return _MO_DAU_KHUNG.sub("", p, count=1)
+
+
+def prompt_neo_lai(img_prompt: str) -> str:
+    """Lời nhắc ảnh NEO LẠI: bỏ cụm cỡ khung, giữ khối khoá, nối đuôi 'cùng bố cục khung trước'."""
+    p = bo_duoi_noi_canh(img_prompt)
+    dau, tach, khoa = p.partition("\nREFERENCE IMAGES")
+    dau = bo_cum_co_khung(dau)
+    p = dau + tach + khoa
+    if len(p) + len(DUOI_NEO_LAI) > TRAN_PROMPT:
+        p = rut_khoi_khoa(p)
+    return p + DUOI_NEO_LAI
 
 
 class ChuoiNoiCanh:
@@ -317,6 +352,7 @@ class ChuoiNoiCanh:
         """Trả về số cảnh có clip xong trong chuỗi."""
         khung_truoc: Optional[str] = None
         canh_truoc: Optional[Dict[str, Any]] = None
+        so_noi_tiep = 0
         xong = 0
         for c in chuoi:
             self.kiem_dung()
@@ -325,15 +361,24 @@ class ChuoiNoiCanh:
             noi_tiep = False
             # ── ảnh ──
             if not os.path.exists(anh):
-                if self.lien_mach and khung_truoc and noi_tiep_khong_cat(canh_truoc, c):
+                cung_nguoi = self.lien_mach and khung_truoc and noi_tiep_khong_cat(canh_truoc, c)
+                if cung_nguoi and so_noi_tiep < TOI_DA_NOI_TIEP:
                     # Cùng chỗ, cùng người: KHÔNG cắt — khung cuối clip trước là khung
                     # đầu; Veo diễn tiếp hành động của cảnh này. Không tốn một ảnh.
                     shutil.copyfile(khung_truoc, anh)
                     noi_tiep = True
+                    so_noi_tiep += 1
                     self.ghi("    cảnh {0}: diễn tiếp từ khung cuối cảnh trước, không cắt.".format(so))
                 else:
                     refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, khung_truoc)
-                    prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), bool(khung_truoc))
+                    if cung_nguoi:
+                        # Đã diễn tiếp đủ số bước: NEO LẠI nhân vật bằng ảnh có tham chiếu
+                        # nhưng giữ nguyên bố cục khung trước — cú cắt vô hình.
+                        prompt = prompt_neo_lai(str(c.get("img_prompt") or ""))
+                        self.ghi("    cảnh {0}: neo lại nhân vật (ảnh mới cùng bố cục khung trước).".format(so))
+                    else:
+                        prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), bool(khung_truoc))
+                    so_noi_tiep = 0
                     try:
                         self.lam_anh(c, anh, refs, prompt)
                     except Exception as loi:  # noqa: BLE001
@@ -354,7 +399,7 @@ class ChuoiNoiCanh:
                     os.makedirs(os.path.dirname(tho), exist_ok=True)
                     c_clip = c
                     if noi_tiep:
-                        c_clip = dict(c, video_prompt=DAU_VIDEO_NOI_TIEP + str(c.get("video_prompt") or ""))
+                        c_clip = dict(c, video_prompt=DAU_VIDEO_NOI_TIEP + bo_cum_co_khung(str(c.get("video_prompt") or "")))
                     self.lam_clip(c_clip, anh, tho)
                     self.cat(tho, clip, giay_cua_canh(c))
                 except Exception as loi:  # noqa: BLE001

@@ -237,3 +237,25 @@ class TestLienMach:
         assert (anh_d / "2.png").read_bytes() == b"khung"
         assert nhat["clip"] == [1, 2, 3] and any("diễn tiếp" in d for d in nhat["ghi"])
         assert nhat["anh"][1][1] == ["nv1.png", "nv4.png", "loc1.png", "2.png"]
+
+
+class TestNeoLai:
+    def test_bo_cum_co_khung(self):
+        assert nc.bo_cum_co_khung("Medium shot of nv1 (nv1) waving at loc1, warm light") == "nv1 (nv1) waving at loc1, warm light"
+        assert nc.bo_cum_co_khung("Over-the-shoulder shot from behind nv2 toward nv1, she laughs") == "nv2 toward nv1, she laughs"
+        assert nc.bo_cum_co_khung("The kids hide under the table") == "The kids hide under the table"
+
+    def test_prompt_neo_lai(self):
+        goc = "Close-up of nv1 (nv1) smiling at loc1" + chr(10) + "REFERENCE IMAGES are attached, in this order:" + chr(10) + "- reference image 1 = nv1, the hero: a cat"
+        p = nc.prompt_neo_lai(goc)
+        assert p.startswith("nv1 (nv1) smiling") and "REFERENCE IMAGES" in p and p.endswith(nc.DUOI_NEO_LAI)
+        assert "NEXT moment" not in p
+
+    def test_neo_lai_sau_toi_da_noi_tiep(self, tmp_path):
+        ct, nhat, anh_d, clip_d = _chuoi(tmp_path, lien_mach=True)
+        canh = [_c(i, "loc1", refs=("nv1.png", "loc1.png")) for i in range(1, 7)]
+        assert ct.chay(canh) == 6
+        # 1: ảnh mới; 2, 3: diễn tiếp; 4: neo lại (ảnh mới, cùng bố cục); 5, 6: diễn tiếp
+        assert [a[0] for a in nhat["anh"]] == [1, 4]
+        assert any("neo lại" in d for d in nhat["ghi"]) and sum("diễn tiếp" in d for d in nhat["ghi"]) == 4
+        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "3.png"]
