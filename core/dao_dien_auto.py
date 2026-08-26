@@ -296,7 +296,7 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
 
     def mot(v: Tuple[str, str, str]) -> None:
         ma_id, prompt, dich = v
-        goc_anh = _anh_goc(d, goc_cua.get(ma_id))
+        goc_anh = _anh_mau(d, ma_id, goc_cua, man)
         try:
             # Chỉ giai đoạn sau mới cần tham chiếu -> hàm bơm vào của bài kiểm
             # (ba tham số) vẫn dùng được cho đường thường.
@@ -651,16 +651,50 @@ def _anh_goc(thu_muc: str, goc_id: Optional[str]) -> Optional[List[str]]:
     return [p] if os.path.isfile(p) else None
 
 
+def _anh_mau(thu_muc: str, ma_id: str, goc_cua: Dict[str, str],
+             man: Dict[str, Any]) -> Optional[List[str]]:
+    """Ảnh để vẽ theo cho MỘT giai đoạn: ảnh giai đoạn đầu, hoặc giai đoạn anh em
+    nào đã có trên đĩa.
+
+    Vì sao phải có đường lui: đo 26/08/2026 (phim 0002), ảnh giai đoạn đầu của
+    con sói bị bộ lọc chặn, hai giai đoạn sau cùng thấy trống nên mỗi cái vẽ từ
+    chữ ra một con — một con gấu và một con sói. Mượn anh em thì cả họ vẫn là
+    MỘT con vật; chỉ khác món đồ mang theo, đúng nghĩa "giai đoạn".
+    """
+    goc = goc_cua.get(ma_id)
+    co = _anh_goc(thu_muc, goc)
+    if co:
+        return co
+    if not goc:
+        return None
+    for c in man.get("characters") or []:
+        i = str(c.get("id") or "")
+        if not i or i == ma_id or goc_cua_id(i) != goc_cua_id(ma_id):
+            continue
+        p = os.path.join(thu_muc, i + ".png")
+        if os.path.isfile(p):
+            return [p]
+    return None
+
+
 def _viec_theo_lop(viec: List[Tuple[str, str, str]],
                    goc_cua: Dict[str, str]) -> List[List[Tuple[str, str, str]]]:
-    """Chia việc thành hai lớp: giai đoạn ĐẦU (và bối cảnh) trước, giai đoạn SAU sau.
+    """Xếp việc thành nhiều lớp: giai đoạn ĐẦU (và bối cảnh) trước, rồi TỪNG BẬC
+    giai đoạn sau — b, rồi c, rồi d…
 
-    Giai đoạn sau vẽ TỪ ảnh giai đoạn đầu nên phải chờ nó có trên đĩa. Cùng lớp
-    thì vẫn chạy song song như cũ.
+    Giai đoạn sau vẽ TỪ ảnh giai đoạn trước nên phải chờ ảnh ấy có trên đĩa. Trước
+    26/08/2026 mọi giai đoạn sau nằm chung MỘT lớp chạy song song; khi ảnh giai
+    đoạn đầu hỏng thì cả hai cùng vẽ từ chữ và ra hai con vật khác loài (đo trên
+    phim 0002: `nv5b` ra con gấu, `nv5c` ra con sói). Tách theo bậc thì con vẽ
+    trước kịp làm mẫu cho con vẽ sau — cả họ vẫn là một con.
     """
     dau = [v for v in viec if v[0] not in goc_cua]
     sau = [v for v in viec if v[0] in goc_cua]
-    return [x for x in (dau, sau) if x]
+    lop: Dict[str, List[Tuple[str, str, str]]] = {}
+    for v in sau:
+        bac = str(v[0])[len(goc_cua_id(str(v[0]))):] or "b"
+        lop.setdefault(bac, []).append(v)
+    return [x for x in ([dau] + [lop[k] for k in sorted(lop)]) if x]
 
 
 def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[..., None]:

@@ -558,3 +558,50 @@ class TestThieuAnhThamChieu:
         assert "reference image 1 = loc1" in canh[0]["img_prompt"]
         assert "= nv5" not in canh[0]["img_prompt"]
         assert json.load(open(os.path.join(luot.thu_muc, "4-canh.json"), encoding="utf-8"))[0]["characters_used"] == ""
+
+    def test_anh_goc_hong_thi_giai_doan_sau_van_ve_theo_anh_em(self, tmp_path):
+        """MỘT nhân vật chỉ được có MỘT thiết kế, kể cả khi ảnh giai đoạn đầu hỏng.
+
+        Đo 26/08/2026 (phim 0002): `nv5` bị bộ lọc chặn, `nv5b` và `nv5c` chạy song
+        song cùng thấy trống nên mỗi cái vẽ từ chữ — ra một con gấu và một con sói.
+        """
+        from core.prompt_visuals import DUOI_CHAN_DUNG
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = {"characters": [
+            {"id": "nv5", "role": "villain", "english_prompt": "a wolf", "goc_id": "nv5",
+             "sheet_prompt": "a wolf" + DUOI_CHAN_DUNG},
+            {"id": "nv5b", "role": "villain", "english_prompt": "a wolf, white paws", "goc_id": "nv5",
+             "sheet_prompt": "a wolf, white paws" + DUOI_CHAN_DUNG},
+            {"id": "nv5c", "role": "villain", "english_prompt": "a wolf, full belly", "goc_id": "nv5",
+             "sheet_prompt": "a wolf, full belly" + DUOI_CHAN_DUNG}], "locations": []}
+        thay = {}
+
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
+            if ma_id == "nv5":
+                raise RuntimeError("content_rejected")
+            thay[ma_id] = [os.path.basename(x) for x in (tham_chieu or [])]
+            open(dich, "wb").write(b"png")
+
+        dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh, goi_ai=lambda l: "không có json")
+        # nv5b vẽ trước (không có mẫu, đành vẽ từ chữ), nv5c PHẢI vẽ theo ảnh nv5b
+        assert thay["nv5b"] == []
+        assert thay["nv5c"] == ["nv5b.png"], "giai đoạn sau phải vẽ theo ảnh anh em đã có"
+
+    def test_giai_doan_sau_ve_theo_anh_giai_doan_dau_khi_no_co(self, tmp_path):
+        from core.prompt_visuals import DUOI_CHAN_DUNG
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = {"characters": [
+            {"id": "nv5", "role": "villain", "english_prompt": "a wolf", "goc_id": "nv5",
+             "sheet_prompt": "a wolf" + DUOI_CHAN_DUNG},
+            {"id": "nv5b", "role": "villain", "english_prompt": "a wolf, white paws", "goc_id": "nv5",
+             "sheet_prompt": "a wolf, white paws" + DUOI_CHAN_DUNG},
+            {"id": "nv5c", "role": "villain", "english_prompt": "a wolf, full belly", "goc_id": "nv5",
+             "sheet_prompt": "a wolf, full belly" + DUOI_CHAN_DUNG}], "locations": []}
+        thay = {}
+
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
+            thay[ma_id] = [os.path.basename(x) for x in (tham_chieu or [])]
+            open(dich, "wb").write(b"png")
+
+        dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh, goi_ai=lambda l: "x")
+        assert thay["nv5"] == [] and thay["nv5b"] == ["nv5.png"] and thay["nv5c"] == ["nv5.png"]
