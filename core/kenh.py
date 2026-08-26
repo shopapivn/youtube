@@ -138,6 +138,11 @@ class Kenh:
     #: *"không cần giới hạn thời gian hay ký tự ở prompt"*. Chỉ còn một sàn
     #: tuyệt đối chống bản rỗng / AI hỏi lại (`SAN_KICH_BAN_TU_DO`).
     do_dai_tu_do: bool = False
+    #: Chế độ nối cảnh gửi clip với `frame_mode: start_frame` — khung hình đầu clip
+    #: CHÍNH LÀ ảnh gửi (Flow "Frames"), thay vì Veo tự dựng lại bố cục. Cần cổng
+    #: ShopAPI đã nhận trường này (26/08/2026). Bật thì clip nối vào khung cuối
+    #: clip trước không khựng, và diễn tiếp video→video được với cả Veo 3.
+    khung_dau: bool = False
     #: Sau khi chấm chọn bản, HOÀN THIỆN chính bản đó theo nhận xét của bộ
     #: chấm: sửa điểm yếu, phát huy điểm mạnh, làm mượt (`prompt/2c-hoan-thien.md`,
     #: hai lượt gọi nữa: hoàn thiện + chấm so lại). Chủ dự án, 25/08/2026:
@@ -474,6 +479,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
+        khung_dau=bool(cai.get("khung_dau", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
         mau_cua_tool=_co(cai.get("mau_cua_tool")),
         kenh_rieng=_co(cai.get("kenh_rieng")),

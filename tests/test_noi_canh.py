@@ -263,3 +263,12 @@ class TestNeoLai:
 
 def test_engine_giu_khung_dau():
     assert nc.engine_giu_khung_dau("seedance") and not nc.engine_giu_khung_dau("veo3") and not nc.engine_giu_khung_dau("")
+
+
+class TestGiuKhungDau:
+    def test_theo_engine_hoac_co_khung_dau(self):
+        from types import SimpleNamespace as NS
+        assert nc.giu_khung_dau(NS(engine="seedance", khung_dau=False))
+        assert not nc.giu_khung_dau(NS(engine="veo3", khung_dau=False))
+        assert nc.giu_khung_dau(NS(engine="veo3", khung_dau=True))
+        assert not nc.giu_khung_dau(NS(engine="veo3"))

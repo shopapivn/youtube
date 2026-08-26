@@ -51,7 +51,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
-           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO"]
+           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -79,6 +79,13 @@ DUOI_NOI_CANH = (
 #: veo3 qua cổng lệch 26–47 — coi ảnh là gợi ý, tự dựng bố cục mới). Chỉ engine giữ
 #: khung đầu mới "diễn tiếp video→video" được; còn lại mỗi cảnh phải có ảnh mới.
 ENGINE_GIU_KHUNG_DAU = ("seedance",)
+
+
+def giu_khung_dau(kenh: Any) -> bool:
+    """Kênh này có nối clip bằng KHUNG ĐẦU thật không: hoặc engine vốn giữ khung
+    đầu (Seedance), hoặc kênh bật `khung_dau` để gửi `frame_mode: start_frame`
+    cho Veo 3 (Flow "Frames")."""
+    return bool(getattr(kenh, "khung_dau", False)) or engine_giu_khung_dau(str(getattr(kenh, "engine", "") or ""))
 
 
 def engine_giu_khung_dau(engine: str) -> bool:

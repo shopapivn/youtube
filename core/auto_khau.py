@@ -3441,8 +3441,13 @@ def _giay_clip(bc: BoiCanh) -> int:
 
 
 def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
-              dich: str, giay: int, so: Optional[SoTheoDoi] = None) -> None:
+              dich: str, giay: int, so: Optional[SoTheoDoi] = None,
+              khung_dau: bool = False) -> None:
     """Tạo clip cho một cảnh, tải về, mở thử bằng FFmpeg.
+
+    `khung_dau=True` gửi thêm `frame_mode: start_frame`: khung hình đầu của clip
+    CHÍNH LÀ ảnh (Flow "Frames"). Khoá idempotency đổi theo, vì clip cũ cùng
+    prompt nhưng làm ở chế độ nguyên liệu là một sản phẩm khác.
 
     Tách ra khỏi khâu clip vì giờ có **hai** nơi gọi: dây chuyền ở khâu ảnh
     (ảnh nào xong là bắn clip của nó ngay) và khâu clip (làm nốt phần còn
@@ -3483,9 +3488,10 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
             prompt=c["video_prompt"], engine=bc.kenh.engine,
             duration=giay, aspect_ratio="16:9",
             image_url=dia_chi or None,
+            extra_body=({"frame_mode": "start_frame"} if khung_dau else None),
             idempotency_key=khoa_viec(luot, "vid", so_canh,
                                       c["video_prompt"], dia_chi,
-                                      giay) + hau_to)
+                                      giay) + (":kd" if khung_dau else "") + hau_to)
         return _cho_job(bc, job, ten_viec="cảnh {0}".format(so_canh), so=so)
 
     try:
@@ -4209,7 +4215,7 @@ def _khau_anh_noi_canh(bc: BoiCanh):
         from .dao_dien_auto import THU_MUC_THAM_CHIEU, ThamChieuCanh  # noqa: PLC0415
         from .noi_canh import (  # noqa: PLC0415
             ChuoiNoiCanh, SONG_SONG_CHUOI, cat_clip_theo_canh, chay_cac_chuoi,
-            chuoi_theo_boi_canh, engine_giu_khung_dau, khung_cuoi,
+            chuoi_theo_boi_canh, giu_khung_dau, khung_cuoi,
         )
         from .phan_cung import chon_encoder, doc_ket_qua  # noqa: PLC0415
 
@@ -4249,7 +4255,7 @@ def _khau_anh_noi_canh(bc: BoiCanh):
             _bo_clip_cu(bc, os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))
 
         def lam_clip(c, anh, tho):
-            _lam_clip(bc, luot, c, anh, tho, giay, so=so)
+            _lam_clip(bc, luot, c, anh, tho, giay, so=so, khung_dau=bool(bc.kenh.khung_dau))
 
         def cat(tho, clip, giay_canh):
             from .noi_canh import bat_dau_cat  # noqa: PLC0415
@@ -4266,7 +4272,7 @@ def _khau_anh_noi_canh(bc: BoiCanh):
             ct = ChuoiNoiCanh(thu_muc_anh=thu_muc, thu_muc_clip=thu_muc_clip, thu_muc_tham_chieu=thu_muc_tc,
                               lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich,
                               ghi=bc.ghi, kiem_dung=bc.kiem_dung, bao_anh=them("anh"), bao_clip=them("clip"),
-                              lien_mach=engine_giu_khung_dau(bc.kenh.engine))
+                              lien_mach=giu_khung_dau(bc.kenh))
             n = ct.chay(ch)
             with khoa_dem:
                 loi_chung.extend(ct.loi)
