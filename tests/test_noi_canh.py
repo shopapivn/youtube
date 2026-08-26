@@ -332,6 +332,12 @@ class TestCuMayDai:
         assert p.count("no text") == 1
         assert nc.prompt_doan(d, True).startswith(nc.DAU_CLIP_NOI_TIEP_DAI + "nv1 waving")
 
+    def test_bo_chi_dao_may(self):
+        assert nc.bo_chi_dao_may("framed over nv2's shoulder, nv1 recoils sharply, camera eases in slightly") == "nv1 recoils sharply"
+        assert nc.bo_chi_dao_may("nv2 rises onto two legs, one paw stroking its whiskers, camera tilts upward following it") ==             "nv2 rises onto two legs, one paw stroking its whiskers"
+        assert nc.bo_chi_dao_may("Close-up of nv2 bowing, no camera move") == "nv2 bowing"
+        assert nc.bo_chi_dao_may("nv1 laughs") == "nv1 laughs"
+
     def test_prompt_neo_khung(self):
         goc = "Medium shot of nv1 running at loc1, 3D style\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv1"
         p = nc.prompt_neo_khung(goc)

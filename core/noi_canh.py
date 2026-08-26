@@ -53,7 +53,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
            "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO", "CuMayDai", "chia_doan", "prompt_doan", "hanh_dong_clip",
-           "prompt_neo_khung", "noi_cac_clip", "THU_MUC_DOAN", "GIAY_CLIP_VEO", "TOI_DA_NOI_TIEP_DAI"]
+           "prompt_neo_khung", "noi_cac_clip", "bo_chi_dao_may", "THU_MUC_DOAN", "GIAY_CLIP_VEO", "TOI_DA_NOI_TIEP_DAI"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -525,6 +525,24 @@ def hanh_dong_clip(video_prompt: str):
     return p[:k].strip().rstrip(","), p[k:]
 
 
+_CHI_DAO_MAY = re.compile(
+    r"(?:^|,\s*)(?:framed\s+[^,]*|over[- ]the[- ]shoulder[^,]*|over\s+\w+'s\s+shoulder[^,]*|from\s+behind\s+\w+[^,]*|"
+    r"(?:the\s+)?camera\s+[^,]*|(?:slow|fast|quick|gentle|smooth)?\s*(?:pan|tilt|dolly|crane|zoom|push[- ]in|pull[- ]back|"
+    r"tracking\s+shot|orbit)[^,]*|(?:extreme\s+)?close[- ]up[^,]*|wide\s+shot[^,]*|medium\s+shot[^,]*|low[- ]angle[^,]*|"
+    r"high[- ]angle[^,]*|no\s+camera\s+move[^,]*)(?=,|$)", re.I)
+
+
+def bo_chi_dao_may(hanh_dong: str) -> str:
+    """Bỏ mọi mệnh đề chỉ đạo MÁY QUAY / cỡ khung trong một hành động ('framed over nv2's
+    shoulder', 'camera cranes slowly upward'…). Ở đoạn diễn tiếp của cú máy dài, khung
+    đã do khung trước quyết định — Veo đọc 'over the shoulder' là đưa nhân vật lên sát
+    ống kính (đo 26/08/2026: mèo thành mảng vàng che nửa màn hình)."""
+    p = bo_cum_co_khung(str(hanh_dong or ""))
+    p = _CHI_DAO_MAY.sub("", p)
+    p = re.sub(r"\s*,\s*,+", ",", p).strip(" ,")
+    return p
+
+
 def chia_doan(chuoi: Sequence[Dict[str, Any]], giay_clip: float = GIAY_CLIP_VEO) -> List[Dict[str, Any]]:
     """Chia tổng thời lượng chuỗi thành n đoạn bằng nhau ≤ `giay_clip`; mỗi đoạn biết
     nó phủ những cảnh nào (theo mốc thời gian cộng dồn)."""
@@ -559,7 +577,7 @@ def prompt_doan(doan: Dict[str, Any], noi_tiep: bool) -> str:
         if i == 0:
             duoi = d
         if noi_tiep or i > 0:
-            hd = bo_cum_co_khung(hd)
+            hd = bo_chi_dao_may(hd)
         if hd:
             phan.append(hd)
     than = " Then: ".join(phan)
