@@ -72,6 +72,8 @@ _THAY_THO = [
     (re.compile(r"\b(?:toward|towards|to|into|near|at)\s+(?:his|her|its|their)\s+(?:open\s+)?(?:mouth|jaws|maw|snout)\b", re.I), "toward his face"),
     (re.compile(r"\b(?:open|gaping|wide)\s+(?:mouth|jaws|maw)\b", re.I), "big smile"),
     (re.compile(r"\b(?:tongue|fangs|sharp teeth|claws)\b", re.I), ""),
+    # "wide comic mouth dropping open" (cảnh 157, 26/08) vẫn bị chặn: cứ chữ mồm là thay.
+    (re.compile(r"\b(?:mouths?|jaws|maw|snout)\b", re.I), "face"),
 ]
 
 
