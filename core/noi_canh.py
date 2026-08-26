@@ -53,7 +53,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
            "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO", "CuMayDai", "chia_doan", "prompt_doan", "hanh_dong_clip",
-           "prompt_khung_cuoi", "noi_cac_clip", "bo_chi_dao_may", "THU_MUC_DOAN", "GIAY_CLIP_VEO"]
+           "prompt_khung_cuoi", "noi_cac_clip", "cu_may_cua_canh", "don_cu_may", "bo_chi_dao_may", "THU_MUC_DOAN", "GIAY_CLIP_VEO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -611,6 +611,52 @@ def prompt_khung_cuoi(img_prompt: str) -> str:
     if len(p) + len(DUOI_KHUNG_CUOI) > TRAN_PROMPT:
         p = rut_khoi_khoa(p)
     return p + DUOI_KHUNG_CUOI
+
+
+def cu_may_cua_canh(canh: Sequence[Dict[str, Any]], so_canh: int) -> List[Dict[str, Any]]:
+    """Chuỗi (cú máy) chứa cảnh `so_canh` — rỗng nếu không tìm thấy."""
+    for ch in chuoi_theo_boi_canh(canh):
+        if any(int(c.get("scene_id") or 0) == int(so_canh) for c in ch):
+            return list(ch)
+    return []
+
+
+def don_cu_may(thu_muc_anh: str, thu_muc_clip: str, chuoi: Sequence[Dict[str, Any]],
+               ca_anh: bool = True) -> List[str]:
+    """Xoá mọi thứ đã dựng của một cú máy để lượt sau làm lại THẬT. Trả danh sách tệp đã xoá.
+
+    Vì sao cần hàm riêng: ở chế độ nối cảnh, `6-clip/<cảnh>.mp4` chỉ là một LÁT CẮT
+    của cú máy chung nằm trong `6-clip/_doan/`. Xoá mỗi lát cắt thì lượt sau cắt lại
+    từ đúng cú máy cũ — hình y hệt, khách tưởng đã dựng lại (kho-github-14 hỏi
+    26/08/2026 khi nối nút "tạo lại cảnh" của bảng cảnh).
+
+    `ca_anh=False` thì giữ các khung hình đã vẽ (dựng lại clip từ đúng khung cũ,
+    rẻ hơn: chỉ tốn tiền clip).
+    """
+    if not chuoi:
+        return []
+    ma = int(chuoi[0]["scene_id"])
+    tm = os.path.join(thu_muc_clip, THU_MUC_DOAN)
+    xoa: List[str] = []
+    for c in chuoi:
+        xoa.append(os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))
+    dau = "{0}-".format(ma)
+    if os.path.isdir(tm):
+        for ten in sorted(os.listdir(tm)):
+            if ten.startswith(dau) or ten in ("{0}.mp4".format(ma), "{0}.mp4.txt".format(ma)):
+                if not ca_anh and ten.lower().endswith(".png"):
+                    continue
+                xoa.append(os.path.join(tm, ten))
+    if ca_anh:
+        xoa.append(os.path.join(thu_muc_anh, "{0}.png".format(ma)))
+    da_xoa: List[str] = []
+    for q in xoa:
+        try:
+            os.remove(q)
+            da_xoa.append(q)
+        except OSError:
+            pass
+    return da_xoa
 
 
 def noi_cac_clip(ffmpeg: str, nguon: Sequence[str], dich: str,

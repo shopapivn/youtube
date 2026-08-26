@@ -395,3 +395,38 @@ class TestCuMayDai:
         canh = [_c(1, "loc1", giay=6.0), _c(2, "loc1", giay=6.0)]
         assert ct.chay(canh) == 0
         assert ct.loi == ["ảnh đoạn 1-0"] and nhat["clip"] == []
+
+
+class TestDungLaiCuMay:
+    def test_cu_may_cua_canh(self):
+        canh = [_c(1, "loc1"), _c(2, "loc1"), _c(3, "loc2"), _c(4, "loc2")]
+        assert [c["scene_id"] for c in nc.cu_may_cua_canh(canh, 2)] == [1, 2]
+        assert [c["scene_id"] for c in nc.cu_may_cua_canh(canh, 4)] == [3, 4]
+        assert nc.cu_may_cua_canh(canh, 9) == []
+
+    def test_don_cu_may_xoa_ca_tep_trung_gian(self, tmp_path):
+        anh_d = tmp_path / "5-anh"; clip_d = tmp_path / "6-clip"; doan = clip_d / "_doan"
+        for d in (anh_d, clip_d, doan):
+            d.mkdir(parents=True, exist_ok=True)
+        for q in ("5-anh/1.png", "5-anh/3.png", "6-clip/1.mp4", "6-clip/2.mp4", "6-clip/3.mp4",
+                  "6-clip/_doan/1-0.mp4", "6-clip/_doan/1-0-cat.mp4", "6-clip/_doan/1-1.png",
+                  "6-clip/_doan/1.mp4", "6-clip/_doan/1.mp4.txt", "6-clip/_doan/3-0.mp4"):
+            (tmp_path / q).write_bytes(b"x")
+        chuoi = [_c(1, "loc1"), _c(2, "loc1")]
+        da = nc.don_cu_may(str(anh_d), str(clip_d), chuoi)
+        con = sorted(os.path.relpath(str(p), str(tmp_path)).replace(chr(92), "/")
+                     for p in tmp_path.rglob("*") if p.is_file())
+        # cú máy của cảnh 1–2 bay sạch; cú máy khác (3-*) và clip cảnh 3 còn nguyên
+        assert con == ["5-anh/3.png", "6-clip/3.mp4", "6-clip/_doan/3-0.mp4"]
+        assert len(da) == 8
+        assert nc.don_cu_may(str(anh_d), str(clip_d), []) == []
+
+    def test_don_cu_may_giu_anh_khi_khong_can(self, tmp_path):
+        anh_d = tmp_path / "5-anh"; doan = tmp_path / "6-clip" / "_doan"
+        doan.mkdir(parents=True); anh_d.mkdir()
+        (anh_d / "1.png").write_bytes(b"x")
+        (doan / "1-1.png").write_bytes(b"x")
+        (doan / "1-0.mp4").write_bytes(b"x")
+        nc.don_cu_may(str(anh_d), str(tmp_path / "6-clip"), [_c(1, "loc1")], ca_anh=False)
+        assert (anh_d / "1.png").exists() and (doan / "1-1.png").exists()
+        assert not (doan / "1-0.mp4").exists()
