@@ -187,3 +187,11 @@ def test_kenh_hoathinh_3d():
     goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     k = doc_kenh(goc, "hoathinh-3d")
     assert k.che_do_ke == "noi_canh" and k.do_dai_tu_do and "SHOT CONTINUITY" in k.prompt["7-canh.md"]
+
+
+def test_duoi_noi_canh_khong_noi_doi(tmp_path):
+    goc = "Wide shot of nv1 (nv1) at loc1. Style: 3D"
+    p1 = nc.prompt_noi_canh(goc, True)
+    p2 = nc.prompt_noi_canh(p1, True)            # nối lần hai từ bản đã có đuôi
+    assert p1 == p2 and p1.count("NEXT moment") == 1
+    assert nc.bo_duoi_noi_canh(p1) == goc and nc.bo_duoi_noi_canh(goc) == goc

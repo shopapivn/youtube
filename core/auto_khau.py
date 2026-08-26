@@ -3625,11 +3625,7 @@ def _lam_lanh_tho_neu_bi_tu_choi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
     so_canh = int(c["scene_id"])
     bc.ghi("    ảnh cảnh {0}: vẫn bị chặn — thay từ thô rồi thử lần cuối…".format(so_canh))
     c["img_prompt"] = tho
-    with _KHOA_SUA_CANH:
-        try:
-            sua_loi_nhac_canh(luot, so_canh, img_prompt=tho)
-        except Exception:  # noqa: BLE001
-            pass
+    _ghi_loi_nhac_da_sua(luot, so_canh, tho)
     return tho
 
 
@@ -3659,12 +3655,20 @@ def _viet_lai_khi_bi_tu_choi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
     if not moi or moi.strip() == cu.strip():
         return ""
     c["img_prompt"] = moi
+    _ghi_loi_nhac_da_sua(luot, so_canh, moi)
+    return moi
+
+
+def _ghi_loi_nhac_da_sua(luot: LuotChay, so_canh: int, moi: str) -> None:
+    """Lưu lời nhắc đã sửa vào 4-canh.json — KHÔNG kèm đuôi nối cảnh (đuôi được
+    nối lại lúc tạo; lưu kèm là lần sau nối đôi, prompt vượt 5.000 ký tự)."""
+    from .noi_canh import bo_duoi_noi_canh  # noqa: PLC0415
+
     with _KHOA_SUA_CANH:
         try:
-            sua_loi_nhac_canh(luot, so_canh, img_prompt=moi)
+            sua_loi_nhac_canh(luot, so_canh, img_prompt=bo_duoi_noi_canh(moi))
         except Exception:  # noqa: BLE001 — không ghi được cũng vẫn tạo ảnh bằng bản mới
             pass
-    return moi
 
 
 def _xoa_dau(bc: BoiCanh, tep: str) -> None:

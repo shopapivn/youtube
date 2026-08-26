@@ -48,7 +48,7 @@ import subprocess
 import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-__all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh",
+__all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
            "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "THU_MUC_KHUNG", "THU_MUC_THO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
@@ -123,10 +123,21 @@ def tham_chieu_noi_canh(thu_muc_tham_chieu: str, c: Dict[str, Any],
 def prompt_noi_canh(img_prompt: str, co_khung_truoc: bool) -> str:
     """Lời nhắc ảnh cho chế độ nối cảnh: khối khoá giữ nguyên (nhân vật + bối cảnh
     vẫn được gửi), có khung trước thì nối đuôi `DUOI_NOI_CANH` nói rõ ảnh cuối là khung trước."""
-    p = str(img_prompt or "").rstrip()
+    p = bo_duoi_noi_canh(img_prompt)
     if not co_khung_truoc:
         return p
     return p + DUOI_NOI_CANH
+
+
+def bo_duoi_noi_canh(prompt: str) -> str:
+    """Bỏ đuôi nối cảnh (mọi bản đã nối) khỏi lời nhắc — để lưu vào 4-canh.json và
+    để nối lại đúng một lần. Đo 26/08/2026: bản viết lại được lưu kèm đuôi, lần
+    tạo bù nối thêm đuôi nữa → 'prompt quá dài (>5000 ký tự)' (cảnh 161)."""
+    p = str(prompt or "")
+    dau = DUOI_NOI_CANH.strip()
+    while dau in p:
+        p = p.replace(dau, "")
+    return p.rstrip()
 
 
 def giay_cua_canh(c: Dict[str, Any]) -> float:

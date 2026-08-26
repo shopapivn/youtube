@@ -109,3 +109,25 @@ def test_lam_lanh_tho_thu_truyen():
     ra = lam_lanh_tho("the wolf swallows them whole, then licks his lips, fangs showing")
     assert "swallow" not in ra and "lick" not in ra and "fangs" not in ra
     assert "hides them in his big round belly" in ra
+
+
+def test_loi_nhac_da_sua_luu_khong_kem_duoi_noi_canh(tmp_path, monkeypatch):
+    from core.noi_canh import DUOI_NOI_CANH
+    c = {"scene_id": 9, "img_prompt": "her cheeks flushing, a cat" + DUOI_NOI_CANH}
+    luot = _luot(tmp_path, [{"scene_id": 9, "img_prompt": "her cheeks flushing, a cat"}])
+    goi = []
+
+    def tao_anh_gia(bc, luot, prompt, hop, khoa, ten_hien="", so=None):
+        goi.append(prompt)
+        if "flushing" in prompt:
+            raise RuntimeError("content_rejected")
+        return {"id": "job1"}
+
+    monkeypatch.setattr(auto_khau, "_tao_anh", tao_anh_gia)
+    monkeypatch.setattr(auto_khau, "_tai_ket_qua", lambda bc, goi_, i, tep: open(tep, "wb").write(b"png"))
+    monkeypatch.setattr(auto_khau, "_xoa_dau", lambda bc, tep: None)
+    bc = _bc(lambda l: "her cheeks rosy, a cat" + DUOI_NOI_CANH)
+    auto_khau._lam_anh_canh(bc, luot, c, str(tmp_path / "9.png"), _Hop())
+    with open(os.path.join(luot.thu_muc, "4-canh.json"), encoding="utf-8") as f:
+        luu = json.load(f)[0]["img_prompt"]
+    assert "rosy" in luu and "NEXT moment" not in luu
