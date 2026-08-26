@@ -57,3 +57,12 @@ def test_kenh_story_3d_de_tu_do():
     assert "4-do-dai.md" not in k.prompt
     assert "<<PHUT>>" not in k.prompt.get("2-viet.md", "") and "<<CHARS>>" not in k.prompt.get("2-viet.md", "")
     assert "<<PHUT>>" not in k.prompt.get("2b-cham.md", "")
+
+
+def test_token_viet_theo_do_dai_nguon():
+    from core.auto_khau import TOKEN_VIET_SAN, TOKEN_VIET_TRAN, _token_viet
+    assert _token_viet(0, 0) == TOKEN_VIET_SAN
+    assert _token_viet(8000, 6400) == TOKEN_VIET_SAN          # truyện ngắn: sàn cũ, không đổi
+    assert _token_viet(30000, 0) == int(30000 * 1.3 / 2)      # nguồn 30k ký tự ≈ 36 phút → 19.500 token
+    assert _token_viet(0, 30000) == int(30000 * 1.3 / 2)      # hoặc theo mục tiêu phút của kênh thường
+    assert _token_viet(200000, 0) == TOKEN_VIET_TRAN

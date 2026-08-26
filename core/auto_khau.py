@@ -622,6 +622,24 @@ def _doc_doi_thu(d: str) -> Dict[str, str]:
     return ra
 
 
+#: Ngân sách token đầu ra cho bước viết: sàn cũ 8.192 (≈ 20 phút đọc tiếng
+#: Việt) và trần 32.768. Truyện dài theo nguồn (chủ dự án 26/08/2026: "đừng
+#: giới hạn, nó do nguồn đầu vào") mà giữ 8.192 là bài bị cụt ở phút 20.
+TOKEN_VIET_SAN = 8192
+TOKEN_VIET_TRAN = 32768
+
+
+def _token_viet(so_ky_tu_goc: int, muc_tieu: int = 0) -> int:
+    """Token đầu ra cho một lượt viết/sửa kịch bản, theo độ dài nguồn hoặc mục tiêu.
+
+    Tiếng Việt ≈ 2 ký tự/token (đo thô, có dấu); nhân 1,3 cho dư. Lấy cái lớn
+    hơn giữa nguồn và mục tiêu, kẹp trong [sàn, trần].
+    """
+    can = max(int(so_ky_tu_goc or 0), int(muc_tieu or 0))
+    uoc = int(can * 1.3 / 2)
+    return max(TOKEN_VIET_SAN, min(TOKEN_VIET_TRAN, uoc))
+
+
 def _muc_tieu_do_dai(k: "Kenh", tu_lieu: str, giay_goc: int) -> int:
     """Số ký tự nhắm tới cho bước viết.
 
@@ -1969,7 +1987,8 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 else:
                     ban_nhap = _goi(
                         bc, _thay(khuon, dict(chung, DRAFT=ban_nhap)),
-                        _khoa_chat(luot, ten)).strip()
+                        _khoa_chat(luot, ten),
+                        toi_da_token=_token_viet(len(tu_lieu), muc_tieu_kt)).strip()
                 truoc_go = ban_nhap
                 ban_nhap = _go_loi_dan_dau(ban_nhap, k.ngon_ngu)
                 if ban_nhap != truoc_go:
@@ -2142,7 +2161,8 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         bc.ghi("  viết bản {0}/{1}…".format(nhan, n))
         bat_dau = time.time()
         chu = _goi(bc, _thay(khuon, dict(chung, DRAFT="")),
-                   _khoa_chat(luot, "2-viet.md:ban{0}".format(i + 1))).strip()
+                   _khoa_chat(luot, "2-viet.md:ban{0}".format(i + 1)),
+                   toi_da_token=_token_viet(len(tu_lieu), muc_tieu)).strip()
         chu = _go_loi_dan_dau(chu, k.ngon_ngu)
         if chu:
             bc.ghi("  bản {0}: {1} ký tự ≈ {2} phút, mất {3:.0f} giây.".format(
