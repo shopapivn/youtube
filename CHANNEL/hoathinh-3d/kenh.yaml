@@ -29,11 +29,12 @@ phut_muc_tieu: 8
 # Độ dài TỰ DO: không nhắm phút, không nắn, không chấm độ dài — truyện dài
 # ngắn theo câu chuyện (chủ dự án 25/08/2026). `phut_muc_tieu` ở trên không dùng.
 do_dai_tu_do: true
-# Tool chỉ dùng Veo 3 (chủ dự án 26/08/2026). Đo cùng ngày: veo3 qua cổng coi ảnh vào
-# là gợi ý, không phải khung đầu (khung đầu lệch 26–47/255) — nên nối cảnh trên Veo là
-# "ảnh mới mỗi cảnh với đủ tham chiếu + khung cuối clip trước", cú cắt đổi hẳn cỡ khung,
-# bỏ 0,35 s lấy đà; phần diễn tiếp video→video chỉ bật khi engine giữ khung đầu (seedance).
+# Tool chỉ dùng Veo 3 (chủ dự án 26/08/2026). Trước 26/08 veo3 qua cổng coi ảnh vào là
+# gợi ý, không phải khung đầu (khung đầu lệch 26–47/255) nên mối nối khựng. Từ 26/08 cổng
+# nhận `frame_mode: start_frame` (Flow "Frames"): khung hình đầu clip CHÍNH LÀ ảnh —
+# bật bằng `khung_dau` bên dưới; có nó thì diễn tiếp video→video cũng bật cho Veo 3.
 engine: "veo3"
+khung_dau: true
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"
 dot_phu_de: true
