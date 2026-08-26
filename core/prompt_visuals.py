@@ -620,7 +620,11 @@ DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single fi
                    "wearing the outfit of its FIRST appearance in the story, standing, "
                    "arms relaxed at sides, neutral expression, gazing straight ahead, "
                    "centered on a plain pure white background, 16:9 canvas, no "
-                   "text, no letters, no watermark")
+                   "text, no letters, no watermark. IGNORE any action, pose, mood or "
+                   "situation named above (asleep, lying down, running, crying, hiding, "
+                   "eating…): this is a neutral character sheet, so draw the character "
+                   "AWAKE, STANDING UPRIGHT and facing the viewer no matter what the "
+                   "story does to it")
 #: "Ngang tam mat, thay mat dat": do 25/08/2026 canh 72/74 — tham chieu lau dai
 #: chup tu xa tren cao, mo hinh dan xe ngua len noc tuong thanh va ve ca nha to
 #: bang cong. Anh thiet lap phai la cho NHAN VAT SE DUNG, nhin tu tam mat nguoi.

@@ -414,14 +414,18 @@ def test_khoa_nhan_dang_noi_ten_voi_anh_tham_chieu(wb):
           {"img_prompt": "Empty road", "video_prompt": "wind", "reference_files": ""}]
     wb._khoa_nhan_dang(sc, dan, noi)
     p = sc[0]["img_prompt"]
-    # KHÔNG tả ngoại hình trong khối khoá — chỉ id + vai. Chữ và ảnh cãi nhau thì
-    # mô hình nghe chữ rồi bịa ra một nhân vật khác (chủ dự án + đo 26/08/2026).
-    assert "reference image 1 = nv4, the the cat" in p
-    assert "plumed hat" not in p and "small cat in a" not in p
-    assert "reference image 2 = loc9, The ogre's castle" in p and "stone castle" not in p
-    assert "ONLY from its reference image" in p and "Do NOT invent" in p
-    assert "nv4 [reference image 1]" in p and "(see reference image 1)" in p
-    assert "look EXACTLY like its reference image" in p
+    # ═══ LỐI OPENSTORY: RÀNG BUỘC TRONG CÂU, CHÚ THÍCH MỘT DÒNG ═══
+    #
+    # Bản cũ dán một đoạn văn ~1.100 ký tự liệt kê mặt, mắt, tỉ lệ, da, lông,
+    # trang phục phải chép y hệt. Đo 27/08/2026 trên đúng những cảnh máy vẽ
+    # nhầm người (openstory/0002, cảnh 25): đoạn văn dài 3,00 điểm; một dòng
+    # của OpenStory 4,00. Liệt kê từng nét hoá ra lại là chữ đi cãi với ảnh.
+    assert "nv4 (Image 1)" in p and "loc9 (Image 2)" in p
+    # Ảnh nào câu văn đã ràng buộc thì KHÔNG lặp lại ở chú thích dưới.
+    assert "= nv4" not in p and "= loc9" not in p
+    # Vẫn tuyệt đối không tả ngoại hình.
+    assert "plumed hat" not in p and "small cat in a" not in p and "stone castle" not in p
+    assert "Reference images define identity" in p
     assert sc[0]["video_prompt"].startswith("IDENTITY LOCK")
     # KHÔNG tả lại nhân vật trong khoá video — chữ và ảnh cãi nhau thì mô hình bỏ ảnh.
     assert "plumed hat" not in sc[0]["video_prompt"] and "nothing is removed" in sc[0]["video_prompt"]
@@ -438,14 +442,21 @@ def test_excel_moi_canh_co_khoi_khoa(wb, yeu_cau):
     ra = wb.handle(yeu_cau, cast_fn=_cast_phu_va_boi_canh, chia_fn=_chia_giu_khuc)
     m = ra["scenes"]["json"]
     co_ref = [s for s in m["scenes"] if s.get("reference_files")]
-    assert co_ref and all("reference image 1 =" in s["img_prompt"] for s in co_ref)
+    assert co_ref and all("Reference images define identity" in s["img_prompt"]
+                          for s in co_ref)
+    assert all("(Image 1)" in s["img_prompt"] or "Image 1 =" in s["img_prompt"]
+               for s in co_ref)
 
 
 def test_khoa_cho_phep_doi_trang_phuc_khi_canh_noi_ro(wb):
     from core.chia_canh import KHUON_MAC_DINH
     # Cảnh KHÔNG tả lại nhân vật — chỉ id + tư thế; giai đoạn có id riêng.
     assert "ONLY by id" in KHUON_MAC_DINH and "one id per stage" in KHUON_MAC_DINH
-    assert "not yet wearing" in wb._KHOA_NHAN_VAT and "everything not mentioned" in wb._KHOA_NHAN_VAT
+    # 27/08/2026: câu "được đổi trang phục nếu cảnh nói rõ" nằm trong đoạn văn
+    # khoá cũ, đã bỏ cùng đoạn ấy (xem `_GUARD_NHAN_DANG`). Đổi trang phục giờ
+    # đi bằng ĐÚNG một đường: mỗi giai đoạn một id, một ảnh tham chiếu riêng —
+    # đường ấy chắc hơn một câu dặn, và có bài kiểm riêng bên dưới.
+    assert not hasattr(wb, "_KHOA_NHAN_VAT"), "đừng dựng lại đoạn văn khoá cũ"
 
 
 # ── Nhân vật đổi trang phục giữa truyện: mỗi giai đoạn một tham chiếu ───────
@@ -487,7 +498,7 @@ def test_canh_dung_id_giai_doan_thi_tham_chieu_va_khoa_theo_giai_doan(wb, yeu_ca
     assert json.loads(s["reference_files"]) == ["nv2b.png"]
     # Trang phục của giai đoạn nằm trong ẢNH tham chiếu riêng của nó (nv2b.png),
     # không nằm trong chữ — xem `_mo_ta_tham_chieu`.
-    assert "reference image 1 = nv2b" in s["img_prompt"] and "red beret" not in s["img_prompt"]
+    assert "nv2b (Image 1)" in s["img_prompt"] and "red beret" not in s["img_prompt"]
     assert "red beret" in [c for c in m["characters"] if c["id"] == "nv2b"][0]["sheet_prompt"]
 
 
@@ -531,7 +542,9 @@ def test_ep_ke_hoach_HOP_nhan_vat_khong_thay(wb):
 
 
 def test_khoa_boi_canh_dung_tren_dat_va_anh_thiet_lap_ngang_tam_mat(wb):
-    assert "never standing on water" in wb._KHOA_BOI_CANH and "correct scale" in wb._KHOA_BOI_CANH
+    # Luật vật lý tách khỏi khối khoá cũ và giữ nguyên — nó không nói gì về
+    # danh tính nên không dính dáng tới `_GUARD_NHAN_DANG`.
+    assert "never standing on water" in wb._LUAT_DUNG_CHAN and "correct scale" in wb._LUAT_DUNG_CHAN
     assert "human eye level" in wb._DUOI_BOI_CANH and "lower third" in wb._DUOI_BOI_CANH
 
 
@@ -661,3 +674,124 @@ def test_giai_doan_bien_hinh_la_than_the_moi(wb):
     doi_thiet_ke_nhan_vat([], ra, "nv15", "a huge round giant with a red beard")
     assert ra[0]["english_prompt"].startswith("a huge round giant") and "outfit at this stage: mossy-green" in ra[0]["english_prompt"]
     assert ra[1]["english_prompt"].startswith(run.DAU_BIEN_HINH + "a large rounded lion")
+
+
+# ── Id KHÔNG có ảnh kèm: thay bằng vai, không để trần ───────────────────────
+
+def test_id_khong_duoc_gui_anh_thi_thay_bang_vai(wb):
+    """Trần 2 nhân vật/cảnh, nhưng nhân vật thứ ba vẫn bị viết vào lời nhắc.
+
+    `nv4` là thứ chỉ TOOL hiểu — máy vẽ nhận một dãy ảnh theo thứ tự, không
+    nhận tên tệp. Để `nv4` trần là đưa cho nó một chuỗi vô nghĩa và nó bịa ra
+    một nhân vật mới, mỗi cảnh một kiểu. Đo trên lượt thật openstory/0002
+    (26/08/2026): 12/30 cảnh dính.
+    """
+    dan = [{"id": "nv1", "role": "boy", "english_prompt": "a small boy"},
+           {"id": "nv2", "role": "grandmother", "english_prompt": "an old woman"},
+           {"id": "nv5", "role": "duck", "english_prompt": "a plump duck"}]
+    noi = [{"id": "loc1", "name": "The hut"}, {"id": "loc7", "name": "The pond"}]
+    sc = [{"img_prompt": "Wide shot of nv1 and nv2 inside loc1 while nv5 swims past loc7",
+           "video_prompt": "nv5 paddles toward nv1.",
+           "reference_files": json.dumps(["nv1.png", "nv2.png", "loc1.png"])}]
+    wb._khoa_nhan_dang(sc, dan, noi)
+    p = sc[0]["img_prompt"]
+    # Hai nhân vật + một nơi CÓ ảnh: giữ id, gắn số ảnh.
+    assert "nv1 (Image 1)" in p and "nv2 (Image 2)" in p
+    assert "loc1 (Image 3)" in p
+    # Nhân vật và nơi KHÔNG có ảnh: id biến mất, còn lại vai / tên nơi.
+    than = p.split("REFERENCE IMAGES")[0]
+    # Nhãn lấy nguyên cụm nhận dạng trong dàn — xem
+    # `test_nhan_vat_khong_co_anh_mang_NHAN_CO_DINH` để biết vì sao không phải
+    # chỉ cái vai.
+    assert "nv5" not in than and "a plump duck" in than
+    assert "loc7" not in than and "The pond" in than
+    # Lời nhắc clip cũng vậy.
+    assert "nv5" not in sc[0]["video_prompt"] and "a plump duck" in sc[0]["video_prompt"]
+    assert "nv1" in sc[0]["video_prompt"]  # nhân vật CÓ ảnh giữ nguyên id
+
+
+def test_nhan_vat_khong_co_anh_mang_NHAN_CO_DINH(wb):
+    """Nhãn phải kèm cụm nhận dạng, và giống hệt nhau ở mọi cảnh.
+
+    Bản đầu chỉ cho cái vai ("the duck"). Đo trên lượt thật openstory/0002
+    (26/08/2026, 30 cảnh): con vịt hiện ra HAI kiểu trong cùng một phim — vịt
+    cổ xanh nâu ở cảnh 11-15, vịt trắng ở cảnh 28-30, trong khi dàn ghi rõ
+    "creamy-white". Vai suông nói cho máy biết vẽ CON GÌ, không nói CON NÀO.
+
+    Không mâu thuẫn luật 26/08 ("đừng tả chi tiết, dùng ảnh"): luật ấy nói về
+    nhân vật CÓ ảnh — chữ và ảnh cãi nhau thì máy nghe chữ. Ở đây không có ảnh
+    nào để cãi; bỏ chữ đi là không còn gì.
+    """
+    vit = "a friendly plump duck, soft creamy-white feathers and light orange bill"
+    dan = [{"id": "nv1", "role": "boy", "english_prompt": "a small boy"},
+           {"id": "nv5", "role": "helper animal", "english_prompt": vit}]
+    sc = [{"img_prompt": "Close-up of nv5 swimming while nv1 watches",
+           "video_prompt": "nv5 paddles.",
+           "reference_files": json.dumps(["nv1.png"])},
+          {"img_prompt": "Wide shot of nv5 on the bank near nv1",
+           "video_prompt": "nv5 waddles.",
+           "reference_files": json.dumps(["nv1.png"])}]
+    wb._khoa_nhan_dang(sc, dan, [])
+    for s in sc:
+        than = s["img_prompt"].split("REFERENCE IMAGES")[0]
+        assert "nv5" not in than
+        assert "creamy-white" in than, "mất màu là mất thứ giữ con vật khỏi đổi"
+    # GIỐNG HỆT NHAU giữa hai cảnh — đó là thứ thay cho ảnh tham chiếu.
+    lay = lambda t: t.split("nv1")[0]  # noqa: E731
+    assert "creamy-white" in sc[0]["video_prompt"]
+    assert wb._nhan_co_dinh(dan[1]) == wb._nhan_co_dinh(dan[1])
+
+
+def test_nhan_co_dinh_khong_cut_giua_tu(wb):
+    """Nhãn cụt ("soft dark grey strip") là nhãn vô nghĩa."""
+    dai = ("a friendly ordinary house cat, grey-and-brown mackerel tabby fur "
+           "with soft dark grey stripes along the back and a pale belly")
+    nhan = wb._nhan_co_dinh({"english_prompt": dai})
+    assert len(nhan) <= wb.DAI_NHAN_CO_DINH
+    assert dai.startswith(nhan)
+    assert nhan.split()[-1].lower() not in wb._TU_NOI_CUT
+    assert "grey-and-brown" in nhan, "phải giữ được màu"
+
+
+def test_nhan_co_dinh_thieu_mo_ta_thi_lui_ve_vai(wb):
+    assert wb._nhan_co_dinh({"role": "healer"}) == "the healer"
+
+
+def test_id_la_khong_co_trong_dan_thi_de_nguyen(wb):
+    """Id AI bịa ra thì giữ nguyên — che đi là giấu mất một lỗi khác."""
+    dan = [{"id": "nv1", "role": "boy", "english_prompt": "a small boy"}]
+    sc = [{"img_prompt": "Wide shot of nv1 and nv77 by the river",
+           "video_prompt": "they walk.",
+           "reference_files": json.dumps(["nv1.png"])}]
+    wb._khoa_nhan_dang(sc, dan, [])
+    assert "nv77" in sc[0]["img_prompt"]
+
+
+def test_khoi_khoa_khong_goi_ten_net_ve_nao(wb):
+    """Khối khoá dán vào MỌI kênh — gọi tên một nét vẽ là phá kênh khác.
+
+    Đo trên lượt thật openstory/0002 (26/08/2026, hoạt hình 3D): cả 30 lời
+    nhắc ảnh đều kết bằng *"the same pencil-sketch line style"* — chép từ kênh
+    bút chì giấy trắng. Lời nhắc tả phim 3D kiểu Pixar, câu cuối bảo nhân vật
+    có nét vẽ chì; máy phải chọn một, và nó vẽ lại nhân vật cho khớp.
+    """
+    for net in ("pencil", "sketch", "watercolor", "cel-shaded", "3D", "Pixar"):
+        assert net.lower() not in wb._GUARD_NHAN_DANG.lower(), net
+    # Một dòng, không phải một đoạn văn: đó là cả điểm của bản 27/08.
+    assert len(wb._GUARD_NHAN_DANG) < 250
+    assert "consistent with its reference image" in wb._GUARD_NHAN_DANG
+
+
+def test_chan_dung_bo_qua_tu_the_trong_mo_ta():
+    """Ảnh gốc phải là NGƯỜI ĐỨNG, dù truyện đang bảo nhân vật nằm ngủ.
+
+    Đo 27/08/2026 (phim hoathinh-3d/0002): AI ghi tư thế vào ô "trang phục" của
+    giai đoạn — "lying down on its side as an ordinary sleeping wolf" — nên ảnh
+    tham chiếu của sói giai đoạn 3 là một con sói ĐANG NGỦ. Mọi cảnh vẽ theo ảnh
+    đó đều lệch, và nó cũng không còn khớp hai giai đoạn kia.
+    """
+    from core.prompt_visuals import DUOI_CHAN_DUNG
+    d = DUOI_CHAN_DUNG.lower()
+    assert "ignore any action, pose" in d
+    assert "asleep" in d and "lying down" in d
+    assert "awake, standing upright" in d
