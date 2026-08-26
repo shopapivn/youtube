@@ -8,6 +8,17 @@ match what is being said, the picture does not look like their own life, or
 every picture looks the same as the last one. Every rule below exists to close
 one of those three exits.
 
+## PACING — two numbers the tool reads; change them to change the rhythm
+
+MIN_SECONDS_PER_SCENE: 3
+MAX_SECONDS_PER_SCENE: 8
+
+One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
+scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
+same moment from different camera positions — the tool does that split, you
+only decide how long one idea holds the screen. Want 30 seconds per scene?
+Set MAX to 30. Want a fast cut? Set MAX to 5.
+
 ## THE REFERENCE CHARACTER — read this first
 
 There is ONE recurring main character. Its reference image (`nv1.png`) is
@@ -240,17 +251,6 @@ Two reasons, and both were measured on real videos:
 If a line of narration really names several things, pick the ONE that carries
 the feeling and show that; or place them in a single space together — objects
 scattered on one desk, figures standing in one street.
-
-## PACING — two numbers the tool reads; change them to change the rhythm
-
-MIN_SECONDS_PER_SCENE: 3
-MAX_SECONDS_PER_SCENE: 8
-
-One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
-scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
-same moment from different camera positions — the tool does that split, you
-only decide how long one idea holds the screen. Want 30 seconds per scene?
-Set MAX to 30. Want a fast cut? Set MAX to 5.
 
 ## SCENE DIVISION — use the SRT indices
 

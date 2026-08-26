@@ -128,6 +128,17 @@ still be able to guess the line from the picture.
 Do not cut on a fixed clock. Cut where the thought changes. One scene = one
 idea the narrator is landing.
 
+## PACING — two numbers the tool reads; change them to change the rhythm
+
+MIN_SECONDS_PER_SCENE: 3
+MAX_SECONDS_PER_SCENE: 8
+
+One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
+scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
+same moment from different camera positions — the tool does that split, you
+only decide how long one idea holds the screen. Want 30 seconds per scene?
+Set MAX to 30. Want a fast cut? Set MAX to 5.
+
 ## WHERE YOU ARE — this is a long video, cut into pieces
 
 You are writing piece **<<KHUC_THU>> of <<TONG_KHUC>>**. Each piece is a
@@ -228,17 +239,6 @@ ask for panels, a comic page, split-screen, a diptych, a collage, a storyboard
 sheet or "four vignettes" — a grid cannot move, and its panel numbers come
 back as visible digits. If a line names several things, pick the ONE that
 carries the feeling, or place them together in one space.
-
-## PACING — two numbers the tool reads; change them to change the rhythm
-
-MIN_SECONDS_PER_SCENE: 3
-MAX_SECONDS_PER_SCENE: 8
-
-One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
-scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
-same moment from different camera positions — the tool does that split, you
-only decide how long one idea holds the screen. Want 30 seconds per scene?
-Set MAX to 30. Want a fast cut? Set MAX to 5.
 
 ## SCENE DIVISION — use the SRT indices
 
