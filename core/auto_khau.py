@@ -4034,6 +4034,85 @@ def _bat_lam_sach(bc: BoiCanh) -> bool:
     return bat
 
 
+class VanTay:
+    """Nhớ mỗi tệp đã được tạo từ **lời nhắc nào**, để sửa lời nhắc là làm lại.
+
+    ═══ VÌ SAO KHÔNG CHỈ HỎI "TỆP CÓ CHƯA" ═══
+
+    Mọi khâu đều nhìn đĩa trước rồi bỏ qua nếu thấy tệp — đó là thứ giữ cho
+    "Chạy tiếp" không trả tiền hai lần. Nhưng nó chỉ đúng khi **đầu vào không
+    đổi**. Đo trên lượt thật TL4-T7/0051 (26/08/2026): khách sửa lời nhắc rồi
+    "Làm lại từ khâu cắt cảnh" lúc 18:54, chạy tiếp — 169/173 ảnh và 172/172
+    clip vẫn là bản cũ, video dựng ra y hệt lần trước. Cả buổi sửa lời nhắc
+    không có tác dụng gì, mà nhìn bảng trạng thái vẫn thấy xanh hết.
+
+    Nên cạnh thư mục kết quả có một sổ nhỏ: `_van-tay.json` = {số cảnh: vân
+    tay của lời nhắc đã dùng}. Tệp có sẵn mà vân tay khác thì lời nhắc đã đổi
+    → làm lại. Vân tay giống thì bỏ qua như trước.
+
+    ═══ KHÔNG CÓ SỔ THÌ KHÔNG ĐOÁN ═══
+
+    Lượt chạy trước bản này không có sổ. Khi ấy `khac()` trả `False` — giữ
+    đúng nết cũ, không tự ý tiêu tiền vẽ lại cả trăm tấm ảnh của khách chỉ vì
+    tool vừa lên đời. Muốn làm lại thì có "Làm lại khâu này" và
+    `don_canh_de_lam_lai`.
+    """
+
+    #: Sổ nằm ở thư mục LƯỢT, không nằm trong `5-anh/` hay `6-clip/`: thư mục
+    #: kết quả là thứ khách mở ra xem và chép đi, đừng rắc tệp kỹ thuật vào đó.
+    TEN_ANH = "_van-tay-anh.json"
+    TEN_CLIP = "_van-tay-clip.json"
+
+    def __init__(self, duong: str) -> None:
+        self._duong = duong
+        self._khoa = threading.Lock()
+        try:
+            with open(self._duong, "r", encoding="utf-8") as tep:
+                self._so = {str(k): str(v) for k, v in json.load(tep).items()}
+        except (OSError, ValueError, AttributeError):
+            self._so = {}
+
+    @staticmethod
+    def _dau(*phan: Any) -> str:
+        import hashlib  # noqa: PLC0415
+
+        van = "|".join(str(m) for m in phan)
+        return hashlib.sha1(van.encode("utf-8")).hexdigest()[:16]
+
+    def khac(self, so: Any, *phan: Any) -> bool:
+        """Đã ghi vân tay cho `so` và vân tay ấy KHÁC đầu vào lần này chưa?"""
+        with self._khoa:
+            cu = self._so.get(str(so))
+        return bool(cu) and cu != self._dau(*phan)
+
+    def dat(self, so: Any, *phan: Any) -> None:
+        """Ghi vân tay cho `so` rồi lưu sổ ra đĩa (an toàn với đa luồng)."""
+        with self._khoa:
+            self._so[str(so)] = self._dau(*phan)
+            ban = dict(self._so)
+        tam = self._duong + ".tam"
+        try:
+            os.makedirs(os.path.dirname(self._duong) or ".", exist_ok=True)
+            with open(tam, "w", encoding="utf-8") as tep:
+                json.dump(ban, tep, ensure_ascii=False)
+            os.replace(tam, self._duong)
+        except OSError:
+            # Sổ hỏng không được làm hỏng lượt chạy: mất sổ thì chỉ mất khả
+            # năng phát hiện lời nhắc đổi, ảnh vẫn có và tiền vẫn không mất.
+            pass
+
+
+def _cat_tep_cu(tep: str) -> bool:
+    """Đổi tên `tep` thành `tep.cu` (giữ lại chứ không xoá). Trả True nếu có làm."""
+    if not os.path.exists(tep):
+        return False
+    try:
+        os.replace(tep, tep + ".cu")
+    except OSError:
+        return False
+    return True
+
+
 def _bo_clip_cu(bc: BoiCanh, tep_clip: str) -> bool:
     """Ảnh của cảnh vừa được tạo lại → clip cũ (nếu còn) cất đi (`<n>.mp4.cu`), trả True.
 
@@ -4134,6 +4213,10 @@ def _khau_anh(bc: BoiCanh):
         # Lấy URL tham chiếu TRƯỚC khi bung luồng: để trong luồng thì cả trăm
         # luồng cùng thấy chưa có rồi cùng tải một tệp lên.
         hop = ThamChieu(bc)
+        # Sổ vân tay lời nhắc: sửa lời nhắc rồi chạy tiếp thì phải vẽ lại,
+        # không được lấy ảnh cũ ra dùng (xem `VanTay`).
+        van_tay = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_ANH))
+        van_tay_clip = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_CLIP))
         thu_muc_bia, muc_bia, _thieu_bia, ta_bia, tieu_de, chu_bia = \
             _chuan_bi_bia(bc, luot)
         giay = _giay_clip(bc)
@@ -4173,14 +4256,20 @@ def _khau_anh(bc: BoiCanh):
             so_canh = int(c["scene_id"])
             dich = os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))
             if os.path.exists(dich):
-                them("clip")
-                return
+                if van_tay_clip.khac(so_canh, c.get("video_prompt") or ""):
+                    bc.ghi("    cảnh {0}: lời nhắc clip đã đổi — làm lại "
+                           "clip.".format(so_canh))
+                    _cat_tep_cu(dich)
+                else:
+                    them("clip")
+                    return
             if clip_tat.is_set() or not os.path.exists(tep_anh):
                 return
             if not str(c.get("video_prompt") or "").strip():
                 return
             try:
                 _lam_clip(bc, luot, c, tep_anh, dich, giay, so=so)
+                van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
             except Cancelled:
                 raise
             except Exception as loi:  # noqa: BLE001
@@ -4211,8 +4300,17 @@ def _khau_anh(bc: BoiCanh):
             so_canh = int(x["scene_id"])
             tep = os.path.join(thu_muc, "{0}.png".format(so_canh))
             san_co = os.path.exists(tep)
+            if san_co and van_tay.khac(so_canh, x.get("img_prompt") or ""):
+                # Lời nhắc của cảnh này đã đổi kể từ lúc vẽ tấm đang nằm đây.
+                # Giữ tấm cũ lại (`.cu`) rồi vẽ tấm mới — đây chính là chỗ mà
+                # cả buổi sửa lời nhắc của khách từng không có tác dụng gì.
+                bc.ghi("    cảnh {0}: lời nhắc đã đổi — vẽ lại ảnh.".format(
+                    so_canh))
+                _cat_tep_cu(tep)
+                san_co = False
             if not san_co:
                 _lam_anh_canh(bc, luot, x, tep, _hop_cho_canh(bc, luot, x, hop), so=so)
+                van_tay.dat(so_canh, x.get("img_prompt") or "")
                 # Ảnh VỪA tạo lại → clip cũ của cảnh này (nếu còn) đã lỗi thời.
                 _bo_clip_cu(bc, os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh)))
             else:
@@ -4370,13 +4468,30 @@ def _khau_clip(bc: BoiCanh):
         os.makedirs(thu_muc, exist_ok=True)
         giay = _giay_clip(bc)
         so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
+        van_tay_clip = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_CLIP))
+
         def mot_canh(c):
             so_canh = int(c["scene_id"])
             tep = os.path.join(thu_muc, "{0}.mp4".format(so_canh))
             anh = os.path.join(thu_muc_anh, "{0}.png".format(so_canh))
             if os.path.exists(tep):
-                return so_canh, True
+                # ═══ "ĐÃ CÓ TỆP" CHƯA ĐỦ ĐỂ BỎ QUA ═══
+                #
+                # Hai cách một clip trở nên lỗi thời mà tệp vẫn nằm đó:
+                # ảnh của chính nó vừa được vẽ lại (`_bo_clip_cu_hon_anh` —
+                # viết ra từ 25/08 nhưng chưa nơi nào gọi), và lời nhắc clip
+                # đã đổi (`VanTay`). Cả hai đều từng làm khách xem lại đúng
+                # video cũ sau khi đã sửa và trả tiền cho lượt sửa.
+                cu = _bo_clip_cu_hon_anh(bc, tep, anh)
+                if not cu and van_tay_clip.khac(so_canh, c.get("video_prompt") or ""):
+                    bc.ghi("    cảnh {0}: lời nhắc clip đã đổi — làm lại "
+                           "clip.".format(so_canh))
+                    _cat_tep_cu(tep)
+                    cu = True
+                if not cu:
+                    return so_canh, True
             _lam_clip(bc, luot, c, anh, tep, giay, so=so)
+            van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
             return so_canh, False
 
         try:
