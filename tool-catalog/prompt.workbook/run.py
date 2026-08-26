@@ -1719,9 +1719,12 @@ def _gan_reference_files(scenes, characters, locations=()) -> None:
         if scene.get("reference_files"):
             continue
         tho = str(scene.get("characters_used") or "").replace(",", " ").split()
-        # Toi da 2 nhan vat + 1 boi canh. Do 25/08/2026 (20 canh, AI cham do
-        # giong 1–5): gui het 4–6 anh tham chieu → 3,75; chi 2 nhan vat dau + 1
-        # noi → 3,79 va it bi tu choi hon. Nhieu anh qua thi mo hinh lan anh.
+        # MOI nhan vat co mat trong canh deu phai co anh cua no. Truoc 26/08/2026
+        # tran nay la 2, theo phep do 25/08 khi loi nhac CON ta nhan vat bang chu
+        # (4–6 anh → 3,75; 2 anh + 1 noi → 3,79). Bo ta chu roi thi phep do do
+        # khong con dung: nhan vat khong co anh la nhan vat KHONG CO GI — do
+        # 26/08 tren phim 0002, canh 12–13 co 4 nhan vat ma chi gan 2, may ve ra
+        # may con cao va mot con gau thay cho dan de con.
         ids = [i for i in tho if i in hop_nv][:TOI_DA_NV_THAM_CHIEU]
         loc = str(scene.get("location_used") or "").strip()
         if loc in hop_loc:
@@ -1753,7 +1756,9 @@ _KHOA_NHAN_VAT = ("Take every character's look ONLY from its reference image —
                   "the hat and boots', 'hat held in hand'); everything not mentioned "
                   "stays exactly as in the reference.")
 #: Bao nhieu NHAN VAT duoc gan anh tham chieu cho mot canh (them 1 boi canh).
-TOI_DA_NV_THAM_CHIEU = 2
+#: Cong nhan toi 10 anh (`workers/veo3/engine/media.MAX_REFERENCES`), nen 4 nhan
+#: vat + 1 noi van con thua cho.
+TOI_DA_NV_THAM_CHIEU = 4
 
 #: "Dung tren mat dat": do 25/08/2026 canh 41/50 — tham chieu boi canh la mat
 #: song, prompt khong noi dung o dau, mo hinh dat meo va cong chua LEN MAT NUOC.
@@ -1815,6 +1820,49 @@ def _mo_ta_tham_chieu(i: str, dan: Mapping[str, Any], noi: Mapping[str, Any]) ->
     return "{0}, {1}".format(i, l.get("name") or "place")
 
 
+#: Id nhan vat / boi canh trong loi nhac: `nv4`, `nv7b`, `loc12`.
+_MAU_ID = re.compile(r"\b((?:nv|loc)\d+[a-z]?)\b(?!\s*\[reference)")
+
+
+def _thay_id_khong_co_anh(chu: str, gan, dan, noi) -> str:
+    """Id CO trong dan nhung KHONG duoc gui anh kem -> thay bang VAI cua no.
+
+    ═══ VI SAO ═══
+
+    Trung `TOI_DA_NV_THAM_CHIEU` = 2 nhan vat + 1 noi moi canh la con so da do
+    (25/08/2026: gui 4-6 anh thi diem giong tut 3,79 -> 3,75). Nhung nhan vat
+    thu ba van bi AI viet vao loi nhac bang chinh cai id — va id la thu chi
+    TOOL hieu. May ve khong nhan duoc ten tep, no nhan mot day anh theo thu tu.
+    Thay `nv4` cho no la mot chuoi vo nghia: no be ra mot nhan vat moi, moi
+    canh mot kieu.
+
+    Do tren luot that (openstory/0002, 26/08/2026): **12/30 canh** co id tran —
+    nv4 thay lang, nv5 con vit, nv6 dan ca. Ba nhan vat phu, khong canh nao ve
+    giong canh nao.
+
+    Thay bang VAI ("the village healer"), KHONG ta ngoai hinh: nhan vat co anh
+    thi chu va anh danh nhau, may nghe chu (chu du an 26/08 — xem
+    `_mo_ta_tham_chieu`); nhan vat khong co anh thi khong co gi de danh nhau,
+    nhung ta ky van lam may ve moi canh mot kieu. Vai la muc vua du: may biet
+    ve ai, ma khong co chi tiet nao de troi.
+    """
+    def doi(m):
+        i = m.group(1)
+        if i in gan:
+            return i
+        if i in dan:
+            c = dan[i]
+            return "the {0}".format(c.get("role") or c.get("name") or "character")
+        if i in noi:
+            l = noi[i]
+            return str(l.get("name") or "the place")
+        return i  # id la, khong co trong dan: de nguyen cho nguoi sua tool thay
+
+    # `(nv4)` -> `(the village healer)` roi moi toi dang tran, de khong sinh
+    # ra `((the …))`.
+    return _MAU_ID.sub(doi, str(chu or ""))
+
+
 def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
     """Gan vao MOI canh khoi 'REFERENCE IMAGES attached, in this order: …'.
 
@@ -1846,8 +1894,12 @@ def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
             dong.append(_KHOA_NHAN_VAT)
         if any(i in noi for i in ids):
             dong.append(_KHOA_BOI_CANH)
+        # Id con lai (nhan vat thu ba tro di) khong co anh kem -> thay bang
+        # vai, dung de tro cho may ve. Xem `_thay_id_khong_co_anh`.
+        chu = _thay_id_khong_co_anh(chu, set(ids), dan, noi)
         s["img_prompt"] = chu + "\n".join(dong)
-        s["video_prompt"] = _khoa_video(s.get("video_prompt"), ids, dan)
+        s["video_prompt"] = _thay_id_khong_co_anh(
+            _khoa_video(s.get("video_prompt"), ids, dan), set(ids), dan, noi)
 
 
 def _bo_enrich(goi) -> Callable:

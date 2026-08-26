@@ -13,6 +13,8 @@ from core import dao_dien_auto as dd
 from core.auto_khau import _hop_cho_canh, _viet_xlsx
 from core.kenh import Kenh, doc_kenh
 
+GOC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 def _bc(tmp_path, che_do="tu_xay", anh_nv=None):
     nhat_ky = []
@@ -499,3 +501,60 @@ class TestBiaTheoPhim:
         bc.kenh.che_do_ke = ""
         assert _hop_bia(bc, luot, hop_cu) is hop_cu
         assert dd.nhan_vat_chinh_cua_luot(_luot(tmp_path / "khac"), 2) == [] if False else True
+
+
+# ── Thiếu ảnh tham chiếu: mượn giai đoạn anh em, hoặc bỏ id cho khỏi lệch số ──
+# Đo 26/08/2026 (phim 0002): `nv5.png` bị bộ lọc chặn, tool đi tiếp, khối khoá
+# vẫn ghi "reference image 1 = nv5" nhưng ảnh gắn thật là bối cảnh → mọi số thứ
+# tự trỏ nhầm; cảnh 4 và 6 ra hai con sói khác nhau.
+
+class TestThieuAnhThamChieu:
+    def _man_soi(self):
+        from core.prompt_visuals import DUOI_CHAN_DUNG
+        return {"characters": [
+            {"id": "nv5", "role": "villain", "english_prompt": "a grey wolf",
+             "sheet_prompt": "a grey wolf" + DUOI_CHAN_DUNG},
+            {"id": "nv5b", "role": "villain", "english_prompt": "a grey wolf, white paws",
+             "sheet_prompt": "a grey wolf, white paws" + DUOI_CHAN_DUNG}],
+            "locations": [{"id": "loc1", "name": "cottage", "english_prompt": "a cottage",
+                           "sheet_prompt": "a cottage"}]}
+
+    def test_muon_anh_giai_doan_anh_em(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        man = self._man_soi()
+
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
+            if ma_id == "nv5":
+                raise RuntimeError("content_rejected")
+            open(dich, "wb").write(b"png")
+
+        thieu = dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh,
+                                  goi_ai=lambda l: "không có json")
+        assert thieu == []
+        d = os.path.join(luot.thu_muc, dd.THU_MUC_THAM_CHIEU)
+        assert os.path.exists(os.path.join(d, "nv5.png"))
+        assert any("mượn ảnh nv5b" in x for x in bc._nhat_ky)
+
+    def test_khong_co_anh_em_thi_bo_id_va_dung_lai_khoi_khoa(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        bc.goc = GOC   # `_bo_id_khoi_canh` dựng lại khối khoá bằng chính run.py
+        man = self._man_soi()
+        man["characters"] = [man["characters"][0]]   # chỉ còn nv5, không anh em
+        canh = [{"scene_id": 1, "characters_used": "nv5", "location_used": "loc1",
+                 "reference_files": json.dumps(["nv5.png", "loc1.png"]),
+                 "img_prompt": "Wide shot of nv5 at loc1", "video_prompt": "it walks"}]
+
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
+            if ma_id == "nv5":
+                raise RuntimeError("content_rejected")
+            open(dich, "wb").write(b"png")
+
+        thieu = dd.tao_tham_chieu(bc, luot, man, canh=canh, tao_anh=tao_anh,
+                                  goi_ai=lambda l: "không có json")
+        assert thieu == ["nv5"]
+        assert json.loads(canh[0]["reference_files"]) == ["loc1.png"]
+        assert "nv5" not in canh[0]["characters_used"]
+        # khối khoá dựng lại: ảnh 1 giờ là loc1, không còn trỏ nhầm
+        assert "reference image 1 = loc1" in canh[0]["img_prompt"]
+        assert "= nv5" not in canh[0]["img_prompt"]
+        assert json.load(open(os.path.join(luot.thu_muc, "4-canh.json"), encoding="utf-8"))[0]["characters_used"] == ""

@@ -322,11 +322,66 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
             continue  # giai đoạn khác cùng gốc vừa thiết kế lại → đã tạo lại cả cụm
         if _thiet_ke_lai_va_tao_lai(bc, luot, man, canh, ma_id, ly_do, lam, goi_ai):
             continue
+        if _muon_anh_giai_doan(bc, d, man, ma_id):
+            continue
         con_thieu.append(ma_id)
-        bc.ghi("    tham chiếu {0}: KHÔNG tạo được — các cảnh có {0} sẽ không có "
-               "ảnh tham chiếu. Sửa mô tả trong 4-canh-dan.json rồi “Làm lại khâu này”."
-               .format(ma_id))
+        bc.ghi("    tham chiếu {0}: KHÔNG tạo được — bỏ {0} khỏi mọi cảnh để số thứ "
+               "tự ảnh không lệch. Sửa mô tả trong 4-canh-dan.json rồi “Làm lại "
+               "khâu này”.".format(ma_id))
+    if con_thieu and canh is not None:
+        _bo_id_khoi_canh(bc, luot, man, canh, con_thieu)
     return con_thieu
+
+
+def _muon_anh_giai_doan(bc: Any, d: str, man: Dict[str, Any], ma_id: str) -> bool:
+    """Thiếu ảnh MỘT GIAI ĐOẠN thì mượn ảnh giai đoạn khác của cùng nhân vật.
+
+    Các giai đoạn là cùng một người, chỉ khác món đồ mang theo (sói chân đen →
+    sói chân bột trắng → sói bụng đầy đá). Mượn anh em vẫn đúng mặt, đúng dáng,
+    đúng cỡ — hơn hẳn để trống cho máy bịa ra một con khác.
+    """
+    goc = goc_cua_id(ma_id)
+    for c in man.get("characters") or []:
+        i = str(c.get("id") or "")
+        if not i or i == ma_id or goc_cua_id(i) != goc:
+            continue
+        nguon = os.path.join(d, i + ".png")
+        if os.path.isfile(nguon):
+            shutil.copyfile(nguon, os.path.join(d, ma_id + ".png"))
+            bc.ghi("    tham chiếu {0}: không tạo được — mượn ảnh {1} (cùng nhân vật, "
+                   "khác giai đoạn).".format(ma_id, i))
+            return True
+    return False
+
+
+def _bo_id_khoi_canh(bc: Any, luot: Any, man: Dict[str, Any],
+                     canh: List[Dict[str, Any]], thieu: List[str]) -> None:
+    """Bỏ id không có ảnh khỏi cảnh rồi DỰNG LẠI khối khoá cho khớp số ảnh thật."""
+    bo = set(thieu)
+    doi = []
+    for c in canh:
+        try:
+            ten = json.loads(c.get("reference_files") or "[]")
+        except ValueError:
+            ten = [x.strip() for x in str(c.get("reference_files") or "").split(",")]
+        con = [t for t in ten if os.path.splitext(os.path.basename(str(t)))[0] not in bo]
+        if len(con) == len(ten):
+            continue
+        c["reference_files"] = json.dumps(con)
+        c["characters_used"] = ", ".join(
+            x for x in str(c.get("characters_used") or "").replace(",", " ").split() if x not in bo)
+        # Cắt khối khoá cũ rồi để `_khoa_nhan_dang` dựng lại từ đầu.
+        chu = str(c.get("img_prompt") or "")
+        k = chu.find("\nREFERENCE IMAGES are attached")
+        if k >= 0:
+            c["img_prompt"] = chu[:k]
+        doi.append(c)
+    if not doi:
+        return
+    run = _nap_run(getattr(bc, "goc", "") or ".")
+    run._khoa_nhan_dang(doi, man.get("characters") or [], man.get("locations") or [])
+    bc.ghi("    đã dựng lại khối khoá của {0} cảnh cho khớp số ảnh thật.".format(len(doi)))
+    _ghi_lai_canh_va_dan(luot, man, canh)
 
 
 def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
