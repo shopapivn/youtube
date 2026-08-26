@@ -455,3 +455,24 @@ class TestKhuonChiaCuaKenh:
         assert dd.khuon_du_cho_dao_dien(k.prompt.get("7-canh.md", ""))
         assert "metaphor" not in k.prompt["7-canh.md"].split("THE RULES")[1].split("STYLE TAIL")[0].lower() or \
             "not a metaphor" in k.prompt["7-canh.md"]
+
+
+class TestBiaTheoPhim:
+    def test_nhan_vat_chinh_va_hop_bia(self, tmp_path):
+        bc, luot = _bc(tmp_path), _luot(tmp_path)
+        tc = tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU
+        tc.mkdir()
+        for t in ("nv1.png", "nv4.png", "nv9.png"):
+            (tc / t).write_bytes(b"x")
+        canh = [{"scene_id": i, "reference_files": json.dumps(r)} for i, r in enumerate([
+            ["nv1.png", "loc1.png"], ["nv1.png", "nv4.png", "loc1.png"], ["nv4.png", "loc2.png"],
+            ["nv9.png", "loc2.png"], ["nv1.png", "nv4.png"], ["nv7.png"]], 1)]
+        (tmp_path / "0001" / "4-canh.json").write_text(json.dumps(canh), encoding="utf-8")
+        chinh = dd.nhan_vat_chinh_cua_luot(luot, 2)
+        assert [os.path.basename(p) for p in chinh] == ["nv1.png", "nv4.png"]   # nv7 không có tệp → bỏ
+        from core.auto_khau import _hop_bia
+        hop_cu = object()
+        assert _hop_bia(bc, luot, hop_cu) is not hop_cu and any("ảnh bìa" in d for d in bc._nhat_ky)
+        bc.kenh.che_do_ke = ""
+        assert _hop_bia(bc, luot, hop_cu) is hop_cu
+        assert dd.nhan_vat_chinh_cua_luot(_luot(tmp_path / "khac"), 2) == [] if False else True

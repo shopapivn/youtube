@@ -3538,6 +3538,21 @@ def _hop_cho_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], hop: "ThamChie
     return ThamChieuCanh(bc, duong) if duong else _HopTrong()
 
 
+def _hop_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu"):
+    """Tham chiếu cho ẢNH BÌA: kênh đường đạo diễn dùng nhân vật chính của chính
+    bộ phim (hai id xuất hiện nhiều nhất); đường cũ giữ hộp nv1.png của kênh."""
+    from .dao_dien_auto import ThamChieuCanh, che_do_dao_dien, nhan_vat_chinh_cua_luot  # noqa: PLC0415
+
+    if not che_do_dao_dien(bc.kenh):
+        return hop
+    duong = nhan_vat_chinh_cua_luot(luot, 2)
+    if not duong:
+        return hop
+    bc.ghi("  ảnh bìa: dùng nhân vật chính của phim làm tham chiếu ({0}).".format(
+        ", ".join(os.path.basename(d)[:-4] for d in duong)))
+    return ThamChieuCanh(bc, duong)
+
+
 class _HopTrong:
     def lay(self) -> List[str]:
         return []
@@ -4139,7 +4154,7 @@ def _khau_anh(bc: BoiCanh):
         def mot_muc(m):
             loai, x = m
             if loai == "bia":
-                ket = _lam_bia(bc, luot, hop, thu_muc_bia, x, ta_bia,
+                ket = _lam_bia(bc, luot, _hop_bia(bc, luot, hop), thu_muc_bia, x, ta_bia,
                                tieu_de, chu_bia, so=so)
                 them("bia")
                 return ket
@@ -4523,7 +4538,7 @@ def _khau_thumbnail(bc: BoiCanh):
         thu_muc, muc, thieu, ta_bia, tieu_de, chu_bia = _chuan_bi_bia(bc, luot)
         # Đủ ba tấm rồi thì đừng dựng `ThamChieu`: nó có thể phải tải lại ảnh
         # nhân vật lên, tốn chỗ trong kho tạm 500 MB cho một việc không có.
-        hop = ThamChieu(bc) if thieu else None
+        hop = _hop_bia(bc, luot, ThamChieu(bc)) if thieu else None
         so = SoTheoDoi(bc, nhip=bc.nhip_hoi) if thieu else None
 
         def mot_bia(m):

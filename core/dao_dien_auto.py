@@ -42,7 +42,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .prompt_visuals import goc_cua_id
 
 __all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chieu", "sua_canh_theo_do_moi",
-           "duong_tham_chieu_canh", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
+           "duong_tham_chieu_canh", "nhan_vat_chinh_cua_luot", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
 
 #: Các giá trị `che_do_ke` mở nhánh đạo diễn.
 CHE_DO_DAO_DIEN = ("tu_xay", "nhan_vat_va_boi_canh", "noi_canh")
@@ -582,6 +582,42 @@ def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[[str, str, str], None]:
         _tai_ket_qua(bc, goi, 0, dich)
 
     return lam
+
+
+def nhan_vat_chinh_cua_luot(luot: Any, so: int = 2) -> List[str]:
+    """Đường dẫn tham chiếu của `so` nhân vật xuất hiện NHIỀU NHẤT trong bảng cảnh.
+
+    Dùng cho ảnh bìa ở kênh đường đạo diễn: bìa "Bảy chú dê con" phải vẽ dê và
+    sói của chính bộ phim, không phải `nv1.png` mascot của kênh (đo 26/08/2026:
+    ba bìa đều ra con mèo vì tool cầm nv1.png của kênh).
+    """
+    import collections  # noqa: PLC0415
+
+    try:
+        with open(os.path.join(luot.thu_muc, "4-canh.json"), encoding="utf-8") as f:
+            canh = json.load(f)
+    except (OSError, ValueError):
+        return []
+    dem: collections.Counter = collections.Counter()
+    for c in canh:
+        tho = c.get("reference_files") or ""
+        try:
+            ten = json.loads(tho) if isinstance(tho, str) else list(tho)
+        except ValueError:
+            ten = [x.strip() for x in str(tho).split(",")]
+        for t in ten or []:
+            t = os.path.basename(str(t).strip())
+            if t.startswith("nv"):
+                dem[t] += 1
+    d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
+    ra = []
+    for t, _ in dem.most_common():
+        p = os.path.join(d, t)
+        if os.path.isfile(p):
+            ra.append(p)
+        if len(ra) >= so:
+            break
+    return ra
 
 
 def duong_tham_chieu_canh(luot: Any, c: Dict[str, Any]) -> List[str]:
