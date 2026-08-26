@@ -51,7 +51,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
-           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO"]
+           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -73,6 +73,16 @@ DUOI_NOI_CANH = (
     "STYLE: match the style of the CHARACTER and PLACE reference images (the first attached images) "
     "and the style words of this prompt — if the previous frame looks flatter, softer, blurrier or "
     "more 2D than them, follow the references, not that frame.")
+
+
+#: Engine nào dùng ảnh vào làm KHUNG ĐẦU thật sự (đo 26/08/2026: seedance lệch ~10/255,
+#: veo3 qua cổng lệch 26–47 — coi ảnh là gợi ý, tự dựng bố cục mới). Chỉ engine giữ
+#: khung đầu mới "diễn tiếp video→video" được; còn lại mỗi cảnh phải có ảnh mới.
+ENGINE_GIU_KHUNG_DAU = ("seedance",)
+
+
+def engine_giu_khung_dau(engine: str) -> bool:
+    return str(engine or "").strip().lower() in ENGINE_GIU_KHUNG_DAU
 
 
 def la_noi_canh(kenh: Any) -> bool:

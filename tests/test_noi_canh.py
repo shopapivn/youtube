@@ -259,3 +259,7 @@ class TestNeoLai:
         assert [a[0] for a in nhat["anh"]] == [1, 4]
         assert any("neo lại" in d for d in nhat["ghi"]) and sum("diễn tiếp" in d for d in nhat["ghi"]) == 4
         assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "3.png"]
+
+
+def test_engine_giu_khung_dau():
+    assert nc.engine_giu_khung_dau("seedance") and not nc.engine_giu_khung_dau("veo3") and not nc.engine_giu_khung_dau("")

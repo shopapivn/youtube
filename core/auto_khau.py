@@ -4209,7 +4209,7 @@ def _khau_anh_noi_canh(bc: BoiCanh):
         from .dao_dien_auto import THU_MUC_THAM_CHIEU, ThamChieuCanh  # noqa: PLC0415
         from .noi_canh import (  # noqa: PLC0415
             ChuoiNoiCanh, SONG_SONG_CHUOI, cat_clip_theo_canh, chay_cac_chuoi,
-            chuoi_theo_boi_canh, khung_cuoi,
+            chuoi_theo_boi_canh, engine_giu_khung_dau, khung_cuoi,
         )
         from .phan_cung import chon_encoder, doc_ket_qua  # noqa: PLC0415
 
@@ -4265,7 +4265,8 @@ def _khau_anh_noi_canh(bc: BoiCanh):
         def lam_chuoi(ch):
             ct = ChuoiNoiCanh(thu_muc_anh=thu_muc, thu_muc_clip=thu_muc_clip, thu_muc_tham_chieu=thu_muc_tc,
                               lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich,
-                              ghi=bc.ghi, kiem_dung=bc.kiem_dung, bao_anh=them("anh"), bao_clip=them("clip"))
+                              ghi=bc.ghi, kiem_dung=bc.kiem_dung, bao_anh=them("anh"), bao_clip=them("clip"),
+                              lien_mach=engine_giu_khung_dau(bc.kenh.engine))
             n = ct.chay(ch)
             with khoa_dem:
                 loi_chung.extend(ct.loi)

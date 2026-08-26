@@ -29,11 +29,11 @@ phut_muc_tieu: 8
 # Độ dài TỰ DO: không nhắm phút, không nắn, không chấm độ dài — truyện dài
 # ngắn theo câu chuyện (chủ dự án 25/08/2026). `phut_muc_tieu` ở trên không dùng.
 do_dai_tu_do: true
-# Nối cảnh CẦN engine giữ đúng khung đầu: đo 26/08/2026 — veo3 qua cổng chỉ coi ảnh
-# vào là gợi ý (khung đầu lệch 26–47/255, mỗi clip là một bố cục mới → phim khựng ở
-# mọi mối nối); seedance giữ khung đầu gần y nguyên (lệch ~10) và diễn tiếp từ đó.
-# Giá: seedance 1.000 ₫/clip 10 s (veo3 500 ₫/8 s).
-engine: "seedance"
+# Tool chỉ dùng Veo 3 (chủ dự án 26/08/2026). Đo cùng ngày: veo3 qua cổng coi ảnh vào
+# là gợi ý, không phải khung đầu (khung đầu lệch 26–47/255) — nên nối cảnh trên Veo là
+# "ảnh mới mỗi cảnh với đủ tham chiếu + khung cuối clip trước", cú cắt đổi hẳn cỡ khung,
+# bỏ 0,35 s lấy đà; phần diễn tiếp video→video chỉ bật khi engine giữ khung đầu (seedance).
+engine: "veo3"
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"
 dot_phu_de: true
