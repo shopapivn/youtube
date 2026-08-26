@@ -33,9 +33,9 @@ __all__ = ["duong_mau", "doc_mau", "luu_mau", "xoa_mau"]
 #: giữ để lần sau chọn mẫu vẫn có hình minh hoạ (tệp mất thì chỉ mất hình).
 KHOA_MAU = ("ten", "phong_cach", "chi_dan", "anh_mau", "engine", "ngon_ngu",
             "mo_hinh", "nhat_quan",
-            # Nâng cao của Prompt Visuals (26/08/2026): mạch chia cảnh và
-            # prompt chia cảnh đã sửa — đi theo mẫu, không phải nhớ lại.
-            "nhip", "khuon_chia")
+            # Nâng cao của Prompt Visuals (26/08/2026): prompt chia cảnh đã
+            # sửa (mạch chia là hai con số nằm trong đó) — đi theo mẫu.
+            "khuon_chia")
 
 
 def duong_mau(goc: str) -> str:

@@ -8,8 +8,8 @@ cũng như loạn quá"* — phong cách từng chọn được ở ba chỗ, n�
 
     Bước 1  đưa giọng đọc vào (mp3), kèm kịch bản .txt nếu có
     Bước 2  MỌI thứ về hình: dùng lại kênh/mẫu, hay chọn phong cách mới;
-            nhân vật; ⚙ Nâng cao = đúng lời gửi AI (prompt phong cách, mạch
-            chia cảnh 3–8 hay dày/thưa, prompt chia cảnh) — sửa được, lưu mẫu
+            nhân vật; ⚙ Nâng cao = đúng lời gửi AI (prompt phong cách, prompt
+            chia cảnh với mạch chia là hai con số ở đầu) — sửa được, lưu mẫu
     Bước 3  tạo prompt — thấy rõ khâu nào đang chạy, như bảng khâu tab Tự động
     Bước 4  (hiện khi có kết quả) xem & chỉnh prompt từng cảnh, rồi THỬ thật
             1–3 cảnh (ảnh + clip) trước khi mang Excel sang tab Ảnh & Video
@@ -46,10 +46,10 @@ from core.anh_len import link_dung_lai_duoc, tai_len
 from core.jobs import STATUS_CANCELLED, STATUS_DONE, STATUS_FAILED, JobSpec
 from core.money import format_vnd
 from core.pricing import KIND_IMAGE, KIND_VIDEO, hold_for_image, hold_for_video
-from core.chia_canh import KHUON_MAC_DINH
+from core.chia_canh import KHUON_MAC_DINH, nhip_tu_khuon
 from core.prompt_visuals import (
     CHE_DO_CAN_ANH_NV, CHE_DO_KE, CHO_TRONG_KHUON_CHIA, DUOI_CHAN_DUNG,
-    LOI_NHAC_XAY_PHONG_CACH, NHIP_CHIA, PhongCach, bia_de_xem, boi_canh_de_xem,
+    LOI_NHAC_XAY_PHONG_CACH, PhongCach, bia_de_xem, boi_canh_de_xem,
     canh_de_xem, cau_thieu_gi, chi_dan_tu_bo, chi_dan_tu_tra_loi_ai, dan_de_xem,
     doi_thiet_ke_nhan_vat, dung_boi_canh, dung_workflow, goc_cua_id,
     ke_hoach_de_xem, khuon_chia_dung_duoc, liet_ke_phong_cach,
@@ -289,8 +289,9 @@ class TrangPromptVisuals(QWidget):
            phong cách đã lưu) — chọn là xong, hai tab dưới gấp lại;
         2. hoặc **chọn mới**: lưới thẻ có ảnh + video mẫu / AI xây từ ảnh;
         3. **Nhân vật**: cách kể + ảnh nhân vật (chuyện hình, nên nằm đây);
-        4. **⚙ Nâng cao** (gấp sẵn): prompt phong cách, **mạch chia cảnh**,
-           **prompt chia cảnh** (đúng lời gửi AI, sửa được), đồng bộ với kênh.
+        4. **⚙ Nâng cao** (gấp sẵn): prompt phong cách, **prompt chia cảnh**
+           (đúng lời gửi AI, sửa được — mạch chia là hai con số ở đầu), đồng
+           bộ với kênh.
 
         Một nút "Lưu để dùng lại" duy nhất — bản trước có hai.
         """
@@ -352,14 +353,14 @@ class TrangPromptVisuals(QWidget):
         self._nut_luu_chung = nut_phu("💾 Lưu để dùng lại…", self._luu_mau,
                                       rong=190)
         self._nut_luu_chung.setToolTip(
-            "Lưu phong cách đang chọn cùng mọi thứ trong Nâng cao (prompt đã "
-            "sửa, mạch chia, prompt chia cảnh) — lần sau chọn ở ô “Dùng lại”.")
+            "Lưu phong cách đang chọn cùng mọi thứ trong Nâng cao (prompt phong "
+            "cách, prompt chia cảnh đã sửa) — lần sau chọn ở ô “Dùng lại”.")
         hang_chon.addWidget(self._nut_luu_chung)
         self._nut_nang_cao = nut_phu("⚙ Nâng cao ▾", lambda: self._bat_tat(
             self._khoi_nang_cao, self._nut_nang_cao, "⚙ Nâng cao"), rong=140)
         self._nut_nang_cao.setToolTip(
-            "Xem và sửa đúng những lời tool gửi AI: prompt phong cách, mạch "
-            "chia cảnh (3–8 giây hay dày/thưa hơn), prompt chia cảnh.")
+            "Xem và sửa đúng những lời tool gửi AI: prompt phong cách và prompt "
+            "chia cảnh (mạch chia 3–8 giây hay 30 giây một cảnh nằm ngay trong đó).")
         hang_chon.addWidget(self._nut_nang_cao)
         v.addLayout(hang_chon)
 
@@ -400,9 +401,12 @@ class TrangPromptVisuals(QWidget):
         # cao có thể chỉnh được prompt, ví dụ là mạch chia là 3-8s hay là chia
         # kiểu khác"*. Ba thứ, mỗi thứ một ô, đều đi vào lượt chạy:
         #   prompt phong cách  → `visual_style_directive`
-        #   mạch chia cảnh     → `scene_pacing` (sàn/trần giây mỗi cảnh)
         #   prompt chia cảnh   → `storyboard_template` (khuôn AI chia cảnh +
-        #                        viết prompt; chỉ gửi khi khác mặc định)
+        #                        viết prompt; chỉ gửi khi khác mặc định). Mạch
+        #                        chia là HAI CON SỐ ở đầu khuôn — chủ dự án
+        #                        26/08/2026 bác ô chọn: *"khống chế ở prompt gốc
+        #                        để khách xem được và có thể tối ưu, ví dụ họ
+        #                        muốn 30s 1 cảnh thì họ tự tối ưu được"*.
         self._khoi_nang_cao = QWidget()
         self._khoi_nang_cao.setMinimumWidth(1)
         vc = QVBoxLayout(self._khoi_nang_cao)
@@ -423,18 +427,6 @@ class TrangPromptVisuals(QWidget):
         self._nut_xoa_mau.hide()
         vc.addWidget(self._nut_xoa_mau, 0, Qt.AlignLeft)
 
-        hang_nhip = HangXuongDong()
-        hang_nhip.addWidget(nhan("Mạch chia cảnh:", "phu"))
-        self._o_nhip = QComboBox()
-        self._o_nhip.setMinimumWidth(1)
-        for ma, ten, _cap in NHIP_CHIA:
-            self._o_nhip.addItem(ten, ma)
-        self._o_nhip.setToolTip(
-            "Mỗi cảnh dài bao nhiêu giây. Cắt dày = nhiều cảnh hơn, nhịp nhanh "
-            "hơn, tốn nhiều ảnh/clip hơn. Trần không vượt 8 giây của Veo 3.")
-        hang_nhip.addWidget(self._o_nhip)
-        vc.addLayout(hang_nhip)
-
         hang_khuon = HangXuongDong()
         hang_khuon.addWidget(nhan("Prompt chia cảnh", "phu"))
         self._nut_khuon_mac_dinh = nut_phu("Khôi phục mặc định",
@@ -443,9 +435,10 @@ class TrangPromptVisuals(QWidget):
         vc.addLayout(hang_khuon)
         vc.addWidget(self._chu_phu(
             "Đây là đúng lời tool gửi AI để chia cảnh và viết prompt ảnh + video "
-            "từng cảnh. Sửa được (luật giữ chân, cỡ cảnh, ẩn dụ…). Giữ nguyên "
-            "các chỗ <<…>> — tool điền phụ đề, nhân vật, kế hoạch vào đó; thiếu "
-            "một chỗ là không chạy."))
+            "từng cảnh — sửa thẳng để tối ưu. Mạch chia nằm ở hai dòng số đầu "
+            "tiên (MIN/MAX_SECONDS_PER_SCENE): muốn 30 giây một cảnh thì đổi "
+            "MAX thành 30, muốn cắt dày thì 5. Giữ nguyên các chỗ <<…>> — tool "
+            "điền phụ đề, nhân vật, kế hoạch vào đó; thiếu một chỗ là không chạy."))
         self._o_khuon_chia = QPlainTextEdit()
         self._o_khuon_chia.setPlainText(KHUON_MAC_DINH)
         self._o_khuon_chia.setFixedHeight(180)
@@ -500,9 +493,20 @@ class TrangPromptVisuals(QWidget):
                 "⚠ Thiếu chỗ trống {0} — tool sẽ KHÔNG dùng bản sửa này. Thêm "
                 "lại hoặc bấm “Khôi phục mặc định”.".format(", ".join(thieu)))
             self._nhan_khuon.setStyleSheet("color:{0};".format(theme.VANG))
+            return
+        cap = nhip_tu_khuon(k)
+        self._nhan_khuon.setStyleSheet("")
+        if cap is None:
+            self._nhan_khuon.setText(
+                "✓ Prompt chia cảnh đã sửa — sẽ dùng bản này. (Không đọc được "
+                "hai dòng MIN/MAX_SECONDS_PER_SCENE: mạch chia về mặc định 3–8.)")
         else:
-            self._nhan_khuon.setText("✓ Prompt chia cảnh đã sửa — sẽ dùng bản này.")
-            self._nhan_khuon.setStyleSheet("")
+            self._nhan_khuon.setText(
+                "✓ Prompt chia cảnh đã sửa — sẽ dùng bản này. Mạch chia: "
+                "{0:.0f}–{1:.0f} giây một cảnh{2}.".format(
+                    cap[0], cap[1],
+                    " (clip vẫn 8 giây, cảnh dài được quay nhiều góc máy)"
+                    if cap[1] > 8 else ""))
 
     def _tab_chon_san(self) -> QWidget:
         """Tab 1: lưới thẻ có ảnh + video mẫu, xếp dòng theo bề rộng cửa sổ.
@@ -903,8 +907,6 @@ class TrangPromptVisuals(QWidget):
         # đó chính là phần công khách bỏ ra mà mẫu sinh ra để giữ.
         if str(mau.get("chi_dan") or "").strip():
             self._o_chi_dan.setPlainText(str(mau["chi_dan"]))
-        i_nhip = self._o_nhip.findData(str(mau.get("nhip") or NHIP_CHIA[0][0]))
-        self._o_nhip.setCurrentIndex(i_nhip if i_nhip >= 0 else 0)
         self._o_khuon_chia.setPlainText(
             str(mau.get("khuon_chia") or "").strip() or KHUON_MAC_DINH)
         # Ô chọn đứng ở mục mẫu (không nhảy về phong cách gốc) để khách thấy
@@ -957,9 +959,9 @@ class TrangPromptVisuals(QWidget):
                 # Ảnh khách tải khi nhờ AI xây — để lần sau chọn mẫu vẫn có
                 # hình minh hoạ, không chỉ một khối chữ.
                 "anh_mau": list(self._anh_mau_chon),
-                # Nâng cao đi theo mẫu: mạch chia và prompt chia cảnh đã sửa
-                # (rỗng = mặc định) — đây là phần công khách bỏ ra.
-                "nhip": str(self._o_nhip.currentData() or ""),
+                # Nâng cao đi theo mẫu: prompt chia cảnh đã sửa (rỗng = mặc
+                # định; mạch chia là hai con số nằm trong đó) — phần công
+                # khách bỏ ra.
                 "khuon_chia": self._khuon_chia_da_sua(),
             })
         except Exception as loi:  # noqa: BLE001 — lưu hỏng không được giết tab
@@ -1823,7 +1825,6 @@ class TrangPromptVisuals(QWidget):
                 "Bước 2, thêm lại hoặc bấm “Khôi phục mặc định”.".format(
                     ", ".join(thieu)))
             return
-        nhip = str(self._o_nhip.currentData() or "")
         files = list(self._files)
 
         self._huy = threading.Event()
@@ -1842,13 +1843,13 @@ class TrangPromptVisuals(QWidget):
         def viec() -> List[str]:
             return self._chay_nen(files, engine, mo_hinh, ngon_ngu, chi_dan,
                                   kich_ban, nhat_quan, huy, che_do, anh_nv,
-                                  khuon_chia=khuon_chia, nhip=nhip)
+                                  khuon_chia=khuon_chia)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
     def _chay_nen(self, files, engine, mo_hinh, ngon_ngu, chi_dan, kich_ban,
-                  nhat_quan, huy, che_do="tu_xay", anh_nv="", khuon_chia="",
-                  nhip="") -> List[str]:
+                  nhat_quan, huy, che_do="tu_xay", anh_nv="",
+                  khuon_chia="") -> List[str]:
         """LUỒNG NỀN. Không chạm widget — mọi câu chữ đi qua `_ghi_nen`."""
         import json  # noqa: PLC0415
 
@@ -1863,7 +1864,7 @@ class TrangPromptVisuals(QWidget):
         # về đúng dạng cũ (chỉ có phụ đề).
         boi_canh = dung_boi_canh(kich_ban, chi_dan=chi_dan, che_do_ke=che_do,
                                  nhan_vat_co_dinh={"image_file": "nv1.png"},
-                                 khuon_chia=khuon_chia, nhip=nhip)
+                                 khuon_chia=khuon_chia)
         ma_context = ""
         if boi_canh:
             try:

@@ -43,8 +43,9 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .auto import LuotChay, TrangThaiKhau
-from .chia_canh import (DUOI_CAM, bang_phu_de, chia_theo_nghia, dien_khuon,
-                        khoi_ke_hoach, loi_nhac_chia, sach_ke_hoach)
+from .chia_canh import (DUOI_CAM, MIN_GIAY_CANH, bang_phu_de, chia_theo_nghia,
+                        dien_khuon, khoi_ke_hoach, loi_nhac_chia, nhip_tu_khuon,
+                        sach_ke_hoach)
 # `loc_json` chuyển sang ở cạnh `goi_van_ban` — nơi nào đòi AI trả JSON cũng
 # phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
 # vào đây vì `__all__` của tệp này đã hứa có nó.
@@ -2776,6 +2777,14 @@ def _chia_canh_theo_nghia(bc: BoiCanh, luot: LuotChay, cue: List[Dict[str, Any]]
     from .srt_scenes import max_seconds_for  # noqa: PLC0415
 
     tran = float(max_seconds_for(bc.kenh.engine))
+    # Mạch chia (bao nhiêu giây một cảnh) là hai con số trong khối PACING của
+    # chính `7-canh.md` — chủ kênh sửa số trong prompt là đổi mạch. Trần một
+    # ý được lớn hơn clip engine; `chia_theo_nghia` vẫn cắt theo `tran` engine.
+    cap = nhip_tu_khuon(khuon)
+    san, tran_y = cap if cap else (float(MIN_GIAY_CANH), tran)
+    if cap:
+        bc.ghi("  mạch chia trong prompt: {0:.0f}–{1:.0f} giây một cảnh.".format(
+            san, tran_y))
     # Bản đồ hình cho CẢ bài, lập TRƯỚC khi chia khúc — để 9 khúc chạy song
     # song cùng một thế giới. Không có (kênh thiếu `7-ke-hoach.md`, hay AI trả
     # rác) thì `[]`, và các khúc chia y như trước.
@@ -2783,11 +2792,12 @@ def _chia_canh_theo_nghia(bc: BoiCanh, luot: LuotChay, cue: List[Dict[str, Any]]
 
     def hoi(khuc, thu_tu, tong_khuc):
         return _hoi_chia_canh(bc, luot, khuon, list(khuc), thu_tu, tong_khuc,
-                              tran, ke_hoach=ke_hoach)
+                              tran_y, ke_hoach=ke_hoach, san=san, clip=tran)
 
     # `duoi`: ep "no text, no letters…" vao cuoi moi prompt bang ma — luoi an
     # toan hoc tu D:\AFFILIATE, phong khi AI quen duoi o mot cang.
-    return chia_theo_nghia(cue, hoi, tran=tran, nhan_vat_mac_dinh="nv1",
+    return chia_theo_nghia(cue, hoi, tran=tran, san=min(san, tran - 1.0),
+                           nhan_vat_mac_dinh="nv1",
                            ghi=bc.ghi, kiem_dung=bc.kiem_dung, duoi=DUOI_CAM)
 
 
@@ -2888,14 +2898,16 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
                    cue: List[Dict[str, Any]], thu_tu: int, tong_khuc: int,
                    tran: float,
                    ke_hoach: Optional[List[Dict[str, Any]]] = None,
+                   san: float = MIN_GIAY_CANH, clip: float = 0.0,
                    ) -> List[Dict[str, Any]]:
     """Hỏi AI chia một khúc phụ đề. Trả về nguyên thứ nó đưa ra.
 
+    `tran` là trần MỘT Ý ghi trong prompt; `clip` là clip engine (`<<CLIP_SEC>>`).
     Canh lại là việc của `core.chia_canh.canh_lai`, không phải của chỗ này.
     """
     st = bc.kenh.style
     dong = bang_phu_de(cue)
-    loi_nhac = loi_nhac_chia(khuon, cue, tran, {
+    loi_nhac = loi_nhac_chia(khuon, cue, tran, san=san, clip=clip, them={
         # Phần bản đồ hình chạm vào khúc này (rỗng nếu không có bản đồ —
         # `dien_khuon` dọn chỗ trống, lời nhắc y như cũ).
         "KE_HOACH": khoi_ke_hoach(ke_hoach or [], cue),

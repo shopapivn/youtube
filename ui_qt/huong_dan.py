@@ -336,14 +336,15 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "nv2… và các bối cảnh loc1… để cả video nhất quán). Chọn kênh ở ô "
             "“Dùng lại” thì ảnh nhân vật của kênh được lấy sẵn.",
             "“⚙ Nâng cao” (Bước 2) là chỗ xem và sửa ĐÚNG những lời tool gửi AI: "
-            "“Prompt phong cách” (khối ghép vào mọi cảnh); “Mạch chia cảnh” — "
-            "mỗi cảnh dài bao nhiêu giây: theo nội dung 3–8 (mặc định), cắt "
-            "dày 3–5 (nhịp nhanh, nhiều ảnh hơn), cắt vừa 4–6, cắt thưa 5–8; và "
-            "“Prompt chia cảnh” — nguyên lời nhắc AI dùng để chia cảnh và viết "
-            "prompt ảnh/video, sửa thẳng (luật giữ chân, cỡ cảnh, ẩn dụ…), chỉ "
-            "cần giữ các chỗ <<…>> để tool điền phụ đề, nhân vật, kế hoạch; sai "
-            "thì bấm “Khôi phục mặc định”. Bấm “💾 Lưu để dùng lại…” là lưu cả "
-            "phong cách lẫn những gì đã sửa trong Nâng cao thành một mẫu.",
+            "“Prompt phong cách” (khối ghép vào mọi cảnh) và “Prompt chia cảnh” "
+            "— nguyên lời nhắc AI dùng để chia cảnh và viết prompt ảnh/video. "
+            "Hai dòng số đầu tiên của nó (MIN/MAX_SECONDS_PER_SCENE, mặc định "
+            "3–8) là mạch chia: muốn 30 giây một cảnh thì đổi MAX thành 30 "
+            "(clip vẫn 8 giây của Veo 3, cảnh dài được quay thành nhiều góc "
+            "máy), muốn cắt dày thì 5. Phần còn lại (luật giữ chân, cỡ cảnh, ẩn "
+            "dụ…) sửa thẳng; chỉ cần giữ các chỗ <<…>> để tool điền phụ đề, "
+            "nhân vật, kế hoạch; sai thì bấm “Khôi phục mặc định”. Bấm “💾 Lưu "
+            "để dùng lại…” là lưu cả phong cách lẫn prompt đã sửa thành một mẫu.",
             "Bước 3 — Tạo prompt: một nút. Máy tự đoán tiếng trong file, tự giữ "
             "nhân vật xuyên suốt; ba dấu khâu cho biết đang nghe, đang viết "
             "prompt hay đang xuất Excel. Video ở đây luôn là Veo 3 (mỗi cảnh "
@@ -364,9 +365,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "sang tab Ảnh & Video → Hàng loạt chạy hết.",
         ],
         "luu_y": [
-            "Phong cách đã lưu (kể cả mạch chia và prompt bạn sửa ở ⚙ Nâng "
-            "cao) nằm trong ô “Dùng lại” ở Bước 2; muốn bỏ thì mở ⚙ Nâng cao "
-            "bấm “Xoá phong cách đã lưu này”.",
+            "Phong cách đã lưu (kể cả prompt bạn sửa ở ⚙ Nâng cao) nằm trong ô "
+            "“Dùng lại” ở Bước 2; muốn bỏ thì mở ⚙ Nâng cao bấm “Xoá phong cách "
+            "đã lưu này”.",
             "Bước thử tiêu tiền thật (mỗi cảnh 1 ảnh + 1 clip) — giá hiện "
             "ngay trên nút, việc lỗi hoàn 100%. Đồ thử nằm trong thư mục con "
             "“thu-phong-cach”, không lẫn với kết quả chạy loạt.",

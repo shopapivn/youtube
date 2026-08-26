@@ -32,7 +32,7 @@ from core.chia_canh import (  # noqa: E402
 )
 from core.goi_van_ban import goi_van_ban, loc_json  # noqa: E402
 from core.prompt_visuals import CHO_TRONG_KHUON_CHIA  # noqa: E402
-from core.chia_canh import MIN_GIAY_CANH  # noqa: E402
+from core.chia_canh import MIN_GIAY_CANH, nhip_tu_khuon  # noqa: E402
 from core.srt_scenes import (  # noqa: E402
     clock, enforce_max_duration, group_cues, max_seconds_for, parse_srt, target_seconds_for,
 )
@@ -745,8 +745,10 @@ def _ke_hoach_dao_dien(goi, cues, phim, cast, *, engine, ke_hoach_fn=None,
     theo_so = {int(c["index"]): c for c in cues}
     segs = phim.get("segments") or []
     cast_khoi = _khoi_cast_style(cast)
-    # `nhip` = (sàn, trần) khách chọn; không có thì mặc định như trước.
-    san, tran = nhip if nhip else (float(MIN_GIAY_CANH), float(max_seconds_for(engine)))
+    # `nhip` = (sàn, trần một ý) đọc từ khuôn; không có thì mặc định. Beat dài
+    # hơn clip engine vẫn được `_sach_ke_hoach` tách theo trần engine.
+    tran_engine = float(max_seconds_for(engine))
+    san, tran = nhip if nhip else (float(MIN_GIAY_CANH), tran_engine)
 
     def mot_man(seg):
         dong = [theo_so[i] for i in range(int(seg["srt_from"]), int(seg["srt_to"]) + 1)
@@ -764,7 +766,7 @@ def _ke_hoach_dao_dien(goi, cues, phim, cast, *, engine, ke_hoach_fn=None,
                     cast=cast_khoi or "(no recurring cast)", srt=bang_phu_de(dong),
                     min_sec=int(san), max_sec=int(tran))
                 raw = loc_json(goi(loi_nhac, "man-{0}".format(seg["segment_id"])))
-            return _sach_ke_hoach(raw, seg, dong, tran=float(tran), san=float(san))
+            return _sach_ke_hoach(raw, seg, dong, tran=tran_engine, san=float(san))
         except Exception as loi:  # noqa: BLE001 — mot man hong khong giet ca phim
             emit({"type": "event", "event": "progress", "progress": 0.0,
                   "message": "Man {0} chua co ke hoach dao dien ({1}).".format(
@@ -1021,22 +1023,17 @@ _CHO_TRONG_KHUON_CHIA = CHO_TRONG_KHUON_CHIA
 
 
 def _nhip_canh(context, engine) -> "tuple[float, float]":
-    """(sàn, trần) giây mỗi cảnh: mặc định 3 giây và trần engine; khách đổi
-    được qua `context["scene_pacing"] = {"min_sec", "max_sec"}` (Prompt Visuals
-    → Nâng cao → "Mạch chia cảnh"). Trần không bao giờ vượt trần engine — Veo 3
-    từ chối clip dài hơn 8 giây, chọn "5–10" cũng chỉ được 8."""
+    """(sàn, trần) giây MỘT CẢNH, đọc từ khối PACING của chính khuôn chia cảnh
+    (`_khuon_chia(context)`) — khách sửa số trong prompt là đổi mạch. Không có
+    khối thì mặc định 3 giây và trần engine. Trần cảnh được phép lớn hơn clip
+    engine (30 giây một ý): `_canh_theo_nghia` vẫn cắt theo trần engine, mỗi
+    phần một hình từ góc máy khác."""
     tran_engine = float(max_seconds_for(engine))
-    san, tran = float(MIN_GIAY_CANH), tran_engine
-    nhip = context.get("scene_pacing") if isinstance(context, Mapping) else None
-    if isinstance(nhip, Mapping):
-        try:
-            san = float(nhip.get("min_sec") or san)
-            tran = float(nhip.get("max_sec") or tran)
-        except (TypeError, ValueError):
-            san, tran = float(MIN_GIAY_CANH), tran_engine
-    tran = min(max(tran, 2.0), tran_engine)
-    san = min(max(san, 1.0), tran - 1.0)
-    return san, tran
+    cap = nhip_tu_khuon(_khuon_chia(context))
+    if cap is None:
+        return float(MIN_GIAY_CANH), tran_engine
+    san, tran = cap
+    return min(san, tran_engine - 1.0) if tran_engine > 1.0 else san, tran
 
 
 #: Trần chữ của khối context đưa vào lời nhắc. Trước 26/08/2026 là 30.000 ký tự
@@ -1109,9 +1106,11 @@ def _canh_theo_nghia(cues, chia, engine, nhan_vat_chinh="", nhip=None) -> List[D
     thu chi AI biet, nen bat no chia xong roi hoi lai "canh nay ta cai gi" la
     tra tien hai lan cho cung mot doan chu.
     """
-    san, tran = nhip if nhip else (float(MIN_GIAY_CANH), float(max_seconds_for(engine)))
+    # Trần CẮT là của engine; trần trong lời nhắc (một ý dài bao nhiêu) nằm ở
+    # `nhip` và có thể lớn hơn — cảnh dài được quay thành nhiều góc máy.
+    san = nhip[0] if nhip else float(MIN_GIAY_CANH)
     ra: List[Dict[str, Any]] = []
-    for canh in chia_theo_nghia(cues, chia, tran=tran, san=san,
+    for canh in chia_theo_nghia(cues, chia, tran=max_seconds_for(engine), san=san,
                                 nhan_vat_mac_dinh=nhan_vat_chinh,
                                 duoi=DUOI_CAM, giay_moi_khuc=GIAY_MOI_KHUC):
         scene = {key: "" for key in SCENE_COLUMNS}
@@ -1225,6 +1224,7 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
     vao dong cua no (xem `_khoi_ke_hoach`).
     """
     san, tran = _nhip_canh(context, engine)
+    clip = float(max_seconds_for(engine))
     boi_canh = _boi_canh_chu(context, "")
     xong = {"value": 0}
 
@@ -1237,7 +1237,7 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
             "KHUC_THU": thu_tu + 1, "TONG_KHUC": tong_khuc,
             "LA_KHUC_DAU": "yes" if thu_tu == 0 else "no",
             "TY_LE_KHUNG": "16:9 horizontal",
-        }, san=san)
+        }, san=san, clip=clip)
         tra = goi(loi_nhac, "chia-{0}".format(khuc[0]["index"]))
         goi_ve = loc_json(tra)
         ds = goi_ve.get("scenes") if isinstance(goi_ve, dict) else goi_ve

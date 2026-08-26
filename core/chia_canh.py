@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .srt_scenes import clock
 from .su_co import LoiNoiDung
@@ -44,7 +44,7 @@ __all__ = [
     "MIN_GIAY_CANH", "CUE_MOI_KHUC", "KHUC_SONG_SONG", "KHUON_MAC_DINH",
     "DUOI_CAM", "dien_khuon", "bang_phu_de", "chia_khuc", "loi_nhac_chia",
     "canh_lai", "chia_theo_nghia", "ep_duoi", "thong_ke_canh", "gop_ngan",
-    "tach_dai", "sach_ke_hoach", "khoi_ke_hoach",
+    "tach_dai", "sach_ke_hoach", "khoi_ke_hoach", "nhip_tu_khuon",
 ]
 
 #: Cảnh ngắn nhất, tính bằng giây.
@@ -229,11 +229,21 @@ sheet or "four vignettes" — a grid cannot move, and its panel numbers come
 back as visible digits. If a line names several things, pick the ONE that
 carries the feeling, or place them together in one space.
 
+## PACING — two numbers the tool reads; change them to change the rhythm
+
+MIN_SECONDS_PER_SCENE: 3
+MAX_SECONDS_PER_SCENE: 8
+
+One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
+scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
+same moment from different camera positions — the tool does that split, you
+only decide how long one idea holds the screen. Want 30 seconds per scene?
+Set MAX to 30. Want a fast cut? Set MAX to 5.
+
 ## SCENE DIVISION — use the SRT indices
 
-- **<<MAX_SEC>> seconds is a HARD CEILING, not a target.** Work out each
-  scene's length from the timestamps and check it. A longer scene gets chopped
-  into equal pieces with THE SAME PICTURE — split it yourself instead.
+- **<<MAX_SEC>> seconds is a HARD CEILING for one scene, not a target.** Work
+  out each scene's length from the timestamps and check it.
 - Every scene lasts between **<<MIN_SEC>> and <<MAX_SEC>> seconds**. Merge
   short neighbouring lines that belong to one thought; split a long line where
   the thought turns. Never cut mid-sentence.
@@ -357,6 +367,40 @@ def thong_ke_canh(canh: Sequence[Mapping[str, Any]]) -> Dict[str, int]:
     return {"tinh": tinh, "cham": cham, "lap": lap, "tong": len(ds)}
 
 
+#: Hai dòng số trong khối PACING của khuôn chia cảnh. Khách sửa số ở đây là
+#: sửa mạch chia — không có ô chọn nào khác.
+_NHIP_MIN = re.compile(r"MIN_SECONDS_PER_SCENE\s*:\s*([0-9]+(?:[.,][0-9]+)?)")
+_NHIP_MAX = re.compile(r"MAX_SECONDS_PER_SCENE\s*:\s*([0-9]+(?:[.,][0-9]+)?)")
+
+
+def nhip_tu_khuon(khuon: str) -> Optional[Tuple[float, float]]:
+    """(sàn, trần) giây mỗi cảnh đọc từ khối PACING của khuôn; `None` nếu khuôn
+    không có khối ấy hoặc số vô lý (sàn ≥ trần, ≤ 0).
+
+    ═══ VÌ SAO SỐ NẰM TRONG PROMPT, KHÔNG PHẢI Ô CHỌN ═══
+
+    Bản 26/08/2026 buổi sáng có một ô "Mạch chia cảnh" (3–8 / 3–5 / 5–8). Chủ
+    dự án bác ngay: *"không đúng, mạch chia cảnh tao không muốn chọn thế mà tao
+    muốn là khống chế ở prompt gốc để khách xem được và có thể tối ưu, ví dụ
+    họ muốn 30s 1 cảnh thì họ tự tối ưu được"*. Nên prompt gốc mở đầu bằng
+    hai dòng số; khách đọc, sửa, và tool đọc lại đúng hai dòng ấy. Trần ở đây
+    là trần MỘT Ý (cảnh); clip của engine vẫn 8 giây — cảnh dài hơn được quay
+    thành nhiều góc máy (`canh_lai` cắt theo trần engine, mỗi phần một hình).
+    """
+    k = str(khuon or "")
+    a, b = _NHIP_MIN.search(k), _NHIP_MAX.search(k)
+    if not a or not b:
+        return None
+    try:
+        san = float(a.group(1).replace(",", "."))
+        tran = float(b.group(1).replace(",", "."))
+    except ValueError:
+        return None
+    if san <= 0 or tran <= san:
+        return None
+    return san, tran
+
+
 def dien_khuon(khuon: str, gia_tri: Mapping[str, Any]) -> str:
     """Điền `<<TÊN>>` trong lời nhắc. Chỗ nào không có dữ liệu thì để trống."""
     ra = khuon or ""
@@ -409,18 +453,20 @@ def chia_khuc(cue: Sequence[Mapping[str, Any]],
 
 def loi_nhac_chia(khuon: str, cue: Sequence[Mapping[str, Any]], tran: float,
                   them: Optional[Mapping[str, Any]] = None,
-                  san: float = MIN_GIAY_CANH) -> str:
+                  san: float = MIN_GIAY_CANH, clip: float = 0.0) -> str:
     """Dựng lời nhắc cho một khúc: phụ đề có đánh số + sàn/trần độ dài.
 
-    `san`/`tran` là mạch chia khách chọn (Prompt Visuals → Nâng cao → "Mạch chia
-    cảnh", 26/08/2026): cắt dày 3–5, cắt thưa 5–8… Mặc định là sàn 3 giây và
-    trần của engine như trước.
+    `san`/`tran` là hai con số khách ghi trong khối PACING của chính khuôn
+    (xem `nhip_tu_khuon`) — chủ dự án 26/08/2026: *"khống chế ở prompt gốc để
+    khách xem được và có thể tối ưu, ví dụ họ muốn 30s 1 cảnh"*. `clip` là
+    độ dài một clip của engine (điền `<<CLIP_SEC>>`); trống thì bằng `tran`.
     """
     gia_tri: Dict[str, Any] = dict(them or {})
     gia_tri.update({
         "SRT": bang_phu_de(cue),
         "MIN_SEC": "{0:.0f}".format(float(san)),
         "MAX_SEC": "{0:.0f}".format(float(tran)),
+        "CLIP_SEC": "{0:.0f}".format(float(clip or tran)),
     })
     return dien_khuon(khuon, gia_tri)
 
