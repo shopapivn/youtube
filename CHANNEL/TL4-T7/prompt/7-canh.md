@@ -33,20 +33,46 @@ picture smiles, and the image model copies that smile unless told otherwise.
 Measured on one real video of this channel: the character smiled while being
 accused, while the ground cracked under it, while it was startled — and the
 viewer stops believing the story the moment the face contradicts the words.
-So every scene that shows `nv1` states the face in plain words: `mouth a
-small flat line, brows drawn in`, `wide eyes, mouth open in a small o`,
-`eyes closed, easy smile`. Write the mouth shape and the eyes, not an adjective
-— and write them **right after the first mention of `nv1`**, not at the end
-of the prompt. Measured on 38 real frames: faces written at the end of a long
-prompt came back as the reference smile in 3 of them; faces written up front
-did not.
+So every scene that shows `nv1` states the face in plain words — and write
+them **right after the first mention of `nv1`**, not at the end of the prompt.
+Measured on 38 real frames: faces written at the end of a long prompt came
+back as the reference smile in 3 of them; faces written up front did not.
+
+**The face has exactly two parts: two eyes and one mouth. It has NO eyebrows,
+no teeth, no nose, no cheeks.** Measured on a real video: every prompt that
+said `brows drawn together`, `brows lifting` or `gritted` came back with thick
+eyebrows and bared teeth — a different character for those seconds, which is
+exactly the drift the reference image exists to prevent. Never write the words
+brow, brows, eyebrow, frown lines, teeth, gritted, clenched jaw. Build every
+feeling from this vocabulary only:
+- eyes: `two small black dots` (neutral), `dots set close and low` (worried),
+  `eyes narrowed to two short slanted lines` (annoyed, tense), `two wide round
+  circles with dot pupils` (surprised, alarmed), `two closed downward arcs`
+  (sad, ashamed), `two closed upward arcs` (content, relieved), `half-lidded
+  flat lines` (tired), `one eye a dot and one a closed arc` (doubtful);
+- mouth: `small flat line`, `small wavy line`, `small downturned curve`,
+  `tiny o`, `wide open o`, `easy smile`, `wide open smile`, `mouth pressed to
+  a dot`;
+- cartoon marks, the way a good animated short does it: `a single sweat drop
+  beside the head`, `a small tear at the eye`, `steam puff rising from the
+  head`, `three short motion lines`, `a tiny spiral above the head`, `sparkle
+  marks`, `a small dark cloud over the head`;
+- the whole body: `shoulders up to the ears`, `body shrunk into a ball`,
+  `arms flung wide`, `leaning far back`, `head tilted all the way sideways`.
+`eyes narrowed to two short slanted lines, mouth a small wavy line, a single
+sweat drop` says anxious better than any adjective, and stays on-model.
 
 **`nv1` wears nothing, ever — even when the narration mentions clothes.** A
 coat is carried over an arm, hung by the door, or sliding off the shoulders
 to the floor; it is never on the body. Measured on real frames: three scenes
 put a coat on `nv1` and for those seconds it read as a different character.
-The same body rule holds for reflections, mirrors and windows: `nv1`'s
-reflection is also pure white (its shadow is dark, and that is fine).
+**Never show a reflection, mirror image, twin, ghost or "other self" of
+`nv1`.** Measured on a real video: every such prompt came back as a second
+white character with a different face standing next to the first, and the
+viewer no longer knew who the story was about. Doubt, an inner voice, a
+harsher self are shown as `nv1`'s dark shadow on the wall, a small dark cloud
+over its head, a muted grey silhouette across the room — never as another
+white figure. Its shadow is dark, and that is fine.
 
 **`nv1` is the ONLY pure-white figure in the whole video.** Other people —
 colleagues, a boss, a crowd, a friend — are plain rounded figures of the same
@@ -110,6 +136,21 @@ sides, subject off-centre, depth front-to-back. This is not a phone video.
    Test: if your prompt would still make sense under a DIFFERENT line of
    narration, it is the wrong prompt — rewrite it. Write the metaphor object
    into `visual_anchor`.
+   **And the metaphor must be BIG.** A real place is the floor, not the show.
+   Measured on a real video of this channel with real places in every scene:
+   the viewer still left, because scene after scene was `nv1` sitting at a
+   table holding a small cup. A metaphor the size of a hand is wallpaper; a
+   metaphor the size of the room is a scene. The knot of guilt is not a
+   little ball in the lap — it is a rope as thick as an arm looping around
+   the whole body and the table legs. The phone's glow does not light a face
+   — it floods the dark room and throws a giant shadow up the wall. The crowd
+   is not three figures — it is a wall of them filling the frame edge to
+   edge, and `nv1` is the one white dot. Give every scene at least one of:
+   scale (the object is huge, or the person is tiny against it), light (one
+   lamp in a dark room, a glow that changes everything), or space (the room
+   empties, tilts, fills, cracks). At most one scene in four may be `nv1`
+   simply handling a small everyday prop; the other three need the big
+   image.
 
 4. **The face matches the line.** Guilt looks like guilt, relief looks like
    relief, being judged looks like being judged. State the mouth and eyes in

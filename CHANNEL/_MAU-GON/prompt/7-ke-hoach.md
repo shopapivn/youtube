@@ -43,8 +43,10 @@ no rhythm. Your map is the only thing those writers share.
    happens, so the wave goodbye is drawn at the station and the coat comes
    off at home — never both at the door. **The last chapter is the closing**,
    where the narration turns to the viewer directly.
-4. **No two consecutive chapters share a place.** Choose from the everyday
-   settings of the audience note below; at least half of all chapters happen
+4. **No two consecutive chapters share a place, and no place is used more
+   than twice in the whole video** — measured on a real video: five of twelve
+   chapters were the same apartment, and the video read as one long evening
+   at home. Choose from the everyday settings of the audience note below; at least half of all chapters happen
    in real everyday places (apartment, office, train, konbini, cafe, park,
    street), the rest may be a more symbolic space when the narration is about
    an idea rather than a person — and even then give it a floor and a light.
@@ -57,6 +59,16 @@ no rhythm. Your map is the only thing those writers share.
 7. `motif`: ONE object, taken from the narration's own images where it has
    one, and how it changes: `glass of muddy water on the counter — churning →
    settling → clear`. A motif may return in a later chapter, changed.
+   **The motif must be able to fill a frame.** A cup in two hands, a phone on
+   a table, a canned coffee are props, not motifs — measured on a real video,
+   chapters built on them came back as the character sitting and holding
+   something, and the viewer left. Choose objects that can grow, flood, crack,
+   fill the room, throw a shadow up the wall, or turn the whole space: a rope
+   of guilt around the body, a wall of a crowd, a well that overflows, a room
+   that tilts, a shadow taller than the person. **Never a reflection, mirror
+   image or second self of `nv1`** — it comes back as a second white
+   character. An inner voice is a dark shadow, a small dark cloud, a muted
+   grey silhouette.
 8. `key_line`: the SRT index of the line where this chapter turns. Pick the
    sentence that states the result or the reversal, not the sentence that
    introduces it.

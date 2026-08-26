@@ -220,6 +220,12 @@ class TestPromptBaNoi:
         assert "a new chapter is a new place" in chu         # không có chương
         assert "at least one third of the frame height" in chu
         assert "not a metaphor" in chu                       # mở đầu = nhận ra mình
+        # Đo 0051 (173 cảnh, chỗ thật nhưng nhàm): ẩn dụ phải LỚN; mặt không
+        # lông mày/răng; không phản chiếu nv1.
+        assert "the metaphor must be BIG" in chu
+        assert "NO eyebrows" in chu and "Never write the words brow" in chu
+        assert "Never show a reflection" in chu
+        assert "brows drawn in" not in chu
         # Luật cũ vẫn còn — chúng đo được trên video thật, không bỏ.
         assert "HARD CEILING" in chu and "DIFFERENT line of narration" in chu
         assert "NEVER describe its face" in chu
@@ -231,7 +237,11 @@ class TestPromptBaNoi:
                   "<<AUDIENCE_CULTURE_NOTE>>", "<<CULTURAL_METAPHORS>>"):
             assert o in chu, o
         assert '"chapters"' in chu and '"key_line"' in chu
-        assert "No two consecutive chapters share a place" in chu
+        gon = " ".join(chu.split())
+        assert "No two consecutive chapters share a place" in gon
+        assert "no place is used more than twice" in gon
+        assert "The motif must be able to fill a frame" in gon
+        assert "Never a reflection" in gon
 
     def test_7_ke_hoach_nam_trong_danh_sach_buoc_de_kenh_doc_duoc(self):
         from core.kenh import BUOC_BAT_BUOC, BUOC_PROMPT
@@ -260,5 +270,12 @@ class TestStyleKhongEpSaMacDaoVaNuCuoi:
         assert "everyday place" in st["image_style"].lower()
         assert "only pure-white figure" in st["image_style"].lower()
         assert "no second white figure" in st["negative_prompt"].lower()
+        # Đo 0051: "brows drawn together" → máy vẽ lông mày + răng, nv1 thành
+        # người khác; "reflection of nv1" → hai hình trắng. Khoá cả hai.
+        assert "no eyebrows" in st["image_style"].lower()
+        assert "no eyebrows" in st["negative_prompt"].lower() and "no teeth" in st["negative_prompt"].lower()
+        assert "reflection" in st["negative_prompt"].lower()
+        assert "large round white head and a plain unclothed white body" not in st["image_style"], (
+            "đuôi style không tả thân nv1 — ảnh tham chiếu đã khoá, tả thêm chỉ kéo lệch")
         assert "no dark or cold palette" not in st["negative_prompt"].lower(), (
             "cấm tối là cấm luôn cảnh đêm phòng trọ, konbini — thứ khán giả nhận ra")
