@@ -210,26 +210,29 @@ class TestPromptBaNoi:
         ban = {_doc(k, ten) for k in BA_NOI}
         assert len(ban) == 1, "{0} lệch giữa khuôn / TL4-T7 / _MAU-GON".format(ten)
 
-    def test_7_canh_nhan_ban_do_va_noi_ro_ba_loi_thoat_cua_nguoi_xem(self):
-        chu = " ".join(_doc("TL4-T7", "7-canh.md").split())
+    def test_7_canh_nhan_ban_do_va_giu_bon_luat_goc(self):
+        """26/08: lời nhắc bị phình thành ~300 dòng luật; chủ dự án bác thẳng —
+        *"càng đơn giản thì AI lại càng sáng tạo"*, và bản làm tay của họ chỉ
+        có bốn luật. Bài kiểm này giữ **bốn luật ấy** cùng mấy chốt kỹ thuật
+        đã đo được, và giữ cho tệp KHÔNG phình lại."""
+        tho = _doc("TL4-T7", "7-canh.md")
+        chu = " ".join(tho.split())
         assert "<<KE_HOACH>>" in chu
-        # Ba lỗi đo được trên ảnh thật, mỗi lỗi một luật:
-        assert "REAL, NAMED place" in chu                    # sa mạc đào
-        assert "The expression is NOT locked" in chu         # cười mọi cảnh
-        assert "ONLY pure-white figure" in chu               # ai là nv1?
-        assert "a new chapter is a new place" in chu         # không có chương
-        assert "at least one third of the frame height" in chu
-        assert "not a metaphor" in chu                       # mở đầu = nhận ra mình
-        # Đo 0051 (173 cảnh, chỗ thật nhưng nhàm): ẩn dụ phải LỚN; mặt không
-        # lông mày/răng; không phản chiếu nv1.
-        assert "the metaphor must be BIG" in chu
-        assert "NO eyebrows" in chu and "Never write the words brow" in chu
-        assert "Never show a reflection" in chu
-        assert "brows drawn in" not in chu
-        # Luật cũ vẫn còn — chúng đo được trên video thật, không bỏ.
-        assert "HARD CEILING" in chu and "DIFFERENT line of narration" in chu
+        # Bốn luật gốc của bản làm tay
+        assert "main character is the centre" in chu
+        assert "Do not repeat the same setting" in chu
+        assert "NO TEXT" in chu
+        assert "NEVER the character merely sitting or standing" in chu
+        assert "DIFFERENT line of narration" in chu
+        # Chốt kỹ thuật đã trả giá mới có
+        assert "HARD CEILING" in chu
         assert "NEVER describe its face" in chu
+        assert "no eyebrows, no teeth" in chu
+        assert "only pure-white figure" in chu
+        assert "Never a mirror image or a second self" in chu
         assert '"expression"' in chu and '"location_used"' in chu
+        # Đừng để phình lại: bản 26/08 là 165 dòng.
+        assert len(tho.splitlines()) < 220, "lời nhắc lại phình thành danh sách luật"
 
     def test_7_ke_hoach_co_du_o_dien_va_doi_JSON_chapters(self):
         chu = _doc("TL4-T7", "7-ke-hoach.md")
@@ -238,10 +241,10 @@ class TestPromptBaNoi:
             assert o in chu, o
         assert '"chapters"' in chu and '"key_line"' in chu
         gon = " ".join(chu.split())
-        assert "No two consecutive chapters share a place" in gon
-        assert "no place is used more than twice" in gon
-        assert "The motif must be able to fill a frame" in gon
-        assert "Never a reflection" in gon
+        assert "at most twice in the whole video" in gon
+        assert "never in two chapters in a row" in gon
+        assert "Choose something that can fill a frame" in gon
+        assert "Never a reflection or a second self" in gon
 
     def test_7_ke_hoach_nam_trong_danh_sach_buoc_de_kenh_doc_duoc(self):
         from core.kenh import BUOC_BAT_BUOC, BUOC_PROMPT
