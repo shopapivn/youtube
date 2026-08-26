@@ -614,3 +614,12 @@ def test_don_mo_ta_bo_lenh_va_phu_dinh(wb):
     dan = [{"id": "nv1", "english_prompt": "a cat, no hat", "stages": [{"when": "x", "outfit": "a vest, no boots"}]}]
     assert run._don_dan(dan) == 1
     assert dan[0]["english_prompt"] == "a cat" and dan[0]["stages"][0]["outfit"] == "a vest"
+
+
+def test_boi_canh_chu_khong_cat_truyen_dai_va_bo_khuon(wb):
+    run = wb
+    ctx = {"script": "x" * 50000, "storyboard_template": "KHUON " * 2000, "style": {"a": 1}}
+    chu = run._boi_canh_chu(ctx)
+    assert "KHUON" not in chu and "x" * 50000 in chu and '"style"' in chu
+    assert run._boi_canh_chu({}, "(none)") == "(none)" and run._boi_canh_chu(None, "") == ""
+    assert len(run._boi_canh_chu({"s": "y" * 200000})) == run.TRAN_CONTEXT_CHU

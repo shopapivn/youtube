@@ -655,7 +655,7 @@ def _doc_phim(goi, cues, context, *, phim_fn=None) -> Dict[str, Any]:
         else:
             # Ca loi doc, khong cat: cat la mat nhan vat/noi chon o phan sau.
             loi_doc = bang_phu_de(cues)
-            boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else "(none)"
+            boi_canh = _boi_canh_chu(context, "(none)")
             giay = _giay_video(cues)
             raw = loc_json(goi(_KHUON_PHIM.format(transcript=loi_doc, context=boi_canh,
                                                   phut="{0:.1f}".format(giay / 60.0),
@@ -1010,6 +1010,25 @@ _CHO_TRONG_KHUON_CHIA = ("<<CAST_STYLE>>", "<<DIRECTOR_PLAN>>", "<<CONTEXT>>", "
                          "<<MAX_SEC>>", "<<KHUC_THU>>")
 
 
+#: Trần chữ của khối context đưa vào lời nhắc. Trước 26/08/2026 là 30.000 ký tự
+#: — kịch bản dài (truyện 25 phút ≈ 20.000 ký tự) cộng phong cách là bị cắt mất
+#: đoạn cuối TRƯỚC khi tuyển vai, nhân vật xuất hiện muộn không có mặt trong dàn.
+#: Chủ dự án: "đừng giới hạn, nó do nguồn đầu vào". 160.000 ký tự ≈ 40 phút đọc,
+#: vẫn trong cửa sổ của mô hình.
+TRAN_CONTEXT_CHU = 160000
+#: Khoá trong context KHÔNG phải nội dung — không đưa vào lời nhắc.
+_KHOA_CONTEXT_BO = ("storyboard_template",)
+
+
+def _boi_canh_chu(context, mac_dinh: str = "") -> str:
+    """Context → chuỗi JSON cho lời nhắc: bỏ khuôn chia cảnh, trần `TRAN_CONTEXT_CHU`."""
+    if not context:
+        return mac_dinh
+    if isinstance(context, Mapping):
+        context = {k: v for k, v in context.items() if k not in _KHOA_CONTEXT_BO}
+    return json.dumps(context, ensure_ascii=False)[:TRAN_CONTEXT_CHU]
+
+
 def _khuon_chia(context) -> str:
     """Khuôn chia cảnh: của kênh (`context["storyboard_template"]`) nếu đủ chỗ trống, không thì mặc định.
 
@@ -1175,7 +1194,7 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
     vao dong cua no (xem `_khoi_ke_hoach`).
     """
     tran = max_seconds_for(engine)
-    boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else ""
+    boi_canh = _boi_canh_chu(context, "")
     xong = {"value": 0}
 
     def chia(khuc, thu_tu, tong_khuc):
@@ -1331,7 +1350,7 @@ def _dung_dan_cast(goi, cues, context, co_san) -> Mapping[str, Any]:
     """Goi AI mot lan (`goi(..., "cast")`, khoa idempotent) de rut dan + boi canh + style."""
     # Ca loi doc, khong cat (ban cu cat 12.000 ky tu: video dai mat nhan vat cuoi).
     loi_doc = " ".join(str(cue.get("text") or "").strip() for cue in cues)
-    boi_canh = json.dumps(context, ensure_ascii=False)[:30000] if context else "(khong co)"
+    boi_canh = _boi_canh_chu(context, "(khong co)")
     fixed = _LUAT_NV1_CO_DINH.format(mo_ta=co_san[0]["english_prompt"]) if co_san else ""
     nv, loc = _da_nhan_ra(context)
     loi_nhac = _KHUON_CAST.format(context=boi_canh, transcript=loi_doc,
@@ -1737,7 +1756,7 @@ def _bo_enrich(goi) -> Callable:
         # gio chay duoc (pyflakes chi ra 24/08/2026).
         loi_nhac = "Tra JSON {{scenes:[...]}}. Giu scene_id; moi scene co img_prompt va video_prompt tieng Anh chi tiet. " \
                    "Khong doi timing. Context: {0}\nScenes: {1}".format(
-                       json.dumps(context, ensure_ascii=False)[:30000],
+                       _boi_canh_chu(context, ""),
                        json.dumps(compact, ensure_ascii=False))
         data = loc_json(goi(loi_nhac, "batch-{0}".format(dem["value"])))
         return data.get("scenes", []) if isinstance(data, dict) else data
