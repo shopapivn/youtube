@@ -66,7 +66,10 @@ DUOI_NOI_CANH = (
     "characters start exactly where that frame left them (same positions, same clothes, same "
     "props); only the camera and the action described above change. Frame the picture with the "
     "shot named at the start of this prompt (its size and angle), not with the framing of that "
-    "previous frame. Every character still looks EXACTLY like its own reference image.")
+    "previous frame. Every character still looks EXACTLY like its own reference image. RENDERING "
+    "STYLE: match the style of the CHARACTER and PLACE reference images (the first attached images) "
+    "and the style words of this prompt — if the previous frame looks flatter, softer, blurrier or "
+    "more 2D than them, follow the references, not that frame.")
 
 
 def la_noi_canh(kenh: Any) -> bool:
