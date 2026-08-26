@@ -195,3 +195,12 @@ def test_duoi_noi_canh_khong_noi_doi(tmp_path):
     p2 = nc.prompt_noi_canh(p1, True)            # nối lần hai từ bản đã có đuôi
     assert p1 == p2 and p1.count("NEXT moment") == 1
     assert nc.bo_duoi_noi_canh(p1) == goc and nc.bo_duoi_noi_canh(goc) == goc
+
+
+def test_prompt_dai_thi_rut_khoi_khoa_va_duoi_ngan():
+    lock = chr(10).join("- reference image %d = nv%d, the hero: " % (i, i) + "x" * 1300 for i in range(1, 5))
+    goc = "Wide shot of nv1 (nv1)" + chr(10) + "REFERENCE IMAGES are attached, in this order:" + chr(10) + lock
+    assert len(goc) > nc.TRAN_PROMPT
+    p = nc.prompt_noi_canh(goc, True)
+    assert len(p) <= 5000 and p.endswith(nc.DUOI_NOI_CANH_NGAN) and "reference image 4 = nv4" in p
+    assert nc.bo_duoi_noi_canh(nc.prompt_noi_canh("ngan (nv1)", True)) == "ngan (nv1)"

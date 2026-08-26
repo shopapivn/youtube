@@ -126,7 +126,30 @@ def prompt_noi_canh(img_prompt: str, co_khung_truoc: bool) -> str:
     p = bo_duoi_noi_canh(img_prompt)
     if not co_khung_truoc:
         return p
-    return p + DUOI_NOI_CANH
+    if len(p) + len(DUOI_NOI_CANH) <= TRAN_PROMPT:
+        return p + DUOI_NOI_CANH
+    # Cổng ảnh chặn lời nhắc > 5.000 ký tự (cảnh 161, 26/08). Khối khoá ba tham
+    # chiếu dài thì rút mỗi dòng mô tả còn 220 ký tự rồi mới nối đuôi ngắn.
+    p = rut_khoi_khoa(p)
+    return p + DUOI_NOI_CANH_NGAN
+
+
+#: Trần lời nhắc ảnh của cổng (5.000) trừ một khoảng an toàn.
+TRAN_PROMPT = 4800
+DUOI_NOI_CANH_NGAN = (
+    "\nThe LAST attached reference image is the final frame of the previous shot: this picture is "
+    "the NEXT moment in the same place and light, characters where that frame left them; frame it "
+    "with the shot named at the start; characters look EXACTLY like their reference images.")
+
+
+def rut_khoi_khoa(prompt: str, toi_da_dong: int = 220) -> str:
+    """Rút gọn từng dòng '- reference image N = …' trong khối khoá còn `toi_da_dong` ký tự."""
+    ra = []
+    for dong in str(prompt or "").split("\n"):
+        if dong.startswith("- reference image ") and len(dong) > toi_da_dong:
+            dong = dong[:toi_da_dong].rstrip(" ,;") + "…"
+        ra.append(dong)
+    return "\n".join(ra)
 
 
 def bo_duoi_noi_canh(prompt: str) -> str:
