@@ -34,11 +34,11 @@ class TestThuan:
         khung = tmp_path / "k.png"; khung.write_bytes(b"k")
         c = _c(7, "loc1")
         assert [os.path.basename(p) for p in nc.tham_chieu_noi_canh(str(tmp_path), c, None)] == ["nv1.png", "loc1.png"]
-        assert [os.path.basename(p) for p in nc.tham_chieu_noi_canh(str(tmp_path), c, str(khung))] == ["nv1.png", "k.png"]
+        assert [os.path.basename(p) for p in nc.tham_chieu_noi_canh(str(tmp_path), c, str(khung))] == ["nv1.png", "loc1.png", "k.png"]
         p0 = nc.prompt_noi_canh(c["img_prompt"], False)
         assert p0 == c["img_prompt"]
         p1 = nc.prompt_noi_canh(c["img_prompt"], True)
-        assert "reference image 2 = loc1" not in p1 and "reference image 1 = nv1" in p1
+        assert "reference image 2 = loc1" in p1 and "reference image 1 = nv1" in p1
         assert p1.endswith(nc.DUOI_NOI_CANH) and "NEXT moment" in p1
 
     def test_giay_cua_canh(self):
@@ -111,8 +111,8 @@ class TestChuoi:
         canh = [_c(1, "loc1", giay=4.6), _c(2, "loc1", giay=3.2), _c(3, "loc1", giay=5.0)]
         assert ct.chay(canh) == 3
         # cảnh 1: tham chiếu như Excel; cảnh 2, 3: nhân vật + khung trước, bỏ bối cảnh, prompt nối
-        assert nhat["anh"] == [(1, ["nv1.png", "loc1.png"], False), (2, ["nv1.png", "1.png"], True),
-                               (3, ["nv1.png", "2.png"], True)]
+        assert nhat["anh"] == [(1, ["nv1.png", "loc1.png"], False), (2, ["nv1.png", "loc1.png", "1.png"], True),
+                               (3, ["nv1.png", "loc1.png", "2.png"], True)]
         assert nhat["clip"] == [1, 2, 3]
         assert nhat["cat"] == [("1.mp4", 4.6), ("2.mp4", 3.2), ("3.mp4", 5.0)]
         assert nhat["khung"] == ["1.png", "2.png", "3.png"]
@@ -126,13 +126,13 @@ class TestChuoi:
         (clip_d / "khung").mkdir(); (clip_d / "khung" / "1.png").write_bytes(b"cu")
         assert ct.chay(canh) == 2
         assert [a[0] for a in nhat["anh"]] == [2] and nhat["clip"] == [2]
-        assert nhat["anh"][0][1] == ["nv1.png", "1.png"]           # vẫn nối từ khung cũ của cảnh 1
+        assert nhat["anh"][0][1] == ["nv1.png", "loc1.png", "1.png"]           # vẫn nối từ khung cũ của cảnh 1
 
     def test_clip_hong_thi_noi_tu_anh(self, tmp_path):
         ct, nhat, anh_d, clip_d = _chuoi(tmp_path, lam_clip_hong={1})
         canh = [_c(1, "loc1"), _c(2, "loc1")]
         assert ct.chay(canh) == 1
-        assert nhat["anh"][1][1] == ["nv1.png", "1.png"]           # 1.png ở đây là ẢNH cảnh 1
+        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1.png"]   # 1.png ở đây là ẢNH cảnh 1
         assert ct.loi == ["clip 1"] and any("khâu clip sẽ làm nốt" in d for d in nhat["ghi"])
         assert not (clip_d / "1.mp4").exists()
 
@@ -148,7 +148,7 @@ class TestChuoi:
         ct, nhat, anh_d, clip_d = _chuoi(tmp_path)
         canh = [_c(1, "loc1", video=""), _c(2, "loc1")]
         assert ct.chay(canh) == 1
-        assert nhat["clip"] == [2] and nhat["anh"][1][1] == ["nv1.png", "1.png"]
+        assert nhat["clip"] == [2] and nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1.png"]
 
     def test_dung_thi_dung(self, tmp_path):
         ct, nhat, anh_d, clip_d = _chuoi(tmp_path)

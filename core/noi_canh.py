@@ -30,12 +30,12 @@ theo thời lượng cảnh. Ở đây cắt **ngay khi tải về** (bản thô
 thấy trước khi sang cảnh sau — làm tham chiếu. Lấy khung ở giây thứ 8 là lấy
 một khoảnh khắc người xem không bao giờ thấy.
 
-═══ THAM CHIẾU: NHÂN VẬT + KHUNG TRƯỚC, BỎ BỐI CẢNH ═══
+═══ THAM CHIẾU: ĐỦ NHÂN VẬT + BỐI CẢNH NHƯ EXCEL, KHUNG TRƯỚC THÊM VÀO CUỐI ═══
 
-Cổng ảnh nhận tối đa ba ảnh tham chiếu (2 nhân vật + 1 bối cảnh). Có khung
-trước thì khung ấy **chính là** bối cảnh (đúng góc, đúng ánh sáng, đúng chỗ) —
-nên bỏ ảnh bối cảnh, giữ ≤ 2 nhân vật + khung trước. Dòng mô tả bối cảnh trong
-khối khoá bỏ theo, thay bằng câu nói rõ ảnh cuối là khung trước.
+Chủ dự án 26/08/2026: *"các ảnh sau ảnh 1 vẫn cần gửi cả nhân vật, bối cảnh;
+khung cuối thì để ảnh tiếp tạo cho chuẩn hơn"*. Đo cùng ngày: cổng ảnh nhận
+bốn tham chiếu (2 nhân vật + bối cảnh + khung trước) — nên gửi đủ, khung trước
+là ảnh CUỐI CÙNG và khối khoá nói rõ điều đó.
 
 Không Qt. Mọi lời gọi mạng/FFmpeg đều đi qua hàm bơm được — bài kiểm bơm giả.
 """
@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence
@@ -105,13 +104,11 @@ def tham_chieu_noi_canh(thu_muc_tham_chieu: str, c: Dict[str, Any],
                         khung_truoc: Optional[str]) -> List[str]:
     """Đường dẫn tham chiếu cho ảnh cảnh `c` ở chế độ nối cảnh.
 
-    Có `khung_truoc` → nhân vật (giữ thứ tự) + khung trước, BỎ bối cảnh.
-    Không có (cảnh đầu chuỗi) → đúng như Excel khai.
+    Đúng như Excel khai (nhân vật rồi bối cảnh, giữ thứ tự) + `khung_truoc`
+    nối vào CUỐI nếu có. Cảnh đầu chuỗi không có khung trước.
     """
     ra = []
     for ten in _ten_tham_chieu(c):
-        if khung_truoc and ten.startswith("loc"):
-            continue
         p = os.path.join(thu_muc_tham_chieu, ten)
         if os.path.isfile(p):
             ra.append(p)
@@ -120,16 +117,12 @@ def tham_chieu_noi_canh(thu_muc_tham_chieu: str, c: Dict[str, Any],
     return ra
 
 
-_DONG_LOC = re.compile(r"\n- reference image \d+ = loc\d+[^\n]*")
-
-
 def prompt_noi_canh(img_prompt: str, co_khung_truoc: bool) -> str:
-    """Lời nhắc ảnh cho chế độ nối cảnh: có khung trước thì bỏ dòng bối cảnh trong
-    khối khoá (ảnh bối cảnh không còn được gửi) và nối đuôi `DUOI_NOI_CANH`."""
+    """Lời nhắc ảnh cho chế độ nối cảnh: khối khoá giữ nguyên (nhân vật + bối cảnh
+    vẫn được gửi), có khung trước thì nối đuôi `DUOI_NOI_CANH` nói rõ ảnh cuối là khung trước."""
     p = str(img_prompt or "").rstrip()
     if not co_khung_truoc:
         return p
-    p = _DONG_LOC.sub("", p)
     return p + DUOI_NOI_CANH
 
 
