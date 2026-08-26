@@ -4214,8 +4214,8 @@ def _khau_anh_noi_canh(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         from .dao_dien_auto import THU_MUC_THAM_CHIEU, ThamChieuCanh  # noqa: PLC0415
         from .noi_canh import (  # noqa: PLC0415
-            ChuoiNoiCanh, SONG_SONG_CHUOI, cat_clip_theo_canh, chay_cac_chuoi,
-            chuoi_theo_boi_canh, giu_khung_dau, khung_cuoi,
+            ChuoiNoiCanh, CuMayDai, SONG_SONG_CHUOI, cat_clip_theo_canh, chay_cac_chuoi,
+            chuoi_theo_boi_canh, giu_khung_dau, khung_cuoi, noi_cac_clip,
         )
         from .phan_cung import chon_encoder, doc_ket_qua  # noqa: PLC0415
 
@@ -4266,13 +4266,27 @@ def _khau_anh_noi_canh(bc: BoiCanh):
         def trich(clip, khung):
             return khung_cuoi(ffmpeg, clip, khung)
 
+        def cat_tu(nguon, dich, bat_dau, giay_canh):
+            cat_clip_theo_canh(ffmpeg, nguon, dich, giay_canh, codec, opts, bat_dau=bat_dau)
+
+        def noi(nguon, dich):
+            noi_cac_clip(ffmpeg, nguon, dich)
+
         loi_chung: List[str] = []
+        # Khung đầu thật (Veo 3 Frames / Seedance): cả chuỗi là MỘT cú máy dài ghép từ
+        # các đoạn 8 s. Không thì đường cũ: ảnh mới mỗi cảnh + khung cuối làm tham chiếu.
+        cu_may_dai = giu_khung_dau(bc.kenh)
+        if cu_may_dai:
+            bc.ghi("  khung đầu thật: mỗi chuỗi là một cú máy dài, cắt từng cảnh ra từ đó.")
 
         def lam_chuoi(ch):
-            ct = ChuoiNoiCanh(thu_muc_anh=thu_muc, thu_muc_clip=thu_muc_clip, thu_muc_tham_chieu=thu_muc_tc,
-                              lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich,
-                              ghi=bc.ghi, kiem_dung=bc.kiem_dung, bao_anh=them("anh"), bao_clip=them("clip"),
-                              lien_mach=giu_khung_dau(bc.kenh))
+            chung = dict(thu_muc_anh=thu_muc, thu_muc_clip=thu_muc_clip, thu_muc_tham_chieu=thu_muc_tc,
+                         lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich,
+                         ghi=bc.ghi, kiem_dung=bc.kiem_dung, bao_anh=them("anh"), bao_clip=them("clip"))
+            if cu_may_dai:
+                ct = CuMayDai(cat_tu=cat_tu, noi_clip=noi, lien_mach=True, **chung)
+            else:
+                ct = ChuoiNoiCanh(lien_mach=False, **chung)
             n = ct.chay(ch)
             with khoa_dem:
                 loi_chung.extend(ct.loi)
@@ -4284,7 +4298,7 @@ def _khau_anh_noi_canh(bc: BoiCanh):
             so.dong()
         thieu_anh = [int(c["scene_id"]) for c in canh
                      if not os.path.exists(os.path.join(thu_muc, "{0}.png".format(int(c["scene_id"]))))]
-        if thieu_anh:
+        if thieu_anh and not cu_may_dai:
             bc.ghi("  ảnh: thiếu {0}/{1} ({2}) — “Làm lại khâu này” làm nốt.".format(
                 len(thieu_anh), len(canh), ", ".join(str(x) for x in thieu_anh[:12])))
         if dem["clip"] < len(canh):

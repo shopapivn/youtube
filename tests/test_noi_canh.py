@@ -272,3 +272,97 @@ class TestGiuKhungDau:
         assert not nc.giu_khung_dau(NS(engine="veo3", khung_dau=False))
         assert nc.giu_khung_dau(NS(engine="veo3", khung_dau=True))
         assert not nc.giu_khung_dau(NS(engine="veo3"))
+
+
+def _cu_may(tmp_path, lam_anh_hong=None, lam_clip_hong=None):
+    anh_d = tmp_path / "5-anh"; clip_d = tmp_path / "6-clip"; tc = tmp_path / "tham-chieu"
+    for d in (anh_d, clip_d, tc):
+        d.mkdir(exist_ok=True)
+    for x in ("nv1.png", "loc1.png"):
+        (tc / x).write_bytes(b"ref")
+    nhat = {"anh": [], "clip": [], "cat": [], "noi": [], "khung": [], "ghi": []}
+
+    def lam_anh(c, tep, refs, prompt):
+        if lam_anh_hong and len(nhat["anh"]) + 1 in lam_anh_hong:
+            raise RuntimeError("content_rejected")
+        nhat["anh"].append((os.path.basename(tep), [os.path.basename(r) for r in refs], prompt[:40]))
+        open(tep, "wb").write(b"anh")
+
+    def lam_clip(c, anh, tho):
+        if lam_clip_hong and len(nhat["clip"]) + 1 in lam_clip_hong:
+            raise RuntimeError("clip hỏng")
+        nhat["clip"].append((os.path.basename(tho), c["video_prompt"])); open(tho, "wb").write(b"tho")
+
+    def cat_tu(nguon, dich, bat_dau, giay):
+        nhat["cat"].append((os.path.basename(dich), round(bat_dau, 2), round(giay, 2))); open(dich, "wb").write(b"cut")
+
+    def noi(nguon, dich):
+        nhat["noi"].append([os.path.basename(x) for x in nguon]); open(dich, "wb").write(b"take")
+
+    def trich(clip, khung):
+        nhat["khung"].append(os.path.basename(khung)); open(khung, "wb").write(b"khung"); return khung
+
+    ct = nc.CuMayDai(thu_muc_anh=str(anh_d), thu_muc_clip=str(clip_d), thu_muc_tham_chieu=str(tc),
+                     lam_anh=lam_anh, lam_clip=lam_clip, cat=lambda *a: None, trich_khung=trich,
+                     ghi=nhat["ghi"].append, cat_tu=cat_tu, noi_clip=noi)
+    return ct, nhat, anh_d, clip_d
+
+
+class TestCuMayDai:
+    def test_chia_doan(self):
+        canh = [_c(1, "loc1", giay=4.6), _c(2, "loc1", giay=3.2), _c(3, "loc1", giay=5.0)]
+        d = nc.chia_doan(canh)
+        assert [x["k"] for x in d] == [0, 1] and abs(d[0]["giay"] - 6.4) < 1e-6
+        assert [c["scene_id"] for c in d[0]["canh"]] == [1, 2] and [c["scene_id"] for c in d[1]["canh"]] == [2, 3]
+        assert len(nc.chia_doan([_c(1, "loc1", giay=8.0)])) == 1
+        assert len(nc.chia_doan([_c(1, "loc1", giay=8.1)])) == 2
+
+    def test_hanh_dong_clip_bo_khoa_va_tach_duoi(self):
+        v = ("IDENTITY LOCK, highest priority for the entire clip: every character stays exactly; nothing is added. "
+             "Only pose, gesture, expression and camera move. nv1 waves at nv2, slow pan, smooth 3D animated motion, no text")
+        hd, duoi = nc.hanh_dong_clip(v)
+        assert hd == "nv1 waves at nv2, slow pan" and duoi.startswith(", smooth 3D animated motion")
+        assert nc.hanh_dong_clip("just moves") == ("just moves", "")
+
+    def test_prompt_doan(self):
+        d = {"canh": [_c(1, "loc1", video="Medium shot of nv1 waving, smooth 3D animated motion, no text"),
+                      _c(2, "loc1", video="Close-up of nv1 laughing, smooth 3D animated motion, no text")]}
+        p = nc.prompt_doan(d, False)
+        assert p.startswith(nc.DAU_CLIP_KHUNG_DAU) and "Medium shot of nv1 waving Then: nv1 laughing, smooth 3D" in p
+        assert p.count("no text") == 1
+        assert nc.prompt_doan(d, True).startswith(nc.DAU_CLIP_NOI_TIEP_DAI + "nv1 waving")
+
+    def test_prompt_neo_khung(self):
+        goc = "Medium shot of nv1 running at loc1, 3D style\nREFERENCE IMAGES are attached, in this order:\n- reference image 1 = nv1"
+        p = nc.prompt_neo_khung(goc)
+        assert p.startswith(nc.NEO_KHUNG) and "running" not in p and "reference image 1 = nv1" in p
+
+    def test_mot_cu_may_hai_doan_roi_cat_tung_canh(self, tmp_path):
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
+        canh = [_c(1, "loc1", giay=4.6), _c(2, "loc1", giay=3.2), _c(3, "loc1", giay=5.0)]
+        assert ct.chay(canh) == 3
+        assert nhat["anh"] == [("1.png", ["nv1.png", "loc1.png"], nc.prompt_noi_canh(canh[0]["img_prompt"], False)[:40])]
+        assert [x[0] for x in nhat["clip"]] == ["1-0.mp4", "1-1.mp4"]
+        assert nhat["clip"][0][1].startswith(nc.DAU_CLIP_KHUNG_DAU) and nhat["clip"][1][1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI)
+        assert nhat["cat"] == [("1-0-cat.mp4", 0.0, 6.4), ("1-1-cat.mp4", 0.0, 6.4),
+                               ("1.mp4", 0.0, 4.6), ("2.mp4", 4.6, 3.2), ("3.mp4", 7.8, 5.0)]
+        assert nhat["noi"] == [["1-0-cat.mp4", "1-1-cat.mp4"]] and (clip_d / "_doan" / "1.mp4").exists()
+        assert (clip_d / "_doan" / "1-1.png").read_bytes() == b"khung"   # diễn tiếp: khung cuối đoạn 0
+        # chạy lại: không làm gì thêm
+        n = {k: len(v) for k, v in nhat.items() if k != "ghi"}
+        assert ct.chay(canh) == 3 and {k: len(v) for k, v in nhat.items() if k != "ghi"} == n
+
+    def test_neo_lai_sau_toi_da_doan(self, tmp_path):
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
+        canh = [_c(i, "loc1", giay=8.0) for i in range(1, 5)]   # 32 s → 4 đoạn
+        assert ct.chay(canh) == 4
+        assert [a[0] for a in nhat["anh"]] == ["1.png", "1-2.png"]
+        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png", "1-1-cuoi.png"] and nhat["anh"][1][2] == nc.NEO_KHUNG[:40]
+        assert nhat["clip"][2][1].startswith(nc.DAU_CLIP_KHUNG_DAU) and nhat["clip"][3][1].startswith(nc.DAU_CLIP_NOI_TIEP_DAI)
+
+    def test_clip_hong_giua_chung_thi_cat_phan_da_co(self, tmp_path):
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path, lam_clip_hong={2})
+        canh = [_c(1, "loc1", giay=6.0), _c(2, "loc1", giay=6.0), _c(3, "loc1", giay=4.0)]   # 16 s → 2 đoạn × 8
+        assert ct.chay(canh) == 1
+        assert ct.loi == ["clip đoạn 1-1"] and nhat["noi"] == [["1-0-cat.mp4"]]
+        assert [x[0] for x in nhat["cat"]] == ["1-0-cat.mp4", "1.mp4"]
