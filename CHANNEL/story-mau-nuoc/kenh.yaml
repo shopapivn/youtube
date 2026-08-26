@@ -1,0 +1,29 @@
+# ============================================================================
+#  KÊNH story-mau-nuoc — Truyện kể kiểu Mỹ (người lớn), minh hoạ MÀU NƯỚC cổ tích
+# ============================================================================
+#  Nhân bản từ story-3d (26/08/2026): cùng đường chạy — AI đọc phim, tự dựng
+#  nhân vật + bối cảnh tham chiếu, ảnh rồi clip (không nối cảnh). Khác ở ba chỗ:
+#  tiếng Anh + giọng Mỹ, phong cách màu nước (style.yaml), và bộ prompt viết
+#  content kiểu remake đơn giản cho truyện người lớn (prompt/2-viet.md, 2b-cham.md,
+#  3-sua.md). Nguồn: các kênh kể chuyện đời/drama kiểu "Whispered Truths".
+# ============================================================================
+ma: "story-mau-nuoc"
+ten: "Truyện màu nước (Mỹ)"
+ngon_ngu: "en"
+giong_van: "American English, first-person storytelling for adults: calm, intimate, confessional; short clear sentences; present the twist early, keep the listener curious; natural spoken rhythm for narration."
+# Tiếng Anh đọc chậm rãi ≈ 150 từ/phút ≈ 850–900 ký tự/phút (đo lại sau video đầu ở tab Voice).
+ky_tu_moi_phut: 880
+chu_bia_hoa: true
+voice_id: "XW70ikSsadUbinwLMZ5w"
+phut_muc_tieu: 30
+# Độ dài TỰ DO: theo nguồn (video kể chuyện Mỹ thường 30–60 phút).
+do_dai_tu_do: true
+che_do_tieu_de: "nguyen_goc"
+engine: "veo3"
+so_thumbnail: 3
+mo_hinh: "claude-sonnet-5"
+dot_phu_de: false
+am_luong_nhac: 0.10
+nhac_nen: ""
+# AI tự dựng nhân vật + bối cảnh tham chiếu theo từng truyện (đường đạo diễn), KHÔNG nối cảnh.
+che_do_ke: tu_xay

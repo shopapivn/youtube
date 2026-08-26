@@ -1,0 +1,32 @@
+# ============================================================================
+#  PHONG CÁCH KÊNH story-mau-nuoc — truyện kể kiểu Mỹ, minh hoạ MÀU NƯỚC cổ tích
+# ============================================================================
+#  16 khoá HÌNH (bộ vẽ "màu nước sách truyện") + 5 khoá VĂN HOÁ (khán giả Mỹ,
+#  người lớn). Vì sao màu nước: chủ dự án 26/08/2026 — "làm chân thực thì nó hay
+#  lỗi", tranh màu nước kể chuyện giống một câu chuyện được kể lại, tay/mặt lệch
+#  một chút vẫn hợp nét vẽ, không thành lỗi.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+style_name: "watercolor_storybook_american_drama"
+image_style: "hand-painted watercolor storybook illustration, soft wet-on-wet washes with visible paper grain, loose ink linework, muted natural palette with one warm accent, gentle light, painterly not photoreal, timeless fairy-tale storybook feeling applied to a modern everyday setting"
+video_style: "gentle watercolor animation, slow drifting camera, soft parallax between painted layers, subtle breathing movement, colours bloom softly like wet paint, the background keeps its colour and texture for the whole clip and must not darken, grey out or shift hue"
+thumbnail_style: "bold watercolor poster, one large expressive face or two people in a charged moment, strong contrast between a warm figure and a cool wash background, painterly, high emotional readability"
+scene_plan_style: "illustrated audiobook language: one clear readable moment per picture, the narrator's world seen as painted memories — kitchens, driveways, courtrooms, hospital corridors, front doors — faces and gestures carry the emotion"
+palette: "muted warm neutrals with soft indigo shadows and one amber accent (#E8C39E, #6B7A8F, #3A3D46)"
+negative_prompt: "no text, no letters, no numbers, no watermark, no logo, no extra fingers, no distorted hands, no deformed faces, no photoreal skin, no 3D render look, no flat vector clipart, no anime style, no blurry low-detail artifacts"
+reference_lock: "Every character keeps exactly the face, hair, age, body shape, outfit and props of its own reference image; outfit changes only where the story says so (a new reference image exists for that stage); the watercolor look stays identical in every picture"
+technical_suffix: "same hand-painted watercolor storybook style for every shot, visible paper grain, soft washes, loose ink lines, no text, no letters, no watermark"
+engagement_rules: "show the narrator's point of view in the room, put the other person's face where the listener can read it, hold on hands and small objects (a phone, a suitcase, a ring, a document) at the turning points, let the accent colour mark the emotional object of the scene, end each scene on a change the viewer notices"
+default_character_prompt: "watercolor storybook character, realistic adult proportions softened by loose painterly rendering, expressive readable face, everyday modern clothes with one signature colour, soft ink outline, paper grain"
+default_character_lock: "painterly watercolor rendering, realistic adult proportions, one signature colour; face, hair and outfit fixed per reference image"
+thumb_text_style: "hand-lettered white brush letters with a soft dark outline over a watercolor wash"
+thumb_text_shadow: "soft dark drop shadow"
+thumb_text_hex: "#FFFFFF"
+thumb_text_font: "bold brush hand-lettering"
+audience_language: "English (United States)"
+audience_culture_note: "Design for American adults listening to first-person life stories (family betrayal, divorce, inheritance, workplace justice, karma). Settings are everyday American: suburban houses with driveways, kitchens with islands, diners, hospital corridors, courtrooms, lawyers' offices, church halls, pickup trucks, small-town main streets. Emotions are adult and restrained; the painting is warm even when the moment is hard."
+cultural_props: "suburban front porch, mailbox, kitchen island, minivan, pickup truck, diner booth, coffee mug, manila folder, smartphone, wedding ring, old suitcase, courthouse steps, hospital waiting room chairs, Thanksgiving table"
+cultural_metaphors: "betrayal: a front door closing on a warm room | dignity: a person standing straight on a porch with a single suitcase | justice: courthouse steps in morning light | secrets: a manila folder half open on a table | new beginning: a small apartment window with a single plant"
+cultural_emotion_style: "Adult, restrained, readable emotions: a held jaw, eyes glossy but not streaming, a hand gripping a mug, a slow smile at the end. No cartoon exaggeration, no screaming faces."
