@@ -746,6 +746,10 @@ class HopNhanBan(QDialog):
         hang2 = HangXuongDong()
         hang2.addWidget(nhan("Tên kênh:", "phu"))
         self._o_ten = QLineEdit((k.ten or ma_goc) + " (bản của tôi)")
+        # Tên dài hơn ô thì QLineEdit cuộn tới cuối — khách chỉ thấy đuôi
+        # "(bản của tôi)". Đưa con trỏ về đầu để thấy tên kênh.
+        self._o_ten.setCursorPosition(0)
+        self._o_ma.setCursorPosition(0)
         hang2.addWidget(self._o_ten)
         v.addLayout(hang2)
         self._nhan_loi = nhan("", "phu")
