@@ -1890,7 +1890,7 @@ class TrangPromptVisuals(QWidget):
                 # mã artifact, không nhận đường dẫn trần.
                 ma = kho.put_file(duong, kind="audio",
                                   schema="narration-audio.v1")
-                ma_chay = "pv-" + _ma_an_toan(ten) or "pv-chay"
+                ma_chay = "pv-" + _ma_an_toan(ten)
                 wf = dung_workflow(_ma_artifact(ma), engine=engine,
                                    mo_hinh=mo_hinh, ngon_ngu=ngon_ngu,
                                    nhat_quan=nhat_quan,
@@ -2327,7 +2327,12 @@ def _ma_an_toan(ten: str) -> str:
 
     Mã này cũng là tên tệp điểm dừng, nên mỗi file giọng đọc một mã riêng —
     dùng chung là file sau đè điểm dừng của file trước.
+
+    Luật thật nằm ở `core.workflow.ma_an_toan`, cạnh chính cái biểu thức đi
+    soi nó. Trước 26/08/2026 chỗ này tự lọc bằng `str.isalnum()` — mà hàm ấy
+    hiểu cả Unicode, nên chữ tiếng Việt lọt qua rồi đâm vào bộ soi chỉ nhận
+    ASCII: khách đặt tên tệp `001_Đoạn 1_1.mp3` là không tạo được file nào.
     """
-    goc = os.path.splitext(os.path.basename(ten))[0]
-    ra = "".join(c if (c.isalnum() or c in "._-") else "-" for c in goc)
-    return ra.strip("-.") or "chay"
+    from core.workflow import ma_an_toan  # noqa: PLC0415
+
+    return ma_an_toan(os.path.splitext(os.path.basename(ten))[0])

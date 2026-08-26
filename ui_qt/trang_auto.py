@@ -125,6 +125,19 @@ def _dem_trong_khau(tt) -> str:
     return "{0}/{1}{2}".format(xong, tong, " " + viec if viec else "")
 
 
+def _liet_ke_so(ds) -> str:
+    """“7, 19, 42” — dài quá thì cắt và nói còn bao nhiêu cảnh nữa.
+
+    Nhật ký phải nói RA SỐ CẢNH nào đang được làm lại: người vừa tick mười hai
+    dòng cần đối chiếu xem tool hiểu đúng chưa. Nhưng in cả trăm số ra một dòng
+    thì đẩy mọi dòng khác ra khỏi ô nhật ký.
+    """
+    so = [str(int(s)) for s in ds]
+    if len(so) <= 12:
+        return ", ".join(so)
+    return "{0}… và {1} cảnh nữa".format(", ".join(so[:12]), len(so) - 12)
+
+
 class TrangTuDong(QWidget):
     # ═══ SỰ THẬT NẰM Ở ĐĨA, KHÔNG NẰM Ở ĐÂY ═══
     #
@@ -375,6 +388,23 @@ class TrangTuDong(QWidget):
         hang2.addWidget(nut_phu("Nạp file có sẵn", self._nap_san, rong=170))
         v.addLayout(hang2)
 
+        # ═══ MỘT BẢNG CHO CẢ TRĂM CẢNH ═══
+        #
+        # Bấm đúp một tấm trong dải phim mở được đúng MỘT cảnh, và chỉ những
+        # cảnh đã có ảnh mới hiện ra để mà bấm. Soi một mẻ 99 cảnh theo lối ấy
+        # là mở 99 hộp. Nút này mở bảng đủ mọi cảnh, sửa cảnh nào thì cảnh ấy
+        # được tạo lại — cả mẻ trong MỘT lượt chạy.
+        hang3 = HangXuongDong()
+        self._nut_bang_canh = nut_phu("Sửa lời nhắc từng cảnh",
+                                      lambda: self._mo_bang_canh(), rong=210)
+        self._nut_bang_canh.setToolTip(
+            "Mở bảng đủ mọi cảnh của lượt này: ảnh nhỏ, lời đọc, hai lời nhắc.\n"
+            "Sửa lời nhắc ẢNH của cảnh nào thì tôi làm lại ảnh + clip của cảnh "
+            "đó; chỉ sửa lời nhắc VIDEO thì giữ ảnh, chỉ dựng lại clip.\n"
+            "Cảnh bạn không sửa thì không bị đụng tới, không trả tiền lần nữa.")
+        hang3.addWidget(self._nut_bang_canh)
+        v.addLayout(hang3)
+
         v.addWidget(self._dai_phim())
 
         v.addWidget(self._phu(
@@ -473,9 +503,14 @@ class TrangTuDong(QWidget):
             self._dai_cho.append(muc)
         co = bool(self._dai_da_co)
         self._dai.setVisible(co)
+        # Câu này phải nói đúng thứ cái bấm đúp SẼ làm, và nó khác nhau tuỳ lúc:
+        # đang chạy thì mở ảnh gốc để xem, dừng rồi thì mở thẳng bảng cảnh ở
+        # đúng cảnh ấy để sửa.
         self._nhan_dai.setText(
-            "Ảnh từng cảnh — bấm đúp để mở ảnh gốc ({0} tấm).".format(
-                len(self._dai_da_co)) if co else
+            ("Ảnh từng cảnh — bấm đúp một tấm để mở ảnh gốc ({0} tấm)."
+             if self._dang_chay else
+             "Ảnh từng cảnh — bấm đúp tấm nào chưa ưng để sửa lời nhắc cảnh "
+             "đó ({0} tấm).").format(len(self._dai_da_co)) if co else
             "Khâu tạo ảnh chạy xong tới đâu, ảnh hiện ra tới đó.")
         if self._dai_cho and not self._dong_ho_anh.isActive():
             self._dong_ho_anh.start()
@@ -508,84 +543,156 @@ class TrangTuDong(QWidget):
             muc.setIcon(QIcon(QPixmap.fromImage(anh)))
 
     def _mo_anh_canh(self, muc) -> None:
-        """Bấm đúp một cảnh: mở hộp xem lại + sửa lời nhắc để tạo lại.
+        """Bấm đúp một cảnh trong dải phim: mở bảng cảnh, nhảy sẵn tới cảnh ấy.
 
-        Đang chạy thì chưa cho tạo lại (khâu đang bận) — chỉ mở ảnh gốc để xem.
+        Đang chạy thì khâu đang bận, chưa sửa được — lúc đó chỉ mở ảnh gốc để
+        xem. Trước 26/08/2026 đây là một hộp riêng chỉ sửa được một cảnh; gộp
+        về bảng chung để cả tool chỉ còn MỘT chỗ sửa lời nhắc.
         """
         so = int(muc.data(Qt.UserRole + 1) or 0)
         duong = str(muc.data(Qt.UserRole) or "")
-
-        def _mo_anh_goc() -> None:
+        # Chưa sửa được (đang chạy, chưa có bảng cảnh…) thì vẫn phải làm MỘT
+        # việc gì đó có ích: mở ảnh gốc ra xem. Bấm đúp mà chỉ nhận về một hộp
+        # báo lỗi là cái bấm phí.
+        if (self._dang_chay or not self._duong or not so
+                or not self._mo_bang_canh(so, im_lang=True)):
             from PyQt5.QtCore import QUrl  # noqa: PLC0415
             from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
             if duong and os.path.isfile(duong):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(duong))
 
-        if self._dang_chay or not self._duong or not so:
-            _mo_anh_goc()
-            return
+    def _mo_bang_canh(self, canh_dau: int = 0, *, im_lang: bool = False) -> bool:
+        """Mở bảng đủ mọi cảnh của lượt đang xem. `False` = chưa mở được.
+
+        `im_lang=True` thì không dựng hộp báo — dành cho đường bấm đúp dải ảnh,
+        nơi người gọi có sẵn một việc khác để làm thay.
+        """
+        def khong(tieu_de: str, noi_dung: str) -> bool:
+            if not im_lang:
+                self._app.show_message(tieu_de, noi_dung)
+            return False
+
         luot = self._doc()
         if luot is None:
-            _mo_anh_goc()
-            return
+            return khong(
+                "Chưa chọn lượt",
+                "Chọn một lượt ở ô “Lượt” rồi mới xem được bảng cảnh của nó.")
+        if self._dang_chay:
+            # Khâu đang chạy đã đọc `4-canh.json` vào bộ nhớ từ lúc bắt đầu:
+            # sửa lúc này không vào được tới nó, mà lại tưởng là đã sửa.
+            return khong(
+                "Đang chạy",
+                "Bấm Dừng trước rồi hãy sửa lời nhắc. Khâu đang chạy đã đọc "
+                "bảng cảnh vào bộ nhớ từ lúc bắt đầu, sửa bây giờ nó không "
+                "thấy — phần đã làm vẫn giữ nguyên khi bạn dừng.")
         from core.auto_khau import _doc_canh  # noqa: PLC0415
-        canh = next((c for c in _doc_canh(luot)
-                     if int(c.get("scene_id") or 0) == so), None)
-        if canh is None:
-            _mo_anh_goc()
-            return
-        from .sua_canh import HopSuaCanh  # noqa: PLC0415
-        HopSuaCanh(self._tao_lai_canh, so, canh, luot.thu_muc, self).exec_()
+        try:
+            canh = _doc_canh(luot)
+        except (RuntimeError, ValueError, OSError) as loi:
+            return khong(
+                "Chưa có bảng cảnh",
+                "Khâu “Cắt cảnh và viết lời nhắc” chạy xong thì mới có lời "
+                "nhắc từng cảnh để sửa.\n\n({0})".format(loi))
+        if not canh:
+            return khong("Bảng cảnh trống", "Lượt này chưa cắt ra cảnh nào.")
+        from .bang_canh_auto import HopBangCanh  # noqa: PLC0415
+        HopBangCanh(self._sua_va_tao_lai, canh, luot.thu_muc, self,
+                    canh_dau=canh_dau, noi_canh=self._la_noi_canh(luot)).exec_()
+        return True
 
-    def _tao_lai_canh(self, so_canh: int, loai: str, *,
-                      img_prompt: Optional[str] = None,
-                      video_prompt: Optional[str] = None) -> None:
-        """Sửa lời nhắc rồi tạo lại ảnh (loai="anh") hoặc chỉ clip (loai="clip")
-        của **một cảnh** — các cảnh khác không bị đụng, không trả tiền lần nữa.
+    def _la_noi_canh(self, luot: LuotChay) -> bool:
+        """Kênh của lượt này có dựng theo CÚ MÁY DÀI không.
 
-        Cách làm an toàn tiền: xoá đúng tệp của cảnh này, đặt khâu về "chờ".
-        Khâu ảnh/clip nhìn đĩa trước — cảnh nào còn tệp thì bỏ qua, chỉ cảnh vừa
-        xoá mới được làm. Khoá gọi việc có nhét lời nhắc, nên lời nhắc mới ra
-        khoá mới, không kẹt vào bản cũ. Dừng sau khâu clip để xem tiếp, chưa
-        dựng video.
+        Cần biết vì ở chế độ ấy `6-clip/N.mp4` chỉ là một lát cắt ra từ cú máy
+        chung của cả chuỗi (`6-clip/_doan/`), nên "tạo lại clip cảnh N" theo lối
+        thường sẽ cắt lại từ đúng cú máy cũ — **hình không đổi**. Không nói ra
+        thì tool hứa một đằng làm một nẻo.
         """
+        try:
+            from core.kenh import doc_kenh  # noqa: PLC0415
+            from core.noi_canh import la_noi_canh  # noqa: PLC0415
+
+            return bool(la_noi_canh(doc_kenh(self._app.base_dir, luot.ma_kenh)))
+        except Exception:  # noqa: BLE001 — không đọc được kênh thì coi như thường
+            return False
+
+    def _sua_va_tao_lai(self, sua: Dict[int, tuple]) -> bool:
+        """Ghi lời nhắc đã sửa, rồi tạo lại **đúng những cảnh ấy** — trong MỘT
+        lượt chạy. Cảnh không sửa không bị đụng và không trả tiền lần nữa.
+
+        `sua` là `{số cảnh: (lời nhắc ảnh mới hay None, lời nhắc video mới hay
+        None)}`, và chính chỗ `None` ra lệnh:
+
+        * **ô ảnh có chữ mới** → làm lại ảnh, rồi làm lại clip của cảnh đó. Bắt
+          buộc kéo theo clip: clip lấy ảnh làm khung đầu, giữ clip cũ là giữ
+          chuyển động của một tấm ảnh không còn nữa.
+        * **chỉ ô video có chữ mới** → giữ nguyên ảnh, chỉ dựng lại clip.
+
+        Cách làm an toàn tiền: xoá đúng tệp của những cảnh ấy, đặt khâu về
+        "chờ". Khâu ảnh/clip nhìn đĩa trước — cảnh nào còn tệp thì bỏ qua, chỉ
+        cảnh vừa xoá mới được làm. Khoá gọi việc có nhét lời nhắc, nên lời nhắc
+        mới ra khoá mới, không kẹt vào bản cũ. Dừng sau khâu clip để xem tiếp,
+        chưa dựng video.
+
+        Trả `False` khi không làm được — hộp gọi tới giữ nguyên chữ vừa gõ.
+        """
+        from .bang_canh_auto import HopBangCanh  # noqa: PLC0415
+
+        if not sua:
+            return False
         if self._dang_chay:
             self._app.show_message("Đang chạy",
                                    "Bấm Dừng trước rồi hãy tạo lại.")
-            return
+            return False
         luot = self._doc()
         if luot is None:
-            return
-        from core.auto_khau import sua_loi_nhac_canh  # noqa: PLC0415
+            return False
+        lam_anh, lam_clip = HopBangCanh.chia_viec(sua)
+
+        from core.auto_khau import (  # noqa: PLC0415
+            don_canh_de_lam_lai, sua_loi_nhac_canh,
+        )
+        for so, (img_prompt, video_prompt) in sorted(sua.items()):
+            try:
+                sua_loi_nhac_canh(luot, so, img_prompt=img_prompt,
+                                  video_prompt=video_prompt)
+            except (ValueError, RuntimeError, OSError) as loi:
+                self._app.show_message(
+                    "Không sửa được lời nhắc",
+                    "Cảnh {0}: {1}".format(so, loi))
+                return False
+
+        # Xoá tệp của riêng những cảnh này, mỗi nhóm một luật.
         try:
-            sua_loi_nhac_canh(luot, so_canh, img_prompt=img_prompt,
-                              video_prompt=video_prompt)
-        except (ValueError, RuntimeError, OSError) as loi:
-            self._app.show_message("Không sửa được lời nhắc", str(loi))
-            return
-        # Xoá tệp của riêng cảnh này. Tạo lại ảnh thì xoá cả ảnh lẫn clip (clip
-        # lấy ảnh làm khung đầu); tạo lại clip thì giữ ảnh, chỉ xoá clip.
-        anh = os.path.join(luot.thu_muc, "5-anh", "{0}.png".format(so_canh))
-        clip = os.path.join(luot.thu_muc, "6-clip", "{0}.mp4".format(so_canh))
-        try:
-            if loai == "anh" and os.path.isfile(anh):
-                os.remove(anh)
-            if os.path.isfile(clip):
-                os.remove(clip)
+            don_canh_de_lam_lai(luot, lam_anh, ca_anh=True)
+            don_canh_de_lam_lai(luot, lam_clip, ca_anh=False)
         except OSError as loi:
-            self._app.show_message("Không xoá được tệp cũ", str(loi))
-            return
+            self._app.show_message(
+                "Không xoá được tệp cũ",
+                "{0}\n\nTệp có thể đang mở trong trình xem ảnh/video. Đóng nó "
+                "lại rồi bấm tạo lại.".format(loi))
+            return False
         # Đặt khâu về "chờ" để nó chạy lại. Chỉ cảnh vừa xoá tệp được làm.
-        if loai == "anh":
+        if lam_anh:
             dat_lam_lai(luot, "anh", ca_sau=False)
-            self._quen_canh_dai(so_canh)   # để dải phim vẽ lại ảnh mới
-        dat_lam_lai(luot, "clip", ca_sau=False)
+            for so in lam_anh:
+                self._quen_canh_dai(so)    # để dải phim vẽ lại ảnh mới
+        # Khâu clip đang “bỏ qua” là người dùng cố ý tắt (video ảnh tĩnh). Bật
+        # lại hộ là tự ý tiêu 500 ₫ một cảnh cho thứ họ đã bảo không làm.
+        if luot.tt("clip").trang_thai != BO_QUA:
+            dat_lam_lai(luot, "clip", ca_sau=False)
         ghi_luot(luot)
-        ten = "ảnh và clip" if loai == "anh" else "clip"
-        self._ghi("Tạo lại {0} cho cảnh {1} — chạy nền, xong sẽ hiện lại. "
-                  "Chưa dựng video.".format(ten, so_canh))
+        if lam_anh:
+            self._ghi("Tạo lại ảnh + clip cho cảnh {0}.".format(
+                _liet_ke_so(lam_anh)))
+        if lam_clip:
+            self._ghi("Tạo lại clip cho cảnh {0}.".format(
+                _liet_ke_so(lam_clip)))
+        self._ghi("Đang chạy nền — xong sẽ hiện lại. Chưa dựng video; xem "
+                  "xong ưng thì bấm “Chạy tiếp”.")
         # Dừng sau khâu clip: tạo lại xong dừng lại để xem tiếp, chưa dựng.
         self._bat_dau(luot, dung_sau="clip")
+        return True
 
     def _quen_canh_dai(self, so_canh: int) -> None:
         """Quên thẻ của một cảnh trên dải phim, để lần vẽ sau nạp lại ảnh mới.

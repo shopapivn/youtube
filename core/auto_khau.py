@@ -841,7 +841,24 @@ def _tao_job(bc: BoiCanh, ham: Callable, **kw):
     xem ghi chú đầu tệp ấy. Ở đây chỉ cần bảo đảm một điều: `kw` mang
     **cùng một Idempotency-Key** qua mọi lần thử, nên thử lại không bao giờ
     trừ tiền hai lần.
+
+    ═══ ÉP KHOÁ VỀ ASCII NGAY TẠI ĐÂY ═══
+
+    Idempotency-Key đi trong **header HTTP**, mà header chỉ nhận ASCII. Lọt một
+    chữ có dấu là mọi lời gọi chết với câu `'ascii' codec can't encode
+    character` — câu ấy không nhắc gì tới khoá, tới header hay tới tiếng Việt,
+    nên nhìn vào không đoán ra.
+
+    Mọi nơi gọi hôm nay đều đã đi qua `khoa_viec`/`_khoa_chat` (đã ép ASCII).
+    Chặn thêm lần nữa ở đây vì đây là **cửa duy nhất** mọi việc tốn tiền phải
+    qua: nơi gọi thứ mười lăm quên ép thì cũng không thủng. Đường viết chữ
+    (`core/goi_van_ban.py`) đã theo đúng nếp này từ trước.
     """
+    khoa = kw.get("idempotency_key")
+    if isinstance(khoa, str) and not khoa.isascii():
+        kw = dict(kw, idempotency_key=(
+            khoa.encode("ascii", "replace").decode("ascii").replace("?", "-")))
+
     def mot_lan():
         xin_nhip(bc.on_log, ngu=bc.ngu)
         return ham(**kw)
@@ -3848,9 +3865,15 @@ def _chen_the_cam_xuc(bc: BoiCanh, luot: LuotChay, kich_ban: str) -> str:
         bc = bc.cho_kich_ban()
 
         def goi(loi_nhac: str) -> str:
+            # Đi qua `_khoa_chat` chứ KHÔNG tự ghép chuỗi: nó lo hai việc mà
+            # bản ghép tay ở đây thiếu cả hai — ép khoá về thuần ASCII (mã kênh
+            # có dấu là chết cả mẻ, xem `_khoa_ascii`) và nhét MÃ KÊNH vào khoá
+            # (mọi kênh đều đánh số lượt từ `0001`, thiếu mã kênh là kênh này
+            # đâm vào kênh kia, cổng trả 409 idempotency_conflict — đã mất một
+            # lượt 25 phút vì đúng chuyện đó, 19/08/2026).
             return bc.goi_chat(loi_nhac, mo_hinh=bc.kenh.mo_hinh,
-                               khoa="{0}:chat:the-cam-xuc:{1}".format(
-                                   luot.ma_luot, len(loi_nhac)))
+                               khoa=_khoa_chat(luot, "the-cam-xuc:{0}".format(
+                                   len(loi_nhac))))
 
         co_the = chen_the(kich_ban, goi, giong_van=bc.kenh.giong_van,
                           ngon_ngu=bc.kenh.ngon_ngu, ghi=bc.ghi)
@@ -4866,6 +4889,32 @@ def _khau_dung(bc: BoiCanh):
                 "phu_de_dot": dot, "nhac": os.path.basename(nhac) if nhac else "",
                 "do_phan_giai": ten_dpg}
 
+    def soi_lai(luot: LuotChay) -> bool:
+        """Video cũ còn đúng không — hỏi TRƯỚC khi bỏ qua khâu dựng.
+
+        ═══ VÌ SAO CẦN, ĐO NGÀY 26/08/2026 ═══
+
+        Thân khâu này ĐÃ biết so ngày: clip nào mới hơn `8-video.mp4` thì dựng
+        lại. Nhưng khâu đã đánh dấu "xong" thì `core.auto.chay` bỏ qua thẳng,
+        nên đoạn so ngày ấy nằm im — y hệt chuyện đã xảy ra với bảng cảnh
+        (xem `core.auto._con_dung_duoc`).
+
+        Hậu quả đúng chỗ khách vừa trả tiền: sửa lời nhắc vài cảnh, tạo lại
+        clip, bấm "Chạy tiếp" — khâu dựng bị bỏ qua, và khách mở `8-video.mp4`
+        ra xem thì vẫn là **bản cũ**, đúng những cảnh vừa sửa vẫn nguyên si.
+        Cùng lỗi ấy dính cả nút "Làm lại khâu này" trên dòng clip.
+
+        Cửa này chỉ đọc ngày tệp, không gọi mạng, không tiêu một đồng nào.
+        """
+        d = luot.thu_muc
+        dich = os.path.join(d, "8-video.mp4")
+        if not os.path.exists(dich):
+            return True     # chưa có video thì không phải việc của cửa này
+        return not _nguon_moi_hon_video(
+            dich, os.path.join(d, "6-clip"),
+            os.path.join(d, "2-giong-doc.mp3"))
+
+    lam.soi_lai = soi_lai
     return lam
 
 

@@ -16,6 +16,55 @@ WORKFLOW_VERSION = "1"
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
+def ma_an_toan(ten: str, mac_dinh: str = "chay") -> str:
+    """Doi mot cau chu bat ky (ten tep, ten kenh...) thanh `workflow_id` hop le.
+
+    ═══ VI SAO HAM NAY PHAI NAM CANH `_ID` ═══
+
+    Khach bao loi 26/08/2026: bam "tao thu" tren tep `001_Doan 1_1.mp3` (chu Đ
+    va dau nang) thi tool tra ve *"workflow_id chi duoc dung chu, so..."* va
+    khong tao duoc file nao.
+
+    Cho hong: ben giao dien loc ky tu bang `str.isalnum()`, ma `isalnum()` cua
+    Python hieu ca Unicode — `"Đ".isalnum()` va `"ạ".isalnum()` deu True. Nen
+    chu tieng Viet **di thang qua bo loc**, roi dam vao `_ID` o day von chi
+    nhan ASCII. Hai luat, hai noi, lech nhau — va nguoi tra gia la khach dat
+    ten tep bang tieng me de cua ho.
+
+    Nen bo doi chieu phai o CUNG mot cho voi bo doi: sua `_ID` la sua luon ham
+    nay. Ket qua tra ve luon thoa `_ID`.
+
+    Giu nguyen ma cu khi no da hop le, khong "don dep cho dep": `workflow_id`
+    cung la ten tep diem dung (`checkpoints/<id>.json`), doi ma la mat diem
+    dung — lan chay sau bat dau lai tu dau va **tra tien lan hai**.
+
+    Ma phai bo dau thi nhet them 6 ky tu bam tu ten goc, vi bo dau lam hai ten
+    khac nhau thanh mot: `Đoạn 1` va `Doan 1` cung ra `Doan-1`, dung chung mot
+    diem dung, va tep sau de mat viec cua tep truoc.
+    """
+    import hashlib  # noqa: PLC0415
+    import unicodedata  # noqa: PLC0415
+
+    goc = str(ten or "")
+    # Đường cũ, giữ y nguyên: tên nào vốn đã hợp lệ thì mã không đổi một byte.
+    cu = "".join(c if (c.isalnum() or c in "._-") else "-" for c in goc).strip("-.")
+    if _ID.fullmatch(cu):
+        return cu
+
+    phang = unicodedata.normalize(
+        "NFD", goc.replace("đ", "d").replace("Đ", "D"))
+    phang = "".join(c for c in phang if unicodedata.category(c) != "Mn")
+    sach = re.sub(r"-{2,}", "-",
+                  re.sub(r"[^A-Za-z0-9._-]+", "-", phang)).strip("-._")
+    # `_ID` đòi ký tự ĐẦU là chữ hoặc số — `_abc` hay `.abc` vẫn trượt. Tới
+    # đây mọi ký tự còn lại đều là ASCII nên `isalnum()` không đánh lừa nữa.
+    while sach and not sach[0].isalnum():
+        sach = sach[1:]
+    sach = sach[:100] or mac_dinh
+    return "{0}-{1}".format(
+        sach, hashlib.sha1(goc.encode("utf-8")).hexdigest()[:6])
+
+
 class WorkflowError(ValueError):
     """Workflow sai; thong diep duoc viet de hien truc tiep tren giao dien."""
 

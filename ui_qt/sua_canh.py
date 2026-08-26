@@ -1,5 +1,12 @@
 """Hộp xem lại **một cảnh** rồi sửa lời nhắc để tạo lại ảnh/clip.
 
+⚠ HẾT DÙNG từ 26/08/2026 — thay bằng `ui_qt/bang_canh_auto.py`, bảng sửa được
+MỌI cảnh và mỗi cảnh tự biết phải làm lại gì. Không còn chỗ nào gọi tệp này.
+
+Chưa xoá vì tool đang chạy trên máy khách nạp nó **lúc bấm đúp**, không phải
+lúc mở tool: xoá đi là lượt đang chạy dở có thể chết giữa mẻ. Xoá được sau khi
+khách tắt tool rồi mở lại.
+
 Chủ dự án, 20/08/2026: *"ở chỗ xem các video tạo ra có thể tạo lại ảnh và video
 nếu không đạt, kiểu là click vào và sửa được prompt ảnh và video để nó tạo lại
 ảnh và video"*.

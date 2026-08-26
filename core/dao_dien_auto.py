@@ -34,6 +34,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,20 @@ __all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chie
 
 #: Các giá trị `che_do_ke` mở nhánh đạo diễn.
 CHE_DO_DAO_DIEN = ("tu_xay", "nhan_vat_va_boi_canh", "noi_canh")
+
+#: Mã nhân vật / bối cảnh dùng được làm TÊN TỆP: `nv1`, `nv4b`, `bc2`…
+_MA_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def _ma_id_dung_duoc(ma_id: str) -> bool:
+    """Mã này có ghép thành `tham-chieu/<mã>.png` được không.
+
+    Mã do AI trả về. Lời nhắc đòi `nv1`/`nv4b`, nhưng lời nhắc không phải bộ
+    chặn — và ở đây mã thành đường dẫn tệp. Chặn ba thứ: rỗng, `.`/`..` và mọi
+    ký tự ngoài chữ-số-`._-` (gồm cả `/`, `\\` và chữ tiếng Việt có dấu).
+    """
+    ma_id = str(ma_id or "").strip()
+    return bool(_MA_ID.fullmatch(ma_id)) and ma_id not in (".", "..")
 
 #: Tệp dàn nhân vật + bối cảnh + kế hoạch của lượt (cạnh `4-canh.json`).
 TEP_DAN = "4-canh-dan.json"
@@ -244,6 +259,16 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
     for c in list(man.get("characters") or []) + list(man.get("locations") or []):
         ma_id = str(c.get("id") or "").strip()
         if not ma_id:
+            continue
+        if not _ma_id_dung_duoc(ma_id):
+            # `ma_id` do AI trả về, mà ở đây nó thành TÊN TỆP. Lời nhắc đòi
+            # `nv1`, `nv4b` — nhưng "lời nhắc đòi" không phải là một bộ chặn.
+            # Một `id` có `/` hay `..` là ghi ra ngoài thư mục lượt (đụng đúng
+            # thứ CLAUDE.md cấm), một `id` có dấu tiếng Việt thì tệp vẽ ra một
+            # đằng còn cột `image_file` trỏ một nẻo. Bỏ qua và NÓI RA, đừng
+            # lặng lẽ vẽ một tham chiếu không ai tra được.
+            bc.ghi("    (bỏ qua nhân vật/bối cảnh có mã lạ: {0!r} — mã chỉ "
+                   "được dùng chữ, số, '.', '_', '-')".format(ma_id[:40]))
             continue
         dich = os.path.join(d, ma_id + ".png")
         if os.path.exists(dich):

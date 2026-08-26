@@ -227,8 +227,31 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "
             "kịch bản thì phải “Làm lại từ khâu này” — giọng đọc cũ đang đọc "
             "bản kịch bản không còn nữa.",
-            "Dải ảnh dưới bảng hiện từng cảnh ngay khi tạo xong — bấm đúp một "
-            "tấm là mở ảnh gốc, khỏi phải mở thư mục đi tìm.",
+            "Dải ảnh dưới bảng hiện từng cảnh ngay khi tạo xong. Lúc đang "
+            "chạy, bấm đúp một tấm là mở ảnh gốc để xem cho to.",
+            "Cảnh nào nhìn không ổn thì SỬA LỜI NHẮC, thế thôi — sửa là tôi "
+            "làm lại. Bấm “Sửa lời nhắc từng cảnh” (ngay trên dải ảnh), hoặc "
+            "bấm đúp đúng tấm ảnh chưa ưng: bảng đủ MỌI cảnh của lượt mở ra, "
+            "nhảy sẵn tới cảnh đó. Bấm một cảnh rồi gõ vào hai ô bên dưới, "
+            "xong bấm “Tạo lại”.",
+            "Sửa ô nào quyết định làm lại cái gì — không có nút nào để chọn: "
+            "sửa LỜI NHẮC ẢNH thì tôi làm lại ảnh RỒI làm lại clip của cảnh ấy "
+            "(clip lấy ảnh làm khung đầu, giữ clip cũ là giữ chuyển động của "
+            "một tấm ảnh không còn nữa); chỉ sửa LỜI NHẮC VIDEO thì tôi giữ "
+            "nguyên ảnh, chỉ dựng lại clip cho rẻ.",
+            "Sửa mấy cảnh cũng được, mỗi cảnh một kiểu cũng được: cả mẻ đi "
+            "trong MỘT lượt chạy. Dòng chữ ngay trên nút nói trước cảnh nào "
+            "làm lại ảnh + clip, cảnh nào chỉ clip. Cảnh bạn không sửa thì "
+            "không ai đụng tới và không trả tiền lần thứ hai. Chạy xong tôi "
+            "dừng lại để bạn xem, chưa dựng video — ưng rồi bấm “Chạy tiếp”.",
+            "Bảng cảnh chỉ mở khi lượt đang DỪNG. Lúc đang chạy, khâu đã đọc "
+            "bảng cảnh vào bộ nhớ từ đầu nên sửa cũng không tới được nó — bấm "
+            "Dừng trước, phần đã làm vẫn giữ nguyên.",
+            "Kênh dựng theo CÚ MÁY DÀI (nối cảnh) thì bảng cảnh hiện một dòng "
+            "cảnh báo vàng: ở kênh loại đó nhiều cảnh liền nhau là một đoạn "
+            "quay chung, clip từng cảnh chỉ là lát cắt ra từ đoạn ấy — nên sửa "
+            "lời nhắc một cảnh CHƯA ra hình mới. Lời nhắc vẫn được lưu; muốn "
+            "đổi hình thật thì hiện phải làm lại cả khâu ảnh.",
             "Nút “Tạo kênh mới” dẫn bạn đi qua năm bước làm một video, mỗi "
             "bước một màn hình, cứ bấm “Tiếp ▶”: ① đặt tên rồi chọn kiểu vẽ "
             "(thấy luôn ảnh nhân vật mẫu) và khán giả; ② giọng đọc; "
