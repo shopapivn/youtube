@@ -25,7 +25,8 @@ if str(_STUDIO) not in sys.path:
     sys.path.insert(0, str(_STUDIO))
 
 from core.prompt_visuals import (  # noqa: E402,F401 — doi_thiet_ke/loi_nhac dung qua module
-    DUOI_BOI_CANH, DUOI_CHAN_DUNG, doi_thiet_ke_nhan_vat, goc_cua_id, loi_nhac_thiet_ke_lai,
+    DUOI_BOI_CANH, DUOI_CHAN_DUNG, DUOI_GIAI_DOAN, doi_thiet_ke_nhan_vat, goc_cua_id,
+    loi_nhac_thiet_ke_lai,
 )
 from core.chia_canh import (  # noqa: E402
     DUOI_CAM, KHUON_MAC_DINH, bang_phu_de, chia_theo_nghia, loi_nhac_chia,
@@ -190,6 +191,7 @@ The last beat of the act closes it on the motif.
 #: dung canh nhau, va moi canh sau chep luon bo cuc hai nguoi.
 _DUOI_CHAN_DUNG = DUOI_CHAN_DUNG
 _DUOI_BOI_CANH = DUOI_BOI_CANH
+_DUOI_GIAI_DOAN = DUOI_GIAI_DOAN
 
 #: Bao nhieu ky tu loi doc dua cho luot viet anh bia / nhac. 0 = ca bai:
 #: anh bia phai biet cao trao o cuoi, nhac phai theo mach ca video — cat bot
@@ -250,6 +252,13 @@ narrated video. Read the whole narration transcript below and decide:
    TRANSFORMS (an ogre becomes a lion, then a mouse; a frog becomes a prince)
    also gets `stages` — one per form, `outfit` describing the whole new body —
    because each form needs its own reference picture or the scenes invent it.
+   The SAME rule applies when only the BODY POSTURE changes: an animal that is an
+   ordinary animal at first and only later stands, speaks or acts like a person
+   (or the reverse) needs one stage per posture — `outfit` says the whole body
+   mode ("on all four paws as an ordinary animal", "standing upright on two legs
+   like a person, wearing …"). Do not skip this: with one upright portrait, every
+   scene that shows the animal on all fours invents a different animal (measured
+   26/08/2026: identity score 3/5, a different cat in each scene).
    Describe what image generators get wrong by default, in POSITIVE words:
    for an animal, the exact fur pattern ("solid plain golden-yellow fur without
    any stripes", not just "yellow cat"), "bare paws" when it wears no shoes,
@@ -729,7 +738,9 @@ def _them_prompt_tham_chieu(cast, context) -> None:
     for c in cast.get("characters") or []:
         if c.get("co_dinh"):
             continue
-        c["sheet_prompt"] = c["english_prompt"] + _DUOI_CHAN_DUNG + duoi_style
+        # Giai đoạn sau vẽ KÈM ảnh giai đoạn đầu -> nói rõ "cùng một cá thể".
+        them = _DUOI_GIAI_DOAN if str(c.get("goc_id") or "") not in ("", c.get("id")) else ""
+        c["sheet_prompt"] = c["english_prompt"] + _DUOI_CHAN_DUNG + them + duoi_style
     for l in cast.get("locations") or []:
         l["sheet_prompt"] = l["english_prompt"] + _DUOI_BOI_CANH + duoi_style
 

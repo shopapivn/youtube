@@ -240,6 +240,7 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
     d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
     os.makedirs(d, exist_ok=True)
     viec: List[Tuple[str, str, str]] = []
+    goc_cua: Dict[str, str] = {}
     for c in list(man.get("characters") or []) + list(man.get("locations") or []):
         ma_id = str(c.get("id") or "").strip()
         if not ma_id:
@@ -256,6 +257,9 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
         prompt = str(c.get("sheet_prompt") or c.get("english_prompt") or "").strip()
         if prompt:
             viec.append((ma_id, prompt, dich))
+            goc = str(c.get("goc_id") or "").strip()
+            if goc and goc != ma_id:
+                goc_cua[ma_id] = goc
     if not viec:
         return []
     bc.ghi("  tạo {0} ảnh tham chiếu: {1}".format(len(viec), ", ".join(v[0] for v in viec)))
@@ -267,8 +271,11 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
 
     def mot(v: Tuple[str, str, str]) -> None:
         ma_id, prompt, dich = v
+        goc_anh = _anh_goc(d, goc_cua.get(ma_id))
         try:
-            lam(ma_id, prompt, dich)
+            # Chỉ giai đoạn sau mới cần tham chiếu -> hàm bơm vào của bài kiểm
+            # (ba tham số) vẫn dùng được cho đường thường.
+            lam(ma_id, prompt, dich, goc_anh) if goc_anh else lam(ma_id, prompt, dich)
             _soi_chan_dung(bc, ma_id, prompt, dich, mo_ta_cua.get(ma_id), lam, cham)
             bc.ghi("    tham chiếu {0}: xong".format(ma_id))
         except Exception as loi:  # noqa: BLE001 — thiếu một tham chiếu không được giết cả lượt
@@ -277,8 +284,10 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
             with khoa:
                 thieu.append((ma_id, str(loi)))
 
-    with ThreadPoolExecutor(max_workers=SONG_SONG_THAM_CHIEU) as pool:
-        list(pool.map(mot, viec))
+    # Giai đoạn ĐẦU trước, giai đoạn sau sau — để ảnh gốc có sẵn mà vẽ theo.
+    for lop in _viec_theo_lop(viec, goc_cua):
+        with ThreadPoolExecutor(max_workers=SONG_SONG_THAM_CHIEU) as pool:
+            list(pool.map(mot, lop))
     if not thieu:
         return []
     # ═══ TỪ CHỐI HAI LẦN → THIẾT KẾ LẠI NHÂN VẬT, RỒI TẠO LẠI ═══
@@ -554,7 +563,27 @@ class _HopRong:
         return []
 
 
-def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[[str, str, str], None]:
+def _anh_goc(thu_muc: str, goc_id: Optional[str]) -> Optional[List[str]]:
+    """Đường dẫn ảnh tham chiếu của giai đoạn ĐẦU, nếu đã có."""
+    if not goc_id:
+        return None
+    p = os.path.join(thu_muc, str(goc_id) + ".png")
+    return [p] if os.path.isfile(p) else None
+
+
+def _viec_theo_lop(viec: List[Tuple[str, str, str]],
+                   goc_cua: Dict[str, str]) -> List[List[Tuple[str, str, str]]]:
+    """Chia việc thành hai lớp: giai đoạn ĐẦU (và bối cảnh) trước, giai đoạn SAU sau.
+
+    Giai đoạn sau vẽ TỪ ảnh giai đoạn đầu nên phải chờ nó có trên đĩa. Cùng lớp
+    thì vẫn chạy song song như cũ.
+    """
+    dau = [v for v in viec if v[0] not in goc_cua]
+    sau = [v for v in viec if v[0] in goc_cua]
+    return [x for x in (dau, sau) if x]
+
+
+def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[..., None]:
     from .auto_khau import _tai_ket_qua, _tao_anh, khoa_viec  # noqa: PLC0415
     from .goi_van_ban import goi_van_ban  # noqa: PLC0415
     from .viet_lai_prompt import la_bi_tu_choi, viet_lai_prompt  # noqa: PLC0415
@@ -563,8 +592,11 @@ def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[[str, str, str], None]:
         return goi_van_ban(bc.client, [{"role": "user", "content": loi_nhac}],
                            mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"), toi_da_token=2048)
 
-    def lam(ma_id: str, prompt: str, dich: str) -> None:
-        hop = _HopRong()
+    def lam(ma_id: str, prompt: str, dich: str,
+            tham_chieu: Optional[List[str]] = None) -> None:
+        # Giai đoạn sau của một nhân vật: gửi kèm ẢNH giai đoạn đầu để vẽ ra
+        # ĐÚNG con ấy ở hình dạng mới — xem `_viec_theo_lop`.
+        hop = ThamChieuCanh(bc, list(tham_chieu)) if tham_chieu else _HopRong()
         try:
             goi = _tao_anh(bc, luot, prompt, hop, khoa_viec(luot, "tc", ma_id, prompt),
                            ten_hien="tham chiếu " + ma_id)

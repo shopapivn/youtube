@@ -624,6 +624,12 @@ DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single fi
 #: "Ngang tam mat, thay mat dat": do 25/08/2026 canh 72/74 — tham chieu lau dai
 #: chup tu xa tren cao, mo hinh dan xe ngua len noc tuong thanh va ve ca nha to
 #: bang cong. Anh thiet lap phai la cho NHAN VAT SE DUNG, nhin tu tam mat nguoi.
+#: Ghép vào chan dung GIAI DOAN SAU (vẽ kèm ảnh giai đoạn đầu làm tham chiếu).
+#: Đo 26/08/2026: vẽ giai đoạn sau từ chữ thì ra một cá thể khác; vẽ từ ảnh thì
+#: giữ nguyên mặt/mắt/màu, chỉ đổi đúng thứ cần đổi (điểm nhận dạng 3 -> 5).
+DUOI_GIAI_DOAN = (" — this is the SAME individual as the attached reference image: keep its face, "
+                  "eyes, fur or skin colour and markings, and its size exactly; change ONLY what this "
+                  "description says has changed (posture, body form, clothes, props)")
 DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, seen from "
                   "human eye level standing on the ground of that place, the ground "
                   "(floor, path, grass, bank) clearly visible across the lower third "

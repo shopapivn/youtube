@@ -128,7 +128,7 @@ class TestTaoThamChieu:
         man["characters"][0]["co_dinh"] = True
         goi = []
 
-        def tao_anh(ma_id, prompt, dich):
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
             goi.append((ma_id, prompt))
             if ma_id == "nv2":
                 raise RuntimeError("content_rejected")
@@ -242,7 +242,7 @@ class TestThietKeLai:
                  "reference_files": json.dumps(["nv1.png"])}]
         goi = []
 
-        def tao_anh(ma_id, prompt, dich):
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
             goi.append((ma_id, prompt[:40]))
             if "feathered" in prompt:
                 raise RuntimeError("content_rejected")
@@ -271,7 +271,7 @@ class TestThietKeLai:
         bc, luot = _bc(tmp_path), _luot(tmp_path)
         man = json.loads(json.dumps(MAN))
 
-        def tao_anh(ma_id, prompt, dich):
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
             raise RuntimeError("content_rejected")
 
         thieu = dd.tao_tham_chieu(bc, luot, man, canh=[], tao_anh=tao_anh, goi_ai=lambda l: "không có json")
@@ -298,7 +298,7 @@ class TestThietKeLai:
         (tmp_path / "0001" / dd.THU_MUC_THAM_CHIEU / "nv1.png").write_bytes(b"cu")
         hoi = []
 
-        def tao_anh(ma_id, prompt, dich):
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
             if "feathered" in prompt:
                 raise RuntimeError("content_rejected")
             with open(dich, "wb") as f:
@@ -354,6 +354,29 @@ class TestSuaCanhTheoDoMoi:
                                         "nv1b", "boots", "vest", goi_ai) == 0
 
 
+class TestGiaiDoanVeTuAnh:
+    """Giai đoạn sau vẽ TỪ ẢNH giai đoạn đầu (đo 26/08/2026: vẽ lại từ chữ ra cá thể khác)."""
+
+    def test_giai_doan_sau_nhan_anh_goc_lam_tham_chieu(self, tmp_path):
+        bc = _bc(tmp_path)
+        luot = SimpleNamespace(thu_muc=str(tmp_path), ma_luot="u1", ma_kenh="story-3d")
+        man = {"characters": [{"id": "nv2", "sheet_prompt": "meo vang"},
+                              {"id": "nv2b", "sheet_prompt": "meo dung hai chan", "goc_id": "nv2"}],
+               "locations": [{"id": "loc1", "sheet_prompt": "canh dong"}]}
+        goi = []
+
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
+            goi.append((ma_id, [os.path.basename(x) for x in (tham_chieu or [])]))
+            open(dich, "wb").write(b"png")
+
+        assert dd.tao_tham_chieu(bc, luot, man, tao_anh=tao_anh) == []
+        theo = dict(goi)
+        assert theo["nv2"] == [] and theo["loc1"] == []
+        assert theo["nv2b"] == ["nv2.png"], "giai đoạn sau phải vẽ kèm ảnh giai đoạn đầu"
+        # và giai đoạn đầu phải xong TRƯỚC (cùng lớp thì mới song song)
+        assert [x[0] for x in goi].index("nv2") < [x[0] for x in goi].index("nv2b")
+
+
 class TestSoiChanDung:
     def test_chan_dung_thieu_vuong_mien_thi_ve_lai_va_giu_ban_hon(self, tmp_path):
         bc, luot = _bc(tmp_path), _luot(tmp_path)
@@ -361,7 +384,7 @@ class TestSoiChanDung:
                                "sheet_prompt": "portrait of the king"}], "locations": []}
         goi = []
 
-        def tao_anh(ma_id, prompt, dich):
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
             goi.append(prompt)
             with open(dich, "wb") as f:
                 f.write(b"lan%d" % len(goi))
@@ -383,7 +406,7 @@ class TestSoiChanDung:
                "locations": [{"id": "loc1", "sheet_prompt": "a hall"}]}
         n = {"k": 0}
 
-        def tao_anh(ma_id, prompt, dich):
+        def tao_anh(ma_id, prompt, dich, tham_chieu=None):
             n["k"] += 1
             with open(dich, "wb") as f:
                 f.write(b"x")
