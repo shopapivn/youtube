@@ -147,9 +147,17 @@ class TestLoiNhacCanh:
         assert "DIFFERENT line of narration" in chu
 
     def test_khoa_nhan_vat_tham_chieu(self):
+        """Ảnh nhân vật đi kèm yêu cầu dưới dạng ẢNH THAM CHIẾU, không phải tên tệp.
+
+        Chủ dự án, 26/08/2026: *"ảnh tải lên nó về dạng media id tham chiếu chứ
+        ảnh không có nv1 đâu"*. Máy vẽ nhận `reference_images=<URL>` (xem
+        `core/auto_khau._tao_anh`) nên chuỗi `nv1.png` trong lời nhắc không trỏ
+        vào đâu cả — gọi thẳng là "the reference character".
+        """
         chu = self._canh()
         assert "NEVER describe its face" in chu
-        assert "nv1 (nv1.png)" in chu
+        assert "the reference character" in chu
+        assert "nv1.png" not in chu, "máy vẽ không thấy tên tệp, đừng viết vào lời nhắc"
 
     def test_do_dai_canh_suy_tu_SRT_khong_co_dinh(self):
         chu = self._canh()

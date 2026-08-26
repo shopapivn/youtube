@@ -230,6 +230,7 @@ class TestPromptBaNoi:
         assert "no eyebrows, no teeth" in chu
         assert "only pure-white figure" in chu
         assert "Never a mirror image or a second self" in chu
+        assert "nv1.png" not in chu, "lời nhắc không được trỏ tên tệp — máy vẽ nhận ảnh gắn kèm"
         assert '"expression"' in chu and '"location_used"' in chu
         # Đừng để phình lại: bản 26/08 là 165 dòng.
         assert len(tho.splitlines()) < 220, "lời nhắc lại phình thành danh sách luật"

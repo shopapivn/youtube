@@ -33,7 +33,7 @@ it — the section order, the real newlines, the short punchy lines:
 
 ```
 psychological youtube thumbnail designed for extremely high click-through-rate, emotional tension, visual curiosity, cinematic storytelling
-use provided character reference, keep consistent branding style
+use the attached character reference image, keep consistent branding style
 
 scene composition:
 the reference character standing still in foreground, visibly different from everyone else
@@ -68,7 +68,7 @@ no watermark, no logo, no extra text except the requested hook text
 ## ABSOLUTE RULES
 
 1. **DESCRIBING THE CHARACTER IS FORBIDDEN.** Refer to them only as
-   `the reference character` (file `nv1.png`). Never add physical descriptors —
+   `the reference character` (its picture is attached to the request). Never add physical descriptors —
    no face, no hair, no clothes. Describe only **pose, emotion, body language**:
    guarded posture, slight discomfort, introspective mood.
 
