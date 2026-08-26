@@ -623,3 +623,16 @@ def test_boi_canh_chu_khong_cat_truyen_dai_va_bo_khuon(wb):
     assert "KHUON" not in chu and "x" * 50000 in chu and '"style"' in chu
     assert run._boi_canh_chu({}, "(none)") == "(none)" and run._boi_canh_chu(None, "") == ""
     assert len(run._boi_canh_chu({"s": "y" * 200000})) == run.TRAN_CONTEXT_CHU
+
+
+def test_ap_same_as_gop_ten_khong_them_id(wb):
+    run = wb
+    cast = {"characters": [{"id": "nv1", "name": "Cat", "role": "hero", "english_prompt": "a cat"}],
+            "locations": [{"id": "loc9", "name": "The mill", "english_prompt": "a watermill"}]}
+    n = run._ap_same_as(cast, {"Cối xay bột": "loc9", "Con mèo": "nv1", "không có": "loc99"})
+    assert n == 2
+    assert cast["locations"][0]["name"] == "The mill (Cối xay bột)" and len(cast["locations"]) == 1
+    assert cast["characters"][0]["name"] == "Cat (Con mèo)"
+    # Sau khi gộp, kiểm phủ theo từ khoá thấy "Cối xay bột" đã có → không còn thiếu.
+    assert run._duoc_phu("Cối xay bột", cast["locations"], "name", "english_prompt")
+    assert run._ap_same_as(cast, None) == 0

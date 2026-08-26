@@ -342,13 +342,19 @@ Rules: same JSON shape as before; character ids continue from `{nv_tiep}`,
 location ids from `{loc_tiep}`; each `english_prompt` is one fixed English
 appearance/place description reused verbatim by every scene; characters must
 be clearly DISTINCT from the existing ones; keep the same visual style.
+FIRST check whether a "missing" name is simply another name (often Vietnamese)
+for something that ALREADY exists in the list above — "Cối xay bột" is the
+mill `loc9`, "Lâu đài của nhà vua" is the palace `loc10`. Such names go into
+`same_as` (name → existing id) and get NO new entry: two ids for one place
+give the film two different castles (measured 26/08/2026).
 
 ## Transcript (for reference)
 {transcript}
 
 ## Return JSON only, no commentary
 ```json
-{{"characters": [{{"id": "{nv_tiep}", "role": "...", "name": "...",
+{{"same_as": {{"<missing name that already exists>": "<existing id>"}},
+ "characters": [{{"id": "{nv_tiep}", "role": "...", "name": "...",
                  "english_prompt": "...", "reference_lock": "...",
                  "gender": "", "age": "", "notes": ""}}],
  "locations": [{{"id": "{loc_tiep}", "name": "...", "english_prompt": "...",
@@ -1273,8 +1279,12 @@ def _dan_nhan_vat(goi, cues, context, *, nhat_quan=True, che_do=CHE_DO_TU_XAY,
             them = _sach_cast(raw2, nv_dau=len(cast["characters"]) + 1)
             co_nv = {c["id"] for c in cast["characters"]}
             co_loc = {l["id"] for l in cast["locations"]}
+            so_trung = _ap_same_as(cast, raw2.get("same_as") if isinstance(raw2, Mapping) else None)
             cast["characters"] += [c for c in them["characters"] if c["id"] not in co_nv]
             cast["locations"] += [l for l in them["locations"] if l["id"] not in co_loc]
+            if so_trung:
+                emit({"type": "event", "event": "progress", "progress": 0.0,
+                      "message": "{0} ten 'thieu' thuc ra la ten khac cua muc da co — gop, khong them id moi.".format(so_trung)})
             emit({"type": "event", "event": "progress", "progress": 0.0,
                   "message": "Casting bo sot {0} nhan vat, {1} noi chon — da bo sung "
                              "them {2} nhan vat, {3} noi.".format(
@@ -1319,6 +1329,26 @@ def _duoc_phu(muc: str, dan: List[Mapping[str, Any]], *cot) -> bool:
         if any(t in chu for t in tk):
             return True
     return False
+
+
+def _ap_same_as(cast, same_as) -> int:
+    """`same_as` {tên còn thiếu → id đã có}: nối tên ấy vào `name` của mục đã có
+    (để `_duoc_phu` khớp từ khoá), KHÔNG tạo id mới. Trả về số tên đã gộp."""
+    if not isinstance(same_as, Mapping):
+        return 0
+    theo_id = {c["id"]: c for c in cast["characters"]}
+    theo_id.update({l["id"]: l for l in cast["locations"]})
+    n = 0
+    for ten, ma in same_as.items():
+        muc = theo_id.get(str(ma or "").strip())
+        ten = str(ten or "").strip()
+        if muc is None or not ten:
+            continue
+        hien = str(muc.get("name") or "")
+        if ten.lower() not in hien.lower():
+            muc["name"] = "{0} ({1})".format(hien, ten) if hien else ten
+        n += 1
+    return n
 
 
 def _con_thieu(cast, context) -> tuple:
