@@ -12,15 +12,13 @@ speaker, a new arrival, a new place. One scene = one story beat.
 
 ## PACING — two numbers the tool reads; change them to change the rhythm
 
-MIN_SECONDS_PER_SCENE: 6
+MIN_SECONDS_PER_SCENE: 3
 MAX_SECONDS_PER_SCENE: 8
 
-One scene = one shot of the film, and the machine films exactly
-<<CLIP_SEC>> seconds at a time. So write scenes that are ALREADY about
-<<CLIP_SEC>> seconds long: then one scene is one shot, with nothing to
-merge or cut apart afterwards. Let a beat breathe — the characters can
-act two or three moves inside one shot — instead of chopping every
-sentence into its own picture.
+Cut where the story needs a new picture — a new action, a new speaker, a
+new place — and let the scene be as long as that beat lasts. Do NOT
+stretch or shorten a beat to fit the machine: the tool films a scene in
+<<CLIP_SEC>>-second takes and joins them, so any length works.
 
 ## WHERE YOU ARE — this is a long video, cut into pieces
 
