@@ -795,3 +795,31 @@ def test_chan_dung_bo_qua_tu_the_trong_mo_ta():
     assert "ignore any action, pose" in d
     assert "asleep" in d and "lying down" in d
     assert "awake, standing upright" in d
+
+
+def test_bo_tu_the_khoi_o_trang_phuc_giai_doan():
+    """Ô "outfit" của giai đoạn là ĐỒ MẶC, không phải nhân vật đang làm gì.
+
+    Đo 27/08/2026 (phim hoathinh-3d/0002): AI viết giai đoạn 3 của sói là "lying
+    down on its side on all fours as an ordinary sleeping wolf, …" → ảnh tham
+    chiếu ra một con sói ĐANG NGỦ, in cả chữ "NAPPING WOLF" lên ảnh.
+    """
+    from core.prompt_visuals import bo_tu_the
+    ra = bo_tu_the("lying down on its side on all fours as an ordinary sleeping wolf, "
+                   "full deep charcoal-grey fur, floured pale paws, round heavy belly")
+    assert ra == "full deep charcoal-grey fur, floured pale paws, round heavy belly"
+    # đồ mặc thật thì giữ nguyên
+    assert bo_tu_the("red beret, green vest, small brown boots") == "red beret, green vest, small brown boots"
+    assert bo_tu_the("curled up asleep") == ""      # không còn gì thì trả rỗng, nơi gọi tự lo
+    assert bo_tu_the("") == ""
+
+
+def test_giai_doan_ghep_do_da_bo_tu_the(wb):
+    cast = wb._sach_cast({"style": {}, "characters": [
+        {"id": "nv1", "role": "villain", "english_prompt": "a big grey wolf",
+         "stages": [{"when": "at first", "outfit": "no clothes"},
+                    {"when": "after eating", "outfit": "lying down asleep, round heavy belly"}]}],
+        "locations": []})
+    sau = cast["characters"][1]
+    assert "lying down" not in sau["english_prompt"] and "asleep" not in sau["english_prompt"]
+    assert "round heavy belly" in sau["english_prompt"]

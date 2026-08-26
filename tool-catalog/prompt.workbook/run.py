@@ -25,8 +25,8 @@ if str(_STUDIO) not in sys.path:
     sys.path.insert(0, str(_STUDIO))
 
 from core.prompt_visuals import (  # noqa: E402,F401 — doi_thiet_ke/loi_nhac dung qua module
-    DUOI_BOI_CANH, DUOI_CHAN_DUNG, DUOI_GIAI_DOAN, doi_thiet_ke_nhan_vat, goc_cua_id,
-    loi_nhac_thiet_ke_lai,
+    DUOI_BOI_CANH, DUOI_CHAN_DUNG, DUOI_GIAI_DOAN, bo_tu_the, doi_thiet_ke_nhan_vat,
+    goc_cua_id, loi_nhac_thiet_ke_lai,
 )
 from core.chia_canh import (  # noqa: E402
     DUOI_CAM, KHUON_MAC_DINH, bang_phu_de, chia_theo_nghia, loi_nhac_chia,
@@ -1472,8 +1472,11 @@ def _tach_giai_doan(goc: Dict[str, Any], stages) -> List[Dict[str, Any]]:
             c["english_prompt"] = "{0}{1} — the transformed form of {2}".format(
                 DAU_BIEN_HINH, do.rstrip(" ;."), goc.get("name") or goc["id"])
         else:
+            # Bo TU THE khoi o "outfit": no la do mac, khong phai nhan vat dang lam
+            # gi. Do 27/08/2026 (phim 0002): "lying down ... as an ordinary sleeping
+            # wolf" lot vao day -> anh tham chieu ve ra con soi DANG NGU.
             c["english_prompt"] = "{0}; outfit at this stage: {1}".format(
-                goc["english_prompt"].rstrip(" ;."), do)
+                goc["english_prompt"].rstrip(" ;."), bo_tu_the(do) or do)
         c["giai_doan"] = k + 1
         c["giai_doan_khi"] = str(st.get("when") or "").strip()
         c["goc_id"] = goc["id"]
@@ -1739,35 +1742,25 @@ def _gan_reference_files(scenes, characters, locations=()) -> None:
 #: — vo nghia voi mo hinh ve — va moi canh AI ta con meo mot kieu. Mo hinh anh
 #: khong biet anh tham chieu nao la ai, nen no ve lai theo chu. Khoa bang ma:
 #: noi ro "reference image 1 = nv4, the cat: <mo ta nguyen van>" va bat ve y het.
-_KHOA_NHAN_VAT = ("Take every character's look ONLY from its reference image — face, eyes, "
-                  "head and body proportions, SIZE relative to the others, fur or skin, "
-                  "outfit and props. Do NOT invent or infer any of these from the words of "
-                  "this prompt; the words say only WHO is in the picture and WHAT they do. "
-                  "Every character listed above must look EXACTLY like its reference "
-                  "image: the same face and eyes, the same head and body proportions, "
-                  "the same fur or skin, the same outfit and props (hat, boots, bag, "
-                  "crown, beard…), the same pencil-sketch line style. Do NOT redesign, "
-                  "simplify or restyle the character; only its pose, gesture and "
-                  "expression change for this scene. The character keeps exactly the "
-                  "colours of its reference image: the scene's accent colour must NEVER "
-                  "touch the character, its hat, feather, eyes, clothes or props — apply "
-                  "any accent only to the surroundings. The ONLY allowed outfit change is "
-                  "one this scene's description states explicitly (e.g. 'not yet wearing "
-                  "the hat and boots', 'hat held in hand'); everything not mentioned "
-                  "stays exactly as in the reference.")
 #: Bao nhieu NHAN VAT duoc gan anh tham chieu cho mot canh (them 1 boi canh).
 #: Cong nhan toi 10 anh (`workers/veo3/engine/media.MAX_REFERENCES`), nen 4 nhan
 #: vat + 1 noi van con thua cho.
 TOI_DA_NV_THAM_CHIEU = 4
 
-#: "Dung tren mat dat": do 25/08/2026 canh 41/50 — tham chieu boi canh la mat
-#: song, prompt khong noi dung o dau, mo hinh dat meo va cong chua LEN MAT NUOC.
-_KHOA_BOI_CANH = ("The place must match its reference image (same architecture, "
-                  "furniture and layout); only framing and lighting change. Every "
-                  "character stands, sits or walks on the SOLID GROUND of that place "
-                  "(floor, path, grass, bank, steps) with correct scale and physics — "
-                  "never standing on water, floating in the air or sunk into walls, "
-                  "unless the text explicitly says so.")
+#: ═══ HAI HANG SO CU DA BO — DUNG DUNG LAI ═══
+#:
+#: `_KHOA_NHAN_VAT` (doan van ~1.100 ky tu liet ke mat, mat, ti le, da, long,
+#: trang phuc, dao cu phai chep y het) va `_KHOA_BOI_CANH` bi go 27/08/2026.
+#:
+#: Do tren canh 25 cua openstory/0002 — dung canh may ve cau be thanh dua khac:
+#:
+#:     doan van dai (loi cu)      3, 3 diem
+#:     mot dong guard (OpenStory) 4, 4 diem
+#:
+#: Liet ke tung net de "chep cho giong" hoa ra la chu di cai voi anh, va may
+#: nghe chu. Xem `_GUARD_NHAN_DANG`. Luat vat ly cua `_KHOA_BOI_CANH` duoc giu
+#: lai rieng o `_LUAT_DUNG_CHAN` vi no khong noi gi ve danh tinh.
+
 #: Khoa cho loi nhac VIDEO — dat o DAU, khong phai cuoi. Do 25/08/2026 (12 clip
 #: Veo 3, AI cham khung cuoi duoc dung): cau khoa o cuoi → 3,00; khoa o dau kem
 #: mo ta tung nhan vat + "khong them, khong bot" → 3,50. Veo nang phan dau.
@@ -1824,6 +1817,58 @@ def _mo_ta_tham_chieu(i: str, dan: Mapping[str, Any], noi: Mapping[str, Any]) ->
 _MAU_ID = re.compile(r"\b((?:nv|loc)\d+[a-z]?)\b(?!\s*\[reference)")
 
 
+#: Nhan nhan dang dai toi da bao nhieu ky tu. Du de noi ro con vat/nguoi ay
+#: la ai (loai, mau), ngan de khong thanh mot doan ta canh tranh voi bo cuc.
+DAI_NHAN_CO_DINH = 100
+
+#: Tu noi khong duoc dung cuoi nhan — cat o do la nhan cut nghia.
+_TU_NOI_CUT = frozenset(("with", "and", "the", "of", "in", "on", "a",
+                         "along", "over", "under", "at", "to", "for"))
+
+
+def _nhan_co_dinh(e, mac_dinh: str = "") -> str:
+    """Nhan cho nhan vat/noi KHONG duoc gui anh tham chieu — LUON GIONG NHAU.
+
+    ═══ VI SAO KHONG PHAI CHI CAI VAI ═══
+
+    Ban dau cho ra "the duck". Do tren luot that openstory/0002 (26/08/2026,
+    30 canh): con vit hien ra **hai kieu khac nhau trong cung mot phim** —
+    canh 11-15 la vit co xanh nau, canh 28-30 la vit trang. Dan ghi ro nv5 la
+    *"creamy-white feathers"*, tuc may bia ra con vit nau. Vai suong ("the
+    duck") noi cho may biet VE CON GI, khong noi VE CON NAO.
+
+    Nen nhan phai kem mot cum nhan dang **chep nguyen tu dan va giong het nhau
+    o moi canh** — giong het la phan quan trong nhat: no thay cho vai tro ma
+    anh tham chieu dang lam cho hai nhan vat kia.
+
+    ═══ KHONG MAU THUAN VOI LUAT 26/08 ═══
+
+    Chu du an hom ay: *"khong mo ta chi tiet ma chi co trong prompt dung media
+    id cua anh nhan vat do, vi neu mo ta chi tiet thi no se bi sai"*. Luat ay
+    noi ve nhan vat CO anh: chu va anh danh nhau thi may nghe chu, nen phai bo
+    chu. O day khong co anh nao de danh nhau — bo chu di la khong con gi.
+    """
+    tho = str(e.get("english_prompt") or "").strip()
+    if not tho:
+        return mac_dinh or "the {0}".format(
+            e.get("role") or e.get("name") or "character")
+    if len(tho) <= DAI_NHAN_CO_DINH:
+        return tho
+    # Cat o KHOANG TRANG gan tran nhat, KHONG cat o dau phay dau tien: cau ta
+    # trong dan de loai o menh de dau ("a friendly ordinary house cat") va MAU
+    # o menh de sau ("grey-and-brown mackerel tabby") — cat som la vut di dung
+    # thu giu cho con vat khong doi mau giua phim.
+    cat = tho.rfind(" ", 0, DAI_NHAN_CO_DINH)
+    ra = tho[:cat if cat > 20 else DAI_NHAN_CO_DINH].rstrip(" ,")
+    # Bo tu noi bi cut o duoi ("with", "along the") — nhan phai doc duoc.
+    while True:
+        tu = ra.rsplit(" ", 1)[-1].lower()
+        if tu in _TU_NOI_CUT and " " in ra:
+            ra = ra.rsplit(" ", 1)[0].rstrip(" ,")
+            continue
+        return ra
+
+
 def _thay_id_khong_co_anh(chu: str, gan, dan, noi) -> str:
     """Id CO trong dan nhung KHONG duoc gui anh kem -> thay bang VAI cua no.
 
@@ -1851,11 +1896,10 @@ def _thay_id_khong_co_anh(chu: str, gan, dan, noi) -> str:
         if i in gan:
             return i
         if i in dan:
-            c = dan[i]
-            return "the {0}".format(c.get("role") or c.get("name") or "character")
+            return _nhan_co_dinh(dan[i])
         if i in noi:
             l = noi[i]
-            return str(l.get("name") or "the place")
+            return _nhan_co_dinh(l, mac_dinh=str(l.get("name") or "the place"))
         return i  # id la, khong co trong dan: de nguyen cho nguoi sua tool thay
 
     # `(nv4)` -> `(the village healer)` roi moi toi dang tran, de khong sinh
@@ -1863,12 +1907,48 @@ def _thay_id_khong_co_anh(chu: str, gan, dan, noi) -> str:
     return _MAU_ID.sub(doi, str(chu or ""))
 
 
-def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
-    """Gan vao MOI canh khoi 'REFERENCE IMAGES attached, in this order: …'.
+#: ═══ MOT DONG, KHONG PHAI MOT DOAN VAN ═══
+#:
+#: Nguyen van cua OpenStory (`src/lib/prompts/reference-image-prompt.ts`,
+#: hang `IDENTITY_GUARD`). Ho co y BO doan van dai liet ke mat/mat/ti le/da/
+#: trang phuc ma tool nay dung truoc do; ghi chu cua ho: *"One-line identity
+#: guard replacing the old IMPORTANT paragraph… phrased as cross-panel
+#: CONSISTENCY, not likeness replication"*.
+#:
+#: Do tren may chu cua ta (26-27/08/2026, canh 25/26/29 cua openstory/0002 —
+#: dung nhung canh may ve nham nguoi): doan van dai 3,00 diem; mot dong nay
+#: 4,00. Liet ke tung net de "chep cho giong" hoa ra lai la chu di cai voi
+#: anh, va may nghe chu.
+_GUARD_NHAN_DANG = (
+    "Reference images define identity — keep every referenced character, "
+    "object and location consistent with its reference image; never render a "
+    "reference image itself as a separate panel or subject.")
 
-    Thu tu trong khoi = thu tu `reference_files` = thu tu anh duoc gui, nen
-    'reference image 1' luon dung anh. Cac cho ghi `(nv4)` / `nv4` trong loi
-    nhac doi thanh `nv4 [reference image 1]` de mo hinh noi duoc ten voi anh.
+#: Luat vat ly giu lai tu `_KHOA_BOI_CANH` cu: no khong noi ve danh tinh nen
+#: khong dinh dang toi guard, ma bo di thi nhan vat dung tren mat nuoc.
+_LUAT_DUNG_CHAN = (
+    "Every character stands, sits or walks on the SOLID GROUND of the place "
+    "(floor, path, grass, bank, steps) with correct scale and physics — never "
+    "standing on water, floating in the air or sunk into walls, unless the "
+    "text explicitly says so.")
+
+
+def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
+    """Rang buoc anh tham chieu vao loi nhac theo loi OpenStory.
+
+    Hai phan, dung thu tu nay:
+
+      1. RANG BUOC TRONG CAU — moi cho loi nhac goi ten `nv4` doi thanh
+         `nv4 (Image 1)`, dung ngay tai cho no xuat hien trong cau van. So
+         trong ngoac = vi tri anh trong `reference_files` = thu tu anh duoc
+         gui len, nen no luon tro dung tam.
+      2. CHU THICH CUOI — mot dong `_GUARD_NHAN_DANG`, cong mot dong cho
+         nhung anh ma cau van KHONG nhac toi (thuong la boi canh). Anh da
+         duoc nhac trong cau thi khong lap lai o duoi.
+
+    Khac ban cu o cho quan trong nhat: KHONG con doan van liet ke tung net
+    phai chep. Xem ghi chu o `_GUARD_NHAN_DANG` de biet vi sao va do duoc bao
+    nhieu.
     """
     dan = {c["id"]: c for c in characters}
     noi = {l["id"]: l for l in locations}
@@ -1882,18 +1962,24 @@ def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
         if not ids or "REFERENCE IMAGES are attached" in str(s.get("img_prompt") or ""):
             continue
         chu = str(s.get("img_prompt") or "")
+        da_nhac = []
         for k, i in enumerate(ids, 1):
-            chu = re.sub(r"\(\s*" + re.escape(i) + r"\s*(\(" + re.escape(i) + r"\.png\))?\s*\)",
-                         "(see reference image {0})".format(k), chu)
-            chu = re.sub(r"\b" + re.escape(i) + r"\b(?!\s*\[reference)",
-                         "{0} [reference image {1}]".format(i, k), chu)
+            # `(nv4)` / `(nv4 (nv4.png))` -> `(Image 1)`; roi den dang tran.
+            chu, n1 = re.subn(
+                r"\(\s*" + re.escape(i) + r"\s*(\(" + re.escape(i) + r"\.png\))?\s*\)",
+                "(Image {0})".format(k), chu)
+            chu, n2 = re.subn(r"\b" + re.escape(i) + r"\b(?!\s*\(Image)",
+                              "{0} (Image {1})".format(i, k), chu)
+            da_nhac.append(bool(n1 or n2))
         dong = ["", "REFERENCE IMAGES are attached, in this order:"]
         for k, i in enumerate(ids, 1):
-            dong.append("- reference image {0} = {1}".format(k, _mo_ta_tham_chieu(i, dan, noi)))
-        if any(i in dan for i in ids):
-            dong.append(_KHOA_NHAN_VAT)
+            # Anh nao cau van da rang buoc thi khong lap lai o duoi — chu
+            # thich chi de cuu nhung anh khong ai nhac (thuong la boi canh).
+            if not da_nhac[k - 1]:
+                dong.append("- Image {0} = {1}".format(k, _mo_ta_tham_chieu(i, dan, noi)))
+        dong.append(_GUARD_NHAN_DANG)
         if any(i in noi for i in ids):
-            dong.append(_KHOA_BOI_CANH)
+            dong.append(_LUAT_DUNG_CHAN)
         # Id con lai (nhan vat thu ba tro di) khong co anh kem -> thay bang
         # vai, dung de tro cho may ve. Xem `_thay_id_khong_co_anh`.
         chu = _thay_id_khong_co_anh(chu, set(ids), dan, noi)

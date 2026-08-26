@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import Tuple, Any, Dict, List, Mapping, Optional, Sequence
 
 __all__ = [
-    "DUOI_CHAN_DUNG", "DUOI_BOI_CANH", "goc_cua_id", "LOI_NHAC_THIET_KE_LAI", "loi_nhac_thiet_ke_lai",
+    "DUOI_CHAN_DUNG", "DUOI_BOI_CANH", "goc_cua_id", "bo_tu_the", "LOI_NHAC_THIET_KE_LAI", "loi_nhac_thiet_ke_lai",
     "doi_thiet_ke_nhan_vat",
     "ENGINE", "MO_HINH", "NGON_NGU", "MA_MODEL_NGHE", "MAU_HINH",
     "KHOA_CHI_DAN", "PhongCach", "chi_dan_tu_bo", "liet_ke_phong_cach",
@@ -639,6 +639,31 @@ DUOI_BOI_CANH = (" — establishing wide shot of the empty place, no people, see
                   "(floor, path, grass, bank) clearly visible across the lower third "
                   "so characters can later stand on it at correct scale, centered, "
                   "16:9 composition, no text, no letters, no watermark")
+
+
+#: Từ chỉ TƯ THẾ / TRẠNG THÁI — không phải đồ mặc. Mệnh đề nào chứa chúng thì bỏ
+#: khỏi mô tả giai đoạn: ảnh tham chiếu phải là người ĐỨNG YÊN, trung tính.
+_TU_THE = re.compile(
+    r"\b(lying|lies|lie\s+down|laid|lay\s+down|sleeping|asleep|napping|nap|dozing|snoring|"
+    r"sitting|seated|sits|crouching|kneeling|curled\s+up|sprawled|slumped|collapsed|"
+    r"running|walking|jumping|leaping|falling|swimming|dancing|crying|weeping|"
+    r"on\s+all\s+fours|belly[- ]up|on\s+its\s+side|on\s+his\s+side|on\s+her\s+side)\b", re.I)
+
+
+def bo_tu_the(chu: str) -> str:
+    """Bỏ những mệnh đề nói TƯ THẾ khỏi mô tả trang phục của một giai đoạn.
+
+    Ô "outfit" của giai đoạn phải là ĐỒ MẶC và NGOẠI HÌNH, không phải nhân vật
+    đang làm gì. Đo 27/08/2026 (phim 0002): AI viết "lying down on its side on
+    all fours as an ordinary sleeping wolf, …, floured pale paws, round heavy
+    belly" -> ảnh gốc thành con sói đang ngủ, in cả chữ "NAPPING WOLF" lên ảnh,
+    và không còn khớp hai giai đoạn kia. Giữ lại "floured pale paws, round heavy
+    belly"; bỏ hai mệnh đề đầu.
+    """
+    phan = [x.strip() for x in str(chu or "").split(",")]
+    giu = [x for x in phan if x and not _TU_THE.search(x)]
+    ra = ", ".join(giu).strip(" ,;")
+    return ra if ra else ""
 
 
 def goc_cua_id(i: str) -> str:
