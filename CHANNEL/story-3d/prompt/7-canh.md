@@ -10,6 +10,15 @@ picture.
 Do not cut on a fixed clock. Cut where the story moves: a new action, a new
 speaker, a new arrival, a new place. One scene = one story beat.
 
+## PACING — two numbers the tool reads; change them to change the rhythm
+
+MIN_SECONDS_PER_SCENE: 3
+MAX_SECONDS_PER_SCENE: 8
+
+One scene = one picture that then moves. A clip is <<CLIP_SEC>> seconds; a
+scene longer than that is filmed as several <<CLIP_SEC>>-second shots of the
+same picture, so keep scenes short and change the picture often.
+
 ## WHERE YOU ARE — this is a long video, cut into pieces
 
 You are writing piece **<<KHUC_THU>> of <<TONG_KHUC>>**. Each piece is a
