@@ -102,9 +102,13 @@ continuous film, not a fresh setup:
 - When the story moves to a NEW place (a new `location_used`), say so in the
   first scene there ("now at loc5, arriving from the road") — that scene starts
   a new chain and gets the place's own reference instead.
-- The video prompt of every scene ends on a clear, held final pose (the
-  character finishes the action and holds still for a beat) so the next scene
-  can start from that exact frame.
+- Consecutive scenes in the same place with the SAME people are filmed as ONE
+  continuous take: the tool starts the next clip from the last frame of the
+  previous one, so write the video prompt as the action that follows
+  naturally; the motion must be already under way at the first frame and still
+  moving at the last frame — never a frozen pose at either end. A new picture
+  (a real cut) is made only when someone new enters or the place changes; then
+  choose a clearly different shot size or angle so the cut reads as intended.
 
 ## STYLE TAIL — every prompt ends with one
 

@@ -4252,7 +4252,10 @@ def _khau_anh_noi_canh(bc: BoiCanh):
             _lam_clip(bc, luot, c, anh, tho, giay, so=so)
 
         def cat(tho, clip, giay_canh):
-            cat_clip_theo_canh(ffmpeg, tho, clip, giay_canh, codec, opts)
+            from .noi_canh import bat_dau_cat  # noqa: PLC0415
+
+            cat_clip_theo_canh(ffmpeg, tho, clip, giay_canh, codec, opts,
+                               bat_dau=bat_dau_cat(giay_canh, giay))
 
         def trich(clip, khung):
             return khung_cuoi(ffmpeg, clip, khung)

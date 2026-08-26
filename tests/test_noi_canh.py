@@ -74,7 +74,7 @@ class TestThuan:
         assert not dich.exists()
 
 
-def _chuoi(tmp_path, lam_clip_hong=None, lam_anh_hong=None):
+def _chuoi(tmp_path, lam_clip_hong=None, lam_anh_hong=None, lien_mach=False):
     anh_d = tmp_path / "5-anh"; clip_d = tmp_path / "6-clip"; tc = tmp_path / "tham-chieu"
     for d in (anh_d, clip_d, tc):
         d.mkdir(exist_ok=True)
@@ -101,7 +101,8 @@ def _chuoi(tmp_path, lam_clip_hong=None, lam_anh_hong=None):
         os.makedirs(os.path.dirname(khung), exist_ok=True); open(khung, "wb").write(b"khung"); return khung
 
     ct = nc.ChuoiNoiCanh(thu_muc_anh=str(anh_d), thu_muc_clip=str(clip_d), thu_muc_tham_chieu=str(tc),
-                         lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich, ghi=nhat["ghi"].append)
+                         lam_anh=lam_anh, lam_clip=lam_clip, cat=cat, trich_khung=trich, ghi=nhat["ghi"].append,
+                         lien_mach=lien_mach)
     return ct, nhat, anh_d, clip_d
 
 
@@ -204,3 +205,35 @@ def test_prompt_dai_thi_rut_khoi_khoa_va_duoi_ngan():
     p = nc.prompt_noi_canh(goc, True)
     assert len(p) <= 5000 and p.endswith(nc.DUOI_NOI_CANH_NGAN) and "reference image 4 = nv4" in p
     assert nc.bo_duoi_noi_canh(nc.prompt_noi_canh("ngan (nv1)", True)) == "ngan (nv1)"
+
+
+class TestLienMach:
+    def test_noi_tiep_khong_cat(self):
+        a = _c(1, "loc1", refs=("nv1.png", "nv2.png", "loc1.png"))
+        assert nc.noi_tiep_khong_cat(a, _c(2, "loc1", refs=("nv1.png", "loc1.png")))         # nv1 ⊆ {nv1,nv2}
+        assert not nc.noi_tiep_khong_cat(a, _c(3, "loc1", refs=("nv1.png", "nv4.png", "loc1.png")))   # nv4 mới vào
+        assert not nc.noi_tiep_khong_cat(None, _c(4, "loc1"))
+        assert not nc.noi_tiep_khong_cat(a, _c(5, "loc1", refs=("loc1.png",)))              # cảnh không người: ảnh mới
+
+    def test_bat_dau_cat(self):
+        assert nc.bat_dau_cat(4.0, 8.0) == nc.BO_DAU_CLIP
+        assert nc.bat_dau_cat(7.9, 8.0) == 0.1 - 1e-16 or abs(nc.bat_dau_cat(7.9, 8.0) - 0.1) < 1e-9
+        assert nc.bat_dau_cat(8.0, 8.0) == 0.0
+
+    def test_cat_co_ss(self):
+        goi = []
+        nc.cat_clip_theo_canh("ffmpeg", "tho.mp4", "cut.mp4", 4.0, chay=lambda l, **k: (goi.append(l), SimpleNamespace(returncode=0, stderr=""))[1], bat_dau=0.35)
+        l = goi[0]
+        assert l[l.index("-ss") + 1] == "0.350" and l.index("-ss") < l.index("-i")
+
+    def test_chuoi_dien_tiep_khong_tao_anh_moi(self, tmp_path):
+        ct, nhat, anh_d, clip_d = _chuoi(tmp_path, lien_mach=True)
+        canh = [_c(1, "loc1", refs=("nv1.png", "loc1.png")), _c(2, "loc1", refs=("nv1.png", "loc1.png")),
+                _c(3, "loc1", refs=("nv1.png", "nv4.png", "loc1.png"))]
+        (tmp_path / "tham-chieu" / "nv4.png").write_bytes(b"ref")
+        assert ct.chay(canh) == 3
+        # cảnh 2 diễn tiếp: không gọi lam_anh, ảnh 2 = khung cuối 1; cảnh 3 có nv4 mới → ảnh mới
+        assert [a[0] for a in nhat["anh"]] == [1, 3]
+        assert (anh_d / "2.png").read_bytes() == b"khung"
+        assert nhat["clip"] == [1, 2, 3] and any("diễn tiếp" in d for d in nhat["ghi"])
+        assert nhat["anh"][1][1] == ["nv1.png", "nv4.png", "loc1.png", "2.png"]

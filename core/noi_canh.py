@@ -44,12 +44,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
-           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "THU_MUC_KHUNG", "THU_MUC_THO"]
+           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "THU_MUC_KHUNG", "THU_MUC_THO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
 THU_MUC_KHUNG = "khung"
@@ -66,7 +67,8 @@ DUOI_NOI_CANH = (
     "characters start exactly where that frame left them (same positions, same clothes, same "
     "props); only the camera and the action described above change. Frame the picture with the "
     "shot named at the start of this prompt (its size and angle), not with the framing of that "
-    "previous frame. Every character still looks EXACTLY like its own reference image. RENDERING "
+    "previous frame — the framing MUST differ clearly from that frame (a different shot size or angle), "
+    "never a near-identical composition. Every character still looks EXACTLY like its own reference image. RENDERING "
     "STYLE: match the style of the CHARACTER and PLACE reference images (the first attached images) "
     "and the style words of this prompt — if the previous frame looks flatter, softer, blurrier or "
     "more 2D than them, follow the references, not that frame.")
@@ -182,18 +184,34 @@ def giay_cua_canh(c: Dict[str, Any]) -> float:
         return 0.0
 
 
+#: Bỏ bao nhiêu giây ĐẦU clip Veo khi cắt: đo 26/08/2026 trên năm clip, chuyển
+#: động ở 0–0,5 s chỉ bằng 1/3 đoạn giữa (máy "lấy đà" từ ảnh tĩnh) — mỗi mối
+#: nối vì thế khựng một nhịp. Cắt từ 0,35 s là vào đúng lúc hình đã chạy.
+BO_DAU_CLIP = 0.35
+
+
+def bat_dau_cat(giay_canh: float, giay_clip: float = 8.0) -> float:
+    """Giây bắt đầu lấy trong clip thô: bỏ đoạn lấy đà nếu clip còn đủ dài cho cảnh."""
+    du = float(giay_clip) - float(giay_canh)
+    return max(0.0, min(BO_DAU_CLIP, du))
+
+
 def cat_clip_theo_canh(ffmpeg: str, nguon: str, dich: str, giay: float,
                        codec: str = "libx264", opts: Optional[Dict[str, Any]] = None,
-                       chay: Callable[..., Any] = subprocess.run) -> None:
-    """Cắt (hoặc kéo dài bằng giữ khung cuối) clip về đúng `giay` giây, không tiếng.
+                       chay: Callable[..., Any] = subprocess.run, bat_dau: float = 0.0) -> None:
+    """Cắt (hoặc kéo dài bằng giữ khung cuối) clip về đúng `giay` giây, không tiếng,
+    lấy từ giây `bat_dau` của clip thô.
 
     Cùng bộ lọc với khâu dựng (`tpad` + `-t`), nên bản cắt ở đây và bản khâu
     dựng cắt lại là một.
     """
     can = max(0.5, float(giay))
-    lenh = [ffmpeg, "-y", "-hide_banner", "-nostats", "-i", nguon,
-            "-vf", "tpad=stop_mode=clone:stop_duration={0:.3f}".format(can),
-            "-t", "{0:.3f}".format(can), "-c:v", codec]
+    lenh = [ffmpeg, "-y", "-hide_banner", "-nostats"]
+    if bat_dau > 0:
+        lenh += ["-ss", "{0:.3f}".format(float(bat_dau))]
+    lenh += ["-i", nguon,
+             "-vf", "tpad=stop_mode=clone:stop_duration={0:.3f}".format(can),
+             "-t", "{0:.3f}".format(can), "-c:v", codec]
     for k, v in (opts or {}).items():
         lenh.extend([k, str(v)])
     lenh.extend(["-pix_fmt", "yuv420p", "-an", dich])
@@ -227,6 +245,42 @@ def khung_cuoi(ffmpeg: str, clip: str, dich_png: str,
     return dich_png
 
 
+def _id_nhan_vat(c: Dict[str, Any]) -> set:
+    ra = set()
+    for ten in _ten_tham_chieu(c):
+        if ten.startswith("nv"):
+            ra.add(ten[:-4] if ten.endswith(".png") else ten)
+    for t in str(c.get("characters_used") or "").replace(";", ",").split(","):
+        t = t.strip()
+        if t.startswith("nv"):
+            ra.add(t)
+    return ra
+
+
+def noi_tiep_khong_cat(truoc: Optional[Dict[str, Any]], c: Dict[str, Any]) -> bool:
+    """Cảnh `c` có thể DIỄN TIẾP từ khung cuối cảnh `truoc` mà không cắt không?
+
+    Cùng chỗ (trong cùng chuỗi là mặc định) và mọi nhân vật của `c` đã có mặt ở
+    `truoc` → không cần ảnh mới: Veo diễn hành động mới từ đúng khung cuối, cú
+    máy liền. Có người mới bước vào (không có tham chiếu trong khung) → phải tạo
+    ảnh mới với tham chiếu (một cú cắt thật).
+
+    Đo 26/08/2026 (hoathinh-3d/0001): mỗi mối nối là một cú cắt cứng giữa hai
+    bố cục gần y hệt → nhìn như phim bị khựng. Cắt chỉ khi có lý do phim.
+    """
+    if not truoc:
+        return False
+    nv_c = _id_nhan_vat(c)
+    if not nv_c:
+        return False
+    return nv_c <= _id_nhan_vat(truoc)
+
+
+#: Đầu lời nhắc clip khi diễn tiếp không cắt.
+DAU_VIDEO_NOI_TIEP = ("Continue this exact shot without a cut, starting from this frame: the characters "
+                      "keep their positions and the action flows on; ")
+
+
 class ChuoiNoiCanh:
     """Chạy MỘT chuỗi tuần tự: ảnh → clip → cắt → khung cuối → cảnh sau.
 
@@ -242,7 +296,9 @@ class ChuoiNoiCanh:
                  trich_khung: Callable[[str, str], str],
                  ghi: Callable[[str], None], kiem_dung: Callable[[], None] = lambda: None,
                  bao_anh: Callable[[], None] = lambda: None,
-                 bao_clip: Callable[[], None] = lambda: None) -> None:
+                 bao_clip: Callable[[], None] = lambda: None,
+                 lien_mach: bool = True) -> None:
+        self.lien_mach = lien_mach
         self.thu_muc_anh = thu_muc_anh
         self.thu_muc_clip = thu_muc_clip
         self.thu_muc_tham_chieu = thu_muc_tham_chieu
@@ -260,24 +316,35 @@ class ChuoiNoiCanh:
     def chay(self, chuoi: Sequence[Dict[str, Any]]) -> int:
         """Trả về số cảnh có clip xong trong chuỗi."""
         khung_truoc: Optional[str] = None
+        canh_truoc: Optional[Dict[str, Any]] = None
         xong = 0
         for c in chuoi:
             self.kiem_dung()
             so = int(c["scene_id"])
             anh, clip, tho, khung = self._duong(so)
+            noi_tiep = False
             # ── ảnh ──
             if not os.path.exists(anh):
-                refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, khung_truoc)
-                prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), bool(khung_truoc))
-                try:
-                    self.lam_anh(c, anh, refs, prompt)
-                except Exception as loi:  # noqa: BLE001
-                    self.ghi("    cảnh {0}: ảnh hỏng ({1}) — chuỗi đứt ở đây, các cảnh sau "
-                             "bắt đầu lại từ tham chiếu bối cảnh.".format(so, str(loi)[:100]))
-                    self.loi.append("ảnh {0}".format(so))
-                    khung_truoc = None
-                    continue
+                if self.lien_mach and khung_truoc and noi_tiep_khong_cat(canh_truoc, c):
+                    # Cùng chỗ, cùng người: KHÔNG cắt — khung cuối clip trước là khung
+                    # đầu; Veo diễn tiếp hành động của cảnh này. Không tốn một ảnh.
+                    shutil.copyfile(khung_truoc, anh)
+                    noi_tiep = True
+                    self.ghi("    cảnh {0}: diễn tiếp từ khung cuối cảnh trước, không cắt.".format(so))
+                else:
+                    refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, khung_truoc)
+                    prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), bool(khung_truoc))
+                    try:
+                        self.lam_anh(c, anh, refs, prompt)
+                    except Exception as loi:  # noqa: BLE001
+                        self.ghi("    cảnh {0}: ảnh hỏng ({1}) — chuỗi đứt ở đây, các cảnh sau "
+                                 "bắt đầu lại từ tham chiếu bối cảnh.".format(so, str(loi)[:100]))
+                        self.loi.append("ảnh {0}".format(so))
+                        khung_truoc = None
+                        canh_truoc = None
+                        continue
             self.bao_anh()
+            canh_truoc = c
             # ── clip ──
             if not os.path.exists(clip):
                 if not str(c.get("video_prompt") or "").strip():
@@ -285,7 +352,10 @@ class ChuoiNoiCanh:
                     continue
                 try:
                     os.makedirs(os.path.dirname(tho), exist_ok=True)
-                    self.lam_clip(c, anh, tho)
+                    c_clip = c
+                    if noi_tiep:
+                        c_clip = dict(c, video_prompt=DAU_VIDEO_NOI_TIEP + str(c.get("video_prompt") or ""))
+                    self.lam_clip(c_clip, anh, tho)
                     self.cat(tho, clip, giay_cua_canh(c))
                 except Exception as loi:  # noqa: BLE001
                     self.ghi("    cảnh {0}: clip hỏng ({1}) — cảnh sau nối từ chính ảnh cảnh này; "
