@@ -8,7 +8,7 @@ mục đích: bé nghe hết truyện và bố mẹ yên tâm bật lại. hãy 
 4. AN TOÀN VÀ ÊM: không cảnh đáng sợ, máu me, đánh đập, chết chóc; cái ác thua kiểu cổ tích; kết thúc ấm, có bài học ngắn, câu hỏi cho bé kể với bố mẹ, lời chúc ngủ ngon
 5. TIẾNG CHO BÉ: câu ngắn, từ dễ, không từ khó, không mỉa mai người lớn; thuần <<NGON_NGU>>, không lệch tiếng, không sót lời dẫn
 6. NHÌN THẤY ĐƯỢC: mỗi cảnh rõ ở đâu / mặc gì / cầm gì / làm gì; khoảnh khắc đổi trang phục hay đồ vật được kể thành câu riêng — bản nào để hoạ sĩ phải đoán là trừ
-7. ĐỘ DÀI: KHÔNG giới hạn — truyện dài ngắn theo chính câu chuyện. Chỉ trừ điểm khi kể lê thê lặp ý, hoặc cụt lủn bỏ mất một chặng của truyện gốc.
+7. ĐỦ TRUYỆN VÀ ĐỘ DÀI: nguồn có mấy truyện thì bản kể phải có đủ bấy nhiêu, đúng thứ tự, mỗi truyện đủ chặng; tổng độ dài tương đương bản gốc (≈ <<PHUT_GOC>> phút đọc). Bỏ sót một truyện hay dừng sau truyện đầu là lỗi nặng nhất; kể lê thê lặp ý cũng trừ.
 
 số đo tôi tính sẵn cho từng bản (phút đọc quy từ số ký tự theo giọng đọc của kênh):
 <<SO_DO>>

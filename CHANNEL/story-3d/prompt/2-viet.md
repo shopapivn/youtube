@@ -1,4 +1,5 @@
-Dưới đây là bản kể của một truyện cổ tích (video đối thủ đã có nhiều người xem). Hãy VIẾT LẠI thành một bản kể mới bằng <<NGON_NGU>> — dài ngắn theo chính câu chuyện, KHÔNG giới hạn phút hay ký tự, kể đủ mọi chặng của truyện gốc, không kéo dài lê thê — cho TRẺ EM 4–10 tuổi nghe (trước giờ ngủ, hoặc cùng cha mẹ).
+Dưới đây là bản kể của MỘT HAY NHIỀU truyện cổ tích (video đối thủ đã có nhiều người xem; nhiều video gộp 2–5 truyện nối tiếp nhau). Hãy VIẾT LẠI thành bản kể mới bằng <<NGON_NGU>> cho TRẺ EM 4–10 tuổi nghe (trước giờ ngủ, hoặc cùng cha mẹ).
+ĐỘ DÀI VÀ ĐỦ TRUYỆN — quan trọng nhất: kể lại TẤT CẢ các truyện có trong nguồn, đúng thứ tự, mỗi truyện đủ mọi chặng (mở đầu, các biến cố, cao trào, kết), mỗi truyện có câu mở và câu kết riêng; tổng độ dài tương đương bản gốc — bản gốc dài khoảng <<PHUT_GOC>> phút đọc (<<CHARS_GOC>> ký tự). Không rút thành tóm tắt, không bỏ truyện nào, không kéo dài lê thê. Đừng dừng bài sau truyện đầu tiên.
 Tiêu đề video: <<TITLE>>
 Giọng kể của kênh: <<LANGUAGE>>
 
