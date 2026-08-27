@@ -516,7 +516,8 @@ _KHUNG_CHUNG = (
 DAU_CLIP_KHUNG_DAU = (
     KHOA_CLIP + "Animate from this exact first frame as one continuous shot of a 3D animated film: lively, "
     "clearly visible motion the whole time — the characters act out every beat with full-body movement, "
-    "gestures and expressions, never a frozen pose. " + _KHUNG_CHUNG)
+    "gestures and expressions, never a frozen pose. The motion runs right through the final frame: do NOT "
+    "slow down, settle or hold still near the end of the clip. " + _KHUNG_CHUNG)
 #: Đoạn 2 trở đi của cùng một cú máy: MÁY ĐỨNG YÊN. Đo 26/08/2026: mỗi đoạn
 #: "trôi nhẹ" một chút, bốn đoạn cộng lại thành một cú zoom vào — người xem thấy
 #: bối cảnh đổi hẳn. Máy đứng yên thì bốn clip ghép lại vẫn là MỘT khung hình.
@@ -524,7 +525,8 @@ DAU_CLIP_NOI_TIEP_DAI = (
     KHOA_CLIP + "One single unbroken take continuing from this exact frame — no cut, no new shot, no jump. "
     "The camera is locked off: it does not move, pan, tilt, zoom, orbit or drift, and the framing at the end "
     "of the clip is exactly the framing at the start. Lively, clearly visible motion from the characters the "
-    "whole time, never a frozen pose. " + _KHUNG_CHUNG)
+    "whole time, never a frozen pose, and the motion runs right through the final frame — do NOT slow down, "
+    "settle or hold still near the end of the clip. " + _KHUNG_CHUNG)
 def hanh_dong_clip(video_prompt: str):
     """(hành động + máy quay, đuôi phong cách) của một lời nhắc clip — bỏ khối IDENTITY LOCK
     ở đầu (ở chế độ khung đầu, nhân vật đã nằm trong khung; Veo cần hành động, không cần tả người)."""
@@ -769,6 +771,10 @@ class CuMayDai(ChuoiNoiCanh):
                     if not os.path.exists(tho):
                         c_clip = dict(c_dau, video_prompt=prompt_doan(d, k > 0))
                         self.lam_clip(c_clip, f0, tho, f1)
+                    # KHÔNG bỏ đoạn đầu clip. Đo 27/08/2026 trên phim 0002: cắt từ
+                    # 0,35 s làm số chỗ đứng hình TĂNG từ 3 lên 6 — clip thô gần như
+                    # không có đoạn lấy đà (freezedetect trên 3 clip: 1 clip 0,33 s,
+                    # 2 clip không có), nên dịch cửa sổ chỉ kéo thêm phần cuối vào.
                     self.cat_tu(tho, cat, 0.0, d["giay"])
                 except Exception as loi:  # noqa: BLE001
                     self.ghi("    đoạn {0}-{1}: clip hỏng ({2}) — bỏ đoạn này, mở lại cú "

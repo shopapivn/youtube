@@ -760,6 +760,22 @@ def _giay_srt(moc: Any) -> float:
         return 0.0
 
 
+def _dai_clip(ffmpeg: str, duong: str) -> float:
+    """Độ dài một clip, tính bằng giây. Không đo được thì trả `0.0`.
+
+    Dùng để biết còn bao nhiêu chỗ dư mà bỏ đoạn lấy đà đầu clip.
+    """
+    try:
+        tho = subprocess.run(
+            [ffmpeg, "-hide_banner", "-i", duong], capture_output=True, text=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stderr or ""
+        chu = tho.split("Duration:", 1)[1].split(",", 1)[0].strip()
+        gio, phut, giay = chu.split(":")
+        return int(gio) * 3600 + int(phut) * 60 + float(giay)
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return 0.0
+
+
 def _kiem_media(bc: BoiCanh, duong: str) -> None:
     """Mở thử tệp bằng FFmpeg. Hỏng thì **xoá** để lần sau tải lại.
 
@@ -1752,11 +1768,20 @@ def _khau_kich_ban(bc_goc: BoiCanh):
         # ở máy này lại là dùng api… có thể mày đang viết content bằng
         # shopapi"*. Một dòng này để ai dán nhật ký lên cũng thấy ngay.
         if bc_goc.goi_chat_kich_ban is not None:
-            from .viet_max import MO_HINH_TOT_NHAT, NHIP_THU_LAI  # noqa: PLC0415
+            from .viet_max import (NHIP_THU_LAI, THANG_MO_HINH,  # noqa: PLC0415
+                                   mo_hinh_dang_dung)
 
+            # Nói model ĐANG dùng, không nói model đứng đầu thang: hôm nay
+            # fable cạn hạn mức thì dòng này phải hiện đúng bậc thay thế, chứ
+            # không phải một cái tên đã bị bỏ qua từ nãy.
+            dang = mo_hinh_dang_dung(bc.goc)
             bc.ghi("  đường viết chữ: Claude Code (thuê bao Claude Max của máy), "
-                   "model {0}, KHÔNG tiêu ví; hỏng thì thử lại {1} lần rồi mới "
-                   "báo lỗi.".format(MO_HINH_TOT_NHAT, 1 + len(NHIP_THU_LAI)))
+                   "model {0}{1}, KHÔNG tiêu ví; hết hạn mức thì tụt bậc ngay, "
+                   "hỏng vì lý do khác thì thử lại {2} lần rồi mới báo lỗi.".format(
+                       dang,
+                       "" if dang == THANG_MO_HINH[0] else
+                       " (đã tụt từ {0} vì hết hạn mức)".format(THANG_MO_HINH[0]),
+                       1 + len(NHIP_THU_LAI)))
         else:
             bc.ghi("  đường viết chữ: ví ShopAPI, model {0} (mỗi lượt gọi trừ "
                    "tiền).".format(k.mo_hinh))
@@ -3493,6 +3518,79 @@ def _giay_clip(bc: BoiCanh) -> int:
         return 8 if bc.kenh.engine == "veo3" else 10
 
 
+def _ghim_hai_dau(bc: BoiCanh) -> bool:
+    """Kênh này có vẽ thêm ảnh KHUNG CUỐI và ghim clip cả hai đầu không?"""
+    return bool(getattr(getattr(bc, "kenh", None), "ghim_hai_dau", False))
+
+
+def _anh_khung_cuoi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
+                    anh_dau: str, hop: "ThamChieu",
+                    so: Optional[SoTheoDoi] = None) -> str:
+    """Vẽ tấm KHUNG CUỐI của một cảnh; trả đường dẫn, hoặc "" nếu không vẽ được.
+
+    ═══ VÌ SAO CẦN TẤM NÀY ═══
+
+    Ghim khung ĐẦU xong thì đầu clip trùng khít ảnh (đo 27/08/2026: lệch 3,6 /
+    255, 30/30 clip). Nhưng Veo vẫn có 8 giây tự do sau đó, và đuôi trôi: AI
+    chấm khung cuối 3,70, hai clip rơi xuống 2 điểm.
+
+    Ghim CẢ HAI đầu trên đúng ba clip trôi nặng nhất: cảnh 11 đi 2 → 4, cảnh 2
+    đi 3 → 4, và cả ba clip kết thúc gần trùng khít tấm khung cuối (lệch
+    1,4–5,4). Cảnh 8 vẫn 2 điểm — vì chính TẤM KHUNG CUỐI của nó vẽ sai (lệch
+    khung đầu 52,6, tức một bố cục khác hẳn).
+
+    Bài học nằm ở cảnh 8: ghim hai đầu không tự chữa nhân vật, nó **dời chỗ
+    hỏng từ bên trong video ra thành một tấm ảnh**. Mà ảnh thì đo được, chấm
+    được, vẽ lại được — nên tấm này đi qua ĐÚNG cửa chấm như ảnh khung đầu.
+
+    Ảnh khung đầu được đính làm tham chiếu CUỐI CÙNG: `prompt_khung_cuoi` dặn
+    máy "cùng cú máy với tấm tham chiếu cuối, máy không di chuyển, chỉ nhân
+    vật diễn tiếp".
+    """
+    from .noi_canh import prompt_khung_cuoi  # noqa: PLC0415
+
+    so_canh = int(c["scene_id"])
+    dich = os.path.join(os.path.dirname(anh_dau), "{0}-cuoi.png".format(so_canh))
+    if os.path.exists(dich):
+        return dich
+    loi_nhac = prompt_khung_cuoi(str(c.get("img_prompt") or ""))
+    if not loi_nhac.strip():
+        return ""
+    from .dao_dien_auto import ThamChieuCanh  # noqa: PLC0415
+
+    duong = list(getattr(hop, "_duong", []) or [])
+    # Ảnh khung ĐẦU đính làm tham chiếu CUỐI CÙNG: `prompt_khung_cuoi` dặn máy
+    # "cùng cú máy với tấm tham chiếu cuối". Hộp không có đường cục bộ (kênh
+    # một nhân vật cố định) thì dùng nguyên hộp cũ, mất câu neo ấy nhưng vẫn
+    # vẽ được.
+    hop_cuoi = ThamChieuCanh(bc, duong + [anh_dau]) if duong else hop
+    try:
+        goi = _tao_anh(bc, luot, loi_nhac, hop_cuoi,
+                       khoa_viec(luot, "img", so_canh, loi_nhac,
+                                 "|".join(hop_cuoi.lay()), "kc"),
+                       ten_hien="khung cuối cảnh {0}".format(so_canh), so=so)
+        _tai_ket_qua(bc, goi, 0, dich)
+        _xoa_dau(bc, dich)
+    except Exception as loi:  # noqa: BLE001 — không có khung cuối thì ghim một đầu
+        bc.ghi("    cảnh {0}: không vẽ được khung cuối ({1}) — ghim một đầu."
+               .format(so_canh, str(loi)[:80]))
+        return ""
+    # Cùng cửa chấm với ảnh khung đầu: cảnh 8 hỏng vì chính tấm này vẽ sai.
+    _cham_va_ve_lai(bc, luot, dict(c, img_prompt=loi_nhac), dich, hop_cuoi, so=so)
+    return dich
+
+
+def _co_khung_dau(bc: BoiCanh) -> bool:
+    """Kênh này có ghim khung đầu clip không.
+
+    `getattr` chứ không `bc.kenh.khung_dau`: khâu clip chạy trong luồng phụ và
+    mọi lỗi ở đó bị nuốt thành "cảnh này hỏng" — một `AttributeError` vì đồ
+    giả trong bài kiểm thiếu trường sẽ hiện ra thành *"không ra clip nào"* chứ
+    không hiện ra thành lỗi thuộc tính. Mất nửa giờ mới lần ra (27/08/2026).
+    """
+    return bool(getattr(getattr(bc, "kenh", None), "khung_dau", False))
+
+
 def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
               dich: str, giay: int, so: Optional[SoTheoDoi] = None,
               khung_dau: bool = False, anh_cuoi: Optional[str] = None) -> None:
@@ -3501,6 +3599,18 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
     `khung_dau=True` gửi thêm `frame_mode: start_frame`: khung hình đầu của clip
     CHÍNH LÀ ảnh (Flow "Frames"). Khoá idempotency đổi theo, vì clip cũ cùng
     prompt nhưng làm ở chế độ nguyên liệu là một sản phẩm khác.
+
+    ═══ BA NƠI GỌI, TRƯỚC 27/08/2026 CHỈ MỘT NƠI TRUYỀN CỜ ═══
+
+    Kênh khai `khung_dau: true` mà đường thường (không nối cảnh) vẫn gọi hàm
+    này với mặc định `False` — cờ của kênh bị bỏ qua **lặng lẽ**, không một
+    dòng nhật ký nào.
+
+    Đo được vì so khung đầu clip với chính tấm ảnh gửi vào (ảnh xám 160×90,
+    thang 0–255): phim `openstory/0002` lệch trung bình **37,6** dù kênh đã
+    bật cờ; làm lại đúng một clip có cờ thì lệch **3,5**. Một phép đo rẻ mà
+    nói ngay được "cờ có tới nơi không" — đắt hơn nhiều là ngồi đoán vì sao
+    nhân vật trôi.
 
     `anh_cuoi` gửi thêm `image_url_end`: clip bị ghim CẢ HAI đầu — nó bắt đầu
     đúng bằng `anh` và kết thúc đúng bằng `anh_cuoi`, engine chỉ làm phần chuyển
@@ -3688,6 +3798,108 @@ def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
                            ten_hien="ảnh cảnh {0}".format(so_canh), so=so)
     _tai_ket_qua(bc, goi, 0, tep)
     _xoa_dau(bc, tep)
+    _cham_va_ve_lai(bc, luot, c, tep, hop, so=so)
+
+
+#: Mỗi cảnh yếu được vẽ thêm tối đa bấy nhiêu ứng viên.
+SO_UNG_VIEN_CHAM = 2
+
+
+def _cham_va_ve_lai(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
+                    hop: "ThamChieu", so: Optional[SoTheoDoi] = None) -> None:
+    """Chấm tấm vừa vẽ với ảnh tham chiếu; lệch quá thì vẽ thêm, giữ tấm hơn.
+
+    ═══ VÌ SAO KHÂU NÀY CẦN CỬA CHẤM RIÊNG ═══
+
+    Tool đã có bộ chấm `core/cham_anh.py` từ 25/08/2026, nhưng nó chỉ gắn vào
+    **hàng đợi của giao diện** (`ui_qt/app.py` → `core/jobs.py`). Luồng Tự động
+    gọi thẳng `client.images.create`, nên nó đi vòng qua cửa ấy: vẽ xong là đi
+    tiếp, tấm nào lệch thì lệch luôn vào phim.
+
+    Đo 27/08/2026 trên phim `openstory/0002` (30 cảnh): 4 cảnh ra 2–3 điểm —
+    nhân vật bị vẽ lại thành người khác. Vẽ thêm ứng viên rồi giữ tấm cao điểm
+    hơn cứu được **cả bốn** lên 4 điểm (cảnh 2 đi 2 → 3 → 4).
+
+    ═══ MẶC ĐỊNH TẮT ═══
+
+    Mỗi lượt chấm là một lời gọi chữ có kèm ảnh, và mỗi lần vẽ lại là một tấm
+    ảnh nữa — tiền thật. Kênh nào muốn thì khai `cham_anh: true` trong
+    `kenh.yaml`; kênh của khách không tự dưng đắt lên.
+    """
+    if not bool(getattr(bc.kenh, "cham_anh", False)):
+        return
+    from .cham_anh import NGUONG_LAM_LAI, cham_anh  # noqa: PLC0415
+
+    refs = _duong_tham_chieu(bc, luot, c, hop)
+    if not refs or not os.path.isfile(tep):
+        return
+    so_canh = int(c["scene_id"])
+
+    def goi_cham(noi_dung):
+        from .goi_van_ban import goi_van_ban  # noqa: PLC0415
+
+        return goi_van_ban(bc.client, [{"role": "user", "content": noi_dung}],
+                           mo_hinh=bc.kenh.mo_hinh, toi_da_token=200)
+
+    diem = cham_anh(goi_cham, tep, refs, mo_ta=str(c.get("img_prompt") or "")[:600])
+    # `0` KHÔNG phải điểm kém: giám khảo được bảo trả 0 khi nhân vật không có
+    # trong khung (máy quay đang ở chỗ khác, cảnh chỉ có đồ vật) — không có gì
+    # để so thì không có gì để sửa. `core/jobs.py` chặn vế này từ 25/08/2026;
+    # bản đầu của hàm này quên, và cảnh 27 của phim 0002 bị vẽ lại oan
+    # (27/08/2026).
+    if diem is None or diem == 0 or diem > NGUONG_LAM_LAI:
+        return
+    bc.ghi("    ảnh cảnh {0}: {1}/5 điểm giống — vẽ thêm để chọn tấm hơn…".format(
+        so_canh, diem))
+    tot = diem
+    giu = tep + ".giu"
+    try:
+        shutil.copyfile(tep, giu)
+    except OSError:
+        return
+    try:
+        for lan in range(SO_UNG_VIEN_CHAM):
+            bc.kiem_dung()
+            try:
+                goi = _tao_anh(bc, luot, c["img_prompt"], hop,
+                               khoa_viec(luot, "img", so_canh, c["img_prompt"],
+                                         "|".join(hop.lay()), "uv{0}".format(lan + 1)),
+                               ten_hien="ảnh cảnh {0} (ứng viên {1})".format(
+                                   so_canh, lan + 1), so=so)
+                _tai_ket_qua(bc, goi, 0, tep)
+                _xoa_dau(bc, tep)
+            except Exception as loi:  # noqa: BLE001 — ứng viên hỏng thì giữ tấm cũ
+                bc.ghi("    ảnh cảnh {0}: ứng viên {1} không vẽ được ({2})".format(
+                    so_canh, lan + 1, str(loi)[:80]))
+                break
+            moi = cham_anh(goi_cham, tep, refs,
+                           mo_ta=str(c.get("img_prompt") or "")[:600])
+            bc.ghi("    ảnh cảnh {0}: ứng viên {1} được {2}/5 (tấm đang giữ {3})".format(
+                so_canh, lan + 1, moi, tot))
+            if moi is not None and moi > tot:
+                tot = moi
+                shutil.copyfile(tep, giu)
+            if tot > NGUONG_LAM_LAI:
+                break
+        # Tấm cuối cùng vẽ ra chưa chắc là tấm hơn — chép lại bản đang giữ.
+        shutil.copyfile(giu, tep)
+    finally:
+        try:
+            os.remove(giu)
+        except OSError:
+            pass
+
+
+def _duong_tham_chieu(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
+                      hop: "ThamChieu") -> List[str]:
+    """Đường dẫn ảnh tham chiếu THẬT của một cảnh, cho bộ chấm mở ra xem.
+
+    Chỉ đường đạo diễn (`ThamChieuCanh`) mới giữ đường dẫn cục bộ. Kênh một
+    nhân vật cố định đi hộp khác, chưa có đường ấy — trả rỗng thì `cham_anh`
+    lặng lẽ bỏ qua, đúng nết "không có gì để so thì đừng chấm".
+    """
+    duong = list(getattr(hop, "_duong", []) or [])
+    return [p for p in duong if isinstance(p, str) and os.path.isfile(p)]
 
 
 _KHOA_SUA_CANH = threading.Lock()
@@ -3992,12 +4204,18 @@ def _kiem_kich_ban_dung_duoc(so_ky_tu: int, muc_tieu: int,
         except OSError:
             pass
     raise LoiNoiDung(
-        "kịch bản chỉ có {0} ký tự trong khi cần khoảng {1} — ngắn tới mức này "
+        "kịch bản chỉ có {0} ký tự, dưới sàn {1} ký tự{2} — ngắn tới mức này "
         "thì thường không phải bài viết, mà là câu AI hỏi lại hoặc trả về dở. "
         "Dừng ở đây thay vì đem nó đi tạo giọng nói và hàng trăm tấm ảnh. "
         "Bản hỏng đã dời sang 1-kich-ban-KHONG-DUNG-DUOC.txt để bạn xem máy đã "
         "trả về gì; bấm Chạy tiếp là tool viết lại từ đầu."
-        .format(so_ky_tu, muc_tieu))
+        # Nói SÀN trước, mục tiêu sau. Kênh để độ dài tự do thì `muc_tieu` là
+        # 0, mà câu cũ in thẳng `muc_tieu` nên màn hình hiện "cần khoảng 0" —
+        # vô nghĩa với người đọc, lại giấu mất con số thật đang chặn (đo
+        # 26/08/2026, lượt thử kênh openstory: bài 1.452 ký tự bị sàn 1.500
+        # chặn, màn hình nói 0).
+        .format(so_ky_tu, san,
+                " (mục tiêu {0})".format(muc_tieu) if muc_tieu > 0 else ""))
 
 
 def _lam_sach_ket_qua(bc: BoiCanh, *tep: str) -> None:
@@ -4291,7 +4509,12 @@ def _khau_anh(bc: BoiCanh):
             if not str(c.get("video_prompt") or "").strip():
                 return
             try:
-                _lam_clip(bc, luot, c, tep_anh, dich, giay, so=so)
+                anh_cuoi = (_anh_khung_cuoi(bc, luot, c, tep_anh,
+                                            _hop_cho_canh(bc, luot, c, hop), so=so)
+                            if _ghim_hai_dau(bc) else "")
+                _lam_clip(bc, luot, c, tep_anh, dich, giay, so=so,
+                          khung_dau=_co_khung_dau(bc) or bool(anh_cuoi),
+                          anh_cuoi=anh_cuoi or None)
                 van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
             except Cancelled:
                 raise
@@ -4420,7 +4643,7 @@ def _khau_anh_noi_canh(bc: BoiCanh):
             _bo_clip_cu(bc, os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))
 
         def lam_clip(c, anh, tho, anh_cuoi=None):
-            _lam_clip(bc, luot, c, anh, tho, giay, so=so, khung_dau=bool(bc.kenh.khung_dau),
+            _lam_clip(bc, luot, c, anh, tho, giay, so=so, khung_dau=_co_khung_dau(bc),
                       anh_cuoi=anh_cuoi)
 
         def cat(tho, clip, giay_canh):
@@ -4513,7 +4736,15 @@ def _khau_clip(bc: BoiCanh):
                     cu = True
                 if not cu:
                     return so_canh, True
-            _lam_clip(bc, luot, c, anh, tep, giay, so=so)
+            # Cùng luật với dây chuyền ở khâu ảnh — hai nhánh lệch nhau đúng
+            # một tham số là cờ chết lặng, không ai thấy (bài học 27/08/2026
+            # với `khung_dau`, xem `_lam_clip`).
+            anh_cuoi = (_anh_khung_cuoi(bc, luot, c, anh,
+                                        _hop_cho_canh(bc, luot, c, _HopTrong()), so=so)
+                        if _ghim_hai_dau(bc) else "")
+            _lam_clip(bc, luot, c, anh, tep, giay, so=so,
+                      khung_dau=_co_khung_dau(bc) or bool(anh_cuoi),
+                      anh_cuoi=anh_cuoi or None)
             van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
             return so_canh, False
 
