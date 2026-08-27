@@ -52,6 +52,8 @@ from .chia_canh import (DUOI_CAM, MIN_GIAY_CANH, bang_phu_de, chia_theo_nghia,
 from .goi_van_ban import loc_json
 from .kenh import Kenh, ten_khung, ten_tieng
 from .nang_anh import KHUNG
+from .ghi_dia import (duong_tam, ghi_chu as _ghi_chu_dia, ghi_json,
+                      thay_the)
 from .the_cam_xuc import TEP_CO_THE, chen_the, kiem_the
 from .tron_tieng import co_ne_giong, loc_tron_nhac
 from .su_co import (SUAT_TAI_TEP, LoiNoiDung, LoiTaiVe, goi_kien_nhan,
@@ -688,11 +690,7 @@ def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
 
 
 def _ghi_chu(duong: str, chu: str) -> None:
-    os.makedirs(os.path.dirname(duong) or ".", exist_ok=True)
-    tam = duong + ".tam"
-    with open(tam, "w", encoding="utf-8") as tep:
-        tep.write(chu)
-    os.replace(tam, duong)
+    _ghi_chu_dia(duong, chu)
 
 
 def _doc_chu(duong: str) -> str:
@@ -1817,7 +1815,7 @@ def _tai_ket_qua_mot_lan(bc: BoiCanh, goi: Dict[str, Any], chi_so: int,
         dia_chi += "?index={0}".format(int(chi_so))
 
     os.makedirs(os.path.dirname(dich) or ".", exist_ok=True)
-    tam = dich + ".tam"
+    tam = duong_tam(dich)
     xin_nhip(bc.on_log, ngu=bc.ngu)
     dau = bc.client._build_headers(accept="*/*")  # noqa: SLF001
     da_nhan = 0
@@ -1844,7 +1842,7 @@ def _tai_ket_qua_mot_lan(bc: BoiCanh, goi: Dict[str, Any], chi_so: int,
             raise LoiNoiDung(
                 "tải thiếu: nhận {0} byte trong khi máy chủ báo {1}".format(
                     da_nhan, can))
-    os.replace(tam, dich)
+    thay_the(tam, dich)
     return dich
 
 
@@ -3360,9 +3358,9 @@ def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh,
                 kh.cell(hang, cot, (c or {}).get(ten, ""))
 
     os.makedirs(os.path.dirname(duong) or ".", exist_ok=True)
-    tam = duong + ".tam"
+    tam = duong_tam(duong)
     sach.save(tam)
-    os.replace(tam, duong)
+    thay_the(tam, duong)
 
 
 # ── Khâu 5 & 6: ảnh và clip ──────────────────────────────────────────────────
@@ -3523,8 +3521,23 @@ def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str,
 
     `giu_nhip` là số giây tối thiểu giữa hai lần **ghi ra đĩa** — xem
     `NHIP_GHI_TIEN_DO`.
+
+    ═══ GHI SỔ HỎNG KHÔNG ĐƯỢC LÀM HỎNG KHÂU ═══
+
+    Đây là **sổ sách**, không phải sản phẩm. Ảnh đã tải về vẫn nằm trên đĩa dù
+    có ghi được tiến độ hay không, và khâu chạy lại sẽ nhìn đĩa mà nhặt tiếp.
+    Nên một lỗi ghi tệp ở đây chỉ được phép làm mất *con số hiển thị*, tuyệt
+    đối không được ném lên trên để giết cả mẻ.
+
+    Có luật này vì đã mất thật: 27/08/2026, máy khách chết ở đúng dòng đổi tên
+    `trang-thai.json` (`WinError 5`), khâu ảnh hỏng 12 lần liền, 97 cảnh không
+    ra nổi một tấm — trong khi kịch bản, giọng đọc, phụ đề và bảng cảnh đã
+    xong hết từ ba tiếng trước. `core/ghi_dia.py` lo phần thử lại; chỗ này là
+    lưới cuối, cho trường hợp thử lại vẫn không xong (đĩa đầy, thư mục bị khoá
+    hẳn). Lỗi vẫn được nói ra một lần trong nhật ký chứ không nuốt im.
     """
     moc = [0.0]
+    da_than = [False]
 
     def bao(xong: int, tong: int) -> None:
         tt.ghi_chu["xong"] = int(xong)
@@ -3534,7 +3547,13 @@ def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str,
         if giu_nhip and xong < tong and bay_gio - moc[0] < float(giu_nhip):
             return
         moc[0] = bay_gio
-        bc.nhip(luot)
+        try:
+            bc.nhip(luot)
+        except OSError as loi:
+            if not da_than[0]:
+                da_than[0] = True
+                bc.ghi("    (không ghi được tiến độ ra đĩa: {0} — vẫn chạy "
+                       "tiếp, kết quả không mất)".format(str(loi)[:120]))
 
     return bao
 
@@ -4544,12 +4563,8 @@ class VanTay:
         with self._khoa:
             self._so[str(so)] = self._dau(*phan)
             ban = dict(self._so)
-        tam = self._duong + ".tam"
         try:
-            os.makedirs(os.path.dirname(self._duong) or ".", exist_ok=True)
-            with open(tam, "w", encoding="utf-8") as tep:
-                json.dump(ban, tep, ensure_ascii=False)
-            os.replace(tam, self._duong)
+            ghi_json(self._duong, ban, indent=None)
         except OSError:
             # Sổ hỏng không được làm hỏng lượt chạy: mất sổ thì chỉ mất khả
             # năng phát hiện lời nhắc đổi, ảnh vẫn có và tiền vẫn không mất.

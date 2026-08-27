@@ -219,6 +219,36 @@ def describe(exc: BaseException) -> ErrorAdvice:
             action="Bạn thử lại giúp mình.",
         )
 
+    # ── Windows đang giữ tệp ─────────────────────────────────────────────────
+    #
+    # Phải đứng TRƯỚC nhánh "đứt mạng" ngay dưới: nhánh ấy bắt cả `OSError`, nên
+    # một lỗi ghi tệp trên máy lại được báo là "Mạng bị gián đoạn" — khách đi
+    # kiểm tra đường truyền cho một sự cố không liên quan gì tới mạng.
+    #
+    # Log máy khách 27/08/2026 (lượt `TL1-T1/0001`), khâu ảnh hỏng 12 lần::
+    #
+    #     [WinError 5] Access is denied:
+    #     '…\\0001\\trang-thai.json.tam' -> '…\\0001\\trang-thai.json'
+    #
+    # Thủ phạm gần như luôn là phần mềm diệt vi-rút đang quét tệp vừa ghi, thư
+    # mục đang đồng bộ đám mây, hoặc hai cửa sổ tool cùng mở một lượt.
+    # `core/ghi_dia.py` đã tự đợi và thử lại; tới được đây nghĩa là nó bị giữ
+    # lâu hơn năm giây — lúc ấy khách cần biết phải làm gì, không phải chụp
+    # màn hình.
+    if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (5, 32, 33):
+        return ErrorAdvice(
+            title="Windows đang chặn một tệp trong thư mục kết quả",
+            message="Tool ghi sổ tiến độ không được vì Windows báo tệp đang bị "
+                    "giữ. Kết quả đã làm xong vẫn còn nguyên trên đĩa, bạn "
+                    "KHÔNG mất tiền phần đã chạy.",
+            action="Đóng bớt cửa sổ tool nếu bạn mở hai cái cùng một lượt, và "
+                   "cho thư mục PROJECTS ra ngoài danh sách quét của phần mềm "
+                   "diệt vi-rút (hoặc chuyển tool ra khỏi Downloads / thư mục "
+                   "đang đồng bộ đám mây). Rồi bấm “Chạy tiếp” — tool nhặt "
+                   "đúng chỗ đang dở.",
+            retryable=True,
+        )
+
     # ── Đứt mạng ở tầng dưới SDK ─────────────────────────────────────────────
     #
     # `RemoteDisconnected`, `ConnectionResetError`, `URLError`… nổ ra từ

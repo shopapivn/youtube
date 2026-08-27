@@ -47,6 +47,8 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from .ghi_dia import ghi_json
+
 __all__ = [
     "KHAU", "MA_KHAU", "ten_khau", "khau_tieu_tien",
     "CHO", "DANG", "XONG", "HONG", "BO_QUA",
@@ -311,6 +313,12 @@ def ghi_luot(luot: LuotChay) -> None:
     Ghi thẳng thì mất điện đúng lúc ghi là tệp trạng thái cụt đầu, và khi ấy
     **cả lượt chạy coi như mất** dù mọi tệp kết quả vẫn nằm nguyên trên đĩa —
     đúng thứ mà cơ chế chạy tiếp sinh ra để tránh.
+
+    Việc đổi tên đi qua `core/ghi_dia.py` chứ không gọi thẳng `os.replace`:
+    trên Windows tệp này bị ghi hàng nghìn lượt trong một mẻ ảnh, và chỉ cần
+    một lượt trúng lúc con quét vi-rút đang mở tệp tạm là cả khâu chết
+    (27/08/2026, máy khách: `WinError 5`, hỏng 12 lần liền, 97 cảnh không ra
+    nổi một tấm).
     """
     os.makedirs(luot.thu_muc, exist_ok=True)
     goi = {
@@ -320,12 +328,7 @@ def ghi_luot(luot: LuotChay) -> None:
         "tao_luc": luot.tao_luc,
         "khau": {m: asdict(luot.tt(m)) for m in MA_KHAU},
     }
-    duong = os.path.join(luot.thu_muc, TEP_TRANG_THAI)
-    tam = duong + ".tam"
-    with open(tam, "w", encoding="utf-8") as tep:
-        json.dump(goi, tep, ensure_ascii=False, indent=2)
-        tep.write("\n")
-    os.replace(tam, duong)
+    ghi_json(os.path.join(luot.thu_muc, TEP_TRANG_THAI), goi)
 
 
 # ── Chạy lại một bước ────────────────────────────────────────────────────────
@@ -477,8 +480,22 @@ def chay(
         if on_log is not None:
             on_log(dong)
 
+    da_than_ghi = [False]
+
     def bao_doi() -> None:
-        ghi_luot(luot)
+        # Ghi sổ hỏng thì **mất sổ**, không được mất lượt: mọi kết quả vẫn nằm
+        # trên đĩa và các khâu sau vẫn chạy được. Chết ở đây là bỏ dở một lượt
+        # đã tiêu tiền chỉ vì một tệp trạng thái — xem `ghi_luot`.
+        try:
+            ghi_luot(luot)
+        except OSError as loi:
+            if not da_than_ghi[0]:
+                da_than_ghi[0] = True
+                ghi("   (KHÔNG ghi được {0}: {1})".format(
+                    TEP_TRANG_THAI, str(loi)[:120]))
+                ghi("   Lượt vẫn chạy tiếp, kết quả không mất. Nhưng nếu đóng "
+                    "tool bây giờ thì lần sau mở lên sẽ không nhớ đang tới "
+                    "khâu nào — hãy để nó chạy hết.")
         if on_doi is not None:
             on_doi(luot)
 
