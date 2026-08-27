@@ -430,3 +430,22 @@ class TestDungLaiCuMay:
         nc.don_cu_may(str(anh_d), str(tmp_path / "6-clip"), [_c(1, "loc1")], ca_anh=False)
         assert (anh_d / "1.png").exists() and (doan / "1-1.png").exists()
         assert not (doan / "1-0.mp4").exists()
+
+    def test_doan_moi_hon_thi_noi_lai_cu_may(self, tmp_path):
+        """Vẽ lại một đoạn thì cú máy phải nối lại, nếu không cảnh cắt ra vẫn là bản cũ.
+
+        Đo 27/08/2026 (phim 0002): sửa xong cảnh 5, đoạn mới đúng, nhưng tệp cú máy cũ
+        còn nằm đó nên tool cắt cảnh ra từ bản cũ — mọi tệp mang giờ mới mà hình vẫn cũ.
+        """
+        import time
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path)
+        canh = [_c(1, "loc1", giay=4.0)]
+        assert ct.chay(canh) == 1
+        assert len(nhat["noi"]) == 1
+        # chạy lại: không nối lại
+        assert ct.chay(canh) == 1 and len(nhat["noi"]) == 1
+        # đoạn được vẽ lại (mới hơn cú máy) -> phải nối lại
+        time.sleep(1.1)
+        (clip_d / "_doan" / "1-0-cat.mp4").write_bytes(b"moi")
+        (clip_d / "1.mp4").unlink()
+        assert ct.chay(canh) == 1 and len(nhat["noi"]) == 2

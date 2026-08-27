@@ -683,6 +683,21 @@ def noi_cac_clip(ffmpeg: str, nguon: Sequence[str], dich: str,
         raise RuntimeError("nối clip hỏng: {0}".format(str(getattr(ket, "stderr", ""))[-300:]))
 
 
+def _co_doan_moi_hon(doan: Sequence[str], take: str) -> bool:
+    """Có đoạn nào mới hơn tệp cú máy không (tức cú máy đã cũ, phải nối lại)."""
+    try:
+        moc = os.path.getmtime(take)
+    except OSError:
+        return True
+    for q in doan:
+        try:
+            if os.path.getmtime(q) > moc + 1:
+                return True
+        except OSError:
+            return True
+    return False
+
+
 class CuMayDai(ChuoiNoiCanh):
     """Một chuỗi = một cú máy dài ghép từ các đoạn 8 s (xem chú thích đầu mục).
 
@@ -763,7 +778,11 @@ class CuMayDai(ChuoiNoiCanh):
             self.ghi("    chuỗi {0}: chỉ có {1}/{2} đoạn — các cảnh sau mốc đó chưa có clip.".format(ma, len(cat_xong), len(doan)))
         take = os.path.join(tm, "{0}.mp4".format(ma))
         try:
-            if not os.path.exists(take) or not du:
+            # Nối lại khi CHƯA có, khi thiếu đoạn, HOẶC khi có đoạn mới hơn chính nó.
+            # Đo 27/08/2026: vẽ lại cảnh 5 của phim 0002 thì đoạn mới ra đúng, nhưng
+            # tệp cú máy cũ vẫn nằm đó nên tool cắt cảnh ra từ BẢN CŨ — người xem thấy
+            # y như chưa sửa gì, mà mọi tệp đều mang giờ mới.
+            if not os.path.exists(take) or not du or _co_doan_moi_hon(cat_xong, take):
                 self.noi_clip(cat_xong, take)
         except Exception as loi:  # noqa: BLE001
             self.ghi("    chuỗi {0}: nối các đoạn hỏng ({1}).".format(ma, str(loi)[:100]))
