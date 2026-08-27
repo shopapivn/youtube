@@ -281,9 +281,12 @@ def _cu_may(tmp_path, lam_anh_hong=None, lam_clip_hong=None):
     for x in ("nv1.png", "loc1.png"):
         (tc / x).write_bytes(b"ref")
     nhat = {"anh": [], "clip": [], "cat": [], "noi": [], "khung": [], "ghi": []}
+    dem = {"anh": 0}   # đếm mọi LƯỢT GỌI, kể cả lượt hỏng — nếu đếm ảnh đã vẽ thì
+                       # một ảnh hỏng làm mọi lượt sau cũng thành "lượt thứ 2" và hỏng theo
 
     def lam_anh(c, tep, refs, prompt):
-        if lam_anh_hong and len(nhat["anh"]) + 1 in lam_anh_hong:
+        dem["anh"] += 1
+        if lam_anh_hong and dem["anh"] in lam_anh_hong:
             raise RuntimeError("content_rejected")
         nhat["anh"].append((os.path.basename(tep), [os.path.basename(r) for r in refs], prompt[:40]))
         open(tep, "wb").write(b"anh")
@@ -390,11 +393,30 @@ class TestCuMayDai:
         assert ct.loi == ["clip đoạn 1-1"] and nhat["noi"] == [["1-0-cat.mp4"]]
         assert [x[0] for x in nhat["cat"]] == ["1-0-cat.mp4", "1.mp4"]
 
-    def test_anh_khung_cuoi_hong_thi_dung_chuoi(self, tmp_path):
+    def test_anh_hong_thi_mo_lai_cu_may_o_doan_sau(self, tmp_path):
+        """Một ảnh hỏng chỉ mất ĐÚNG đoạn ấy, không mất cả chuỗi.
+
+        Đo 27/08/2026 trên phim thật 0003 (239 cảnh): 7 chuỗi đứt vì một ảnh bị bộ lọc
+        chặn, mã cũ `break` ngay nên 42 cảnh mất trắng — chuỗi 143 mất cả 17 cảnh.
+        """
         ct, nhat, anh_d, clip_d = _cu_may(tmp_path, lam_anh_hong={2})
-        canh = [_c(1, "loc1", giay=6.0), _c(2, "loc1", giay=6.0)]
-        assert ct.chay(canh) == 0
-        assert ct.loi == ["ảnh đoạn 1-0"] and nhat["clip"] == []
+        canh = [_c(1, "loc1", giay=8.0), _c(2, "loc1", giay=8.0), _c(3, "loc1", giay=8.0)]
+        assert ct.chay(canh) == 2, "mất đúng một cảnh, hai cảnh kia vẫn có clip"
+        assert ct.loi == ["ảnh đoạn 1-0"]
+        assert any("mở lại cú máy" in d for d in nhat["ghi"])
+        # ảnh vẽ ngay SAU cú hỏng là khung MỞ mới: chỉ nhân vật + bối cảnh,
+        # không kèm khung trước (khung trước chính là tấm vừa hỏng)
+        assert nhat["anh"][1][1] == ["nv1.png", "loc1.png"]
+
+    def test_dut_giua_chuoi_thi_thanh_hai_cu_may(self, tmp_path):
+        """Đứt ở GIỮA thì chuỗi thành hai cú máy, mỗi bên vẫn liền mạch."""
+        ct, nhat, anh_d, clip_d = _cu_may(tmp_path, lam_anh_hong={3})
+        canh = [_c(i, "loc1", giay=8.0) for i in range(1, 4)]
+        assert ct.chay(canh) == 2
+        assert any("đứt 1 chỗ" in d for d in nhat["ghi"])
+        assert len(nhat["noi"]) == 2, "hai nhóm đoạn -> hai lần nối"
+        # cảnh 3 cắt từ cú máy THỨ HAI nên mốc bắt đầu tính lại từ 0
+        assert ("3.mp4", 0.0, 8.0) in nhat["cat"]
 
 
 class TestDungLaiCuMay:

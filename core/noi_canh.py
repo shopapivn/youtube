@@ -49,7 +49,7 @@ import re
 import shutil
 import subprocess
 import threading
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
            "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO", "CuMayDai", "chia_doan", "prompt_doan", "hanh_dong_clip",
@@ -728,7 +728,10 @@ class CuMayDai(ChuoiNoiCanh):
         os.makedirs(tm, exist_ok=True)
         self.ghi("    chuỗi {0}: {1} cảnh, {2:.1f} s → {3} đoạn × {4:.1f} s, một cú máy, ghim cả hai đầu.".format(
             ma, len(chuoi), doan[-1]["bat_dau"] + doan[-1]["giay"], len(doan), doan[0]["giay"]))
-        cat_xong: List[str] = []
+        # Mỗi NHÓM là một cú máy liền: [(chỉ số đoạn đầu, [tệp đã cắt…]), …].
+        # Đoạn hỏng cắt chuỗi thành hai nhóm — xem chú thích đầu `_mo_lai_chuoi`.
+        nhom: List[Tuple[int, List[str]]] = []
+        mo_lai = True   # đoạn kế tiếp có phải là khung MỞ một cú máy mới không
         for d in doan:
             self.kiem_dung()
             k = d["k"]
@@ -740,7 +743,7 @@ class CuMayDai(ChuoiNoiCanh):
             for so_khung, (tep, c, dau_chuoi) in enumerate(((f0, c_dau, True), (f1, c_cuoi, False))):
                 if os.path.exists(tep):
                     continue
-                if dau_chuoi and k == 0:
+                if dau_chuoi and mo_lai:
                     refs = tham_chieu_noi_canh(self.thu_muc_tham_chieu, c, None)
                     prompt = prompt_noi_canh(str(c.get("img_prompt") or ""), False)
                     self.ghi("    đoạn {0}-{1}: vẽ khung mở cú máy.".format(ma, k))
@@ -752,13 +755,15 @@ class CuMayDai(ChuoiNoiCanh):
                 try:
                     self.lam_anh(c, tep, refs, prompt)
                 except Exception as loi:  # noqa: BLE001
-                    self.ghi("    đoạn {0}-{1}: ảnh hỏng ({2}) — chuỗi dừng ở đây.".format(ma, k, str(loi)[:100]))
+                    self.ghi("    đoạn {0}-{1}: ảnh hỏng ({2}) — bỏ đoạn này, mở lại cú "
+                             "máy ở đoạn sau.".format(ma, k, str(loi)[:90]))
                     self.loi.append("ảnh đoạn {0}-{1}".format(ma, k))
                     hong = True
                     break
                 self.bao_anh()
             if hong:
-                break
+                mo_lai = True
+                continue
             if not os.path.exists(cat):
                 try:
                     if not os.path.exists(tho):
@@ -766,46 +771,50 @@ class CuMayDai(ChuoiNoiCanh):
                         self.lam_clip(c_clip, f0, tho, f1)
                     self.cat_tu(tho, cat, 0.0, d["giay"])
                 except Exception as loi:  # noqa: BLE001
-                    self.ghi("    đoạn {0}-{1}: clip hỏng ({2}) — chuỗi dừng ở đây.".format(ma, k, str(loi)[:100]))
+                    self.ghi("    đoạn {0}-{1}: clip hỏng ({2}) — bỏ đoạn này, mở lại cú "
+                             "máy ở đoạn sau.".format(ma, k, str(loi)[:90]))
                     self.loi.append("clip đoạn {0}-{1}".format(ma, k))
-                    break
-            cat_xong.append(cat)
-
-        if not cat_xong:
-            return 0
-        du = len(cat_xong) == len(doan)
-        if not du:
-            self.ghi("    chuỗi {0}: chỉ có {1}/{2} đoạn — các cảnh sau mốc đó chưa có clip.".format(ma, len(cat_xong), len(doan)))
-        take = os.path.join(tm, "{0}.mp4".format(ma))
-        try:
-            # Nối lại khi CHƯA có, khi thiếu đoạn, HOẶC khi có đoạn mới hơn chính nó.
-            # Đo 27/08/2026: vẽ lại cảnh 5 của phim 0002 thì đoạn mới ra đúng, nhưng
-            # tệp cú máy cũ vẫn nằm đó nên tool cắt cảnh ra từ BẢN CŨ — người xem thấy
-            # y như chưa sửa gì, mà mọi tệp đều mang giờ mới.
-            if not os.path.exists(take) or not du or _co_doan_moi_hon(cat_xong, take):
-                self.noi_clip(cat_xong, take)
-        except Exception as loi:  # noqa: BLE001
-            self.ghi("    chuỗi {0}: nối các đoạn hỏng ({1}).".format(ma, str(loi)[:100]))
-            self.loi.append("nối chuỗi {0}".format(ma))
-            return 0
-        co = len(cat_xong) * doan[0]["giay"]
-        xong = 0
-        t = 0.0
-        for c in chuoi:
-            sid = int(c["scene_id"])
-            g = giay_cua_canh(c)
-            if t + g > co + 0.05:
-                break   # cảnh chưa được cú máy phủ trọn — không cắt dở (khâu dựng giữ khung trước)
-            clip = os.path.join(self.thu_muc_clip, "{0}.mp4".format(sid))
-            if not os.path.exists(clip):
-                try:
-                    self.cat_tu(take, clip, t, g)
-                except Exception as loi:  # noqa: BLE001
-                    self.ghi("    cảnh {0}: cắt từ cú máy hỏng ({1}).".format(sid, str(loi)[:100]))
-                    self.loi.append("cắt cảnh {0}".format(sid))
-                    t += g
+                    mo_lai = True
                     continue
-            t += g
-            self.bao_clip()
-            xong += 1
+            if mo_lai or not nhom:
+                nhom.append((k, []))
+            nhom[-1][1].append(cat)
+            mo_lai = False
+
+        if not nhom:
+            return 0
+        if len(nhom) > 1:
+            self.ghi("    chuỗi {0}: đứt {1} chỗ — thành {2} cú máy thay vì một.".format(
+                ma, len(nhom) - 1, len(nhom)))
+        giay_doan = doan[0]["giay"]
+        xong = 0
+        for so, (k0, cat_ds) in enumerate(nhom):
+            take = os.path.join(tm, "{0}.mp4".format(ma) if so == 0 else "{0}-t{1}.mp4".format(ma, so))
+            try:
+                if not os.path.exists(take) or _co_doan_moi_hon(cat_ds, take):
+                    self.noi_clip(cat_ds, take)
+            except Exception as loi:  # noqa: BLE001
+                self.ghi("    chuỗi {0}: nối các đoạn hỏng ({1}).".format(ma, str(loi)[:100]))
+                self.loi.append("nối chuỗi {0}".format(ma))
+                continue
+            # Cú máy này phủ quãng thời gian [dau, cuoi) tính từ đầu chuỗi.
+            dau = k0 * giay_doan
+            cuoi = dau + len(cat_ds) * giay_doan
+            t = 0.0
+            for c in chuoi:
+                sid = int(c["scene_id"])
+                g = giay_cua_canh(c)
+                if t >= dau - 0.05 and t + g <= cuoi + 0.05:
+                    clip = os.path.join(self.thu_muc_clip, "{0}.mp4".format(sid))
+                    if not os.path.exists(clip):
+                        try:
+                            self.cat_tu(take, clip, t - dau, g)
+                        except Exception as loi:  # noqa: BLE001
+                            self.ghi("    cảnh {0}: cắt từ cú máy hỏng ({1}).".format(sid, str(loi)[:100]))
+                            self.loi.append("cắt cảnh {0}".format(sid))
+                            t += g
+                            continue
+                    self.bao_clip()
+                    xong += 1
+                t += g
         return xong
