@@ -59,7 +59,8 @@ from .su_co import (SUAT_TAI_TEP, LoiNoiDung, LoiTaiVe, goi_kien_nhan,
 
 __all__ = [
     "BoiCanh", "dung_bo_viec", "chia_doan_doc", "chia_doan_va_nghi",
-    "tach_phan", "DAU_NGAT_PHAN", "GIAY_NGHI_PHAN", "dem_tien_do",
+    "tach_phan", "DAU_NGAT_PHAN", "GIAY_NGHI_PHAN", "GIAY_NGHI_GIUA_KHUC",
+    "dem_tien_do",
     "CHU_MOI_LUOT_DOC", "loc_json", "sua_loi_nhac_canh",
 ]
 
@@ -540,6 +541,25 @@ def _ne_giua_the(chu: str, cat: int) -> int:
 #: (`prompt/3-sua.md`) được dặn đặt dấu này ở ranh giới các phần.
 DAU_NGAT_PHAN = "---"
 
+#: Nghỉ mấy giây ở chỗ cắt VÌ QUÁ DÀI (giữa một phần), để che chỗ đổi tông.
+#:
+#: ═══ VÌ SAO CHỖ NÀY CŨNG PHẢI CÓ MỘT NHỊP ═══
+#:
+#: Chủ dự án, 27/08/2026: *"voice mỗi lần là 1 tông giọng nên việc nghỉ vậy ở
+#: 1 phần đã xong sẽ giúp khán giả không nhận ra việc thay đổi tông"*. Đúng —
+#: và nó cũng đúng cho chỗ cắt vì trần 1.000 chữ: đó cũng là một lượt gọi mới,
+#: cũng đổi tông, chỉ khác là nó rơi giữa một mạch đang kể.
+#:
+#: Nên chỗ ấy vẫn cần một nhịp, nhưng phải NGẮN hơn hẳn nhịp giữa hai phần:
+#: 0,35 giây nghe như một hơi lấy đà tự nhiên và che được chỗ ghép, trong khi
+#: 1,2 giây ở giữa câu chuyện thì nghe như đứt băng.
+#:
+#: Cách chắc nhất vẫn là **đừng để phải cắt**: kịch bản 15 phút khoảng 4.700
+#: chữ chia 5–9 phần thì mỗi phần ~600 chữ, dưới trần 1.000 — mọi chỗ đổi tông
+#: rơi đúng vào nhịp nghỉ giữa hai phần. Đó là lý do `prompt/3-sua.md` dặn đặt
+#: 5–9 dấu `---`.
+GIAY_NGHI_GIUA_KHUC = 0.35
+
 #: Nghỉ mấy giây giữa hai phần khi kênh không khai `giay_nghi_phan`.
 #:
 #: ═══ VÌ SAO LÀ KHOẢNG LẶNG THẬT, KHÔNG PHẢI THẺ `[long pause]` ═══
@@ -602,8 +622,16 @@ def chia_doan_va_nghi(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC,
         cac = chia_doan_doc(mot, tran)
         for j, x in enumerate(cac):
             doan.append(x)
-            het_phan = (j == len(cac) - 1) and (i < len(phan) - 1)
-            nghi.append(float(giay_nghi) if het_phan and giay_nghi > 0 else 0.0)
+            cuoi_bai = (i == len(phan) - 1) and (j == len(cac) - 1)
+            het_phan = (j == len(cac) - 1)
+            if cuoi_bai or giay_nghi <= 0:
+                nghi.append(0.0)
+            elif het_phan:
+                nghi.append(float(giay_nghi))
+            else:
+                # Cắt vì quá trần: vẫn là một lượt đọc mới, vẫn đổi tông — che
+                # bằng một nhịp ngắn. Xem `GIAY_NGHI_GIUA_KHUC`.
+                nghi.append(min(float(giay_nghi), GIAY_NGHI_GIUA_KHUC))
     return doan, nghi
 
 

@@ -143,6 +143,13 @@ class Kenh:
     #: ShopAPI đã nhận trường này (26/08/2026). Bật thì clip nối vào khung cuối
     #: clip trước không khựng, và diễn tiếp video→video được với cả Veo 3.
     khung_dau: bool = False
+    #: Nghỉ mấy giây giữa hai PHẦN của kịch bản (dòng `---` trong bản đọc).
+    #:
+    #: Khoảng lặng THẬT, chèn lúc ghép tiếng — không phải thẻ `[long pause]`,
+    #: thứ mà nhà máy giọng nói lúc nghe lúc không. Khán giả có chỗ chuyển
+    #: mình giữa các phần, người dựng nhìn sóng âm là thấy ngay chỗ cắt.
+    #: 0 = không nghỉ, chạy y như trước.
+    giay_nghi_phan: float = 1.2
     #: Sau khi chấm chọn bản, HOÀN THIỆN chính bản đó theo nhận xét của bộ
     #: chấm: sửa điểm yếu, phát huy điểm mạnh, làm mượt (`prompt/2c-hoan-thien.md`,
     #: hai lượt gọi nữa: hoàn thiện + chấm so lại). Chủ dự án, 25/08/2026:
@@ -489,6 +496,9 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         mo_hinh=str(cai.get("mo_hinh") or "claude-sonnet-5"),
         chu_bia_hoa=bool(cai.get("chu_bia_hoa", True)),
         so_thumbnail=max(1, int(_so(cai.get("so_thumbnail"), 3))),
+        # Nhịp nghỉ giữa các phần: 0 = tắt. Không cho số âm (FFmpeg dựng
+        # tệp lặng dài âm giây là hỏng lệnh nối).
+        giay_nghi_phan=max(0.0, float(_so(cai.get("giay_nghi_phan"), 1.2))),
         dot_phu_de=bool(cai.get("dot_phu_de", True)),
         # Gõ sai tên độ phân giải thì quay về "Giữ nguyên" chứ không ném lỗi:
         # một chữ gõ nhầm trong `kenh.yaml` không đáng làm chết cả lượt chạy.

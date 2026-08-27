@@ -49,6 +49,11 @@ hoan_thien: true
 #  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ
 #  bìa lấy đúng tiêu đề đối thủ, không làm vỡ lượt chạy.
 che_do_tieu_de: "nguyen_goc"
+# ── Nhịp nghỉ giữa các phần ──────────────────────────────────────────────────
+#  Bước rà soát đặt một dòng "---" ở ranh giới các phần; tool chèn đúng chừng
+#  này giây im lặng vào đó khi ghép tiếng. Khán giả có nhịp chuyển mình, và
+#  người dựng nhìn sóng âm là thấy ngay chỗ cắt. Để 0 là tắt.
+giay_nghi_phan: 1.2
 engine: "veo3"
 so_thumbnail: 3
 mo_hinh: "claude-sonnet-5"

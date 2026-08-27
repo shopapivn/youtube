@@ -8,6 +8,14 @@ viết bằng **<<LANGUAGE>>**. Đừng hỏi lại, cứ dựa vào bản vừa
 Xuất dạng file txt để chạy voice ElevenLabs: có cảm xúc, không bị đều đều,
 KHÔNG liền nhau, KHÔNG BỊ dính chữ.
 
+Chia bài thành các PHẦN: giữa hai phần đặt một dòng chỉ có ba gạch
+
+---
+
+Tool chèn một quãng lặng thật vào đúng chỗ đó — người xem có nhịp chuyển mình,
+người dựng nhìn sóng âm là thấy chỗ cắt, và chỗ đổi tông giọng bị che đi. Đặt ở
+chỗ ý ĐỔI HẲN, đừng đặt giữa một mạch đang kể; bài mười lăm phút thường 5–9 dấu.
+
 Chỉ trả về kịch bản, dài tương đương bản vừa viết. Không nhận xét.
 
 ## Kịch bản gốc đã viral

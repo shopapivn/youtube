@@ -7,6 +7,14 @@ chỉ làm ba việc:
 
 trả về NGUYÊN VĂN kịch bản đã rà soát ngay trong câu trả lời, bằng <<NGON_NGU>> — không tạo file, không mô tả việc đã làm, không nhận xét, đừng hỏi lại.
 
+Chia bài thành các PHẦN: giữa hai phần đặt một dòng chỉ có ba gạch
+
+---
+
+Tool chèn một quãng lặng thật vào đúng chỗ đó — người xem có nhịp chuyển mình,
+người dựng nhìn sóng âm là thấy chỗ cắt, và chỗ đổi tông giọng bị che đi. Đặt ở
+chỗ ý ĐỔI HẲN, đừng đặt giữa một mạch đang kể; bài mười lăm phút thường 5–9 dấu.
+
 kịch bản:
 
 <<DRAFT>>
