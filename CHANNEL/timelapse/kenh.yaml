@@ -1,0 +1,53 @@
+# ============================================================================
+#  KÊNH timelapse — Một chỗ, ngàn năm, máy quay đứng yên
+# ============================================================================
+#  Học từ kênh "Timelapse Studio" (video "Evolution of Rome | Fixed-Camera
+#  Timelapse: The Colosseum Valley", 22 phút, 1,24 triệu lượt xem). Đo trên
+#  chính tệp video ngày 27/08/2026:
+#
+#    * một góc máy duy nhất suốt 2700 năm, không đổi một li;
+#    * cả phim chỉ ~5 chỗ ngắt — riêng đoạn giây 13 → 577 không một cú cắt nào;
+#    * KHÔNG có lời đọc, chỉ nhạc;
+#    * số năm chạy ở góc phải dưới, nhảy liên tục;
+#    * đổi thời đại diễn ra ngay trong khung: chợ đông → người thưa → đường
+#      trống → đoàn quân tràn vào, nhà cửa biến đổi dần dưới chân.
+#
+#  Vì sao chỗ này hợp với tool: mỗi clip được ghim CẢ HAI ĐẦU (ảnh mốc trước
+#  làm khung đầu, ảnh mốc sau làm khung cuối), nên máy không được phép xê dịch
+#  khung hình. Cái mà kênh phim coi là nhược điểm — Veo chậm lại rồi giữ yên
+#  khi hạ vào khung cuối — ở đây đúng là thứ cần: một thời đại hiện ra rồi
+#  đứng lại cho người xem kịp nhìn.
+#
+#  ⚠ KHÔNG BAO GIỜ ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+# ── Kênh MẪU của tool ────────────────────────────────────────────────────────
+#  Cập nhật tool sẽ GHI ĐÈ kênh này. Muốn sửa cho riêng mình thì bấm "Nhân bản"
+#  ở tab Tự động — bản sao có kenh_rieng: true, cập nhật không đụng vào.
+mau_cua_tool: true
+ma: "timelapse"
+ten: "Timelapse (một chỗ, ngàn năm)"
+ngon_ngu: "vi"
+
+# Cách kể: bảng MỐC THỜI GIAN thay cho kịch bản, không có lời đọc. Nhịp phim
+# lấy từ chính bảng mốc (mỗi mốc 8 giây) chứ không từ giọng đọc — xem
+# `core/timelapse.py`. Khâu "Đọc thành giọng" và "Tách phụ đề" tự động bỏ qua.
+che_do_ke: timelapse
+
+# Ghim cả hai đầu mỗi clip: Veo 3 qua endpoint Frames. Bỏ cờ này là mất toàn bộ
+# ý nghĩa của kênh — máy sẽ tự dựng lại bố cục và góc máy trôi mỗi 8 giây.
+khung_dau: true
+engine: "veo3"
+
+# Phim dài bao nhiêu phút → bấy nhiêu mốc (8 giây một mốc).
+phut_muc_tieu: 8
+
+mo_hinh: "claude-sonnet-5"
+so_thumbnail: 3
+chu_bia_hoa: true
+
+# KHÔNG có lời đọc: cả đường tiếng là nhạc nền, nên để nguyên độ to.
+# Đặt tên tệp nhạc trong thư mục `NHAC/` của tool vào đây.
+nhac_nen: ""
+am_luong_nhac: 1.0
+dot_phu_de: false

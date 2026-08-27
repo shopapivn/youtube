@@ -58,7 +58,8 @@ from .su_co import (SUAT_TAI_TEP, LoiNoiDung, LoiTaiVe, goi_kien_nhan,
                     phan_loai, xin_nhip)
 
 __all__ = [
-    "BoiCanh", "dung_bo_viec", "chia_doan_doc", "dem_tien_do",
+    "BoiCanh", "dung_bo_viec", "chia_doan_doc", "chia_doan_va_nghi",
+    "tach_phan", "DAU_NGAT_PHAN", "GIAY_NGHI_PHAN", "dem_tien_do",
     "CHU_MOI_LUOT_DOC", "loc_json", "sua_loi_nhac_canh",
 ]
 
@@ -532,6 +533,80 @@ def _ne_giua_the(chu: str, cat: int) -> int:
     return mo if mo > 0 else cat
 
 
+#: Dòng đánh dấu **hết một phần** trong kịch bản đọc.
+#:
+#: Ba gạch đứng một mình trên một dòng — thứ người không biết lập trình gõ
+#: được, và là dấu ngắt quen thuộc trong văn bản. Bước rà soát
+#: (`prompt/3-sua.md`) được dặn đặt dấu này ở ranh giới các phần.
+DAU_NGAT_PHAN = "---"
+
+#: Nghỉ mấy giây giữa hai phần khi kênh không khai `giay_nghi_phan`.
+#:
+#: ═══ VÌ SAO LÀ KHOẢNG LẶNG THẬT, KHÔNG PHẢI THẺ `[long pause]` ═══
+#:
+#: Chủ dự án, 27/08/2026: *"mỗi phần đó có nhịp nghỉ… để khán giả được chuyển
+#: mình giữa các phần, với lại đoạn nghỉ đó khi edit nhìn vào thấy nó không có
+#: âm thanh, dễ edit các phần"*.
+#:
+#: Thẻ thì nhà máy giọng nói lúc nghe lúc không — đo trên lượt 0053: mọi thẻ
+#: đều bị nuốt, quãng nghỉ ra 1,2–1,8 giây tuỳ chỗ, không điều khiển được.
+#: Khoảng lặng chèn lúc ghép thì đúng từng phần mười giây, nhìn thấy trên sóng
+#: âm khi dựng, và không tốn một lượt gọi nào.
+#:
+#: 1,2 giây: đủ để người xem chuyển mình, đủ để người dựng thấy quãng trắng rõ
+#: ràng, mà mười phần cũng chỉ cộng thêm 12 giây vào cả video.
+GIAY_NGHI_PHAN = 1.2
+
+
+def _bo_dau_ngat(chu: str) -> str:
+    """Bỏ các dòng đánh dấu ngắt phần — chúng không bao giờ được đọc lên."""
+    ra = []
+    for dong in (chu or "").splitlines():
+        g = dong.strip()
+        if g and len(g) >= 3 and set(g) <= set("-_*"):
+            continue
+        ra.append(dong)
+    return "\n".join(ra)
+
+
+def tach_phan(kich_ban: str) -> List[str]:
+    """Cắt kịch bản tại các dòng `---`. Không có dấu nào thì trả về một phần."""
+    phan: List[str] = []
+    dang: List[str] = []
+    for dong in (kich_ban or "").splitlines():
+        g = dong.strip()
+        if g and len(g) >= 3 and set(g) <= set("-_*"):
+            phan.append("\n".join(dang))
+            dang = []
+            continue
+        dang.append(dong)
+    phan.append("\n".join(dang))
+    return [m for m in (x.strip() for x in phan) if m]
+
+
+def chia_doan_va_nghi(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC,
+                      giay_nghi: float = GIAY_NGHI_PHAN,
+                      ) -> Tuple[List[str], List[float]]:
+    """Chia kịch bản thành đoạn đọc, kèm **số giây nghỉ sau mỗi đoạn**.
+
+    Nghỉ chỉ rơi vào chỗ hết một phần (dòng `---`), không rơi vào chỗ cắt vì
+    quá dài — chỗ ấy nằm giữa một ý, chèn khoảng lặng vào nghe như đứt băng.
+
+    `giay_nghi <= 0` thì mọi ô nghỉ đều 0: kênh không muốn nhịp nghỉ vẫn chạy
+    y như trước.
+    """
+    phan = tach_phan(kich_ban)
+    doan: List[str] = []
+    nghi: List[float] = []
+    for i, mot in enumerate(phan):
+        cac = chia_doan_doc(mot, tran)
+        for j, x in enumerate(cac):
+            doan.append(x)
+            het_phan = (j == len(cac) - 1) and (i < len(phan) - 1)
+            nghi.append(float(giay_nghi) if het_phan and giay_nghi > 0 else 0.0)
+    return doan, nghi
+
+
 def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
     """Cắt kịch bản thành các đoạn vừa một lượt đọc.
 
@@ -558,7 +633,7 @@ def chia_doan_doc(kich_ban: str, tran: int = CHU_MOI_LUOT_DOC) -> List[str]:
     1.000+1.000+726, chia đều ra 909+909+908. Cùng ba đoạn, nhưng đoạn đều nhau
     thì tông giọng giữa chúng cũng gần nhau hơn.
     """
-    tho = (kich_ban or "").strip()
+    tho = _bo_dau_ngat(kich_ban or "").strip()
     if not tho:
         return []
     tran = max(1, int(tran))
@@ -2552,7 +2627,9 @@ def _khau_giong_doc(bc: BoiCanh):
         if not bc.kenh.voice_id:
             raise RuntimeError("kênh chưa chọn giọng — điền voice_id vào kenh.yaml")
 
-        doan = chia_doan_doc(kich_ban)
+        doan, nghi_doan = chia_doan_va_nghi(
+            kich_ban, giay_nghi=float(getattr(bc.kenh, "giay_nghi_phan",
+                                              GIAY_NGHI_PHAN) or 0.0))
         if not doan:
             raise RuntimeError("kịch bản rỗng, không có gì để đọc")
         thu_muc_doan = os.path.join(d, "2-doan")
@@ -2638,7 +2715,7 @@ def _khau_giong_doc(bc: BoiCanh):
                             chiu_thieu=False)
         finally:
             theo_doi.dong()
-        _noi_mp3(bc, manh, dich)
+        _noi_mp3(bc, manh, dich, nghi=nghi_doan)
         doi = _doi_cao_do_giong(bc, dich)
         _lam_sach_ket_qua(bc, dich)
         return {"so_doan": len(manh), "doi_cao_do": doi}
@@ -2683,9 +2760,45 @@ def _bi_xen_am_dau(ffmpeg: str, tep: str) -> bool:
     return dinh is not None and dinh > NGUONG_AM_DAU
 
 
-def _noi_mp3(bc: BoiCanh, manh: Sequence[str], dich: str) -> None:
-    """Nối các đoạn mp3 thành một file. Dùng FFmpeg, chạy trên máy."""
-    if len(manh) == 1:
+def _tep_im_lang(ffmpeg: str, thu_muc: str, giay: float, mau: str) -> str:
+    """Dựng một tệp mp3 im lặng dài `giay`, cùng khuôn tiếng với `mau`.
+
+    Cùng tần số lấy mẫu / số kênh / bitrate thì nối bằng `-c copy` được — khỏi
+    mã hoá lại mười lăm phút tiếng chỉ để thêm mấy quãng lặng.
+    """
+    hz, kenh, bit = 44100, 1, "128k"
+    try:
+        ket = subprocess.run(
+            [ffmpeg, "-hide_banner", "-i", mau, "-f", "null", "-"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        mo = re.search(r"(\d+) Hz, (mono|stereo), [^,]+, (\d+) kb/s", ket.stderr or "")
+        if mo:
+            hz = int(mo.group(1))
+            kenh = 1 if mo.group(2) == "mono" else 2
+            bit = "{0}k".format(int(mo.group(3)))
+    except OSError:
+        pass
+    dich = os.path.join(thu_muc, "_im-lang-{0:.0f}ms.mp3".format(giay * 1000))
+    if not os.path.exists(dich):
+        subprocess.run(
+            [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+             "-i", "anullsrc=r={0}:cl={1}".format(hz, "mono" if kenh == 1 else "stereo"),
+             "-t", "{0:.3f}".format(giay), "-c:a", "libmp3lame", "-b:a", bit, dich],
+            check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return dich
+
+
+def _noi_mp3(bc: BoiCanh, manh: Sequence[str], dich: str,
+             nghi: Optional[Sequence[float]] = None) -> None:
+    """Nối các đoạn mp3 thành một file. Dùng FFmpeg, chạy trên máy.
+
+    `nghi[i]` = mấy giây im lặng chèn **sau** đoạn thứ i — nhịp nghỉ giữa các
+    phần: khán giả có chỗ chuyển mình, người dựng nhìn sóng âm là thấy ranh
+    giới phần để cắt. Xem `chia_doan_va_nghi`.
+    """
+    nghi = list(nghi or [])
+    if len(manh) == 1 and not any(x > 0 for x in nghi[:-1] or [0]):
         import shutil  # noqa: PLC0415
 
         shutil.copyfile(manh[0], dich)
@@ -2695,8 +2808,19 @@ def _noi_mp3(bc: BoiCanh, manh: Sequence[str], dich: str) -> None:
         raise RuntimeError("máy chưa có FFmpeg để nối các đoạn giọng đọc")
     danh_sach = dich + ".txt"
     with open(danh_sach, "w", encoding="utf-8") as tep:
-        for m in manh:
+        for i, m in enumerate(manh):
             tep.write("file '{0}'\n".format(os.path.abspath(m).replace("'", "'\\''")))
+            giay = float(nghi[i]) if i < len(nghi) else 0.0
+            if giay <= 0 or i == len(manh) - 1:
+                continue
+            try:
+                im = _tep_im_lang(ffmpeg, os.path.dirname(os.path.abspath(m)),
+                                  giay, m)
+            except (OSError, subprocess.SubprocessError):
+                # Không dựng được quãng lặng thì thôi — đừng làm hỏng cả khâu
+                # đọc vì một nhịp nghỉ.
+                continue
+            tep.write("file '{0}'\n".format(im.replace("'", "'\\''")))
     lenh = [ffmpeg, "-y", "-hide_banner", "-nostats", "-f", "concat",
             "-safe", "0", "-i", danh_sach, "-c", "copy", dich]
     ket = subprocess.run(lenh, capture_output=True, text=True,
@@ -5381,7 +5505,9 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                    "0", "-i", danh_sach, "-c", "copy", tam_noi])
 
     co_tieng = os.path.exists(mp3)
-    co_nhac = bool(nhac) and os.path.exists(nhac) and co_tieng
+    # Nhạc chạy được KHÔNG CẦN giọng đọc: kênh timelapse không có lời đọc, cả
+    # đường tiếng của nó chỉ là nhạc nền (xem `core/timelapse.py`).
+    co_nhac = bool(nhac) and os.path.exists(nhac)
 
     lenh = ["-y", "-hide_banner", "-nostats", "-i", tam_noi]
     if co_tieng:
@@ -5429,7 +5555,7 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     else:
         lenh += ["-c:v", "copy"]
 
-    if co_nhac:
+    if co_nhac and co_tieng:
         # Nhạc tự lùi khi có giọng, tự lên lại khi giọng ngừng. Cả lời giải
         # thích lẫn số đo nằm ở `core/tron_tieng.py` — cùng một chuỗi lọc với
         # tab Dựng video thủ công, để hai tab ra tiếng giống nhau.
@@ -5437,6 +5563,12 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                              ne_giong=co_ne_giong(ffmpeg))
         lenh += ["-filter_complex", tron, "-map", "0:v:0", "-map", "[ra]",
                  "-c:a", "aac", "-b:a", "192k", "-shortest"]
+    elif co_nhac:
+        # KHÔNG có giọng đọc: nhạc là toàn bộ đường tiếng, và nó nằm ở đầu vào
+        # SỐ 1 chứ không phải số 2 (kênh timelapse — xem `core/timelapse.py`).
+        # Nhạc đã `-stream_loop -1` nên `-shortest` chốt đúng độ dài hình.
+        lenh += ["-map", "0:v:0", "-map", "1:a:0", "-c:a", "aac", "-b:a",
+                 "192k", "-shortest"]
     elif co_tieng:
         # `-shortest` để video kết thúc cùng lúc với giọng đọc: tổng clip
         # thường dài hơn tiếng vài giây vì mỗi cảnh làm tròn lên.
@@ -5494,8 +5626,158 @@ def _chay(ffmpeg: str, tham_so: Sequence[str]) -> None:
 # ── Gom lại ──────────────────────────────────────────────────────────────────
 
 
+def _khau_kich_ban_timelapse(bc: BoiCanh):
+    """Dựng BẢNG MỐC THỜI GIAN thay cho kịch bản: phim này không có lời đọc.
+
+    Chủ đề lấy từ tiêu đề khách nhập, hoặc từ link tư liệu nếu có. Ra một tệp
+    JSON (`4-moc-thoi-gian.json`) và một bản đọc được cho người (`1-kich-ban.txt`).
+    """
+    def lam(luot: LuotChay, tt: TrangThaiKhau):
+        from .timelapse import (  # noqa: PLC0415
+            GIAY_MOT_MOC, TEP_MOC, doc_bang_moc, loi_nhac_bang_moc, so_moc_cho_phut,
+        )
+
+        d = luot.thu_muc
+        tep = os.path.join(d, TEP_MOC)
+        if os.path.exists(tep):
+            with open(tep, encoding="utf-8") as f:
+                bang = json.load(f)
+            return {"da_co": True, "so_moc": len(bang.get("moc") or [])}
+        vao = luot.dau_vao or {}
+        chu_de = str(vao.get("tieu_de") or "").strip() or str(vao.get("link") or "").strip()
+        if not chu_de:
+            raise LoiNoiDung("chưa có chủ đề — nhập tiêu đề (ví dụ “Thăng Long "
+                             "1000 năm nhìn từ một bến sông”) rồi chạy lại")
+        phut = float(getattr(bc.kenh, "phut_muc_tieu", 0) or 8)
+        so_moc = so_moc_cho_phut(phut, GIAY_MOT_MOC)
+        bc.ghi("  dựng bảng mốc thời gian: {0} mốc cho ~{1:.0f} phút phim.".format(so_moc, phut))
+        tho = bc.goi_chat(loi_nhac_bang_moc(chu_de, so_moc),
+                          mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"),
+                          toi_da_token=16384)
+        bang = doc_bang_moc(loc_json(tho))
+        if len(bang.get("moc") or []) < 2:
+            raise LoiNoiDung("AI không dựng được bảng mốc thời gian — thử lại hoặc "
+                             "đổi tiêu đề cho rõ nơi chốn")
+        if not bang.get("goc_may"):
+            raise LoiNoiDung("bảng mốc thiếu mô tả GÓC MÁY — cả phim dựa vào nó")
+        with open(tep, "w", encoding="utf-8") as f:
+            json.dump(bang, f, ensure_ascii=False, indent=1)
+        dong = ["{0} — {1}".format(m.get("nhan") or m.get("nam"), m.get("canh"))
+                for m in bang["moc"]]
+        with open(os.path.join(d, "1-kich-ban.txt"), "w", encoding="utf-8") as f:
+            f.write("NƠI: {0}\n\nGÓC MÁY: {1}\n\n".format(bang.get("noi"), bang.get("goc_may")))
+            f.write("\n".join(dong) + "\n")
+        bc.ghi("  {0} mốc, từ {1} tới {2}.".format(
+            len(bang["moc"]), bang["moc"][0].get("nam"), bang["moc"][-1].get("nam")))
+        return {"so_moc": len(bang["moc"]), "noi": bang.get("noi", "")}
+
+    return lam
+
+
+def _khau_bang_canh_timelapse(bc: BoiCanh):
+    """Bảng mốc → bảng cảnh (mốc thời gian giả) + một ảnh bối cảnh làm góc máy."""
+    def lam(luot: LuotChay, tt: TrangThaiKhau):
+        from .dao_dien_auto import THU_MUC_THAM_CHIEU, _HopRong  # noqa: PLC0415
+        from .timelapse import (  # noqa: PLC0415
+            GIAY_MOT_MOC, TEP_MOC, canh_tu_bang_moc, prompt_anh_moc,
+        )
+
+        d = luot.thu_muc
+        with open(os.path.join(d, TEP_MOC), encoding="utf-8") as f:
+            bang = json.load(f)
+        canh = canh_tu_bang_moc(bang, GIAY_MOT_MOC)
+        if not canh:
+            raise LoiNoiDung("bảng mốc chưa đủ hai mốc để dựng cảnh")
+        # Ảnh BỐI CẢNH = khung hình mốc ĐẦU TIÊN. Mọi ảnh sau vẽ theo nó, nên
+        # nó quyết định góc máy của cả phim.
+        tc = os.path.join(d, THU_MUC_THAM_CHIEU)
+        os.makedirs(tc, exist_ok=True)
+        dich = os.path.join(tc, "loc1.png")
+        if not os.path.exists(dich):
+            bc.ghi("  vẽ khung hình mốc đầu — góc máy của cả phim.")
+            prompt = prompt_anh_moc(bang, bang["moc"][0], dau_phim=True)
+            _tai_ket_qua(bc, _tao_anh(bc, luot, prompt, _HopRong(),
+                                      khoa_viec(luot, "tl", "loc1", prompt),
+                                      ten_hien="góc máy"), 0, dich)
+        with open(os.path.join(d, "4-canh.json"), "w", encoding="utf-8") as f:
+            json.dump(canh, f, ensure_ascii=False, indent=1)
+        _viet_xlsx(os.path.join(d, "4-canh.xlsx"), canh, bc.kenh,
+                   boi_canh=[{"id": "loc1", "name": bang.get("noi") or "",
+                              "english_prompt": bang.get("goc_may") or ""}])
+        bc.ghi("  {0} cảnh × {1:.0f} giây = {2:.0f} giây phim.".format(
+            len(canh), GIAY_MOT_MOC, len(canh) * GIAY_MOT_MOC))
+        return {"so_canh": len(canh), "giay": len(canh) * GIAY_MOT_MOC,
+                "goc_may": (bang.get("goc_may") or "")[:80]}
+
+    return lam
+
+
+def _khau_anh_timelapse(bc: BoiCanh):
+    """Ảnh + clip cho timelapse: ảnh mốc k là khung ĐẦU clip k và khung CUỐI clip k−1.
+
+    Khác `_khau_anh_noi_canh`: ở đây ẢNH CHÍNH LÀ MỐC, không có khung phụ nào.
+    Vẽ tuần tự vì ảnh mốc k vẽ theo ảnh mốc k−1 (giữ nguyên góc máy).
+    """
+    def lam(luot: LuotChay, tt: TrangThaiKhau):
+        from .dao_dien_auto import THU_MUC_THAM_CHIEU, ThamChieuCanh  # noqa: PLC0415
+
+        d = luot.thu_muc
+        canh = _doc_canh(luot)
+        thu_muc = os.path.join(d, "5-anh")
+        thu_muc_clip = os.path.join(d, "6-clip")
+        os.makedirs(thu_muc, exist_ok=True)
+        os.makedirs(thu_muc_clip, exist_ok=True)
+        tc = os.path.join(d, THU_MUC_THAM_CHIEU)
+        goc = os.path.join(tc, "loc1.png")
+        so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
+        giay = _giay_clip(bc)
+        xong_anh = xong_clip = 0
+        truoc = goc   # khung mốc trước; mốc đầu tiên chính là ảnh góc máy
+        try:
+            for c in canh:
+                bc.kiem_dung()
+                n = int(c["scene_id"])
+                anh = os.path.join(thu_muc, "{0}.png".format(n))
+                if not os.path.exists(anh):
+                    refs = [truoc] if os.path.isfile(truoc) else []
+                    _lam_anh_canh(bc, luot, c, anh, ThamChieuCanh(bc, refs), so=so)
+                xong_anh += 1
+                clip = os.path.join(thu_muc_clip, "{0}.mp4".format(n))
+                if not os.path.exists(clip):
+                    try:
+                        _lam_clip(bc, luot, c, truoc, clip, giay, so=so,
+                                  khung_dau=True, anh_cuoi=anh)
+                    except Exception as loi:  # noqa: BLE001
+                        bc.ghi("    mốc {0}: clip hỏng ({1}) — đi tiếp.".format(n, str(loi)[:90]))
+                        truoc = anh
+                        continue
+                xong_clip += 1
+                truoc = anh
+        finally:
+            so.dong()
+        return {"so_anh": xong_anh, "so_clip": xong_clip, "tong": len(canh)}
+
+    return lam
+
+
 def dung_bo_viec(bc: BoiCanh) -> Dict[str, Callable]:
-    """Bảng `mã khâu → hàm làm việc`, đưa thẳng cho `core.auto.chay`."""
+    """Bảng `mã khâu → hàm làm việc`, đưa thẳng cho `core.auto.chay`.
+
+    Khâu nào KHÔNG có trong bảng thì `core.auto.chay` đánh dấu bỏ qua — đó là
+    cách kênh timelapse tắt hai khâu tiếng: nó không có lời đọc, nhịp phim lấy
+    từ bảng mốc thời gian (xem `core/timelapse.py`).
+    """
+    from .timelapse import la_timelapse  # noqa: PLC0415
+
+    if la_timelapse(bc.kenh):
+        return {
+            "kich-ban": _khau_kich_ban_timelapse(bc),
+            "bang-canh": _khau_bang_canh_timelapse(bc),
+            "anh": _khau_anh_timelapse(bc),
+            "clip": _khau_clip(bc),
+            "thumbnail": _khau_thumbnail(bc),
+            "dung": _khau_dung(bc),
+        }
     return {
         "kich-ban": _khau_kich_ban(bc),
         "giong-doc": _khau_giong_doc(bc),
