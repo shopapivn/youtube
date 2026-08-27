@@ -2562,6 +2562,12 @@ def _khau_giong_doc(bc: BoiCanh):
         # Ba đoạn chạy cùng lúc thì cũng nên hỏi chung một lượt: mỗi đoạn tự
         # hỏi lấy là ba lần chờ hết nhịp 2 giây đầu tiên cho mỗi đợt.
         theo_doi = SoTheoDoi(bc, nhip=bc.nhip_hoi)
+        # Lấy một lần cho cả mẻ: cửa soi âm đầu chạy trong luồng con, đừng để
+        # mỗi luồng đi dò FFmpeg lại từ đầu.
+        try:
+            ffmpeg_doc = bc.ffmpeg or _tim_ffmpeg()
+        except Exception:  # noqa: BLE001
+            ffmpeg_doc = ""
 
         def mot_doan(muc):
             so, chu = muc
@@ -2593,6 +2599,24 @@ def _khau_giong_doc(bc: BoiCanh):
                        "lại bằng khoá mới.".format(so))
                 goi_tts = doc(":k2")
             _tai_ket_qua(bc, goi_tts, 0, tep)
+            # ═══ SOI ÂM ĐẦU: NHÀ MÁY HAY XÉN MẤT CHỮ ĐẦU ═══
+            #
+            # Xem `NGUONG_AM_DAU`. Đọc lại đúng MỘT lần bằng khoá mới — bản
+            # thứ hai thường lành, và một lượt đọc lại rẻ hơn nhiều so với
+            # một video mở màn bằng chữ cụt.
+            if _bi_xen_am_dau(ffmpeg_doc, tep):
+                bc.ghi("    đoạn {0}: nhà máy trả về bản bị cắt mất âm đầu — "
+                       "đọc lại.".format(so))
+                try:
+                    _tai_ket_qua(bc, doc(":am-dau"), 0, tep)
+                except Exception as loi:  # noqa: BLE001
+                    bc.ghi("    đoạn {0}: đọc lại không được ({1}) — giữ bản "
+                           "cũ.".format(so, str(loi)[:60]))
+                else:
+                    if _bi_xen_am_dau(ffmpeg_doc, tep):
+                        bc.ghi("    đoạn {0}: bản đọc lại vẫn cụt âm đầu — "
+                               "giữ, nhưng chữ đầu đoạn có thể nghe hụt."
+                               .format(so))
             return so, False
 
         # ═══ ĐỌC SONG SONG, VÀ THIẾU MỘT ĐOẠN LÀ HỎNG CẢ KHÂU ═══
@@ -2620,6 +2644,43 @@ def _khau_giong_doc(bc: BoiCanh):
         return {"so_doan": len(manh), "doi_cao_do": doi}
 
     return lam
+
+
+#: Đỉnh âm lượng cho phép trong 50 mili giây ĐẦU của một đoạn giọng đọc.
+#:
+#: Đo 27/08/2026 trên các tệp thật: đoạn lành mở đầu bằng im lặng
+#: (−58 … −84 dB), đoạn bị xén mở đầu bằng tiếng (−1,8 … −11 dB). Không có
+#: đoạn nào rơi vào giữa, nên mốc −30 dB tách sạch hai nhóm mà không bắt oan.
+NGUONG_AM_DAU = -30.0
+
+#: Nghe bao nhiêu mili giây đầu để biết đoạn có bị xén không.
+GIAY_NGHE_AM_DAU = 0.05
+
+
+def _dinh_am_dau(ffmpeg: str, tep: str, giay: float = GIAY_NGHE_AM_DAU) -> Optional[float]:
+    """Đỉnh âm lượng (dB) trong `giay` giây đầu của tệp tiếng, hoặc `None`.
+
+    `None` = không đo được (thiếu FFmpeg, tệp lạ). Nơi gọi coi như "không có
+    ý kiến" và đi tiếp — cửa soi hỏng không được làm hỏng khâu đọc.
+    """
+    if not ffmpeg or not os.path.exists(tep):
+        return None
+    try:
+        ket = subprocess.run(
+            [ffmpeg, "-hide_banner", "-nostats", "-t", "{0:.3f}".format(giay),
+             "-i", tep, "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except OSError:
+        return None
+    dau = re.search(r"max_volume:\s*(-?[0-9.]+)", ket.stderr or "")
+    return float(dau.group(1)) if dau else None
+
+
+def _bi_xen_am_dau(ffmpeg: str, tep: str) -> bool:
+    """Đoạn tiếng này có bị cắt mất âm đầu không. Xem `NGUONG_AM_DAU`."""
+    dinh = _dinh_am_dau(ffmpeg, tep)
+    return dinh is not None and dinh > NGUONG_AM_DAU
 
 
 def _noi_mp3(bc: BoiCanh, manh: Sequence[str], dich: str) -> None:
