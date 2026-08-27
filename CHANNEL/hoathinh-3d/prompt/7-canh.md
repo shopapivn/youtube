@@ -139,6 +139,25 @@ Each scene is one single continuous image that then moves, not a layout. Never
 ask for panels, a comic page, split-screen, a diptych, a collage, a storyboard
 sheet or "four vignettes".
 
+## EVERYONE IN THE PICTURE MUST HAVE A REFERENCE
+
+The picture is drawn from the attached reference images and nothing else. So:
+
+- **Name every character you put in the frame** in `characters_used`, even one
+  that is only half seen — a paw at the door, a shadow on the wall, a silhouette
+  behind a window. A creature nobody named has no reference picture, so the
+  machine invents it, and it comes out a different animal every time.
+- **Never write "and the siblings", "the others", "the rest of them".** If a
+  group is on screen, use the group character's own id; the machine draws all of
+  them from that one reference. Unnamed extras are drawn as plain ordinary
+  animals with no clothes.
+- **Never dress a character in something its reference does not wear** — no
+  disguise, cloak, hood, bonnet, costume. If the story needs a disguise, say what
+  is actually different (floured white paws, a voice, a hidden face), not
+  "disguised as the mother".
+- At most four characters in one scene. More than that and someone loses their
+  reference — split the beat into two scenes instead.
+
 ## SCENE DIVISION — use the SRT indices
 
 - **<<MAX_SEC>> seconds is a HARD CEILING, not a target.** Work out each
