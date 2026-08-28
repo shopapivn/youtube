@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "Chỉ số kênh YouTube",
+  "version": "2.0.0",
+  "description": "Tự lấy số liệu kênh và từng video từ YouTube Studio, lưu vào máy bạn để đưa cho AI phân tích.",
+  "permissions": [
+    "storage",
+    "downloads",
+    "alarms",
+    "tabs",
+    "webRequest",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://studio.youtube.com/*",
+    "https://*.youtube.com/*",
+    "https://*.google.com/*",
+    "https://*.googleapis.com/*",
+    "https://*.googleusercontent.com/*",
+    "http://192.168.88.254:8765/*",
+    "http://localhost:8765/*",
+    "http://127.0.0.1:8765/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://studio.youtube.com/*"
+      ],
+      "js": [
+        "inject.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://studio.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Chỉ số kênh"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "nghi.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

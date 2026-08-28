@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 
 __all__ = ["Skill", "SKILL", "SKILL_CHO_BAT", "MA_NGHIEN_CUU", "MA_SCRIPT",
-    "MA_XOA_LOGO", "MA_TU_KHOA",
+    "MA_XOA_LOGO", "MA_TU_KHOA", "MA_CHI_SO",
            "tim_skill", "skill_chu"]
 
 #: Skill chạy trên máy, có trang riêng thay vì ô nhập chữ.
@@ -42,6 +42,16 @@ MA_XOA_LOGO = "xoa-logo"
 #: Đo lượt tìm từ khoá **trên chính YouTube**. Chạy trên máy qua `trendspy`,
 #: xem `core/tu_khoa_youtube.py`.
 MA_TU_KHOA = "tu-khoa"
+
+#: Số liệu kênh CỦA CHÍNH KHÁCH, lấy từ YouTube Studio bằng một tiện ích Chrome.
+#: Khác mọi Skill còn lại ở chỗ nó cần khách cài thêm một thứ vào trình duyệt —
+#: vì những con số quyết định (lượt hiển thị, tỷ lệ bấm, video mình bị xếp cạnh)
+#: KHÔNG có trong API công khai nào của YouTube, chỉ hiện sau khi đăng nhập Studio.
+MA_CHI_SO = "chi-so-ytb"
+
+# "Chrome sạch" từng là một Skill ở đây (26/08/2026, vài giờ). Chủ dự án: *"có
+# lẽ mày nên để nó ở 1 tab độc lập… tao muốn phát triển nó như 1 phần mềm GPM"*
+# → nay là tab riêng `ui_qt/trang_chrome_sach.py`, khoá "chrome-sach" trong TRANG.
 
 
 @dataclass(frozen=True)
@@ -86,6 +96,17 @@ SKILL: Tuple[Skill, ...] = (
               "Tôi đo hình dạng dấu rồi trừ ngược ra khỏi ảnh, nên phần ảnh bên "
               "dưới hiện lại đúng như ban đầu. Chạy trên máy bạn, 27 mili giây "
               "một ảnh.",
+        loai="may",
+    ),
+    Skill(
+        ma=MA_CHI_SO,
+        ten="Chỉ số kênh của bạn",
+        bieu_tuong="📊",
+        mo_ta="Lấy số liệu thật từ YouTube Studio của chính bạn — lượt hiển thị, "
+              "tỷ lệ bấm, thời gian xem, khán giả ở nước nào, video của bạn đang bị "
+              "xếp cạnh video nào — rồi chép sang ChatGPT hay Claude để hỏi kênh đang "
+              "nghẽn ở đâu. Cần cài một tiện ích vào Chrome, làm một lần. Chạy trên "
+              "máy bạn — miễn phí.",
         loai="may",
     ),
     Skill(

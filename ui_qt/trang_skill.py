@@ -34,8 +34,8 @@ from PyQt5.QtWidgets import (
 )
 
 from core.skill_rieng import SkillRiengError, liet_ke_rieng, luu_skill, xoa_skill
-from core.skills import (MA_NGHIEN_CUU, MA_SCRIPT, MA_TU_KHOA, MA_XOA_LOGO,
-                         SKILL, Skill)
+from core.skills import (MA_CHI_SO, MA_NGHIEN_CUU, MA_SCRIPT, MA_TU_KHOA,
+                         MA_XOA_LOGO, SKILL, Skill)
 
 from . import theme
 from .widgets import ChonThuMuc, nhan, nut_chinh, nut_phu, the, tieu_de_trang
@@ -454,7 +454,8 @@ class TrangSkill(QWidget):
         rieng = {MA_NGHIEN_CUU: self._trang_nghien_cuu,
                  MA_SCRIPT: self._trang_script,
                  MA_XOA_LOGO: self._trang_xoa_logo,
-                 MA_TU_KHOA: self._trang_tu_khoa}
+                 MA_TU_KHOA: self._trang_tu_khoa,
+                 MA_CHI_SO: self._trang_chi_so}
         tao = rieng.get(skill.ma)
         if tao is None:
             return TamSkillChu(self._app, skill, self)
@@ -485,6 +486,11 @@ class TrangSkill(QWidget):
         from .trang_tu_khoa import TrangTuKhoa
 
         return TrangTuKhoa(self._app)
+
+    def _trang_chi_so(self) -> QWidget:
+        from .trang_chi_so_ytb import TrangChiSoYTB
+
+        return TrangChiSoYTB(self._app)
 
     def mo(self, ma: str) -> None:
         tam = self._tam.get(ma)

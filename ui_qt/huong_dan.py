@@ -78,8 +78,82 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Chọn được 131 nước, gõ vào ô nước để tìm nhanh. Từ khoá ngách quá "
             "thì có thể không có gợi ý nào — đó là câu trả lời thật, không "
             "phải lỗi.",
+            "“Chỉ số kênh của bạn” lấy số liệu thật từ YouTube Studio CỦA CHÍNH "
+            "BẠN: video được đưa ra trước mặt người xem bao nhiêu lần, bao nhiêu "
+            "phần trăm trong đó bấm vào, xem được bao lâu, khán giả ở nước nào, và "
+            "video của bạn đang bị xếp cạnh những video nào. Không API nào của "
+            "YouTube cho những con số này — chúng chỉ hiện sau khi đăng nhập Studio, "
+            "nên phải cài một tiện ích nhỏ vào Chrome, làm một lần là xong.",
+            "Cách dùng: bấm “Lưu tiện ích ra máy…”, chọn một thư mục. Mở Chrome, gõ "
+            "chrome://extensions, bật “Chế độ dành cho nhà phát triển” ở góc phải "
+            "trên, bấm “Tải tiện ích đã giải nén”, chọn đúng thư mục vừa lưu. Rồi mở "
+            "YouTube Studio một lần để tiện ích nhận ra kênh.",
+            "Sau đó tiện ích tự chụp số liệu ở các mốc 24 giờ, 48 giờ, 72 giờ, 7 ngày "
+            "và 28 ngày sau khi bạn đăng video — Chrome phải đang mở. Muốn xem ngay "
+            "thì bấm “Chụp ngay tất cả” trong tiện ích, mỗi video khoảng một phút.",
+            "Số liệu nằm trong thư mục Tải xuống / chi-so-youtube trên máy bạn, không "
+            "gửi đi đâu cả. Quay lại đây bấm “Đọc dữ liệu” là thấy bảng, rồi bấm "
+            "“Chép cho ChatGPT / Claude” và dán vào khung chat — khối chữ đó đã kèm "
+            "sẵn giải thích từng cột và câu hỏi cần hỏi.",
+            "Mốc 24 giờ đầu chưa nói lên nhiều: YouTube thường mất vài ngày mới tìm "
+            "ra tệp khán giả cho một video. Đọc theo cả đường đi qua nhiều mốc thì "
+            "mới thấy video đang lên hay đã dừng.",
             "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
             "mất khi cập nhật tool.",
+        ],
+    },
+    "chrome-sach": {
+        "tieu_de": "GPM & VPS",
+        "tom_tat": "Hai mức của cùng một việc. **GPM Login**: mỗi hồ sơ Chrome "
+                   "là một máy riêng trong mắt YouTube/Google (cookie riêng, IP "
+                   "riêng, đồng hồ khớp IP) — chạy trên máy bạn, miễn phí. "
+                   "**VPS**: thuê hẳn một máy Windows chạy 24/7 ở nơi khác, mỗi "
+                   "máy một địa chỉ IPv6 riêng — 200.000₫/tháng.",
+        "buoc": [
+            "Bấm “Thêm hồ sơ”, đặt tên, dán proxy (ip:port:user:pass hoặc "
+            "socks5://…). Không có proxy thì để trống — vẫn được hồ sơ riêng, "
+            "chỉ là chung IP với máy.",
+            "Bấm “Kiểm tra IP” trong hộp: tôi báo IP đi ra, nước nào, và tự "
+            "chọn múi giờ cho khớp. Proxy chết thì biết ngay ở đây, không phải "
+            "lúc đang đăng nhập.",
+            "Bấm “Mở” (hoặc nháy đúp dòng) — một Chrome riêng hiện ra. Đăng "
+            "nhập YouTube trong đó như bình thường; lần sau mở lại vẫn còn "
+            "đăng nhập.",
+            "Có nhiều proxy? “Thêm nhiều”: dán mỗi dòng một proxy, thêm “| tên” "
+            "nếu muốn đặt tên — mỗi dòng thành một hồ sơ.",
+            "Chọn nhiều dòng rồi bấm Mở/Đóng/Xoá là làm cả loạt.",
+        ],
+        "luu_y": [
+            "Máy có nhiều IPv6 (nhà mạng cấp cả dải)? Bấm “IPv6 của máy” trong "
+            "hộp hồ sơ: mỗi hồ sơ một địa chỉ cố định, không cần mua proxy. "
+            "Chỉ tác dụng với trang có IPv6 (YouTube, Google có; nhiều trang "
+            "khác thì không).",
+            "Sạch hẳn: vào Cài đặt → Chrome sạch, chọn “Chrome riêng của tool” "
+            "và bấm tải (~170 MB, một lần). Bản đó không dính Google Sync, tiện "
+            "ích hay chính sách của Chrome bạn dùng hằng ngày.",
+            "Xoá hồ sơ là xoá cả cookie, đăng nhập trong đó — không lùi lại "
+            "được. “Nhân bản” tạo hồ sơ mới cùng proxy nhưng thư mục trống.",
+            "Tắt tool là Chrome của các hồ sơ tắt theo (luật chung của tool: "
+            "không để tiến trình rác). Lần sau mở lại vẫn còn đăng nhập.",
+            "Không giả vân tay máy (canvas, WebGL). Đo thật: Google chấm theo "
+            "IP + cách mở Chrome + hành vi; giả vân tay còn làm điểm tụt vì "
+            "tạo ra một cái máy không có ngoài đời.",
+            "─── MỤC VPS ───",
+            "Máy ảo cần khoá API (tab Cài đặt). Mỗi máy là một thẻ, bấm “Mở "
+            "máy” là vào thẳng — tôi cất sẵn mật khẩu cho Remote Desktop nên "
+            "thường không phải gõ gì. Nếu Windows vẫn hỏi thì mật khẩu đã nằm "
+            "sẵn trong bộ nhớ tạm, dán vào rồi bấm “Ghi nhớ tôi”.",
+            "Nút “Đổi” cạnh ô mật khẩu đặt một mật khẩu mới ngẫu nhiên. Tôi tự "
+            "chờ tới khi máy nhận xong (vài giây) rồi mới hiện mật khẩu mới — "
+            "không phải bấm làm mới.",
+            "Máy ảo CHỈ CÓ INTERNET IPv6. YouTube và các dịch vụ của Google "
+            "vào bình thường; các trang không hỗ trợ IPv6 thì không vào được. "
+            "Máy của bạn cũng cần có IPv6 mới kết nối vào được — mạng nhà "
+            "thường có sẵn, mạng di động và mạng công ty thì thường không.",
+            "Thuê máy TRỪ TIỀN NGAY và tự gia hạn mỗi 30 ngày. Huỷ lúc nào cũng "
+            "được, máy vẫn dùng hết kỳ đã trả. Tới kỳ mà ví không đủ tiền thì "
+            "hợp đồng hết hạn, máy về kho và MẬT KHẨU BỊ ĐỔI — dữ liệu trong "
+            "máy không lấy lại được, nên hãy chép ra trước.",
         ],
     },
     "content": {
@@ -197,6 +271,14 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "link — và không phụ thuộc vào việc YouTube có cho tải hay không.",
             "Điền tiêu đề và chữ ảnh bìa nếu bạn đã nghĩ sẵn — bỏ trống thì "
             "tôi tự đặt.",
+            "Riêng kênh “Timelapse (một chỗ, ngàn năm)” thì KHÁC: nó không kể "
+            "lại nội dung của ai, nên không cần link cũng không cần tư liệu. "
+            "Chỉ cần một dòng tiêu đề nói rõ NƠI nào và khoảng thời gian nào — "
+            "ví dụ “Thăng Long — Hà Nội nhìn từ một khúc sông Hồng, 1010 đến "
+            "nay”. Tôi tự dựng bảng mốc thời gian, vẽ từng thời đại từ đúng "
+            "một góc máy, rồi nối lại thành phim. Kênh này không có lời đọc: "
+            "muốn có tiếng thì thả một tệp .mp3 vào thư mục nhạc của kênh, "
+            "không thì phim ra sẽ câm.",
             "Đã viết kịch bản ở chỗ khác rồi? Dán bài vào ô nội dung và bật "
             "“Đây là kịch bản hoàn chỉnh”. Tôi bỏ qua khâu viết — không tốn "
             "tiền khâu đó — và chạy thẳng từ khâu giọng đọc.",
@@ -263,7 +345,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "kịch bản mà đọc bằng tiếng khác thì độ dài video khác hẳn. Bước ② "
             "chỉ còn chọn giọng đọc; độ dài do content quyết, không đặt ở đây. "
             "Chưa có mã giọng (Voice ID)? Ngay bước này có liên kết mở Thư viện "
-            "giọng ElevenLabs để nghe thử và lấy mã.",
+            "giọng của nhà cung cấp để nghe thử và lấy mã.",
             "Bước ③ “Hình ảnh & nhân vật” lên trước vì chọn phong cách hình và "
             "nhân vật xong thì các prompt ở bước sau mới tạo ảnh/video đúng "
             "phong cách ấy. Ở đây phong cách hình bày thành lưới thẻ CÓ ẢNH MẪU "
@@ -406,8 +488,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "characters trong file Excel được điền, và mọi cảnh dùng chung đúng "
             "nhân vật đó cùng một phong cách — giống tab Tự động. Tắt thì mỗi "
             "cảnh tự do, sheet characters để trống.",
-            "File Excel đặt tên sheet đúng kiểu VE3 (scenes, characters…) nên "
-            "mở thẳng bằng VE3_SUITE được, không phải chép cột sang.",
+            "File Excel đặt tên sheet theo chuẩn quen thuộc (scenes, "
+            "characters…) nên mở thẳng bằng các tool dựng video theo bảng cảnh "
+            "được, không phải chép cột sang.",
             "Chọn nhiều file thì chạy lần lượt; một file hỏng không làm hỏng "
             "các file còn lại.",
         ],

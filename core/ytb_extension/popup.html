@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+body{font:13px system-ui;width:460px;padding:10px;margin:0}
+input{width:100%;box-sizing:border-box;font:12px monospace}
+button{margin:4px 4px 0 0}
+.ok{color:#080}.bad{color:#c00}
+#log,#videos,#ep{max-height:150px;overflow:auto;background:#f4f4f4;padding:6px;font:11px monospace;white-space:pre-wrap;margin:4px 0}
+small{color:#666}
+</style></head>
+<body>
+<b>Chỉ số kênh — tự động</b><br>
+<small>Cài xong chỉ cần mở Studio một lần. Extension tự tìm video và tự chụp số liệu ở các mốc 24h/48h/72h/7 ngày/28 ngày, lưu vào thư mục Tải xuống của máy bạn.</small>
+<p>Nơi lưu: <span id="host_tt"></span><br><input id="host" placeholder="để trống = lưu vào máy này (khuyên dùng)"></p>
+<p>Kênh: <b id="kenh"></b> · mã kênh (tuỳ chọn) <input id="ma_kenh" placeholder="k1"></p>
+<button id="luu">Lưu</button>
+<button id="kham">Tìm video lại</button>
+<button id="quet">Chụp ngay tất cả</button>
+<button id="kenhbtn">Chụp kênh</button>
+<button id="xoa">Xoá lịch</button>
+<p><b>Video</b> (id · tuổi · đã chụp)</p>
+<div id="videos"></div>
+<p><b>Lịch</b>: <span id="lich"></span></p>
+<p><b>Endpoint youtubei</b> (thấy / lưu)</p>
+<div id="ep"></div>
+<div id="log"></div>
+<script src="popup.js"></script>
+</body></html>

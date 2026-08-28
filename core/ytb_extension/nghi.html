@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Chỉ số kênh — đang chờ</title>
+<style>
+body{font:14px system-ui;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#fafafa;color:#222}
+.hop{max-width:640px;padding:26px;width:100%}
+h1{font-size:20px;margin:0 0 4px}
+.phu{color:#777;margin:0 0 18px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:7px 4px;border-bottom:1px solid #eee;vertical-align:top}
+td:first-child{color:#777;width:150px}
+.ok{color:#0a7a28;font-weight:600}
+.bad{color:#c00;font-weight:600}
+button{padding:7px 14px;font:14px system-ui;cursor:pointer;border:1px solid #bbb;border-radius:5px;background:#fff}
+#tt{font-size:13px;color:#555}
+#nk{background:#f2f2f2;padding:8px;border-radius:4px;font:11px/1.6 monospace;white-space:pre-wrap;max-height:150px;overflow:auto;margin-top:14px}
+small{color:#888}
+</style></head>
+<body><div class="hop">
+<h1>Chỉ số kênh — đang chờ mốc chụp tiếp theo</h1>
+<p class="phu">Tab này là chỗ làm việc của extension. Cứ để yên, đừng đóng.</p>
+<table>
+  <tr><td>Trạm nhận</td><td id="host">…</td></tr>
+  <tr><td>Kênh</td><td id="kenh">…</td></tr>
+  <tr><td>Video theo dõi</td><td id="video">…</td></tr>
+  <tr><td>Mốc kế tiếp</td><td id="ke">…</td></tr>
+  <tr><td>Lần chụp gần nhất</td><td id="lanchup">…</td></tr>
+  <tr><td>Hoạt động gần nhất</td><td id="cuoi">…</td></tr>
+</table>
+<p><a id="bang" href="#" target="_blank">📊 Mở bảng chỉ số (toàn bộ lịch sử + biểu đồ)</a></p>
+<p><button id="chup">Chụp ngay để kiểm tra</button> <span id="tt">Bấm để lấy số liệu ngay, không cần chờ mốc. Tab sẽ mở trang analytics ~1 phút rồi quay lại đây.</span></p>
+<div id="nk"></div>
+<p><small>Khi tới mốc, tab này tự mở trang analytics, lấy số liệu rồi quay lại đây. Cập nhật mỗi 5 giây.</small></p>
+</div>
+<script src="nghi.js"></script>
+</body></html>
