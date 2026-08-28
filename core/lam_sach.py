@@ -333,9 +333,10 @@ def co_doi_cao_do(ffmpeg: str) -> bool:
     """Bản FFmpeg này có `rubberband` không.
 
     `rubberband` phải được biên dịch vào lúc dựng FFmpeg, nên hai bản cùng số
-    hiệu vẫn có thể một bản có một bản không. Bản đi kèm `imageio-ffmpeg` thì
-    có (đã kiểm), nhưng `tim_ffmpeg` **ưu tiên bản khách tự cài** — mà bản ấy
-    thì không đoán được.
+    hiệu vẫn có thể một bản có một bản không. Từ 28/08/2026 `tim_ffmpeg` ưu
+    tiên bản trong thư mục tool (bản đi kèm `imageio-ffmpeg` hoặc bản tool tự
+    tải), nên phần lớn máy sẽ có; nhưng bản trên PATH của máy khách vẫn có thể
+    được dùng khi hai bản kia vắng, và bản ấy thì không đoán được.
 
     Thiếu thì vẫn dịch được bằng đường lui, chỉ kém hơn — xem `doi_cao_do`.
     """

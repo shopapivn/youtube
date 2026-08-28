@@ -144,22 +144,52 @@ class CaiDatDung:
     goc: str = ""
 
 
-def tim_ffmpeg() -> str:
-    """Đường dẫn FFmpeg dùng được, hoặc chuỗi rỗng.
+def thu_muc_tool() -> str:
+    """Thư mục cài đặt của tool (chỗ có `core/`, `ui_qt/`, `PROJECTS/`)."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    Ưu tiên bản cài trong máy; không có thì lấy bản đi kèm `imageio-ffmpeg` —
-    khách không biết code không nên phải tự đi cài FFmpeg rồi sửa biến PATH.
+
+def tim_ffmpeg(goc: str = "") -> str:
+    """Đường dẫn FFmpeg **đủ dùng để dựng video**, hoặc chuỗi rỗng.
+
+    ═══ BẢN CỦA TOOL TRƯỚC, BẢN CỦA MÁY SAU ═══
+
+    Bản cũ hỏi `PATH` trước. Nghe thì hợp lý — bản khách tự cài thường mới hơn.
+    Nhưng khâu dựng là khâu duy nhất chạy trên máy khách, và *"mỗi máy 1 cấu
+    hình"* (chủ dự án, 28/08/2026): trên PATH có thể là một bản rút gọn thiếu
+    `libx264`, hoặc một bản không có bộ lọc `subtitles`. Khi ấy khâu 8 đổ **sau
+    khi khách đã trả tiền cho cả 99 clip**, và lỗi ấy không bao giờ tái hiện
+    được trên máy mình.
+
+    Nên thứ tự là: bản tool tự tải về `runtime/` → bản đi kèm `imageio-ffmpeg`
+    (cùng bộ cài của tool, bản đã chạy hàng trăm lượt dựng) → mới tới PATH.
+
+    Và bản nào cũng bị soi `-encoders` / `-filters` trước khi nhận
+    (`ffmpeg_goi_san.du_dung`), nên một bản cụt nằm ở đầu hàng cũng chỉ bị bỏ
+    qua chứ không kéo cả khâu dựng đổ theo.
     """
-    san_co = shutil.which("ffmpeg")
-    if san_co:
-        return san_co
-    try:
-        import imageio_ffmpeg
+    from .ffmpeg_goi_san import du_dung, tim_ffmpeg_da_tai  # noqa: PLC0415
 
-        duong_dan = imageio_ffmpeg.get_ffmpeg_exe()
-    except Exception:  # noqa: BLE001 — thiếu gói là chuyện bình thường
-        return ""
-    return duong_dan if duong_dan and os.path.isfile(duong_dan) else ""
+    goc = goc or thu_muc_tool()
+
+    def cua_goi() -> str:
+        try:
+            import imageio_ffmpeg
+
+            duong_dan = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:  # noqa: BLE001 — thiếu gói là chuyện bình thường
+            return ""
+        return duong_dan if duong_dan and os.path.isfile(duong_dan) else ""
+
+    ung_vien = [tim_ffmpeg_da_tai(goc), cua_goi(), shutil.which("ffmpeg") or ""]
+    ung_vien = [u for u in ung_vien if u]
+    for duong in ung_vien:
+        if du_dung(duong):
+            return duong
+    # Không bản nào đủ: trả bản đầu tiên tìm được (nếu có) để câu báo lỗi của
+    # khâu dựng còn nói được tên tệp, thay vì "máy chưa có FFmpeg" — một câu
+    # sai khi máy có FFmpeg mà bản ấy thiếu bộ lọc.
+    return ung_vien[0] if ung_vien else ""
 
 
 #: Các ngăn của một dự án do chính tool tạo ra (xem `core/du_an.NGAN`).

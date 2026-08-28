@@ -869,7 +869,7 @@ def _dai_clip(ffmpeg: str, duong: str) -> float:
     try:
         tho = subprocess.run(
             [ffmpeg, "-hide_banner", "-i", duong], capture_output=True, text=True, timeout=60,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stderr or ""
+            creationflags=_co_tao_ffmpeg()).stderr or ""
         chu = tho.split("Duration:", 1)[1].split(",", 1)[0].strip()
         gio, phut, giay = chu.split(":")
         return int(gio) * 3600 + int(phut) * 60 + float(giay)
@@ -908,7 +908,7 @@ def _loi_giai_ma(ffmpeg: str, duong: str) -> str:
     ket = subprocess.run(
         [ffmpeg, "-v", "error", "-xerror", "-i", duong, "-f", "null", "-"],
         capture_output=True, text=True,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        creationflags=_co_tao_ffmpeg())
     if ket.returncode == 0:
         return ""
     return _loi_ffmpeg(ket.stderr) or "FFmpeg trả mã {0}".format(ket.returncode)
@@ -2773,7 +2773,7 @@ def _dinh_am_dau(ffmpeg: str, tep: str, giay: float = GIAY_NGHE_AM_DAU) -> Optio
             [ffmpeg, "-hide_banner", "-nostats", "-t", "{0:.3f}".format(giay),
              "-i", tep, "-af", "volumedetect", "-f", "null", "-"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            creationflags=_co_tao_ffmpeg())
     except OSError:
         return None
     dau = re.search(r"max_volume:\s*(-?[0-9.]+)", ket.stderr or "")
@@ -2797,7 +2797,7 @@ def _tep_im_lang(ffmpeg: str, thu_muc: str, giay: float, mau: str) -> str:
         ket = subprocess.run(
             [ffmpeg, "-hide_banner", "-i", mau, "-f", "null", "-"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            creationflags=_co_tao_ffmpeg())
         mo = re.search(r"(\d+) Hz, (mono|stereo), [^,]+, (\d+) kb/s", ket.stderr or "")
         if mo:
             hz = int(mo.group(1))
@@ -2811,7 +2811,7 @@ def _tep_im_lang(ffmpeg: str, thu_muc: str, giay: float, mau: str) -> str:
             [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
              "-i", "anullsrc=r={0}:cl={1}".format(hz, "mono" if kenh == 1 else "stereo"),
              "-t", "{0:.3f}".format(giay), "-c:a", "libmp3lame", "-b:a", bit, dich],
-            check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            check=True, creationflags=_co_tao_ffmpeg())
     return dich
 
 
@@ -2851,7 +2851,7 @@ def _noi_mp3(bc: BoiCanh, manh: Sequence[str], dich: str,
             "-safe", "0", "-i", danh_sach, "-c", "copy", dich]
     ket = subprocess.run(lenh, capture_output=True, text=True,
                          encoding="utf-8", errors="replace",
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                         creationflags=_co_tao_ffmpeg())
     try:
         os.remove(danh_sach)
     except OSError:
@@ -2865,6 +2865,38 @@ def _tim_ffmpeg() -> str:
     from .dung_video import tim_ffmpeg  # noqa: PLC0415
 
     return tim_ffmpeg()
+
+
+def _bao_dam_ffmpeg(bc: BoiCanh) -> str:
+    """FFmpeg đủ dựng được video — thiếu thì TẢI VỀ THƯ MỤC TOOL rồi dùng.
+
+    ═══ ĐỪNG BẮT KHÁCH TỰ ĐI CÀI Ở KHÂU CUỐI ═══
+
+    Tới đây khách đã trả tiền cho kịch bản, giọng đọc, 99 ảnh và 99 clip. Báo
+    *"máy chưa có FFmpeg"* rồi dừng là để họ ôm đủ nguyên liệu của một video
+    mười phút mà không có video nào — đúng cái cảnh khâu ảnh bìa từng gây ra
+    (xem `core.auto.KHAU_KHONG_CHAN`).
+
+    Tải 40 MB mất chưa tới một phút, và chỉ mất đúng một lần cho cả đời máy đó.
+    Nó rẻ hơn mọi cách khác, kể cả cách bảo khách mở trình duyệt đi tìm.
+
+    `bc.ffmpeg` có sẵn thì tin ngay, không soi lại: đó là đường khai đè của bài
+    kiểm và của người gọi biết rõ mình đang làm gì.
+    """
+    from .ffmpeg_goi_san import cai_ffmpeg, thieu_gi  # noqa: PLC0415
+
+    if bc.ffmpeg:
+        return bc.ffmpeg
+    ffmpeg = _tim_ffmpeg()
+    if ffmpeg:
+        thieu = thieu_gi(ffmpeg)
+        if not thieu:
+            return ffmpeg
+        bc.ghi("  bản FFmpeg trên máy này thiếu {0} — không dựng đủ được, tải "
+               "bản đầy đủ về thư mục tool.".format(", ".join(thieu)))
+    else:
+        bc.ghi("  máy chưa có FFmpeg — tải một bản về thư mục tool.")
+    return cai_ffmpeg(bc.goc, bao=bc.ghi)
 
 
 # ── Khâu 3: phụ đề ───────────────────────────────────────────────────────────
@@ -5242,9 +5274,7 @@ def _khau_dung(bc: BoiCanh):
                 os.replace(dich, os.path.join(d, "8-video.cu.mp4"))
             except OSError:
                 pass
-        ffmpeg = bc.ffmpeg or _tim_ffmpeg()
-        if not ffmpeg:
-            raise RuntimeError("máy chưa có FFmpeg")
+        ffmpeg = _bao_dam_ffmpeg(bc)
         canh = _doc_canh(luot)
         thu_muc_clip = os.path.join(d, "6-clip")
         _loai_clip_hong(bc, ffmpeg, thu_muc_clip, canh)
@@ -5329,10 +5359,19 @@ def _khau_dung(bc: BoiCanh):
             bc.ghi("    (phóng {0}×{1} — khâu này lâu hơn giữ nguyên khoảng "
                    "bốn lần; phần nét thêm ra là máy đoán, không phải chi "
                    "tiết có thật. Đổi ở Cài đặt.)".format(khung[0], khung[1]))
+        # Nói ngay từ đầu khâu này chạy bằng gì và sẽ báo tiến độ ra sao. Đây là
+        # khâu duy nhất chạy trên máy khách, và cũng là khâu lâu nhất: khách báo
+        # 28/08/2026 rằng tool "Not responding" chính vì ngồi nhìn một dòng nhật
+        # ký đứng im mà không biết nó còn sống hay không.
+        bc.ghi("    (dựng trên máy bạn, không tốn tiền: {0} luồng CPU, mức nén "
+               "“{1}” chọn theo cấu hình máy này. Cứ khoảng {2:.0f} giây tôi "
+               "báo một dòng phần trăm; cửa sổ vẫn bấm được, và bấm Dừng là "
+               "dừng ngay.)".format(
+                   so_van_ffmpeg(), _muc_nen(bc.goc), GIAY_BAO_TIEN_DO))
         _ghep_video(ffmpeg, manh, mp3, srt if dot else "", dich,
                     giay=giay, ghi=bc.ghi, nhac=nhac,
                     am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)),
-                    khung=khung, base_dir=bc.goc)
+                    khung=khung, base_dir=bc.goc, dung=bc.kiem_dung)
         # Video dựng xong vốn đã sạch thẻ — FFmpeg mã hoá lại là thẻ của tệp
         # nguồn mất hết. Vẫn chạy một lượt cho chắc: nó chỉ chép luồng sang tệp
         # mới, mất vài giây cho cả video mười phút, và nó bảo hiểm cho ngày nào
@@ -5375,6 +5414,17 @@ def _khau_dung(bc: BoiCanh):
 
     lam.soi_lai = soi_lai
     return lam
+
+
+def _muc_nen(goc: str) -> str:
+    """Mức nén x264 máy này sẽ dùng cho bản cuối — chỉ để ghi vào nhật ký."""
+    from .phan_cung import chon_encoder, doc_ket_qua  # noqa: PLC0415
+
+    try:
+        return chon_encoder(doc_ket_qua(goc), intermediate=False)[1].get(
+            "-preset", "medium")
+    except Exception:  # noqa: BLE001 — một dòng nhật ký không được làm hỏng khâu
+        return "medium"
 
 
 def chon_do_phan_giai(goc: str, kenh) -> str:
@@ -5452,7 +5502,8 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 ghi: Optional[Callable[[str], None]] = None,
                 nhac: str = "", am_luong: float = 0.12,
                 khung: Optional[Sequence[int]] = None,
-                base_dir: str = ".") -> None:
+                base_dir: str = ".",
+                dung: Optional[Callable[[], None]] = None) -> None:
     """Cắt từng clip về đúng độ dài cảnh, nối lại, gắn tiếng, đốt phụ đề.
 
     `giay[i]` là độ dài **cảnh thứ i** lấy từ bảng cảnh — không phải độ dài
@@ -5508,10 +5559,10 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     #     → phải dùng encoder bản cuối (CPU an toàn), không được dùng GPU.
     codec_cat, opts_cat = chon_encoder(pc, intermediate=ma_lai)
 
-    dung = []
+    da_cat = []
     for i, m in enumerate(clip):
         if giay is None:
-            dung.append(m)
+            da_cat.append(m)
             continue
         ra = os.path.join(tam, "{0:04d}.mp4".format(i))
         if not os.path.exists(ra):
@@ -5533,15 +5584,18 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                         "-c:v", codec_cat]
             for k, v in opts_cat.items():
                 lenh_cat.extend([k, str(v)])
-            lenh_cat.extend(["-pix_fmt", "yuv420p", "-an", ra])
+            lenh_cat.extend(["-threads", str(so_van_ffmpeg()),
+                             "-pix_fmt", "yuv420p", "-an", ra])
             _chay(ffmpeg, lenh_cat)
-        dung.append(ra)
+        da_cat.append(ra)
+        if dung is not None:
+            dung()      # bấm Dừng giữa 99 lần cắt thì dừng ngay tại đây
         if ghi is not None and (i + 1) % 20 == 0:
             ghi("    cắt {0}/{1} clip…".format(i + 1, len(clip)))
 
     danh_sach = os.path.join(thu_muc, "_clip.txt")
     with open(danh_sach, "w", encoding="utf-8") as tep:
-        for m in dung:
+        for m in da_cat:
             tep.write("file '{0}'\n".format(os.path.abspath(m).replace("'", "'\\''")))
     tam_noi = os.path.join(thu_muc, "_noi.mp4")
     _chay(ffmpeg, ["-y", "-hide_banner", "-nostats", "-f", "concat", "-safe",
@@ -5594,6 +5648,7 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 lenh.extend([k, str(v)])
         lenh.extend(["-preset", opts_cuoi.get("-preset", "slow")])
         lenh.extend(["-crf", opts_cuoi.get("-crf", "18")])
+        lenh.extend(["-threads", str(so_van_ffmpeg())])
         lenh.extend(["-pix_fmt", "yuv420p"])
     else:
         lenh += ["-c:v", "copy"]
@@ -5621,7 +5676,12 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     # phải tải hết tệp mới bắt đầu phát được — xem lại bản dựng trên máy là
     # phải chờ. Tab Dựng video thủ công vốn đã có, đường Tự động thì chưa.
     lenh += ["-movflags", "+faststart", dich]
-    _chay(ffmpeg, lenh)
+    # Vòng nén cuối là chỗ ngốn hầu hết thời gian của cả khâu — có video mười
+    # phút mất hàng giờ. Đưa `ghi` xuống để nó báo phần trăm, và `dung` để nút
+    # Dừng cắt được ngang chừng; không có hai thứ ấy thì nhật ký im suốt và
+    # khách chỉ còn cách nhìn một cửa sổ trắng mà đoán.
+    _chay(ffmpeg, lenh, ghi=ghi, viec="ghép video",
+          tong_giay=float(sum(giay)) if giay else 0.0, dung=dung)
     import shutil as _sh  # noqa: PLC0415
     for tep in (danh_sach, tam_noi):
         try:
@@ -5649,21 +5709,145 @@ def _loi_ffmpeg(stderr: str) -> str:
     return " | ".join(chon)[:400]
 
 
-def _chay(ffmpeg: str, tham_so: Sequence[str]) -> None:
-    ket = subprocess.run([ffmpeg] + list(tham_so), capture_output=True,
-                         text=True,
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if ket.returncode != 0:
+#: Chừa lại bao nhiêu lõi CPU cho cửa sổ tool khi FFmpeg đang chạy.
+LOI_DE_DANH = 1
+
+
+def so_van_ffmpeg() -> int:
+    """Cho FFmpeg mấy luồng — luôn chừa ít nhất một lõi cho giao diện."""
+    return max(1, (os.cpu_count() or 2) - LOI_DE_DANH)
+
+
+def _co_tao_ffmpeg() -> int:
+    """Cờ tạo tiến trình FFmpeg: ẩn cửa sổ đen **và** hạ mức ưu tiên.
+
+    ═══ VÌ SAO PHẢI HẠ ƯU TIÊN — KHÁCH BÁO 28/08/2026 ═══
+
+    Khâu dựng là khâu DUY NHẤT chạy hẳn trên máy khách, và nó ăn sạch CPU: mã
+    hoá x264 `-preset slow` ở 4K chiếm mọi lõi trong hàng giờ. Luồng vẽ của Qt
+    khi ấy tranh không nổi một lát CPU nào; quá 5 giây không trả lời tin nhắn
+    cửa sổ là Windows dán ngay chữ **"Not responding"** lên thanh tiêu đề và
+    phủ trắng cả trang — trông y hệt tool đã treo, trong khi nó đang chạy đúng.
+
+    Hai việc chữa đúng chỗ ấy, cả hai đều không đổi một khung hình nào của
+    video ra:
+
+    * `BELOW_NORMAL_PRIORITY_CLASS` — Windows luôn nhường lát CPU cho luồng vẽ
+      trước, FFmpeg nhận phần còn lại. Cửa sổ vẫn bấm được suốt lúc dựng.
+    * `so_van_ffmpeg()` (`-threads`) — chừa hẳn một lõi, phòng khi máy chỉ có
+      2–4 lõi thì riêng mức ưu tiên chưa đủ.
+
+    Mất thêm khoảng một phần mười thời gian dựng. Đổi lại khách không còn nhìn
+    một cửa sổ chết trong hai tiếng rồi tắt máy giữa chừng.
+    """
+    if os.name != "nt":
+        return 0
+    return (getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            | getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0x00004000))
+
+
+def _giay_dong_ho(chu: str) -> float:
+    """`00:01:23.456` → số giây. Đọc không được thì `0.0`."""
+    try:
+        gio, phut, giay = str(chu).strip().split(":")
+        return int(gio) * 3600 + int(phut) * 60 + float(giay)
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+#: Mấy giây mới báo tiến độ ghép một lần.
+GIAY_BAO_TIEN_DO = 20.0
+
+
+def _chay(ffmpeg: str, tham_so: Sequence[str], *,
+          ghi: Optional[Callable[[str], None]] = None,
+          tong_giay: float = 0.0, viec: str = "ghép",
+          dung: Optional[Callable[[], None]] = None) -> None:
+    """Chạy một lệnh FFmpeg, có báo tiến độ và bấm Dừng được.
+
+    ═══ MỘT DÒNG NHẬT KÝ IM SUỐT HAI TIẾNG CŨNG LÀ MỘT LỖI ═══
+
+    Bản trước gọi `subprocess.run` rồi ngồi đợi. Với video mười phút phóng lên
+    4K, giữa dòng "ghép 99 clip…" và dòng kế tiếp là **hàng giờ không có chữ
+    nào** — không cách nào phân biệt "đang mã hoá cảnh 40" với "tool treo".
+    Cùng lúc ấy nút Dừng bấm cũng không nhả, vì `run` chỉ quay lại khi FFmpeg
+    xong.
+
+    Nay đọc `-progress` của chính FFmpeg: cứ `GIAY_BAO_TIEN_DO` giây báo một
+    dòng phần trăm, và mỗi nhịp ấy cũng là một lần hỏi "có ai bấm Dừng không" —
+    bấm Dừng thì giết FFmpeg ngay, không đợi hết.
+
+    `tong_giay` là độ dài video sẽ ra, để đổi mốc thời gian thành phần trăm;
+    bằng 0 thì chỉ báo số giây đã ghép được.
+    """
+    lenh = [ffmpeg]
+    if ghi is not None:
+        lenh += ["-progress", "pipe:1"]
+    lenh += list(tham_so)
+    ra = str(tham_so[-1]) if tham_so else ""
+
+    def bo_tep_do() -> None:
         # Tệp ra viết dở phải bỏ: lần thử lại thấy "đã có" là dùng luôn tệp
         # cụt — video cuối lặng lẽ thiếu một đoạn.
-        ra = str(tham_so[-1]) if tham_so else ""
         if ra and not ra.startswith("-") and os.path.isfile(ra):
             try:
                 os.remove(ra)
             except OSError:
                 pass
+
+    tien = subprocess.Popen(  # noqa: S603
+        lenh, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        encoding="utf-8", errors="replace", creationflags=_co_tao_ffmpeg())
+
+    # stderr phải có người đọc liên tục: FFmpeg in cảnh báo suốt lúc chạy, ống
+    # dẫn đầy là nó đứng im giữa chừng và cả hai bên cùng đợi nhau mãi mãi.
+    kho_loi: List[str] = []
+
+    def hut_loi() -> None:
+        try:
+            kho_loi.append(tien.stderr.read() or "")
+        except Exception:  # noqa: BLE001
+            kho_loi.append("")
+
+    luong = threading.Thread(target=hut_loi, daemon=True)
+    luong.start()
+
+    lan_bao = time.monotonic()
+    try:
+        for dong in tien.stdout or []:
+            if dung is not None:
+                dung()          # ném Cancelled nếu người dùng bấm Dừng
+            if ghi is None or not dong.startswith("out_time="):
+                continue
+            xong = _giay_dong_ho(dong.split("=", 1)[1])
+            bay_gio = time.monotonic()
+            if xong <= 0 or bay_gio - lan_bao < GIAY_BAO_TIEN_DO:
+                continue
+            lan_bao = bay_gio
+            if tong_giay > 0:
+                ghi("    {0} {1:.0f}% ({2:.0f}/{3:.0f} giây)…".format(
+                    viec, min(100.0, 100.0 * xong / tong_giay), xong,
+                    tong_giay))
+            else:
+                ghi("    {0} được {1:.0f} giây…".format(viec, xong))
+    except BaseException:
+        tien.kill()
+        tien.wait()
+        bo_tep_do()
+        raise
+    finally:
+        try:
+            tien.stdout.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    ma = tien.wait()
+    luong.join(timeout=10)
+    if ma != 0:
+        bo_tep_do()
         raise RuntimeError("FFmpeg hỏng ({0}): {1}".format(
-            os.path.basename(ra) if ra else "?", _loi_ffmpeg(ket.stderr)))
+            os.path.basename(ra) if ra else "?",
+            _loi_ffmpeg("".join(kho_loi))))
 
 
 # ── Gom lại ──────────────────────────────────────────────────────────────────

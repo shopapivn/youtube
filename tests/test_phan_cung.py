@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 
+from core import phan_cung
 from core.phan_cung import (
     PhanCung,
     khao_sat,
@@ -114,18 +115,57 @@ def test_chon_encoder_intermediate_co_gpu():
     assert opts["-cq"] == "20"
 
 
-def test_chon_encoder_intermediate_khong_gpu():
-    """Bản trung gian, không GPU → libx264 medium."""
-    pc = PhanCung(
-        gpu_nvidia=False, gpu_amd=False, gpu_intel=False,
-        vram_mb=0, cpu_cores=4,
-        ffmpeg_encoders=[],
-        whisper_device="cpu"
+def _pc(cores: int, gpu: bool = False) -> PhanCung:
+    return PhanCung(
+        gpu_nvidia=gpu, gpu_amd=False, gpu_intel=False,
+        vram_mb=8000 if gpu else 0, cpu_cores=cores,
+        ffmpeg_encoders=["h264_nvenc"] if gpu else [],
+        whisper_device="cuda" if gpu else "cpu",
     )
-    codec, opts = chon_encoder(pc, intermediate=True)
+
+
+def test_chon_encoder_intermediate_khong_gpu():
+    """Bản trung gian, không GPU → libx264, tốc độ co theo số lõi."""
+    codec, opts = chon_encoder(_pc(4), intermediate=True)
     assert codec == "libx264"
-    assert opts["-preset"] == "medium"
+    assert opts["-preset"] == "veryfast"
     assert opts["-crf"] == "14"
+    # Máy dựng nhiều lõi thì vẫn được nén kỹ như trước.
+    assert chon_encoder(_pc(16), intermediate=True)[1]["-preset"] == "medium"
+
+
+class TestPresetTheoCpu:
+    """Mức nén phải đi theo số lõi — *"máy nào cũng dùng được"*, 28/08/2026.
+
+    Chốt cứng `-preset slow` cho mọi máy là chốt theo máy dựng 16 lõi. Trên
+    laptop 4 lõi của khách, cùng một video mười phút phóng 4K mất hàng giờ với
+    CPU ghim 100%, và Windows dán chữ "Not responding" lên cửa sổ tool.
+    """
+
+    def test_may_yeu_khong_bao_gio_nhan_preset_cham(self):
+        for loi in (1, 2, 3, 4, 6):
+            cuoi = phan_cung.preset_theo_cpu(loi, intermediate=False)
+            assert cuoi not in ("slow", "slower", "veryslow"), loi
+
+    def test_may_manh_van_nen_ky(self):
+        assert phan_cung.preset_theo_cpu(16, intermediate=False) == "slow"
+
+    def test_ban_trung_gian_luon_nhanh_hon_ban_cuoi(self):
+        nhanh_dan = ["ultrafast", "veryfast", "fast", "medium", "slow"]
+        for loi in (1, 2, 4, 8, 12, 16, 32):
+            giua = phan_cung.preset_theo_cpu(loi, intermediate=True)
+            cuoi = phan_cung.preset_theo_cpu(loi, intermediate=False)
+            assert nhanh_dan.index(giua) < nhanh_dan.index(cuoi), loi
+
+    def test_khong_co_khao_sat_thi_doc_cpu_that_cua_may(self):
+        """Chưa chạy SETUP vẫn phải chọn được — `doc_ket_qua` trả `None`."""
+        import os
+
+        assert phan_cung.so_loi(None) == (os.cpu_count() or 4)
+        codec, opts = chon_encoder(None, intermediate=False)
+        assert codec == "libx264"
+        assert opts["-preset"] == phan_cung.preset_theo_cpu(
+            phan_cung.so_loi(None), intermediate=False)
 
 
 def test_chon_encoder_master_luon_cpu():

@@ -107,7 +107,7 @@ class _MayGia:
     def __init__(self):
         self.lenh = []
 
-    def __call__(self, ffmpeg, tham_so):
+    def __call__(self, ffmpeg, tham_so, **_kw):
         self.lenh.append(list(tham_so))
 
 

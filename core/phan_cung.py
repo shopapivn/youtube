@@ -116,6 +116,44 @@ def doc_ket_qua(base_dir: str) -> PhanCung | None:
         return None
 
 
+def so_loi(pc: PhanCung | None) -> int:
+    """Máy này có mấy lõi CPU. Không biết thì đoán 4 — mức phổ thông nhất."""
+    if pc and pc.cpu_cores:
+        return max(1, int(pc.cpu_cores))
+    return os.cpu_count() or 4
+
+
+def preset_theo_cpu(loi: int, *, intermediate: bool) -> str:
+    """Mức nén x264 hợp với số lõi máy này.
+
+    ═══ CÙNG MỘT `slow` LÀ MƯỜI PHÚT Ở MÁY NÀY, BA TIẾNG Ở MÁY KIA ═══
+
+    Chủ dự án, 28/08/2026: *"có thể đi theo cpu để máy nào cũng dùng được"*.
+
+    Bản trước chốt cứng `-preset slow` cho mọi máy. Trên máy dựng 16 lõi thì
+    đúng — chậm hơn `medium` chừng 40% mà nhỏ hơn vài phần trăm. Trên laptop 4
+    lõi của khách thì cùng một video mười phút phóng 4K mất **hàng giờ**, CPU
+    ghim 100% suốt, và Windows dán chữ "Not responding" lên cửa sổ tool.
+
+    Cái mất khi lùi preset nhỏ hơn nhiều so với cái mất khi khách tắt máy giữa
+    chừng: từ `slow` xuống `veryfast` ở cùng CRF, tệp to hơn chừng một phần
+    năm — mà YouTube mã hoá lại toàn bộ, nên phần "to hơn" ấy tan ngay khi tải
+    lên. Ngược lại một lượt dựng bị bỏ dở là mất trắng cả bảy khâu đã trả tiền.
+
+    Bản trung gian luôn nhanh hơn bản cuối một nấc: nó sẽ bị mã lại lần nữa,
+    nên tiếc thời gian ở đó là tiếc nhầm chỗ.
+    """
+    if loi >= 12:
+        cuoi, giua = "slow", "medium"
+    elif loi >= 8:
+        cuoi, giua = "medium", "fast"
+    elif loi >= 4:
+        cuoi, giua = "fast", "veryfast"
+    else:
+        cuoi, giua = "veryfast", "ultrafast"
+    return giua if intermediate else cuoi
+
+
 def chon_encoder(pc: PhanCung | None, intermediate: bool) -> Tuple[str, dict]:
     """Chọn video encoder + options phù hợp với phần cứng.
 
@@ -128,18 +166,24 @@ def chon_encoder(pc: PhanCung | None, intermediate: bool) -> Tuple[str, dict]:
 
     User đã chốt: bản master cuối luôn dùng CPU (an toàn). Chỉ bản trung gian
     mới dùng GPU để tăng tốc.
+
+    Mức nén thì **đi theo số lõi CPU** của chính máy đang chạy — xem
+    :func:`preset_theo_cpu`.
     """
+    loi = so_loi(pc)
     if not intermediate:
-        # Master cuối: luôn CPU, preset chậm, chất lượng cao
-        return ("libx264", {"-preset": "slow", "-crf": "18"})
+        # Master cuối: luôn CPU, chất lượng cao, tốc độ co theo máy.
+        return ("libx264", {"-preset": preset_theo_cpu(loi, intermediate=False),
+                            "-crf": "18"})
 
     # Bản trung gian: ưu tiên tốc độ
     if pc and pc.gpu_nvidia and "h264_nvenc" in pc.ffmpeg_encoders:
         # GPU: preset p4 (medium-fast), CQ 20 (chất lượng khá)
         return ("h264_nvenc", {"-preset": "p4", "-cq": "20"})
     else:
-        # CPU fallback: preset medium, CRF 14 (chất lượng tốt cho trung gian)
-        return ("libx264", {"-preset": "medium", "-crf": "14"})
+        # CPU fallback: CRF 14 (chất lượng tốt cho trung gian)
+        return ("libx264", {"-preset": preset_theo_cpu(loi, intermediate=True),
+                            "-crf": "14"})
 
 
 def chon_whisper_model(pc: PhanCung | None) -> Tuple[str, str]:

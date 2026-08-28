@@ -101,6 +101,20 @@ def diagnose(catalog: Mapping[str, ToolManifest], tool_ids: Iterable[str] = (),
 
 
 def _bundled_ffmpeg() -> str:
+    """FFmpeg nằm sẵn trong bộ cài của tool — bản tự tải, hoặc bản đi kèm gói.
+
+    Phải hỏi cả bản tự tải về `runtime/` (`core/ffmpeg_goi_san.py`), không thì
+    máy nào đã tải xong vẫn bị bảng chẩn đoán báo "Thiếu chương trình ffmpeg".
+    """
+    try:
+        from .dung_video import thu_muc_tool
+        from .ffmpeg_goi_san import tim_ffmpeg_da_tai
+
+        da_tai = tim_ffmpeg_da_tai(thu_muc_tool())
+        if da_tai:
+            return da_tai
+    except Exception:  # noqa: BLE001 — còn đường hỏi gói bên dưới
+        pass
     try:
         import imageio_ffmpeg
         path = imageio_ffmpeg.get_ffmpeg_exe()
