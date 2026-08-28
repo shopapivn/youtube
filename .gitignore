@@ -3,6 +3,24 @@ config.json
 secrets.json
 secrets.json.tmp
 
+# ═══ VÀ MỌI TỆP BÍ MẬT ĐẶT TÊN KIỂU KHÁC ═══
+#
+# Ba dòng trên gọi đích danh từng tệp, nên tệp bí mật nào sinh sau là **không
+# ai chặn**. Đúng 28/08/2026 có `vps-rieng.secret.json` (mật khẩu máy ảo) nằm
+# ở gốc kho, không dòng nào chặn nó.
+#
+# Chuyện đó nguy vì cách phát hành ở đây là `git add -A` cả cây rồi đẩy, mà kho
+# `shopapivn/youtube` là kho CÔNG KHAI: một lần lỡ tay là mật khẩu nằm trong
+# lịch sử git, xoá tệp đi cũng không lấy lại được — phải đổi mật khẩu.
+#
+# Nên chặn theo KHUÔN TÊN, không gọi đích danh nữa. Xem
+# `tests/test_khong_day_tep_bi_mat.py` — bài kiểm giữ cho luật này còn hiệu lực.
+*secret*.json
+*.secret.*
+*-rieng.json
+*.key
+*.pem
+
 # Đồ khách tạo ra khi dùng tool.
 #
 # PROJECTS/ là SẢN PHẨM của khách — video, ảnh, clip, giọng đọc. Một lượt chạy
