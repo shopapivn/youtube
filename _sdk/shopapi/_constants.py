@@ -156,7 +156,7 @@ MAX_TEXT_LENGTH = 100_000
 #: Số ký tự tối đa của ``prompt`` (ảnh và video).
 #:
 #: ⚠ Phải bằng ĐÚNG máy chủ (``imageSchema``/``videoSchema`` trong
-#: ``apps/api/src/modules/jobs/job.schemas.ts``). Trước đây SDK chặn ở 5.000
+#: tài liệu hợp đồng API). Trước đây SDK chặn ở 5.000
 #: trong khi máy chủ nhận 8.000: cùng một prompt 6.000 ký tự thì gọi bằng cURL
 #: chạy ngon còn gọi bằng SDK báo lỗi — người ta kết luận SDK hỏng và gỡ đi.
 MAX_PROMPT_LENGTH = 8_000
@@ -164,7 +164,7 @@ MAX_PROMPT_LENGTH = 8_000
 #:
 #: ⚠ Cùng lý do như ``MAX_PROMPT_LENGTH`` ngay trên: phải bằng ĐÚNG
 #: ``MAX_REFERENCE_IMAGES`` của máy chủ trong
-#: ``apps/api/src/modules/jobs/job.schemas.ts``. SDK chặn chặt hơn máy chủ là tự
+#: tài liệu hợp đồng API. SDK chặn chặt hơn máy chủ là tự
 #: tay từ chối một yêu cầu hoàn toàn hợp lệ; SDK dễ dãi hơn máy chủ thì khách
 #: qua được SDK rồi ăn 400 từ máy chủ. Cả hai kiểu lệch đều khó lần vì mỗi bên
 #: đều "đúng theo mã của mình" — nên có bài kiểm khoá hai con số này bằng nhau
@@ -239,9 +239,7 @@ UNIT_PRICE_MICRO: Dict[str, str] = {
 
 #: Giá video theo ENGINE (µVND mỗi video) — nguồn đúng khi cần báo giá.
 #:
-#: Seedance đắt gấp đôi vì giá vốn gấp đôi: dola.com chặn cứng 2 video/gmail/ngày
-#: nên mỗi clip "ăn" nửa vòng đời một gmail, trong khi một gmail Veo3 chạy được
-#: nhiều hơn hẳn.
+#: Seedance có giá vốn cao hơn nên giá bán gấp đôi.
 VIDEO_UNIT_PRICE_MICRO: Dict[str, str] = {
     "veo3": "500000000",       # 500₫, clip 8 giây
     "seedance": "1000000000",  # 1.000₫, clip 10 giây

@@ -352,6 +352,18 @@ class ChonThuMuc(QWidget):
             self._o.setText(duong_dan)
         self._mac_dinh = duong_dan or self._mac_dinh
 
+    def dat_thang(self, duong_dan: str) -> None:
+        """Đè thẳng, kể cả khi khách đã tự sửa.
+
+        Khác `dat` ở chủ ý: `dat` là tool tự đổi mặc định (đổi dự án, đổi loại
+        việc) nên phải nhường lựa chọn của khách. Hàm này chỉ được gọi khi
+        chính khách **vừa bấm một cái nút** để bảo "lấy thư mục kia sang đây" —
+        lúc ấy giữ lại đường dẫn cũ mới là làm ngược ý họ.
+        """
+        if duong_dan:
+            self._o.setText(duong_dan)
+            self._mac_dinh = duong_dan
+
     def _chon(self) -> None:
         chon = QFileDialog.getExistingDirectory(self, "Chọn thư mục lưu", self.value)
         if chon:

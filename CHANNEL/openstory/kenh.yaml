@@ -1,0 +1,80 @@
+# ============================================================================
+#  KÊNH openstory — Truyện cổ tích (lối OpenStory)
+# ============================================================================
+#  ĐÂY LÀ BẢN ĐỂ SO SÁNH, không phải kênh thay thế.
+#
+#  Nó là bản sao từng byte của kênh `story-3d` — cùng giọng đọc, cùng
+#  `style.yaml`, cùng ảnh nhân vật, cùng tám tệp lời nhắc — **trừ đúng một
+#  tệp**: `prompt/7-canh.md`, viết lại theo trọn bộ luật của OpenStory
+#  (`THAM-KHAO/openstory/src/lib/prompts/workflow-prompts.ts`, đọc 26/08/2026;
+#  bản bóc tách ở `THAM-KHAO/OPENSTORY-BOC-TACH.md`).
+#
+#  Cách so cho ra kết quả dùng được: chạy CÙNG một truyện qua `story-3d` và
+#  qua kênh này, rồi mở hai thư mục ảnh xem cạnh nhau. Đổi hai thứ một lúc thì
+#  không biết thứ nào làm nên khác biệt — nên tám tệp kia cố ý giữ nguyên.
+#
+#  ⚠ `ky_tu_moi_phut` đi theo GIỌNG ĐỌC. Giọng f5q6kePPoQAjCPYG6moa chưa đo —
+#  832 là số của giọng cũ, giữ nguyên như `story-3d` cho hai bên bằng nhau.
+#
+#  ⚠ KHÔNG BAO GIỜ ĐẶT KHOÁ API VÀO ĐÂY. Tiền của luồng AUTO đi qua đúng một
+#  cửa: ví ShopAPI mà tool đã đăng nhập. Tool có bộ quét, thấy khoá là chặn.
+# ============================================================================
+
+# ── Kênh MẪU của tool ─────────────────────────────────────────────────────────
+#  Cập nhật tool sẽ GHI ĐÈ kênh này bằng bản mẫu mới hơn. Muốn sửa cho riêng
+#  mình thì bấm "Nhân bản" ở tab Tự động — bản sao có kenh_rieng: true, cập
+#  nhật không đụng vào.
+mau_cua_tool: true
+ma: "openstory"
+ten: "Truyện cổ tích (lối OpenStory)"
+ngon_ngu: "vi"
+giong_van: "Vietnamese fairy-tale narration for children 4–10: warm, gentle, playful storyteller voice; short simple sentences; lively dialogue; sound words; the narrator speaks to the child listener (các bạn nhỏ / các con)."
+ky_tu_moi_phut: 832
+chu_bia_hoa: true
+voice_id: "f5q6kePPoQAjCPYG6moa"
+phut_muc_tieu: 8
+# Độ dài TỰ DO: không nhắm phút, không nắn, không chấm độ dài — truyện dài
+# ngắn theo câu chuyện (chủ dự án 25/08/2026). `phut_muc_tieu` ở trên không dùng.
+do_dai_tu_do: true
+engine: "veo3"
+# Khung hình đầu của clip CHÍNH LÀ tấm ảnh vừa vẽ (`frame_mode: start_frame`),
+# không phải một tấm Veo tự nghĩ ra từ chữ. Đúng luật của OpenStory cho lời
+# nhắc chuyển động: *"the still IS the exact first frame the video model will
+# animate from"*. Mã tool đã đo 26/08/2026: không ghim thì sau 8 giây nhân vật
+# đã đổi. Kênh `hoathinh-3d` bật sẵn; kênh này bật 27/08/2026.
+khung_dau: true
+# Vẽ thêm một tấm ảnh KHUNG CUỐI mỗi cảnh rồi ghim clip CẢ HAI đầu. Đo
+# 27/08/2026 trên ba clip trôi nặng nhất: cảnh 11 đi 2 → 4 điểm, cảnh 2 đi
+# 3 → 4, và clip kết thúc gần trùng khít tấm khung cuối (lệch 1,4-5,4/255).
+# Tốn thêm một tấm ảnh mỗi cảnh.
+ghim_hai_dau: true
+# Chấm từng tấm ảnh với ảnh tham chiếu, lệch quá thì vẽ thêm và giữ tấm hơn.
+# Đo 27/08: 4 cảnh yếu cứu được cả 4, điểm giống 3,83 → 4,00.
+cham_anh: true
+so_thumbnail: 3
+mo_hinh: "claude-sonnet-5"
+# KHÔNG đốt phụ đề vào hình. Chủ dự án 28/08/2026: *"template này mày đừng để
+# nó edit phụ đề vì phụ đề đang xấu"* — phim của kênh này còn đi qua CapCut,
+# chữ sẽ làm ở đó. Tệp `3-phu-de.srt` vẫn được tạo đầy đủ để mang sang.
+dot_phu_de: false
+# Giữ TIẾNG CẢNH của clip (bước chân, chim hót, nước, gió) nằm dưới giọng đọc,
+# và xuất riêng `8-tieng-canh.m4a` để trộn tay ở CapCut. Bật ô này thì khâu
+# clip tự ghim thêm câu cấm nhạc và cấm mọi lời nói vào lời nhắc — xem
+# `core/auto_khau.LUAT_TIENG_CANH`.
+giu_tieng_canh: true
+# Độ to tiếng cảnh trong bản đã trộn. Chủ dự án 28/08: *"âm thanh phụ to quá
+# thì nó bị lấn mất voice… bé hơn chút sẽ không bị át nhạc nền sau thêm vào"*.
+# Đo trên phim 0008: tiếng cảnh trung bình -31,3 dB nghe rất nhỏ, nhưng ĐỈNH
+# -1,6 dB ngang hẳn giọng đọc (-1,4 dB) — một tiếng nước bắn là vọt lên bằng
+# lời kể. 0,35 hạ đỉnh ấy xuống -10,7 dB.
+# ⚠ Chỉ đổi bản đã trộn. `8-tieng-canh.m4a` xuất riêng luôn giữ MỨC GỐC để
+# khách tự chỉnh ở CapCut.
+am_luong_tieng_canh: 0.35
+am_luong_nhac: 0.12
+nhac_nen: ""
+
+# Cách kể bằng hình: AI đọc phim, tự dựng dàn nhân vật (có giai đoạn trang
+# phục) + bối cảnh + kế hoạch đạo diễn + ảnh tham chiếu từng nhân vật. Giống
+# hệt `story-3d` — đây chính là chỗ OpenStory gọi là "character bible /
+# location bible", nên hai bên so được với nhau.
+che_do_ke: tu_xay

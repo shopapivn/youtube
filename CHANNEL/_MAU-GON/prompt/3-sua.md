@@ -16,7 +16,10 @@ Tool chèn một quãng lặng thật vào đúng chỗ đó — người xem c�
 người dựng nhìn sóng âm là thấy chỗ cắt, và chỗ đổi tông giọng bị che đi. Đặt ở
 chỗ ý ĐỔI HẲN, đừng đặt giữa một mạch đang kể; bài mười lăm phút thường 5–9 dấu.
 
-Chỉ trả về kịch bản, dài tương đương bản vừa viết. Không nhận xét.
+Chỉ trả về NGUYÊN VĂN kịch bản, dài tương đương bản vừa viết — không tạo
+file, không đặt tên file, không mô tả việc đã làm, không liệt kê chỗ đã sửa,
+không đếm ký tự, không tiêu đề, không nhận xét. Bản trả về đi thẳng vào máy
+đọc giọng nói: có gì trong đó là người xem nghe thấy nấy.
 
 ## Kịch bản gốc đã viral
 

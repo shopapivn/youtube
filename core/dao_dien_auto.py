@@ -194,12 +194,48 @@ def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
         # để khâu thử lại, đừng đem đi tạo 123 ảnh.
         raise RuntimeError("đạo diễn không dựng được dàn nhân vật — xem dòng 'đạo diễn:' phía trên; "
                            "thường là máy chủ từ chối khoá trùng hoặc AI trả JSON hỏng")
+    bo = _bo_boi_canh_khong_ai_den(man, canh)
+    if bo:
+        bc.ghi("  đạo diễn: bỏ {0} bối cảnh không cảnh nào đến ({1}).".format(len(bo), ", ".join(bo)))
     with open(os.path.join(d, TEP_DAN), "w", encoding="utf-8") as f:
         json.dump({kh: man.get(kh) for kh in ("characters", "locations", "director_plan", "story", "settings")},
                   f, ensure_ascii=False, indent=1)
     bc.ghi("  đạo diễn xong: {0} cảnh, {1} nhân vật, {2} bối cảnh.".format(
         len(canh), len(man.get("characters") or []), len(man.get("locations") or [])))
     return canh, man
+
+
+def _bo_boi_canh_khong_ai_den(man: Dict[str, Any], canh: List[Dict[str, Any]]) -> List[str]:
+    """Bỏ khỏi dàn những bối cảnh mà kế hoạch lẫn bảng cảnh đều không dùng tới.
+
+    ═══ VÌ SAO ═══
+
+    Dàn bối cảnh viết trước, kế hoạch viết sau. Chỗ nào lời kể nhắc thoáng qua
+    ("chạy về nhà") thì dàn dựng luôn một nơi cho nó, rồi kế hoạch gộp nhịp ấy vào
+    cảnh khác và nơi kia mồ côi. Đo trên phim openstory/0008 (28/08/2026): dàn 5
+    nơi, kế hoạch dùng 4 — `loc4` "path running home" không cảnh nào đến.
+
+    Nơi mồ côi tốn đúng một tấm ảnh tham chiếu (`tao_tham_chieu` vẽ cả
+    `characters` lẫn `locations`), và nó nằm lại trong thư mục làm mồi cho những
+    khâu sau tra nhầm. Cắt ở đây là cắt TRƯỚC khi vẽ.
+
+    Chỉ cắt bối cảnh. Nhân vật thì không: một nhân vật có thể được gọi bằng vai
+    trong câu văn mà không cần gắn ảnh (xem `run._thay_id_khong_co_anh`), nên
+    "không cảnh nào gắn" chưa phải là "không ai dùng".
+    """
+    noi = list(man.get("locations") or [])
+    if not noi:
+        return []
+    dung = set()
+    for b in (man.get("director_plan") or []):
+        dung.add(str(b.get("location") or "").strip())
+    for c in canh:
+        dung.add(str(c.get("location_used") or "").strip())
+    dung.discard("")
+    bo = [str(l.get("id") or "") for l in noi if str(l.get("id") or "") not in dung]
+    if bo:
+        man["locations"] = [l for l in noi if str(l.get("id") or "") in dung]
+    return bo
 
 
 def _ma_lan_chay(ma_kenh: str, ma_luot: str, srt: str, ctx: str, mod: Any = None) -> str:

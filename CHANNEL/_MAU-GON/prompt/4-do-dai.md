@@ -26,4 +26,7 @@ Work in **<<LANGUAGE>>**.
 ## Script
 <<DRAFT>>
 
-**Output the script only. No notes, no commentary, no character count.**
+**Output the script only — the narration text and nothing else. No notes,
+no commentary, no character count, no headings, no code fences, no file
+name, and no description of what you changed. Whatever you return goes
+straight into the voice engine: every word in it is read aloud.**

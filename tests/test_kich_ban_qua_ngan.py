@@ -97,6 +97,23 @@ def test_cau_bao_loi_noi_duoc_phai_lam_gi():
         _kiem_kich_ban_dung_duoc(218, 3410)
     except LoiNoiDung as loi:
         chu = str(loi)
-        assert "218" in chu and "3410" in chu
+        # Ba con số, mỗi con nói một việc: bài dài bao nhiêu, SÀN đang chặn ở
+        # đâu, và mục tiêu là bao nhiêu. Bản cũ chỉ in mục tiêu, nên kênh để
+        # độ dài tự do (mục tiêu 0) hiện ra "cần khoảng 0" (26/08/2026).
+        assert "218" in chu and "1534" in chu and "3410" in chu
         assert "Chạy tiếp" in chu
         assert "KHONG-DUNG-DUOC" in chu
+
+
+def test_do_dai_tu_do_thi_cau_bao_noi_dung_san_that():
+    """Mục tiêu 0 mà in "cần khoảng 0" là câu báo vô nghĩa — phải nói sàn."""
+    from core.auto_khau import SAN_KICH_BAN_TU_DO
+
+    try:
+        _kiem_kich_ban_dung_duoc(1452, 0, tu_do=True)
+    except LoiNoiDung as loi:
+        chu = str(loi)
+        assert str(SAN_KICH_BAN_TU_DO) in chu and "1452" in chu
+        assert "mục tiêu" not in chu
+    else:
+        raise AssertionError("phải chặn bài 1.452 ký tự khi sàn là 1.500")

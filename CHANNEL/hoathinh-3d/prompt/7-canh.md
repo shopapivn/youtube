@@ -66,13 +66,24 @@ subject off-centre, depth front-to-back.
    say only which part of it we see and what is in the foreground.
 3. **Vary the shot hard between consecutive scenes.** Open every image prompt
    with the shot itself — `Extreme close-up of…`, `Close-up of…`, `Medium
-   shot of…`, `Over-the-shoulder shot of…`, `Low angle looking up at…`, `Wide
-   shot of…`, `Top-down view of…`, `Insert of <object>…`, `POV of <id>…` — and
-   never use the same opening twice in a row. When several consecutive lines
-   happen in the same place with the same people, walk the camera through
-   them like a film: wide → medium → close-up → the other character's reaction
-   → an insert of the object → over-the-shoulder — the picture must change
+   shot of…`, `Two-shot of…`, `Low angle looking up at…`, `High angle looking
+   down at…`, `Wide shot of…`, `Top-down view of…`, `Insert of <object>…` —
+   and never use the same opening twice in a row. When several consecutive
+   lines happen in the same place with the same people, walk the camera
+   through them like a film: wide → medium → close-up → the other character's
+   reaction → an insert of the object → a two-shot — the picture must change
    even when the place does not.
+
+   **Never `Over-the-shoulder shot of…` and never `POV of <id>…`.** Both put
+   the largest thing in frame — a back, or nothing at all — where the machine
+   has no reference to match against, and it invents. Measured 28/08/2026 on
+   openstory/0008 scene 7, whose prompt opened *"Over-the-shoulder shot from
+   just behind nv1's shoulder in soft blur… looking across to nv4"*: the boy
+   vanished from the picture entirely, a middle-aged woman who is nowhere in
+   the story appeared in the middle of the room, and the healer was reduced to
+   a green back. Scored 2/5, redrawn four times, wrong all four times — because
+   the fault is in the SHOT, not in the draw. To show A looking at B, put both
+   of them in frame facing each other and let the shot size carry the intimacy.
 4. **A child must read it in one second.** One action per picture, big
    readable emotion (wide eyes, open-mouth laugh, arms thrown up, a proud
    chest, a sad slump), bright even light on faces, nothing hidden in shadow,

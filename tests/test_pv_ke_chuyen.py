@@ -80,8 +80,13 @@ def test_loai_1_khong_goi_casting_chi_co_nv1(wb, yeu_cau):
     assert m["settings"]["che_do_ke"] == "mot_nhan_vat"
     assert all(s["characters_used"] == "nv1" for s in m["scenes"])
     # Sheet characters: nv1 có ảnh sẵn → status done.
+    #
+    # Dò cột theo TÊN, không theo số thứ tự: 27/08/2026 thêm cột `body_mode`
+    # vào giữa là bài kiểm gãy, mà lỗi hiện ra thành "nv1.png != done" —
+    # không nhắc gì tới việc cột đã dịch.
     hang = _sheet(yeu_cau, "characters")
-    assert hang[1][0] == "nv1" and hang[1][6] == "done"
+    cot = {ten: i for i, ten in enumerate(hang[0])}
+    assert hang[1][cot["id"]] == "nv1" and hang[1][cot["status"]] == "done"
 
 
 # ── Loại 2: nv1 cố định + AI dựng nv2.. và bối cảnh ─────────────────────────
@@ -521,7 +526,11 @@ def test_ep_canh_theo_ke_hoach_boi_canh_va_nhan_vat(wb):
 
 def test_ke_hoach_khong_con_luat_doi_cho_cho_da_dang(wb):
     assert "do not stage two consecutive beats in the same place" not in wb._KHUON_KE_HOACH
-    assert "FOLLOWS THE STORY" in wb._KHUON_KE_HOACH
+    # 27/08/2026 đổi chữ: "THE PLACE FOLLOWS THE STORY" → "THE PLACE IS WHERE
+    # THE CHARACTERS ARE IN THAT MOMENT". Cùng một ý, nhưng câu cũ bị đọc
+    # thành "giữ nguyên nơi cho tới khi có câu tuyên bố đã đi" nên cả đoạn
+    # vượt hồ bị đặt ở bờ.
+    assert "WHERE THE CHARACTERS ARE IN THAT MOMENT" in wb._KHUON_KE_HOACH
     khoi = wb._khoi_cast_style({"characters": [], "locations": [{"id": "loc1", "name": "a", "english_prompt": "b"}]})
     assert "stay in the same place until the narration says" in khoi
 
@@ -794,7 +803,14 @@ def test_chan_dung_bo_qua_tu_the_trong_mo_ta():
     d = DUOI_CHAN_DUNG.lower()
     assert "ignore any action, pose" in d
     assert "asleep" in d and "lying down" in d
-    assert "awake, standing upright" in d
+    # 27/08 chiều: đổi "AWAKE, STANDING UPRIGHT" thành "awake, standing in the
+    # neutral posture described just above". Đảm bảo của bài kiểm này KHÔNG
+    # đổi — sói đang ngủ vẫn phải vẽ tỉnh và đứng. Đổi vì "đứng thẳng, buông
+    # thõng hai tay" là câu viết cho NGƯỜI: dán lên mèo bốn chân thì ra mèo
+    # đứng hai chân, và 19 cảnh có mèo ra 19 con khác nhau (phim
+    # openstory/0002). Xem ghi chú trên `DUOI_CHAN_DUNG`.
+    assert "awake, standing in the neutral posture" in d
+    assert "all fours" in d and "no human arms" in d
 
 
 def test_bo_tu_the_khoi_o_trang_phuc_giai_doan():
@@ -823,3 +839,190 @@ def test_giai_doan_ghep_do_da_bo_tu_the(wb):
     sau = cast["characters"][1]
     assert "lying down" not in sau["english_prompt"] and "asleep" not in sau["english_prompt"]
     assert "round heavy belly" in sau["english_prompt"]
+
+
+# ── Gốc rễ: dáng thân phải là DỮ LIỆU, không phải văn xuôi ─────────────────
+
+def test_dang_than_khai_thanh_du_lieu_va_di_vao_loi_nhac_ve(wb):
+    """Con vật bình thường phải được vẽ bốn chân, con vật đi hai chân thì đứng.
+
+    Trước 27/08/2026 không chỗ nào trong dây chuyền KHAI ra "con mèo này đi bốn
+    chân" — điều ấy chỉ nằm chìm trong một câu văn ("four bare soft paws"), còn
+    lệnh vẽ chân dung thì dán cứng "standing, arms relaxed at sides" cho MỌI
+    nhân vật. Ảnh gốc ra mèo đứng hai chân, và 19 cảnh có mèo vẽ ra 19 con mèo
+    khác nhau (phim openstory/0002).
+    """
+    assert "body_mode" in wb.CHARACTER_HEADERS
+    assert wb._dang_than({"body_mode": "animal"}) == "animal"
+    assert wb._dang_than({"body_mode": "Upright-Animal"}) == "upright-animal"
+    assert wb._dang_than({"body_mode": "human"}) == "human"
+    # Không khai thì im lặng, KHÔNG đoán bừa từ vai.
+    assert wb._dang_than({"role": "the cat"}) == ""
+    assert wb._cau_dang_than({"role": "the cat"}) == ""
+
+    meo = wb._cau_dang_than({"body_mode": "animal"}).lower()
+    assert "all four legs" in meo and "never on two legs" in meo
+    assert "never with human arms" in meo
+    dung = wb._cau_dang_than({"body_mode": "upright-animal"}).lower()
+    assert "standing upright on two legs" in dung
+    assert wb._cau_dang_than({"body_mode": "human"}) == ""
+
+
+def test_cau_dang_than_nam_TRONG_loi_nhac_ve_chan_dung(wb):
+    """Khai ra mà không đưa vào lệnh vẽ thì khai để làm gì."""
+    cast = {"style": {"image_style": "3D"},
+            "characters": [{"id": "nv3", "role": "cat", "body_mode": "animal",
+                            "english_prompt": "an ordinary house cat"},
+                           {"id": "nv1", "role": "boy", "body_mode": "human",
+                            "english_prompt": "a small boy"}],
+            "locations": []}
+    wb._dung_sheet_prompt(cast) if hasattr(wb, "_dung_sheet_prompt") else None
+    # Hàm đúc sheet_prompt nằm trong luồng dựng dàn; gọi thẳng phần đúc:
+    duoi_style = " Style: 3D"
+    for c in cast["characters"]:
+        c["sheet_prompt"] = (c["english_prompt"] + wb._cau_dang_than(c)
+                             + wb._DUOI_CHAN_DUNG + duoi_style)
+    meo = cast["characters"][0]["sheet_prompt"].lower()
+    assert "ordinary animal" in meo and "all four legs" in meo
+    assert "arms relaxed at its sides" not in meo.split("posture —")[0]
+
+
+def test_body_mode_song_sot_qua_buoc_chuan_hoa_dan(wb):
+    """Thêm trường vào khuôn JSON thôi chưa đủ — nó phải có tên ở `_sach_cast`.
+
+    Hàm ấy dựng một dict MỚI theo danh sách trường cố định, nên trường nào
+    không được gọi tên là bị vứt lặng lẽ: khai `body_mode` trong lời nhắc, AI
+    trả về đàng hoàng, mà tới lúc vẽ chân dung thì mất sạch — và cái hỏng
+    không kêu một tiếng nào (27/08/2026, bắt được trước khi chạy phim).
+    """
+    raw = {"characters": [
+        {"id": "nv3", "role": "cat", "body_mode": "animal",
+         "english_prompt": "an ordinary house cat"},
+        {"id": "nv4", "role": "wolf", "body_mode": "upright-animal",
+         "english_prompt": "a grey wolf",
+         "stages": [{"when": "at the start", "outfit": "nothing"},
+                    {"when": "later", "outfit": "a white bonnet"}]}]}
+    ra = wb._sach_cast(raw)
+    theo_id = {c["id"]: c for c in ra["characters"]}
+    assert theo_id["nv3"]["body_mode"] == "animal"
+    # Giai đoạn sau cũng phải mang theo, nếu không nv4b vẽ ra bốn chân.
+    assert theo_id["nv4"]["body_mode"] == "upright-animal"
+    assert theo_id["nv4a"]["body_mode"] == "upright-animal" \
+        if "nv4a" in theo_id else theo_id["nv4b"]["body_mode"] == "upright-animal"
+
+
+# ── Một nhân vật, một lệnh đặt ảnh ─────────────────────────────────────────
+
+def test_chi_rang_buoc_lan_nhac_dau_khong_ve_hai_con_meo(wb):
+    """Mỗi "(Image N)" là một lệnh đặt tấm ảnh ấy vào khung.
+
+    Bản cũ thay MỌI lần nhắc, nên lời nhắc kể tên con mèo hai lần thành hai
+    lệnh đặt và máy vẽ HAI CON MÈO. Chủ dự án xem phim openstory/0003: *"lúc
+    thì 1 con mèo lúc thì 2 con mèo"*. Đo trên chính bảng cảnh ấy: 5/29 cảnh
+    ràng buộc lặp, cảnh 27 ràng buộc `nv1` ba lần.
+    """
+    dan = [{"id": "nv1", "name": "Tí (the poor boy)", "role": "hero",
+            "english_prompt": "a boy"},
+           {"id": "nv3", "name": "Mèo mướp (the tabby cat)",
+            "role": "helper (loyal pet cat)", "english_prompt": "a cat"}]
+    noi = [{"id": "loc3", "name": "Lotus pond (wide open water)",
+            "english_prompt": "a pond"}]
+    sc = [{"img_prompt": "Wide shot of nv1 lifting nv3 while nv3 clings to nv1 "
+                         "at loc3, nv1 smiles.",
+           "video_prompt": "nv3 climbs, nv1 laughs.",
+           "reference_files": json.dumps(["nv1.png", "nv3.png", "loc3.png"])}]
+    wb._khoa_nhan_dang(sc, dan, noi)
+    than = sc[0]["img_prompt"].split("REFERENCE IMAGES")[0]
+    for i in ("nv1", "nv3", "loc3"):
+        assert than.count(i + " (Image") == 1, "{0} phải chỉ một lệnh đặt".format(i)
+    # Lần nhắc sau gọi bằng cách người ta vẫn gọi, KHÔNG phải id trần.
+    assert "the tabby cat" in than and "the poor boy" in than
+    assert "nv3 clings" not in than and "nv1 smiles" not in than
+
+
+def test_goi_lai_lay_cum_tieng_anh_trong_ngoac(wb):
+    """Dàn ghi tên kiểu "Mèo mướp (the tabby cat)" — cụm trong ngoặc dùng được
+    thẳng trong lời nhắc tiếng Anh; không có thì lui về tên, rồi tới vai."""
+    dan = {"nv3": {"id": "nv3", "name": "Mèo mướp (the tabby cat)", "role": "pet"},
+           "nv9": {"id": "nv9", "name": "Sói", "role": "villain"},
+           "nv8": {"id": "nv8", "name": "", "role": "healer (herbalist)"}}
+    assert wb._goi_lai("nv3", dan, {}) == "the tabby cat"
+    assert wb._goi_lai("nv9", dan, {}) == "the Sói"
+    assert wb._goi_lai("nv8", dan, {}) == "the healer"
+    # Không bao giờ trả rỗng — câu văn thủng một lỗ còn tệ hơn một id trần.
+    assert wb._goi_lai("nv7", {}, {}) == "nv7"
+
+
+def test_chi_gan_anh_cho_nhan_vat_CAU_VAN_goi_ten(wb):
+    """Ảnh gắn vào mà câu văn không gọi tên thì máy vẽ ĐÚNG tấm ấy rồi bỏ phần còn lại.
+
+    Đo 27/08/2026 (phim openstory/0003): 4/29 cảnh gắn ảnh cho nhân vật câu văn
+    không nhắc. Cảnh 14 gắn `nv5` (con vịt) trong khi câu văn chỉ nói `nv1` và
+    `nv3` — ảnh ra CHỈ CÓ CON VỊT, cậu bé và con mèo biến mất. Chủ dự án:
+    *"vẫn là tình trạng thiếu tham chiếu"*.
+    """
+    chars = [{"id": "nv1", "english_prompt": "a boy"},
+             {"id": "nv3", "english_prompt": "a cat"},
+             {"id": "nv5", "english_prompt": "a duck"}]
+    locs = [{"id": "loc4", "english_prompt": "a pond"}]
+    sc = [{"scene_id": 1, "characters_used": "nv1,nv5,nv3", "location_used": "loc4",
+           "img_prompt": "Medium shot of nv1 and nv3 aboard the basket-boat.",
+           "video_prompt": "they drift"}]
+    wb._gan_reference_files(sc, chars, locs)
+    gan = json.loads(sc[0]["reference_files"])
+    assert gan == ["nv1.png", "nv3.png", "loc4.png"], gan
+    # Ô khai cũng phải khớp, kẻo khâu sau đọc một danh sách đã không còn đúng.
+    assert sc[0]["characters_used"] == "nv1,nv3"
+
+
+def test_thu_tu_anh_theo_thu_tu_xuat_hien_trong_cau(wb):
+    """Image 1 nên là nhân vật câu văn gọi trước — số trong ngoặc đi theo câu."""
+    chars = [{"id": "nv1", "english_prompt": "a boy"},
+             {"id": "nv3", "english_prompt": "a cat"}]
+    sc = [{"scene_id": 1, "characters_used": "nv1,nv3", "location_used": "",
+           "img_prompt": "Close-up of nv3 leaping while nv1 watches.",
+           "video_prompt": "x"}]
+    wb._gan_reference_files(sc, chars, [])
+    assert json.loads(sc[0]["reference_files"]) == ["nv3.png", "nv1.png"]
+
+
+def test_cau_van_khong_goi_ai_thi_lui_ve_o_khai(wb):
+    """Câu văn không nêu id nào thì lấy theo ô khai — hành vi CỐ Ý của sản phẩm
+    ("cảnh nào chưa gán ai thì mặc định nhân vật chính").
+
+    CÒN MỘT CA CHƯA XỬ, ghi ở đây để người sau khỏi tưởng là đã xong: cảnh cố ý
+    trống người (phim 0004 cảnh 23 "empty gathering spot with no people", cảnh
+    24 cận cảnh một bông sen) vẫn bị gắn ảnh nhân vật chính. Chưa sửa vì chưa
+    có cách đọc chắc chắn "cảnh này có người không" từ câu văn — dò bằng từ
+    khoá thì sai nhiều hơn đúng.
+    """
+    chars = [{"id": "nv1", "english_prompt": "a boy"}]
+    locs = [{"id": "loc7", "english_prompt": "a pond"}]
+    sc = [{"scene_id": 1, "characters_used": "nv1", "location_used": "loc7",
+           "img_prompt": "Extreme close-up insert of a single white lotus.",
+           "video_prompt": "x"}]
+    wb._gan_reference_files(sc, chars, locs)
+    assert json.loads(sc[0]["reference_files"]) == ["nv1.png", "loc7.png"]
+
+
+def test_ke_hoach_dat_beat_dung_NOI_NHAN_VAT_DANG_O(wb):
+    """Chỗ đứng của một nhịp là nơi nhân vật ĐANG ở, không phải nơi đoạn ấy bắt đầu.
+
+    Luật cũ chỉ nói "giữ nguyên nơi cho tới khi lời kể nói nhân vật đã di
+    chuyển" — quá dính. Đo 27/08/2026 (phim openstory/0004): dàn dựng sẵn
+    `loc5 "giữa đầm"` mà không nhịp nào dùng, còn cảnh gặp con vịt giữa hồ thì
+    bị đặt ở `loc3 "bờ đầm"` suốt, vì không câu nào trong lời kể tuyên bố "giờ
+    đã ra tới giữa". Chủ dự án: *"lúc gặp vịt là phải ở tình huống đang ở giữa
+    hồ"*.
+    """
+    khuon = wb.PROMPT_KE_HOACH if hasattr(wb, "PROMPT_KE_HOACH") else None
+    import io as _io
+    with _io.open(os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "tool-catalog", "prompt.workbook",
+            "run.py"), encoding="utf-8") as t:
+        ma = t.read()
+    assert "WHERE THE CHARACTERS ARE IN THAT MOMENT" in ma
+    assert "MOVING COUNTS EVEN WHEN NO SENTENCE ANNOUNCES IT" in ma
+    assert "where are their feet right" in ma      # câu xuống dòng giữa chừng
+    # Bối cảnh dựng ra mà không nhịp nào dùng là dấu hiệu một nhịp đặt sai chỗ.
+    assert "EVERY LOCATION IN THE CAST LIST MUST BE USED" in ma

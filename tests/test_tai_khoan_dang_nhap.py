@@ -4,7 +4,7 @@ Chủ dự án 22/08/2026: *"khách lần đầu chạy họ phải vào web t�
 lại rất phiền… thiết kế tab tài khoản có thể đăng nhập và tạo API key"*.
 
 Máy chủ có sẵn `POST /auth/login` và `POST /account/api-keys` (đã đối chiếu mã
-nguồn `apps/api/src/modules/{auth,apikeys}`), `core/auth.py` gói lại thành
+tài liệu hợp đồng API, mục đăng nhập/khoá API), `core/auth.py` gói lại thành
 `AccountSession`. Bài này canh phần giao diện nối hai lời gọi đó lại: gõ email +
 mật khẩu → đăng nhập → tạo khoá → lưu khoá, một nút.
 

@@ -1,4 +1,4 @@
-"""Chèn **thẻ cảm xúc** của ElevenLabs v3 vào kịch bản trước khi đem đi đọc.
+"""Chèn **thẻ cảm xúc** v3 vào kịch bản trước khi đem đi đọc.
 
 Chủ dự án, 16/08/2026: *"sau khi content viết xong có thể api để thêm 1 prompt
 chèn thẻ cảm xúc phù hợp giúp content hay hơn, con người hơn… nhưng không phải
@@ -99,7 +99,7 @@ __all__ = [
 #: Tên tệp giữ bản kịch bản đã chèn thẻ.
 TEP_CO_THE = "1-kich-ban-the.txt"
 
-#: Thẻ được phép dùng — lấy từ tài liệu chính thức của ElevenLabs.
+#: Thẻ được phép dùng — lấy từ tài liệu chính thức của cổng giọng nói.
 #:
 #: ═══ CHỈ NHỮNG THỨ NGHE ĐƯỢC ═══
 #:
@@ -258,7 +258,7 @@ def loi_nhac_chen_the(kich_ban: str, giong_van: str = "",
     1. **Không đổi một chữ nào.** Nói ở đầu, nói lại ở cuối, và có `kiem_the`
        đứng sau kiểm. Ba lớp cho một luật vì đây là luật hỏng thì hỏng nặng.
 
-    2. **Thưa tay.** Tài liệu ElevenLabs không cho tỉ lệ cụ thể, nhưng lý do
+    2. **Thưa tay.** Tài liệu của cổng giọng nói không cho tỉ lệ cụ thể, nhưng lý do
        thì rõ: thẻ có sức nặng vì nó hiếm. Chèn vào mọi câu thì thành tiếng ồn,
        và giọng đọc nghe như đang diễn kịch chứ không như đang kể chuyện.
        Chốt ở **một thẻ cho khoảng 4–6 câu**, và chỉ ở chỗ thật sự có chuyển.
@@ -274,7 +274,7 @@ def loi_nhac_chen_the(kich_ban: str, giong_van: str = "",
         boi_canh += "\nNgôn ngữ kịch bản: {0}".format(ngon_ngu)
     return (
         "Bạn là người chỉ đạo lồng tiếng. Việc của bạn là chèn thẻ cảm xúc "
-        "ElevenLabs v3 vào kịch bản dưới đây để người đọc nghe tự nhiên hơn, "
+        "v3 (dạng [tên_thẻ]) vào kịch bản dưới đây để người đọc nghe tự nhiên hơn, "
         "giống người thật hơn.\n"
         "\n"
         "LUẬT BẮT BUỘC — vi phạm là kết quả bị vứt bỏ:\n"

@@ -1,0 +1,16 @@
+THẢ MỘT TỆP NHẠC VÀO ĐÂY
+
+Kênh này KHÔNG có lời đọc — cả đường tiếng của phim là nhạc nền, đúng như
+kênh đối thủ (Timelapse Studio). Không có tệp nhạc thì phim ra vẫn dựng
+được nhưng CÂM.
+
+Cách làm:
+  1. Chép tệp .mp3 vào chính thư mục này.
+  2. Mở `kenh.yaml` ở thư mục cha, sửa dòng:
+         nhac_nen: "nhac/ten-tep-cua-ban.mp3"
+
+Nhạc ngắn hơn phim cũng được — tool tự lặp lại cho tới hết hình.
+
+Nhạc thế nào thì hợp: một bè dài, chậm, không lời, không có đoạn cao trào
+rõ rệt (vì phim dài và không cắt, nhạc có cao trào sẽ chỏi với chỗ đang
+diễn). Đàn dây trầm, piano thưa, hoặc nhạc môi trường đều hợp.

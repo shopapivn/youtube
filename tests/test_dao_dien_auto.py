@@ -632,3 +632,32 @@ class TestThieuAnhThamChieu:
         # 3) chính nó còn mốc → dùng của nó
         nv["sheet_prompt"] = "a wolf" + DUOI_CHAN_DUNG + " Style: MINE"
         assert dd._duoi_phong_cach(luot, man, nv) == " Style: MINE"
+
+
+# ── Bỏ bối cảnh mồ côi ────────────────────────────────────────────────────
+#
+# Dàn dựng ra một nơi mà kế hoạch không đi tới thì cắt TRƯỚC khi vẽ. Đo trên
+# phim openstory/0008 (28/08/2026): dàn 5 nơi, kế hoạch dùng 4 — `loc4` "path
+# running home" mồ côi, tốn đúng một tấm ảnh tham chiếu vẽ ra rồi bỏ.
+
+
+def _man_ba_noi():
+    return {"locations": [{"id": "loc1"}, {"id": "loc2"}, {"id": "loc3"}],
+            "director_plan": [{"location": "loc1"}, {"location": "loc2"}]}
+
+
+def test_cat_noi_mo_coi():
+    man = _man_ba_noi()
+    assert dd._bo_boi_canh_khong_ai_den(man, [{"location_used": "loc2"}]) == ["loc3"]
+    assert [l["id"] for l in man["locations"]] == ["loc1", "loc2"]
+
+
+def test_bang_canh_dung_thi_giu_du_ke_hoach_khong_nhac():
+    """Kế hoạch bỏ sót mà bảng cảnh có dùng thì vẫn là nơi thật — đừng cắt."""
+    man = _man_ba_noi()
+    assert dd._bo_boi_canh_khong_ai_den(man, [{"location_used": "loc3"}]) == []
+    assert len(man["locations"]) == 3
+
+
+def test_dan_rong_thi_khong_dung_toi():
+    assert dd._bo_boi_canh_khong_ai_den({"locations": [], "director_plan": []}, []) == []

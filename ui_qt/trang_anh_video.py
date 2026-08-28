@@ -17,19 +17,18 @@ có chỗ nào diễn đạt được.
 
 *"1 tab làm thủ công như ở bên flow, gửi prompt và nhận kết quả để khách hàng
 làm lẻ, nhưng có thể gửi nhiều prompt liên tục chứ không phải chờ từng cái, và
-nhìn trực quan giống bên flow"* — và *"1 tab làm hàng loạt như
-`D:\\VE3_SUITE\\RUN.bat`"*.
+nhìn trực quan giống bên flow"* — và *"1 tab làm hàng loạt"*.
 
 Chỗ quan trọng nhất của lối thủ công là **không chờ**: bấm gửi xong ô nhập trống
 ngay để gõ tiếp, việc cũ chạy nền, thẻ kết quả tự đầy dần. Bắt chờ từng cái là
 biến một công cụ sáng tác thành một cái máy bấm số xếp hàng.
 
-═══ HÀNG LOẠT: HỌC GÌ TỪ VE3_SUITE ═══
+═══ HÀNG LOẠT: HỌC GÌ TỪ LỐI LÀM THEO BẢNG CẢNH ═══
 
-`D:\\VE3_SUITE` chạy theo **dự án**: một bảng cảnh, mỗi cảnh có *lời nhắc ảnh* và
-*lời nhắc video*, ảnh sinh ra rồi mới làm đầu vào cho video của chính cảnh ấy
-(cột `img_prompt` → `img_path` → `video_prompt`). Đó là thứ đáng mượn — không
-phải phần trại Chrome, thứ chỉ có ý nghĩa với máy chủ.
+Lối ấy chạy theo **dự án**: một bảng cảnh, mỗi cảnh có *lời nhắc ảnh* và *lời
+nhắc video*, ảnh sinh ra rồi mới làm đầu vào cho video của chính cảnh ấy (cột
+`img_prompt` → `img_path` → `video_prompt`). Đó là thứ đáng mượn — phần lo chỗ
+chạy thì đã có máy chủ làm hộ.
 
 Nối ảnh sang video là chỗ **duy nhất** trong tool này mà một việc phải chờ việc
 khác xong. Nên nó nằm ở đây, trong `_ThemVideoTiepTheo`, một chỗ, có tên.
@@ -993,8 +992,8 @@ class TabHangLoat(QWidget):
         self.noi_chuoi = QCheckBox("Ảnh vừa tạo → đầu vào video")
         self.noi_chuoi.setChecked(True)
         self.noi_chuoi.setToolTip(
-            "Cách VE3_SUITE làm: ảnh của cảnh nào thành khung đầu cho clip của "
-            "chính cảnh đó, nên nhân vật và bối cảnh không nhảy giữa các cảnh.")
+            "Ảnh của cảnh nào thành khung đầu cho clip của chính cảnh đó, nên "
+            "nhân vật và bối cảnh không nhảy giữa các cảnh.")
         self.noi_chuoi.setStyleSheet(f"color:{theme.CHU_MO};")
         doc.addWidget(self.noi_chuoi)
 

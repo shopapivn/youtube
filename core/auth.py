@@ -7,7 +7,7 @@ tiên. Đó là ma sát ngay ở cửa vào, và phần lớn người bỏ đi 
 Giờ khách gõ email + mật khẩu, **tool tự tạo khoá API hộ**. Chữ "khoá API" khách
 không cần biết là gì.
 
-## Luồng thật của máy chủ (đã đối chiếu mã nguồn `apps/api/src/modules/auth/`)
+## Luồng thật của máy chủ (đã đối chiếu tài liệu hợp đồng API, mục đăng nhập)
 
 ```
 POST /auth/login {email, password}

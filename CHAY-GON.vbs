@@ -38,8 +38,9 @@ Set shell = CreateObject("WScript.Shell")
 thuMuc = fso.GetParentFolderName(WScript.ScriptFullName)
 
 ' Giữ locale/múi giờ nhất quán cho mọi engine và Chrome con do Studio mở.
-' IP mạng trực tiếp ở Việt Nam -> UTC+7, tiếng Việt. Các engine vẫn có thể
-' đọc riêng VEO3TOP_TZ/VEO3TOP_LOCALE; TZ/LANG là giá trị chung cho tiến trình con.
+' Máy ở Việt Nam -> UTC+7, tiếng Việt. TZ/LANG là giá trị chung cho tiến trình
+' con; hai biến còn lại là tên riêng mà engine đã đọc sẵn từ trước — đặt luôn
+' cho khỏi phải vá chỗ đọc. ĐỪNG đổi tên: engine vẫn tra đúng chữ cũ.
 shell.Environment("PROCESS")("TZ") = "Asia/Ho_Chi_Minh"
 shell.Environment("PROCESS")("LANG") = "vi_VN.UTF-8"
 shell.Environment("PROCESS")("LANGUAGE") = "vi_VN:vi"

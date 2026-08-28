@@ -1,0 +1,63 @@
+# ── ĐỌC TRƯỚC KHI SỬA TỆP NÀY ──
+#
+# Kênh timelapse KHÔNG lấy lời nhắc từ đây. Nó tự dựng toàn bộ lời nhắc
+# ảnh và clip trong `core/timelapse.py` (`prompt_anh_moc`, `prompt_clip_troi`,
+# `prompt_clip_chuyen`) — kiểm 28/08/2026 trên phim 0005: lời nhắc thật
+# không chứa một chữ nào của `image_style` hay `video_style`. Mấy dòng dưới
+# đây còn để cho người đọc hiểu kênh này nhìn ra sao, và cho khâu ảnh bìa.
+#
+# Muốn đổi nhịp phim thì sửa `core/timelapse.py`, không sửa ở đây.
+#
+# `video_style` vừa bỏ câu "smoke and cloud racing in bands, light sliding"
+# ngày 28/08/2026 cho khớp mã: đo ba dải ngang của khung trên 34 clip thì
+# dải TRỜI động 21,30 so với 12,20 ở dải giữa — mây chạy là dải động nhất
+# khung hình, và nó là thứ tôi tự dặn máy làm chứ không phải lịch sử.
+
+# ============================================================================
+#  PHONG CÁCH kênh TIMELAPSE — một chỗ, ngàn năm, máy quay đứng yên
+# ============================================================================
+#  Kênh này không có nhân vật. Nó chỉ có MỘT NƠI và MỘT GÓC MÁY, nên phần lớn
+#  các ô "nhân vật" của kênh khác ở đây bỏ trống là đúng.
+#
+#  Bốn điều chi phối mọi dòng bên dưới, xem lại tệp video của đối thủ 27/08/2026:
+#    * ĐỨNG TRONG LÒNG PHỐ, ngang tầm mắt: nhà hai bên chặn sát mép trái–phải,
+#      đường chạy hút vào tâm khung. Bản đầu của tôi cho máy đứng bên kia sông
+#      nhìn sang — 70% khung là nước và trời, lịch sử thành một dải chấm nhỏ xíu
+#      ở giữa, không có gì để nhìn. Đó là lỗi nặng nhất và nó nằm ngay ở đây.
+#    * PHƠI SÁNG LÂU: nhà cửa nét căng từng viên gạch, người và xe nhoè thành
+#      vệt. Đây là chữ ký của thể loại. Vẽ người sắc nét thì ra ảnh du lịch.
+#    * ÁNH SÁNG PHẢI SỐNG: đổi giờ, đổi mùa, đổi thời tiết, có cả cảnh đêm. Bản
+#      đầu tôi khoá "cùng một giờ, cùng một thứ ánh sáng" — chính dòng ấy làm
+#      phim đơn điệu. Cái không được đổi là HƯỚNG máy nhìn, không phải ánh sáng.
+#    * không chữ, không số trong hình — số năm do tool tự in lên sau, ở góc trái
+#      dưới (góc phải dưới đã có dấu của nhà cung cấp).
+# ============================================================================
+
+style_name: "fixed_camera_history_timelapse"
+
+image_style: "photorealistic cinematic film still shot at STREET LEVEL from one fixed viewpoint, buildings framing the left and right edges, the road running to a vanishing point in the centre, rich human-scale detail close to the camera, long-exposure look with solid things razor sharp and moving people smeared into soft streaks, documentary realism, 35mm, high micro-contrast, no stylisation"
+
+video_style: "locked-off tripod shot at street level, the frame absolutely still while the world inside it is rebuilt; long-exposure time-lapse motion — architecture rock steady and razor sharp, crowds and traffic streaming past as soft translucent streaks far faster than life, the sky filmed at ordinary speed with clouds that keep their shape and light that does not slide; no camera movement of any kind"
+
+thumbnail_style: "photorealistic cinematic street-level view, one place across two ages, buildings framing both edges and the road running to a vanishing point, the anchor landmark at the far end, dramatic light, enormous year numbers as the dominant text"
+
+scene_plan_style: "one street-level viewpoint for the entire film, with one named landmark at the far end that the viewer watches being built, ruined and rebuilt; every milestone is the same view 10-20 years later; change is shown by what stands beside the road, how crowded it is, and what is burning, growing or falling down — never by moving the camera"
+
+palette: "natural earth and daylight — river browns, reed greens, tile and timber ochres, hazy blue distance (#8C6B4F, #6F7F53, #A9BCCB)"
+
+negative_prompt: "no text, no letters, no numbers, no watermark, no logo, no map, no timeline graphic, no split-screen arrows, no camera movement, no motion blur of the buildings, no aerial or drone view, no view from a hilltop or from across a river, no empty wide panorama, no lens flare, no tilt-shift, no painterly or illustrated look, no cartoon, no blood, no bodies in close view, no weapons pointed at the viewer"
+
+reference_lock: "The GEOMETRY of the view is fixed for the whole film: the camera stands in the same spot at the same eye height, the road runs in the same direction to the same vanishing point, the horizon sits at the same height, and the named landmark stays where it is in frame. What people built beside that road may change completely, right up against the camera — that change IS the film. The hour, the weather and the season may change from one milestone to the next; the direction the camera faces may not."
+
+technical_suffix: "same fixed street-level viewpoint and same lens in every shot, long-exposure time-lapse look, photoreal documentary, no text, no letters, no watermark"
+
+engagement_rules: "keep the named landmark at the far end of the street visible in every shot — it is the one thing the viewer tracks across two thousand years; give every milestone one thing the eye can follow close to camera — a stall, a cart, a column of smoke, a working crowd; put a violent or startling milestone roughly every fourth one; vary hour, weather and season, and use night where the era allows lamps; let ruins and rebuilding alternate, because that contrast is why the viewer stays"
+
+# Chữ trên ảnh bìa: hai con số năm làm chủ, chữ ít thôi.
+thumb_text_style: "enormous condensed sans-serif numerals in white with a heavy black outline, set into the sky"
+thumb_text_shadow: "hard drop shadow for legibility against bright sky"
+thumb_text_hex: "#FFFFFF"
+thumb_text_font: "heavy condensed sans-serif, newspaper-headline weight"
+
+audience_language: "Vietnamese"
+audience_culture_note: "Người xem là người Việt xem cho vui và để biết, không phải nhà nghiên cứu. Ưu tiên nơi chốn họ nhận ra ngay: một khúc sông, một bến chợ, một cửa ô, một chân cầu. Chi tiết đời sống phải đúng thời: thuyền nan, nhà tranh vách đất, mái ngói ta, gánh hàng rong, xe kéo, xe đạp, xe máy — mỗi thứ xuất hiện đúng lúc nó có thật. Không dựng biểu tượng du lịch vào những năm nó chưa tồn tại."

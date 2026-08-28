@@ -1,9 +1,9 @@
 {
   "tool_id": "transcribe.local",
   "name": "Tao phu de local",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "contract_version": "1",
-  "description": "Chuyen audio thanh phu de co moc thoi gian tren may khach.",
+  "description": "Audio thanh phu de co moc thoi gian tren may khach. Co config.script thi chu lay tu kich ban, may nghe chi de lay moc gio.",
   "inputs": [
     {"name": "audio", "kind": "audio", "schema": "narration-audio.v1"}
   ],
@@ -14,7 +14,8 @@
     "model":{"type":"string","enum":["small"],"default":"small"},
     "language":{"type":"string","default":"vi"},
     "device":{"type":"string","enum":["cpu","cuda"],"default":"cpu"},
-    "compute_type":{"type":"string","enum":["int8","float16","float32"],"default":"int8"}
+    "compute_type":{"type":"string","enum":["int8","float16","float32"],"default":"int8"},
+    "script":{"type":"string","default":""}
   }},
   "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 3600,
               "python_modules": ["faster_whisper"],

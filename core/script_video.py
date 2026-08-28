@@ -24,9 +24,9 @@ trước**, đường sau chỉ chạy khi đường trước không ra chữ:
 Đường 4 chạy **trên máy khách, miễn phí**, không gọi ví ShopAPI. Nhưng nó nặng:
 tải tiếng về, rồi nghe hết cả video. Nên mặc định tắt, và người dùng phải tự bật.
 
-Cách xếp này chép ý từ tool `D:\\CONTENT` của chủ dự án (bốn phương án cascade),
-bỏ đi hai thứ ở đó mà chỗ này không có: proxy xoay vòng, và Whisper API trả tiền
-theo phút. Chỗ này ưu tiên miễn phí.
+Cách xếp này chép ý từ một tool nội bộ đời trước của chủ dự án (bốn phương án
+cascade), bỏ đi thứ ở đó mà chỗ này không có: Whisper API trả tiền theo phút.
+Chỗ này ưu tiên miễn phí.
 """
 
 from __future__ import annotations

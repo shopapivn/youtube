@@ -63,7 +63,7 @@ __all__ = [
 ]
 
 #: Trần dung lượng MỘT file — khớp `maxInputUploadBytes` của máy chủ
-#: (`apps/api/src/modules/storage/storage.service.ts`).
+#: (xem tài liệu hợp đồng API, mục kho tệp).
 #:
 #: Kiểm ở phía client là để bạn biết ngay, chứ không phải để thay máy chủ: đẩy
 #: 40 MB lên đường truyền rồi mới nhận `400` là mấy chục giây vứt đi.

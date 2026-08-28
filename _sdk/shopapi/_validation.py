@@ -26,10 +26,10 @@ from ._constants import (
 from ._exceptions import InvalidRequestError
 from ._money import group_thousands
 
-#: Khuôn `voice_id` thật của ElevenLabs — đúng 20 ký tự chữ và số.
-#: Phải khớp `ELEVENLABS_VOICE_ID` ở `apps/api/src/modules/jobs/job.schemas.ts`;
+#: Khuôn `voice_id` thật của cổng giọng nói — đúng 20 ký tự chữ và số.
+#: Phải khớp đúng khuôn máy chủ kiểm (xem tài liệu hợp đồng API);
 #: lệch nhau nghĩa là SDK từ chối thứ máy chủ nhận, hoặc ngược lại.
-_ELEVENLABS_VOICE_ID = re.compile(r"^[A-Za-z0-9]{20}$")
+_KHUON_VOICE_ID_NHA_CUNG_CAP = re.compile(r"^[A-Za-z0-9]{20}$")
 
 __all__ = [
     "validate_text",
@@ -135,10 +135,9 @@ def validate_audio_format(fmt: Any, *, param: str = "format") -> str:
 def validate_voice_id(voice_id: Any, *, param: str = "voice_id") -> str:
     """Kiểm khuôn `voice_id` NGAY TẠI MÁY KHÁCH, trước khi tốn một lượt mạng.
 
-    Nhận hai dạng (giống hệt máy chủ — xem `ELEVENLABS_VOICE_ID` trong
-    `apps/api/src/modules/jobs/job.schemas.ts`):
+    Nhận hai dạng (giống hệt máy chủ — xem tài liệu hợp đồng API):
       1. mã ngắn của shopapi, ví dụ ``vi_female_01``;
-      2. ``voice_id`` thật của ElevenLabs — đúng 20 ký tự chữ và số.
+      2. ``voice_id`` thật của cổng giọng nói — đúng 20 ký tự chữ và số.
 
     Kiểm ở đây không thay thế máy chủ, nó chỉ báo lỗi SỚM HƠN: người viết code
     biết mình gõ sai ngay lúc chạy thử, thay vì sau một vòng gọi mạng.
@@ -149,12 +148,12 @@ def validate_voice_id(voice_id: Any, *, param: str = "voice_id") -> str:
         )
     ma = voice_id.strip()
     hop_le = (any(v["id"] == ma for v in VOICE_CATALOG)
-              or _ELEVENLABS_VOICE_ID.match(ma) is not None)
+              or _KHUON_VOICE_ID_NHA_CUNG_CAP.match(ma) is not None)
     if not hop_le:
         raise _fail(
             "`{0}` không đúng khuôn. Dùng một trong hai cách: "
             "(1) mã có sẵn của shopapi — xem `shopapi.VOICE_CATALOG`; hoặc "
-            "(2) voice_id thật của ElevenLabs, đúng 20 ký tự chữ và số "
+            "(2) voice_id thật của cổng giọng nói, đúng 20 ký tự chữ và số "
             "(ví dụ \"NOpBlnGInO9m6vDvFkFC\"). Lấy id tại "
             "elevenlabs.io/app/voice-library: mở giọng bạn thích, bấm nút ba "
             "chấm rồi chọn \"Copy voice ID\".".format(param),
@@ -228,9 +227,9 @@ def default_video_duration(engine: str) -> int:
 def validate_video_duration(engine: str, duration: Any, *, param: str = "duration") -> int:
     """veo3 chỉ 8 giây; seedance chỉ 10; auto nhận 8 hoặc 10.
 
-    Clip 5 giây đã NGỪNG BÁN (mỗi clip dù dài ngắn đều tiêu một lượt trong hạn
-    mức 2 video/gmail/ngày), nên không nhắc tới số 5 ở bất kỳ đâu nữa — vừa từ
-    chối số 5 vừa mời khách chọn số 5 là mâu thuẫn khách nhìn thấy ngay.
+    Clip 5 giây đã NGỪNG BÁN (mỗi clip dù dài ngắn đều tính một lượt), nên không
+    nhắc tới số 5 ở bất kỳ đâu nữa — vừa từ chối số 5 vừa mời khách chọn số 5 là
+    mâu thuẫn khách nhìn thấy ngay.
     """
     if isinstance(duration, bool) or not isinstance(duration, int):
         raise _fail("Thời lượng video `{0}` phải là số nguyên (giây).".format(param), param)

@@ -41,7 +41,14 @@ DO_PHAN_GIAI = ("4K", "1440p", "1080p", GIU_NGUYEN)
 #: `cai_dat.MAC_DINH` mà quên dựng ô cho nó thì bài kiểm đỏ. Thiếu chốt ấy thì
 #: một ngày nào đó có tuỳ chọn chỉ sửa được bằng cách mở tệp JSON — đúng thứ
 #: tab này sinh ra để dẹp.
-MUC_RIENG = ("do_phan_giai", "muc_song_song")
+MUC_RIENG = ("do_phan_giai", "muc_song_song",
+             "chrome_sach_nguon", "chrome_sach_kich_thuoc")
+
+#: Nguồn Chrome cho tab Chrome sạch, `(khoá lưu, nhãn)`.
+NGUON_CHROME = (
+    ("may", "Chrome của máy"),
+    ("rieng", "Chrome riêng của tool"),
+)
 
 #: Các mốc công suất gửi việc, `(khoá lưu, nhãn ngắn hiện trên ô chọn)`.
 #: Thứ tự = thứ tự hiện ra, từ nhẹ tới mạnh nhất.
@@ -70,8 +77,8 @@ MUC = (
     ("lam_sach_dau_ai", "Xoá dấu nguồn gốc AI trong tệp",
      "Tắt sẵn. Bật thì trước khi giao, tôi bỏ mấy thẻ dữ liệu ẩn khỏi cả bốn "
      "loại kết "
-     "quả — chữ, giọng đọc, ảnh, video. Thẻ đó là “Made with Google AI” và "
-     "C2PA, do nhà cung cấp gắn vào. Ảnh KHÔNG bị nén lại nên không mất nét, "
+     "quả — chữ, giọng đọc, ảnh, video. Thẻ đó là thẻ nguồn gốc AI do nhà "
+     "cung cấp gắn vào tệp. Ảnh KHÔNG bị nén lại nên không mất nét, "
      "video chỉ chép lại nên không mất giây nào.\n"
      "Tôi đo trên kết quả thật của bạn rồi, và phải nói thẳng: kịch bản, giọng "
      "đọc và video cuối VỐN ĐÃ sạch. Chỗ duy nhất còn thẻ là ẢNH BÌA — nó cũng "
@@ -115,15 +122,15 @@ MUC = (
     ("doi_cao_do_giong", "Đổi nhẹ cao độ giọng đọc",
      "Tắt sẵn. Đây là nút DUY NHẤT trong nhóm này đụng vào chính nội dung, chứ "
      "không chỉ vào thẻ dữ liệu — nên nó tách riêng.\n"
-     "Cổng giọng nói chạy trên ElevenLabs, mà ElevenLabs nhúng dấu chìm "
-     "SynthID vào âm thanh. Dấu đó nằm trong sóng tiếng nên xoá thẻ không tới "
-     "được. Nghiên cứu cho thấy dịch cao độ làm gãy dấu này.\n"
+     "Cổng giọng nói nhúng dấu chìm SynthID vào chính âm thanh. Dấu "
+     "đó nằm trong sóng tiếng nên xoá thẻ không tới được. Nghiên cứu "
+     "cho thấy dịch cao độ làm gãy dấu này.\n"
      "Tôi dịch 60 cent — hơn nửa nốt nhạc. Nhạc công mới phân biệt được, người "
      "nghe kể chuyện thì không. Độ dài giữ nguyên tuyệt đối nên phụ đề và cảnh "
      "không xê dịch một mi-li-giây nào.\n"
      "PHẢI NÓI THẬT: tôi KHÔNG tự kiểm được là dấu đã mất hay chưa — máy dò "
-     "của Google không công khai. Bạn tự kiểm miễn phí bằng Audio Detector của "
-     "ElevenLabs: tải lên bản trước và sau rồi so."),
+     "của Google không công khai. Bạn tự kiểm miễn phí bằng công cụ dò "
+     "dấu chìm của nhà cung cấp giọng: tải lên bản trước và sau rồi so."),
 )
 
 
@@ -141,6 +148,7 @@ class TrangCaiDat(QWidget):
         doc.addWidget(self._the_cap_nhat())
         doc.addWidget(self._the_video())
         doc.addWidget(self._the_song_song())
+        doc.addWidget(self._the_chrome_sach())
         doc.addWidget(self._the_thu_muc())
         doc.addWidget(self._the_thu_vien())
         doc.addWidget(self._the_agent())
@@ -252,6 +260,113 @@ class TrangCaiDat(QWidget):
             if k == khoa:
                 return i
         return 0
+
+    # ── Chrome sạch ──────────────────────────────────────────────────────────
+
+    def _the_chrome_sach(self) -> QWidget:
+        from core import chrome_sach as cs
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 16, 20, 18)
+        v.setSpacing(6)
+        v.addWidget(nhan("Chrome sạch", "h2"))
+        v.addWidget(self._phu(
+            "Tab Chrome sạch mở mỗi hồ sơ bằng một Chrome. Chọn Chrome nào ở đây, "
+            "còn hồ sơ và proxy thì làm ở tab đó."))
+
+        dang = cai_dat.doc(self._app.base_dir)
+        hang = HangXuongDong()
+        hang.addWidget(nhan("Mở bằng:", "phu"))
+        self._o_nguon = QComboBox()
+        for _k, nhan_o in NGUON_CHROME:
+            self._o_nguon.addItem(nhan_o)
+        chi_so = next((i for i, (k, _n) in enumerate(NGUON_CHROME)
+                       if k == dang.get("chrome_sach_nguon")), 0)
+        self._o_nguon.setCurrentIndex(chi_so)
+        self._o_nguon.setFixedWidth(200)
+        self._o_nguon.currentIndexChanged.connect(self._doi_nguon_chrome)
+        hang.addWidget(self._o_nguon)
+        self._nut_tai_chrome = nut_phu("Tải Chrome riêng", self._tai_chrome_rieng, rong=160)
+        hang.addWidget(self._nut_tai_chrome)
+        v.addLayout(hang)
+
+        self._nhan_chrome = self._phu("")
+        v.addWidget(self._nhan_chrome)
+        v.addWidget(self._phu(
+            "Chrome của máy có ngay nhưng dính tài khoản Google Sync, tiện ích và "
+            "chính sách của Chrome bạn dùng hằng ngày — không sạch hẳn.\n"
+            "Chrome riêng là bản Chrome for Testing do Google phát hành cho tự "
+            "động hoá: không Google Update, không sync. Tải một lần (~170 MB) về "
+            "thư mục runtime của tool, cập nhật tool không phải tải lại, gỡ bằng "
+            "cách xoá thư mục. Đây là cách các phần mềm kiểu GPM làm."))
+
+        hang2 = HangXuongDong()
+        hang2.addWidget(nhan("Cỡ cửa sổ:", "phu"))
+        self._o_kich_thuoc = QComboBox()
+        self._o_kich_thuoc.addItems(list(cs.KICH_THUOC))
+        self._o_kich_thuoc.setCurrentIndex(max(0, self._o_kich_thuoc.findText(
+            str(dang.get("chrome_sach_kich_thuoc", cs.KICH_THUOC[0])))))
+        self._o_kich_thuoc.setFixedWidth(150)
+        self._o_kich_thuoc.currentTextChanged.connect(
+            lambda ten: self._dat("chrome_sach_kich_thuoc", ten))
+        hang2.addWidget(self._o_kich_thuoc)
+        v.addLayout(hang2)
+        v.addWidget(self._phu(
+            "Cỡ phổ biến ngoài đời để cửa sổ trông như máy thật. Múi giờ và ngôn "
+            "ngữ đặt theo từng hồ sơ ở tab Chrome sạch, vì mỗi proxy một nước."))
+        self._ve_trang_thai_chrome()
+        return khung
+
+    def _ve_trang_thai_chrome(self) -> None:
+        from core import chrome_goi_san
+
+        so = chrome_goi_san.phien_ban_da_tai(self._app.base_dir)
+        duong = chrome_goi_san.tim_chrome_rieng(self._app.base_dir)
+        if duong:
+            self._nhan_chrome.setText("Chrome riêng đã có (bản {0}): {1}".format(so or "?", duong))
+            self._nut_tai_chrome.setText("Tải lại")
+        else:
+            self._nhan_chrome.setText("Chrome riêng: chưa tải.")
+            self._nut_tai_chrome.setText("Tải Chrome riêng")
+
+    def _doi_nguon_chrome(self, chi_so: int) -> None:
+        if 0 <= chi_so < len(NGUON_CHROME):
+            self._dat("chrome_sach_nguon", NGUON_CHROME[chi_so][0])
+
+    def _dat(self, khoa: str, gia_tri) -> None:
+        if not cai_dat.dat(self._app.base_dir, khoa, gia_tri):
+            self._app.show_message(
+                "Không lưu được cài đặt",
+                "Tôi không ghi được vào thư mục workspace. Bạn kiểm tra xem ổ "
+                "đĩa còn chỗ trống không.")
+
+    def _tai_chrome_rieng(self) -> None:
+        from core import chrome_goi_san
+
+        self._nut_tai_chrome.setEnabled(False)
+        self._nhan_chrome.setText("Đang tải Chrome riêng (~170 MB)… bạn cứ dùng tool tiếp.")
+        goc = self._app.base_dir
+
+        def viec():
+            import shutil
+
+            co = chrome_goi_san.tim_chrome_rieng(goc)
+            if co:   # "Tải lại": bỏ bản cũ để lấy bản Stable mới nhất
+                shutil.rmtree(os.path.dirname(co), ignore_errors=True)
+            return chrome_goi_san.cai_chrome(goc)
+
+        def xong(_duong):
+            self._nut_tai_chrome.setEnabled(True)
+            self._ve_trang_thai_chrome()
+            self._o_nguon.setCurrentIndex(1)   # tải rồi thì hẳn là muốn dùng
+
+        def hong(loi):
+            self._nut_tai_chrome.setEnabled(True)
+            self._ve_trang_thai_chrome()
+            self._app.show_message("Không tải được Chrome riêng", str(loi))
+
+        self._app.run_bg(viec, on_ok=xong, on_err=hong)
 
     def _doi_ss(self, chi_so: int) -> None:
         if not 0 <= chi_so < len(MUC_SONG_SONG):

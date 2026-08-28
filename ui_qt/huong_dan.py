@@ -150,6 +150,14 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "vào bình thường; các trang không hỗ trợ IPv6 thì không vào được. "
             "Máy của bạn cũng cần có IPv6 mới kết nối vào được — mạng nhà "
             "thường có sẵn, mạng di động và mạng công ty thì thường không.",
+            "Địa chỉ, tên đăng nhập và mật khẩu bị CHE trên màn hình. Bấm "
+            "“Chép” là giá trị vào bộ nhớ tạm và hiện ra vài giây rồi tự che "
+            "lại — để một lần quay màn hình hay chụp ảnh gửi đi hỏi không mang "
+            "theo mật khẩu máy bạn.",
+            "Có máy VPS mua ở chỗ khác? Bấm “Thêm máy riêng” ở cuối mục VPS. "
+            "Nó chỉ nằm trên đúng máy tính này, mật khẩu được Windows mã hoá, "
+            "ShopAPI không thấy và không đụng tới. Chép sang máy khác sẽ không "
+            "đọc được — đó là cách Windows bảo vệ, không phải hỏng.",
             "Thuê máy TRỪ TIỀN NGAY và tự gia hạn mỗi 30 ngày. Huỷ lúc nào cũng "
             "được, máy vẫn dùng hết kỳ đã trả. Tới kỳ mà ví không đủ tiền thì "
             "hợp đồng hết hạn, máy về kho và MẬT KHẨU BỊ ĐỔI — dữ liệu trong "
@@ -186,9 +194,41 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
         "luu_y": [
             "Mặc định lưu .mp3.", "Tính tiền theo số ký tự.",
+            "Đọc xong bấm “Làm phụ đề .srt” là sang thẳng tab Phụ đề, hai "
+            "thư mục điền sẵn — phụ đề lấy chữ từ chính file .txt bạn vừa đọc "
+            "nên đúng từng chữ, và chạy trên máy nên không tốn tiền.",
             "Hàng “Kênh” dưới ô Voice ID: chọn kênh là giọng của kênh điền vào "
             "ngay; nghe thử ưng giọng nào thì “Lưu vào kênh” — tab Tự động đọc "
             "bằng giọng đó từ lần chạy tới.",
+        ],
+    },
+    "phu-de": {
+        "tieu_de": "Phụ đề (SRT)",
+        "tom_tat": "File giọng đọc + file kịch bản .txt → file .srt có chữ "
+                   "đúng nguyên kịch bản.",
+        "buoc": [
+            "Chọn thư mục chứa file giọng đọc (.mp3) — thường là thư mục "
+            "VOICE của dự án.",
+            "Chọn thư mục chứa file kịch bản .txt. Cùng một chỗ thì để y "
+            "nguyên đường dẫn ở trên.",
+            "Xem bảng bên dưới: mỗi dòng là một cặp tôi đã ghép được. Dòng "
+            "nào báo thiếu kịch bản thì bấm “Chọn tay…” để tự trỏ.",
+            "Chọn tiếng nói trong file rồi bấm “Tạo phụ đề”.",
+        ],
+        "luu_y": [
+            "Chạy hoàn toàn trên máy bạn — KHÔNG tốn một đồng nào.",
+            "Chữ trong phụ đề luôn lấy từ file .txt, không bao giờ lấy thứ "
+            "máy nghe được. Máy nghe chỉ để biết câu nào đọc vào giây thứ mấy.",
+            "Cột Trạng thái ghi “chữ đúng 100%” — đó là con số đo thật, so "
+            "từng chữ giữa file .srt vừa ghi và file .txt của bạn.",
+            "Thấy chữ “giờ ước lượng” nghĩa là máy chưa nghe được file tiếng "
+            "(thiếu bộ nghe, hoặc bạn đưa nhầm file). Chữ vẫn đúng, nhưng câu "
+            "có thể hiện sớm/muộn vài phần mười giây.",
+            "Đã có sẵn file .srt sai chữ? Chọn “Chữa file .srt có sẵn” — tôi "
+            "giữ nguyên mốc giờ cũ, chỉ thay chữ, và ghi ra file mới tên "
+            "“....chuan.srt” nên bản cũ vẫn còn.",
+            "Lần chạy đầu tiên máy tải bộ nghe về (vài chục MB) nên lâu hơn "
+            "hẳn. Những lần sau không phải tải nữa.",
         ],
     },
     # Tab này có hai tab con làm hai việc khác hẳn nhau, nên **mỗi tab con một
@@ -509,6 +549,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": [
             "Chạy bằng FFmpeg ngay trên máy bạn — không cần mạng, không trừ tiền.",
             "Tool KHÔNG bao giờ xoá file gốc của bạn.",
+            "Phụ đề: đưa thẳng file kịch bản .txt cũng được, tôi tự ép nó khớp "
+            "vào giọng đọc nên chữ đúng từng chữ. Đang có sẵn file .srt sai "
+            "nội dung thì chữa ở tab Phụ đề (SRT) trước, rồi quay lại đây.",
             "Bạn không phải gom file bằng tay: tôi lấy lời đọc trong VOICE, "
             "ảnh và clip trong VISUAL, phụ đề trong EXCEL của dự án. Thư mục "
             "bạn tự xếp (mp3 và ảnh nằm chung một chỗ) cũng nhận được.",

@@ -22,3 +22,23 @@ __pycache__/
 
 # Kho GitHub tai ve de doc tham khao - khong phai ma cua tool.
 THAM-KHAO/
+
+# ═══ TÀI LIỆU NỘI BỘ — KHÔNG BAO GIỜ ĐI KÈM BẢN GIAO KHÁCH ═══
+#
+# Sự cố 28/08/2026: mấy file ghi chú việc dưới đây đang được git theo dõi, tức
+# là chúng đi thẳng lên kho công khai cùng bản tool. Trong đó có đường dẫn máy
+# nội bộ, quy mô kho tài khoản thật và tên nhà cung cấp đứng sau từng engine —
+# đúng những thứ khách không cần biết để dùng tool.
+#
+# Nội dung đã dời sang `tools/kho-github-noi-bo/` (ngoài kho này) chứ KHÔNG xoá.
+# Mấy dòng dưới đây để nếu ai đó chép nhầm một bản về lại thì git cũng không
+# nhận. Ghi chú việc mới thì viết thẳng vào thư mục nội bộ ấy.
+/KE-HOACH-*.md
+/THIET-KE-*.md
+/VIEC-*.md
+/CACH-DO.md
+
+# Tool tự ghi bản sao lưu này mỗi lần khách bấm "Mở VS Code" ở tab Agent
+# (`core/claude_code.DUOI_SAO_LUU`). Nó là cấu hình RIÊNG của máy đang chạy,
+# không phải mã của tool.
+*.shopapi-backup

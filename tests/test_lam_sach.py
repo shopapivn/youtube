@@ -487,4 +487,9 @@ class TestGoDinhDangMarkdown:
         with open(os.path.join(goc, "core", "auto_khau.py"),
                   encoding="utf-8") as t:
             ma = t.read()
-        assert "go_dinh_dang(ban_nhap)" in ma
+        # Bản 28/08/2026 lồng thêm `_don_ban` vào trong (gỡ ghi chú kỹ thuật
+        # trước khi gỡ dấu markdown), nên so theo *chỗ nối* chứ không so theo
+        # nguyên văn lời gọi — dò nguyên văn thì lần sau ai lồng thêm một
+        # bước nữa là bài kiểm đỏ mà chẳng có gì hỏng.
+        assert "go_dinh_dang(" in ma
+        assert "ban_nhap = go_dinh_dang" in ma

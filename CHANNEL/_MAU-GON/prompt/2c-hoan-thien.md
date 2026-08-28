@@ -5,7 +5,7 @@ kịch bản dưới đây đã được chọn là bản tốt nhất trong <<S
 - nhất quán từ đầu tới cuối: một ẩn dụ, một hình ảnh đã dùng thì mọi chỗ nhắc lại phải cùng một hình ảnh đó, không lẫn cái cũ với cái mới
 
 giữ nguyên cấu trúc, các ý, nghiên cứu, con số, ẩn dụ và độ dài (khoảng <<PHUT>> phút đọc ≈ <<CHARS>> ký tự). không viết lại từ đầu, không thêm ý mới ngoài những gì cần để sửa điểm yếu. viết bằng <<NGON_NGU>>.
-trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét, không tiêu đề.
+trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét, không tiêu đề, không tạo file, không mô tả việc đã làm, không liệt kê chỗ đã sửa, không đếm ký tự — bản trả về đi thẳng vào máy đọc giọng nói.
 
 kịch bản gốc đã viral (để lấy chất liệu nếu cần):
 

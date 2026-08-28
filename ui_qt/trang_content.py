@@ -39,6 +39,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.chuoi_buoc import Buoc, ghep_yeu_cau
+from core.goi_van_ban import CHI_TRA_NOI_DUNG as _CHI_TRA_NOI_DUNG
 from core.mau_kich_ban import MauKichBan, liet_ke, luu as luu_mau, xoa as xoa_mau
 from core.voice_text import clean_voice_text
 
@@ -430,21 +431,21 @@ class TabTemplate(QWidget):
         self._app.show_error(loi)
 
 
-#: Lời nhắc hệ thống cố ý **cụt lủn**: prompt là của khách, tool không được nhét
-#: thêm yêu cầu về độ dài hay ngôn ngữ vào sau lưng họ. Chỉ giữ đúng một câu
+#: Lời nhắc hệ thống cố ý **chỉ nói về hình thức**: prompt là của khách, tool
+#: không được nhét thêm yêu cầu về độ dài hay ngôn ngữ vào sau lưng họ. Nó chỉ
 #: chặn phần thừa — không có nó thì mô hình trả về "Chắc chắn rồi! Đây là…" kèm
 #: một đống markdown, mà đây là chữ để đem đi đọc thành tiếng.
-_CHI_TRA_NOI_DUNG = ("Chỉ trả về đúng nội dung được yêu cầu — không lời dẫn, "
-                     "không giải thích, không markdown.")
+#:
+#: Một bản duy nhất cho cả tool, ở `core/goi_van_ban.py`. Trước 28/08/2026 tab
+#: này có bản chép riêng, còn tab Tự động thì **không có bản nào** — đúng kiểu
+#: hỏng mà chép tay sinh ra: sửa một chỗ, ba chỗ kia không ai nhớ.
 
 
 def _goi_mo_hinh(client, yeu_cau: str) -> str:
     """Một lượt gọi mô hình qua ví ShopAPI. **Chạy ở luồng nền.**"""
-    from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+    from core.goi_van_ban import goi_van_ban, tin_nhan_viet  # noqa: PLC0415
 
-    return goi_van_ban(client, [
-        {"role": "system", "content": _CHI_TRA_NOI_DUNG},
-        {"role": "user", "content": yeu_cau}])
+    return goi_van_ban(client, tin_nhan_viet(yeu_cau))
 
 
 def _dung_goi_mo_hinh(app):

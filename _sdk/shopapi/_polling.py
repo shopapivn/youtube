@@ -32,11 +32,10 @@ DEFAULT_WAIT_TIMEOUT = 600.0
 #: ═══ CÁI GIÁ, ĐO TRÊN MÁY CHỦ THẬT ═══
 #:
 #:     GET /v1/jobs  3.146 lần / 5 phút = 10 request/giây từ MỘT khách
-#:     → ~2,6 trên 4 lõi CPU của VPS
-#:     → load average 10, và POST .../complete hỏng 79% vì giao dịch hết giờ
 #:
-#: Tức nhịp hỏi dày không chỉ tốn băng thông — nó cướp CPU của chính khâu kết
-#: sổ tiền cho những job mà nó đang chờ.
+#: Với nhịp đó máy chủ phải bỏ phần lớn sức ra trả lời "chưa xong", và khâu kết
+#: sổ cho chính những job đang chờ bị đẩy lùi lại. Tức hỏi dày không chỉ tốn
+#: băng thông — nó làm hỏng đúng cái việc mà nó đang chờ.
 #:
 #: ═══ VÌ SAO ĐÚNG 30 GIÂY ═══
 #:

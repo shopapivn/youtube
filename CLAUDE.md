@@ -29,14 +29,9 @@ Bốn luật, cả bốn đều là tiền thật của họ:
    CPU của máy chủ — và máy chủ dùng đúng CPU đó để kết sổ tiền cho chính job
    bạn đang chờ.
 
-   Đo trên máy chủ thật ngày 16/08/2026, một khách hỏi 10 lần/giây:
-
-   ```
-   GET /v1/jobs      3.146 lần / 5 phút  →  ~2,6 trên 4 lõi CPU của VPS
-   POST .../complete 471 lỗi / 124 thành công  =  79% lượt quyết toán HỎNG
-   ```
-
-   Tức khách đó tự làm hỏng 79% lượt kết sổ tiền của chính mình, chỉ vì hỏi quá dày.
+   Đo trên máy chủ thật ngày 16/08/2026, một khách hỏi 10 lần/giây
+   (`GET /v1/jobs` 3.146 lần trong 5 phút) đã tự làm hỏng phần lớn lượt kết sổ
+   tiền của **chính mình** — chỉ vì hỏi quá dày.
 
    **Cách đúng, theo thứ tự ưu tiên:**
    - Dùng `app.start_batch(...)` có sẵn — nó đã tự lo nhịp hỏi.
@@ -54,24 +49,17 @@ Bốn luật, cả bốn đều là tiền thật của họ:
      dùng `Event.wait(giây)`, nó tỉnh ngay bất kể ngủ bao lâu; đừng ngủ ngắn
      rồi hỏi lại.
 
-5. **Nhịp hỏi dày còn giành mất ĐƯỜNG TRUYỀN, không chỉ CPU.** Máy chạy tool
-   cũng là máy chạy worker. Đo ngày 16/08/2026 trên máy thật:
-
-   ```
-   tool bắn      1.212 lượt GET /v1/jobs / 5 phút  (~4 lần/giây)
-   tool đẩy lên    463 ảnh (178 MB) / 5 phút       → kín đường lên
-   worker tải về    23 KB/giây                     → 516 lượt hết giờ giữa chừng
-   ```
-
-   Đường lên kín thì tín hiệu báo nhận của đường xuống cũng nghẹt. Kết quả:
-   15–25% job của khách hỏng, kèm câu báo lỗi đổ tại "địa chỉ ảnh của bạn" —
-   ta đổ lỗi cho khách vì đường truyền của chính ta.
+5. **Nhịp hỏi dày còn giành mất ĐƯỜNG TRUYỀN, không chỉ sức máy chủ.** Vừa
+   bắn hàng nghìn lượt hỏi vừa đẩy hàng trăm ảnh lên trong cùng 5 phút là bịt
+   kín đường lên của chính máy này. Đường lên kín thì tín hiệu báo nhận của
+   đường xuống cũng nghẹt, và job bắt đầu hỏng kèm câu báo lỗi đổ tại "địa chỉ
+   ảnh của bạn" — ta đổ lỗi cho khách vì đường truyền của chính ta.
 
    Vì thế ảnh tải lên được **để lại một bản ngay trên đĩa máy này**
-   (`shopapi_common.luu_ban_cuc_bo` / `core/auto_khau._luu_ban_cuc_bo`), và
-   worker tra bản đó trước khi nghĩ tới việc gọi ra Internet. Sửa một trong hai
-   đầu thì phải sửa cả đầu kia — đường dẫn và cách rút mã `upl_...` phải khớp,
-   lệch nhau thì lối tắt im lặng ngừng chạy và triệu chứng duy nhất là job chậm.
+   (`core/auto_khau._luu_ban_cuc_bo`), và phía nhận ảnh tra bản đó trước khi
+   nghĩ tới việc gọi ra Internet. Sửa một đầu thì phải sửa cả đầu kia — đường
+   dẫn và cách rút mã `upl_...` phải khớp, lệch nhau thì lối tắt im lặng ngừng
+   chạy và triệu chứng duy nhất là job chậm.
 
 ## Thư mục
 
@@ -108,6 +96,7 @@ tests/                 chạy: python -m pytest tests/
 | Skill | `ui_qt/trang_skill.py` | việc lẻ: một ô nhập → một kết quả |
 | Viết kịch bản | `ui_qt/trang_content.py` | chat, hoặc chạy chuỗi lời nhắc khách tự soạn |
 | Voice | `ui_qt/trang_voice.py` | đọc chữ thành giọng nói, cả thư mục .txt một lượt |
+| Phụ đề (SRT) | `ui_qt/trang_phu_de.py` | mp3 + kịch bản .txt → .srt; hoặc chữa .srt cũ sai chữ. Chạy trên máy |
 | Ảnh & Video | `ui_qt/trang_anh_video.py` | tab con **Thủ công** (gửi từng cái, kiểu Flow) và **Hàng loạt** (bảng cảnh, ảnh nối sang video) |
 | Dựng video | `ui_qt/trang_edit.py` | ghép clip + lời đọc bằng FFmpeg, chạy trên máy, miễn phí |
 | Ví & Tài khoản | `ui_qt/trang_tai_khoan.py` | đăng nhập, số dư, nạp tiền |

@@ -78,7 +78,60 @@ from .su_co import (
 )
 
 __all__ = ["goi_van_ban", "loc_json", "khoi_anh", "MO_HINH_MAC_DINH",
-           "TOI_DA_TOKEN_MAC_DINH"]
+           "TOI_DA_TOKEN_MAC_DINH", "CHI_TRA_NOI_DUNG", "tin_nhan_viet"]
+
+#: Lời nhắc **hệ thống** đi kèm mọi lượt nhờ AI viết chữ của tool.
+#:
+#: ═══ VÌ SAO NÓ Ở ĐÂY, VÀ VÌ SAO NÓ TỪNG THIẾU ═══
+#:
+#: Khách báo 28/08/2026: kịch bản đem đi đọc lẫn cả lời AI tả việc nó vừa làm
+#: — *"Dưới đây là kịch bản đã rà soát:"*, *"Ghi chú: đã chèn 32 thẻ"* — và
+#: máy đọc giọng nói đọc luôn cả mấy câu ấy vào video.
+#:
+#: Đi dò thì thấy tool đã biết cách chữa, và **đã chữa hai lần ở hai chỗ
+#: khác**, chỉ sót đúng chỗ ra tiền:
+#:
+#:     tab Viết kịch bản  `ui_qt/trang_content.py`  CÓ lời nhắc hệ thống
+#:     tab Skill          `ui_qt/trang_skill.py`    CÓ
+#:     đường Claude Max   `core/viet_max.CHI_DAO_VIET`  CÓ (và kỹ nhất)
+#:     tab TỰ ĐỘNG        `ui_qt/trang_auto.py`     KHÔNG — không một chữ nào
+#:
+#: Tab Tự động là tab dựng ra video khách bán. Nó gửi lên cổng đúng một tin
+#: nhắn `user` là nguyên văn lời nhắc của kênh, không có dòng nào dặn mô hình
+#: rằng câu trả lời **chính là** bài chứ không phải một lời báo cáo về bài.
+#:
+#: Nên chữa ở lời nhắc của từng kênh là chữa ngọn: kênh khách đã nhân bản giữ
+#: bản lời nhắc CŨ (`core/dong_bo_kenh.py` cố ý không đụng vào kênh riêng), và
+#: khách tự sửa lời nhắc thì lại hở ra. Chữa ở đây thì mọi kênh, mọi lời nhắc,
+#: mọi bước đều được che — kể cả kênh viết từ trước bản vá này.
+#:
+#: Câu *"nếu lời nhắc bảo ghi ra tệp thì hiểu là in toàn bộ nội dung ra"* là
+#: bài học mua bằng lượt chạy thật 24/08/2026 (TL4-T7/0011), chép từ
+#: `core/viet_max.CHI_DAO_VIET`: lời nhắc `3-sua.md` của kênh có câu *"xuất
+#: dạng file txt"*, và mô hình hiểu đen — nó đi tả cái tệp thay vì in bài.
+CHI_TRA_NOI_DUNG = (
+    "Chỉ trả về đúng nội dung được yêu cầu, và KHÔNG có gì khác: không lời "
+    "dẫn kiểu \"Đây là…\" / \"Here is…\", không giải thích, không nhận xét, "
+    "không tóm tắt việc bạn vừa làm, không liệt kê chỗ đã sửa, không đếm ký "
+    "tự, không markdown thừa, không rào ```. "
+    "Nếu lời nhắc bảo ghi kết quả ra tệp hoặc đặt tên tệp, hãy hiểu là: in "
+    "TOÀN BỘ nội dung tệp ấy làm câu trả lời. "
+    "Câu trả lời bắt đầu ngay bằng ký tự đầu tiên của nội dung."
+)
+
+
+def tin_nhan_viet(noi_dung: Any) -> List[Dict[str, Any]]:
+    """Dựng danh sách tin nhắn cho một lượt nhờ AI viết chữ.
+
+    Một hàm cho việc tưởng như thừa này để **không ai quên cái tin nhắn hệ
+    thống** — quên nó chính là cả lỗi khách báo 28/08/2026. Xem
+    `CHI_TRA_NOI_DUNG`.
+
+    `noi_dung` là chuỗi lời nhắc, hoặc mảng khối (chữ + ảnh) khi lượt gọi có
+    kèm ảnh — cứ truyền thẳng thứ cổng nhận.
+    """
+    return [{"role": "system", "content": CHI_TRA_NOI_DUNG},
+            {"role": "user", "content": noi_dung}]
 
 #: Mô hình dùng cho mọi việc viết chữ trong tool.
 MO_HINH_MAC_DINH = "claude-sonnet-5"

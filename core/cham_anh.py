@@ -30,18 +30,34 @@ NGUONG_LAM_LAI = 3
 
 LOI_NHAC_CHAM = """The first {n} image(s) are REFERENCE designs of characters/places for a video.
 The last image is a scene generated for that video, which was told to use them.
-Judge ONLY whether each character that APPEARS in the scene has the SAME DESIGN as its
-reference — face shape, eyes, body proportions, fur/skin, clothing, hat, props, drawing style.
-Ignore pose, expression, camera distance and background. If the scene text explicitly says an
-outfit item is not yet worn, do not penalise its absence.
+Judge THREE things, and take the WORST of them.
+
+(a) HEADCOUNT. The scene description below names who is in the picture. Every character it
+names must actually BE there, exactly once. A named character that is missing, or drawn twice,
+is the worst kind of failure — the picture no longer tells the story. Read the description,
+list who it says is present, then look for each one.
+
+(b) DESIGN. Each character that appears must have the SAME DESIGN as its reference — face
+shape, eyes, body proportions, fur/skin, clothing, hat, props, drawing style. Ignore pose,
+expression, camera distance and background. If the scene text explicitly says an outfit item
+is not yet worn, do not penalise its absence.
+
+(c) WHO DOES WHAT. When the description gives distinct postures or actions to named
+characters (one lies down, one stands; one speaks, one listens; one carries the thing), the
+SAME character must have that posture in the picture. Only judge a SWAP — the posture landing
+on the wrong named character. Do not judge how well the action is drawn, and if the description
+gives everyone the same posture, there is nothing to swap: skip (c).
+
 Score the scene with ONE number:
-5 = every visible character is identical to its reference;
-4 = same design, tiny differences;
-3 = recognisably the same character but clearly redrawn (proportions changed, an outfit item
+5 = everyone the description names is present exactly once, and identical to its reference;
+4 = everyone present, same design, tiny differences;
+3 = everyone present but a character is clearly redrawn (proportions changed, an outfit item
     missing or added);
-2 = mostly a different character;
+2 = A NAMED CHARACTER IS MISSING or drawn twice, or a character is mostly a different one,
+    or TWO CHARACTERS HAVE SWAPPED the postures the description gave them;
 1 = a different character entirely;
-0 = no reference character is visible in the scene at all (camera is elsewhere) — nothing to judge.
+0 = the description names nobody, or the camera is deliberately elsewhere (an insert of an
+    object, an empty landscape) — nothing to judge.
 Return JSON only: {{"diem": <0-5>, "khac": "<one short sentence>"}}
 
 Scene description (for context): {mo_ta}"""

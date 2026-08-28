@@ -13,7 +13,7 @@ trong `img_prompt` / `video_prompt`.
 
 ═══ VÌ SAO GIỮ TÊN CỘT TIẾNG ANH ═══
 
-`scene_id`, `img_prompt`, `video_prompt`, `reference_files` — đúng tên VE3_SUITE
+`scene_id`, `img_prompt`, `video_prompt`, `reference_files` — đúng tên quen thuộc
 và tab Prompt Visuals dùng. Chủ dự án chọn giữ nguyên (15/08/2026) để **file
 xuất từ Prompt Visuals nạp thẳng sang tab Ảnh & Video được**, không phải qua
 bước chuyển đổi nào.

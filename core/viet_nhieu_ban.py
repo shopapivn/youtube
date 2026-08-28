@@ -186,7 +186,9 @@ KHUON_HOAN_THIEN = (
     "giữ nguyên cấu trúc, các ý, nghiên cứu, ẩn dụ và độ dài (khoảng <<PHUT>> phút "
     "đọc ≈ <<CHARS>> ký tự); không viết lại từ đầu, không thêm ý mới ngoài "
     "những gì cần để sửa điểm yếu. viết bằng <<NGON_NGU>>.\n"
-    "trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét.\n\n"
+    "trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét, "
+    "không tạo file, không mô tả việc đã làm, không liệt kê chỗ đã sửa, "
+    "không đếm ký tự — bản trả về đi thẳng vào máy đọc giọng nói.\n\n"
     "bản gốc đã viral (để lấy chất liệu nếu cần):\n\n<<COMPETITOR_TRANSCRIPT>>\n\n"
     "kịch bản cần hoàn thiện:\n\n<<DRAFT>>")
 
@@ -226,6 +228,12 @@ def hoan_thien_ban(goi: Callable[[str], str], ban: str, goc: str, *,
     except Exception as loi:  # noqa: BLE001 — hoàn thiện là việc phụ, hỏng thì thôi
         noi("  (hoàn thiện hỏng: {0} — giữ bản chọn)".format(str(loi)[:80]))
         return ban, False, "hoàn thiện hỏng: " + str(loi)[:80]
+    # Dọn ghi chú kỹ thuật TRƯỚC hai rào chắn dưới: cả hai đều đo bằng câu và
+    # bằng ký tự, nên một khối "Ghi chú: đã sửa…" làm lệch cả hai — bản tốt bị
+    # tính là "đi quá xa" rồi bị bỏ. Xem `core/lam_sach.go_ghi_chu_ky_thuat`.
+    from .lam_sach import go_ghi_chu_ky_thuat  # noqa: PLC0415
+
+    moi = go_ghi_chu_ky_thuat(moi).strip()
     if not moi:
         return ban, False, "bản hoàn thiện rỗng"
     giu = ty_le_giu_cau(ban, moi)

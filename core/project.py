@@ -128,7 +128,7 @@ STATUS_LABEL: Dict[str, str] = {
 _TERMINAL_GOOD = (ST_DONE, ST_OFF)
 
 #: Thử lại tối đa ngần này lần cho một bước rồi mới chịu thua và báo khách.
-#: Học từ `dola_farm`: cứ thử mãi là đốt tiền trong im lặng.
+#: Kinh nghiệm vận hành: cứ thử mãi là đốt tiền trong im lặng.
 MAX_STAGE_ATTEMPTS = 3
 
 #: Ký tự không dùng được trong tên thư mục.

@@ -219,7 +219,7 @@ class NhipDo:
 
         # ═══ NHỚ NHỊP QUA CÁC LẦN CHẠY — 14/08/2026 ═══
         #
-        # Bên VE3_SUITE mỗi "mã" là một TIẾN TRÌNH RIÊNG, nên mỗi mã dựng một
+        # Ở lối một-tiến-trình-một-mã thì mỗi mã dựng một
         # `NhipDo` mới bắt đầu lại từ 1. Nhân đôi mỗi vòng, một vòng bằng một
         # job (~60 giây với video) thì chạm 64 mất 6 phút — mã ngắn xong trước
         # đó, tiến trình chết mang theo cả bài học, mã sau leo lại từ chân.

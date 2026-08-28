@@ -10,7 +10,7 @@ Ba lỗi bản trước mà bài này canh:
 * Thông tin ngân hàng nằm trong `bank.*`, đọc trường phẳng nên ra "— — —".
 
 Không bài nào gọi mạng: `run_bg` chạy thẳng, phiếu là dict giả đúng hình dạng
-`POST /v1/topup/intent` của máy chủ (`apps/api/src/modules/topup/topup.service.ts`).
+`POST /v1/topup/intent` của máy chủ (xem tài liệu hợp đồng API, mục nạp tiền).
 """
 from __future__ import annotations
 

@@ -143,6 +143,16 @@ class Kenh:
     #: ShopAPI đã nhận trường này (26/08/2026). Bật thì clip nối vào khung cuối
     #: clip trước không khựng, và diễn tiếp video→video được với cả Veo 3.
     khung_dau: bool = False
+    #: Chấm từng tấm ảnh với ảnh tham chiếu, lệch quá thì vẽ thêm và giữ tấm
+    #: hơn (`auto_khau._cham_va_ve_lai`). Mặc định TẮT: mỗi lượt chấm là một
+    #: lời gọi chữ, mỗi lần vẽ lại là một tấm ảnh — kênh của khách không tự
+    #: dưng đắt lên.
+    cham_anh: bool = False
+    #: Vẽ thêm một tấm ảnh KHUNG CUỐI cho mỗi cảnh rồi ghim clip CẢ HAI đầu
+    #: (`auto_khau._anh_khung_cuoi`). Tốn thêm một tấm ảnh mỗi cảnh, đổi lại
+    #: đuôi clip không trôi — đo 27/08/2026: cảnh 11 đi 2 → 4 điểm, cảnh 2 đi
+    #: 3 → 4. Mặc định TẮT.
+    ghim_hai_dau: bool = False
     #: Nghỉ mấy giây giữa hai PHẦN của kịch bản (dòng `---` trong bản đọc).
     #:
     #: Khoảng lặng THẬT, chèn lúc ghép tiếng — không phải thẻ `[long pause]`,
@@ -218,6 +228,62 @@ class Kenh:
     #: `.srt` lên riêng thì người xem bật/tắt được, đổi cỡ chữ được, và YouTube
     #: đọc được nội dung để đề xuất video — chữ đốt vào hình thì nó mù.
     dot_phu_de: bool = True
+
+    #: Giữ lại TIẾNG CẢNH của từng clip (tiếng bước chân, chim hót, nước, gió).
+    #:
+    #: ═══ VÌ SAO CÓ Ô NÀY ═══
+    #:
+    #: Khâu dựng vốn vứt sạch tiếng của clip (`-an` lúc cắt) và chỉ giữ giọng
+    #: đọc. Chủ dự án 28/08/2026: *"những âm thanh không phải người nói có thể
+    #: giữ lại được không — kiểu nó sẽ làm cho video sinh động hơn… bỏ nhạc nền
+    #: của video gốc và âm thanh người nói, giữ các âm thanh phụ (ví dụ tiếng
+    #: bước chân, chim hót…)"*.
+    #:
+    #: Không tách được nhạc/lời ra khỏi tiếng động sau khi engine đã trộn. Nên
+    #: chặn ở ĐẦU VÀO: bật ô này thì khâu clip ghim thêm một câu bắt engine chỉ
+    #: làm tiếng nền và tiếng động, cấm nhạc và cấm mọi lời nói
+    #: (`core/auto_khau.LUAT_TIENG_CANH`). Đo trên phim `openstory/0008`: lời
+    #: nhắc do AI viết có `ambient:`/`sfx:` ở 25/30 cảnh nhưng **0/30** cảnh
+    #: nhắc "no music, no speech" — nên câu ấy phải do tool ghim, không trông
+    #: vào AI nhớ.
+    #:
+    #: Khâu dựng còn xuất riêng `8-tieng-canh.m4a` để mang sang CapCut trộn
+    #: tay: khách dựng lại ở đó thì cần đường tiếng rời, không cần bản đã trộn.
+    giu_tieng_canh: bool = False
+
+    #: Độ to tiếng cảnh trong `8-video.mp4`, lúc KHÔNG có giọng đọc.
+    #:
+    #: Chủ dự án 28/08/2026: *"cái âm thanh video thì cần bé hơn, vì bản chất
+    #: là có lồng voice — nếu âm thanh phụ to quá thì nó bị lấn mất voice; và
+    #: đôi khi nó có nhạc nền nên nếu bé hơn chút sẽ không bị át nhạc nền sau
+    #: thêm vào"*.
+    #:
+    #: Đo trên phim `openstory/0008` mới thấy vì sao 0,7 lấn: tiếng cảnh có
+    #: **trung bình** rất nhỏ (-31,3 dB) nhưng **đỉnh** ngang hẳn giọng đọc
+    #: (-1,6 dB so với -1,4 dB) — một tiếng nước bắn, một tiếng gỗ va là vọt
+    #: lên bằng lời kể. Nên phải nhìn đỉnh, không nhìn trung bình.
+    #:
+    #: 0,35 (bằng nửa mức cũ, tức -9 dB) đưa đỉnh tiếng cảnh xuống -10,7 dB,
+    #: thấp hơn đỉnh giọng đọc 9,3 dB, và chừa chỗ cho nhạc nền khách tự chèn ở
+    #: CapCut sau này.
+    #:
+    #: ⚠ Ô này chỉ đổi bản đã trộn. Tệp `8-tieng-canh.m4a` xuất riêng luôn giữ
+    #: **mức gốc** — khách chỉnh to nhỏ ở CapCut, đưa cho họ bản đã hạ sẵn là
+    #: lấy mất quyền ấy.
+    am_luong_tieng_canh: float = 0.35
+
+    #: Ngưỡng nhận ra tiếng người trong clip — trên mức này thì tắt tiếng clip.
+    #:
+    #: Mặc định 0 nghĩa là *dùng ngưỡng chung* `tieng_canh.NGUONG_TIENG_NGUOI`
+    #: (0,25), chỗ có khoảng trống đo được giữa ồn nền và tiếng nói.
+    #:
+    #: Có ô riêng vì phép đo bám **nhịp âm tiết 3–6 Hz**, mà không phải kênh
+    #: nào cũng chỉ có tiếng nói rơi vào nhịp ấy. Phiên `kho-github-77` nêu ca
+    #: thật 28/08/2026: kênh timelapse có tiếng chợ đông và tiếng người hò hét
+    #: lúc cháy — tiếng đám đông cũng dồn vào 300–3400 Hz và cũng dập dình, nên
+    #: có thể bị bắt oan. Kênh ấy nâng ngưỡng của mình lên là xong, không phải
+    #: lung lay ngưỡng chung vốn có khoảng trống thật đỡ lưng.
+    nguong_tieng_nguoi: float = 0.0
 
     #: Độ phân giải video ra: `"Giữ nguyên"`, `"1080p"`, `"1440p"` hay `"4K"`.
     #:
@@ -487,6 +553,8 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
         khung_dau=bool(cai.get("khung_dau", False)),
+        cham_anh=bool(cai.get("cham_anh", False)),
+        ghim_hai_dau=bool(cai.get("ghim_hai_dau", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
         mau_cua_tool=_co(cai.get("mau_cua_tool")),
         kenh_rieng=_co(cai.get("kenh_rieng")),
@@ -500,6 +568,11 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         # tệp lặng dài âm giây là hỏng lệnh nối).
         giay_nghi_phan=max(0.0, float(_so(cai.get("giay_nghi_phan"), 1.2))),
         dot_phu_de=bool(cai.get("dot_phu_de", True)),
+        giu_tieng_canh=bool(cai.get("giu_tieng_canh", False)),
+        am_luong_tieng_canh=max(0.0, min(1.0, float(
+            cai.get("am_luong_tieng_canh", 0.35) or 0.35))),
+        nguong_tieng_nguoi=max(0.0, min(1.0, float(
+            cai.get("nguong_tieng_nguoi", 0.0) or 0.0))),
         # Gõ sai tên độ phân giải thì quay về "Giữ nguyên" chứ không ném lỗi:
         # một chữ gõ nhầm trong `kenh.yaml` không đáng làm chết cả lượt chạy.
         do_phan_giai=ten_khung(cai.get("do_phan_giai")),
@@ -655,17 +728,24 @@ def kiem_kenh(kenh: Kenh) -> List[str]:
     if not kenh.ngon_ngu:
         thieu.append("Chưa biết kênh nói tiếng gì — thêm `ngon_ngu:` vào {0} "
                      "(ví dụ `es`, `vi`, `en`).".format(TEP_KENH))
-    if not kenh.voice_id:
-        thieu.append("Chưa chọn giọng đọc — thêm `voice_id:` vào {0}. Mã giọng "
-                     "lấy ở tab Voice.".format(TEP_KENH))
-    if not kenh.anh_nv:
-        thieu.append("Chưa có ảnh nhân vật tham chiếu — bỏ một tệp .png vào "
-                     "thư mục `{0}/`. Thiếu nó thì mỗi cảnh ra một nhân vật "
-                     "khác nhau.".format(THU_MUC_NV))
+    # Kênh timelapse không có lời đọc và không có nhân vật, và nó tự dựng bảng
+    # cảnh từ bảng mốc thời gian chứ không qua hai bước lời nhắc kia. Đòi nó đủ
+    # bốn thứ ấy là bắt người dùng đi tìm cách chữa một lỗi không có thật.
+    ke_thuong = str(getattr(kenh, "che_do_ke", "") or "").strip() != "timelapse"
+    if ke_thuong:
+        if not kenh.voice_id:
+            thieu.append("Chưa chọn giọng đọc — thêm `voice_id:` vào {0}. Mã "
+                         "giọng lấy ở tab Voice.".format(TEP_KENH))
+        if not kenh.anh_nv:
+            thieu.append("Chưa có ảnh nhân vật tham chiếu — bỏ một tệp .png vào "
+                         "thư mục `{0}/`. Thiếu nó thì mỗi cảnh ra một nhân vật "
+                         "khác nhau.".format(THU_MUC_NV))
     if not kenh.style.get("image_style"):
         thieu.append("Chưa tả kênh nhìn như thế nào — thêm `image_style:` vào "
                      "{0}.".format(TEP_STYLE))
     for ten in BUOC_BAT_BUOC:
+        if not ke_thuong and ten in ("2-viet.md", "7-canh.md"):
+            continue
         if not (kenh.prompt.get(ten) or "").strip():
             mo_ta = dict(BUOC_PROMPT).get(ten, ten)
             thieu.append("Thiếu bước “{0}” — tạo tệp `{1}/{2}`.".format(

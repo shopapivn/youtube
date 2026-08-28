@@ -134,3 +134,27 @@ class TestKhauAnhBiaVanCoChuDeDat:
         assert "TITLE:" in khuc and "THUMB:" in khuc
         # Không có tiêu đề thì lấy dòng đầu của chính bài — đừng để rỗng.
         assert "splitlines" in khuc
+
+
+class TestKenhChiCanTieuDe:
+    """Kênh timelapse chạy được chỉ với một dòng tiêu đề.
+
+    Nó không kể lại nội dung của ai: từ cái tên nơi chốn, nó tự dựng bảng mốc
+    thời gian. Bắt nó phải có link hay tư liệu là chặn đúng cách dùng duy nhất
+    của nó — xem `core/timelapse.py`.
+    """
+
+    def test_tieu_de_du_dai_la_chay_duoc_du_khong_co_gi_khac(self):
+        assert kiem_tu_lieu("", "", tieu_de="Thăng Long nhìn từ sông Hồng",
+                            chi_tieu_de=True) == ("", "")
+
+    def test_tieu_de_trong_hoac_qua_ngan_thi_chan(self):
+        for xau in ("", "   ", "Hà Nội"):
+            loi, noi = kiem_tu_lieu("", "", tieu_de=xau, chi_tieu_de=True)
+            assert loi == "Chưa có tiêu đề", xau
+            assert "không cần link" in noi.lower() or "Không cần link" in noi
+
+    def test_kenh_thuong_khong_bi_doi_hanh_vi(self):
+        # có tiêu đề nhưng không có tư liệu -> vẫn chặn như trước
+        assert kiem_tu_lieu("", "", tieu_de="Một tiêu đề dài đủ")[0] == "Chưa có tư liệu"
+        assert kiem_tu_lieu(LINK, "", tieu_de="") == ("", "")

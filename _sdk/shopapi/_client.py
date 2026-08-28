@@ -208,7 +208,7 @@ class BaseClient:
 
         ═══ VÌ SAO PHẢI NHỚ ═══
 
-        Bên VE3_SUITE mỗi mã là một TIẾN TRÌNH RIÊNG, nên không có gì sống đủ
+        Ở lối làm một-tiến-trình-một-mã thì không có gì sống đủ
         lâu để học. Xem khối chú thích đầu `_nho_nhip.py` để có số đo.
         """
         vong = self._nhip_loai.get(loai)

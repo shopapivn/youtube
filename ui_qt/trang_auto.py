@@ -59,8 +59,13 @@ MAU_TRANG_THAI = {
 }
 
 
-def kiem_tu_lieu(link: str, tu_lieu: str, la_kich_ban: bool = False) -> tuple:
+def kiem_tu_lieu(link: str, tu_lieu: str, la_kich_ban: bool = False,
+                 tieu_de: str = "", chi_tieu_de: bool = False) -> tuple:
     """Đầu vào của một lượt đã dùng được chưa. `("", "")` nghĩa là chạy được.
+
+    `chi_tieu_de=True` cho kênh chỉ cần MỘT dòng tiêu đề, không cần tư liệu —
+    kênh timelapse là thế: nó không kể lại nội dung của ai cả, nó tự dựng bảng
+    mốc thời gian cho một nơi chốn từ chính cái tên bạn gõ vào.
 
     `la_kich_ban=True` khi thứ dán vào **là bài đã viết xong**, không phải tư
     liệu. Lúc ấy link vô nghĩa: không có gì để tải, và cũng không có khâu viết
@@ -77,6 +82,13 @@ def kiem_tu_lieu(link: str, tu_lieu: str, la_kich_ban: bool = False) -> tuple:
     """
     link = (link or "").strip()
     tu_lieu = (tu_lieu or "").strip()
+    if chi_tieu_de:
+        if len((tieu_de or "").strip()) < 8:
+            return ("Chưa có tiêu đề",
+                    "Kênh này chỉ cần một dòng: NƠI nào, và khoảng thời gian "
+                    "nào. Ví dụ: “Thăng Long — Hà Nội nhìn từ một khúc sông "
+                    "Hồng, 1010 đến nay”. Không cần link, không cần tư liệu.")
+        return ("", "")
     if la_kich_ban:
         if not tu_lieu:
             return ("Chưa có kịch bản",
@@ -904,6 +916,20 @@ class TrangTuDong(QWidget):
             return "moi"
         return ""
 
+    def _chi_can_tieu_de(self, ma: str) -> bool:
+        """Kênh này chạy được chỉ với một dòng tiêu đề, không cần tư liệu?
+
+        Kênh timelapse không kể lại nội dung của ai: nó tự dựng bảng mốc thời
+        gian cho một nơi chốn từ chính cái tên bạn gõ. Bắt nó phải có link hay
+        tư liệu là chặn đúng cách dùng duy nhất của nó.
+        """
+        try:
+            from core.timelapse import la_timelapse  # noqa: PLC0415
+
+            return la_timelapse(doc_kenh(self._app.base_dir, ma))
+        except Exception:  # noqa: BLE001 — kênh hỏng thì cứ hỏi tư liệu như cũ
+            return False
+
     def _chay(self) -> None:
         ma = self._chon_kenh.currentText().strip()
         if not ma:
@@ -920,11 +946,13 @@ class TrangTuDong(QWidget):
         link = self._o_link.text().strip()
         tu_lieu = self._o_tu_lieu.toPlainText().strip()
         la_kich_ban = self._o_la_kich_ban.isChecked()
-        tieu_de_loi, noi_dung_loi = kiem_tu_lieu(link, tu_lieu, la_kich_ban)
+        tieu_de = self._o_tieu_de.text().strip()
+        tieu_de_loi, noi_dung_loi = kiem_tu_lieu(
+            link, tu_lieu, la_kich_ban, tieu_de=tieu_de,
+            chi_tieu_de=self._chi_can_tieu_de(ma))
         if tieu_de_loi:
             self._app.show_message(tieu_de_loi, noi_dung_loi)
             return
-        tieu_de = self._o_tieu_de.text().strip()
         chu_bia = self._o_chu_bia.text().strip()
         luot = moi_luot(self._app.base_dir, ma, self._ma_luot_moi(ma), {
             "link": link, "tieu_de": tieu_de, "chu_bia": chu_bia,
@@ -1086,7 +1114,8 @@ class TrangTuDong(QWidget):
         def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
                 khoa: str = "", toi_da_token: int = 8192,
                 anh: str = "") -> str:
-            from core.goi_van_ban import goi_van_ban, khoi_anh  # noqa: PLC0415
+            from core.goi_van_ban import (goi_van_ban, khoi_anh,  # noqa: PLC0415
+                                          tin_nhan_viet)
 
             def kiem_dung():
                 if self._huy is not None and self._huy.is_set():
@@ -1101,8 +1130,13 @@ class TrangTuDong(QWidget):
             else:
                 noi_dung = loi_nhac
 
+            # `tin_nhan_viet` kèm lời nhắc hệ thống "câu trả lời CHÍNH LÀ nội
+            # dung, không phải báo cáo về nội dung". Tab này từng là tab DUY
+            # NHẤT gửi lên cổng mà không có dòng dặn nào — và đó là gốc của
+            # việc kịch bản lẫn ghi chú kỹ thuật rồi bị đọc vào video. Xem
+            # `core.goi_van_ban.CHI_TRA_NOI_DUNG`.
             return goi_van_ban(
-                client, [{"role": "user", "content": noi_dung}],
+                client, tin_nhan_viet(noi_dung),
                 mo_hinh=mo_hinh, toi_da_token=int(toi_da_token), khoa=khoa,
                 on_log=self._ghi_nen, kiem_dung=kiem_dung)
 

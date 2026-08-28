@@ -39,15 +39,38 @@ che_do_ke: timelapse
 khung_dau: true
 engine: "veo3"
 
-# Phim dài bao nhiêu phút → bấy nhiêu mốc (8 giây một mốc).
-phut_muc_tieu: 8
+# Phim dài bao nhiêu phút → bấy nhiêu mốc (8 giây một mốc). 15 phút ≈ 112 mốc.
+#
+# Đặt 15 vì đó là độ dài thật của thể loại: phim Rome của đối thủ 22 phút, phim
+# Paris 15 phút. Ngắn hơn thì không đủ chỗ cho sử thật — mà sử thật mới là thứ
+# người xem đến vì nó.
+#
+# Đo 27/08/2026: xin AI dựng thẳng bảng 60 mốc trong MỘT lượt gọi — 198 giây, đủ
+# 60 mốc, không mốc nào trùng năm, mô tả mốc cuối vẫn dài y hệt mốc đầu (242
+# chữ). Tức là bảng mốc KHÔNG đuối ở quy mô phim thật; không cần chia nhỏ.
+phut_muc_tieu: 15
 
 mo_hinh: "claude-sonnet-5"
 so_thumbnail: 3
 chu_bia_hoa: true
 
 # KHÔNG có lời đọc: cả đường tiếng là nhạc nền, nên để nguyên độ to.
-# Đặt tên tệp nhạc trong thư mục `NHAC/` của tool vào đây.
+#
+# ⚠ Để rỗng thì phim dựng xong sẽ CÂM. Thả một tệp .mp3 vào thư mục `nhac/`
+# bên cạnh rồi ghi tên nó vào đây, ví dụ: nhac_nen: "nhac/song-nuoc.mp3".
+# Nhạc ngắn hơn phim cũng được — tool tự lặp cho tới hết hình.
 nhac_nen: ""
 am_luong_nhac: 1.0
 dot_phu_de: false
+
+# GIỮ TIẾNG CẢNH CỦA CLIP. Phim này không có lời đọc, nên trước nay nó ra
+# hoàn toàn CÂM — mà máy dựng clip vẫn sinh tiếng kèm theo và khâu dựng vứt
+# đi. Đo 28/08/2026 trên clip 15 của phim 0005: tiếng thật, mean_volume
+# −11,7 dB (không phải im lặng). Bật cờ này thì tiếng đám đông, tiếng nước,
+# tiếng chuông, tiếng lửa của từng clip đi thẳng vào phim, không tốn thêm
+# một đồng nào, và không cần bạn kiếm tệp nhạc.
+#
+# Cờ này cũng ghim luật "không nhạc, không lời nói" vào lời nhắc clip
+# (`core/auto_khau.LUAT_TIENG_CANH`) — nếu không dặn thì máy hay tự thêm
+# nhạc nền, và nhạc của máy thì không tắt đi được nữa.
+giu_tieng_canh: true

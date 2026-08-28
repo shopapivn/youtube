@@ -282,7 +282,7 @@ class TestChiaDoanDoc:
         assert doan and all(len(d) <= CHU_MOI_LUOT_DOC for d in doan)
 
     def test_tran_dung_bang_tran_da_do_cua_cong(self):
-        """Tool gốc `D:\\11lab_vm` đo được 1.000 — cùng một nhà máy giọng nói."""
+        """Tool nội bộ đời trước đo được 1.000 — cùng một cổng giọng nói."""
         assert CHU_MOI_LUOT_DOC == 1000
 
     def test_hai_bat_bien_dung_voi_moi_kieu_kich_ban(self):

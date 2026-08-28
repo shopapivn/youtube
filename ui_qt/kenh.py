@@ -1031,12 +1031,12 @@ class HopKenh(QDialog):
         v.addWidget(self._o_giong)
 
         v.addWidget(self._phu(
-            "Chưa có mã giọng? Mở Thư viện giọng của ElevenLabs, nghe thử, chọn "
-            "một giọng rồi bấm “Use” — mã hiện ra (Voice ID) dán vào ô trên."))
+            "Chưa có mã giọng? Mở Thư viện giọng của nhà cung cấp, nghe thử, "
+            "chọn một giọng rồi bấm “Use” — mã hiện ra (Voice ID) dán vào ô trên."))
         lien = QLabel(
             '<a href="https://elevenlabs.io/app/voice-library" '
             'style="color:{0}; text-decoration:none;">'
-            '🔗 Mở Thư viện giọng ElevenLabs</a>'.format(theme.NHAN))
+            '🔗 Mở Thư viện giọng</a>'.format(theme.NHAN))
         lien.setTextFormat(Qt.RichText)
         lien.setOpenExternalLinks(True)
         lien.setToolTip("https://elevenlabs.io/app/voice-library")

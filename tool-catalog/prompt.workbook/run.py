@@ -160,11 +160,28 @@ For every beat give:
   turn / reveal / land the point);
 - `characters` — ids from the cast that are IN FRAME ("" if none) and
   `location` — a location id ("" only if the story is truly nowhere). THE PLACE
-  FOLLOWS THE STORY, like a film: a beat stays in the SAME place as the
-  previous beat until the narration says the characters moved (they walk to
-  the river, arrive at the castle, go home). Never cut to another place for
-  variety — vary shot size, angle and what moves in frame instead. A
-  conversation happens in one place from start to end;
+  IS WHERE THE CHARACTERS ARE IN THAT MOMENT, like a film: a beat stays in the
+  SAME place as the previous beat until the characters move. Never cut to
+  another place for variety — vary shot size, angle and what moves in frame
+  instead. A conversation happens in one place from start to end.
+  MOVING COUNTS EVEN WHEN NO SENTENCE ANNOUNCES IT. A journey has stages, and
+  the cast list usually has a location for each: pushing off is at the shore,
+  paddling and meeting someone out on the water is in the MIDDLE of the water,
+  arriving is at the far side. Ask of every beat "where are their feet right
+  now?" — not "where did this stretch of the story begin?". Leaving characters
+  at the departure point through a whole crossing is the commonest failure
+  here: measured 27/08/2026 on a film that had a "middle of the pond" location
+  built and unused while the mid-water meeting was drawn on the bank.
+  EVERY LOCATION IN THE CAST LIST MUST BE USED by at least one beat. The cast
+  built exactly the places this story visits; one that no beat uses means a
+  beat is in the wrong place — find it and move it.
+  ONCE THEY HAVE MOVED ON, THEY DO NOT SLIDE BACK. A place they have left may
+  return only where the narration takes them back (they walk home, they climb
+  out). A plan that reads A, B, A, B for one continuous journey is wrong every
+  time: measured 27/08/2026, a boy already adrift in the middle of the water
+  had his whole conversation with the duck planned back on the bank, then the
+  next beat was out in the middle again. Read the beats in a row like a
+  storyboard and ask whether a viewer could walk that path;
 - `shot_size` from EST_WIDE, WIDE, MEDIUM, CLOSE, DETAIL — build intensity
   toward the act's turning point (WIDE→MEDIUM→CLOSE), open on a wide when a
   place is new;
@@ -208,7 +225,7 @@ CREATIVE = ("scene_kind", "subject_mode", "primary_subject", "primary_action", "
 
 #: Cot cua sheet `characters` — trung ten voi VE3_SUITE va voi tab Tu dong
 #: (`core/auto_khau.COT_NHAN_VAT`), de file mo thang bang VE3 duoc.
-CHARACTER_HEADERS = ["id", "role", "name", "english_prompt", "vietnamese_prompt",
+CHARACTER_HEADERS = ["id", "role", "name", "body_mode", "english_prompt", "vietnamese_prompt",
                      "image_file", "status", "gender", "age", "notes",
                      # Cot them sau cot VE3: prompt tao anh chan dung tham chieu.
                      "sheet_prompt"]
@@ -252,6 +269,20 @@ narrated video. Read the whole narration transcript below and decide:
    TRANSFORMS (an ogre becomes a lion, then a mouse; a frog becomes a prince)
    also gets `stages` — one per form, `outfit` describing the whole new body —
    because each form needs its own reference picture or the scenes invent it.
+   EVERY character must declare `body_mode` — the shape its body has in THIS
+   story, as data, not buried in prose:
+     "human"          a person;
+     "animal"         an ordinary animal that walks on all fours (or swims,
+                      or perches) and never stands, talks or wears clothes;
+     "upright-animal" an animal that walks on two legs, gestures, talks or
+                      wears clothes like a person.
+   Judge it from the story, not from how cute it would look. A cat that only
+   miaows, jumps and carries things in its mouth is "animal"; a cat that puts
+   on boots and speaks to a king is "upright-animal". Getting this wrong
+   poisons every scene: measured 27/08/2026 on a film whose cat was an ordinary
+   house cat — the reference sheet drew it standing on two legs, and all 19
+   scenes with the cat drew a DIFFERENT cat, because no scene could use a
+   two-legged cat and each one re-invented an ordinary one.
    The SAME rule applies when only the BODY POSTURE changes: an animal that is an
    ordinary animal at first and only later stands, speaks or acts like a person
    (or the reverse) needs one stage per posture — `outfit` says the whole body
@@ -325,6 +356,7 @@ these lists that is missing from your answer will be treated as an error.
 {{"style": {{"image_style": "...", "palette": "...", "motion": "..."}},
  "characters": [
    {{"id": "{nv_dau}", "role": "...", "name": "...",
+    "body_mode": "human | animal | upright-animal",
     "english_prompt": "<fixed appearance, no scene-specific pose>",
     "reference_lock": "<short identity anchor>",
     "gender": "", "age": "", "notes": "",
@@ -366,6 +398,7 @@ give the film two different castles (measured 26/08/2026).
 ```json
 {{"same_as": {{"<missing name that already exists>": "<existing id>"}},
  "characters": [{{"id": "{nv_tiep}", "role": "...", "name": "...",
+                 "body_mode": "human | animal | upright-animal",
                  "english_prompt": "...", "reference_lock": "...",
                  "gender": "", "age": "", "notes": ""}}],
  "locations": [{{"id": "{loc_tiep}", "name": "...", "english_prompt": "...",
@@ -427,6 +460,49 @@ def _don_dan(characters) -> int:
             if isinstance(st, dict) and st.get("outfit"):
                 st["outfit"] = _don_mo_ta(str(st["outfit"]))
     return n
+
+
+#: Dang than -> mot cau dat NGAY SAU mo ta, truoc duoi chan dung.
+#:
+#: ═══ VI SAO PHAI LA DU LIEU, KHONG PHAI VAN XUOI ═══
+#:
+#: Truoc 27/08/2026 khong cho nao trong day chuyen KHAI ra "con meo nay di bon
+#: chan". Dieu ay chi nam chim trong mot cau van ("four bare soft paws"), con
+#: `DUOI_CHAN_DUNG` thi dan cung cho MOI nhan vat cau *"standing, arms relaxed
+#: at sides"* — cau viet cho NGUOI. Ket qua: anh tham chieu ra con meo dung hai
+#: chan, va 19 canh co meo ve ra 19 con meo khac nhau (phim openstory/0002,
+#: chu du an: *"luc thi meo 1 loai luc thi ve ra meo khac"*).
+#:
+#: Chua bang cach dan them mot cau nua vao duoi la chua phan ngon. Goc re la:
+#: dang than phai do NGUOI DUNG DAN khai ra, va lenh ve phai doc dung o ay.
+_CAU_DANG_THAN = {
+    "animal": (" — this is an ORDINARY ANIMAL: draw it in its natural animal "
+               "bearing (a four-legged animal stands squarely on all four legs, "
+               "a bird perches, a fish swims), never on two legs, never with "
+               "human arms or hands, never wearing clothes"),
+    "upright-animal": (" — this animal WALKS AND ACTS LIKE A PERSON in this "
+                       "story: draw it standing upright on two legs, arms "
+                       "relaxed at its sides"),
+    "human": "",
+}
+
+
+def _dang_than(c) -> str:
+    """`body_mode` da chuan hoa. Thieu thi doan tu mo ta, khong doan tu vai."""
+    tho = str(c.get("body_mode") or "").strip().lower().replace("_", "-")
+    if tho in _CAU_DANG_THAN:
+        return tho
+    if tho.startswith("upright"):
+        return "upright-animal"
+    if tho.startswith("animal"):
+        return "animal"
+    return ""
+
+
+def _cau_dang_than(c) -> str:
+    """Cau ta dang than cho loi nhac ve chan dung. Khong khai thi tra "" —
+    im lang tot hon doan bay, va `DUOI_CHAN_DUNG` van co nhanh du phong."""
+    return _CAU_DANG_THAN.get(_dang_than(c), "")
 
 
 def _lam_lanh_moi_prompt(cast, scenes, bia) -> None:
@@ -740,7 +816,8 @@ def _them_prompt_tham_chieu(cast, context) -> None:
             continue
         # Giai đoạn sau vẽ KÈM ảnh giai đoạn đầu -> nói rõ "cùng một cá thể".
         them = _DUOI_GIAI_DOAN if str(c.get("goc_id") or "") not in ("", c.get("id")) else ""
-        c["sheet_prompt"] = c["english_prompt"] + _DUOI_CHAN_DUNG + them + duoi_style
+        c["sheet_prompt"] = (c["english_prompt"] + _cau_dang_than(c)
+                             + _DUOI_CHAN_DUNG + them + duoi_style)
     for l in cast.get("locations") or []:
         l["sheet_prompt"] = l["english_prompt"] + _DUOI_BOI_CANH + duoi_style
 
@@ -1500,8 +1577,13 @@ def _sach_cast(raw, nv_dau: int = 1) -> Dict[str, Any]:
         if not english:
             continue  # khong co mo ta ngoai hinh thi khong khoa duoc, bo qua
         cid = str(item.get("id") or "").strip() or "nv{0}".format(thu_tu)
+        # `body_mode` phai co ten o day. Ham nay dung mot dict MOI theo danh
+        # sach truong co dinh, nen truong nao khong duoc goi ten la bi vut
+        # lang le — them o khuon JSON va o CHARACTER_HEADERS thoi thi chua du,
+        # va cai hong khong keu mot tieng nao (27/08/2026).
         goc = {"id": cid, "role": str(item.get("role") or ""),
                "name": str(item.get("name") or ""), "english_prompt": english,
+               "body_mode": str(item.get("body_mode") or ""),
                "reference_lock": str(item.get("reference_lock") or ""),
                "gender": str(item.get("gender") or ""),
                "age": str(item.get("age") or ""),
@@ -1728,7 +1810,44 @@ def _gan_reference_files(scenes, characters, locations=()) -> None:
         # khong con dung: nhan vat khong co anh la nhan vat KHONG CO GI — do
         # 26/08 tren phim 0002, canh 12–13 co 4 nhan vat ma chi gan 2, may ve ra
         # may con cao va mot con gau thay cho dan de con.
-        ids = [i for i in tho if i in hop_nv][:TOI_DA_NV_THAM_CHIEU]
+        #
+        # ═══ VA MOI ANH GAN VAO DEU PHAI CO CHO DUNG TRONG CAU ═══
+        #
+        # `characters_used` do AI khai, cau van cung do AI viet — hai thu ay
+        # LECH NHAU. Gan anh theo o khai thi co tam anh khong ai goi ten, va
+        # may lam dung cai viec ta so nhat: no ve TAM ANH THUA ay, roi bo
+        # nhung nhan vat cau van co goi.
+        #
+        # Do 27/08/2026 tren phim openstory/0003: 4/29 canh gan anh cho nhan
+        # vat cau van khong nhac. Canh 14 gan `nv5` (con vit) ma cau van chi
+        # noi `nv1` va `nv3` — anh ra CHI CO CON VIT, cau be va con meo bien
+        # mat. Chu du an: *"van la tinh trang thieu tham chieu"*.
+        #
+        # Nen: chi gan anh cho nhan vat CAU VAN THAT SU GOI TEN, va xep theo
+        # dung thu tu chung xuat hien trong cau. Cau van khong goi ai (hiem)
+        # thi moi lui ve o khai.
+        than = str(scene.get("img_prompt") or "").split("\nREFERENCE IMAGES")[0]
+        trong_cau = []
+        for m in re.finditer(r"\b(nv\d+[a-z]?)\b", than):
+            if m.group(1) in hop_nv and m.group(1) not in trong_cau:
+                trong_cau.append(m.group(1))
+        # Cau van khong goi ai thi lui ve o khai — day la hanh vi CO Y cua san
+        # pham ("canh nao chua gan ai thi mac dinh nhan vat chinh", xem
+        # `tests/test_nhan_vat_xuyen_suot.py`), va no dung cho canh AI quen kê
+        # tên.
+        #
+        # Cho nay con MOT CA CHUA XU: canh co y trong nguoi (phim 0004 canh 23
+        # "empty gathering spot with no people", canh 24 can canh mot bong sen)
+        # van bi gan anh nhan vat chinh. Chua sua vi chua co cach doc chac chan
+        # "canh nay co nguoi khong" tu cau van — do bang tu khoa thi sai nhieu
+        # hon dung. Guard co san cau "never render a reference image itself as
+        # a separate panel or subject" dang giu cho nay; neu do duoc no thung
+        # thi quay lai day.
+        ids = (trong_cau or [i for i in tho if i in hop_nv])[:TOI_DA_NV_THAM_CHIEU]
+        # Giu o khai khop voi anh that su gan, de khau sau khong doc mot danh
+        # sach da khong con dung.
+        if ids:
+            scene["characters_used"] = ",".join(ids)
         loc = str(scene.get("location_used") or "").strip()
         if loc in hop_loc:
             ids.append(loc)
@@ -1743,8 +1862,35 @@ def _gan_reference_files(scenes, characters, locations=()) -> None:
 #: khong biet anh tham chieu nao la ai, nen no ve lai theo chu. Khoa bang ma:
 #: noi ro "reference image 1 = nv4, the cat: <mo ta nguyen van>" va bat ve y het.
 #: Bao nhieu NHAN VAT duoc gan anh tham chieu cho mot canh (them 1 boi canh).
-#: Cong nhan toi 10 anh (`workers/veo3/engine/media.MAX_REFERENCES`), nen 4 nhan
-#: vat + 1 noi van con thua cho.
+#:
+#: ═══ CONG NHAN 10 ANH, NHUNG MO HINH CHI DUNG NOI 3 ═══
+#:
+#: Do 27/08/2026 tren phim `openstory/0003`, cham tung canh bang `cham_anh`
+#: roi gom theo SO ANH GAN VAO:
+#:
+#:     2 anh : 4,00
+#:     3 anh : 4,33   <- tot nhat
+#:     4 anh : 2,80   <- sup
+#:     5 anh : 2,00
+#:
+#: ═══ VA PHEP DO AY BI NHIEU — DUNG DUNG NO DE HA TRAN ═══
+#:
+#: Bang tren gom theo so anh, nhung canh nhieu anh CUNG LA canh nhieu nhan
+#: vat, tuc bo cuc kho hon. No do "canh dong thi diem thap", khong do "nhieu
+#: anh thi hong". Phep do CO KIEM SOAT (cung mot loi nhac, doi so anh 1/2/3/4,
+#: sau luot) cho ket qua NHIEU: 4 anh co luot dung ca ba nhan vat, 3 anh co
+#: luot hong.
+#:
+#: 27/08 toi ha tran ve 2 dua tren bang bi nhieu ay. Hau qua thay ngay o phim
+#: 0007: canh "thay lang toi xem benh" bi ep con hai nhan vat, va NGUOI BENH —
+#: nhan vat ca canh noi ve — bi day ra thanh "a small blanketed figure", roi
+#: duoc ve thanh mot nguoi la. Chu du an: *"khong nen ha tran, veo 3 cho tham
+#: chieu nhieu ma"*.
+#:
+#: Nen: giu tran 4 (cong nhan toi 10 anh). Cho chua khong nam o so anh ma o
+#: KHUNG HINH — canh chon hai nguoi cua cau chuyen lam chu the, con lai la bo
+#: vai, ban tay o mep khung, hoac ra ngoai khung. Va KHONG BAO GIO viet mot
+#: nhan vat co ten thanh mot cai xac vo danh. Xem `CHANNEL/*/prompt/7-canh.md`.
 TOI_DA_NV_THAM_CHIEU = 4
 
 #: ═══ HAI HANG SO CU DA BO — DUNG DUNG LAI ═══
@@ -1869,14 +2015,35 @@ def _nhan_co_dinh(e, mac_dinh: str = "") -> str:
         return ra
 
 
+def _goi_lai(i: str, dan, noi) -> str:
+    """Cach goi mot nhan vat / mot noi o nhung lan nhac SAU lan dau.
+
+    Dan ghi ten kieu `"Ti (the poor boy)"`, `"Meo muop (the tabby cat)"` — cum
+    trong ngoac la cum tieng Anh dung duoc thang trong loi nhac. Khong co thi
+    lui ve ten, roi toi vai. Khong bao gio tra rong: tra rong la cau van thung
+    mot lo.
+    """
+    e = dan.get(i) or noi.get(i) or {}
+    ten = str(e.get("name") or "").strip()
+    m = re.search(r"\(([^)]+)\)", ten)
+    if m:
+        trong = m.group(1).strip()
+        if re.match(r"^(the|a|an) ", trong, re.I):
+            return trong
+    dau = re.split(r"\s*\(", ten, 1)[0].strip()
+    if dau:
+        return dau if i in noi else ("the " + dau if not dau.lower().startswith("the ") else dau)
+    vai = re.split(r"\s*\(", str(e.get("role") or ""), 1)[0].strip()
+    return ("the " + vai) if vai else i
+
+
 def _thay_id_khong_co_anh(chu: str, gan, dan, noi) -> str:
     """Id CO trong dan nhung KHONG duoc gui anh kem -> thay bang VAI cua no.
 
     ═══ VI SAO ═══
 
-    Trung `TOI_DA_NV_THAM_CHIEU` = 2 nhan vat + 1 noi moi canh la con so da do
-    (25/08/2026: gui 4-6 anh thi diem giong tut 3,79 -> 3,75). Nhung nhan vat
-    thu ba van bi AI viet vao loi nhac bang chinh cai id — va id la thu chi
+    Tran `TOI_DA_NV_THAM_CHIEU` (4 nhan vat + 1 noi moi canh) cat bot id du.
+    Nhung nhan vat thu nam van bi AI viet vao loi nhac bang chinh cai id — va id la thu chi
     TOOL hieu. May ve khong nhan duoc ten tep, no nhan mot day anh theo thu tu.
     Thay `nv4` cho no la mot chuoi vo nghia: no be ra mot nhan vat moi, moi
     canh mot kieu.
@@ -1964,12 +2131,25 @@ def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
         chu = str(s.get("img_prompt") or "")
         da_nhac = []
         for k, i in enumerate(ids, 1):
-            # `(nv4)` / `(nv4 (nv4.png))` -> `(Image 1)`; roi den dang tran.
-            chu, n1 = re.subn(
-                r"\(\s*" + re.escape(i) + r"\s*(\(" + re.escape(i) + r"\.png\))?\s*\)",
-                "(Image {0})".format(k), chu)
-            chu, n2 = re.subn(r"\b" + re.escape(i) + r"\b(?!\s*\(Image)",
-                              "{0} (Image {1})".format(i, k), chu)
+            # ═══ CHI RANG BUOC LAN NHAC DAU ═══
+            #
+            # Moi "(Image N)" la mot lenh dat tam anh ay vao khung. Ban cu thay
+            # MOI lan nhac, nen mot loi nhac ke ten con meo hai lan thanh hai
+            # lenh dat -> may ve HAI CON MEO. Chu du an xem phim 0003: *"luc
+            # thi 1 con meo luc thi 2 con meo"*. Do tren chinh bang canh ay:
+            # 5/29 canh rang buoc lap, canh 27 rang buoc `nv1` BA lan.
+            #
+            # Lan dau gan so; nhung lan sau goi bang cach nguoi ta van goi
+            # ("the tabby cat") — van hieu la cung mot nhan vat, ma khong con
+            # la mot lenh dat anh nua.
+            goi_lai = _goi_lai(i, dan, noi)
+            ngoac = re.compile(r"\s*\(\s*" + re.escape(i) + r"\s*(\("
+                               + re.escape(i) + r"\.png\))?\s*\)")
+            chu, n1 = ngoac.subn(" (Image {0})".format(k), chu, count=1)
+            chu, _ = ngoac.subn("", chu)
+            tran = re.compile(r"\b" + re.escape(i) + r"\b(?!\s*\(Image)")
+            chu, n2 = tran.subn("{0} (Image {1})".format(i, k), chu, count=1)
+            chu, _ = tran.subn(goi_lai, chu)
             da_nhac.append(bool(n1 or n2))
         dong = ["", "REFERENCE IMAGES are attached, in this order:"]
         for k, i in enumerate(ids, 1):

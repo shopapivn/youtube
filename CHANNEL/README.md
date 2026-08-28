@@ -94,3 +94,24 @@ Tự động đi qua đúng một cửa: **ví ShopAPI mà tool đã đăng nh�
 
 Tool có bộ quét: thấy chuỗi giống khoá (`sk-…`, `sk_…`, `AIza…`, khối private
 key) trong thư mục kênh là **báo đỏ và không cho chạy**.
+
+## Kênh `openstory` — bản đối chứng, không phải kênh để chạy hàng ngày
+
+Thêm 26/08/2026. Nó là **bản sao của `story-3d`** — cùng giọng đọc, cùng
+`style.yaml`, cùng ảnh nhân vật, cùng bảy tệp lời nhắc — **khác đúng một tệp**:
+`prompt/7-canh.md`, viết lại theo trọn bộ luật của dự án OpenStory (bản tải về
+ở `THAM-KHAO/openstory/`, bóc tách ở `THAM-KHAO/OPENSTORY-BOC-TACH.md`).
+
+Nó tồn tại để trả lời một câu hỏi: **lối viết lời nhắc của họ có cho ảnh đẹp
+hơn lối của ta không.** Cách so cho ra kết quả dùng được:
+
+1. chạy **cùng một truyện** qua `story-3d`, rồi qua `openstory`;
+2. mở hai thư mục ảnh xem cạnh nhau — cùng nhân vật, cùng phong cách, cùng
+   giọng đọc, nên thứ duy nhất khác là lời nhắc.
+
+Đổi hai thứ một lúc thì không biết thứ nào làm nên khác biệt. Bài kiểm
+`tests/test_kenh_openstory.py` canh đúng chuyện đó: bảy tệp kia mà lệch
+`story-3d` một byte là bài kiểm đỏ.
+
+Bên nào thắng thì đưa `7-canh.md` của bên ấy thành bản chính, và kênh còn lại
+gỡ đi — đừng nuôi hai kênh gần giống nhau lâu dài.

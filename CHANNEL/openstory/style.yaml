@@ -1,0 +1,35 @@
+# ============================================================================
+#  PHONG CÁCH KÊNH story-3d — Truyện cổ tích (hoạt hình 3D, trẻ em)
+# ============================================================================
+#  Ghép từ hai nửa của khuôn:
+#
+#    16 khoá HÌNH     ← bộ vẽ “Bút chì giấy trắng”
+#     5 khoá VĂN HOÁ  ← khán giả “Việt Nam”
+#
+#  Đổi nét vẽ thì sửa nhóm trên; đổi nước/khán giả thì sửa nhóm dưới. Hai nhóm
+#  không dính nhau, sửa một nhóm không làm hỏng nhóm kia.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+style_name: "pixar_3d_fairy_tale_vietnamese"
+image_style: "stylised 3D animated film still, Pixar-like, soft global illumination, rounded appealing forms, subsurface skin, cinematic depth of field, children's fairy-tale film look, rounded friendly characters, expressive big eyes, storybook warmth"
+video_style: "smooth 3D animated motion, gentle camera push-in, soft physics, the background keeps its colour and texture for the whole clip and must not darken, grey out or shift hue, lively but gentle character animation for young children"
+thumbnail_style: "bold 3D animated poster, big friendly character, high contrast, punchy lighting, fairy-tale hero front and centre, magical sparkle, big warm colours"
+scene_plan_style: "3D animated fairy-tale film language: clear staging, one readable action per shot, characters' faces visible, magical objects glow softly, safe and warm for children"
+palette: "warm saturated primaries with soft teal shadows (#F4A259, #5B8E7D, #2A2D34)"
+negative_prompt: "no text, no letters, no numbers, no watermark, no logo, no extra fingers, no distorted hands, no deformed faces, no blurry or low-detail artifacts, no photoreal skin, no flat 2D drawing, no scary faces, no blood, no weapons pointed at the viewer"
+reference_lock: "Every character keeps exactly the face, body proportions, outfit and props of its own reference image; outfit changes only where the story says so (a new reference image exists for that stage)."
+technical_suffix: "same 3D animated fairy-tale film style for every shot, soft global illumination, cinematic depth of field, no text, no letters, no watermark"
+engagement_rules: "keep the hero and the helper big in frame, show reactions (surprise, joy, fear-then-relief) in close-ups, let magical moments sparkle, end each scene on a change a child can point at"
+default_character_prompt: "friendly 3D animated fairy-tale character, rounded appealing proportions, expressive big eyes, storybook outfit with one signature colour and one signature prop, soft global illumination, no text, no watermark"
+default_character_lock: "rounded 3D animated proportions, expressive big eyes, one signature colour, one signature prop; face and outfit fixed per reference image"
+thumb_text_style: "chunky white letters with a thick dark-blue outline on a warm yellow burst"
+thumb_text_shadow: "soft drop shadow"
+thumb_text_hex: "#FFFFFF"
+thumb_text_font: "bold rounded children's book font"
+audience_language: "Vietnamese"
+audience_culture_note: "Design for Vietnamese children aged 4-10 and their parents watching together. Classic fairy-tale settings (mill, cottage, forest, river, palace, castle) rendered warm and safe; villains are silly or clumsy rather than frightening; animals are cute and expressive. Vietnamese touches where natural: bamboo, banyan trees, rice fields, conical hats on villagers, lotus ponds, paper lanterns. Every scene must read clearly with the sound off: who is there, what they hold, what changes."
+cultural_props: "non la, den long giay, ao yem, chieu coi, thung tre, nha tranh, cay da, ao sen, gio tre, com nam"
+cultural_metaphors: "kindness: a small character shares food with an animal | cleverness: a lightbulb-like sparkle above a character's head | fear: a character hides behind a tree with only eyes showing | joy: characters jump and confetti of petals falls | greed: a character hugs a huge pile of gold and topples over | transformation: a swirl of golden sparkles, then the new form appears"
+cultural_emotion_style: "Big, readable emotions for children: wide smiles, round surprised mouths, tears as single big drops, anger as puffed cheeks. Tension resolves quickly into relief and laughter. The narrator's warmth is mirrored by soft lighting and gentle camera moves."

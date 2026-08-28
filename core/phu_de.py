@@ -30,9 +30,20 @@ nghĩa, mà người Việt dựng video thì không đọc ra để mà sửa.
 5. Cắt kịch bản gốc thành câu phụ đề, mỗi câu lấy thời gian của ký tự đầu và
    ký tự cuối.
 
-Nếu tỉ lệ khớp quá thấp (đưa nhầm file, hay mp3 không phải giọng đọc kịch bản
-này) thì **nói thẳng** và trả về phần máy nghe được, chứ không ghép bừa một
-phụ đề trông có vẻ đúng mà lệch hẳn.
+═══ MỘT LUẬT KHÔNG CÓ NGOẠI LỆ: CHỮ LÀ CHỮ KỊCH BẢN ═══
+
+Có kịch bản thì **chữ trong tệp `.srt` luôn là chữ của kịch bản**, không bao
+giờ là thứ máy nghe được. Bản trước không như vậy: tỉ lệ khớp tụt xuống dưới
+`NGUONG_KHOP` là nó quay về chép nguyên lời máy nghe — tức là đúng lúc bộ nghe
+tỏ ra tệ nhất thì tool lại tin nó nhất. Khách báo hậu quả 28/08/2026: *"srt bị
+sai nội dung"*.
+
+Tỉ lệ khớp thấp giờ chỉ còn nghĩa một điều: **mốc thời gian ép ra không đáng
+tin**. Và mốc thời gian có đường lui riêng — rải theo độ dài từng câu, cộng lại
+vừa đúng độ dài file tiếng. Kết quả xấu nhất còn lại là phụ đề chữ đúng 100%,
+mốc lệch vài phần mười giây; `dang_tin` để `False` để nơi gọi nói thật.
+
+Chỉ khi **không có kịch bản nào** thì mới dùng thứ máy nghe được.
 
 Không mạng, không Qt. Việc nghe được **truyền vào** nên phần khó nhất — ép
 khớp — kiểm được bằng dữ liệu dựng tay, không cần chạy whisper.
@@ -52,6 +63,7 @@ __all__ = [
     "Cau", "KetPhuDe", "TIENG_DAY",
     "tao_phu_de", "viet_srt", "nghe_bang_whisper",
     "cat_cau", "dong_ho",
+    "doc_srt", "nghe_tu_srt", "sua_srt_theo_txt", "do_khop_voi_kich_ban",
 ]
 
 #: Ngôn ngữ **viết liền không có dấu cách**. Cắt câu và đếm độ dài phải theo
@@ -67,7 +79,9 @@ TRAN_KY_TU_THUONG = 42
 GIAY_TOI_DA = 6.0
 GIAY_TOI_THIEU = 0.7
 
-#: Dưới ngưỡng khớp này thì coi như đưa nhầm file — xem `KetPhuDe.dang_tin`.
+#: Dưới ngưỡng khớp này thì mốc thời gian ép ra không đáng tin nữa — xem
+#: `KetPhuDe.dang_tin`. **Chỉ mốc thời gian**: chữ vẫn lấy nguyên kịch bản,
+#: xem khối "CHỮ KHÔNG BAO GIỜ ĐI ĐƯỜNG KHÁC" ở `tao_phu_de`.
 NGUONG_KHOP = 0.55
 
 #: Dấu kết câu, cả bản Latinh lẫn bản chữ vuông.
@@ -89,18 +103,49 @@ class Cau:
         return max(0.0, self.ket_thuc - self.bat_dau)
 
 
+#: Chữ trong phụ đề lấy từ đâu. Hai giá trị này là **hai thứ khác hẳn nhau**
+#: với người xem, nên chúng phải phân biệt được ở nơi gọi:
+#:
+#: * `KICH_BAN` — chữ đúng từng ký tự với tệp kịch bản. Sai lệch duy nhất còn
+#:   lại (nếu có) là mốc thời gian.
+#: * `MAY_NGHE` — chữ là thứ máy nghe được. Chỉ xảy ra khi **không có kịch bản
+#:   nào** để ép vào.
+CHU_TU_KICH_BAN = "kich-ban"
+CHU_TU_MAY_NGHE = "may-nghe"
+
+
 @dataclass
 class KetPhuDe:
     cau: List[Cau] = field(default_factory=list)
     #: Tỉ lệ ký tự của kịch bản khớp được với thứ máy nghe (0…1).
     ty_le_khop: float = 0.0
-    #: Đã phải bỏ ép khớp, quay về dùng nguyên thứ máy nghe được.
-    da_rot_ve_nghe: bool = False
+    #: Chữ lấy từ đâu — `CHU_TU_KICH_BAN` hay `CHU_TU_MAY_NGHE`.
+    nguon_chu: str = CHU_TU_KICH_BAN
+    #: Mốc thời gian là **ước lượng** (rải theo số ký tự), không đo được từ
+    #: giọng đọc. Chữ vẫn đúng kịch bản.
+    moc_uoc_luong: bool = False
     loi: str = ""
 
     @property
+    def chu_dung_kich_ban(self) -> bool:
+        """Chữ trong phụ đề đúng nguyên tệp kịch bản."""
+        return self.nguon_chu == CHU_TU_KICH_BAN
+
+    @property
+    def da_rot_ve_nghe(self) -> bool:
+        """Đã phải dùng nguyên thứ máy nghe được làm chữ phụ đề.
+
+        Giữ tên cũ cho nơi gọi cũ, nhưng **nghĩa đã hẹp lại**: trước đây nó bật
+        cả khi chỉ có mốc thời gian là ước lượng. Giờ nó chỉ bật đúng lúc chữ
+        không phải của kịch bản — thứ duy nhất người xem đọc thấy sai.
+        """
+        return self.nguon_chu == CHU_TU_MAY_NGHE
+
+    @property
     def dang_tin(self) -> bool:
-        return bool(self.cau) and not self.da_rot_ve_nghe
+        """Chữ đúng kịch bản **và** mốc thời gian đo được từ giọng đọc."""
+        return (bool(self.cau) and self.chu_dung_kich_ban
+                and not self.moc_uoc_luong)
 
     @property
     def tong_giay(self) -> float:
@@ -111,6 +156,34 @@ class KetPhuDe:
 
 _BO_DI = re.compile(r"[\s　]+|[、，,。．.！!？?…；;：:「」『』（）()\"'’“”\-—–]")
 
+#: Dấu thanh và dấu phụ rời (`U+0300…U+036F`) sinh ra sau khi tách chữ bằng
+#: `NFD`. Không đụng tới dấu đục/dấu tròn tiếng Nhật (`U+3099`, `U+309A`) — thứ
+#: ấy đổi hẳn âm chứ không phải dấu phụ, và `NFC` ở cuối sẽ ghép nó về chỗ cũ.
+_DAU_PHU = re.compile("[\\u0300-\\u036f]")
+
+
+def _bo_dau(chu: str) -> str:
+    """Bỏ dấu thanh, chỉ để **so sánh**. Không bao giờ đụng tới chữ ghi ra tệp.
+
+    ═══ VÌ SAO PHẢI BỎ DẤU MỚI SO ĐƯỢC ═══
+
+    Bộ nghe chạy trên máy khách là bản nhỏ (`base`/`small`), và thứ nó sai
+    nhiều nhất ở tiếng Việt **không phải là từ, mà là dấu**: "hoà" ra "hòa",
+    "cửa" ra "của", "giữ" ra "giư". Người nghe vẫn hiểu, nhưng phép so từng ký
+    tự thì coi đó là hai chữ khác nhau — và một câu sai bốn dấu là bốn ký tự
+    trượt trong tỉ lệ khớp.
+
+    Cộng dồn cả bài, tỉ lệ khớp tụt xuống dưới `NGUONG_KHOP` và cả tệp phụ đề
+    rơi sang đường lui, dù bộ nghe thật ra đã nghe **đúng từng từ**. Bỏ dấu ở
+    tầng so sánh là lấy lại đúng chỗ trượt oan đó.
+
+    An toàn tuyệt đối về mặt chính tả: hàm này chỉ dựng ra chuỗi để `difflib`
+    dò mốc thời gian. Chữ đi vào tệp `.srt` luôn được cắt ra từ **kịch bản
+    gốc**, còn nguyên dấu.
+    """
+    tach = _DAU_PHU.sub("", unicodedata.normalize("NFD", chu))
+    return unicodedata.normalize("NFC", tach).replace("đ", "d").replace("Đ", "D")
+
 
 def _chuan_hoa(chu: str) -> str:
     """Bóc hết dấu câu và khoảng trắng, đưa về một dạng để so.
@@ -118,7 +191,8 @@ def _chuan_hoa(chu: str) -> str:
     `NFKC` gộp chữ nửa thân và toàn thân về một mối — máy nghe hay trả `１２３`
     trong khi kịch bản viết `123`, không gộp thì hai thứ ấy không bao giờ khớp.
     """
-    return _BO_DI.sub("", unicodedata.normalize("NFKC", chu or "")).lower()
+    tho = _BO_DI.sub("", unicodedata.normalize("NFKC", chu or "")).lower()
+    return _bo_dau(tho)
 
 
 def _rai_thoi_gian(tu: Sequence[Tuple[str, float, float]]):
@@ -358,10 +432,39 @@ def tao_phu_de(
     dau, cuoi, ty_le = _khop(dong, nghe_sach, moc)
     ket.ty_le_khop = ty_le
     if ty_le < NGUONG_KHOP:
-        ghi("  ⚠ kịch bản và giọng đọc chỉ khớp {0:.0%} — nhiều khả năng đưa "
-            "nhầm file. Dùng nguyên thứ máy nghe được.".format(ty_le))
-        ra = _rot_ve_nghe(tu, ngon_ngu)
+        # ═══ CHỮ KHÔNG BAO GIỜ ĐI ĐƯỜNG KHÁC ═══
+        #
+        # Chỗ này trước đây quay về dùng **nguyên thứ máy nghe được** làm chữ
+        # phụ đề. Đó chính là nguồn của lỗi khách báo 28/08/2026: *"srt bị sai
+        # nội dung"*. Bộ nghe chạy trên máy khách là bản nhỏ; gặp giọng đọc AI
+        # tiếng Việt nói nhanh, nhạc nền, hay tên riêng, nó nghe nhầm — và cái
+        # nhầm ấy được ghi thẳng vào tệp phụ đề rồi đốt lên hình.
+        #
+        # Nhưng ta đang cầm sẵn **đúng từng chữ** thứ đã đem đi đọc. Không có
+        # trường hợp nào mà thứ máy nghe được lại đúng hơn tệp kịch bản. Nên
+        # tỉ lệ khớp thấp không còn là lý do đổi chữ; nó chỉ là lý do **không
+        # tin mốc thời gian ép ra** — và mốc thời gian thì có đường lui riêng:
+        # rải theo độ dài từng câu.
+        #
+        # Kết quả xấu nhất còn lại: phụ đề chữ đúng 100%, mốc lệch vài phần
+        # mười giây. Trước đây kết quả xấu nhất là phụ đề sai chữ mà nhìn vào
+        # không biết là sai.
+        ghi("  ⚠ kịch bản và bản nghe được chỉ khớp {0:.0%} — mốc thời gian ép ra "
+            "không đáng tin. Giữ nguyên chữ kịch bản, rải mốc theo độ dài từng "
+            "câu.".format(ty_le))
+        # Độ dài THẬT của file tiếng đi trước mốc cuối cùng bộ nghe trả về:
+        # tỉ lệ khớp tụt thấp nhiều khi chính vì bộ nghe **bỏ dở giữa chừng**,
+        # và lúc ấy mốc cuối của nó chỉ là chỗ nó dừng, không phải chỗ giọng
+        # đọc dứt. Rải cả kịch bản vào quãng cụt đó là phụ đề chạy hết từ giữa
+        # video. Đường chữa tệp `.srt` không có mp3 nên vẫn lấy mốc cuối.
+        ra = _rai_deu_cac_cau(manh, do_dai_tieng(duong_mp3)
+                              or (moc[-1][1] if moc else 0.0))
         ra.ty_le_khop = ty_le
+        if not ra.cau:
+            ket.loi = ("kịch bản và giọng đọc không khớp ({0:.0%}) và cũng "
+                       "không đo được độ dài file tiếng".format(ty_le))
+            return ket
+        ghi("  đã rải {0} câu — chữ đúng nguyên kịch bản.".format(len(ra.cau)))
         return ra
 
     tong = (moc[-1][1] if moc else 0.0)
@@ -427,35 +530,50 @@ def _rai_deu(duong_mp3: str, kich_ban: str, ngon_ngu: str, ghi) -> KetPhuDe:
     nói thật với khách rằng nên đọc lại trước khi đăng.
     """
     tong = do_dai_tieng(duong_mp3)
-    manh = cat_cau(kich_ban, ngon_ngu=ngon_ngu)
-    if tong <= 0 or not manh:
-        return KetPhuDe()
-
-    do_dai = [max(1, len(_chuan_hoa(m))) for m in manh]
-    tong_ky_tu = float(sum(do_dai))
-    ket = KetPhuDe(da_rot_ve_nghe=True)
-    moc = 0.0
-    for i, (chu, so_ky_tu) in enumerate(zip(manh, do_dai), start=1):
-        chiem = tong * (so_ky_tu / tong_ky_tu)
-        # Gọi bằng TÊN trường, không theo thứ tự: `Cau` bắt đầu bằng `so` chứ
-        # không bắt đầu bằng `chu`, và truyền nhầm thứ tự thì mọi câu ra rỗng
-        # mà không có lỗi nào — đúng kiểu hỏng lặng lẽ nhất.
-        ket.cau.append(Cau(so=i, bat_dau=moc, ket_thuc=moc + chiem,
-                           chu=chu.strip()))
-        moc += chiem
+    ket = _rai_deu_cac_cau(cat_cau(kich_ban, ngon_ngu=ngon_ngu), tong)
+    if not ket.cau:
+        return ket
     ghi("  đã rải phụ đề theo độ dài từng câu ({0} câu trong {1:.0f} giây). "
         "Chữ đúng nguyên kịch bản, mốc thời gian là ước lượng.".format(
             len(ket.cau), tong))
     return ket
 
 
-def _rot_ve_nghe(tu, ngon_ngu: str) -> KetPhuDe:
-    """Đường lui: ghép thẳng thứ máy nghe được thành phụ đề.
+def _rai_deu_cac_cau(manh: Sequence[str], tong: float) -> KetPhuDe:
+    """Rải `manh` câu đã cắt sẵn vào `tong` giây, theo độ dài từng câu.
 
-    Vẫn hơn không có gì, nhưng `dang_tin` để `False` để nơi gọi biết mà nói
-    thật với người dùng.
+    Tách khỏi `_rai_deu` vì có **hai** đường cùng cần nó: máy không chạy nổi bộ
+    nghe, và bộ nghe chạy được nhưng ép khớp ra tỉ lệ quá thấp. Cả hai đều phải
+    ra cùng một thứ — chữ của kịch bản, mốc ước lượng — nên chúng phải dùng
+    chung đúng một đoạn mã, đừng chép ra hai bản rồi lệch nhau.
     """
-    ket = KetPhuDe(da_rot_ve_nghe=True)
+    if tong <= 0 or not manh:
+        return KetPhuDe()
+    do_dai = [max(1, len(_chuan_hoa(m))) for m in manh]
+    tong_ky_tu = float(sum(do_dai))
+    ket = KetPhuDe(moc_uoc_luong=True)
+    moc = 0.0
+    for i, (chu, so_ky_tu) in enumerate(zip(manh, do_dai), start=1):
+        chiem = tong * (so_ky_tu / tong_ky_tu)
+        # Gọi bằng TÊN trường, không theo thứ tự: `Cau` bắt đầu bằng `so` chứ
+        # không bắt đầu bằng `chu`, và truyền nhầm thứ tự thì mọi câu ra rỗng
+        # mà không có lỗi nào — đúng kiểu hỏng lặng lẽ nhất.
+        ket.cau.append(Cau(so=i, bat_dau=round(moc, 3),
+                           ket_thuc=round(moc + chiem, 3), chu=chu.strip()))
+        moc += chiem
+    return ket
+
+
+def _rot_ve_nghe(tu, ngon_ngu: str) -> KetPhuDe:
+    """Ghép thẳng thứ máy nghe được thành phụ đề.
+
+    ⚠ **Chỉ dùng khi không có kịch bản nào.** Có kịch bản thì chữ luôn lấy từ
+    kịch bản, kể cả lúc ép khớp thất bại — xem khối "CHỮ KHÔNG BAO GIỜ ĐI ĐƯỜNG
+    KHÁC" trong `tao_phu_de`.
+
+    `dang_tin` để `False` để nơi gọi biết mà nói thật với người dùng.
+    """
+    ket = KetPhuDe(nguon_chu=CHU_TU_MAY_NGHE)
     tran = (TRAN_KY_TU_DAY if (ngon_ngu or "").lower() in TIENG_DAY
             else TRAN_KY_TU_THUONG)
     dem, t0, t1 = "", None, 0.0
@@ -622,3 +740,108 @@ def viet_srt(duong: str, cau: Sequence[Cau]) -> str:
         tep.write("\n".join(khoi))
     os.replace(tam, duong)
     return duong
+
+
+# ── Chữa một tệp .srt đã có, bằng chính kịch bản ─────────────────────────────
+#
+# ═══ VÌ SAO CẦN ĐƯỜNG NÀY ═══
+#
+# Khách đã có sẵn hàng đống tệp `.srt` do bản tool cũ (hoặc một công cụ khác)
+# nghe ra — mốc thời gian thì đúng, **chữ thì sai**. Bảo họ xoá đi làm lại từ
+# mp3 là bắt máy nghe lại cả tiếng đồng hồ tiếng nói, trong khi thứ duy nhất
+# cần thay là chữ.
+#
+# Việc này thật ra **đúng bằng việc ép khớp** đã có ở trên, chỉ khác nguồn mốc
+# thời gian: thay vì hỏi bộ nghe, ta đọc mốc từ chính tệp `.srt`. Nên nó không
+# có mã riêng — nó đi qua `tao_phu_de` với một `nghe` khác.
+
+#: Dòng thời gian của SRT. Nhận cả `,` lẫn `.` ngăn mili-giây, và cả dạng thiếu
+#: số giờ (`00:12,300`) mà vài công cụ xuất ra.
+_DONG_GIO = re.compile(
+    r"(\d{1,3}:)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*"
+    r"(\d{1,3}:)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})")
+
+
+def _giay(gio: str, phut: str, giay: str, mili: str) -> float:
+    return (int(gio[:-1]) * 3600 if gio else 0) + int(phut) * 60 + \
+        int(giay) + int(mili.ljust(3, "0")) / 1000.0
+
+
+def doc_srt(chu: str) -> List[Cau]:
+    """Đọc nội dung một tệp `.srt` thành danh sách câu. **Đọc dễ tính.**
+
+    Khác `core.srt_scenes.parse_srt` — bên ấy *gác cổng* cho khâu cắt cảnh nên
+    gặp tệp lệch giờ là ném lỗi, đúng việc của nó. Ở đây thì ngược lại: tệp đưa
+    vào vốn **đã được biết là hỏng**, ta đến để chữa nó. Ném lỗi ở cửa vào là
+    từ chối đúng những tệp cần chữa nhất.
+
+    Nên: khối nào không có dòng thời gian thì bỏ qua, khối nào có mà lệch thì
+    vẫn nhận — mốc lệch sẽ được nắn lại lúc ghi ra.
+    """
+    ra: List[Cau] = []
+    for khoi in re.split(r"\r?\n\s*\r?\n", str(chu or "").strip()):
+        dong = [d.strip() for d in khoi.splitlines() if d.strip()]
+        vi_tri = next((i for i, d in enumerate(dong) if _DONG_GIO.search(d)), None)
+        if vi_tri is None:
+            continue
+        m = _DONG_GIO.search(dong[vi_tri])
+        noi_dung = " ".join(dong[vi_tri + 1:]).strip()
+        if not noi_dung:
+            continue
+        t0 = _giay(m.group(1) or "", m.group(2), m.group(3), m.group(4))
+        t1 = _giay(m.group(5) or "", m.group(6), m.group(7), m.group(8))
+        ra.append(Cau(so=len(ra) + 1, bat_dau=t0, ket_thuc=max(t1, t0),
+                      chu=noi_dung))
+    return ra
+
+
+def nghe_tu_srt(duong_srt: str) -> List[Tuple[str, float, float]]:
+    """Lấy mốc thời gian từ một tệp `.srt` có sẵn, thay cho việc nghe lại mp3.
+
+    Trả về đúng khuôn mà `tao_phu_de` đợi ở tham số `nghe`.
+    """
+    with open(duong_srt, "r", encoding="utf-8-sig", errors="replace") as tep:
+        chu = tep.read()
+    cau = doc_srt(chu)
+    if not cau:
+        raise ValueError("tệp .srt không có dòng phụ đề nào đọc được")
+    return [(c.chu, c.bat_dau, c.ket_thuc) for c in cau]
+
+
+def sua_srt_theo_txt(duong_srt: str, kich_ban: str, dich: str = "", *,
+                     ngon_ngu: str = "",
+                     on_log: Optional[Callable[[str], None]] = None) -> KetPhuDe:
+    """Thay chữ trong `duong_srt` bằng chữ của `kich_ban`, giữ nguyên mốc giờ.
+
+    `dich` để trống thì **ghi đè chính tệp cũ**. Trả về `KetPhuDe` để nơi gọi
+    biết khớp được bao nhiêu.
+
+    Không cắt theo đúng số dòng của tệp cũ: dòng của tệp cũ được cắt theo thứ
+    máy *nghe nhầm*, nên giữ y nguyên ranh giới ấy là giữ lại đúng chỗ sai.
+    Kịch bản được cắt lại theo câu của chính nó, rồi mỗi câu nhận mốc giờ nội
+    suy từ tệp cũ.
+    """
+    ket = tao_phu_de("", kich_ban, ngon_ngu=ngon_ngu, on_log=on_log,
+                     nghe=lambda *_a, **_k: nghe_tu_srt(duong_srt))
+    if ket.cau:
+        viet_srt(dich or duong_srt, ket.cau)
+    return ket
+
+
+def do_khop_voi_kich_ban(cau: Sequence[Cau], kich_ban: str) -> float:
+    """Chữ trong phụ đề trùng với kịch bản bao nhiêu phần (0…1).
+
+    Dùng để **tự soi lại thứ mình vừa ghi ra**: khâu phụ đề của tab Tự động gọi
+    hàm này sau khi ghi tệp, và nói thẳng ra con số. Một tệp `.srt` sai chữ
+    trông y hệt một tệp đúng cho tới lúc video đã lên sóng — chỗ duy nhất phát
+    hiện được là ngay tại đây, khi cả hai thứ còn nằm cạnh nhau.
+    """
+    ra = _chuan_hoa("".join(c.chu for c in cau))
+    goc = _chuan_hoa(kich_ban or "")
+    if not goc:
+        return 0.0
+    if ra == goc:
+        return 1.0
+    trung = sum(k.size for k in difflib.SequenceMatcher(
+        None, goc, ra, autojunk=False).get_matching_blocks())
+    return min(1.0, trung / len(goc))

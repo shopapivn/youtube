@@ -108,7 +108,7 @@ do vài ảnh còn vệt rất nhạt khi phóng to.
   giữ lại mã đo (`do-dau.py`, `alpha-chuan.py`, `do-vien.py` trong thư mục tạm của
   phiên làm việc) để đo lại khi cần.
 - **Không đụng tới dấu chìm (SynthID).** Dấu chìm nằm trong pixel, không phải thứ
-  này xử lý. Xem thêm `VIEC-XOA-LOGO-VA-NANG-4K.md`.
+  này xử lý — không công cụ xoá thẻ nào chạm tới được nó.
 
 ---
 

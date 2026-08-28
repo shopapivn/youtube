@@ -56,7 +56,7 @@ không bao giờ tự cập nhật mà không hỏi.
 
 ---
 
-## Tám tab
+## Các tab
 
 | Tab | Làm gì |
 |---|---|
@@ -64,6 +64,7 @@ không bao giờ tự cập nhật mà không hỏi.
 | 🧠 **Skill** | Việc lẻ quanh một video. Hiện có **Lấy dữ liệu đối thủ** — chạy trên máy bạn, miễn phí. |
 | ✍️ **Viết kịch bản** | Hai lối: **Chat** (viết từng lượt, đính kèm .txt, giữ nhiều phiên) hoặc **Template** (chuỗi prompt bạn tự viết — dán một đầu vào, chạy một mạch ra file .txt). |
 | 🎙️ **Voice** | Lấy từ file .txt có sẵn hoặc dán chữ. Nhiều nhân vật thì xếp từng giọng vào hàng đợi, chạy một lượt. Bỏ qua file đã có để chạy tiếp lô đứt giữa chừng. |
+| 📝 **Phụ đề (SRT)** | File giọng đọc + file kịch bản .txt → file .srt. Chữ lấy từ .txt nên **đúng từng chữ**, máy nghe chỉ dùng để biết câu nào đọc vào giây thứ mấy. Chữa được cả file .srt cũ đang sai nội dung. Chạy trên máy bạn, miễn phí. |
 | 🖼️ **Tạo ảnh** | Dán cả danh sách, mỗi dòng một ảnh. Ảnh tham chiếu chung để giữ nhân vật giống nhau xuyên video. |
 | 🎬 **Tạo video** | Mỗi dòng một clip. Veo3 ra clip 8 giây, Seedance 10 giây. |
 | ✂️ **Dựng video** | Ghép ảnh/clip + lời đọc + phụ đề thành video hoàn chỉnh bằng FFmpeg. Chạy trên máy bạn, miễn phí. |

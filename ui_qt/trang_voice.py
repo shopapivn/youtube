@@ -16,7 +16,7 @@ cũng chẳng có lý do gì phải đoán thứ tự — đánh số là hết 
 
 Là tab thật (`QTabWidget`) chứ không phải dãy nút giả làm tab: hình cái tab dính
 liền khung nội dung nói ngay "đây là hai màn hình riêng", còn dãy nút chỉ nói
-"chọn một trong hai giá trị". Tool gốc `D:\11lab_vm` cũng chia tab như vậy.
+"chọn một trong hai giá trị". Tool nội bộ đời trước cũng chia tab như vậy.
 
 ═══ BA THÓI QUEN CHÉP TỪ TOOL GỐC ═══
 
@@ -268,8 +268,8 @@ class TrangGiongNoi(QWidget):
         #   2. đổi hẳn thành ô chọn tên giọng → mất đường dán ID, mà đó mới là
         #      thứ khách dùng thật;
         #   3. ô ID kèm danh sách sáu giọng dựng sẵn, điền sẵn `vi_female_01` →
-        #      chủ dự án: *"đổi thành: bạn vào elevenlabs lấy id voice điền vào
-        #      đây, chữ mờ hướng dẫn; bỏ cái nữ miền bắc…"*.
+        #      chủ dự án: *"đổi thành: bạn vào thư viện giọng lấy id voice điền
+        #      vào đây, chữ mờ hướng dẫn; bỏ cái nữ miền bắc…"*.
         #
         # Điền sẵn một mã là **chọn hộ khách** một giọng họ chưa nghe bao giờ:
         # bấm chạy luôn thì cả lô ra sai giọng, mà vẫn mất tiền. Để trống thì
@@ -366,8 +366,8 @@ class TrangGiongNoi(QWidget):
         **File đứng trước Text**: đây là tab lồng tiếng hàng loạt, và đường chính
         là nạp cả thư mục .txt. Tab mở sẵn phải là đường phần lớn người dùng đi.
 
-        Tool gốc `D:\\11lab_vm` cũng chia tab như vậy (*Auto Convert*, *Voice
-        Convert*, *Accounts*, *4G Proxy*) chứ không nhồi chung.
+        Tool nội bộ đời trước cũng chia tab như vậy — mỗi việc một tab —
+        chứ không nhồi chung.
         """
         khoi = QWidget()
         v = QVBoxLayout(khoi)
@@ -495,9 +495,27 @@ class TrangGiongNoi(QWidget):
         self._nut_dung = nut_nguy_hiem("STOP", self._dung, rong=110)
         hang.addWidget(self._nut_dung)
         hang.addStretch(1)
+        # Đọc xong thì việc kế tiếp gần như luôn là làm phụ đề — và tab Phụ đề
+        # cần đúng hai thứ màn hình này đang cầm: thư mục .mp3 vừa ghi ra và
+        # thư mục .txt nguồn. Bắt khách tự đi tìm lại hai đường dẫn ấy là bắt
+        # họ làm phần việc mà tool đã biết sẵn câu trả lời.
+        nut_sub = nut_phu("Làm phụ đề .srt", self._sang_phu_de, rong=150)
+        nut_sub.setToolTip(
+            "Sang tab Phụ đề với hai thư mục điền sẵn: file .mp3 vừa đọc và "
+            "file .txt gốc. Phụ đề lấy chữ từ .txt nên đúng từng chữ, và chạy "
+            "trên máy bạn nên không tốn tiền.")
+        hang.addWidget(nut_sub)
         hang.addWidget(nut_nguy_hiem("Xoá danh sách", self._xoa_danh_sach, rong=150))
         self._cap_nhat_nut_dung()
         return hang
+
+    def _sang_phu_de(self) -> None:
+        """Mở tab Phụ đề, điền sẵn thư mục tiếng và thư mục chữ."""
+        trang = self._app.trang("phu-de")
+        dat = getattr(trang, "dat_thu_muc", None)
+        if callable(dat):
+            dat(self._thu_muc.value, self._nguon)
+        self._app.show_page("phu-de")
 
     # ── Dựng phụ ─────────────────────────────────────────────────────────────
 
@@ -911,12 +929,14 @@ class TrangGiongNoi(QWidget):
         còn việc dựng hàm gọi AI. Tách ra vì kiểm một hàm thì dễ, còn kiểm một
         widget Qt thì bài kiểm chết câm.
         """
-        from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+        from core.goi_van_ban import goi_van_ban, tin_nhan_viet  # noqa: PLC0415
         from core.the_cam_xuc import chen_the_hang_loat  # noqa: PLC0415
 
         def goi(loi_nhac: str) -> str:
-            return goi_van_ban(self._app.client,
-                               [{"role": "user", "content": loi_nhac}])
+            # `kiem_the` vốn đã vứt bản nào AI lỡ đổi chữ, nên lời dẫn không
+            # lọt được vào giọng đọc từ đường này. Nhưng vứt là **mất tiền
+            # lượt gọi ấy** và mất luôn thẻ của khúc đó. Rẻ hơn là dặn trước.
+            return goi_van_ban(self._app.client, tin_nhan_viet(loi_nhac))
 
         chen_the_hang_loat(specs, goi)
         return specs

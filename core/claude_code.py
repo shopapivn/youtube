@@ -14,7 +14,7 @@ Viết lại từng ấy thứ để rồi ra bản kém hơn là phí công.
 
 ═══ VÌ SAO CẮM ĐƯỢC VÀO SHOPAPI ═══
 
-`apps/api/.../protocols/anthropic.controller.ts` ghi rõ, và đây là mô hình kinh
+Tài liệu hợp đồng API ghi rõ, và đây là mô hình kinh
 doanh chứ không phải mẹo::
 
     ANTHROPIC_BASE_URL   = https://api.shopapi.vn
@@ -23,7 +23,7 @@ doanh chứ không phải mẹo::
 Máy chủ shopapi đã phát đúng khuôn sự kiện Anthropic nên Claude Code không phân
 biệt được với gọi thẳng hãng. Khách trả tiền qua ví shopapi như mọi việc khác.
 
-═══ VÌ SAO CHẠY HEADLESS CHỨ KHÔNG NHÚNG MÀN HÌNH ═══
+═══ VÌ SAO GỌI CLI MỘT LƯỢT CHỨ KHÔNG NHÚNG MÀN HÌNH ═══
 
 Claude Code là giao diện dòng lệnh đầy đủ (vẽ bằng ink/React, dùng mã màu ANSI và
 con trỏ). Nhúng nó vào một ô chữ Qt sẽ ra một mớ ký tự điều khiển — muốn đúng thì
@@ -476,7 +476,7 @@ def moi_truong(api_key: str, base_url: str,
 def lenh_chay(cau_hoi: str, duong_claude: str = "claude", *,
               tiep_tuc: bool = False, mo_hinh: str = MO_HINH_MAC_DINH,
               toan_quyen: bool = True) -> List[str]:
-    """Dựng dòng lệnh headless.
+    """Dựng dòng lệnh gọi CLI một lượt (`-p`, không mở phiên tương tác).
 
     `--output-format stream-json` để Studio vẽ được tiến trình ngay, thay vì để
     khách nhìn màn hình đứng im vài phút rồi mới có chữ.
@@ -612,7 +612,7 @@ def chay_claude(cau_hoi: str, thu_muc: str, api_key: str, base_url: str, *,
 #:
 #: Claude Code tự chọn một mã bản cụ thể của Anthropic (`claude-sonnet-4-5-…`)
 #: nếu không ai chỉ định. Cổng shopapi dùng tên riêng — `claude-sonnet-5`,
-#: `claude-opus-5`, `claude-fable-5` (xem `apps/api/.../llm.catalog.ts`) — nên
+#: `claude-opus-5`, `claude-fable-5` (xem bảng model trong hợp đồng API) — nên
 #: chốt sẵn ba tên ấy thay vì trông chờ cổng đoán đúng ý.
 #:
 #: Ba biến này là của Claude Code, không phải của shopapi: `HAIKU` là **khe mô
@@ -1127,7 +1127,7 @@ def mo_terminal(thu_muc: str, api_key: str = "", base_url: str = "", *,
 
     `toan_quyen` là mặc định và là quyết định của chủ dự án. Thiếu nó thì Claude
     Code dừng hỏi ở mỗi lần sửa file — với khách không biết code, mỗi câu hỏi ấy
-    là một chỗ để bỏ cuộc. Cờ này từng chỉ có ở đường headless (đã bỏ), nên nút
+    là một chỗ để bỏ cuộc. Cờ này từng chỉ có ở đường gọi CLI một lượt (đã bỏ), nên nút
     “Mở Claude Code” chạy bản **hỏi từng bước** mà không ai để ý.
 
     `cmd /k` chứ không phải `/c`: chạy xong Claude Code mà cửa sổ đóng ngay thì

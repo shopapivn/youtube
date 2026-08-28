@@ -75,11 +75,10 @@ DASHBOARD_LOGIN_URL = "https://shopapi.vn/login"
 #: ═══ PHẢI BÁM ĐÚNG TRẦN MÁY CHỦ, KHÔNG ĐƯỢC THẤP HƠN ═══
 #:
 #: Đo 23/08/2026 (khách báo "MAX mà 1000 ảnh/video chạy mãi không xong"): ba con
-#: số cũ `{16, 384, 64}` đã LẠC HẬU so với máy chủ. `HARD_MAX_CONCURRENT_PER_USER`
-#: bên `queue.constants.ts` giờ là `{tts:16, image:6144, video:832}`, và nhà máy
-#: thật chạy song song ~image 3072 (96 gmail × 32 luồng), ~video 320 (10 × 32).
-#: Một khách chạy một mình được ~90% số đó (`concurrency.service.ts`: trừ 10% dự
-#: phòng) — tức image ~2764, video ~288.
+#: số cũ `{16, 384, 64}` đã LẠC HẬU so với trần máy chủ công bố. Trần thật của
+#: từng khách LUÔN đọc động ở `GET /v1/me` — nó co giãn theo sức chứa còn trống,
+#: nên mọi con số gõ cứng ở đây chỉ là mức KẸP TRÊN cho file cấu hình, không
+#: phải mức nên chạy.
 #:
 #: Ba con số cũ bóp tool xuống dưới nhà máy theo HAI đường IM LẶNG:
 #:   1. Pool luồng của `core/jobs.py` bằng ĐÚNG `sum(HARD_CAPS)`. Cũ = 464 luồng,
@@ -200,10 +199,9 @@ class Config:
     #:
     #: ⚠ CON SỐ NÀY TỪNG LÀ 3, VÀ NÓ LÀ NÚT THẮT CỦA CẢ HỆ THỐNG.
     #:
-    #: Đo ngày 11/08/2026 trên VM `wkr_veo3_main`, 10,1 giờ chạy thật: worker tự
-    #: khai sức chứa **640 chỗ ảnh + 128–288 chỗ video**, nhưng số job chạy cùng
-    #: lúc (bình quân theo thời gian) chỉ là **5,5**. Nhà máy đứng không 84% thời
-    #: gian trong khi hàng vẫn còn.
+    #: Đo trên hạ tầng nội bộ ngày 11/08/2026, 10,1 giờ chạy thật: máy chủ mời
+    #: rộng hơn hẳn, nhưng số job chạy cùng lúc (bình quân theo thời gian) chỉ là
+    #: **5,5**. Nhà máy đứng không 84% thời gian trong khi hàng vẫn còn.
     #:
     #: Phép tính khớp tới từng con số: 3 chỗ ÷ ~50 giây/job = 216 job/giờ; đo
     #: được 219 job/giờ nhận vào. Không phải engine chậm — tool chỉ bơm 3 job.
@@ -249,10 +247,9 @@ class Config:
     #: của engine nhảy ra giữa màn hình là phiền. Bật công tắc này thì mọi Chrome
     #: do tool/engine bật đều nằm ở toạ độ ngoài màn hình.
     #:
-    #: ⚠ "Ẩn" ở đây KHÔNG phải headless. Google phát hiện headless rất tốt và trả
-    #: về CAPTCHA — dự án đã mất mấy ngày vì chuyện đó. Cửa sổ ngoài màn hình vẫn
-    #: được trình duyệt VẼ THẬT nên không phân biệt được với cửa sổ thường.
-    #: Xem `workers/shared/shopapi_worker/chrome_an.py` để biết đầy đủ lý do.
+    #: ⚠ "Ẩn" ở đây nghĩa là ĐẨY CỬA SỔ RA NGOÀI MÀN HÌNH, không phải tắt giao
+    #: diện trình duyệt. Cửa sổ ngoài màn hình vẫn được trình duyệt VẼ THẬT nên
+    #: trang web chạy y hệt cửa sổ thường — chỉ là bạn không nhìn thấy nó.
     #:
     #: ⚠ Nút "🌐 Mở Chrome" (đăng nhập tay) LUÔN hiện, bất kể công tắc này —
     #: ẩn cửa sổ đó thì không ai đăng nhập tay được.
@@ -388,6 +385,10 @@ def ap_an_chrome_vao_moi_truong(an: bool) -> Dict[str, str]:
       * `VEO3TOP_HIDE_CHROME`  1 = ẩn — engine veo3 đọc ĐỘNG mỗi lần mở Chrome
       * `VEO3TOP_IMG_HIDE`     1 = ẩn — hằng dự phòng khi biến trên chưa đặt
       * `SEEDANCE_VISIBLE`     1 = **HIỆN** — nghĩa NGƯỢC LẠI, phải đảo
+
+    ⚠ Ba cái tên trên là **giao kèo có sẵn của engine**, không phải tên ta tự
+    đặt. Đổi tên ở đây mà engine vẫn đọc tên cũ thì công tắc im lặng ngừng chạy
+    — nên giữ nguyên chữ, dù đọc hơi lạ.
 
     Quên đảo `SEEDANCE_VISIBLE` là bật công tắc "ẩn" xong seedance hiện hết —
     đúng loại lỗi im lặng khó truy, nên nó nằm ở MỘT chỗ duy nhất là đây.

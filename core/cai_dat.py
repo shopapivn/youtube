@@ -68,6 +68,15 @@ def luong_khoi_dau(muc: str) -> Dict[str, int]:
 
 #: Mọi tuỳ chọn và giá trị mặc định của nó.
 MAC_DINH: Dict[str, Any] = {
+    # ── Chrome sạch ──────────────────────────────────────────────────────────
+    # "may"  = Chrome cài trên máy (có ngay, nhưng dính Google Sync/tiện ích/
+    #          chính sách của máy);
+    # "rieng" = Chrome for Testing tool tự tải về runtime/ (~170 MB, sạch hẳn).
+    #          Xem `core/chrome_goi_san.py`.
+    "chrome_sach_nguon": "may",
+    # Cỡ cửa sổ Chrome khi mở hồ sơ. Cỡ phổ biến ngoài đời để vân tay không lạ.
+    "chrome_sach_kich_thuoc": "1280×860",
+
     # Mở tool lên là tự tải bản mới rồi khởi động lại, không hỏi.
     #
     # Bật sẵn vì bản vá chỉ có giá trị khi tới được máy khách. Cả một ngày sửa
@@ -115,12 +124,12 @@ MAC_DINH: Dict[str, Any] = {
     # YouTube, và vì sao tin nhầm chỗ đó thì mất kênh chứ không mất công.
     "lam_sach_dau_ai": False,
 
-    # Chèn thẻ cảm xúc ElevenLabs v3 vào kịch bản trước khi đem đi đọc.
+    # Chèn thẻ cảm xúc (thẻ v3 của cổng giọng nói) vào kịch bản trước khi đọc.
     #
     # ═══ TẮT SẴN ═══
     #
     # Chủ dự án chốt lại 16/08/2026: *"sẽ cài ở setting để mặc định là tắt"*.
-    # Đúng: tài liệu ElevenLabs KHÔNG nói gì về thẻ cảm xúc với tiếng không
+    # Đúng: tài liệu của cổng giọng nói KHÔNG nói gì về thẻ cảm xúc với tiếng không
     # phải tiếng Anh, mà kênh đang chạy viết tiếng Nhật. Bật sẵn một thứ chưa
     # ai kiểm được trên đúng thứ tiếng khách dùng là bắt họ làm chuột bạch mà
     # không hỏi.

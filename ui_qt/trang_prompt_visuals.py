@@ -1,7 +1,7 @@
 """Tab **Prompt Visuals**: file giọng đọc → phụ đề → prompt từng cảnh → Excel.
 
 Chủ dự án, 14/08/2026: *"từ mp3 voice ra srt rồi sau đó chạy ra các prompt trong
-excel"*, làm theo `D:\\VE3_SUITE`. Và 24/08/2026: *"thiết kế theo kiểu giống ở
+excel"*, làm theo lối bảng cảnh. Và 24/08/2026: *"thiết kế theo kiểu giống ở
 bên tự động, kiểu đi từng bước"* — nên trang này bày BỐN BƯỚC, trên xuống
 dưới theo thứ tự làm (26/08/2026 gom từ năm: *"mọi thứ hơi khó và trùng lặp
 cũng như loạn quá"* — phong cách từng chọn được ở ba chỗ, nút lưu ở hai):
@@ -14,7 +14,7 @@ cũng như loạn quá"* — phong cách từng chọn được ở ba chỗ, n�
     Bước 4  (hiện khi có kết quả) xem & chỉnh prompt từng cảnh, rồi THỬ thật
             1–3 cảnh (ảnh + clip) trước khi mang Excel sang tab Ảnh & Video
 
-Cột của file Excel sinh ra **trùng tên với bảng của VE3_SUITE** (`scenes`,
+Cột của file Excel sinh ra **trùng tên với bảng cảnh chuẩn** (`scenes`,
 `characters`, `director_plan`, `thumbnail`), nên mở thẳng bằng VE3 được.
 
 Phần nghĩ nằm ở `core/prompt_visuals.py` (thuần tuý, test được) và ở hai tool
@@ -364,7 +364,7 @@ class TrangPromptVisuals(QWidget):
         hang_chon.addWidget(self._nut_nang_cao)
         v.addLayout(hang_chon)
 
-        # ═══ 3. NHÂN VẬT — BA CÁCH KỂ, THAM KHẢO VE3_SUITE ═══
+        # ═══ 3. NHÂN VẬT — BA CÁCH KỂ ═══
         #
         # Chủ dự án 24/08/2026: loại 1 một nhân vật cố định của kênh; loại 2
         # nhân vật cố định + nhân vật/bối cảnh tham chiếu khác; loại 3 AI tự
@@ -1895,7 +1895,8 @@ class TrangPromptVisuals(QWidget):
                                    mo_hinh=mo_hinh, ngon_ngu=ngon_ngu,
                                    nhat_quan=nhat_quan,
                                    ma_artifact_context=ma_context,
-                                   ma_chay=ma_chay, che_do_ke=che_do)
+                                   ma_chay=ma_chay, che_do_ke=che_do,
+                                   kich_ban=kich_ban)
                 huy_token = CancellationToken()
                 if huy.is_set():
                     break

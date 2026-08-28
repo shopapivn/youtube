@@ -9,7 +9,7 @@ VÌ SAO CẦN — ĐO NGÀY 14/08/2026
 
     1 → 2 → 4 → 8 → 16 → 32 → 64
 
-Với job video ~60 giây, chạm 64 mất **6 phút chạy liên tục**. Mà bên VE3_SUITE
+Với job video ~60 giây, chạm 64 mất **6 phút chạy liên tục**. Mà ở lối chạy
 mỗi "mã" là một TIẾN TRÌNH RIÊNG (`ve3_gui.py`: ``queue_ve3_procs = {code:
 Popen}``), nên mỗi mã dựng một `NhipDo` mới bắt đầu lại từ 1. Mã xong trước 6
 phút thì tiến trình chết mang theo cả bài học, và mã sau lại leo từ đầu.
@@ -27,8 +27,8 @@ cái thang 6 bậc, và cứ mỗi mã mới lại tụt về chân thang.
 VÌ SAO KHÔNG ĐƠN GIẢN LÀ "BẮT ĐẦU CAO HƠN"
 ════════════════════════════════════════════════════════════════════════════
 
-Vì con số đúng KHÔNG BIẾT TRƯỚC được: nó là năng lực nhà máy tại thời điểm đó,
-và nhà máy thay đổi (tài khoản bị khoá, IP bị phanh, nhà máy khởi động lại).
+Vì con số đúng KHÔNG BIẾT TRƯỚC được: nó là sức chứa máy chủ tại thời điểm đó,
+và sức chứa ấy thay đổi liên tục theo số khách đang chờ.
 Gõ cứng một số cao là quay lại đúng cái bệnh đã chữa cả ngày hôm nay. Ngày
 12/08/2026 tool đòi 3.072 chỗ ảnh và **giết nhà máy 9 lần trong một ngày**.
 
@@ -39,9 +39,9 @@ vẫn nằm dưới trần động của máy chủ.
 BA CÁI PHANH
 ════════════════════════════════════════════════════════════════════════════
 
-1. **Hạn dùng** (:data:`HAN_GIAY`). Nhịp nhớ từ hôm qua nói về một nhà máy
-   khác. Quá hạn thì quên, leo lại từ đầu — chậm vài phút còn hơn dựng 64 job
-   lên một nhà máy vừa mất 90 tài khoản.
+1. **Hạn dùng** (:data:`HAN_GIAY`). Nhịp nhớ từ hôm qua nói về một mức sức
+   chứa khác. Quá hạn thì quên, leo lại từ đầu — chậm vài phút còn hơn dựng 64
+   job lên một máy chủ vừa co hẹp sức chứa.
 2. **Lùi một bậc** (:data:`CHIA_KHI_NHO`). Vào lại ở MỘT NỬA nhịp đã nhớ, rồi
    để pha leo nhanh nhân đôi — chạm mức cũ sau ĐÚNG MỘT VÒNG thay vì sáu, mà
    vẫn không đặt ngay toàn bộ tải lên một nhà máy chưa kịp nói gì.

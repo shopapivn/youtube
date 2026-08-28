@@ -153,7 +153,7 @@ def _engine(nodes: Sequence[Mapping[str, Any]]) -> str:
     return ENGINE_VEO3
 
 
-#: Giá claude-sonnet-5, µVND mỗi token (`apps/api/src/modules/llm/llm.catalog.ts`).
+#: Giá claude-sonnet-5, µVND mỗi token (xem bảng giá trong tài liệu hợp đồng API).
 #: Đây là bản chép để ước tính TRƯỚC khi gọi; đường tính tiền thật nằm ở máy chủ.
 _GIA_TOKEN_VAO = 840
 _GIA_TOKEN_RA = 4_200

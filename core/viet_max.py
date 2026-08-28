@@ -32,11 +32,18 @@ và `.claude/settings.local.json` của thư mục cũng áp vào nó. Việc �
 "viết một bài văn" — cho nó một thư mục rỗng (`workspace/viet-max/`) là vừa đủ:
 không đọc được gì, không sửa được gì, không dính cấu hình thư mục nào.
 
-═══ HỎNG THÌ LUI VỀ VÍ, KHÔNG LÀM VỠ LƯỢT CHẠY ═══
+═══ HỎNG THÌ XỬ THẾ NÀO ═══
 
-Máy chưa cài Claude Code, chưa đăng nhập, hết hạn mức thuê bao — đường này ném
-lỗi, và `dung_goi_chat_max` lui về đúng hàm gọi ví ShopAPI cũ, kèm một dòng
-nhật ký nói thật. Lượt chạy không bao giờ chết chỉ vì cái nút gạt này.
+Ba loại hỏng, ba cách chữa khác nhau — trộn lẫn là mất thì giờ hoặc mất chất
+lượng (chi tiết ở `THANG_MO_HINH` và `ly_do_tut_bac`):
+
+  hết hạn mức model     → tụt ngay xuống bậc model dưới, KHÔNG đợi (cửa sổ
+                          hạn mức mở lại tính bằng giờ, đợi vô ích)
+  model không dùng được → cũng tụt bậc, và khoá tên ấy một ngày
+  nghẽn tạm / lỗi lẻ    → giữ nguyên model, đợi theo `NHIP_THU_LAI` rồi thử lại
+
+Cạn cả thang thì **ném lỗi nói rõ**, KHÔNG lặng lẽ rẽ sang ví ShopAPI — xem
+`dung_goi_chat_max`: rẽ sang ví là trả tiền lần hai cho thứ đã trả tiền tháng.
 """
 
 from __future__ import annotations
@@ -44,6 +51,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import socket
@@ -53,7 +61,9 @@ import uuid
 from typing import Any, Callable, List, Optional
 
 __all__ = ["co_claude_code", "viet_bang_max", "dung_goi_chat_max",
-           "THU_MUC_RONG"]
+           "THU_MUC_RONG", "THANG_MO_HINH", "la_het_han_muc",
+           "mo_hinh_dang_dung", "doc_han_muc", "ghi_han_muc", "gio_mo_lai",
+           "ly_do_tut_bac"]
 
 #: Thư mục làm việc RỖNG cho tiến trình Claude Code, tính từ gốc tool.
 THU_MUC_RONG = os.path.join("workspace", "viet-max")
@@ -70,6 +80,32 @@ GIAY_CHO_MAC_DINH = 900.0
 #: `kenh.yaml` vẫn là của đường ví (ví tính theo lượt gọi, model to là tiền to);
 #: nó không với tới đây.
 MO_HINH_TOT_NHAT = "claude-fable-5"
+
+#: ═══ BẬC THANG MODEL: HẾT HẠN MỨC THÌ TỤT XUỐNG, KHÔNG ĐỨNG ĐÓ ĐỢI ═══
+#:
+#: Chủ dự án, 26/08/2026: *"model fable đang hết token… muốn nó có logic tự
+#: đổi model cao xuống thấp để không bị lỗi nữa"*.
+#:
+#: Vì sao đợi không cứu được: `NHIP_THU_LAI` giãn tới 300 giây, tổng cộng chưa
+#: tới **chín phút**. Hạn mức thuê bao Claude mở lại theo cửa sổ **hàng giờ**.
+#: Nên sáu lần thử lại trên cùng một model đã cạn là sáu lần hỏng y hệt, mất
+#: chín phút, rồi cả khâu viết vẫn chết — trong khi model dưới đang rảnh.
+#:
+#: Thứ tự: mạnh nhất trước, tụt dần. Tụt bậc **không tính** vào số lần thử
+#: lại: nó không phải một cú hỏng cần nghỉ, nó là đổi cửa và đi tiếp ngay.
+THANG_MO_HINH = (MO_HINH_TOT_NHAT, "claude-opus-5", "claude-sonnet-5",
+                 "claude-haiku-4-5-20251001")
+
+#: Sổ khoá hạn mức, nằm cạnh sổ lỗi trong `workspace/viet-max/`.
+#: `{"claude-fable-5": <epoch mở lại>}`. Ghi ra đĩa chứ không giữ trong bộ
+#: nhớ: tắt tool mở lại mà quên thì lượt sau lại đâm vào đúng bức tường ấy,
+#: mỗi lần một lượt gọi hỏng và vài phút chờ.
+TEP_HAN_MUC = "han-muc.json"
+
+#: Khoá bao lâu khi Claude Code không nói giờ mở lại. Cửa sổ hạn mức của gói
+#: Max là 5 tiếng; khoá một tiếng là đủ để hết đâm đầu vào tường mà vẫn leo
+#: lại model mạnh sớm nếu đoán sai.
+GIAY_KHOA_MAC_DINH = 3600.0
 
 
 def co_claude_code() -> str:
@@ -110,7 +146,7 @@ CHI_DAO_VIET = (
 #: Chủ dự án, 24/08/2026: *"nếu claude max 20 xử lý được đọc ảnh để lấy text
 #: thumb thì mày cũng làm luôn để khâu content này dùng claude max 20 hết"*.
 #:
-#: Claude Code headless không nhận ảnh qua stdin, nhưng công cụ `Read` của nó
+#: Claude Code gọi bằng `-p` không nhận ảnh qua stdin, nhưng công cụ `Read` của nó
 #: mở được tệp ảnh và mô hình NHÌN thấy ảnh ấy. Nên ảnh được ghi tạm vào chính
 #: thư mục rỗng, và `Read` — công cụ chỉ-đọc duy nhất KHÔNG nằm trong
 #: `_CONG_CU_CAM` — là cửa duy nhất mở ra cho nó. Đọc xong tệp bị xoá ngay.
@@ -132,7 +168,7 @@ _CONG_CU_CAM = ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash",
 #: ═══ ĐO ĐƯỢC TRÊN LƯỢT THẬT 24/08/2026, TL4-T7/0012 ═══
 #:
 #: Chủ máy mở nhiều phiên Claude Code cùng lúc. Một phiên gửi tin "tôi đang
-#: sửa các file X, Y" tới MỌI phiên trên máy — kể cả tiến trình headless mà
+#: sửa các file X, Y" tới MỌI phiên trên máy — kể cả tiến trình chạy nền mà
 #: tool vừa bật để viết kịch bản. Tiến trình ấy bỏ bài, quay sang TRẢ LỜI tin
 #: nhắn: bước viết trả về 297 ký tự *"Đã báo lại cho phiên kho-github-a1…"*
 #: thay vì 4.800 ký tự tiếng Nhật.
@@ -157,7 +193,7 @@ def _ghi_anh_tam(thu_muc: str, data_url: str) -> str:
 
 
 def _lenh(duong_claude: str, mo_hinh: str, ten_anh: str = "") -> List[str]:
-    """Dòng lệnh headless cho MỘT lượt viết.
+    """Dòng lệnh gọi CLI một lượt (`-p`) cho MỘT lượt viết.
 
     Lời nhắc đi qua **stdin**, không qua tham số: bản gỡ băng tiếng Nhật dài
     cả chục nghìn ký tự, mà dòng lệnh Windows chỉ chứa được ~32k — đưa qua
@@ -293,6 +329,20 @@ def _chay(mo, duong: str, mo_hinh: str, thu_muc: str, ten_anh: str,
 TEP_LOI_CUOI = "loi-gan-nhat.txt"
 
 
+def _dau_va_duoi(chu: str, moi_dau: int = 1200) -> str:
+    """Giữ ĐẦU và ĐUÔI của một luồng dài, bỏ khúc giữa.
+
+    Bản cũ cắt `[:2000]` — mà JSON của Claude Code để `"result"` (câu nói vì
+    sao hỏng) ở CUỐI, sau cả trăm trường đếm token. Cắt đầu là cắt mất đúng
+    câu cần đọc.
+    """
+    chu = str(chu or "")
+    if len(chu) <= moi_dau * 2:
+        return chu
+    return "{0}\n…[bỏ {1} ký tự giữa]…\n{2}".format(
+        chu[:moi_dau], len(chu) - moi_dau * 2, chu[-moi_dau:])
+
+
 def _ghi_loi_cuoi(thu_muc_cha: str, loi: BaseException, mo_hinh: str,
                   do_dai_loi_nhac: int) -> None:
     """Nối một mục vào `workspace/viet-max/loi-gan-nhat.txt` (giữ ~40 KB cuối).
@@ -308,7 +358,8 @@ def _ghi_loi_cuoi(thu_muc_cha: str, loi: BaseException, mo_hinh: str,
         muc = ("\n=== {0} | {1} | lời nhắc {2} ký tự\n{3}\n--- stdout ({4} ký tự):\n{5}"
                "\n--- stderr ({6} ký tự):\n{7}\n").format(
                    time.strftime("%Y-%m-%d %H:%M:%S"), mo_hinh, do_dai_loi_nhac,
-                   str(loi)[:300], len(ra), ra[:2000], len(err), err[:2000])
+                   str(loi)[:300], len(ra), _dau_va_duoi(ra),
+                   len(err), _dau_va_duoi(err))
         cu = ""
         try:
             with open(tep, encoding="utf-8") as t:
@@ -405,10 +456,16 @@ def chan_doan_loi(loi: BaseException, kiem_mang=mang_toi_anthropic) -> str:
                               "unauthorized", "401", "oauth", "credential")):
         return ("Claude Code CHƯA ĐĂNG NHẬP — mở tab “Agent xây tool”, gõ /login "
                 "rồi chạy tiếp")
-    if any(x in chu for x in ("rate limit", "usage limit", "hit your limit", "429",
-                              "overloaded", "529", "too many")):
-        return ("hạn mức tạm thời của thuê bao hoặc máy chủ Anthropic quá tải — "
-                "tool đợi rồi thử lại, không cần làm gì")
+    # Cạn hạn mức xét TRƯỚC: Claude Code báo nó bằng mã 429, và câu "tool đợi
+    # rồi thử lại" ở nhánh dưới là câu SAI cho trường hợp ấy — cửa sổ hạn mức
+    # mở lại tính bằng giờ. Xem `_DAU_HET_HAN_MUC` (lượt 0052, 26/08/2026).
+    if la_het_han_muc(loi):
+        return ("model này đã CẠN hạn mức thuê bao — tool tụt xuống bậc model "
+                "dưới ngay, không đợi")
+    if any(x in chu for x in ("rate limit", "429", "overloaded", "529",
+                              "too many")):
+        return ("máy chủ Anthropic quá tải hoặc nhịp gọi quá dày — tool đợi rồi "
+                "thử lại, không cần làm gì")
     if "chưa viết xong sau" in chu:
         return "quá giờ chờ — mạng chậm hoặc bài quá dài; tool thử lại"
     try:
@@ -422,6 +479,210 @@ def chan_doan_loi(loi: BaseException, kiem_mang=mang_toi_anthropic) -> str:
             "tool thử lại; chi tiết ở workspace/viet-max/" + TEP_LOI_CUOI)
 
 
+# ── Bậc thang model: hết hạn mức thì tụt xuống ──────────────────────────────
+#
+# ═══ VÌ SAO PHẢI TÁCH "HẾT HẠN MỨC" KHỎI "QUÁ TẢI" ═══
+#
+# Hai thứ này cùng hiện ra là một câu lỗi, nhưng cách chữa NGƯỢC nhau:
+#
+#   quá tải / 429 / 529   → máy chủ đang đông. Đợi 15–300 giây là qua. Đổi
+#                           model không giúp gì, mà còn viết bằng model yếu
+#                           hơn một cách vô cớ.
+#   hết hạn mức thuê bao  → cửa sổ dùng của model NÀY đã cạn, mở lại tính
+#                           bằng GIỜ. Đợi chín phút rồi thử lại là chín phút
+#                           đổ đi. Model bên dưới đang rảnh — đi sang đó.
+#
+# Nên hàm dưới cố ý bắt hẹp: chỉ những câu nói tới hạn mức của tài khoản
+# ("usage limit", "resets at", "quota"). Câu "overloaded", "too many requests"
+# rơi xuống nhánh cũ và được đợi như trước.
+
+#: ═══ DẤU MẠNH: CÂU CHỮ NGƯỜI ĐỌC ĐƯỢC, THẮNG CẢ MÃ LỖI ═══
+#:
+#: Lượt 0052 (26/08/2026, 20:31–20:38) chỉ ra bản đầu của mã này sai ở đâu.
+#: Claude Code báo cạn hạn mức **bằng chính mã 429**:
+#:
+#:     "api_error_status":429,
+#:     "result":"You've reached your Fable 5 limit. Switch to another model,
+#:               or manage usage credits at claude.ai/settings/usage…"
+#:
+#: Bản đầu cho "nghẽn tạm thắng" — thấy `429` là trả `False` ngay, không đọc
+#: tới câu tiếng Anh phía sau. Kết quả: năm lần thử lại trên đúng cái model
+#: đã cạn, mất **8 phút 15 giây**, rồi mới báo hỏng. Đúng thứ bậc thang sinh
+#: ra để tránh.
+#:
+#: Nên: câu chữ mô tả (`reached your … limit`, `switch to another model`)
+#: **thắng** mã trạng thái. Mã 429 một mình mới là nghẽn tạm.
+_DAU_HET_HAN_MUC = (
+    "usage limit", "limit reached", "reached your limit", "quota",
+    "resets at", "reset at", "will reset", "out of tokens", "insufficient",
+    "exhausted", "upgrade to increase",
+    # Nguyên văn bản Claude Code hiện tại (đo lượt 0052).
+    "switch to another model", "manage usage credits",
+)
+
+#: `reached your Fable 5 limit`, `reach your weekly limit` — tên model nằm
+#: chen giữa nên không bắt bằng chuỗi cứng được.
+_MAU_HET_HAN_MUC = re.compile(r"reach\w*\s+your\s+[^.]{0,60}limit", re.I)
+
+#: Chữ chỉ là NGHẼN TẠM — đợi thì qua, không được tụt bậc vì mấy chữ này.
+#: Chỉ xét ĐẾN khi không có dấu mạnh nào ở trên.
+_DAU_NGHEN_TAM = ("overloaded", "529", "too many requests", "rate limit",
+                  "rate_limit_error", "429")
+
+#: Câu báo cạn hạn mức đổi chữ theo từng bản Claude Code ("weekly limit",
+#: "5-hour limit"…). Bắt cứng từng câu là bản sau đổi chữ một chút thì logic
+#: này im lặng ngừng chạy — nên bắt thêm theo CẶP: có chữ "limit" đi cùng một
+#: trong mấy động từ dưới. Đây là dấu YẾU: nghẽn tạm thắng nó.
+_DONG_TU_HAN_MUC = ("reach", "reset", "upgrade", "exceed")
+
+_MAU_GIO_MO_LAI = re.compile(
+    r"reset[s]?(?:\s+\w+)?\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", re.I)
+
+
+def _chu_cua_loi(loi: BaseException) -> str:
+    """Cả câu lỗi lẫn stdout/stderr nguyên văn, gộp lại, chữ thường."""
+    ra, err = getattr(loi, "chi_tiet", ("", ""))
+    return (str(loi) + " " + str(ra) + " " + str(err)).lower()
+
+
+def la_het_han_muc(loi: BaseException) -> bool:
+    """Lỗi này là **cạn hạn mức của model**, hay chỉ là nghẽn tạm?
+
+    Ba tầng, theo đúng thứ tự tin cậy — xem `_DAU_HET_HAN_MUC` để biết vì sao
+    thứ tự này quan trọng (lượt 0052 mất 8 phút vì bản đầu xếp ngược):
+
+      1. câu chữ nói thẳng đã cạn  → CẠN, kể cả khi kèm mã 429
+      2. chỉ có mã lỗi nghẽn/quá tải → nghẽn tạm, đợi rồi thử lại
+      3. "limit" + một động từ       → dấu yếu, đoán là cạn
+    """
+    chu = _chu_cua_loi(loi)
+    if any(x in chu for x in _DAU_HET_HAN_MUC) or _MAU_HET_HAN_MUC.search(chu):
+        return True
+    if any(x in chu for x in _DAU_NGHEN_TAM):
+        return False
+    return "limit" in chu and any(x in chu for x in _DONG_TU_HAN_MUC)
+
+
+#: Câu Claude Code nói khi model KHÔNG DÙNG ĐƯỢC trên máy/tài khoản này:
+#: bản CLI cũ chưa biết tên model, hoặc gói thuê bao không mở model ấy.
+#:
+#: Nó cũng phải tụt bậc — nhưng vì lý do khác hẳn hạn mức, nên nhật ký phải
+#: nói khác: hạn mức là "mai lại có", còn cái này là "máy này không có".
+_DAU_MODEL_HONG = ("model not found", "model_not_found", "invalid model",
+                   "unknown model", "unsupported model", "not available",
+                   "does not have access", "no access to")
+
+#: Model không dùng được thì khoá một ngày: nó không tự khá lên sau một tiếng
+#: như hạn mức, nhưng cũng không được khoá vĩnh viễn — bản CLI mới có thể mở.
+GIAY_KHOA_MODEL_HONG = 86400.0
+
+
+def ly_do_tut_bac(loi: BaseException) -> str:
+    """Lỗi này có đáng tụt xuống bậc dưới không, và vì sao?
+
+    Trả `"han_muc"` (cửa sổ dùng đã cạn), `"hong"` (model này máy/tài khoản
+    không dùng được), hoặc `""` (không tụt — đợi rồi thử lại như cũ).
+    """
+    if la_het_han_muc(loi):
+        return "han_muc"
+    chu = _chu_cua_loi(loi)
+    if any(x in chu for x in _DAU_NGHEN_TAM):
+        return ""
+    return "hong" if any(x in chu for x in _DAU_MODEL_HONG) else ""
+
+
+def gio_mo_lai(loi: BaseException, bay_gio: float) -> float:
+    """Mốc (epoch) nên thử lại model này, đọc từ chính câu Claude Code nói.
+
+    Nó thường nói "your limit will reset at 3pm". Đọc được thì khoá tới đúng
+    giờ ấy (giờ máy); không đọc được thì khoá `GIAY_KHOA_MAC_DINH`.
+    """
+    tim = _MAU_GIO_MO_LAI.search(_chu_cua_loi(loi))
+    if not tim:
+        return bay_gio + GIAY_KHOA_MAC_DINH
+    try:
+        gio = int(tim.group(1))
+        phut = int(tim.group(2) or 0)
+    except (TypeError, ValueError):
+        return bay_gio + GIAY_KHOA_MAC_DINH
+    chieu = (tim.group(3) or "").lower()
+    if chieu == "pm" and gio < 12:
+        gio += 12
+    elif chieu == "am" and gio == 12:
+        gio = 0
+    if not (0 <= gio <= 23 and 0 <= phut <= 59):
+        return bay_gio + GIAY_KHOA_MAC_DINH
+    cuc_bo = time.localtime(bay_gio)
+    moc = time.mktime((cuc_bo.tm_year, cuc_bo.tm_mon, cuc_bo.tm_mday,
+                       gio, phut, 0, 0, 0, -1))
+    if moc <= bay_gio:  # giờ ấy hôm nay đã qua → là giờ của ngày mai
+        moc += 86400.0
+    # Trần một ngày: câu lỗi lạ không được khoá model cả tuần.
+    return min(moc, bay_gio + 86400.0)
+
+
+def duong_han_muc(goc: str) -> str:
+    return os.path.join(goc, THU_MUC_RONG, TEP_HAN_MUC)
+
+
+def doc_han_muc(goc: str) -> dict:
+    """Sổ khoá đã ghi. Tệp hỏng/thiếu thì coi như chưa khoá model nào —
+    không bao giờ để một tệp JSON rách chặn cả khâu viết."""
+    try:
+        with open(duong_han_muc(goc), encoding="utf-8") as t:
+            so = json.load(t)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(so, dict):
+        return {}
+    ra = {}
+    for ma, den in so.items():
+        try:
+            ra[str(ma)] = float(den)
+        except (TypeError, ValueError):
+            continue
+    return ra
+
+
+def ghi_han_muc(goc: str, ma: str, den_luc: float) -> float:
+    """Khoá `ma` tới mốc `den_luc`. Trả lại chính mốc ấy cho nơi gọi ghi nhật ký."""
+    so = doc_han_muc(goc)
+    so[str(ma)] = float(den_luc)
+    try:
+        os.makedirs(os.path.join(goc, THU_MUC_RONG), exist_ok=True)
+        tam = duong_han_muc(goc) + ".tmp"
+        with open(tam, "w", encoding="utf-8") as t:
+            json.dump(so, t, ensure_ascii=False, indent=2)
+        os.replace(tam, duong_han_muc(goc))
+    except OSError:
+        pass  # ghi sổ hỏng thì bậc thang vẫn chạy trong lượt này
+    return float(den_luc)
+
+
+def mo_hinh_dang_dung(goc: str, bay_gio: Optional[Callable[[], float]] = None
+                      ) -> str:
+    """Bậc cao nhất của thang mà hạn mức đã mở lại.
+
+    Khoá hết thì trả về bậc **sắp mở sớm nhất** và cứ thử — sổ khoá là phỏng
+    đoán từ câu lỗi, không phải sự thật; thà tốn một lượt gọi hỏng còn hơn
+    đứng im khi hạn mức thật ra đã mở.
+    """
+    gio = (bay_gio or time.time)()
+    so = doc_han_muc(goc)
+    for ma in THANG_MO_HINH:
+        if so.get(ma, 0.0) <= gio:
+            return ma
+    return min(THANG_MO_HINH, key=lambda m: so.get(m, 0.0))
+
+
+def _gio_ngan(moc: float) -> str:
+    """`1755691200.0` → `"14:20"` — cho nhật ký, khách đọc được."""
+    try:
+        return time.strftime("%H:%M", time.localtime(moc))
+    except (OSError, ValueError, OverflowError):
+        return "?"
+
+
 def dung_goi_chat_max(goc: str, *,
                       on_log: Optional[Callable[[str], None]] = None,
                       kiem_dung: Optional[Callable[[], None]] = None,
@@ -429,6 +690,7 @@ def dung_goi_chat_max(goc: str, *,
                       so_lan: int = 1 + len(NHIP_THU_LAI),
                       ngu: Callable[[float], None] = time.sleep,
                       kiem_mang: Callable[[], bool] = mang_toi_anthropic,
+                      bay_gio: Callable[[], float] = time.time,
                       ) -> Callable[..., str]:
     """Dựng hàm `goi_chat` cho khâu kịch bản: **chỉ Claude Code**, hỏng thì thử lại.
 
@@ -451,34 +713,71 @@ def dung_goi_chat_max(goc: str, *,
     """
     viet_that = viet or viet_bang_max
 
-    def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
-            khoa: str = "", toi_da_token: int = 8192, anh: str = "") -> str:
+    def _di_het_thang(loi_nhac: str, anh: str):
+        """Đi từ bậc cao xuống bậc thấp, dừng ngay khi viết được.
+
+        Trả `(chữ, None)` nếu viết được, `(None, lỗi)` nếu hết đường.
+
+        Tụt bậc **không ngủ và không tiêu một lần thử lại nào**: "hết hạn mức"
+        không phải sự cố tạm — đợi chín phút hay chín giây thì cửa sổ hạn mức
+        vẫn đóng y như thế. Lỗi vì lý do khác (mạng rớt, thoát lẻ) thì dừng
+        vòng này ngay, để vòng ngoài ngủ rồi thử lại như cũ.
+        """
         loi_cuoi: Optional[BaseException] = None
-        for lan in range(max(1, so_lan)):
+        for _ in range(len(THANG_MO_HINH)):
+            ma = mo_hinh_dang_dung(goc, bay_gio=bay_gio)
             try:
-                # `mo_hinh` nhận vào là model của đường ví — đường thuê bao
-                # cố ý KHÔNG dùng nó: xem `MO_HINH_TOT_NHAT`. Ảnh (đọc chữ
-                # bìa) cũng đi đường này — xem `CHI_DAO_ANH`.
-                return viet_that(loi_nhac, goc=goc, mo_hinh=MO_HINH_TOT_NHAT,
-                                 kiem_dung=kiem_dung, anh=anh)
-            except Exception as loi:  # noqa: BLE001 — thử lại, không rẽ ví
+                # `mo_hinh` nhận vào là model của đường ví — đường thuê bao cố
+                # ý KHÔNG dùng nó: xem `MO_HINH_TOT_NHAT`. Ảnh (đọc chữ bìa)
+                # cũng đi đường này — xem `CHI_DAO_ANH`.
+                return viet_that(loi_nhac, goc=goc, mo_hinh=ma,
+                                 kiem_dung=kiem_dung, anh=anh), None
+            except Exception as loi:  # noqa: BLE001 — tụt bậc, không rẽ ví
                 # Khách bấm Dừng thì dừng thật, không đợi hết nhịp.
                 if kiem_dung is not None:
                     kiem_dung()
                 loi_cuoi = loi
-                con = lan < so_lan - 1
-                cho = NHIP_THU_LAI[min(lan, len(NHIP_THU_LAI) - 1)]
+                vi_sao = ly_do_tut_bac(loi)
+                if not vi_sao:
+                    break
+                den = ghi_han_muc(goc, ma, gio_mo_lai(loi, bay_gio())
+                                  if vi_sao == "han_muc"
+                                  else bay_gio() + GIAY_KHOA_MODEL_HONG)
+                ke = mo_hinh_dang_dung(goc, bay_gio=bay_gio)
                 if on_log is not None:
-                    on_log("  Claude Code không viết được (lần {0}/{1}): {2}"
-                           "{3}".format(lan + 1, so_lan, str(loi)[:120],
-                                        " — thử lại sau {0:.0f} giây, không "
-                                        "chuyển sang ví.".format(cho)
-                                        if con else "."))
-                    on_log("    vì sao: " + chan_doan_loi(loi, kiem_mang))
-                if con:
-                    ngu(cho)
-                    if kiem_dung is not None:
-                        kiem_dung()
+                    on_log("  {0} {1} — {2}.".format(
+                        ma,
+                        "hết hạn mức thuê bao (mở lại khoảng {0})".format(
+                            _gio_ngan(den)) if vi_sao == "han_muc"
+                        else "máy này không dùng được model ấy",
+                        "đổi ngay sang " + ke if ke != ma
+                        else "cả thang model đều tắc"))
+                if ke == ma:
+                    break
+        return None, loi_cuoi
+
+    def goi(loi_nhac: str, mo_hinh: str = "claude-sonnet-5",
+            khoa: str = "", toi_da_token: int = 8192, anh: str = "") -> str:
+        loi_cuoi: Optional[BaseException] = None
+        for lan in range(max(1, so_lan)):
+            chu, loi = _di_het_thang(loi_nhac, anh)
+            if chu is not None:
+                return chu
+            loi_cuoi = loi or loi_cuoi
+            con = lan < so_lan - 1
+            cho = NHIP_THU_LAI[min(lan, len(NHIP_THU_LAI) - 1)]
+            if on_log is not None:
+                on_log("  Claude Code không viết được (lần {0}/{1}): {2}"
+                       "{3}".format(lan + 1, so_lan, str(loi_cuoi)[:120],
+                                    " — thử lại sau {0:.0f} giây, không "
+                                    "chuyển sang ví.".format(cho)
+                                    if con else "."))
+                if loi_cuoi is not None:
+                    on_log("    vì sao: " + chan_doan_loi(loi_cuoi, kiem_mang))
+            if con:
+                ngu(cho)
+                if kiem_dung is not None:
+                    kiem_dung()
         raise RuntimeError(
             "Claude Code không viết được sau {0} lần thử ({1}). Máy này đặt "
             "viết kịch bản bằng thuê bao Claude nên tôi KHÔNG chuyển sang ví. "

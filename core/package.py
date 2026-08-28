@@ -91,21 +91,24 @@ SKIP_NAMES = frozenset(
     }
 )
 
-# Bảng vận hành server là sản phẩm nội bộ riêng, tuyệt đối không đi vào ZIP khách.
+# Mã quản trị nội bộ tuyệt đối không đi vào ZIP khách.
 #
-# ⚠ TỪ 12/08/2026 ĐÂY LÀ LƯỚI AN TOÀN, KHÔNG CÒN LÀ HÀNG RÀO. Mười file này đã
-# dời hẳn sang `tools/shopapi-ops/{core_ops,ui_ops}/` — ra ngoài cây thư mục mà
-# bộ đóng gói duyệt. Trước đó chúng nằm ngay trong đây và chỉ được giữ lại bằng
-# danh sách này cộng một bản sao ở `apps/api/.../studio-package.ts`; hai danh
-# sách phải nhớ sửa cả hai, và đã có một lần lọt.
+# ⚠ TỪ 12/08/2026 ĐÂY LÀ LƯỚI AN TOÀN, KHÔNG CÒN LÀ HÀNG RÀO: toàn bộ mã quản
+# trị đã dời hẳn sang một cây thư mục RIÊNG, nằm ngoài cây mà bộ đóng gói duyệt.
 #
-# Thêm mã quản trị mới thì thêm vào `tools/shopapi-ops/`, ĐỪNG thêm một dòng ở
-# đây. `test_customer_ops_separation` canh đúng điều đó.
-CUSTOMER_PACKAGE_EXCLUDES = frozenset({
-    "ui/tab_ops.py", "ui/tab_fleet.py",
-    "core/admin.py", "core/fleetctl.py", "core/dondep.py", "core/vmstate.py",
-    "core/nhatky.py", "core/login_run.py", "core/gmail_csv.py", "core/tai_nguyen.py",
-})
+# ⚠ VÀ ĐÂY LÀ LÝ DO NÓ BẮT THEO TIỀN TỐ THƯ MỤC, KHÔNG KỂ TÊN FILE NỮA.
+# Bản trước liệt kê thẳng mười tên file cần giấu. Nhưng chính cái danh sách ấy
+# lại nằm trong file được giao cho khách — tức là ta phát cho khách đúng bản
+# mục lục của những thứ ta đang giấu. Sự cố 28/08/2026.
+#
+# Bắt theo tiền tố còn đỡ một chỗ hỏng nữa: thêm mã quản trị mới thì chỉ cần
+# đặt nó vào một trong các thư mục dưới đây, không phải nhớ khai thêm dòng nào
+# — mà quên khai chính là cách file lọt ra lần trước.
+CUSTOMER_PACKAGE_EXCLUDE_PREFIXES = (
+    "tools/shopapi-ops/",
+    "core_ops/",
+    "ui_ops/",
+)
 
 #: Lớp chặn thứ hai. Tên file khớp một trong các mẫu này thì DỪNG đóng gói.
 #: Cố ý rộng tay: thà chặn nhầm rồi sửa, còn hơn để lọt khoá ra ngoài.
@@ -137,9 +140,11 @@ def is_skipped(relpath: str) -> bool:
     True
     >>> is_skipped("tests/test_config.py")
     True
+    >>> is_skipped("core_ops/bat_ky_ten_gi.py")
+    True
     """
     relpath = relpath.replace("\\", "/")
-    if relpath in CUSTOMER_PACKAGE_EXCLUDES:
+    if relpath.startswith(CUSTOMER_PACKAGE_EXCLUDE_PREFIXES):
         return True
     parts = [p for p in relpath.split("/") if p]
     if not parts:
@@ -269,10 +274,10 @@ def sync_vendored_sdk(tool_dir: str, sdk_src_dir: str):
 
     Vì sao `_sdk/` phải có mặt trong kho mã chứ không chỉ sinh ra lúc dựng ZIP:
 
-    Khách tải tool về bằng **nút trên web**, và bản ZIP đó do máy chủ tự gói —
-    `apps/api/.../studio-package.ts` duyệt thư mục `tools/shopapi-studio/` rồi
-    chép mọi thứ trừ một danh sách loại trừ. Nó **không** chạy `dong-goi.py`.
-    Nên thứ gì chỉ tồn tại lúc `dong-goi.py` chạy thì bản tải từ web không có.
+    Khách tải tool về bằng **nút trên web**, và bản ZIP đó do máy chủ tự gói:
+    nó duyệt thẳng cây thư mục của bản khách rồi chép mọi thứ trừ một danh sách
+    loại trừ. Nó **không** chạy `dong-goi.py`. Nên thứ gì chỉ tồn tại lúc
+    `dong-goi.py` chạy thì bản tải từ web không có.
 
     SDK `shopapi` chưa lên PyPI, tức là bản tải từ web sẽ không có đường nào lấy
     được nó: `pip install shopapi` hỏng, mà `packages/sdk-python/` thì không nằm

@@ -63,8 +63,19 @@ TRANG = (
     # Chủ dự án, 21/08/2026: đưa Tài khoản lên đầu, Auto về sau Dựng video.
     ("wallet", "", "Tài khoản"),
     ("skill", "", "Công cụ YTB"),
+    # Chủ dự án, 26/08/2026: tab độc lập, "phát triển nó như một phần mềm GPM".
+    # 28/08/2026: tách làm hai mục — "GPM Login" (hồ sơ Chrome trên máy khách,
+    # miễn phí) và "VPS" (máy ảo thuê theo tháng). Khoá vẫn là `chrome-sach` để
+    # bài hướng dẫn, `core/cai_dat.py` và mọi chỗ đã nhớ khoá này không phải sửa
+    # theo — đổi khoá chỉ để chữ trên màn hình khớp tên file là đổi một thứ mười
+    # chỗ đang đọc, để lấy về đúng số không.
+    ("chrome-sach", "", "GPM & VPS"),
     ("content", "", "Viết kịch bản"),
-    ("voice", "", "Voice 11Lab"),
+    ("voice", "", "Voice"),
+    # Đứng ngay sau Voice vì nó dùng đúng hai thứ tab Voice vừa sinh ra và vừa
+    # nhận vào: file .mp3 và chính file .txt đã đem đi đọc. Chủ dự án,
+    # 28/08/2026: *"srt bị sai nội dung… input là mp3 + txt, đầu ra là srt"*.
+    ("phu-de", "", "Phụ đề (SRT)"),
     ("prompt-visuals", "", "Prompt Visuals"),
     # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026).
     ("media", "", "Tạo ảnh+video (Veo3)"),
@@ -367,11 +378,15 @@ class CuaSoChinh(QWidget):
         from .trang_cai_dat import TrangCaiDat
         from .trang_tai_khoan import TrangTaiKhoan
         from .trang_voice import TrangGiongNoi
+        from .trang_phu_de import TrangPhuDe
+        from .trang_gpm_vps import TrangGpmVps
 
         xuong = {
             "skill": lambda: TrangSkill(self),
+            "chrome-sach": lambda: TrangGpmVps(self),
             "content": lambda: TrangKichBan(self),
             "voice": lambda: TrangGiongNoi(self),
+            "phu-de": lambda: TrangPhuDe(self),
             "auto": lambda: TrangTuDong(self),
             "media": lambda: TrangAnhVideo(self),
             "prompt-visuals": lambda: TrangPromptVisuals(self),

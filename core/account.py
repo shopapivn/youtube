@@ -248,7 +248,7 @@ _LADDER = (1, 2, 5)
 def topup_presets(prices: PriceTable, *, count: int = 6) -> List[int]:
     """Danh sách số tiền gợi ý, tính bằng **ĐỒNG**, dựng từ mức tối thiểu của máy chủ.
 
-    ⚠ **Máy chủ không có danh sách mức nạp gợi ý.** Đã tìm khắp `apps/api`: chỉ có
+    ⚠ **Máy chủ không có danh sách mức nạp gợi ý.** Đã tra hết hợp đồng API: chỉ có
     `min_topup` trong `GET /v1/pricing` (và trần 500.000.000₫ trong hằng số). Nên
     thay vì gõ cứng "50k, 100k, 200k…", tool dựng bậc thang 1–2–5 **bắt đầu từ
     đúng `min_topup` máy chủ đang khai**. Máy chủ nâng mức tối thiểu lên 20.000₫

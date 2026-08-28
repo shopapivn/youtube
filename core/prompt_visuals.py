@@ -15,7 +15,7 @@ Hai cổng khớp nhau sẵn: `transcribe.local` ra `subtitle/srt.v1`, `prompt.w
 vào cũng `subtitle/srt.v1`. Nên việc ở đây chỉ là dựng đúng tờ khai workflow rồi
 đưa cho `core.builder_service.BuilderService` chạy.
 
-Cột của workbook sinh ra **trùng tên với bảng của VE3_SUITE** (`scenes`,
+Cột của workbook sinh ra **trùng tên với bảng cảnh chuẩn** (`scenes`,
 `characters`, `director_plan`, `thumbnail`) — xem `tool-catalog/prompt.workbook/
 run.py`. Nghĩa là file Excel lấy ở đây mở thẳng bằng VE3 được, không phải chép
 cột sang.
@@ -232,7 +232,7 @@ NODE_NGHE = "nghe"
 NODE_PROMPT = "prompt"
 
 
-#: Ba cách kể chuyện — chủ dự án 24/08/2026, tham khảo VE3_SUITE. Mã đi thẳng
+#: Ba cách kể chuyện — chủ dự án 24/08/2026. Mã đi thẳng
 #: vào `config.che_do_ke` của `prompt.workbook` (xem `CHE_DO_*` ở `run.py`).
 CHE_DO_KE = (
     ("tu_xay", "AI tự xây nhân vật & bối cảnh theo nội dung",
@@ -254,7 +254,8 @@ def dung_workflow(ma_artifact_audio: str, *, engine: str = "veo3",
                   mo_hinh: str = "claude-sonnet-5", ngon_ngu: str = "vi",
                   nhat_quan: bool = True, ma_artifact_context: str = "",
                   ma_chay: str = "prompt-visuals", che_do_ke: str = "tu_xay",
-                  bia: bool = True, nhac: bool = True) -> Dict[str, Any]:
+                  bia: bool = True, nhac: bool = True,
+                  kich_ban: str = "") -> Dict[str, Any]:
     """Dựng tờ khai workflow hai bước cho một file giọng đọc.
 
     `ma_artifact_audio` là mã artifact đã nạp vào kho của Studio — không phải
@@ -264,6 +265,12 @@ def dung_workflow(ma_artifact_audio: str, *, engine: str = "veo3",
     `nhat_quan` bật thì `prompt.workbook` chạy thêm **một lượt** đọc cả lời đọc
     để dựng dàn nhân vật cố định + một phong cách, rồi mọi cảnh dùng chung —
     y như tab Tự động. Tắt thì về hành vi cũ: mỗi cảnh tự do, sheet nhân vật rỗng.
+
+    `kich_ban` là lời kịch bản gốc (nếu khách có đưa file `.txt`). Có nó thì
+    bước nghe **không chép lời máy nghe nữa**: nó ép kịch bản khớp vào giọng
+    đọc, nên `.srt` mang đúng từng chữ của kịch bản còn mốc thời gian vẫn là
+    mốc thật. Đây là thứ chặn được cả một chuỗi hỏng về sau — cảnh cắt theo chữ
+    sai thì ảnh và clip trả tiền cho cảnh ấy cũng sai theo.
 
     `ma_artifact_context` là mã artifact JSON (kịch bản + phong cách hình ảnh do
     `dung_boi_canh` gói lại) đưa vào cổng `context` của `prompt.workbook`. Bỏ
@@ -289,6 +296,20 @@ def dung_workflow(ma_artifact_audio: str, *, engine: str = "veo3",
     # `language` bỏ trống nghĩa là để máy tự đoán — `run.py` của tool đọc
     # "auto"/"" thành `None` rồi mới đưa cho faster-whisper.
     cai_dat_nghe["language"] = "" if ngon_ngu == "auto" else ngon_ngu
+    # ═══ CÓ KỊCH BẢN THÌ PHỤ ĐỀ LẤY CHỮ TỪ KỊCH BẢN ═══
+    #
+    # Cùng một tệp `.txt` đi hai đường, và hai đường ấy làm hai việc khác nhau:
+    #
+    # * `context.script` — cho AI **đọc để hiểu** lúc viết prompt.
+    # * `config.script` của bước nghe — để **ép khớp**, tức là chữ trong `.srt`
+    #   thành đúng chữ kịch bản, máy nghe chỉ còn giữ mốc thời gian.
+    #
+    # Thiếu đường thứ hai là thứ khách báo 28/08/2026: phụ đề sai chữ, rồi cảnh
+    # cắt theo chữ sai, rồi trả tiền ảnh và clip cho những cảnh ấy. Xem
+    # `tool-catalog/transcribe.local/run.py`.
+    kb = str(kich_ban or "").strip()
+    if kb:
+        cai_dat_nghe["script"] = kb
 
     # Bước viết prompt nhận thêm cổng `context` (kịch bản + phong cách) khi có —
     # `prompt.workbook` khai `context` là tuỳ chọn, nên bỏ trống thì để `inputs`
@@ -615,16 +636,41 @@ def tom_tat_dan(nhan_vat: Sequence[Mapping[str, Any]]) -> str:
         phan.append("{0}{1}".format(cid, " ({0})".format(nhan) if nhan else ""))
     return "Dàn nhân vật giữ xuyên suốt: " + ", ".join(phan)
 
+#: ═══ "ĐỨNG THẲNG, BUÔNG THÕNG HAI TAY" LÀ CÂU VIẾT CHO NGƯỜI ═══
+#:
+#: Bản cũ dặn MỌI nhân vật *"standing, arms relaxed at sides… STANDING UPRIGHT"*.
+#: Dán câu ấy lên một con vật bình thường thì ra một con vật đứng hai chân kiểu
+#: hoạt hình — trong khi truyện thì nó bò bốn chân suốt.
+#:
+#: Đo 27/08/2026 trên phim `openstory/0002`: dàn tả nv3 là *"an ordinary house
+#: cat… four bare soft paws"*, nhưng ảnh tham chiếu ra con mèo ĐỨNG HAI CHÂN.
+#: Mười chín cảnh có con mèo thì mỗi cảnh một con khác — cảnh 2 mèo bò, cảnh 11
+#: mèo tả thực đầu thon, cảnh 25 mèo nhà bình thường. Máy không mang nổi con
+#: mèo-đứng-hai-chân vào cảnh sinh hoạt, nên nó vẽ lại từ đầu, và vẽ lại thì
+#: mỗi lần một kiểu. Chủ dự án xem phim: *"lúc thì mèo 1 loại lúc thì vẽ ra mèo
+#: khác"*.
+#:
+#: Nên câu dặn phải rẽ theo loại nhân vật. Chỗ này KHÁC với luật giai đoạn
+#: (`DUOI_GIAI_DOAN`): giai đoạn lo con vật ĐỔI dáng giữa truyện; chỗ này lo
+#: dáng MẶC ĐỊNH của một con vật không bao giờ đổi.
 DUOI_CHAN_DUNG = (" — full-body front-view reference portrait of ONE single figure "
                    "shown once (never two versions or a before/after side by side), "
-                   "wearing the outfit of its FIRST appearance in the story, standing, "
-                   "arms relaxed at sides, neutral expression, gazing straight ahead, "
+                   "wearing the outfit of its FIRST appearance in the story, "
+                   "neutral expression, gazing straight ahead, "
                    "centered on a plain pure white background, 16:9 canvas, no "
-                   "text, no letters, no watermark. IGNORE any action, pose, mood or "
-                   "situation named above (asleep, lying down, running, crying, hiding, "
-                   "eating…): this is a neutral character sheet, so draw the character "
-                   "AWAKE, STANDING UPRIGHT and facing the viewer no matter what the "
-                   "story does to it")
+                   "text, no letters, no watermark. POSTURE — draw the body the way "
+                   "this character carries it in the story: a person or an "
+                   "upright-walking character stands on two legs with arms relaxed at "
+                   "its sides; an ORDINARY ANIMAL stands squarely on ALL FOURS in its "
+                   "natural animal posture, with no human arms, no clothes and no "
+                   "upright stance unless the description above explicitly says it "
+                   "walks, stands or acts like a person; a fish, bird or creature that "
+                   "swims or flies is shown in its own natural bearing. IGNORE any "
+                   "action, pose, mood or situation named above (asleep, lying down, "
+                   "running, crying, hiding, eating…): this is a neutral character "
+                   "sheet, so draw the character AWAKE, standing in the neutral "
+                   "posture described just above, and facing the viewer no matter what "
+                   "the story does to it")
 #: "Ngang tam mat, thay mat dat": do 25/08/2026 canh 72/74 — tham chieu lau dai
 #: chup tu xa tren cao, mo hinh dan xe ngua len noc tuong thanh va ve ca nha to
 #: bang cong. Anh thiet lap phai la cho NHAN VAT SE DUNG, nhin tu tam mat nguoi.

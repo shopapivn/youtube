@@ -58,6 +58,8 @@ from typing import Dict, List, Optional, Tuple
 
 __all__ = [
     "go_dinh_dang", "go_boc_tool_gia", "go_cach_cjk",
+    "DAU_KY_THUAT", "go_ghi_chu_ky_thuat", "ghi_chu_ky_thuat_con_lai",
+    "nhan_ghi_chu_con_lai",
     "DAU_AI", "KY_TU_AN", "dau_ai_trong", "lam_sach_anh", "lam_sach_video",
     "lam_sach_chu", "lam_sach_tep",
     "CENT_DOI", "co_doi_cao_do", "loc_doi_cao_do", "doi_cao_do",
@@ -293,9 +295,8 @@ def lam_sach_video(ffmpeg: str, tep: str) -> bool:
 #
 # ═══ VÌ SAO LÀM ĐƯỢC ═══
 #
-# Cổng giọng nói chạy trên ElevenLabs (xem khuôn `voice_id` mà SDK kiểm), mà
-# ElevenLabs đã bắt tay Google DeepMind nhúng **SynthID vào âm thanh**, phủ dần
-# ra mọi gói trong tháng 7/2026.
+# Cổng giọng nói nhúng **SynthID vào chính âm thanh** (dấu chìm do Google
+# DeepMind làm), và từ tháng 7/2026 nó phủ gần như mọi lượt đọc.
 #
 # SynthID audio đổi sóng thành **ảnh phổ**, nhúng dấu vào ảnh phổ đó, rồi dựng
 # lại sóng. Nên thứ phá được nó là thứ làm méo ảnh phổ.
@@ -309,8 +310,8 @@ def lam_sach_video(ffmpeg: str, tep: str) -> bool:
 #
 # Máy dò SynthID không công khai, nên tool **không tự kiểm được** là dấu đã mất
 # hay chưa. Mọi con số trên là của người khác đo. Đừng viết vào giao diện một
-# lời hứa chắc chắn — ElevenLabs có Audio Detector công khai, để khách tự kiểm
-# rồi tự quyết.
+# lời hứa chắc chắn — nhà cung cấp giọng có công cụ dò công khai, để khách tự
+# kiểm rồi tự quyết.
 
 #: Dịch bao nhiêu **cent** (1 nốt nhạc = 100 cent).
 #:
@@ -480,7 +481,7 @@ def lam_sach_tep(tep: str, ffmpeg: str = "") -> bool:
 #: ═══ VÌ SAO PHẢI GỠ ═══
 #:
 #: Kịch bản đi thẳng từ tệp `.txt` vào bộ đọc giọng nói. Lời nhắc đã dặn *"xuất
-#: dạng file txt để chạy voice ElevenLabs"*, nhưng AI vẫn hay in đậm mấy chữ nó
+#: dạng file txt để chạy voice"*, nhưng AI vẫn hay in đậm mấy chữ nó
 #: cho là quan trọng. Đo trên sáu lượt chạy thật ngày 19/08/2026: bốn lượt sạch,
 #: hai lượt còn **86** và **98** dấu sao.
 #:
@@ -561,6 +562,302 @@ def go_boc_tool_gia(chu: str) -> str:
     if not ung_vien:
         return chu
     return max(ung_vien, key=len).strip()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GHI CHÚ KỸ THUẬT LẪN VÀO KỊCH BẢN
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Khách báo 28/08/2026: kịch bản đem đi đọc có lẫn **lời AI tả việc nó vừa
+# làm** — "Dưới đây là kịch bản đã rà soát:", "Ghi chú: đã chèn 32 thẻ cảm
+# xúc", "(4.850 ký tự)". Máy đọc giọng nói không phân biệt được, nên nó đọc
+# luôn cả mấy câu ấy vào video.
+#
+# Có sẵn hai chốt, và cả hai đều lọt:
+#
+#   `go_boc_tool_gia`      chỉ bắt lúc AI "diễn" một pha ghi tệp JSON.
+#   `_go_loi_dan_dau`      chỉ chạy với tiếng viết chữ KHÔNG Latinh, và chỉ
+#   (core/auto_khau.py)    cắt phần ĐẦU. Kênh tiếng Việt/Anh không có gì cả.
+#
+# Nên bộ lọc này: không phụ thuộc thứ tiếng, cắt cả đầu lẫn đuôi, và cái gì
+# không cắt chắc tay được thì để `ghi_chu_ky_thuat_con_lai` báo lên cho khâu
+# rà soát chặn — thà dừng còn hơn đem đi đọc.
+#
+# ═══ LUẬT CHUNG: THÀ SÓT CÒN HƠN GIẾT NHẦM ═══
+#
+# Cắt nhầm một câu của bài là hỏng thứ khách đã trả tiền để viết, mà không có
+# dòng lỗi nào báo. Nên mọi phép dò ở đây đều đòi **hai dấu hiệu**, không phải
+# một. Ví dụ rõ nhất: kênh `story-mau-nuoc` kể chuyện ngôi thứ nhất bằng tiếng
+# Anh, câu mở đầu hay nhất của nó là kiểu *"I've been married eleven years…"*
+# hay *"Here's what she did."* — trùng đúng cái mẫu "lời dẫn của AI". Nên chỉ
+# coi là lời dẫn khi câu ấy CÒN nhắc tới chính bản kịch bản ("script", "kịch
+# bản", "file"…). Một mình "I've been" thì không đụng tới.
+
+#: Dấu KHÔNG THỂ nằm trong lời đọc — thấy là chắc chắn ghi chú kỹ thuật.
+#:
+#: Chuỗi thứ hai là tên cổng giọng nói — nó chỉ xuất hiện trong LỜI NHẮC
+#: (`prompt/3-sua.md`), không bao giờ trong lời đọc. AI nhại lại câu dặn ấy là
+#: lỗi hay gặp nhất, và người xem thì nghe thấy nguyên cái tên đó.
+DAU_KY_THUAT: Tuple[str, ...] = (
+    "```", "elevenlabs", "write_file", "</function", "tool_call",
+    "functions.", "1-kich-ban", ".txt",
+)
+
+#: Ô lời nhắc chưa được điền, kiểu `<<DRAFT>>` — AI chép nguyên cái ô ra.
+_O_CHUA_DIEN = re.compile(r"<<[A-Z][A-Z0-9_]{1,30}>>")
+
+#: Nhãn mở đầu một dòng nói **về** bài thay vì **là** bài. Phải có dấu hai
+#: chấm ngay sau: "Ghi chú:" là ghi chú, còn "ghi chú của bà cụ để lại" là
+#: lời kể.
+#:
+#: Cố ý KHÔNG có "lưu ý" và "chú thích": chúng là lời kể bình thường của
+#: truyện thiếu nhi — *"Lưu ý: đừng bao giờ mở cửa cho người lạ."* là câu kết
+#: thật của một truyện, không phải ghi chú của AI. Nhãn nào cũng có thể là câu
+#: kể thì bỏ khỏi danh sách, đừng nới luật dò.
+_NHAN_GHI_CHU: Tuple[str, ...] = (
+    "ghi chú", "nhận xét", "tóm tắt",
+    "thay đổi", "các thay đổi", "những thay đổi", "chỗ đã sửa",
+    "đã sửa", "đã rà soát", "đã chèn", "đã hoàn thiện",
+    "số ký tự", "độ dài", "số câu", "số từ",
+    "note", "notes", "summary", "changes", "changes made", "edits",
+    "revisions", "character count", "word count",
+)
+
+#: Câu mở/đóng kiểu "đây là kết quả" — chỉ tính khi đi KÈM `_TU_VE_BAI`.
+_LOI_DAN: Tuple[str, ...] = (
+    "dưới đây là", "sau đây là", "trên đây là", "đây là", "đó là",
+    "tôi đã", "tôi sẽ", "tôi vừa", "mình đã", "mình sẽ", "xin gửi",
+    "đã rà soát", "đã sửa", "đã chèn", "đã hoàn thiện", "đã xong", "hoàn tất",
+    "here is", "here's", "here are", "below is", "above is",
+    "i'll", "i will", "i have", "i've", "let me", "this is the",
+    "as requested", "certainly", "understood", "sure",
+)
+
+#: Từ chỉ **chính bản kịch bản** — dấu hiệu câu đang nói về bài.
+_TU_VE_BAI: Tuple[str, ...] = (
+    "kịch bản", "bản sửa", "bản rà soát", "bản hoàn thiện", "bản cuối",
+    "bản đã", "văn bản", "lời đọc", "tệp", "file",
+    "script", "transcript", "draft", "version", "narration",
+    "voice-over", "voiceover",
+)
+
+_TRANG_TRI = re.compile(r"^[\s>#*_]+")
+_TIEU_DE_MD = re.compile(r"^\s{0,3}#{1,6}\s")
+#: Một dòng chỉ có rào mã, kèm hoặc không kèm tên thứ tiếng (```txt).
+_DONG_RAO = re.compile(r"^\s*`{3,}\s*[A-Za-z0-9_+-]*\s*$")
+#: Gạch đầu dòng hoặc đánh số — kiểu liệt kê "các chỗ đã sửa".
+_DONG_LIET_KE = re.compile(r"^\s*([-*•]|\d+[.)])\s")
+#: Đường kẻ ngang ngăn phần.
+_DONG_VACH = re.compile(r"^\s*([-*_=–—]\s*){3,}$")
+
+#: Trần cho khối ghi chú cắt được ở mỗi đầu. Ghi chú thật bao giờ cũng ngắn;
+#: cắt quá ngần này là đang cắt vào bài, nên thà để nguyên cho khâu rà soát
+#: chặn còn hơn.
+TOI_DA_DONG_GHI_CHU = 12
+TOI_DA_KY_TU_GHI_CHU = 1500
+#: …và không bao giờ quá ngần này phần của cả bài. Sàn 400 ký tự đi kèm: bài
+#: ngắn (kênh để độ dài tự do, sàn 1.500 ký tự) mà cứ đòi đúng tỉ lệ thì một
+#: khối ghi chú hai dòng cũng vượt, và cái đáng cắt nhất lại không cắt được.
+PHAN_TOI_DA_GHI_CHU = 0.30
+SAN_KY_TU_GHI_CHU = 400
+
+
+def _bo_trang_tri(dong: str) -> str:
+    """Bỏ dấu markdown mở đầu dòng rồi hạ chữ thường, để so cho dễ."""
+    return _TRANG_TRI.sub("", dong or "").replace("**", "").strip().lower()
+
+
+def _la_nhan_ghi_chu(dong: str) -> bool:
+    """Dòng mở bằng một nhãn ghi chú rồi tới dấu hai chấm.
+
+    Đòi cả hai: mở đúng nhãn **và** có dấu hai chấm ở gần đầu dòng. Đoạn
+    trước dấu hai chấm phải ngắn như một cái nhãn — `"Ghi chú:"`,
+    `"Tóm tắt thay đổi:"`, `"Note:"` — chứ không phải cả một câu kể. Nhờ vậy
+    `"Mèo con nói: Chào bạn!"` và `"Đã sửa xong cái mái nhà rồi bà nhé"` đều
+    không bị tính là ghi chú.
+    """
+    goc = _bo_trang_tri(dong)
+    if not any(goc.startswith(nhan) for nhan in _NHAN_GHI_CHU):
+        return False
+    # Dòng tiêu đề markdown (`## Ghi chú`) là nhãn dù không có dấu hai chấm —
+    # chính cái dấu thăng đã nói nó là tiêu đề, không phải câu kể.
+    if _TIEU_DE_MD.match(dong or ""):
+        return True
+    cat = min((goc.find(d) for d in (":", "：") if d in goc), default=-1)
+    return 0 <= cat <= 60
+
+
+def _la_loi_dan(dong: str) -> bool:
+    """Dòng "đây là bản kịch bản…" — HAI dấu hiệu, xem luật chung ở trên."""
+    goc = _bo_trang_tri(dong)
+    if not goc or len(goc) > 300:
+        return False
+    if not any(goc.startswith(m) for m in _LOI_DAN):
+        return False
+    return any(t in goc for t in _TU_VE_BAI)
+
+
+def _la_dau_ky_thuat(dong: str) -> bool:
+    """Dòng chứa thứ không thể là lời đọc."""
+    thap = (dong or "").lower()
+    return (any(d in thap for d in DAU_KY_THUAT)
+            or bool(_O_CHUA_DIEN.search(dong or "")))
+
+
+def _la_ghi_chu(dong: str) -> bool:
+    """Dòng này nói VỀ bài, không phải là bài."""
+    return (_la_nhan_ghi_chu(dong) or _la_loi_dan(dong)
+            or _la_dau_ky_thuat(dong))
+
+
+def _khoi_toan_ghi_chu(khoi: List[str]) -> bool:
+    """Cả khối này chỉ là ghi chú, và có ít nhất một dòng nhãn rõ ràng.
+
+    ═══ VÌ SAO GẠCH ĐẦU DÒNG CHỈ TÍNH KHI ĐÃ CÓ NHÃN Ở TRÊN ═══
+
+    Khối ghi chú cuối bài thường là *"Ghi chú:"* rồi mấy gạch đầu dòng liệt kê
+    chỗ đã sửa. Nhưng truyện thiếu nhi tiếng Việt cũng hay để **lời thoại**
+    trên dòng riêng mở bằng gạch ngang: `- Chúc ngủ ngon nhé!`.
+
+    Hai thứ nhìn giống hệt nhau. Cái phân biệt được là **thứ tự**: gạch đầu
+    dòng của ghi chú bao giờ cũng đứng SAU cái nhãn. Nên duyệt từ trên xuống,
+    và chỉ nhận gạch đầu dòng khi trong khối đã gặp một dòng nhãn trước đó.
+    Lời thoại cuối truyện không có nhãn nào ở trên, nên khối không hợp lệ và
+    không có gì bị cắt.
+    """
+    thay_nhan = False
+    for d in khoi:
+        if _la_ghi_chu(d):
+            thay_nhan = True
+            continue
+        if not d.strip() or _DONG_VACH.match(d) or _DONG_RAO.match(d):
+            continue
+        if thay_nhan and _DONG_LIET_KE.match(d):
+            continue
+        return False
+    return thay_nhan
+
+
+def _vua_tam(khoi: List[str], ca_bai: int) -> bool:
+    """Khối cắt có nằm trong trần không — xem `TOI_DA_DONG_GHI_CHU`."""
+    dai = len("\n".join(khoi))
+    return (len(khoi) <= TOI_DA_DONG_GHI_CHU
+            and dai <= TOI_DA_KY_TU_GHI_CHU
+            and dai <= max(SAN_KY_TU_GHI_CHU, ca_bai * PHAN_TOI_DA_GHI_CHU))
+
+
+def go_ghi_chu_ky_thuat(chu: str) -> str:
+    """Cắt khối ghi chú kỹ thuật ở đầu và cuối kịch bản, giữ nguyên lời đọc.
+
+    Ba việc, theo thứ tự:
+
+      1. Bóc rào mã bọc cả bài (```` ```txt … ``` ````) — và bỏ mọi dòng chỉ
+         có rào mã, ở đâu cũng vậy: một dòng như thế không bao giờ là lời đọc.
+      2. Cắt khối ghi chú ở ĐẦU: lời dẫn "Dưới đây là kịch bản đã rà soát:".
+      3. Cắt khối ghi chú ở CUỐI: "Ghi chú:" kèm danh sách chỗ đã sửa.
+
+    Không đụng vào giữa bài. Ghi chú lọt vào giữa thì không có cách nào cắt mà
+    chắc tay được, nên để `ghi_chu_ky_thuat_con_lai` báo lên và khâu rà soát
+    chặn cả lượt — xem `core/auto_khau._kiem_ban_sach`.
+    """
+    if not chu or not chu.strip():
+        return chu
+    dong = [d for d in chu.splitlines() if not _DONG_RAO.match(d)]
+    ca_bai = max(1, len("\n".join(dong)))
+
+    # Đầu bài: lấy khối DÀI NHẤT còn hợp lệ.
+    for h in range(min(len(dong) - 1, TOI_DA_DONG_GHI_CHU), 0, -1):
+        khoi = dong[:h]
+        if _vua_tam(khoi, ca_bai) and _khoi_toan_ghi_chu(khoi):
+            dong = dong[h:]
+            break
+
+    ra = "\n".join(_cat_duoi(dong, ca_bai)).strip()
+    return ra or chu.strip()
+
+
+#: Ghi chú cuối bài nằm SÁT đuôi. Trong ngần này dòng cuối thì thấy một dòng
+#: nhãn là cắt từ đó xuống hết, **không cần đọc hiểu mấy dòng sau nó**.
+#:
+#: ═══ VÌ SAO PHẢI CÓ LUẬT THỨ HAI NÀY ═══
+#:
+#: Luật đầu (`_khoi_toan_ghi_chu`) đòi MỌI dòng trong khối phải nhận ra được.
+#: Bài kiểm chạy thật `test_kich_ban_sach_truoc_voice` đâm ngay vào chỗ hụt
+#: của nó — khối thật kết thúc bằng:
+#:
+#:     Ghi chú: đã chèn 32 thẻ cảm xúc v3.
+#:     - Sửa 3 chỗ lệch tiếng
+#:     - Tách câu ở đoạn 4
+#:     Tổng: 4.850 ký tự.          ← "tổng" không có trong danh sách nhãn
+#:
+#: Một dòng lạ là cả khối trượt, không cắt được gì, và tên cổng giọng nói đi
+#: thẳng tới chốt chặn — biến một ca chữa được thành một lượt chạy bị dừng.
+#:
+#: Danh sách nhãn sẽ **không bao giờ đủ**: AI viết ghi chú bằng vô số cách.
+#: Nên đừng cố kể hết. Cái chắc chắn hơn nhiều là **vị trí**: ghi chú bao giờ
+#: cũng nằm ở đuôi, và đã bắt đầu thì chạy tới hết bài. Thấy dòng nhãn trong
+#: mấy dòng cuối thì cắt từ đó xuống, khỏi phân loại từng dòng.
+DONG_DUOI_SAT_CUOI = 6
+
+
+def _cat_duoi(dong: List[str], ca_bai: int) -> List[str]:
+    """Cắt khối ghi chú ở cuối bài. Hai luật, thử luật chặt trước.
+
+    1. **Cả khối là ghi chú** — bắt được dạng "Ghi chú:" kèm gạch đầu dòng,
+       dài tới `TOI_DA_DONG_GHI_CHU` dòng.
+    2. **Dòng nhãn nằm sát đuôi** — xem `DONG_DUOI_SAT_CUOI`.
+
+    Không luật nào cắt thì trả nguyên: thà để chốt chặn dừng lượt còn hơn cắt
+    mò vào bài.
+    """
+    # Luật 1 — `t` chạy từ trên xuống nên khối lấy được là khối dài nhất.
+    for t in range(max(1, len(dong) - TOI_DA_DONG_GHI_CHU), len(dong)):
+        khoi = dong[t:]
+        if _vua_tam(khoi, ca_bai) and _khoi_toan_ghi_chu(khoi):
+            return dong[:t]
+
+    # Luật 2 — dòng nhãn đầu tiên trong mấy dòng cuối, rồi lùi lên nuốt nốt
+    # dòng trống và đường kẻ ngang đứng ngay trước nó (`---` ở cuối bài không
+    # còn ngăn cách gì nữa).
+    # Cố ý KHÔNG nhận `_la_loi_dan` ở đây: "Đây là kịch bản…" là chuyện của
+    # ĐẦU bài, còn ở cuối bài nó nuốt mất một câu kể thật. Luật 1 vẫn bắt được
+    # một dòng lời dẫn đứng lẻ ở đuôi, nên không mất gì.
+    for t in range(max(1, len(dong) - DONG_DUOI_SAT_CUOI), len(dong)):
+        if not (_la_nhan_ghi_chu(dong[t]) or _la_dau_ky_thuat(dong[t])):
+            continue
+        while t > 1 and (not dong[t - 1].strip()
+                         or _DONG_VACH.match(dong[t - 1])
+                         or _DONG_RAO.match(dong[t - 1])):
+            t -= 1
+        return dong[:t] if _vua_tam(dong[t:], ca_bai) else dong
+    return dong
+
+
+def ghi_chu_ky_thuat_con_lai(chu: str) -> List[str]:
+    """Dấu kỹ thuật còn sót sau khi đã cắt. Rỗng nghĩa là đem đi đọc được.
+
+    Gọi SAU `go_ghi_chu_ky_thuat`: cái gì còn lại tới đây là nằm giữa bài,
+    lẫn vào lời đọc — không cắt được mà đoán, nên trả về để chỗ gọi dừng lượt
+    thay vì đem đi tạo giọng nói và hàng trăm tấm ảnh.
+    """
+    thap = (chu or "").lower()
+    thay = [d for d in DAU_KY_THUAT if d in thap]
+    o = _O_CHUA_DIEN.search(chu or "")
+    if o:
+        thay.append(o.group(0))
+    return thay
+
+
+def nhan_ghi_chu_con_lai(chu: str) -> List[str]:
+    """Dòng NHÃN ghi chú còn sót, để **cảnh báo** chứ không để chặn.
+
+    Khác `ghi_chu_ky_thuat_con_lai` ở mức chắc chắn: một dòng `"Tóm tắt:"`
+    giữa bài gần như chắc là ghi chú, nhưng "gần như" không đủ để vứt cả một
+    kịch bản đã trả tiền viết. Nên nó chỉ đi vào nhật ký, để chủ kênh mở tệp
+    ra xem — còn `ghi_chu_ky_thuat_con_lai` mới là cái chặn.
+    """
+    return [d.strip()[:80] for d in (chu or "").splitlines()
+            if _la_nhan_ghi_chu(d)]
 
 
 #: Thứ tiếng KHÔNG chèn khoảng trắng giữa các từ (viết dính liền tự nhiên).
