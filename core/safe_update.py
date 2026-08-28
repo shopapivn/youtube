@@ -57,8 +57,10 @@ PRESERVE = (
     "skill-cua-toi",  # Skill Agent đẻ ra riêng cho khách (`core.skill_rieng`)
     "PROJECTS",     # MỌI sản phẩm của khách, xếp theo dự án (core.du_an).
                      # Mất thư mục này là mất cả kịch bản, giọng, ảnh, bản dựng.
-    "runtime",       # Node bản gói sẵn tool tự tải (`core.node_goi_san`)
-                     # — 35 MB, tải lại mỗi lần cập nhật là phí băng thông khách.
+    "runtime",       # Mọi bản gói sẵn tool tự tải: Node (`core.node_goi_san`,
+                     # 35 MB) và FFmpeg (`core.ffmpeg_goi_san`, 40 MB). Tải lại
+                     # mỗi lần cập nhật là phí băng thông khách — mà nhiều
+                     # người ở đây trả tiền theo dung lượng.
     ".claude",        # cấu hình Claude Code của riêng thư mục này, có KHOÁ của
                       # khách trong đó (`core.claude_code`). Mất là mỗi lần cập
                       # nhật khách lại phải vào tab Agent bấm lại từ đầu — mà họ
