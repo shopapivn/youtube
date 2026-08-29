@@ -224,6 +224,9 @@ def hoan_thien_ban(goi: Callable[[str], str], ban: str, goc: str, *,
         moi = (goi(_thay(khuon.strip() or KHUON_HOAN_THIEN, {
             "DIEM_MANH": diem_manh or "(không ghi)", "DIEM_YEU": diem_yeu or "(không ghi)",
             "NGON_NGU": ngon_ngu or "", "PHUT": phut or "?", "CHARS": chars or "?",
+            # Độ dài bản đang cầm — để lời nhắc nói được "bản đang có N ký tự,
+            # nén xuống". Không có số này thì AI không biết mình đang dôi bao nhiêu.
+            "CHARS_DRAFT": len(ban),
             "COMPETITOR_TRANSCRIPT": goc, "DRAFT": ban})) or "").strip()
     except Exception as loi:  # noqa: BLE001 — hoàn thiện là việc phụ, hỏng thì thôi
         noi("  (hoàn thiện hỏng: {0} — giữ bản chọn)".format(str(loi)[:80]))
@@ -238,9 +241,26 @@ def hoan_thien_ban(goi: Callable[[str], str], ban: str, goc: str, *,
         return ban, False, "bản hoàn thiện rỗng"
     giu = ty_le_giu_cau(ban, moi)
     ti_le = len(moi) / max(1, len(ban))
-    if giu < giu_toi_thieu or ti_le > dai_toi_da or ti_le < 1 / dai_toi_da:
-        noi("  (bản hoàn thiện đi quá xa: giữ {0:.0%} câu, dài x{1:.2f} — bỏ, dùng "
-            "bản chọn)".format(giu, ti_le))
+    # ═══ KHI BẢN ĐANG VƯỢT TRẦN ĐỘ DÀI, NÉN SÂU LÀ VIỆC ĐÚNG ═══
+    #
+    # Rào chắn "không được ngắn hơn 1/1.25 lần" sinh ra để chặn bản viết lại từ đầu.
+    # Nhưng nó cũng chặn luôn việc nén — mà nén chính là thứ cần làm khi bản dôi.
+    #
+    # Lượt TL4-T7/0001 (29/08/2026): năm bản viết đều dôi 80–90% so với mục tiêu 13
+    # phút; bộ chấm ghi đúng vào điểm yếu *"dài gần gấp đôi, cần nén về 3.900 ký tự"*;
+    # bước hoàn thiện đọc điểm yếu đó nhưng bị rào chắn này chặn, nên bản cuối ra
+    # 7.589 ký tự — CÒN DÀI HƠN bản được chọn. Video thành 24 phút 32.
+    #
+    # Nên: bản đang vượt trần thì sàn dưới hạ xuống đúng mức mục tiêu (nới thêm 15%
+    # để không đánh trượt một bản nén vừa khéo), và ngưỡng giữ câu cũng phải nới —
+    # nén một nửa thì đương nhiên nhiều câu bị gộp hoặc bỏ.
+    san_duoi, san_giu = 1 / dai_toi_da, giu_toi_thieu
+    if chars and len(ban) > chars * 1.2:
+        san_duoi = min(san_duoi, chars / max(1, len(ban)) * 0.85)
+        san_giu = min(san_giu, 0.35)
+    if giu < san_giu or ti_le > dai_toi_da or ti_le < san_duoi:
+        noi("  (bản hoàn thiện đi quá xa: giữ {0:.0%} câu (sàn {2:.0%}), dài x{1:.2f} "
+            "(sàn x{3:.2f}) — bỏ, dùng bản chọn)".format(giu, ti_le, san_giu, san_duoi))
         return ban, False, "bỏ bản hoàn thiện: giữ {0:.0%} câu, dài x{1:.2f}".format(
             giu, ti_le)
     noi("  đã hoàn thiện: giữ {0:.0%} câu, {1} → {2} ký tự.".format(

@@ -127,8 +127,20 @@ class TestDungDungLuc:
         assert _nan_do_dai(_bc(ai), _Luot(), k, {}, GOC) == GOC
         assert ai.nhan == []
 
-    def test_nguong_dat_van_la_25_phan_tram(self):
-        assert CHENH_CHO_PHEP == 0.25
+    def test_nguong_dat_la_15_phan_tram(self):
+        """Ngưỡng coi là "đạt" — siết 0,25 → 0,15 ngày 29/08/2026.
+
+        Bản 2.13.1 nới 0,08 → 0,25 để "thôi gọi API nhiều vô ích". Ý định đúng,
+        nhưng 0,25 biến mục tiêu 13 phút thành "10 tới 16 phút": lượt TL4-T7
+        viết ra 3.026 ký tự (10,0 phút trên đích 13,0), tool in "độ dài đạt
+        (lệch 23%)" rồi bỏ qua vòng nắn — con số mục tiêu mất hết nghĩa.
+
+        0,15 vẫn rộng gần gấp đôi ý định gốc nên không kéo lại cảnh nắn ba
+        vòng, mà đủ chặt để bản hụt hơn một phần bảy bị nắn. Lời nhắc nay đo
+        bằng số câu nên bản viết đã sát đích hơn: phần lớn lượt tốn thêm đúng
+        một vòng.
+        """
+        assert CHENH_CHO_PHEP == 0.15
 
 
 # ── Tiện ích ────────────────────────────────────────────────────────────────

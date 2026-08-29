@@ -2,11 +2,13 @@ dưới đây là kịch bản gốc đã viral và <<SO_BAN>> bản viết lạ
 
 mục đích duy nhất: THỜI LƯỢNG XEM. video được YouTube đề xuất khi người xem ở lại lâu (trên 60% thời lượng) và bình luận. hãy hình dung đường cong giữ chân của từng bản khi được đọc thành video khoảng <<PHUT>> phút, rồi chấm theo thứ tự ưu tiên:
 
-1. 30 GIÂY ĐẦU (chỗ rớt nhiều nhất): 3 câu đầu phải nêu ngay câu lật / lời hứa của tiêu đề, kèm một cảnh cụ thể người xem thấy chính mình; mở đầu tả cảnh dài, vòng vo mới vào ý là trừ nặng nhất
+1. 30 GIÂY ĐẦU (chỗ rớt nhiều nhất): 3 câu đầu phải nêu ngay câu lật / lời hứa của tiêu đề, kèm một cảnh cụ thể người xem thấy chính mình; mở đầu tả cảnh dài, vòng vo mới vào ý là trừ nặng nhất.
+   Nếu tiêu đề có con số (6 đặc điểm, 7 điều, 5 dấu hiệu…): Ý THỨ NHẤT phải bắt đầu trong 400 ký tự đầu. Bản nào để ý thứ nhất ra sau mốc đó thì TỐI ĐA 5 điểm, dù phần còn lại hay tới đâu — người xem bỏ đi trước khi nghe được thứ tiêu đề hứa. Ghi rõ trong "cho_de_rot" là ý thứ nhất nằm ở ký tự thứ bao nhiêu.
 2. ĐƯỜNG CONG GIỮA BÀI: cứ khoảng 2 phút phải có một cú trả thưởng (ý mới, cảnh "đúng là tôi", con số gây ngạc nhiên), có câu mở nút để muốn nghe tiếp, không có đoạn trũng chỉ giải thích chung chung; bám cấu trúc, các ý, nghiên cứu, con số, ẩn dụ chính của bản gốc — vì bản gốc đã chứng minh giữ được người xem
 3. ĐOẠN CUỐI: ý mạnh nhất để dành cho cuối, câu hỏi cụ thể để bình luận đặt TRƯỚC câu kết và gắn với trải nghiệm vừa kể, kết gợi mở sang video tiếp kèm một lời mời đăng ký ngắn; kết nhạt, thiếu câu hỏi hoặc thiếu lời mời đăng ký là trừ
 4. KHÔNG CHÉP: trùng nguyên văn trên 45% là gần chép, trừ nặng
-5. ĐỘ DÀI: mục tiêu <<PHUT>> phút đọc (≈ <<CHARS>> ký tự), lệch quá 20% là trừ nặng — dài quá thì rớt giữa bài, ngắn quá thì mất thời lượng xem
+5. ĐỘ DÀI: trần <<PHUT>> phút đọc (≈ <<CHARS>> ký tự). Vượt trần trên 20% thì TỐI ĐA 5 điểm; vượt trên 50% thì TỐI ĐA 3 điểm — dài quá thì rớt giữa bài. Ngắn hơn 20% cũng trừ nặng vì mất thời lượng xem.
+   Nếu MỌI bản đều vượt trần thì vẫn chọn bản gần trần nhất, và trong "diem_yeu" phải ghi CHÍNH XÁC cần cắt bao nhiêu ký tự và cắt ở đoạn nào (nêu tên đoạn), vì bước sau sẽ nén theo đúng lời đó.
 6. viết bằng <<NGON_NGU>> tự nhiên, không lệch tiếng, không sót lời dẫn
 
 số đo tôi tính sẵn cho từng bản (phút đọc quy từ số ký tự theo giọng đọc của kênh):

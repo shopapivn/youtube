@@ -109,7 +109,21 @@ TOKEN_CANH = 16384
 #: 8% vì đó là ngưỡng còn nắn được bằng một vòng viết lại mà không phải bịa
 #: thêm ý; quá đó thì phải viết lại cả đoạn, và bịa thêm ý là chỗ chất lượng
 #: tụt.
-CHENH_CHO_PHEP = 0.25
+#:
+#: ═══ 0,25 QUÁ RỘNG ĐỂ CÒN GỌI LÀ MỤC TIÊU (sửa 29/08/2026) ═══
+#:
+#: Bản 2.13.1 nới 0,08 → 0,25 để "thôi gọi API nhiều vô ích" — đúng ý định,
+#: nhưng ghi chú ngay trên đây vẫn nói 8%, nên chỗ lệch không ai thấy.
+#:
+#: Hệ quả đo được trên TL4-T7: kênh nhắm 13 phút, bản viết ra 10,0 phút, tool
+#: in "độ dài đạt (lệch 23%)" rồi bỏ qua luôn vòng nắn. 0,25 biến "13 phút"
+#: thành "10 tới 16 phút" — rộng tới mức con số mục tiêu không còn nghĩa gì.
+#:
+#: 0,15 là chỗ đứng giữa: vẫn rộng gần gấp đôi ý định gốc nên không kéo lại
+#: cảnh nắn ba vòng, nhưng đủ chặt để một bản hụt 23% bị nắn. Và lời nhắc giờ
+#: đo bằng SỐ CÂU (xem prompt/2-viet.md) nên bản viết ra đã sát đích hơn hẳn
+#: — phần lớn lượt chỉ tốn thêm đúng một vòng.
+CHENH_CHO_PHEP = 0.15
 
 #: Nắn nhiều nhất mấy vòng. Ba là đủ: đo thật thì vòng đầu đã kéo được phần
 #: lớn khoảng cách, vòng bốn trở đi chỉ đổi chỗ chữ chứ không đổi độ dài.
@@ -1996,6 +2010,17 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             "CHANNEL": _mo_ta_kenh(k),
             "CHARS": (muc_tieu_kt if muc_tieu_kt > 0
                       else "không giới hạn — dài ngắn theo câu chuyện"),
+            # ═══ VÌ SAO PHẢI NÓI CẢ SÀN LẪN TRẦN ═══
+            #
+            # Lời nhắc chỉ nói một con số đích thì AI viết theo độ dài BẢN GỐC:
+            # lượt TL4-T7/0001 nhắm 13 phút, cả năm bản ra 23–25 phút vì gốc dài
+            # 23 phút. Sửa lời nhắc thành "tối đa X, vượt là loại" thì nó lộn
+            # sang đầu kia — bản thử ra 1.466 ký tự, đúng 4,9 phút trên đích 13.
+            #
+            # Nên đưa cả hai đầu, và đưa bằng SỐ chứ không bằng chữ "khoảng":
+            # AI không đếm ký tự được, nhưng nó bám được vào một khoảng có biên.
+            "CHARS_MIN": (int(muc_tieu_kt * 0.85) if muc_tieu_kt > 0 else ""),
+            "CHARS_MAX": (int(muc_tieu_kt * 1.15) if muc_tieu_kt > 0 else ""),
             # ═══ MỘT THƯỚC: PHÚT ĐỌC ═══
             #
             # Chủ dự án, 25/08/2026: *"lúc thì đo bằng độ dài ký tự lúc thì

@@ -97,9 +97,22 @@ class TestCauHinhTL4:
         assert 12 <= k.phut_muc_tieu <= 15
         # 12–15 phút ở 302 ký tự/phút là 3.600–4.500 ký tự.
         assert 3600 <= k.ky_tu_muc_tieu <= 4500, k.ky_tu_muc_tieu
-        # Một dòng độ dài trong prompt viết — KHÔNG có prompt nắn riêng.
         assert "<<CHARS>>" in k.prompt.get("2-viet.md", "")
-        assert "4-do-dai.md" not in k.prompt
+        # ═══ MỘT DÒNG ĐỘ DÀI LÀ KHÔNG ĐỦ — ĐO ĐƯỢC 29/08/2026 ═══
+        #
+        # Bài này từng chốt "KHÔNG có prompt nắn riêng": chỉ một dòng
+        # `<<CHARS>>` trong prompt viết là đủ đưa kênh về 12–15 phút.
+        #
+        # Lượt chạy thật TL4-T7/0001 bác bỏ điều đó. Cả năm bản viết ra
+        # 23–25 phút (dôi 81–90% so với đích 13 phút), bộ chấm ghi đúng vào
+        # điểm yếu "dài gần gấp đôi", nhưng không có bước nào nắn được — vì
+        # `_nan_do_dai` lặng lẽ thoát ra khi kênh thiếu `4-do-dai.md`. Video
+        # thành 24 phút 32, với ý thứ nhất nằm ở phút 4:41.
+        #
+        # Đo lại sau khi trả tệp nắn về và đổi lời nhắc sang đếm SỐ CÂU:
+        # bản viết 3.026 ký tự (10,0 phút), ý thứ nhất ở ký tự 192.
+        assert "4-do-dai.md" in k.prompt, (
+            "thiếu tệp này thì bước nắn độ dài tự tắt trong im lặng")
 
     def test_mac_dinh_cac_kenh_khac_van_theo_phut(self):
         # Cờ mặc định phải là False để không đổi hành vi kênh cũ.
