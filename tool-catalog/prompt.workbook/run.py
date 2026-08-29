@@ -711,6 +711,7 @@ def handle(request: Mapping[str, Any], *, enrich_fn: Callable = None,
         _validate_coverage(cues, scenes)
         _lam_lanh_moi_prompt(cast, scenes, bia)
         _khoa_nhan_dang(scenes, cast["characters"], cast.get("locations") or [])
+        _ep_phong_cach(scenes, cast.get("style") or {}, emit)
 
         workspace = Path(str(request.get("workspace") or "")).resolve(); workspace.mkdir(parents=True, exist_ok=True)
         manifest = {"schema_version": 1, "project_id": str(request.get("workflow_id") or "project"),
@@ -2098,6 +2099,73 @@ _LUAT_DUNG_CHAN = (
     "(floor, path, grass, bank, steps) with correct scale and physics — never "
     "standing on water, floating in the air or sunk into walls, unless the "
     "text explicitly says so.")
+
+
+def _ep_phong_cach(scenes, style, emit=None) -> int:
+    """Ep MOI canh mang dung phong cach cua kenh, khong tin AI chep lai.
+
+    ═══ VI SAO PHAI EP BANG MA ═══
+
+    Phong cach kenh duoc dua vao loi nhac qua `<<CAST_STYLE>>` va AI duoc dan
+    la chep lai vao cuoi moi `img_prompt`. Do tren phim `openstory/0011`
+    (Thach Sanh, 28/08/2026), 64 canh:
+
+        37 canh chep dung "stylised 3D animated film still, Pixar-like..."
+        23 canh KHONG co cau phong cach nao
+         4 canh tu viet "hand-painted 2D animated feature style"  ← khac han
+
+    Tuc mot phan tu bo phim co the ra mot net ve khac. Nguoi xem thay ngay,
+    va do la loi khong the "chua sau" duoc: anh da ve roi.
+
+    Cung mot hinh dang voi `LUAT_TIENG_CANH`: dan trong loi nhac la dieu kien
+    CAN, ma khong du. Cai gi phai dung y het o moi canh thi de MA ghim, dung
+    de AI chep.
+
+    Cat cau phong cach AI tu viet truoc khi noi cau that vao: hai cau phong
+    cach danh nhau thi may ve nghe cau nao khong ai doan duoc.
+    """
+    import re as _re
+
+    duoi = str((style or {}).get("image_style") or "").strip().rstrip(".,")
+    if not duoi:
+        return 0
+    # Cac cum "phong cach" AI hay tu che ra. Chi cat dung cum, khong cat cau
+    # chua no: phan con lai cua cau van la noi dung canh.
+    _LAC = _re.compile(
+        r",?\s*(?:hand[- ]painted\s+)?(?:2D|3D)?\s*"
+        r"(?:animated\s+(?:feature|film|movie|cartoon)\s*(?:style|still)?|"
+        r"anime\s*style|watercolou?r\s*(?:style|illustration)|"
+        r"oil\s*painting|storybook\s*illustration|comic\s*book\s*style)",
+        _re.I)
+    # Cau phong cach phai nam cuoi phan TA CANH, khong phai cuoi ca chuoi:
+    # phia sau con khoi "REFERENCE IMAGES are attached..." (luat nhan dang, luat
+    # dung chan). Noi ra dang sau la dan phong cach vao cuoi mot cau luat —
+    # do 28/08/2026 tren phim 0011, canh 42 ra "...sunk into walls, unless the
+    # text explicitly says so, stylised 3D animated film still, ...".
+    NEO = "REFERENCE IMAGES"
+    doi = 0
+    for s in scenes:
+        chu = str(s.get("img_prompt") or "")
+        if not chu.strip():
+            continue
+        # "Da co phong cach cua kenh" khong doi CHEP Y HET: AI hay viet mot ban
+        # rut gon ("...Pixar-like soft global illumination..." bo mat dau phay).
+        # Doi y het thi 37/64 canh cua phim 0011 bi coi la thieu, va bi noi
+        # them mot cau nua — hai cau phong cach cung dung, chong len nhau.
+        # Nen chi doi MENH DE DAU, phan xac dinh net ve.
+        dau = duoi.split(",")[0].strip()
+        if dau and dau.lower() in chu.lower():
+            continue
+        i = chu.find(NEO)
+        than, sau = (chu[:i], chu[i:]) if i > 0 else (chu, "")
+        than = _LAC.sub("", than).rstrip().rstrip(",;.")
+        s["img_prompt"] = than + ", " + duoi + (("\n" + sau) if sau else "")
+        doi += 1
+    if doi and emit is not None:
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": "Ep phong cach kenh vao {0} canh thieu hoac lac "
+                         "phong cach.".format(doi)})
+    return doi
 
 
 def _khoa_nhan_dang(scenes, characters, locations=()) -> None:
