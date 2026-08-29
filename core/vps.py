@@ -205,10 +205,28 @@ def viet_file_rdp(may: Mapping[str, Any], thu_muc: str = "") -> str:
     dong = [
         f"full address:s:{dia_chi}",
         f"username:s:{tai_khoan}",
-        "prompt for credentials:i:1",
+        # ⚠ `prompt for credentials:i:0` — KHONG PHAI 1.
+        #
+        # Ban dau viet `1`, va do la mot loi tu ban chan minh: `1` bao Windows
+        # LUON LUON hoi mat khau, tuc vo hieu hoa dung cai chung danh ma
+        # `nho_mat_khau()` vua cat vao Credential Manager ngay trong ham nay.
+        # Chu du an, 28/08/2026: *"no khong luu pass nen toan phai nhap lai"*.
+        #
+        # `0` cho mstsc dung chung danh da cat. Lan dau van hoi (chua co gi de
+        # dung), bam "Ghi nho toi" hoac de `nho_mat_khau()` lo — tu lan hai la
+        # vao thang.
+        "prompt for credentials:i:0",
+        "promptcredentialonce:i:1",
         "authentication level:i:2",
-        # Chuyển hướng khay nhớ tạm: khách chép prompt và kịch bản từ máy nhà
-        # sang máy ảo suốt ngày — tắt nó là bắt họ gõ lại từng đoạn.
+        # ── Chuyen huong o dia: duong chuyen file giua hai may ──
+        #
+        # Chu du an: *"tao can no co lien ket thu muc voi may ket noi de chuyen
+        # file"*. `drivestoredirect:s:*` dua MOI o dia cua may nay vao trong VM
+        # duoi dang `\\tsclient\C`, `\\tsclient\D`… Keo tha qua lai binh
+        # thuong, khong can cai them gi va khong can mo cong nao.
+        #
+        # Khay nho tam cung bat: khach chep prompt va kich ban qua lai suot ngay.
+        "drivestoredirect:s:*",
         "redirectclipboard:i:1",
         "redirectprinters:i:0",
         "session bpp:i:32",

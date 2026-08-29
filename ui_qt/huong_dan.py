@@ -154,10 +154,26 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "“Chép” là giá trị vào bộ nhớ tạm và hiện ra vài giây rồi tự che "
             "lại — để một lần quay màn hình hay chụp ảnh gửi đi hỏi không mang "
             "theo mật khẩu máy bạn.",
+            "Mở máy lần đầu Windows sẽ hỏi mật khẩu — dán vào rồi tick “Ghi "
+            "nhớ tôi”. Từ lần sau bấm là vào thẳng, không phải nhập lại.",
+            "Chuyển file giữa hai máy: mọi ổ đĩa của máy bạn đều hiện sẵn trong "
+            "máy ảo. Mở This PC trong đó, hoặc gõ \\tsclient\D vào thanh địa "
+            "chỉ là thấy ổ D của máy bạn — kéo thả bình thường, không cần cài "
+            "thêm gì. Với máy riêng, điền “Thư mục chung” thì tool in sẵn đường "
+            "dẫn đó cho khỏi phải nhớ.",
+            "Lần đầu mở một máy, Windows vẫn hỏi mật khẩu — bạn dán vào rồi "
+            "tích “Ghi nhớ tôi”. Từ lần thứ hai là bấm một cái vào thẳng, không "
+            "phải gõ lại.",
+            "Ổ đĩa máy bạn hiện sẵn trong máy ảo: mở This PC trong đó sẽ thấy, "
+            "hoặc gõ \\tsclient\D vào thanh địa chỉ. Kéo thả file qua lại bình "
+            "thường, không phải gửi qua Drive hay Zalo.",
             "Có máy VPS mua ở chỗ khác? Bấm “Thêm máy riêng” ở cuối mục VPS. "
             "Nó chỉ nằm trên đúng máy tính này, mật khẩu được Windows mã hoá, "
             "ShopAPI không thấy và không đụng tới. Chép sang máy khác sẽ không "
             "đọc được — đó là cách Windows bảo vệ, không phải hỏng.",
+            "Ô “Thư mục chung” khi thêm máy riêng: chọn thư mục bạn hay dùng, "
+            "tool sẽ in sẵn đường dẫn nhìn từ trong máy ảo (\\tsclient\…) để "
+            "khỏi phải nhớ.",
             "Thuê máy TRỪ TIỀN NGAY và tự gia hạn mỗi 30 ngày. Huỷ lúc nào cũng "
             "được, máy vẫn dùng hết kỳ đã trả. Tới kỳ mà ví không đủ tiền thì "
             "hợp đồng hết hạn, máy về kho và MẬT KHẨU BỊ ĐỔI — dữ liệu trong "

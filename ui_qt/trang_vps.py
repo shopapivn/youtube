@@ -38,9 +38,9 @@ from typing import Any, Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
-    QApplication, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
-    QLabel, QLineEdit, QMessageBox, QScrollArea, QSizePolicy, QSpinBox,
-    QVBoxLayout, QWidget,
+    QApplication, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
+    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QScrollArea, QSizePolicy,
+    QSpinBox, QVBoxLayout, QWidget,
 )
 
 from core import vps as v
@@ -416,6 +416,11 @@ class TrangVps(QWidget):
         doc.addLayout(self._dong_chep("Địa chỉ", m.dia_chi or "—"))
         doc.addLayout(self._dong_chep("Đăng nhập", m.tai_khoan or "—"))
         doc.addLayout(self._dong_chep("Mật khẩu", m.mat_khau or "—"))
+        if m.duong_trong_may():
+            # KHÔNG che dòng này: nó không phải bí mật, và nó là thứ khách cần
+            # ĐỌC để gõ vào thanh địa chỉ trong máy ảo. Che một đường dẫn chỉ
+            # làm người ta phải bấm thêm một cái cho mỗi lần chuyển file.
+            doc.addLayout(self._dong_thu_muc(m))
 
         doc.addWidget(_vach())
         cuoi = QHBoxLayout()
@@ -425,6 +430,25 @@ class TrangVps(QWidget):
         cuoi.addWidget(nut_nguy_hiem("Xoá", lambda: self._xoa_rieng(m), rong=80))
         doc.addLayout(cuoi)
         return khung
+
+    def _dong_thu_muc(self, m: MayRieng) -> QHBoxLayout:
+        r"""Dòng `Thư mục — \\tsclient\D\… — [Chép]`."""
+        duong = m.duong_trong_may()
+        hang = QHBoxLayout()
+        hang.setSpacing(8)
+        nh = nhan("Thư mục", "phu")
+        nh.setFixedWidth(90)
+        hang.addWidget(nh)
+        gt = QLabel(duong)
+        gt.setStyleSheet(f"font-family: {theme.PHONG_MA};")
+        gt.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        gt.setWordWrap(True)
+        gt.setMinimumWidth(1)
+        gt.setToolTip("Mở đường dẫn này trong máy ảo để thấy thư mục %s của máy bạn."
+                      % m.thu_muc)
+        hang.addWidget(gt, 1)
+        hang.addWidget(nut_phu("Chép", lambda: self._chep(duong, "Thư mục"), rong=64))
+        return hang
 
     def _them_rieng(self) -> None:
         hop = HopMayRieng(self)
@@ -699,16 +723,35 @@ class HopMayRieng(QDialog):
         self._ghi_chu = QLineEdit(m.ghi_chu if m else "")
         self._ghi_chu.setPlaceholderText("dùng để làm gì — tuỳ bạn")
 
+        # ── Thư mục chia sẻ ──
+        #
+        # Remote Desktop đưa CẢ ổ đĩa vào phiên, không đưa được riêng một thư
+        # mục — nên ô này không giới hạn quyền truy cập, nó chỉ ghi nhớ chỗ bạn
+        # hay dùng để tool in sẵn đường `\\tsclient\…` cho khỏi phải nhớ.
+        self._thu_muc = QLineEdit(m.thu_muc if m else "")
+        self._thu_muc.setPlaceholderText("để trống nếu không cần chuyển file")
+        nut_chon = nut_phu("Chọn…", self._chon_thu_muc, rong=80)
+        hop_tm = QHBoxLayout()
+        hop_tm.setSpacing(6)
+        hop_tm.addWidget(self._thu_muc, 1)
+        hop_tm.addWidget(nut_chon)
+        khung_tm = QWidget()
+        khung_tm.setLayout(hop_tm)
+
         form.addRow("Tên máy", self._ten)
         form.addRow("Địa chỉ", self._dia_chi)
         form.addRow("Cổng", self._cong)
         form.addRow("Đăng nhập", self._tai_khoan)
         form.addRow("Mật khẩu", self._mat_khau)
         form.addRow("Ghi chú", self._ghi_chu)
+        form.addRow("Thư mục chung", khung_tm)
         doc.addLayout(form)
 
         nh = nhan("Máy riêng chỉ lưu trên máy tính này, mật khẩu được Windows mã hoá. "
-                  "Chép sang máy khác sẽ không đọc được.", "muted")
+                  "Chép sang máy khác sẽ không đọc được.\n"
+                  "Mọi ổ đĩa của máy này đều hiện trong máy ảo dưới dạng "
+                  "\\\\tsclient\\C, \\\\tsclient\\D… — kéo thả file qua lại bình thường.",
+                  "muted")
         nh.setWordWrap(True)
         nh.setMinimumWidth(1)
         doc.addWidget(nh)
@@ -719,6 +762,13 @@ class HopMayRieng(QDialog):
         nut.accepted.connect(self._luu)
         nut.rejected.connect(self.reject)
         doc.addWidget(nut)
+
+    def _chon_thu_muc(self) -> None:
+        duong = QFileDialog.getExistingDirectory(
+            self, "Chọn thư mục dùng chung với máy ảo", self._thu_muc.text() or "")
+        if duong:
+            # `QFileDialog` trả dấu `/`; Windows và `\\tsclient` cần dấu `\`.
+            self._thu_muc.setText(duong.replace("/", "\\"))
 
     def _luu(self) -> None:
         if not self._ten.text().strip():
@@ -737,6 +787,7 @@ class HopMayRieng(QDialog):
             "tai_khoan": self._tai_khoan.text(),
             "mat_khau": self._mat_khau.text(),
             "ghi_chu": self._ghi_chu.text(),
+            "thu_muc": self._thu_muc.text(),
         }
 
 

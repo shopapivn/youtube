@@ -86,6 +86,26 @@ class MayRieng(dict):
     def ghi_chu(self) -> str:
         return str(self.get("ghi_chu") or "")
 
+    @property
+    def thu_muc(self) -> str:
+        """Thư mục trên máy này được đưa vào máy ảo để chuyển file."""
+        return str(self.get("thu_muc") or "")
+
+    def duong_trong_may(self) -> str:
+        """Thư mục đó nhìn từ BÊN TRONG máy ảo trông như thế nào.
+
+        Remote Desktop đưa ổ đĩa của máy khách vào phiên dưới tên `\\tsclient\<ổ>`.
+        Nên `D:\kenh\thang8` ở đây chính là `\\tsclient\D\kenh\thang8` trong đó.
+
+        In sẵn ra thay vì bắt khách tự suy: `\\tsclient` là thứ không ai đoán
+        được nếu chưa từng thấy, và người không biết nó sẽ kết luận là "không
+        chuyển file được" rồi đi tìm cách khác.
+        """
+        tm = self.thu_muc
+        if len(tm) < 2 or tm[1] != ":":
+            return ""
+        return "\\\\tsclient\\" + tm[0].upper() + tm[2:]
+
     def mo_ta(self) -> str:
         """`vps.nha-cung-cap.com:3389 · Administrator` — một dòng cho thẻ."""
         dc = self.dia_chi
@@ -143,6 +163,7 @@ class KhoVpsRieng:
             "tai_khoan": str(thuoc_tinh.get("tai_khoan") or "Administrator").strip(),
             "mat_khau": str(thuoc_tinh.get("mat_khau") or ""),
             "ghi_chu": str(thuoc_tinh.get("ghi_chu") or "").strip(),
+            "thu_muc": str(thuoc_tinh.get("thu_muc") or "").strip(),
         })
         ds.append(dict(may))
         self._ghi(ds)
@@ -153,7 +174,8 @@ class KhoVpsRieng:
         for m in ds:
             if m.get("ma") != ma:
                 continue
-            for khoa in ("ten", "dia_chi", "cong", "tai_khoan", "mat_khau", "ghi_chu"):
+            for khoa in ("ten", "dia_chi", "cong", "tai_khoan", "mat_khau",
+                         "ghi_chu", "thu_muc"):
                 if khoa not in thuoc_tinh:
                     continue
                 gia_tri = thuoc_tinh[khoa]

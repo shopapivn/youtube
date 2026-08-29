@@ -403,7 +403,37 @@ class TrangTaiKhoan(QWidget):
             self._o_ma_2fa.setFocus()
             return
         self._cho_ma = None
-        self._bao_dn(describe_auth_error(loi))
+        cau = describe_auth_error(loi)
+
+        # ═══ KHÁCH ĐĂNG KÝ BẰNG GOOGLE THÌ KHÔNG CÓ MẬT KHẨU ═══
+        #
+        # Máy chủ trả một câu chung cho mọi ca sai (cố ý — nói rõ hơn là để lộ
+        # email nào có tài khoản), và câu đó kết thúc bằng *"nếu bạn đăng ký
+        # bằng Google, hãy bấm Đăng nhập bằng Google"*.
+        #
+        # Trên WEB thì đúng. Trong TOOL thì đó là một cái bẫy: **tool không có
+        # nút Đăng nhập bằng Google**, chỉ có email + mật khẩu. Khách đọc gợi ý,
+        # đi tìm nút, không thấy, rồi kết luận tool hỏng.
+        #
+        # Ca thật 29/08/2026 — khách số 42: đăng ký bằng Google lúc 23:54, sáng
+        # ra mở tool đăng nhập không được. Tài khoản hoàn toàn bình thường
+        # (`active`, đã xác thực email), chỉ là `passwordHash` rỗng vì chưa bao
+        # giờ đặt mật khẩu.
+        #
+        # Nên đổi phần đuôi thành việc khách LÀM ĐƯỢC TRONG TOOL. Không khẳng
+        # định "bạn đăng ký bằng Google" — ta không biết, và đoán sai thì càng
+        # rối; chỉ nói ra đường đi cho ca đó.
+        if "Google" in cau:
+            cau = (
+                "Email hoặc mật khẩu không đúng.\n\n"
+                "Nếu bạn đăng ký bằng Google thì tài khoản CHƯA CÓ mật khẩu, mà "
+                "tool chỉ đăng nhập bằng email + mật khẩu. Bạn làm một trong hai cách:\n"
+                "  1. Vào shopapi.vn → “Quên mật khẩu” → đặt một mật khẩu → quay lại "
+                "đây đăng nhập. (nên dùng cách này)\n"
+                "  2. Vào shopapi.vn → đăng nhập bằng Google → trang API keys → tạo "
+                "khoá → dán vào ô “Khoá API” ngay bên dưới."
+            )
+        self._bao_dn(cau)
 
     # ── Dán khoá tay ─────────────────────────────────────────────────────────
 

@@ -473,3 +473,52 @@ def test_gia_tri_bi_CHE_tren_the_va_chi_hien_khi_bam_chep(tmp_path):
         assert "•" in chu
     finally:
         t.close()
+
+
+# ── File .rdp phải cho phép LƯU đăng nhập và CHIA SẺ thư mục ─────────────────
+
+
+def test_rdp_KHONG_bat_hoi_lai_mat_khau_moi_lan(tmp_path):
+    """`prompt for credentials:i:1` bảo Windows LUÔN hỏi mật khẩu.
+
+    ⚠ Đó là một lỗi tự bắn vào chân: nó vô hiệu hoá đúng cái chứng danh mà
+    `nho_mat_khau()` vừa cất vào Credential Manager ngay trong cùng một hàm.
+    Chủ dự án, 28/08/2026: *"nó không lưu pass nên toàn phải nhập lại"*.
+    """
+    noi_dung = open(v.viet_file_rdp(_may(), str(tmp_path)), encoding="utf-8").read()
+    assert "prompt for credentials:i:0" in noi_dung
+    assert "prompt for credentials:i:1" not in noi_dung
+
+
+def test_rdp_co_chuyen_huong_o_dia_de_chuyen_file(tmp_path):
+    """Không có dòng này thì trong máy ảo không thấy ổ đĩa nào của máy khách, và
+    cách duy nhất để chuyển file là qua một dịch vụ bên thứ ba."""
+    noi_dung = open(v.viet_file_rdp(_may(), str(tmp_path)), encoding="utf-8").read()
+    assert "drivestoredirect:s:*" in noi_dung
+    assert "redirectclipboard:i:1" in noi_dung
+
+
+def test_duong_thu_muc_nhin_tu_trong_may_ao():
+    r"""`D:\kenh` trên máy khách chính là `\\tsclient\D\kenh` trong máy ảo.
+
+    In sẵn ra thay vì bắt khách tự suy: `\\tsclient` là thứ không ai đoán được
+    nếu chưa từng thấy, và người không biết nó sẽ kết luận "không chuyển file
+    được" rồi đi tìm cách khác.
+    """
+    from core.vps_rieng import MayRieng
+
+    assert MayRieng({"thu_muc": r"D:\kenh\thang8"}).duong_trong_may() == r"\\tsclient\D\kenh\thang8"
+    assert MayRieng({"thu_muc": r"c:\a"}).duong_trong_may() == r"\\tsclient\C\a"
+    # Không phải đường dẫn có ổ đĩa thì không đoán bừa — trả rỗng, và thẻ ẩn dòng.
+    assert MayRieng({"thu_muc": r"\may-khac\chung"}).duong_trong_may() == ""
+    assert MayRieng({}).duong_trong_may() == ""
+
+
+def test_thu_muc_luu_va_sua_duoc(tmp_path):
+    from core.vps_rieng import KhoVpsRieng
+
+    kho = KhoVpsRieng(str(tmp_path))
+    m = kho.them(ten="X", dia_chi="1.2.3.4", thu_muc=r"D:\kenh")
+    assert kho.tim(m.ma).thu_muc == r"D:\kenh"
+    kho.sua(m.ma, thu_muc=r"E:\khac")
+    assert kho.tim(m.ma).duong_trong_may() == r"\\tsclient\E\khac"
