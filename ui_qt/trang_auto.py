@@ -277,7 +277,9 @@ class TrangTuDong(QWidget):
         self._o_tu_lieu = QPlainTextEdit()
         self._o_tu_lieu.setPlaceholderText(
             "…hoặc dán thẳng nội dung vào đây (lời thoại đối thủ, hoặc bài "
-            "của chính bạn). Có nội dung ở đây thì tôi bỏ qua link.")
+            "của chính bạn). Có nội dung ở đây thì tôi bỏ qua link.\n"
+            "Với kênh tự tra cứu (timelapse): dán DÀN Ý của bạn — mốc nào bạn "
+            "muốn có, nhấn vào thời nào — tôi vẫn tra cứu để kiểm và bù cho đủ.")
         self._o_tu_lieu.setFixedHeight(72)
         v.addWidget(self._o_tu_lieu)
 
@@ -943,6 +945,8 @@ class TrangTuDong(QWidget):
                 self._duong = do.thu_muc
                 self._chay_tiep()
                 return
+        from core.timelapse import TEP_DAN_Y  # noqa: PLC0415
+
         link = self._o_link.text().strip()
         tu_lieu = self._o_tu_lieu.toPlainText().strip()
         la_kich_ban = self._o_la_kich_ban.isChecked()
@@ -959,7 +963,24 @@ class TrangTuDong(QWidget):
         })
         ghi_luot(luot)
         try:
-            if la_kich_ban:
+            if self._chi_can_tieu_de(ma) and tu_lieu:
+                # ═══ KÊNH TỰ TRA CỨU: nội dung bạn dán là DÀN Ý, không phải
+                #     tư liệu ═══
+                #
+                # Kênh timelapse tự đi đọc bách khoa và tự dựng bảng mốc; tệp
+                # `0-tu-lieu.txt` của nó là hơn một triệu chữ tra cứu được. Ghi
+                # đè tệp ấy bằng vài trăm chữ dàn ý là mất sạch phần kiểm
+                # chứng, và bảng mốc chỉ còn những gì bạn kịp nhớ.
+                #
+                # Chủ dự án 29/08/2026: *"tôi sẽ tạo 1 kịch bản cơ bản sau đó AI
+                # dựa vào dữ liệu đó để hoàn thiện — đầu vào ít hay nhiều thì AI
+                # vẫn ra được kịch bản"*, và *"dù đưa vào thì vẫn là tư liệu
+                # tham khảo, vẫn phải tra cứu và xây cho phù hợp"*.
+                self._ghi_tep(luot, TEP_DAN_Y, tu_lieu)
+                self._ghi("Dùng dàn ý của bạn ({0} chữ) làm xương sống — tôi "
+                          "vẫn tra cứu để kiểm và bù cho đủ mốc."
+                          .format(len(tu_lieu)))
+            elif la_kich_ban:
                 self._nap_kich_ban_san(luot, tu_lieu, tieu_de, chu_bia)
             elif tu_lieu:
                 # Dây chuyền đọc `0-tu-lieu.txt` TRƯỚC khi ngó tới link, nên

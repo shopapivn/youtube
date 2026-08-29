@@ -73,10 +73,12 @@ class TestLoiNhac:
     def test_clip_chuyen_cam_moi_cu_dong_may(self):
         b = _bang()
         p = tl.prompt_clip_chuyen(b["moc"][0], b["moc"][1])
-        assert "THE CAMERA DOES NOT MOVE AT ALL" in p
+        assert "The frame never moves" in p
         for cam in ("no pan", "no tilt", "no zoom", "no drift"):
             assert cam in p
-        assert "Never a cut, never a dissolve" in p
+        assert "no cut, no dissolve" in p
+        # Tai lieu Veo: noi RO cho may dung, dung tu chung chung.
+        assert "(that is where the camera is)" in p
 
     def test_clip_chuyen_khong_ta_bien_co_nao(self):
         """Clip ghim hai đầu thì KHÔNG được tả biến cố.
@@ -89,8 +91,10 @@ class TestLoiNhac:
         b = _bang()
         p = tl.prompt_clip_chuyen(b["moc"][0], b["moc"][1])
         assert "shepherds drive goats" not in p and "crowds stream" not in p
-        assert "INVENT NOTHING" in p
-        assert "appear and then disappear" in p
+        # Bản Veo nói cùng điều ấy bằng câu KHẲNG ĐỊNH, không bằng câu cấm:
+        # chỉ đổi thứ khác nhau giữa hai khung, và cái gì hiện ra thì ở lại.
+        assert "Change only what differs between the two given frames" in p
+        assert "Everything that appears stays to the end of the clip" in p
 
     def test_clip_tua_van_la_tua_nhung_khong_nhoe(self):
         """Chạy nhanh KHÔNG phải là nhoè — đo tận mắt trên phim đối thủ.
@@ -101,18 +105,19 @@ class TestLoiNhac:
         """
         b = _bang()
         p = tl.prompt_clip_troi(b["moc"][0], b["moc"][1])
-        assert "THE YEARS RUN FAST" in p
-        assert "stays SHARP" in p
-        assert "No motion streaks" in p
+        assert "everything in sharp focus" in p
+        assert "razor sharp" in p
+        assert "WHAT CHANGES" in p, "thời gian trôi đọc ra nhờ cái gì đổi"
         assert "translucent streak" not in p.lower()
+        assert "smear" not in p.lower()
         # Bau troi di toc do thuong: dai dong nhat khung hinh (21,30 so voi 3,02).
-        assert "THE SKY IS FILMED AT ORDINARY SPEED" in p
-        assert "No racing cloud bands" in p
+        assert "the sky is filmed at ordinary speed" in p
+        assert "holding their shape" in p
         p = tl.prompt_clip_chuyen(b["moc"][0], b["moc"][1])
         # Tien canh KHONG bi khoa: nam -771 hai ben la hang thong, nam 1928 hai
         # ben la nha bon tang -- doi tien canh chinh la noi dung cua phim.
         assert "FOREGROUND is untouched" not in p
-        assert "The GEOMETRY of the view holds" in p
+        assert "The geometry holds even where the buildings do not" in p
 
     def test_anh_moc_mang_moc_neo_va_anh_sang(self):
         b = tl.doc_bang_moc({
@@ -385,10 +390,10 @@ class TestNhipGiuTua:
     def test_loi_nhac_canh_giu_khac_han_canh_tua(self):
         c = tl.canh_tu_bang_moc(self._bang())
         p = c[0]["video_prompt"]
-        assert "TIME STOPS HERE" in p
-        assert "the year does not advance" in p.lower()
-        assert "THIS IS NOT A TIME-LAPSE" in p
-        assert "eight seconds of ORDINARY TIME" in p
+        assert "eight seconds of ordinary time" in p
+        assert "The year does not advance" in p
+        assert "one moment of history held open" in p
+        assert "ordinary speed" in p and "normal human speed" in p
 
 
 class TestMinhHoaThuNguoiXemDaDoc:
@@ -727,18 +732,19 @@ class TestMoiTamVeTocDoThat:
         den = {"nam": 1310, "tam": 1, "canh": "the market street rebuilt"}
         for p in (tl.prompt_clip_chuyen(tu, den), tl.prompt_clip_troi(tu, den),
                   tl.prompt_clip_dung_lai(den)):
-            assert "no motion streaks" in p.lower()
+            assert "sharp" in p.lower(), "phải nói rõ NÉT, không chỉ cấm nhoè"
             assert "translucent streak" not in p.lower()
-            assert "smeared" not in p.lower()
+            assert "smear" not in p.lower()
+            assert "long-exposure" not in p.lower()
 
     def test_bau_troi_khong_bao_gio_duoc_chay(self):
         """Dòng chữ đắt nhất phim: dải trời là dải động nhất khung hình."""
         g = tl._GACH_TOC_DO_NHANH
         assert "race in bands" not in g and "light slides" not in g
-        assert "THE SKY IS FILMED AT ORDINARY SPEED" in g
-        for cam in ("No racing cloud bands", "no strobing", "no sliding",
-                    "no day-to-night", "no flicker"):
-            assert cam in g, cam
+        # Ta CAI CO thay vi ke CAI CAM: bau troi di cham va giu hinh dang.
+        assert "the sky is filmed at ordinary speed" in g
+        assert "drifting slowly and holding their shape" in g
+        assert "the light steady" in g
 
 
 class TestAnhNhanDangGanVaoMOITam:
@@ -1008,62 +1014,161 @@ class TestAnhDaiDienCuaBai:
         assert len(ra) == 3
 
 
-class TestKhoaTheKyOMoiLoaiClip:
-    """**Mọi** loại clip phải mang khoá thế kỷ. Không trừ loại nào.
+class TestGiuTheKyBangCACHTA:
+    """Giữ đúng thế kỷ bằng cách TẢ CÁI CÓ, không kể tên cái không được có.
 
-    ═══ Ô TÔ Ở NĂM 500 ═══
+    ═══ BẢN TRƯỚC KỂ TÊN THỨ MÌNH SỢ, VÀ NHẬN ĐÚNG CHÚNG ═══
 
-    Ngày 28/08/2026 chủ dự án mở phim 0005 và thấy ô tô ở năm 500. Soi dày quãng
-    88–104 giây (năm 486→540): từ năm 497 có xe hơi đỏ đậu dưới bờ kè, cột đèn
-    đường kiểu thế kỷ 19, ô dù chợ hiện đại.
+    Sáng 28/08/2026 chủ dự án mở phim 0005 và thấy **ô tô ở năm 500**. Bản vá
+    đầu của tôi là một danh sách cấm dài 60 chữ: *"no car, no bus, no bicycle,
+    no motorbike, no parked vehicle, no cast-iron or electric street lamp, no
+    power line, no road sign, no asphalt, no plate glass…"*.
 
-    Nguyên nhân là của tôi: khoá thế kỷ viết hôm 27/08 **chỉ nằm trong
-    `prompt_clip_chuyen`** — 24 trên 103 clip. 79 clip trôi tự do không có khoá
-    nào, mà mỗi cảnh đều đính kèm tấm ảnh chụp chỗ ấy NGÀY NAY làm ảnh nhận
-    dạng: trong tấm ấy có ô tô, có đèn đường. Không ai giữ thế kỷ thì máy trôi
-    dần về đúng tấm ảnh nó đang nhìn.
+    Chiều hôm ấy chủ dự án nói đúng chỗ: *"chặn chỉ là ngọn, quan trọng nhất là
+    prompt… veo 3 có nguyên lý tạo, mày có thể tư duy và tìm hiểu"*. Tra tài
+    liệu Google thì ra hai điều:
 
-    Bài học đắt hơn bản vá: hôm ấy tôi soi 24 khung NGẪU NHIÊN trên 824 giây (một
-    khung mỗi 34 giây) rồi báo "phim sạch". Quá thưa cho một lỗi nhỏ ở góc khung.
+      * hướng dẫn dặn thẳng **đừng viết "no X"** — chữ X vẫn nằm trong lời nhắc;
+      * Veo 3 có **bộ tự viết lại lời nhắc, không tắt được**, nên một danh sách
+        cấm dài là thứ dễ bị viết gọn hoặc bỏ nhất.
+
+    Và số đo khớp: phim ra có đúng bốn thứ trong danh sách cấm — ô tô đậu, cột
+    đèn gang, đường nhựa, nhà Haussmann. Có thể tôi đã tự gọi chúng ra.
+
+    Cách đúng là **lấp chỗ trống**: mặt đường lát gì, đèn thắp bằng gì, trên
+    đường có gì đi lại, người mặc gì.
     """
-
-    CAM = ("no car", "no bus", "no bicycle", "no motorbike",
-           "no cast-iron or electric street lamp", "no power line",
-           "no asphalt", "no plate glass", "no modern clothing",
-           "no modern parasol or market umbrella")
 
     def _moi_loai(self):
         tu = {"nam": 360, "canh": "x" * 20}
-        den = {"nam": 451, "tam": 1, "canh": "y" * 20, "bien_co": "z" * 20}
+        den = {"nam": 451, "tam": 1, "canh": "y" * 20, "bien_co": "z" * 20,
+               "doi_thuong": "packed earth; oil lanterns; ox carts; woollen tunics"}
         return {"ghim": tl.prompt_clip_chuyen(tu, den),
                 "troi": tl.prompt_clip_troi(tu, den),
                 "giu": tl.prompt_clip_dung_lai(den)}
 
-    def test_moi_loai_clip_deu_cam_do_vat_thoi_sau(self):
+    def test_khong_loai_clip_nao_con_ke_ten_thu_bi_cam(self):
+        """Kể tên cái ô tô để cấm nó thì cái ô tô vẫn nằm trong lời nhắc."""
         for ten, p in self._moi_loai().items():
-            goc = " ".join(p.split())
-            for cam in self.CAM:
-                assert cam in goc, (ten, cam)
+            goc = " ".join(p.split()).lower()
+            for cam in ("no car", "no bus", "no bicycle", "no motorbike",
+                        "no asphalt", "no street lamp", "no power line",
+                        "no plate glass", "no modern clothing"):
+                assert cam not in goc, (ten, cam)
+
+    def test_moi_loai_clip_deu_ta_bo_do_nghe_thoi_ay(self):
+        for ten, p in self._moi_loai().items():
+            assert "packed earth" in p, ten
+            assert "oil lanterns" in p, ten
+            assert "woollen tunics" in p, ten
 
     def test_moi_loai_clip_deu_noi_ro_nam(self):
         d = self._moi_loai()
-        assert "THIS CLIP LIVES BETWEEN 360 AND 451" in d["ghim"]
-        assert "THIS CLIP LIVES BETWEEN 360 AND 451" in d["troi"]
-        assert "THE YEAR IN THIS CLIP IS 451" in d["giu"]
+        assert "belongs to the years between 360 and 451" in d["ghim"]
+        assert "belongs to the years between 360 and 451" in d["troi"]
+        assert "belongs to the year 451" in d["giu"]
 
-    def test_noi_thang_anh_tham_chieu_la_bay(self):
-        """Cấm không đủ — phải nói ra vì sao máy hay sa vào, và lối ra là gì."""
+    def test_noi_ro_anh_tham_chieu_dung_de_lam_gi(self):
+        """Ảnh chụp ngày nay là để biết máy đứng đâu, không phải để chép thời nay."""
         for ten, p in self._moi_loai().items():
             goc = " ".join(p.split())
-            assert "AS IT STANDS TODAY MAY BE ATTACHED" in goc, ten
-            assert "Take the geometry from it and refuse everything else" in goc, ten
-        assert "stay close to the first frame and change less" in \
-            " ".join(self._moi_loai()["ghim"].split())
+            assert "as it stands today may be attached" in goc, ten
+            assert "the century from this description" in goc, ten
 
-    def test_khoa_the_ky_dung_duoc_mot_minh(self):
-        assert "THE YEAR IN THIS CLIP IS 845" in tl.khoa_the_ky(845)
-        assert "BETWEEN 100 AND 200" in tl.khoa_the_ky(100, 200)
-        assert "?" in tl.khoa_the_ky(None)
+    def test_mat_duong_lien_mot_khoi_tu_tuong_sang_tuong(self):
+        """Chặn thứ máy CHÉP TỪ ẢNH THAM CHIẾU, bằng câu khẳng định.
+
+        Đo 28/08/2026, mốc 1250: vẽ lại xong bộ soát vẫn thấy *"vạch nhạt đứt
+        quãng chạy giữa lòng đường như vạch kẻ đường"* và *"nắp cống kim loại có
+        gờ"*. Cả hai đều **có thật trong tấm ảnh nhận dạng** — dải đá lát kỷ
+        niệm đánh dấu con ngõ cũ, và nắp cống của quảng trường ngày nay. Máy chép
+        chúng sang vì lời nhắc bảo lấy "hình dạng của khung nhìn" từ tấm ảnh ấy.
+
+        Không gọi tên chúng ra (gọi tên là mời vẽ). Nói mặt đường liền một khối
+        từ tường sang tường thì cả vạch kẻ lẫn nắp cống đều không còn chỗ.
+        """
+        p = tl.khoa_the_ky(1250, None, "packed earth; oil lamps; handcarts")
+        assert "one surface from wall to wall, unbroken and continuous" in p
+        assert "road marking" not in p and "drain" not in p
+
+    def test_thieu_bo_do_nghe_thi_van_co_mot_cau_do_lung(self):
+        p = tl.khoa_the_ky(1200)
+        assert "the ordinary ones of that time and place" in p
+        assert "belongs to the year 1200" in p
+
+    def test_bang_moc_phai_xin_bo_do_nghe_va_tieng(self):
+        # Loi nhac co ngat dong, nen chuan hoa khoang trang truoc khi tim chu.
+        p = " ".join(tl.loi_nhac_bang_moc("X", 40).split())
+        assert "doi_thuong" in p and "tieng" in p
+        assert "cannot be told what NOT to draw" in p, "phải nói rõ VÌ SAO cho AI"
+        # Hai thoi quen day nhat cua may ve: kinh o vang luoi tram va ong khoi
+        # gach, o moi the ky. Goi ten cua so va mai dung tu dau thi khoi phai
+        # bat tung tam (do 28/08/2026: nam luot ve lai chi vi hai thu nay).
+        assert "WHAT THE WINDOWS ARE" in p and "WHAT THE ROOFLINE CARRIES" in p
+        assert "leaded diamond-pane glass and brick chimneys" in p
+        assert "no room for the wrong ones" in p
+        assert "the only sound the film has" in p, "phim không có lời đọc che"
+
+
+class TestLoiNhacPhaiThuanTiengAnh:
+    """Lời nhắc gửi máy dựng phải THUẦN TIẾNG ANH.
+
+    Veo trả lỗi *"Prompts only in English"* với lời nhắc lẫn chữ khác. Ngày
+    28/08/2026 tôi tự tạo đúng lỗi ấy: viết một câu tiếng Việt —
+    *"Soi phim đối thủ ở bước 0,5 giây — người vẫn sắc nét khi đang tua"* —
+    **vào giữa chuỗi tiếng Anh** của `_GACH_TOC_DO_NHANH`, tưởng đang viết chú
+    thích. Nó nằm trong 2 trên 3 loại clip, tức phần lớn phim.
+
+    Chú thích tiếng Việt thuộc về docstring và dòng `#`, không thuộc về chuỗi
+    gửi đi.
+    """
+
+    DAU_VIET = "àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ"
+
+    def _moi_loi_nhac(self):
+        tu = {"nam": 1253, "canh": "the market street"}
+        den = {"nam": 1310, "tam": 1, "canh": "the market street rebuilt",
+               "bien_co": "masons raise a wall"}
+        return {"ghim": tl.prompt_clip_chuyen(tu, den),
+                "troi": tl.prompt_clip_troi(tu, den),
+                "giu": tl.prompt_clip_dung_lai(den),
+                "khoa": tl.khoa_the_ky(1200, 1300),
+                "tieng": tl.khoi_tieng(den),
+                "may": tl._KHOI_MAY,
+                "nhanh": tl._GACH_TOC_DO_NHANH,
+                "cham": tl._GACH_TOC_DO_CHAM}
+
+    def test_khong_mot_dau_tieng_viet_nao_lot_vao(self):
+        for ten, p in self._moi_loi_nhac().items():
+            lot = [c for c in p if c.lower() in self.DAU_VIET]
+            assert not lot, (ten, "".join(lot[:12]))
+
+    def test_moi_loai_clip_deu_ta_TIENG(self):
+        """Không dặn tiếng thì Veo tự bịa, và phim này không có lời đọc che."""
+        for ten in ("ghim", "troi", "giu"):
+            p = self._moi_loi_nhac()[ten]
+            assert "Audio:" in p, ten
+            assert "no music" in p and "no narration" in p, ten
+
+    def test_moi_loai_clip_deu_chan_phu_de_dot_vao_hinh(self):
+        for ten in ("ghim", "troi", "giu"):
+            assert "(no subtitles)" in self._moi_loi_nhac()[ten], ten
+
+    def test_loi_nhac_khong_duoc_phinh_ra_lai(self):
+        """Veo tự viết lại lời nhắc; càng dài càng ít kiểm soát phần tới máy.
+
+        Bản trước clip TUA dài 3.413 ký tự. Trần 2.900 để lần sau ai thêm luật
+        thì bài này kêu trước khi phim kêu.
+        """
+        for ten in ("ghim", "troi", "giu"):
+            p = self._moi_loi_nhac()[ten]
+            assert len(p) <= 2900, (ten, len(p))
+
+    def test_noi_ro_cho_may_dung(self):
+        """Tài liệu Veo: nói rõ vị trí máy, đừng dùng từ chung chung."""
+        m = tl._KHOI_MAY
+        assert "(that is where the camera is)" in m
+        assert "eye level of a person" in m
 
 
 class TestCuaSoatThoiDai:
@@ -1104,6 +1209,18 @@ class TestCuaSoatThoiDai:
                   "power line", "road sign", "asphalt", "market umbrella"):
             assert v in p, v
 
+    def test_bo_qua_dau_cua_nha_cung_cap(self):
+        """Dấu "Veo" ở góc khung không phải lỗi thời đại.
+
+        Đo 28/08/2026 trên phim 0005: không có dòng này thì bộ soát báo dấu ấy ở
+        6 trên 30 khung, và nó dìm mất lỗi THẬT tìm được trong cùng những khung
+        đó (ô tô đậu, cột đèn gang, nhà Haussmann thế kỷ 19). Một cửa chặn kêu
+        về thứ không ai sửa được thì người ta thôi đọc nó.
+        """
+        p = " ".join(tl.LOI_NHAC_SOAT_THOI_DAI.format(nam=500, noi="x").split())
+        assert "IGNORE the small provider watermark" in p
+        assert "Do NOT report it" in p
+
     def test_khong_duoc_cham_diem_tham_my(self):
         """Cửa này chỉ soi lạc thời đại. Chấm đẹp-xấu là bắt nó đoán bừa."""
         p = " ".join(tl.LOI_NHAC_SOAT_THOI_DAI.format(nam=500, noi="x").split())
@@ -1124,9 +1241,12 @@ class TestCuaSoatThoiDai:
 
         def goi(noi_dung):
             thay.append(noi_dung)
-            return '{"lac": ["a red car"], "noi_o_dau": "bottom left"}'
+            return ('{"lac": ["a red car"], "noi_o_dau": "bottom left",'
+                    ' "thay_bang": "the quay is bare flagstones with a moored skiff"}')
 
-        assert tl.soat_thoi_dai(goi, tep, 500, "a street") == ["a red car"]
+        lac, dung = tl.soat_thoi_dai(goi, tep, 500, "a street")
+        assert lac == ["a red car"]
+        assert dung == "the quay is bare flagstones with a moored skiff"
         assert len(thay) == 1 and len(thay[0]) == 2
         assert thay[0][0]["type"] == "text" and "500" in thay[0][0]["text"]
         # Khối ảnh kiểu Anthropic — cổng bỏ im khối `image_url`. Xem
@@ -1136,8 +1256,16 @@ class TestCuaSoatThoiDai:
 
     def test_khong_co_tep_thi_khong_goi(self, tmp_path):
         goi = []
-        assert tl.soat_thoi_dai(lambda x: goi.append(x), str(tmp_path / "khong.png"), 5) == []
+        assert tl.soat_thoi_dai(
+            lambda x: goi.append(x), str(tmp_path / "khong.png"), 5) == ([], "")
         assert goi == []
+
+    def test_bo_cham_phai_noi_CAI_GI_DUNG_THAY_VAO(self):
+        """Kể tên cái nhà để cấm nó thì cái nhà vẫn nằm trong lời nhắc."""
+        p = " ".join(tl.LOI_NHAC_SOAT_THOI_DAI.format(nam=451, noi="x").split())
+        assert "thay_bang" in p
+        assert "Name the real thing, do not say what is absent" in p
+        assert "something a painter could work from" in p
 
 
 class TestChonChoDungNgayTuBuocDau:
@@ -1446,4 +1574,256 @@ class TestGuiAnhPhaiDungKieuKhoiAnh:
         # bỏ dòng chú thích rồi mới tìm
         ma = "\n".join(d for d in ma.splitlines() if not d.strip().startswith("#"))
         assert not re.search(r'"type"\s*:\s*"image_url"', ma),             "cổng bỏ im khối image_url — dùng goi_van_ban.khoi_anh"
+
+
+class TestGoiDangYouTube:
+    """Phim dựng xong vẫn chưa đăng được nếu thiếu tiêu đề, mô tả, thẻ, chương.
+
+    Chủ dự án 28/08/2026: *"làm all mọi thứ để ra sp có thể đăng youtube"*.
+
+    Kênh này chỉ có `8-thumbnail.md`, không có khâu SEO nào. Khâu SEO chung đọc
+    KỊCH BẢN LỜI ĐỌC để viết mô tả — mà phim này **không có lời đọc**, chỉ có
+    bảng mốc thời gian. Nên gói đăng phải viết riêng, lấy từ bảng mốc.
+    """
+
+    def _bang(self):
+        return {"noi": "the square before Notre-Dame, Paris",
+                "noi_vi": "quảng trường trước Nhà thờ Đức Bà",
+                "moc": [{"nam": -52, "su_that": "Lutèce bị đốt"},
+                        {"nam": 1163, "su_that": "khởi công nhà thờ"},
+                        {"nam": 2019, "su_that": "hoả hoạn"}]}
+
+    def test_loi_nhac_mang_du_noi_nam_va_moc(self):
+        p = " ".join(tl.loi_nhac_seo(self._bang(), 15).split())
+        assert "the square before Notre-Dame, Paris" in p
+        assert "-52 to 2019" in p
+        assert "Lutèce bị đốt" in p and "hoả hoạn" in p
+        assert "about 15 minutes" in p
+
+    def test_doi_ca_tieu_de_anh_va_viet(self):
+        """Thể loại này người xem toàn cầu, còn kênh thì của người Việt."""
+        p = tl.loi_nhac_seo(self._bang(), 15)
+        assert "tieu_de_en" in p and "tieu_de_vi" in p
+        assert "mo_ta_en" in p and "mo_ta_vi" in p
+        assert "not a translation of the English word by word" in " ".join(p.split())
+
+    def test_cam_lay_NGUOI_THAT_lam_chu_the_canh(self):
+        """Máy dựng video từ chối vẽ người thật nhận diện được — và nó từ chối
+        bằng cách TREO tới hết giờ chờ.
+
+        Đo 29/08/2026, lượt 0001 cảnh 99: mốc 1980 "Giáo hoàng Jean-Paul II thăm
+        Nhà thờ Đức Bà" được viết thành *"một giáo hoàng áo trắng đi dọc lối rào
+        sát ngay máy quay, tay giơ lên"*. Clip ấy hỏng **hai lần, mỗi lần đợi 12
+        phút** rồi mới bỏ — không có dòng lỗi nào nói vì sao.
+
+        Cách viết đúng cũng là cách quay đúng: máy đứng cách bốn mươi mét, nên
+        thứ nó thấy là ĐÁM ĐÔNG, hàng rào, cờ, giàn máy quay truyền hình. Đám
+        đông chính là biến cố, và đám đông là thứ máy quay cố định làm tốt nhất.
+        """
+        p = " ".join(tl.LOI_NHAC_BANG_MOC.split())
+        assert "NEVER make a named real person the thing the shot is about" in p
+        assert "refuses by hanging until the job times out" in p
+        assert "the crowd IS the event" in p
+
+    def test_bat_noi_that_rang_hinh_la_dung_lai(self):
+        """Kênh sử mà để người xem tưởng là phim tư liệu thật thì mất lòng tin."""
+        p = " ".join(tl.loi_nhac_seo(self._bang(), 15).split())
+        assert "not photographs" in p
+        assert "do not claim the footage is real" in p
+        assert "Do not promise anything the milestone list does not contain" in p
+
+    def test_moc_chuong_tinh_theo_hai_canh_moi_moc(self):
+        """Mỗi mốc hai cảnh (GIỮ + TUA) nên chiếm 16 giây, không phải 8."""
+        p = tl.loi_nhac_seo(self._bang(), 15, giay_moc=8.0)
+        assert "the same 16 seconds" in " ".join(p.split())
+
+    def test_goi_seo_dung_thanh_khoi_chu_doc_duoc(self):
+        ra = tl.goi_seo({
+            "tieu_de_en": "Evolution of Paris | 2200 Years in 15 Minutes",
+            "tieu_de_vi": "Paris qua 2200 năm",
+            "chuong": ["0:00 -52 Lutèce cháy", "2:40 1163 khởi công"],
+            "mo_ta_en": "One camera, one square.", "mo_ta_vi": "Một máy quay.",
+            "the": ["paris", "timelapse", "lịch sử"], "chu_bia": "-52 → 2024"})
+        for x in ("TIÊU ĐỀ (tiếng Anh)", "TIÊU ĐỀ (tiếng Việt)", "CHƯƠNG",
+                  "MÔ TẢ (tiếng Anh)", "MÔ TẢ (tiếng Việt)", "THẺ",
+                  "CHỮ TRÊN ẢNH BÌA"):
+            assert x in ra, x
+        assert "paris, timelapse, lịch sử" in ra
+        assert "0:00 -52 Lutèce cháy\n2:40 1163 khởi công" in ra
+
+    def test_thieu_truong_thi_bo_qua_chu_khong_in_khoi_rong(self):
+        ra = tl.goi_seo({"tieu_de_en": "X"})
+        assert "TIÊU ĐỀ (tiếng Anh)" in ra
+        assert "THẺ" not in ra and "CHƯƠNG" not in ra
+
+    def test_tra_loi_hong_thi_khong_no(self):
+        assert tl.goi_seo(None).strip() == ""
+        assert tl.goi_seo("hỏng").strip() == ""
+
+
+class TestKhongKhiVaDamDong:
+    """Hai thứ cuối cùng tách ảnh của ta khỏi ảnh của đối thủ.
+
+    Đặt cạnh nhau khung năm 220 của họ và tấm ảnh mốc năm 25 đầu tiên kênh này
+    vẽ ra (28/08/2026):
+
+        họ : khói củi và bụi dày trong không khí, nắng thấp xiên qua, cuối phố
+             MỜ đi vì sương; đám đông chen kín một phần ba dưới khung, nhiều
+             người nhìn từ sau gáy; màu ấm, bạc, bám bụi
+        ta : trời xanh trong, bóng đổ gắt, mọi thứ sắc lẻm từ tiền cảnh tới chân
+             trời; tiền cảnh gần như trống
+
+    Ảnh của ta đọc ra **phim dựng máy**, ảnh của họ đọc ra **ảnh chụp**. Và lời
+    nhắc cũ chống lại chính cái nhìn ấy: nó viết *"deep focus from the foreground
+    to the far horizon"* — cấm hẳn lớp sương xa, thứ làm nên chiều sâu.
+    """
+
+    def _p(self, canh="grey paving slabs, timber shops on both sides"):
+        b = tl.doc_bang_moc({
+            "goc_may": "Street level in a narrow lane looking east.",
+            "moc_dinh": "the west front",
+            "moc": [{"nam": 25, "canh": canh, "bien_co": "boatmen roll a drum",
+                     "anh_sang": "clear bright morning",
+                     "doi_thuong": "grey slabs; oil lamps; handcarts; tunics"}]})
+        return tl.prompt_anh_moc(b, b["moc"][0], dau_phim=True)
+
+    def test_bo_deep_focus_toi_chan_troi(self):
+        """Chính câu ấy cấm mất lớp sương xa — thứ đọc ra chiều sâu."""
+        p = self._p()
+        assert "deep focus" not in p
+        assert "softened by distance and haze" in p
+
+    def test_khong_khi_co_khoi_bui_va_nang_thap(self):
+        p = self._p()
+        assert "lived-in air, not clean air" in p
+        for x in ("Woodsmoke", "dust", "haze", "rakes along the street"):
+            assert x in p, x
+
+    def test_dam_dong_chen_sat_may(self):
+        p = self._p()
+        assert "CLOSE TO THE CAMERA" in p
+        assert "seen from behind" in p
+        assert "filling the lower part of the frame" in p
+
+    def test_mot_moc_pho_vang_thi_van_duoc_vang(self):
+        """Bảng mốc được dặn cứ tám mốc để một mốc phố vắng hẳn — đừng nhét
+        người vào đó chỉ vì luật đám đông."""
+        p = self._p()
+        assert "and no busier" in p
+        assert "leave it empty" in p
+
+    def test_chat_anh_chup_chu_khong_phai_phim_dung_may(self):
+        p = self._p()
+        assert "35mm film" in p and "fine grain" in p
+        assert "documentary photograph" in p
+
+    def test_van_khong_vuot_tran_do_dai(self):
+        assert len(self._p()) <= tl.GIOI_HAN_LOI_NHAC
+
+
+class TestLoiNhacVeLaiPhaiVUA_TRAN:
+    """Cửa soát phát hiện được mà **không sửa được** — hai lỗi chồng nhau.
+
+    Đo 28/08/2026, lượt 0001, mốc 451:
+
+        mốc 451: ảnh có 2 vật lạc thế kỷ (jettied half-timbered houses…) — vẽ lại…
+        mốc 451: vẽ lại hỏng (invalid_request) — giữ tấm đầu.
+
+    Đo lại bằng tay:
+
+        lời nhắc gốc                      4.763 ký tự   (trần cổng 4.900/5.000)
+        + câu "ABSOLUTELY FORBIDDEN…"     5.022         → cổng từ chối
+
+    Lời nhắc ảnh vốn đã sát trần, nên câu vá **dán thêm** luôn làm vượt. Tức cửa
+    soát tìm ra lỗi thì báo cáo, rồi **luôn luôn** thất bại ở bước chữa — một
+    cửa chặn chỉ biết kêu.
+
+    Lỗi thứ hai: câu vá ấy đúng kiểu "no X" mà cùng ngày tôi vừa bỏ khắp nơi.
+    """
+
+    def _goc(self, n=4700):
+        return "G" * n
+
+    def test_ve_lai_khong_bao_gio_duoc_vuot_tran(self):
+        for n in (2000, 4700, 4899, 6000):
+            q = tl.loi_nhac_ve_lai(self._goc(n), "the houses are single-storey",
+                                   ["jettied houses"], 451)
+            assert len(q) <= tl.GIOI_HAN_LOI_NHAC, (n, len(q))
+
+    def test_cau_sua_dung_dau_va_viet_bang_khang_dinh(self):
+        q = tl.loi_nhac_ve_lai(self._goc(200),
+                               "the houses are single-storey with flush fronts",
+                               ["jettied houses"], 451)
+        assert q.startswith("IMPORTANT, this is the year 451")
+        assert "the houses are single-storey with flush fronts" in q
+        assert "ABSOLUTELY FORBIDDEN" not in q
+        assert "There is no" not in q
+
+    def test_khong_noi_duoc_cai_dung_thi_danh_noi_cai_sai(self):
+        """Vẫn hơn không vẽ lại — nhưng giữ thật ngắn."""
+        q = tl.loi_nhac_ve_lai(self._goc(200), "", ["a red car", "a street lamp"], 500)
+        assert "none of these belong here" in q
+        assert "a red car" in q
+
+
+class TestDanYCuaChuKenh:
+    """Khách điền kịch bản, AI dựa vào đó hoàn thiện — nhưng vẫn phải tra cứu.
+
+    Chủ dự án 29/08/2026: *"tôi sẽ tạo 1 kịch bản cơ bản sau đó AI dựa vào dữ
+    liệu đó để hoàn thiện — coi như đầu vào ít hay nhiều thì AI vẫn ra được kịch
+    bản để làm video"*, và ngay sau đó nói rõ thêm: *"dù đưa vào thì vẫn là tư
+    liệu tham khảo, vẫn phải tra cứu và xây cho phù hợp"*.
+
+    Hai câu ấy đặt ra đúng một ranh giới: dàn ý quyết định **phim nói về cái
+    gì**, còn tư liệu quyết định **cái gì có thật**. Khi hai bên đá nhau thì
+    nguồn thắng — vì luật số 1 của kênh là chỉ dựng từ sự kiện có thật, và một
+    bộ phim lặng lẽ bịa một mốc cho vừa lòng chủ kênh thì làm hỏng lòng tin vào
+    tất cả các mốc còn lại.
+
+    ═══ VÀ DÀN Ý PHẢI ĐI ĐƯỜNG RIÊNG ═══
+
+    Ô "tư liệu" của tab Tự động ghi thẳng vào `0-tu-lieu.txt`. Với kênh này tệp
+    ấy là **tư liệu tra cứu** — lượt 0001 đọc về 1.113.506 chữ. Ghi đè nó bằng
+    vài trăm chữ dàn ý là mất sạch phần kiểm chứng, và bảng mốc chỉ còn những gì
+    khách kịp nhớ. Nên dàn ý có tệp riêng: `0-dan-y.txt`.
+    """
+
+    def test_dan_y_co_tep_rieng_khong_de_len_tu_lieu(self):
+        assert tl.TEP_DAN_Y == "0-dan-y.txt"
+        assert tl.TEP_DAN_Y != "0-tu-lieu.txt"
+
+    def test_khong_co_dan_y_thi_loi_nhac_khong_doi(self):
+        p = tl.loi_nhac_bang_moc("Paris", 57, "tư liệu…")
+        assert "DÀN Ý CỦA CHỦ KÊNH" not in p
+        assert tl.khung_dan_y("") == "" and tl.khung_dan_y("   ") == ""
+
+    def test_co_dan_y_thi_chen_nguyen_van_len_dau(self):
+        p = tl.loi_nhac_bang_moc("Paris", 57, "tư liệu…", None,
+                                 "nhớ cảnh mùa đông 1709 sông đóng băng")
+        assert "DÀN Ý CỦA CHỦ KÊNH" in p
+        assert "nhớ cảnh mùa đông 1709 sông đóng băng" in p
+        assert p.index("DÀN Ý CỦA CHỦ KÊNH") < p.index("SOURCE MATERIAL")
+
+    def test_dan_y_la_tham_khao_chu_khong_phai_phan_quyet(self):
+        p = " ".join(tl.loi_nhac_bang_moc("Paris", 57, "x", None, "dàn ý").split())
+        assert "Treat it as REFERENCE MATERIAL" in p
+        assert "it does not overrule" in p
+
+    def test_nguon_thang_khi_ngay_thang_da_nhau(self):
+        p = " ".join(tl.loi_nhac_bang_moc("Paris", 57, "x", None, "dàn ý").split())
+        assert "the sources win" in p
+        assert "note in `su_that` that the date was corrected" in p
+
+    def test_khong_duoc_bia_mot_moc_cho_vua_long_chu_kenh(self):
+        p = " ".join(tl.loi_nhac_bang_moc("Paris", 57, "x", None, "dàn ý").split())
+        assert "leave it out" in p
+        assert "quietly invents one event to please the owner" in p
+
+    def test_dau_vao_it_hay_nhieu_deu_phai_ra_bang_du(self):
+        p = " ".join(tl.loi_nhac_bang_moc("Paris", 57, "x", None, "dàn ý").split())
+        assert "fill out the rest from the sources" in p
+        assert "must both come out as a complete, sourced, usable table" in p
+
+    def test_dan_y_qua_dai_thi_cat_bot_chu_khong_no(self):
+        assert len(tl.khung_dan_y("x" * 90000)) < 30000
 

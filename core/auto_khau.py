@@ -1002,6 +1002,37 @@ class LoiKetJob(RuntimeError):
     """
 
 
+def khoa_thoat_ket(lan: int) -> str:
+    """Đuôi khoá idempotency để THOÁT một khoá đã bị kẹt ở máy chủ.
+
+    ═══ MỘT KHOÁ HỎNG WEDGE CẢ LƯỢT CHẠY — ĐO 28/08/2026 ═══
+
+    Phim `openstory/0010`, đoạn giọng đọc số 5 hỏng **mười hai lần liền** với
+    `engine_unavailable`, trong khi bốn đoạn trước làm được. Loại dần:
+
+    * gửi **đúng 857 ký tự ấy** qua đường trần trụi, khoá mới → **xong trong 62
+      giây**. Không phải nội dung, không phải độ dài, không phải nhà máy.
+    * cái khác duy nhất là **khoá**: tool gọi lại bằng đúng khoá cũ.
+
+    Job hỏng ở máy chủ thì bản ghi của khoá ấy giữ luôn cái hỏng. Gọi lại bằng
+    khoá cũ là nhận lại đúng cái xác ấy, mãi mãi.
+
+    Tool vốn có một nấc thoát — đuôi `":k2"` — nhưng chỉ **một** nấc. Khâu ngoài
+    thử lại cả khâu ba lần, mỗi lần lại dựng đúng hai khoá `""` và `":k2"` cũ,
+    nên sau lần đầu là cả hai đều đã hỏng. Lượt chạy kẹt ba tiếng vì thế.
+
+    Đuôi ở đây bám theo THỜI GIAN nên **đổi cả khi tool khởi động lại** — chỗ
+    mà một biến đếm trong bộ nhớ không cứu được.
+
+    ⚠ Chỉ gọi hàm này SAU một `LoiKetJob` (máy chủ nhận rồi bỏ). Job hỏng thì
+    không bị trừ tiền, nên đặt lại bằng khoá mới là an toàn. Đừng dùng nó cho
+    lần gọi ĐẦU: khoá đổi mỗi lần gọi thì mất luôn cái chống trả tiền hai lần.
+    """
+    import time as _t  # noqa: PLC0415
+
+    return ":k{0}-{1}".format(int(lan), int(_t.time()) // 60)
+
+
 #: Bao lâu thì nhắc một câu trong lúc đợi job.
 #:
 #: 90 giây: đủ thưa để không làm rác màn hình, đủ dày để người ngồi trước máy
@@ -1740,9 +1771,16 @@ def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
     except LoiKetJob:
         # Job đã nhận nhưng bỏ đó. Khoá mới là đường duy nhất — xem ghi chú
         # dài ở chỗ tạo clip.
-        bc.ghi("    {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá "
-               "mới.".format(ten_hien or "ảnh"))
-        return mot_lan(dang_dung, ":k2")
+        # Hai nấc, đuôi bám thời gian — xem `khoa_thoat_ket`. Một nấc `":k2"`
+        # cố định thì chạy lại lượt là gặp đúng khoá đã hỏng.
+        for _lan in range(1, 3):
+            bc.ghi("    {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá "
+                   "mới ({1}/2).".format(ten_hien or "ảnh", _lan))
+            try:
+                return mot_lan(dang_dung, khoa_thoat_ket(_lan))
+            except LoiKetJob:
+                if _lan == 2:
+                    raise
     except Exception as loi:  # noqa: BLE001
         chu = str(loi).lower()
         if not any(d in chu for d in _ANH_THAM_CHIEU_HONG) or not dang_dung:
@@ -2728,14 +2766,19 @@ def _khau_giong_doc(bc: BoiCanh):
                 return _cho_job(bc, job, tran=TRAN_CHO_TTS,
                                 ten_viec="đoạn {0}".format(so), so=theo_doi)
 
-            try:
-                goi_tts = doc()
-            except LoiKetJob:
-                # Máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá mới, đúng
-                # như khâu ảnh và khâu clip vẫn làm.
-                bc.ghi("    đoạn {0}: máy chủ nhận việc rồi bỏ đó — đặt "
-                       "lại bằng khoá mới.".format(so))
-                goi_tts = doc(":k2")
+            # Máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá MỚI. Hai nấc,
+            # và đuôi bám thời gian nên chạy lại lượt cũng ra khoá khác; xem
+            # `khoa_thoat_ket` để biết vì sao một nấc là không đủ.
+            goi_tts = None
+            for _lan in range(3):
+                try:
+                    goi_tts = doc("" if _lan == 0 else khoa_thoat_ket(_lan))
+                    break
+                except LoiKetJob:
+                    if _lan == 2:
+                        raise
+                    bc.ghi("    đoạn {0}: máy chủ nhận việc rồi bỏ đó — đặt "
+                           "lại bằng khoá mới ({1}/2).".format(so, _lan + 1))
             _tai_ket_qua(bc, goi_tts, 0, tep)
             # ═══ SOI ÂM ĐẦU: NHÀ MÁY HAY XÉN MẤT CHỮ ĐẦU ═══
             #
@@ -4062,9 +4105,20 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         # Đổi lại là cả lượt chạy không đứng hình. Đã đo thật 14/08/2026: chín
         # clip cuối kẹt, sáu luồng cùng ngồi đợi, cả mẻ 112 cảnh không nhích
         # suốt mười hai phút. Đường còn lại — bỏ cả lượt — đắt hơn nhiều lần.
-        bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá "
-               "mới.".format(so_canh))
-        goi = goi_clip(url_anh, ":k2")
+        # MỘT nấc là không đủ: khâu ngoài thử lại cả khâu, mỗi lần lại dựng
+        # đúng hai khoá `""` và `":k2"` cũ — cả hai đã hỏng từ lần trước. Đo
+        # 28/08/2026 trên phim `openstory/0011` cảnh 40: `:k2` đặt lúc 17:44,
+        # tới 17:55 vẫn "đang làm". Xem `khoa_thoat_ket`.
+        goi = None
+        for _lan in range(1, 3):
+            bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng "
+                   "khoá mới ({1}/2).".format(so_canh, _lan))
+            try:
+                goi = goi_clip(url_anh, khoa_thoat_ket(_lan))
+                break
+            except LoiKetJob:
+                if _lan == 2:
+                    raise
     except Exception as loi:  # noqa: BLE001
         chu = str(loi).lower()
         if not url_anh or not any(d in chu for d in _ANH_THAM_CHIEU_HONG):
@@ -6345,6 +6399,51 @@ def _tra_anh_that(bc: BoiCanh, d: str, noi: str, noi_vi: str, moc_dinh: str,
 THU_MUC_THAM_CHIEU_TL = "tham-chieu"
 
 
+def _viet_goi_dang(bc: BoiCanh, d: str, bang: Dict[str, Any], phut: float,
+                   mo_hinh: str) -> None:
+    """Gói đăng YouTube cho kênh timelapse: `1-seo.txt` + `1-tieu-de.txt`.
+
+    ═══ VÌ SAO KÊNH NÀY PHẢI CÓ RIÊNG ═══
+
+    Khâu SEO chung (`_khau_kich_ban`, tệp `6-seo.md`) viết mô tả **từ kịch bản
+    lời đọc** — mà phim này không có lời đọc, chỉ có bảng mốc thời gian. Kênh
+    timelapse lại đi khâu kịch bản riêng, nên nó rơi qua cả hai cửa và trước bản
+    này **không sinh ra tiêu đề, mô tả, thẻ hay mốc chương nào**.
+
+    `1-tieu-de.txt` cũng là tệp khâu ẢNH BÌA đọc (`_doc_tieu_de`, hai dòng
+    `TITLE:` / `THUMB:`). Thiếu nó thì bìa vẽ ra không có chữ — mà chữ số năm to
+    đùng chính là thứ khiến người ta bấm vào ở thể loại này.
+
+    Chủ dự án 28/08/2026: *"làm all mọi thứ để ra sp có thể đăng youtube"*.
+
+    Hỏng ở bất cứ đâu cũng chỉ ghi nhật ký: bảy khâu trước đã tiêu tiền, một bộ
+    phim thiếu sẵn phần mô tả vẫn hơn hẳn một lượt chết ở khâu cuối.
+    """
+    from .timelapse import (  # noqa: PLC0415
+        GIAY_MOT_MOC, TEP_SEO, goi_seo, loi_nhac_seo,
+    )
+
+    tep_seo = os.path.join(d, TEP_SEO)
+    tep_ten = os.path.join(d, "1-tieu-de.txt")
+    if os.path.exists(tep_seo) and os.path.exists(tep_ten):
+        return
+    if not (bang.get("moc") or []):
+        return
+    try:
+        bc.kiem_dung()
+        goi = loc_json(bc.goi_chat(loi_nhac_seo(bang, phut, GIAY_MOT_MOC),
+                                   mo_hinh=mo_hinh, toi_da_token=4096))
+        _ghi_chu(tep_seo, goi_seo(goi))
+        d_ten = goi if isinstance(goi, dict) else {}
+        tieu_de = str(d_ten.get("tieu_de_vi") or d_ten.get("tieu_de_en") or "").strip()
+        chu_bia = str(d_ten.get("chu_bia") or "").strip()
+        if tieu_de or chu_bia:
+            _ghi_chu(tep_ten, "TITLE: {0}\nTHUMB: {1}\n".format(tieu_de, chu_bia))
+        bc.ghi("  gói đăng YouTube: {0} + 1-tieu-de.txt".format(TEP_SEO))
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("  (bỏ qua gói đăng YouTube: {0})".format(str(loi)[:90]))
+
+
 def _khau_kich_ban_timelapse(bc: BoiCanh):
     """TRA CỨU SỬ THẬT rồi mới dựng bảng mốc — phim này không có lời đọc.
 
@@ -6363,17 +6462,25 @@ def _khau_kich_ban_timelapse(bc: BoiCanh):
     """
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         from .timelapse import (  # noqa: PLC0415
-            GIAY_MOT_MOC, LOI_NHAC_BU_NGUON, LOI_NHAC_SOAT_MOC,
+            GIAY_MOT_MOC, LOI_NHAC_BU_NGUON, LOI_NHAC_SOAT_MOC, TEP_SEO,
+            goi_seo, loi_nhac_seo,
             LOI_NHAC_TIM_NGUON, TEP_MOC, bai_da_doc, doc_bang_moc,
-            loi_nhac_bang_moc, nguon_bu, so_moc_cho_phut, soat_bang_moc,
+            TEP_DAN_Y, loi_nhac_bang_moc, nguon_bu, so_moc_cho_phut,
+            soat_bang_moc,
             tai_tu_lieu_su,
         )
 
         d = luot.thu_muc
         tep = os.path.join(d, TEP_MOC)
+        phut_kenh = float(getattr(bc.kenh, "phut_muc_tieu", 0) or 8)
         if os.path.exists(tep):
             with open(tep, encoding="utf-8") as f:
                 bang = json.load(f)
+            # Bảng mốc đã có nhưng gói đăng thì có thể chưa: lượt chạy dở trước
+            # bản này, hoặc lần trước gói đăng hỏng. Bù ở đây để bấm "Chạy tiếp"
+            # là xong, thay vì phải dựng lại cả bảng mốc.
+            _viet_goi_dang(bc, d, bang, phut_kenh,
+                           str(bc.kenh.mo_hinh or "claude-sonnet-5"))
             return {"da_co": True, "so_moc": len(bang.get("moc") or [])}
         vao = luot.dau_vao or {}
         chu_de = str(vao.get("tieu_de") or "").strip() or str(vao.get("link") or "").strip()
@@ -6458,8 +6565,13 @@ def _khau_kich_ban_timelapse(bc: BoiCanh):
         so_moc = so_moc_cho_phut(phut, GIAY_MOT_MOC)
         bc.ghi("  dựng bảng mốc: xin khoảng {0} mốc cho ~{1:.0f} phút phim "
                "(sử thật có bao nhiêu thì lấy bấy nhiêu).".format(so_moc, phut))
+        # DÀN Ý VIẾT TAY của chủ kênh, nếu có — xương sống của bảng mốc.
+        dan_y = _doc_chu(os.path.join(d, TEP_DAN_Y)).strip()
+        if dan_y:
+            bc.ghi("  có dàn ý của bạn ({0} chữ) — dùng làm xương sống, tra cứu "
+                   "để kiểm và bù cho đủ mốc.".format(len(dan_y)))
         bang = doc_bang_moc(loc_json(bc.goi_chat(
-            loi_nhac_bang_moc(chu_de, so_moc, tu_lieu, nhan_dang),
+            loi_nhac_bang_moc(chu_de, so_moc, tu_lieu, nhan_dang, dan_y),
             mo_hinh=mo_hinh, toi_da_token=32000)))
         if len(bang.get("moc") or []) < 2:
             raise LoiNoiDung("AI không dựng được bảng mốc thời gian — thử lại hoặc "
@@ -6504,7 +6616,8 @@ def _khau_kich_ban_timelapse(bc: BoiCanh):
                 _ghi_chu(tep_tl, tu_lieu)
                 bc.ghi("  dựng lại bảng mốc với {0} chữ tư liệu…".format(len(tu_lieu)))
                 bang2 = doc_bang_moc(loc_json(bc.goi_chat(
-                    loi_nhac_bang_moc(chu_de, so_moc, tu_lieu, nhan_dang),
+                    loi_nhac_bang_moc(chu_de, so_moc, tu_lieu, nhan_dang,
+                                      dan_y),
                     mo_hinh=mo_hinh, toi_da_token=32000)))
                 # Chỉ nhận bản mới nếu nó thật sự lấp được chỗ trống.
                 if len(bang2.get("moc") or []) > len(bang["moc"]) and bang2.get("goc_may"):
@@ -6543,6 +6656,8 @@ def _khau_kich_ban_timelapse(bc: BoiCanh):
             f.write("\n".join(dong) + "\n")
         bc.ghi("  {0} mốc, từ {1} tới {2}.".format(
             len(bang["moc"]), bang["moc"][0].get("nam"), bang["moc"][-1].get("nam")))
+        _viet_goi_dang(bc, d, bang, phut, mo_hinh)
+
         return {"so_moc": len(bang["moc"]), "noi": bang.get("noi", "")}
 
     return lam
@@ -6674,7 +6789,9 @@ def _soat_thoi_dai_anh_moc(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
     """
     from .cham_anh import data_url  # noqa: PLC0415, F401
     from .goi_van_ban import goi_van_ban  # noqa: PLC0415
-    from .timelapse import NGUONG_LAC_THOI, soat_thoi_dai  # noqa: PLC0415
+    from .timelapse import (  # noqa: PLC0415
+        NGUONG_LAC_THOI, loi_nhac_ve_lai, soat_thoi_dai,
+    )
 
     def goi(noi_dung):
         return goi_van_ban(bc.client, [{"role": "user", "content": noi_dung}],
@@ -6686,7 +6803,7 @@ def _soat_thoi_dai_anh_moc(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
     # cua bo cham la mat ca khau anh (bai kiem
     # `test_bo_cham_hong_thi_day_chuyen_van_chay`).
     try:
-        lac = soat_thoi_dai(goi, anh, nam, noi)
+        lac, thay_bang = soat_thoi_dai(goi, anh, nam, noi)
     except Exception as loi:  # noqa: BLE001
         bc.ghi("    mốc {0}: cửa soát thời đại hỏng ({1}) — bỏ qua tấm "
                "này.".format(nam, str(loi)[:60]))
@@ -6700,17 +6817,17 @@ def _soat_thoi_dai_anh_moc(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
         shutil.copyfile(anh, cu)
         os.remove(anh)
         c2 = dict(c)
-        c2["img_prompt"] = "{0}\n\nABSOLUTELY FORBIDDEN in this picture, remove " \
-                           "them completely: {1}. There is no {2} anywhere in " \
-                           "the year {3}.".format(
-                               str(c.get("img_prompt") or ""), "; ".join(lac),
-                               lac[0], nam)
+        c2["img_prompt"] = loi_nhac_ve_lai(str(c.get("img_prompt") or ""),
+                                           thay_bang, lac, nam)
         _lam_anh_canh(bc, luot, c2, anh, hop, so=so)
         try:
-            lai = soat_thoi_dai(goi, anh, nam, noi)
+            lai, _ = soat_thoi_dai(goi, anh, nam, noi)
         except Exception:  # noqa: BLE001
             lai = []
-        if len(lai) >= NGUONG_LAC_THOI and len(lai) >= len(lac):
+        # Hoà thì giữ tấm VẼ LẠI, không giữ tấm đầu: tấm vẽ lại ít nhất đã
+        # được vẽ với câu sửa, còn tấm đầu thì chưa ai nói gì với nó. Chỉ giữ
+        # tấm đầu khi vẽ lại thật sự TỆ HƠN.
+        if len(lai) >= NGUONG_LAC_THOI and len(lai) > len(lac):
             # Ve lai khong hon: giu tam dau, va NOI RA. Doi tam moi lay tam cu
             # chi de khoi mat cong -- ca hai deu ban nhu nhau.
             shutil.copyfile(cu, anh)

@@ -208,7 +208,10 @@ __all__ = [
     "KHOA_GOC_MAY", "DANG_PHOI_SANG", "CHUOI_TROI",
     "loc_so_nam", "nam_theo_giay", "so_moc_cho_phut",
     "khoa_the_ky", "soat_thoi_dai", "LOI_NHAC_SOAT_THOI_DAI", "NGUONG_LAC_THOI",
+    "loi_nhac_ve_lai",
     "the_loai_that", "ung_vien_nhan_dang",
+    "TEP_SEO", "LOI_NHAC_SEO", "loi_nhac_seo", "goi_seo",
+    "TEP_DAN_Y", "KHUNG_DAN_Y", "khung_dan_y",
     "chon_anh_nhan_dang_bang_mat", "LOI_NHAC_NHIN_NHAN_DANG",
     "SO_UNG_VIEN_NHIN",
 ]
@@ -282,6 +285,7 @@ the great invasion, the liberation, the bombing — must be in the film and must
 be RECOGNISABLE when they arrive. Those are the moments they came for.
 
 TOPIC: {chu_de}
+{dan_y}
 
 Everything you write must come out of the source material below. Read it first,
 get the shape of the whole story, then choose the years.
@@ -355,7 +359,53 @@ Design the film. Return JSON only:
           block up the scaffold and set it; the raiders come up the street with
           torches and a roof catches; the procession passes and people kneel as
           it goes. It must be the documented event itself, not a decoration you
-          invented, and not a summary of a whole century.>",
+          invented, and not a summary of a whole century.
+
+          NEVER make a named real person the thing the shot is about — no pope,
+          no president, no general, no king whose face is on record. The machine
+          that draws the film refuses to render recognisable real people, and it
+          refuses by hanging until the job times out, so one such milestone costs
+          a whole shot and a long wait. Measured 29/08/2026: the milestone "the
+          Pope visits the cathedral, 1980" was written as *a white-robed pope
+          comes along a barriered lane close past the camera*, and that shot
+          failed twice, twelve minutes each time.
+
+          Write the event the way the camera forty metres back actually sees it:
+          the crowd packed on the paving, the barriers and the flags, the press
+          of people leaning over them, the television scaffolds, the motorcade
+          in the distance. The film is about the PLACE — the crowd IS the event,
+          and a crowd is what a fixed camera is good at.>",
+      "doi_thuong": "<English, SIX things, semicolons between them, THE ORDINARY
+          KIT OF THIS YEAR at this place: what the ground underfoot is made of;
+          what gives light after dark; what moves along the road; what people
+          wear; WHAT THE WINDOWS ARE (an open hole, a wooden shutter, oiled
+          cloth, horn, small leaded panes, large panes); WHAT THE ROOFLINE
+          CARRIES (thatch, shingle, tile; a smoke hole, or chimneys, and of what).
+
+          Those last two are on the list because the machine that draws the film
+          has a habit: left to itself it puts leaded diamond-pane glass and brick
+          chimneys on almost every European street, in every century. Measured
+          28/08/2026 on one run: the period checker caught exactly those two at
+          milestone 451, 586, 1112, 1160 and 1163 — five redraws for one habit.
+          Naming the right window and the right roofline up front costs you six
+          words and saves all of them. Example for a medieval street: 'packed earth rutted by cart
+          wheels; oil lanterns hung on iron hooks; ox carts and handcarts;
+          woollen tunics and hoods'.
+
+          This is the single most useful line you write. The machine that draws
+          the film cannot be told what NOT to draw — naming a car to forbid it
+          only puts a car in its head. It CAN be told what the street is full
+          of, and a street already full of the right things has no room for the
+          wrong ones. Write what a person standing there would actually see
+          under their feet, over their head and on the backs of the people
+          around them.>",
+      "tieng": "<English, short: what this place SOUNDS like at this moment —
+          the voices, the animals, the work, the water, the weather. Example:
+          'market voices, hooves on packed earth, hammering from a forge, river
+          water'. The film has no narrator, so the sound of the clips is the
+          only sound the film has; if you leave this out the machine invents
+          something, and what it invents goes straight into the finished film.
+          Never music, never a narrator, never anyone talking to camera.>",
       "anh_sang": "<English, short: the hour, weather and season of THIS
           milestone — 'hard noon sun, dry summer dust', 'low winter light, wet
           cobbles', 'night, lit windows and lanterns'. The camera always faces the
@@ -464,8 +514,100 @@ _GOC_TU_KHONG = """ The camera stands AT STREET LEVEL, roughly eye height, INSID
       view."""
 
 
+def _doc_thay_bang(tra: Any) -> str:
+    """Rút câu `thay_bang` — cái ĐÚNG phải có thay vào chỗ vật lạc."""
+    t = str(tra or "").strip()
+    d, c = t.find("{"), t.rfind("}")
+    if d < 0 or c <= d:
+        return ""
+    try:
+        o = json.loads(t[d:c + 1])
+    except ValueError:
+        return ""
+    return str((o or {}).get("thay_bang") or "").strip()[:300] if isinstance(o, dict) else ""
+
+
+def loi_nhac_ve_lai(goc: str, thay_bang: str, lac: Sequence[str], nam: Any) -> str:
+    """Lời nhắc VẼ LẠI một tấm có vật lạc thế kỷ — viết bằng khẳng định.
+
+    ═══ HAI LỖI CHỒNG NHAU, ĐO 28/08/2026 ═══
+
+    Bản trước dán thêm vào cuối lời nhắc gốc:
+
+        "ABSOLUTELY FORBIDDEN in this picture, remove them completely: …
+         There is no jettied half-timbered house anywhere in the year 451."
+
+    **Một:** lời nhắc ảnh vốn đã 4.763 ký tự, sát trần 4.900. Dán thêm là 5.022
+    — cổng từ chối `invalid_request`. Nên mọi lần vẽ lại đều hỏng, và cửa soát
+    thành một cửa chỉ biết kêu chứ không chữa được gì.
+
+    **Hai:** câu vá ấy đúng kiểu "no X" mà cùng ngày tôi vừa bỏ khắp nơi. Kể tên
+    cái nhà để cấm nó thì cái nhà vẫn nằm trong lời nhắc.
+
+    Nay: đặt câu TẢ CÁI ĐÚNG lên **đầu** (chỗ máy đọc kỹ nhất), và cắt gọn cả
+    khối cho vừa trần.
+    """
+    dung = str(thay_bang or "").strip()
+    if not dung:
+        # Bộ chấm không nói được cái đúng thì đành nói cái sai — vẫn hơn không
+        # vẽ lại. Giữ thật ngắn để đỡ gọi tên chúng nhiều lần.
+        dung = "none of these belong here: {0}".format("; ".join(lac)[:160])
+    return gon_loi_nhac(
+        "IMPORTANT, this is the year {0} and an earlier version of this picture "
+        "got it wrong: {1}\n\n{2}".format(nam, dung, goc))
+
+
+#: Khối DÀN Ý của khách, chèn ngay sau TOPIC. Rỗng khi khách không viết gì.
+#:
+#: Chủ dự án 29/08/2026: *"tôi sẽ tạo 1 kịch bản cơ bản sau đó AI dựa vào dữ
+#: liệu đó để hoàn thiện — coi như đầu vào ít hay nhiều thì AI vẫn ra được kịch
+#: bản để làm video"*.
+KHUNG_DAN_Y = """
+═══ DÀN Ý CỦA CHỦ KÊNH — ĐỌC TRƯỚC MỌI THỨ KHÁC ═══
+
+The owner of this channel wrote the outline below by hand. Read it as WHAT THIS
+FILM IS MEANT TO BE — which stretch of history they care about, which moments
+they want the viewer to see, how much weight each part carries. It may be one
+line or twenty pages; it may name years or none; it may be in Vietnamese.
+
+Treat it as REFERENCE MATERIAL, exactly as you treat the encyclopedia articles.
+It does not overrule them, and it does not overrule rule 1 below: everything in
+this film must be a real, dated event. So:
+
+  * **Take their events and go looking for them in the sources.** When you find
+    one, use the sourced date and the sourced detail — that is the version that
+    goes in the table.
+  * **Where they give a year and the sources say another, the sources win.** Use
+    the sourced year, and note in `su_that` that the date was corrected.
+  * **Where they describe a moment without a date**, find the real dated event
+    the sources carry that matches what they are describing.
+  * **Where the sources carry nothing at all for something they name**, leave it
+    out. An outline is a wish list, not evidence, and a film that quietly invents
+    one event to please the owner loses the viewer's trust in all the others.
+    Say nothing; just do not put it in the table.
+  * **Their emphasis shapes the film.** If they linger on one century, give that
+    century more of the milestones you found — that part is theirs to decide.
+  * **Then fill out the rest from the sources** until you reach the target
+    number. They wrote a spine, not a full table.
+
+A one-line outline and a twenty-page one must both come out as a complete,
+sourced, usable table.
+
+--- the owner's outline ---
+{dan_y}
+--- end of the owner's outline ---
+"""
+
+
+def khung_dan_y(dan_y: str) -> str:
+    """Khối dàn ý để chèn vào lời nhắc bảng mốc. Không có thì trả rỗng."""
+    d = str(dan_y or "").strip()
+    return KHUNG_DAN_Y.format(dan_y=d[:20000]) if d else ""
+
+
 def loi_nhac_bang_moc(chu_de: str, so_moc: int, tu_lieu: str = "",
-                      anh_nhan_dang: Optional[Dict[str, Any]] = None) -> str:
+                      anh_nhan_dang: Optional[Dict[str, Any]] = None,
+                      dan_y: str = "") -> str:
     """Lời nhắc dựng bảng mốc — luôn kèm TƯ LIỆU đã tải về.
 
     `tu_lieu` rỗng nghĩa là chưa tra cứu được gì; lúc ấy lời nhắc nói thẳng ra
@@ -481,6 +623,7 @@ def loi_nhac_bang_moc(chu_de: str, so_moc: int, tu_lieu: str = "",
         goc = _GOC_TU_KHONG
     return LOI_NHAC_BANG_MOC.format(
         chu_de=str(chu_de or "").strip(), so_moc=int(so_moc), goc_tu_anh=goc,
+        dan_y=khung_dan_y(dan_y),
         tu_lieu=(str(tu_lieu).strip() or
                  "(chưa tải được tư liệu nào — KHÔNG được bịa mốc để bù vào)"))
 
@@ -496,6 +639,110 @@ def so_moc_cho_phut(phut: float, giay_moi_moc: float = GIAY_MOT_MOC) -> int:
     án xem xong nói đúng một câu: *"chả có cái mốc chả có nhịp gì"*.
     """
     return max(4, int(math.ceil(float(phut) * 60.0 / (2.0 * float(giay_moi_moc)))))
+
+
+#: Tên tệp SEO — trùng tên khâu chung dùng, để tab Tự động và người dùng tìm
+#: thấy nó ở đúng chỗ họ quen.
+TEP_SEO = "1-seo.txt"
+
+#: Dàn ý viết tay của chủ kênh. Đi ĐƯỜNG RIÊNG, không lẫn vào
+#: `0-tu-lieu.txt`: tệp ấy là tư liệu tra cứu (hơn một triệu chữ đọc từ
+#: bách khoa), và ghi đè nó bằng vài trăm chữ dàn ý là mất sạch phần
+#: kiểm chứng — bảng mốc sẽ chỉ còn những gì khách kịp nhớ.
+TEP_DAN_Y = "0-dan-y.txt"
+
+LOI_NHAC_SEO = """Write the YouTube publishing pack for a finished fixed-camera history timelapse
+film. The film has NO narration and NO subtitles: it is one locked camera on one
+place, and a year counter running in the corner.
+
+PLACE: {noi} ({noi_vi})
+YEARS COVERED: {nam_dau} to {nam_cuoi}
+RUNNING TIME: about {phut} minutes
+THE MILESTONES THE FILM ACTUALLY SHOWS:
+{moc}
+
+The audience for this format is worldwide and mostly English-speaking, but this
+channel is Vietnamese. So write BOTH, and write each one as a native would.
+
+The proven title shape for this genre names the place, says what the format is,
+and puts the span and the running time in numbers — that last part is what makes
+people click, because it promises a whole history in a known amount of time.
+
+Return JSON only:
+
+{{
+  "tieu_de_en": "<English title, at most 100 characters. Name the place, the
+      format, the span in years and the running time. Numbers, not words.>",
+  "tieu_de_vi": "<Vietnamese title, at most 100 characters, same three facts.
+      Natural Vietnamese, not a translation of the English word by word.>",
+  "mo_ta_en": "<English description, 3 to 6 short paragraphs. Open with what the
+      viewer is about to watch and where the camera stands. Then a plain list of
+      the biggest dated moments they will see, in order, each on its own line as
+      'YEAR — what happens'. Then one honest paragraph saying the pictures are
+      generated from the documented record: the dates and the events are real
+      and sourced from encyclopedia articles, the images are a reconstruction,
+      not photographs. End with what to look for — the one landmark that stands
+      at the end of the street through the whole film.>",
+  "mo_ta_vi": "<Vietnamese description, the same shape and the same honesty
+      paragraph. Not a word-by-word translation.>",
+  "the": ["<12 to 18 YouTube tags, lowercase, mixed English and Vietnamese,
+      the ones people actually type: the place name, the country, 'timelapse',
+      'history of ...', 'evolution of ...', the century names.>"],
+  "chuong": ["<8 to 14 chapter lines for the description, each exactly
+      'M:SS Label' — the label being the year and the event, e.g.
+      '0:00 -52 Lutetia burns'. Work the times out from the milestone list: the
+      film gives every milestone the same {giay_moc} seconds, in the order
+      listed, and the first one starts at 0:00.>"],
+  "chu_bia": "<the text to burn on the thumbnail: at most 4 words or a pair of
+      years, huge and readable on a phone. Usually the two ends of the span.>"
+}}
+
+Be truthful. Do not promise anything the milestone list does not contain, do not
+invent an event for the description, and do not claim the footage is real."""
+
+
+def loi_nhac_seo(bang: Dict[str, Any], phut: float = 15.0,
+                 giay_moc: float = GIAY_MOT_MOC) -> str:
+    """Lời nhắc gói đăng YouTube, dựng từ bảng mốc.
+
+    Mỗi mốc chiếm hai cảnh (GIỮ + TUA), nên một mốc dài `2 × giay_moc` giây —
+    con số ấy đưa vào lời nhắc để AI tính đúng mốc chương.
+    """
+    moc = list(bang.get("moc") or [])
+    dong = []
+    for i, m in enumerate(moc):
+        dong.append("{0}. {1} — {2}".format(
+            i + 1, m.get("nam"), str(m.get("su_that") or m.get("nhan") or "")[:110]))
+    nam = [int(m["nam"]) for m in moc if str(m.get("nam", "")).lstrip("-").isdigit()]
+    return LOI_NHAC_SEO.format(
+        noi=str(bang.get("noi") or ""), noi_vi=str(bang.get("noi_vi") or ""),
+        nam_dau=min(nam) if nam else "?", nam_cuoi=max(nam) if nam else "?",
+        phut=int(round(float(phut))), giay_moc=int(2 * float(giay_moc)),
+        moc="\n".join(dong)[:9000])
+
+
+def goi_seo(tho: Any) -> str:
+    """Câu trả lời JSON → khối chữ người đọc được, ghi thẳng vào `1-seo.txt`."""
+    d = tho if isinstance(tho, dict) else {}
+    ra = []
+
+    def khoi(ten, chu):
+        chu = str(chu or "").strip()
+        if chu:
+            ra.append("═══ {0} ═══\n{1}".format(ten, chu))
+
+    khoi("TIÊU ĐỀ (tiếng Anh)", d.get("tieu_de_en"))
+    khoi("TIÊU ĐỀ (tiếng Việt)", d.get("tieu_de_vi"))
+    ch = [str(x).strip() for x in (d.get("chuong") or []) if str(x).strip()]
+    if ch:
+        khoi("CHƯƠNG (dán vào đầu phần mô tả)", "\n".join(ch))
+    khoi("MÔ TẢ (tiếng Anh)", d.get("mo_ta_en"))
+    khoi("MÔ TẢ (tiếng Việt)", d.get("mo_ta_vi"))
+    the = [str(x).strip() for x in (d.get("the") or []) if str(x).strip()]
+    if the:
+        khoi("THẺ", ", ".join(the))
+    khoi("CHỮ TRÊN ẢNH BÌA", d.get("chu_bia"))
+    return "\n\n".join(ra) + "\n"
 
 
 def doc_bang_moc(tho: Any) -> Dict[str, Any]:
@@ -519,6 +766,11 @@ def doc_bang_moc(tho: Any) -> Dict[str, Any]:
         moc.append({"nam": nam, "nhan": str(m.get("nhan") or "").strip(),
                     "canh": canh, "bien_co": str(m.get("bien_co") or "").strip(),
                     "anh_sang": str(m.get("anh_sang") or "").strip(),
+                    # Hai trường cho lời nhắc clip, xem `khoa_the_ky` và
+                    # `khoi_tieng`: bộ đồ nghề thời ấy (thay cho danh sách cấm)
+                    # và tiếng của cảnh (không dặn thì Veo tự bịa tiếng).
+                    "doi_thuong": str(m.get("doi_thuong") or "").strip(),
+                    "tieng": str(m.get("tieng") or "").strip(),
                     "su_that": str(m.get("su_that") or "").strip(), "tam": tam})
     moc.sort(key=lambda x: x["nam"])
     return {"noi": str(d.get("noi") or "").strip(),
@@ -1929,10 +2181,11 @@ DANG_PHOI_SANG = (
     "individual figures. Smoke and cloud are smeared into soft bands.")
 
 _DUOI_ANH_MOC = (
-    " Photoreal cinematic still, deep focus from the foreground to the far horizon, "
-    "rich human-scale detail close to the camera, 16:9. No text, no letters, no "
-    "numbers, no watermark, no people looking at the camera, no blood, no weapons "
-    "pointed at the viewer.")
+    " Photoreal documentary photograph on 35mm film, fine grain, natural "
+    "lens: sharp and rich in detail close to the camera, the far end of the "
+    "street softened by distance and haze. 16:9. No text, no letters, no "
+    "numbers, no watermark, no people looking at the camera, no blood, no "
+    "weapons pointed at the viewer.")
 
 
 #: Câu đi kèm ẢNH NHẬN DẠNG — tấm chụp chỗ ấy ngày nay, gắn vào MỌI tấm vẽ.
@@ -1954,6 +2207,52 @@ _CAU_NHAN_DANG = (
     "railings, signs, wires, lamp posts, ticket booths and modern visitors are "
     "all absent. Take the PLACE from the photograph and the CENTURY from the "
     "description.")
+
+
+#: KHÔNG KHÍ + ĐÁM ĐÔNG — hai thứ cuối cùng tách ảnh của ta khỏi ảnh của họ.
+#:
+#: Đặt cạnh nhau khung năm 220 của đối thủ và tấm ảnh mốc năm 25 đầu tiên của
+#: kênh này (28/08/2026):
+#:
+#:   họ  : khói củi và bụi dày trong không khí, nắng thấp xiên qua, cuối phố MỜ
+#:         đi vì sương; đám đông chen kín một phần ba dưới khung, nhiều người
+#:         nhìn từ sau gáy; màu ấm, bạc, bám bụi
+#:   ta  : trời xanh trong, bóng đổ gắt, mọi thứ sắc lẻm từ tiền cảnh tới chân
+#:         trời; tiền cảnh gần như trống
+#:
+#: Ảnh của ta đọc ra **phim dựng máy**, ảnh của họ đọc ra **ảnh chụp**. Và lời
+#: nhắc cũ của ta chống lại chính cái nhìn ấy: nó viết *"deep focus from the
+#: foreground to the far horizon"*, tức cấm hẳn lớp sương xa — thứ làm nên
+#: chiều sâu — rồi không nói gì về đám đông.
+#:
+#: Cả hai đều là câu KHẲNG ĐỊNH tả cái có, đúng cách Veo đọc.
+_KHOI_KHONG_KHI = (
+    "Atmosphere: this is lived-in air, not clean air. Woodsmoke from hearths and "
+    "workshops drifts across the lane, fine dust hangs where feet and wheels have "
+    "raised it, and the far end of the street is softened and paled by haze so "
+    "that distance reads. Sunlight rakes along the street low and warm and catches "
+    "the smoke. Colours are warm and slightly dusty rather than clean and "
+    "saturated.")
+
+#: Đám đông của mốc nào cũng lấy từ chữ của mốc ấy — có mốc là phố vắng hẳn, và
+#: bảng mốc được dặn cứ tám mốc thì để một mốc như thế. Nên câu này nói rõ: theo
+#: lời tả, và CHỈ khi phố đông thì mới chen người sát máy.
+_KHOI_DAM_DONG = (
+    "Foreground and crowd: as busy as the description of this year says, and no "
+    "busier — if it says the street is empty or deserted, leave it empty. When "
+    "there are people, some of them stand and walk CLOSE TO THE CAMERA, within a "
+    "few paces, several seen from behind or in three-quarter view, filling the "
+    "lower part of the frame; the rest thin out away down the lane. Their animals, "
+    "carts, baskets and loads are among them, close enough to read.\n"
+    # Cam "khong chu" la cau CAM, va cam thi yeu -- do 28/08/2026: bo soat bat
+    # chu viet tren bien hieu o moc 1302 va 1345 du duoi anh da co "no text, no
+    # letters". Ta CAI DUNG thay vao, va no cung dung su that: bien hieu thoi
+    # truoc chu yeu la VAT treo va HINH ve, vi phan lon nguoi qua duong khong
+    # doc duoc chu.
+    "Shopfronts: a shop is known by the thing it hangs out — a bush, a boot, a "
+    "loaf, a bunch of keys, a painted picture of the goods — and by the goods "
+    "themselves spread on the board at the front. The fronts carry pictures and "
+    "objects, never writing.")
 
 
 def prompt_anh_moc(bang: Dict[str, Any], moc: Dict[str, Any], dau_phim: bool = False,
@@ -2020,7 +2319,8 @@ def prompt_anh_moc(bang: Dict[str, Any], moc: Dict[str, Any], dau_phim: bool = F
     if anh_that:
         than += " " + _cau_anh_that(anh_that, moc.get("nam"))
     return gon_loi_nhac(
-        " ".join((than, KHOA_GOC_MAY, _dang_toc_do(moc))) + _DUOI_ANH_MOC)
+        " ".join((than, KHOA_GOC_MAY, _dang_toc_do(moc),
+                  _KHOI_KHONG_KHI, _KHOI_DAM_DONG)) + _DUOI_ANH_MOC)
 
 
 #: Dáng hình cho mốc QUAN TRỌNG — phim dừng lại ở đây nên người phải đi tốc độ
@@ -2140,43 +2440,109 @@ CHUOI_TROI = 3
 #: treo cùng lúc, càng ít lượt hết giờ chờ — chứ không phải để nhường ai.
 SONG_SONG_KHOI = 6
 
-_LOI_NHAC_CLIP_TROI = (
-    "A fixed-camera long-exposure time-lapse of one place. The first frame is "
-    "given; continue from it.\n\n"
-    "THE CAMERA DOES NOT MOVE AT ALL — no pan, no tilt, no zoom, no drift, no "
-    "handheld shake. The road keeps its direction, the vanishing point stays on "
-    "the same spot of the frame, the horizon stays at the same height, and "
-    "whatever stands at the left and right edge of frame stays where it is.\n\n"
-    "Across these eight seconds about {nam} years pass, steadily and without "
-    "pause, and the place changes as they pass: {den}\n\n"
-    "• The change is CONTINUOUS and EVEN. A quarter of the way through the clip a "
-    "quarter of the change has happened; halfway through, half of it. Never hold "
-    "the scene still and then jump at the end.\n"
-    "{toc_do}\n"
-    "• {khoa}\n"
-    "• Never a cut, never a dissolve, never a fade, never a jump.\n\n"
-    "Photoreal, no text, no letters, no numbers.")
+#: ═══ CÁCH VIẾT LỜI NHẮC CHO VEO 3 — ĐỌC TRƯỚC KHI SỬA KHỐI NÀY ═══
+#:
+#: Chủ dự án, 28/08/2026: *"quan trọng nhất là api như nào để tao ra prompt ok
+#: để prompt đó tạo ảnh và video ok… thực ra veo 3 có nguyên lý tạo mày có thể
+#: tư duy và tìm hiểu để làm"*.
+#:
+#: Tra tài liệu Google (`ai.google.dev/gemini-api/docs/veo`, hướng dẫn Vertex
+#: AI) và hai bản hướng dẫn thực hành. Bốn điều lật ngược cách tôi đang viết:
+#:
+#: **1. API chỉ nhận CHỮ.** `client.videos.create` có đúng: `prompt`, `engine`,
+#: `duration`, `aspect_ratio`, `image_url` (+ ảnh cuối qua `extra_body`). Không
+#: có `negative_prompt`, không seed, không tham số nào khác. Toàn bộ chất lượng
+#: nằm ở chữ và ở hai tấm ảnh.
+#:
+#: **2. VEO CÓ BỘ TỰ VIẾT LẠI LỜI NHẮC, VÀ KHÔNG TẮT ĐƯỢC** với Veo 3/3.1. Lời
+#: nhắc của ta bị một mô hình khác viết lại trước khi dựng hình. Lời nhắc càng
+#: dài, càng nhiều luật, thì phần tới được máy dựng càng ít kiểm soát. Bản
+#: trước của clip TUA dài **3.413 ký tự**, gần hết là luật và câu cấm.
+#:
+#: **3. CÂU CẤM KÊU TÊN ĐÚNG THỨ MÌNH KHÔNG MUỐN.** Google dặn thẳng: đừng viết
+#: "no X" — chữ X vẫn nằm trong lời nhắc. Khoá thế kỷ bản sáng 28/08 kể tên
+#: *"no car, no bus, no bicycle, no motorbike, no parked vehicle, no cast-iron
+#: street lamp, no asphalt…"* và phim ra có: ô tô đậu, cột đèn gang, đường
+#: nhựa, nhà Haussmann thế kỷ 19. Tôi có thể đã tự gọi chúng ra.
+#:
+#: Cách đúng là **lấp chỗ trống**: nói mặt đường lát gì, đèn thắp bằng gì, trên
+#: đường có gì đi lại, người mặc gì. Một con phố đã có mặt đất nện, đèn dầu
+#: treo móc sắt và người mặc áo len trùm đầu thì không còn chỗ cho cái ô tô —
+#: mà ta cũng không phải nhắc tới ô tô lần nào.
+#:
+#: **4. KHÔNG TẢ TIẾNG THÌ VEO TỰ BỊA TIẾNG.** Tài liệu gọi là *audio
+#: hallucination*; ví dụ được ghi lại: một cảnh độc thoại bị thêm tiếng khán
+#: giả cười. Kênh này vừa bật giữ tiếng cảnh và **không có lời đọc**, nên tiếng
+#: clip là đường tiếng DUY NHẤT của phim — tiếng bịa đi thẳng vào sản phẩm. Lời
+#: nhắc bản trước không có một chữ nào về tiếng.
+#:
+#: Và một lỗi tôi tự tạo hôm ấy: một câu **tiếng Việt** lọt vào giữa chuỗi
+#: tiếng Anh của `_GACH_TOC_DO_NHANH`, trong khi Veo báo lỗi *"Prompts only in
+#: English"* với lời nhắc không thuần tiếng Anh. Nó nằm trong 2 trên 3 loại
+#: clip. Bài kiểm `TestLoiNhacPhaiThuanTiengAnh` khoá chỗ ấy lại.
+#:
+#: Nay mọi lời nhắc clip xếp theo đúng các phần Veo đọc — Scene, Action,
+#: Camera, Composition, Style, Ambiance, Audio, Technical — và ngắn hơn một nửa.
+
+#: Khối MÁY QUAY + BỐ CỤC, dùng chung cho mọi loại clip.
+#:
+#: Tài liệu dặn nói RÕ chỗ máy đứng chứ đừng dùng từ chung chung, và có một mẹo
+#: được ghi lại là thêm "(that is where the camera is)" để máy hiểu đó là vị trí
+#: máy quay chứ không phải một vật trong cảnh.
+_KHOI_MAY = (
+    "Camera: a locked-off tripod standing in the street at the eye level of a "
+    "person (that is where the camera is). The frame never moves — no pan, no "
+    "tilt, no zoom, no drift, no handheld shake, no speed ramp. The road keeps "
+    "its direction, the vanishing point stays on the same spot of the frame, and "
+    "the horizon stays at the same height from the first frame to the last.\n"
+    "Composition: buildings fill the left edge and the right edge of the frame; "
+    "the road runs away from the camera to the landmark that closes the far end; "
+    "something stands within arm's reach of the camera in the foreground.")
+
+#: Đuôi KỸ THUẬT. `(no subtitles)` là mẹo được ghi lại nhiều lần cho Veo 3: nó
+#: hay tự đốt phụ đề vào hình, và câu ấy chặn được.
+_DUOI_KY_THUAT = (
+    "Technical: photorealistic, one continuous take, no cut, no dissolve, no "
+    "fade, no jump. (no subtitles). No text, no letters, no numbers, no captions "
+    "burned into the picture.")
+
+#: Câu TIẾNG mặc định khi bảng mốc không viết.
+_TIENG_MAC_DINH = ("the ordinary sound of this place at this time: voices and "
+                   "footsteps in the street, work and animals nearby, wind and "
+                   "water in the distance")
 
 
-def prompt_clip_troi(tu: Dict[str, Any], den: Dict[str, Any]) -> str:
-    """Lời nhắc clip TRÔI TỰ DO: chỉ ghim khung đầu, không ghim đích đến.
+def khoi_tieng(moc: Dict[str, Any]) -> str:
+    """Phần Audio — luôn có, kể cả khi bảng mốc không viết gì.
 
-    Không có ảnh cuối để hạ vào thì máy không có gì để giật vào, nên đổi thay
-    chảy đều — đó là toàn bộ lý do tồn tại của hàm này. Đổi lại, không ai kéo
-    khung hình về đúng chỗ, nên chỉ được chạy `CHUOI_TROI` clip liền rồi phải có
-    một clip ghim (`prompt_clip_chuyen`) hạ vào một ảnh mốc vẽ sẵn.
-
-    Khác `prompt_clip_chuyen` ở chỗ **có tả** mốc sắp tới: ở đây không có ảnh
-    cuối nói hộ, nên phải nói bằng chữ đi về hướng nào.
+    Phim này không có lời đọc, nên tiếng của clip là đường tiếng duy nhất. Không
+    dặn thì Veo tự bịa, và thứ nó bịa đi thẳng vào phim.
     """
-    try:
-        nam = abs(int(den.get("nam")) - int(tu.get("nam")))
-    except (TypeError, ValueError):
-        nam = 0
-    return _LOI_NHAC_CLIP_TROI.format(
-        khoa=khoa_the_ky(tu.get("nam"), den.get("nam")),
-        nam=nam or 20, den=str(den.get("canh") or den.get("bien_co") or "")[:320],
-        toc_do=_GACH_TOC_DO_CHAM if _la_moc_lon(den) else _GACH_TOC_DO_NHANH)
+    t = str((moc or {}).get("tieng") or "").strip()
+    return ("Audio: {0}. Natural location sound only — no music, no score, no "
+            "narration, nobody speaking to camera.".format(t or _TIENG_MAC_DINH))
+
+
+def khoa_the_ky(nam_tu: Any, nam_den: Any = None, doi_thuong: str = "") -> str:
+    """Giữ clip đúng thế kỷ bằng cách TẢ CÁI CÓ, không kể cái không được có.
+
+    Xem mục đầu khối này: bản trước kể tên 12 thứ không được xuất hiện, và phim
+    ra có đúng bốn trong số đó. `doi_thuong` là bộ đồ nghề thời ấy do khâu bảng
+    mốc viết (mặt đường / ánh đèn / phương tiện / trang phục).
+    """
+    a = str(nam_tu if nam_tu is not None else "?")
+    b = str(nam_den if nam_den is not None else a)
+    quang = ("Everything in frame belongs to the year {0}".format(a) if a == b else
+             "Everything in frame belongs to the years between {0} and {1}".format(a, b))
+    doi = str(doi_thuong or "").strip()
+    if not doi:
+        doi = ("the road surface, the lighting, the vehicles and the clothing are "
+               "the ordinary ones of that time and place")
+    return ("{0}: {1}. The ground is that one surface from wall to wall, "
+            "unbroken and continuous. A photograph of this place as it stands "
+            "today may be attached: take the camera position and the shape of "
+            "the view from it, and the century from this "
+            "description.".format(quang, doi))
 
 
 def _la_moc_lon(moc: Dict[str, Any]) -> bool:
@@ -2186,200 +2552,155 @@ def _la_moc_lon(moc: Dict[str, Any]) -> bool:
         return False
 
 
-#: Gạch đầu dòng TỐC ĐỘ trong lời nhắc clip. Mốc lớn thì người đi tốc độ thật.
+#: Gạch PHONG CÁCH khi thời gian chạy nhanh.
 #:
-#: ── VÌ SAO BẢN NÀY BỎ MÂY CHẠY (đo 28/08/2026, phim timelapse/0005) ──
-#:
-#: Bản trước viết "smoke and cloud race in bands; light slides as the hours
-#: pass". Máy làm đúng lời, và cái giá đọc được ở số đo. Cắt khung 128×72 làm
-#: ba dải ngang, đo lệch khung-sang-khung trên 34 clip:
-#:
-#:     dải TRỜI  (1/3 trên)   trung vị 21,30   ← dải động nhất khung hình
-#:     dải GIỮA  (1/3 giữa)   trung vị 12,20
-#:     dải ĐẤT   (1/3 dưới)   trung vị 16,58
-#:
-#: Trời động gấp 1,7 lần chỗ có nhà cửa — tức phần lớn cái "động" của phim
-#: KHÔNG phải lịch sử đang trôi, mà là mây. Cả phim ra trung vị 15,19 trong
-#: khi đối thủ 3,89; mà nhịp năm của tôi chỉ nhanh hơn họ 1,7 lần, không phải
-#: 3,9 lần. Phần thừa nằm ở dòng chữ này, không nằm ở cấu trúc phim.
-#:
-#: Nên: bầu trời đi tốc độ thường, vệt chỉ còn ở đường phố và mặt nước.
+#: Soi phim đối thủ ở bước 0,5 giây, cả đoạn đứng lẫn đoạn đang tua: người vẫn
+#: sắc nét từng dáng, không một vệt nhoè. Thời gian trôi đọc ra được nhờ **cái
+#: gì đổi** giữa hai khoảnh khắc, không nhờ độ nhoè. Số đo: động dải trời của
+#: họ 3,02 so với 21,30 của bản tôi bảo mây chạy thành dải.
 _GACH_TOC_DO_NHANH = (
-    "• THE YEARS RUN FAST, BUT THE PICTURE IS NOT BLURRED. Soi phim đối thủ "
-    "ở bước 0,5 giây — người vẫn sắc nét khi đang tua. Everything in frame "
-    "stays SHARP: the buildings, and the people too. Time passing is shown by "
-    "WHAT CHANGES between one moment and the next — a different crowd stands "
-    "in the street, different goods are on the stalls, a roof is newer, a wall "
-    "is higher — not by smearing anything into streaks. No motion streaks, no "
-    "long-exposure blur, no ghosting.\n"
-    "• THE SKY IS FILMED AT ORDINARY SPEED: the clouds drift slowly and keep "
-    "their shape for the whole clip. No racing cloud bands, no strobing, no "
-    "sliding sunlight, no day-to-night, no flicker. The sky is the largest "
-    "thing in this frame — if it churns, the film reads as a screensaver "
-    "instead of as history passing.")
+    "Style: a time-lapse of a place, everything in sharp focus. Solid things — "
+    "buildings, walls, the road, trees — stay razor sharp and perfectly still. "
+    "People and carts stay sharp too; the years show through WHAT CHANGES from "
+    "one moment to the next: a different crowd in the street, different goods on "
+    "the stalls, a newer roof, a higher wall.\n"
+    "Ambiance: the sky is filmed at ordinary speed, clouds drifting slowly and "
+    "holding their shape, the light steady from the first frame to the last.")
 
 _GACH_TOC_DO_CHAM = (
-    "• NORMAL SPEED, not a time-lapse. This clip arrives at one of the few "
-    "moments the film stops at, so the people must be sharp and whole and move at "
-    "ordinary human speed — no motion streaks, no smearing. The buildings still "
-    "change across the years as they must, but the viewer has to be able to watch "
-    "the people: their faces, their clothes, what each is carrying and doing.")
+    "Style: ordinary speed, filmed like a documentary shot. Every person and "
+    "animal is sharp and whole and moves at normal human speed — faces, clothes, "
+    "and what each one carries are all readable.\n"
+    "Ambiance: the sky moves at ordinary speed, clouds holding their shape, the "
+    "light steady for the whole shot.")
+
+
+_LOI_NHAC_CLIP_TROI = (
+    "A fixed-camera time-lapse of one place. The first frame is given; continue "
+    "from it.\n\n"
+    "Action: about {nam} years pass across these eight seconds, steadily and "
+    "without pause, and the place changes as they pass. Where it is going: "
+    "{den}. The change is continuous and even — a quarter of the way through the "
+    "clip a quarter of the change has happened, halfway through half of it. "
+    "Never hold the scene still and then jump at the end. Everything that "
+    "appears stays to the end of the clip.\n\n"
+    "{khoa}\n\n"
+    "{may}\n"
+    "{toc_do}\n"
+    "{tieng}\n"
+    "{ky_thuat}")
+
+
+def prompt_clip_troi(tu: Dict[str, Any], den: Dict[str, Any]) -> str:
+    """Lời nhắc clip TRÔI TỰ DO: chỉ ghim khung đầu, không ghim đích đến.
+
+    Mạch GIỮ–TUA hiện tại ghim mọi clip tua vào ảnh mốc sau, nên hàm này là
+    đường lui — giữ cho kênh nào muốn chuỗi trôi dài vẫn chạy được.
+
+    Khác `prompt_clip_chuyen` ở chỗ **có tả** mốc sắp tới: ở đây không có ảnh
+    cuối nói hộ, nên phải nói bằng chữ đi về hướng nào.
+    """
+    try:
+        nam = abs(int(den.get("nam")) - int(tu.get("nam")))
+    except (TypeError, ValueError):
+        nam = 0
+    return _LOI_NHAC_CLIP_TROI.format(
+        nam=nam or 20, den=str(den.get("canh") or den.get("bien_co") or "")[:280],
+        khoa=khoa_the_ky(tu.get("nam"), den.get("nam"), den.get("doi_thuong")),
+        may=_KHOI_MAY,
+        toc_do=(_GACH_TOC_DO_CHAM if _la_moc_lon(den) else _GACH_TOC_DO_NHANH),
+        tieng=khoi_tieng(den), ky_thuat=_DUOI_KY_THUAT)
+
+
+_LOI_NHAC_CHUYEN = (
+    "A fixed-camera time-lapse of one place. The first frame and the last frame "
+    "are both given: the same view of the same place, in the years {nam_tu} and "
+    "{nam_den}.\n\n"
+    "Action: travel steadily from the first frame to the last, so that the years "
+    "passing are what the viewer sees. Change only what differs between the two "
+    "given frames, and spread that change evenly across the whole clip — a "
+    "quarter of the way through, a quarter of the change; halfway through, half "
+    "of it. Buildings rise or decay, vegetation grows or is cleared, the "
+    "settlement thickens or empties. Everything that appears stays to the end of "
+    "the clip.\n\n"
+    "{khoa} If you cannot see how to travel from the first frame to the last, "
+    "stay close to the first frame and change less.\n\n"
+    "{may}\n"
+    "The geometry holds even where the buildings do not: what stands beside the "
+    "road may be built, weathered or torn down right in front of the camera — "
+    "that is the point of this film — but the shape of the view does not shift.\n"
+    "{toc_do}\n"
+    "{tieng}\n"
+    "{ky_thuat}")
 
 
 def prompt_clip_chuyen(tu: Dict[str, Any], den: Dict[str, Any]) -> str:
-    """Lời nhắc CLIP nối hai mốc: máy đứng yên, thời gian chạy qua khung hình.
+    """Lời nhắc clip TUA: hai đầu đã ghim vào hai tấm ảnh, giữa là năm tháng trôi.
 
-    Luật sống còn ở đây: **ĐỪNG TẢ BIẾN CỐ**. Clip này đã bị ghim CẢ HAI ĐẦU vào
-    hai tấm ảnh thật; hai tấm ấy đã nói hết chỗ này trông thế nào lúc đầu và lúc
-    cuối. Thêm chữ tả một biến cố chỉ là mời máy dựng thêm thứ không có trong cả
-    hai khung — mà thứ ấy bắt buộc phải biến mất trước khi clip hạ vào khung cuối.
+    ═══ ĐỪNG TẢ BIẾN CỐ Ở ĐÂY ═══
 
-    Đo 27/08/2026 trên clip 1 phim timelapse/0001, cùng một cặp ảnh, ba lần viết:
+    Clip này bị ghim CẢ HAI ĐẦU; hai tấm ảnh đã nói hết chỗ này trông thế nào
+    lúc đầu và lúc cuối. Thêm chữ tả một biến cố chỉ là mời máy dựng thêm thứ
+    không có trong cả hai khung — mà thứ ấy bắt buộc phải biến mất trước khi
+    clip hạ vào khung cuối. Đo 27/08/2026 trên clip 1 phim 0001, cùng một cặp
+    ảnh, ba lần viết:
 
         lời nhắc                              đỉnh lệch tiền cảnh giữa clip
-        "crowds come and go" + cả 2 biến cố   42,1 / 255   (đám đông tràn rồi biến)
-        chỉ biến cố mốc cuối + luật một chiều 30,6 / 255   (đoàn phu tràn rồi biến)
-        không tả biến cố nào                  <xem số đo ở dưới>
+        "crowds come and go" + cả 2 biến cố   42,1 / 255
+        chỉ biến cố mốc cuối + luật một chiều 30,6 / 255
+        không tả biến cố nào                  thấp nhất
 
-    Đây cũng đúng nguyên tắc chủ dự án đặt ra cho cả tool: **chỉ đây ảnh, đừng tả
+    Đây cũng đúng nguyên tắc chủ dự án đặt cho cả tool: **chỉ đưa ảnh, đừng tả
     chi tiết** — tả chi tiết thì máy bịa ra thứ khác.
-
-    Hai tham số `tu`/`den` giữ nguyên để khâu gọi không phải đổi, và để ngày nào
-    đó cần tả lại thì có sẵn.
     """
-    return (
-        "A fixed-camera time-lapse of one place. The first frame and the last frame "
-        "are both given: the same view of the same place, in the years {nam_tu} "
-        "and {nam_den}.\n\n"
-        "{khoa} If you cannot see how to travel from the first frame to the "
-        "last, stay close to the first frame and change less.\n\n"
-        "THE CAMERA DOES NOT MOVE AT ALL — no pan, no tilt, no zoom, no drift, no "
-        "handheld shake. The frame at the end is exactly the frame at the start.\n"
-        "The camera is a locked-off tripod that nobody touches, not for one instant, "
-        "no matter how dramatic what happens in front of it becomes. No push-in, no "
-        "crash zoom, no dolly, no whip, no speed ramp, no rack focus, and no motion "
-        "blur caused by the camera. The distance from the camera to every landmark, "
-        "and the height of the horizon in the frame, are identical at every moment.\n\n"
-        "Your only job is to travel from the first frame to the last frame, so that "
-        "the years passing are what the viewer sees:\n"
-        "• Change ONLY what differs between the two given frames, and change it "
-        "gradually, steadily, in one direction, across the whole clip. Buildings rise "
-        "or decay, vegetation grows or is cleared, the settlement thickens or empties.\n"
-        "• INVENT NOTHING. Do not add any event, crowd, fire, storm, procession or "
-        "vehicle that is not visible in one of the two given frames. Nothing may "
-        "appear and then disappear.\n"
-        "{toc_do}\n"
-        "• The GEOMETRY of the view holds even where the buildings do not: the road "
-        "keeps its direction, the vanishing point stays on the same spot of the frame, "
-        "the horizon stays at the same height. What stands beside the road may be "
-        "built, weathered or torn down right in front of the camera — that is the "
-        "point of the film — but the shape of the view may not shift.\n"
-        "• Continuous the whole way. Never a cut, never a dissolve, never a fade, "
-        "never a jump.\n\n"
-        "Photoreal, no text, no letters, no numbers."
-    # NHỊP NGHỈ: clip ghim LUÔN chạy tốc độ thường, dù mốc to hay nhỏ.
-    #
-    # Chủ dự án 27/08/2026: *"lúc thì nó làm nhanh lúc thì nó cho cảnh hoạt
-    # động bình thường"*. Đo 28/08/2026 mới thấy tôi làm hụt: 101 trên 103
-    # clip là đoạn tua nhanh, chỉ 2 clip rơi vào khoảng im của đối thủ — phim
-    # tua từ đầu tới cuối, không có chỗ thở. Trong khi 3/4 số cửa sổ đo được
-    # ở phim đối thủ nằm dưới 6,17, và cửa sổ im nhất của họ là 0,48.
-    #
-    # Clip ghim là chỗ nghỉ đúng nhất, và nghỉ ở đây không tốn gì thêm: nó đã
-    # bị ghim CẢ HAI đầu vào hai tấm ảnh vẽ sẵn, nên vốn dĩ nó phải đổi ÍT —
-    # bảo nó tua nhanh vừa sai việc vừa đẩy nó bịa thêm. Cứ 4 clip có 1 clip
-    # ghim, cộng các cảnh dừng, thành khoảng một phần ba phim đi tốc độ thật.
-    ).format(toc_do=_GACH_TOC_DO_NHANH,
-             khoa=khoa_the_ky(tu.get("nam"), den.get("nam")),
-
-             nam_tu=tu.get("nam", "?"), nam_den=den.get("nam", "?"))
-
-
-#: KHOÁ THẾ KỶ — dán vào **mọi** lời nhắc clip, không trừ loại nào.
-#:
-#: Ngày 28/08/2026 chủ dự án mở phim 0005 ra và thấy **ô tô ở năm 500**. Tôi soi
-#: dày quãng 88–104 giây (năm 486→540) thì đúng: từ năm 497 có xe hơi màu đỏ đậu
-#: dưới bờ kè, có cột đèn đường kiểu thế kỷ 19, có ô dù chợ hiện đại.
-#:
-#: Nguyên nhân là của tôi: khoá thế kỷ viết hôm 27/08 **chỉ nằm trong
-#: `prompt_clip_chuyen`**, tức 24 trên 103 clip. 79 clip trôi tự do không có
-#: khoá nào — mà mỗi cảnh đều đính kèm tấm ảnh chụp chỗ ấy NGÀY NAY làm ảnh nhận
-#: dạng, và trong tấm ấy có ô tô, có đèn đường. Không ai giữ thế kỷ lại thì máy
-#: trôi dần về đúng tấm ảnh nó đang nhìn.
-#:
-#: Bài học đắt hơn cả bản vá: hôm ấy tôi soi 24 khung NGẪU NHIÊN trên 824 giây
-#: (một khung mỗi 34 giây) rồi báo "phim sạch". Mật độ ấy quá thưa cho một lỗi
-#: nhỏ nằm ở góc khung. Phim sử phải soi DÀY — một khung mỗi giây, cả quãng.
-def khoa_the_ky(nam_tu: Any, nam_den: Any = None) -> str:
-    """Câu cấm mọi thứ của thời sau lọt vào clip, kèm đúng khoảng năm."""
-    a = str(nam_tu if nam_tu is not None else "?")
-    b = str(nam_den if nam_den is not None else a)
-    quang = ("THE YEAR IN THIS CLIP IS {0}".format(a) if a == b else
-             "THIS CLIP LIVES BETWEEN {0} AND {1}, and never leaves those "
-             "years".format(a, b))
-    return (
-        quang + ". At no moment — not for a single frame anywhere in the "
-        "middle — may anything from a later age appear: no car, no bus, no "
-        "bicycle, no motorbike, no parked vehicle of any kind, no cast-iron or "
-        "electric street lamp, no power line, no road sign, no painted road "
-        "marking, no plate glass, no steel, no concrete, no asphalt, no "
-        "corrugated metal, no modern parasol or market umbrella, no tourist "
-        "boat, no modern clothing, no printed lettering. A REFERENCE "
-        "PHOTOGRAPH OF THIS PLACE AS IT STANDS TODAY MAY BE ATTACHED: it is "
-        "there to tell you WHERE the camera stands and nothing else. Take the "
-        "geometry from it and refuse everything else in it. Drifting toward "
-        "how this place looks today is the one wrong answer, and it is the "
-        "single most common way this kind of film is ruined."
-    )
+    return _LOI_NHAC_CHUYEN.format(
+        nam_tu=tu.get("nam", "?"), nam_den=den.get("nam", "?"),
+        khoa=khoa_the_ky(tu.get("nam"), den.get("nam"), den.get("doi_thuong")),
+        may=_KHOI_MAY, toc_do=_GACH_TOC_DO_NHANH, tieng=khoi_tieng(den),
+        ky_thuat=_DUOI_KY_THUAT)
 
 
 _LOI_NHAC_DUNG_LAI = (
-    "A locked-off camera films one place for eight seconds of ORDINARY TIME. "
-    "The first frame is given; continue from it.\n\n"
+    "A locked-off camera films one place for eight seconds of ordinary time. The "
+    "first frame is given; continue from it.\n\n"
+    "Scene: {canh}\n\n"
+    "Action: across these eight seconds, {bien_co}. The year does not advance "
+    "while this happens: no season passes, nothing is built, nothing decays, the "
+    "buildings and the road stand exactly as they do in the first frame. This is "
+    "one moment of history held open.\n\n"
     "{khoa}\n\n"
-    "THE CAMERA DOES NOT MOVE AT ALL — no pan, no tilt, no zoom, no drift, no "
-    "handheld shake. The road keeps its direction, the vanishing point stays on "
-    "the same spot of the frame, the horizon stays at the same height.\n\n"
-    "TIME STOPS HERE. The year does not advance across this clip: not one season "
-    "passes, nothing is built, nothing decays, no building changes. This is a "
-    "single moment of history held open, and what happens inside it is this:\n\n"
-    "{bien_co}\n\n"
-    "• THIS IS NOT A TIME-LAPSE. Every person, animal, cart and boat is SHARP "
-    "and WHOLE and moves at ordinary human speed. No motion streaks, no "
-    "smearing, no long-exposure blur, no fast-forward, no speed ramp. The "
-    "viewer has stopped here to watch this happen and must be able to see "
-    "faces, clothes, and what each person is carrying and doing.\n"
-    "• The buildings, the road and the trees are EXACTLY as in the given frame at "
-    "the first second and at the last. Do not age them, do not rebuild them.\n"
-    "• The sky moves at ordinary speed too: clouds drift slowly and keep their "
-    "shape, the light does not slide, there is no day-to-night.\n"
-    "• INVENT NOTHING beyond what is written above and what is already in frame.\n"
-    "• Never a cut, never a dissolve, never a fade, never a jump.\n\n"
-    "Photoreal, no text, no letters, no numbers.")
+    "{may}\n"
+    "{toc_do}\n"
+    "{tieng}\n"
+    "{ky_thuat}")
 
 
 def prompt_clip_dung_lai(moc: Dict[str, Any]) -> str:
-    """Lời nhắc cho cảnh DỪNG LẠI ở một mốc lớn — số năm đứng im, biến cố diễn ra.
+    """Lời nhắc clip GIỮ — số năm đứng im, biến cố diễn ra ở tốc độ thường.
 
-    Chủ dự án 27/08/2026: *"đối thủ có chỗ tua nhanh, nhưng có chỗ lại chậm giống
-    như một dấu mốc"*. Chỗ chậm ấy là đây: phim đứng nguyên một năm trong 8 giây
-    để người xem nhìn cho hết việc đã xảy ra, rồi mới đi tiếp.
+    Đây là chỗ phim dừng lại cho người xem nhìn. Đo trên phim đối thủ
+    28/08/2026: 43% thời lượng số năm đứng im, mỗi lần 4–8 giây, và trong quãng
+    ấy người **sắc nét** từng dáng — chạy, đánh nhau, ngã xuống — chứ không nhoè
+    thành vệt.
 
-    Khác mọi lời nhắc khác ở hai chỗ: **không** có "thời gian chạy nhanh" (người
-    đi tốc độ gần thật, không nhoè thành vệt), và **có** tả biến cố — vì ở đây
-    biến cố chính là thứ người xem dừng lại để xem.
+    Khác clip TUA ở hai chỗ: **có** tả biến cố (đó là thứ người xem dừng lại để
+    xem), và **không** có thời gian trôi.
     """
     return _LOI_NHAC_DUNG_LAI.format(
-        khoa=khoa_the_ky(moc.get("nam")),
+        khoa=khoa_the_ky(moc.get("nam"), None, moc.get("doi_thuong")),
+        canh=str(moc.get("canh") or "")[:400] or "the place as the first frame shows it",
         bien_co=(str(moc.get("bien_co") or moc.get("canh") or "").strip()[:320]
-                 or "the life of the place goes on"))
+                 or "the life of the place goes on"),
+        may=_KHOI_MAY, toc_do=_GACH_TOC_DO_CHAM, tieng=khoi_tieng(moc),
+        ky_thuat=_DUOI_KY_THUAT)
 
 
 # ── Bảng mốc → bảng cảnh (nhịp giả thay cho giọng đọc) ──────────────────────
 
 def _mmss(giay: float) -> str:
     g = max(0.0, float(giay))
-    return "{0:02d}:{1:02d}:{2:06.3f}".format(int(g // 3600), int(g % 3600 // 60), g % 60).replace(".", ",")
+    return "{0:02d}:{1:02d}:{2:06.3f}".format(
+        int(g // 3600), int(g % 3600 // 60), g % 60).replace(".", ",")
 
 
 def canh_tu_bang_moc(bang: Dict[str, Any], giay_moi_moc: float = GIAY_MOT_MOC) -> List[Dict[str, Any]]:
@@ -2501,17 +2822,36 @@ Rules for judging:
 - Blur, smoke and distance are not anachronisms.
 - A thing that merely looks NEW is not an anachronism if that kind of thing
   existed in {nam}. A freshly cut stone is fine.
+- IGNORE the small provider watermark in a corner of the frame — a faint "Veo"
+  or similar mark burned in by the tool that drew the picture. It is not part of
+  the scene and nobody put it there on purpose. Do NOT report it, do not report
+  it as "printed lettering", and do not let it make you report the frame as
+  dirty. Measured 28/08/2026: without this line the checker reported that mark
+  on 6 of 30 frames, and it drowned the real faults it found in the same frames
+  (parked cars, cast-iron street lamps, 19th-century apartment blocks).
 
 Return JSON only:
 {{"lac": ["<short name of each anachronistic object, in English>"],
-  "noi_o_dau": "<where in the frame, one short phrase — 'bottom left quay'>"}}
+  "noi_o_dau": "<where in the frame, one short phrase — 'bottom left quay'>",
+  "thay_bang": "<ONE short sentence, positive, saying what a person standing
+      here in {nam} would see in those same spots instead. Name the real
+      thing, do not say what is absent: 'the houses along this street are
+      single-storey with plain flush fronts of mud brick and timber', 'the
+      women wear plain undyed veils pinned at the shoulder'. This sentence
+      is what gets drawn, so make it something a painter could work from.
+      Leave it empty when the list is empty.>"}}
 
 An empty list means the frame is clean for {nam}. That is the normal answer and
 you should give it whenever it is true."""
 
 
-def soat_thoi_dai(goi, anh: str, nam: Any, noi: str = "") -> List[str]:
-    """Nhìn một tấm ảnh, trả về danh sách vật KHÔNG thể có ở năm ấy.
+def soat_thoi_dai(goi, anh: str, nam: Any, noi: str = "") -> Tuple[List[str], str]:
+    """Nhìn một tấm ảnh: những vật KHÔNG thể có ở năm ấy, và cái GÌ thay vào.
+
+    Trả `(danh sách vật lạc, câu tả cái đúng thay vào)`. Câu thứ hai mới là
+    thứ vẽ lại được: kể tên cái nhà để cấm nó thì cái nhà vẫn nằm trong lời
+    nhắc, còn tả *"nhà ở phố này một tầng, mặt phẳng, tường đất trộn rơm"*
+    thì máy có thứ để vẽ.
 
     `goi` nhận danh sách nội dung kiểu OpenAI (chữ + ảnh) và trả về chuỗi —
     cùng giao ước với `core.cham_anh.cham_anh`, để hai bộ dùng chung một đường.
@@ -2524,15 +2864,15 @@ def soat_thoi_dai(goi, anh: str, nam: Any, noi: str = "") -> List[str]:
     from .goi_van_ban import khoi_anh  # noqa: PLC0415
 
     if not os.path.isfile(anh):
-        return []
+        return [], ""
     loi = LOI_NHAC_SOAT_THOI_DAI.format(nam=nam, noi=str(noi or "this place"))
     try:
         # `khoi_anh`, không phải `image_url` — cổng bỏ im khối kiểu OpenAI.
         # Xem chú thích ở `chon_anh_nhan_dang_bang_mat`.
         tra = goi([{"type": "text", "text": loi}, khoi_anh(data_url(anh))])
     except Exception:  # noqa: BLE001
-        return []
-    return _doc_danh_sach_lac(tra)
+        return [], ""
+    return _doc_danh_sach_lac(tra), _doc_thay_bang(tra)
 
 
 def _doc_danh_sach_lac(tra: Any) -> List[str]:

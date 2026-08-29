@@ -88,8 +88,8 @@ class TestChiaKhoi:
         tua = next(c for c in canh if c["ghim"])
         giu = next(c for c in canh if c["dung_lai"])
         assert "The first frame and the last frame are both given" in tua["video_prompt"]
-        assert "TIME STOPS HERE" in giu["video_prompt"]
-        assert "eight seconds of ORDINARY TIME" in giu["video_prompt"]
+        assert "one moment of history held open" in giu["video_prompt"]
+        assert "eight seconds of ordinary time" in giu["video_prompt"]
 
 
 class TestVeAnh:
@@ -436,7 +436,9 @@ class TestCuaSoatChayTrongDayChuyen:
         monkeypatch.setattr(ak, "_khung_cuoi_clip", _gia_khung_cuoi)
         monkeypatch.setattr(ak, "_lam_clip", lambda *a, **kw: open(a[4], "wb").write(b"MP4"))
         monkeypatch.setattr("core.timelapse.soat_thoi_dai",
-                            lambda goi, anh, nam, noi="": tra_loi(anh))
+                            lambda goi, anh, nam, noi="": (
+                                tra_loi(anh),
+                                "the houses are single-storey with flush fronts"))
         dong = []
         ra = _khau_anh_timelapse(_boi_canh(dong.append))(_luot(tmp_path, 5),
                                                          TrangThaiKhau(ma="anh"))
@@ -455,17 +457,40 @@ class TestCuaSoatChayTrongDayChuyen:
             return ["a red car"] if lan["n"] % 2 == 1 else []
 
         ve, dong, _ = self._chay(tmp_path, monkeypatch, tra)
-        lai = [p for n, p in ve if "ABSOLUTELY FORBIDDEN" in p]
+        lai = [p for n, p in ve if p.startswith("IMPORTANT, this is the year")]
         assert lai, "phải có lượt vẽ lại"
-        assert "a red car" in lai[0], "cấm chung chung đã không ăn thì phải gọi tên"
+        # Va bang cau TA CAI DUNG, khong ke ten cai sai. Xem
+        # `TestLoiNhacVeLaiPhaiVUA_TRAN`.
+        assert "single-storey with flush fronts" in lai[0]
+        assert "ABSOLUTELY FORBIDDEN" not in lai[0]
         assert any("lạc thế kỷ" in d for d in dong)
         assert any("vẽ lại sạch" in d for d in dong)
 
-    def test_ve_lai_van_ban_thi_giu_tam_dau_va_danh_dau(self, tmp_path, monkeypatch):
-        ve, dong, ra = self._chay(tmp_path, monkeypatch, lambda anh: ["a red car"])
+    def test_ve_lai_TE_HON_thi_giu_tam_dau_va_danh_dau(self, tmp_path, monkeypatch):
+        """Chỉ giữ tấm đầu khi vẽ lại THẬT SỰ tệ hơn."""
+        lan = {"n": 0}
+
+        def tra(anh):
+            lan["n"] += 1
+            return ["a red car"] if lan["n"] % 2 == 1 else ["a car", "a lamp"]
+
+        ve, dong, ra = self._chay(tmp_path, monkeypatch, tra)
         assert any("GIỮ tấm đầu" in d for d in dong), "vẫn bẩn thì phải nói ra"
         assert any("vẫn đáng ngờ" in d for d in dong), "phải có dòng tổng kết"
         assert ra["so_clip"] == 9, "phim vẫn chạy hết, không chặn dây chuyền"
+
+    def test_hoa_thi_giu_tam_VE_LAI(self, tmp_path, monkeypatch):
+        """Hoà số lỗi thì giữ tấm vẽ lại, không giữ tấm đầu.
+
+        Tấm vẽ lại ít nhất đã được vẽ **với câu sửa**; tấm đầu thì chưa ai nói gì
+        với nó. Đo 28/08/2026, mốc 1250: cả hai tấm đều còn 2 lỗi, và bản cũ giữ
+        tấm đầu — tấm còn nguyên "cửa sổ kính nhiều ô" của thế kỷ sai, trong khi
+        tấm vẽ lại chỉ còn hai thứ chép từ ảnh tham chiếu (vạch đá kỷ niệm và
+        nắp cống), nhẹ hơn hẳn.
+        """
+        ve, dong, ra = self._chay(tmp_path, monkeypatch, lambda anh: ["a red car"])
+        assert not any("GIỮ tấm đầu" in d for d in dong)
+        assert ra["so_clip"] == 9
 
     def test_bo_cham_hong_thi_day_chuyen_van_chay(self, tmp_path, monkeypatch):
         def no(anh):
@@ -552,4 +577,80 @@ class TestThieuNguonThiPhaiHoiLai:
     def test_khong_co_gi_thi_hoi_va_tai(self, tmp_path, monkeypatch):
         hoi, _ = self._chay(tmp_path, monkeypatch, co_tu_lieu=False, co_nguon=False)
         assert any("CHOOSE THE EXACT SPOT" in x for x in hoi)
+
+
+class TestGoiDangGhiCaTepTieuDe:
+    """Khâu ảnh bìa đọc `1-tieu-de.txt`; kênh này chưa bao giờ tạo nó.
+
+    `_chuan_bi_bia` lấy tiêu đề và chữ in trên bìa từ hai dòng `TITLE:` /
+    `THUMB:` của tệp ấy. Kênh timelapse dùng chung khâu ảnh bìa nhưng có khâu
+    kịch bản riêng, và khâu riêng ấy không ghi tệp này — nên bìa vẽ ra **không
+    có chữ nào**, mà chữ số năm to đùng chính là thứ khiến người ta bấm vào ở
+    thể loại này.
+
+    Chủ dự án 28/08/2026: *"làm all mọi thứ để ra sp có thể đăng youtube"*.
+    """
+
+    def _chay(self, tmp_path, monkeypatch, tra_seo):
+        import core.auto_khau as ak
+        from core.auto_khau import BoiCanh, _khau_kich_ban_timelapse
+
+        d = str(tmp_path)
+        with open(os.path.join(d, "0-tu-lieu.txt"), "w", encoding="utf-8") as f:
+            f.write("x" * 9000)
+        with open(os.path.join(d, "0-nguon.json"), "w", encoding="utf-8") as f:
+            json.dump({"noi": "the square", "ten_ngan": "Parvis", "ngon_ngu": "fr",
+                       "nam_dau": 0, "nam_cuoi": 2025}, f)
+        bang = {"noi": "the square", "noi_vi": "quảng trường",
+                "goc_may": "street level", "moc_dinh": "the Gate",
+                "moc": [{"nam": 100 + i * 40, "canh": "the gate at stage %d ok" % i,
+                         "su_that": "việc %d" % i, "nhan": str(100 + i * 40),
+                         "tam": 1, "bien_co": "b", "anh_sang": "s"}
+                        for i in range(6)]}
+        with open(os.path.join(d, "4-moc-thoi-gian.json"), "w", encoding="utf-8") as f:
+            json.dump(bang, f, ensure_ascii=False)
+
+        def goi(ln, **kw):
+            return tra_seo if "YouTube publishing pack" in ln else "{}"
+
+        monkeypatch.setattr(ak, "_tra_anh_that", lambda *a, **k: None)
+        bc = BoiCanh(goc=GOC, kenh=doc_kenh(GOC, "timelapse"), client=object(),
+                     goi_chat=goi, on_log=lambda x: None)
+        luot = LuotChay(ma_kenh="timelapse", ma_luot="0001", thu_muc=d,
+                        dau_vao={"tieu_de": "Paris"})
+        _khau_kich_ban_timelapse(bc)(luot, TrangThaiKhau(ma="kich-ban"))
+        return d
+
+    def _doc(self, d, ten):
+        p = os.path.join(d, ten)
+        if not os.path.exists(p):
+            return ""
+        with open(p, encoding="utf-8") as f:
+            return f.read()
+
+    def test_ghi_ca_1_seo_va_1_tieu_de(self, tmp_path, monkeypatch):
+        d = self._chay(tmp_path, monkeypatch, json.dumps({
+            "tieu_de_en": "Evolution of Paris | 2200 Years in 15 Minutes",
+            "tieu_de_vi": "Paris qua 2200 năm",
+            "chu_bia": "-52 → 2024", "the": ["paris", "timelapse"],
+            "chuong": ["0:00 -52 Lutèce"],
+            "mo_ta_en": "one camera", "mo_ta_vi": "một máy quay"}))
+        seo = self._doc(d, "1-seo.txt")
+        assert "Paris qua 2200 năm" in seo
+        assert "paris, timelapse" in seo
+        assert "0:00 -52 Lutèce" in seo
+        ten = self._doc(d, "1-tieu-de.txt")
+        assert "TITLE: Paris qua 2200 năm" in ten
+        assert "THUMB: -52 → 2024" in ten
+
+    def test_khong_co_tieu_de_viet_thi_lay_ban_tieng_anh(self, tmp_path, monkeypatch):
+        d = self._chay(tmp_path, monkeypatch, json.dumps({
+            "tieu_de_en": "Evolution of Paris", "chu_bia": "2200"}))
+        assert "TITLE: Evolution of Paris" in self._doc(d, "1-tieu-de.txt")
+
+    def test_seo_hong_thi_khau_van_xong(self, tmp_path, monkeypatch):
+        """Bảy khâu trước đã tiêu tiền; đừng chết ở chỗ viết phần mô tả."""
+        d = self._chay(tmp_path, monkeypatch, "không phải JSON")
+        assert os.path.exists(os.path.join(d, "4-canh.json")) or \
+            os.path.exists(os.path.join(d, "4-moc-thoi-gian.json"))
 
