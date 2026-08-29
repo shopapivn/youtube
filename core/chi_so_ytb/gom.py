@@ -141,6 +141,12 @@ def gom(kenh_dir, nganh):
             "impressions_24h": q.get("impressions_24h"),
             "ctr": q.get("ctr"),
             "views": q.get("views"),
+            # Lượt xem THẬT (engaged) — thứ YouTube dùng để tính tiền và xét bật kiếm tiền.
+            # Từ 24/08/2026 "views" là lượt công khai, đếm ngay từ khung hình đầu, nên nó phồng
+            # lên theo nguồn traffic: video được đẩy lên trang chủ đo được 54% thật, còn video
+            # sống bằng đề xuất vẫn 98%. Mọi tỷ lệ tính từ lượt xem phải dùng con số này.
+            "views_that": q.get("views_that") or q.get("views_that_uoc"),
+            "views_that_uoc_tinh": q.get("views_that") is None,
             "unique_viewers": q.get("unique_viewers"),
             "watch_hours": q.get("watch_hours"),
             "avd_giay": q.get("avd_giay"),

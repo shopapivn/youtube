@@ -175,6 +175,18 @@ def sinh(thu_muc, out, thoi_luong=None, gio=None):
         tq["ctr"] = key["VIDEO_THUMBNAIL_IMPRESSIONS_VTR"]
     if "EXTERNAL_VIEWS" in key:
         tq["views"] = key["EXTERNAL_VIEWS"]
+    # Từ 24/08/2026 EXTERNAL_VIEWS đếm một lượt ngay từ khung hình đầu, không cần xem tối thiểu
+    # bao lâu. ENGAGED_VIEWS là chỉ số cũ đổi tên, và VẪN LÀ THỨ tính tiền lẫn xét bật kiếm tiền.
+    # Đo trên kênh thật 28/08: 176 lượt công khai / 97 lượt thật = 55%. Mọi tỷ lệ tính từ lượt
+    # xem đều phải dùng con số này, không dùng lượt công khai.
+    if "ENGAGED_VIEWS" in key:
+        tq["views_that"] = key["ENGAGED_VIEWS"]
+    # Studio KHÔNG phải lúc nào cũng trả ENGAGED_VIEWS. Suy ngược từ giờ xem chia thời gian xem
+    # trung bình — vì AVERAGE_WATCH_TIME của Studio vốn tính trên lượt thật (đã đối chiếu:
+    # 17.352 giây / 97 lượt = 179 giây, khớp con số 177 Studio báo; chia cho 180 lượt công khai
+    # thì ra 96 giây, lệch hẳn).
+    if not tq.get("views_that") and key.get("EXTERNAL_WATCH_TIME") and key.get("AVERAGE_WATCH_TIME"):
+        tq["views_that_uoc"] = round(key["EXTERNAL_WATCH_TIME"] / key["AVERAGE_WATCH_TIME"])
     if "ESTIMATED_UNIQUE_VIEWERS" in key:
         tq["unique_viewers"] = key["ESTIMATED_UNIQUE_VIEWERS"]
     if "SUBSCRIBERS_NET_CHANGE" in key:
