@@ -61,9 +61,35 @@ class TestLoiNhacViet:
         v = _doc(thu_muc, "2-viet.md")
         assert "câu**" in v or "câu," in v, (
             "{0}: lời nhắc viết phải đo thân bài bằng SỐ CÂU".format(nhan))
-        assert "40" in v and "ký tự" in v, (
-            "{0}: phải nêu độ dài câu tự nhiên (~40–50 ký tự), "
-            "câu cụt làm bài hụt một phần ba".format(nhan))
+        # ═══ CÂU NGẮN, KHÔNG PHẢI CÂU DÀI (sửa 29/08/2026) ═══
+        #
+        # Bài này từng đòi lời nhắc ép câu 40–50 ký tự, để bài khỏi hụt độ dài.
+        # Đo lại trên chính kênh: video giữ chân TỐT NHẤT (28% tới cuối) viết câu
+        # trung bình **29 ký tự**; video tệ nhất (12%) viết 30. Câu dài không phải
+        # thứ phân biệt hai bên — ép 40–50 là ép ngược với video đang thắng.
+        # Đủ độ dài bài bằng NHIỀU CÂU hơn, không phải câu dài hơn.
+        assert "29 ký tự" in v, (
+            "{0}: phải nêu độ dài câu đo trên video giữ chân tốt nhất "
+            "(~29 ký tự), và đạt độ dài bài bằng nhiều câu hơn".format(nhan))
+
+    def test_60_giay_dau_theo_bon_tieu_chi_do_duoc(self, nhan, thu_muc):
+        """Ghép đường giữ chân với câu chữ tại đúng thời điểm đó (29/08/2026):
+        trong 52 giây đầu, video tốt rớt 25 điểm, video tệ rớt 52 — gấp đôi.
+        Bốn thứ khác nhau, mỗi thứ một dòng trong lời nhắc."""
+        v = _doc(thu_muc, "2-viet.md")
+        for manh, vi_sao in (
+                ("VẬT THỂ NHÌN ĐƯỢC", "mở bằng cảm giác trừu tượng là chỗ rớt nặng nhất"),
+                ("10–20 ký tự", "câu 35 ký tự ở giây 26 làm bản tệ mất 35 điểm"),
+                ("CÂU HỎI", "bản tốt hỏi ở giây 52 rồi gần như không rớt thêm"),
+                ("CHƯA GIẢI THÍCH CƠ CHẾ", "bản tệ giải thích ở giây 54 và tụt còn 49%")):
+            assert manh in v, "{0}: thiếu '{1}' — {2}".format(nhan, manh, vi_sao)
+
+    def test_cham_cung_soi_60_giay_dau(self, nhan, thu_muc):
+        """Lời nhắc viết đòi bốn thứ thì bộ chấm phải soi được đúng bốn thứ đó,
+        nếu không cả năm bản mở sai kiểu vẫn được chọn một bản."""
+        c = _doc(thu_muc, "2b-cham.md")
+        assert "VẬT THỂ NHÌN ĐƯỢC" in c and "CÂU HỎI" in c, (
+            "{0}: bộ chấm phải chấm 60 giây đầu theo cùng tiêu chí".format(nhan))
 
     def test_y_thu_nhat_phai_vao_som(self, nhan, thu_muc):
         """Chỗ chết đo được của kênh là giây 15–60. Tiêu đề hứa N mục thì mục

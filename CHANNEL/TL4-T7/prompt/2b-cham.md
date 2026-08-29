@@ -2,9 +2,13 @@ dưới đây là kịch bản gốc đã viral và <<SO_BAN>> bản viết lạ
 
 mục đích duy nhất: THỜI LƯỢNG XEM. video được YouTube đề xuất khi người xem ở lại lâu (trên 60% thời lượng) và bình luận. hãy hình dung đường cong giữ chân của từng bản khi được đọc thành video khoảng <<PHUT>> phút, rồi chấm theo thứ tự ưu tiên:
 
-1. 30 GIÂY ĐẦU (chỗ rớt nhiều nhất): 3 câu đầu phải nêu ngay câu lật / lời hứa của tiêu đề, kèm một cảnh cụ thể người xem thấy chính mình; mở đầu tả cảnh dài, vòng vo mới vào ý là trừ nặng nhất.
-   Nếu tiêu đề có con số (6 đặc điểm, 7 điều, 5 dấu hiệu…): Ý THỨ NHẤT phải bắt đầu trong 400 ký tự đầu. Bản nào để ý thứ nhất ra sau mốc đó thì TỐI ĐA 5 điểm, dù phần còn lại hay tới đâu — người xem bỏ đi trước khi nghe được thứ tiêu đề hứa. Ghi rõ trong "cho_de_rot" là ý thứ nhất nằm ở ký tự thứ bao nhiêu.
-2. ĐƯỜNG CONG GIỮA BÀI: cứ khoảng 2 phút phải có một cú trả thưởng (ý mới, cảnh "đúng là tôi", con số gây ngạc nhiên), có câu mở nút để muốn nghe tiếp, không có đoạn trũng chỉ giải thích chung chung; bám cấu trúc, các ý, nghiên cứu, con số, ẩn dụ chính của bản gốc — vì bản gốc đã chứng minh giữ được người xem
+1. 60 GIÂY ĐẦU (chỗ rớt nhiều nhất — đo trên chính kênh này: bản tốt rớt 25 điểm, bản tệ rớt 52 điểm trong 52 giây). Chấm bốn thứ, thiếu thứ nào trừ thứ đó:
+   a) Mở bằng VẬT THỂ NHÌN ĐƯỢC (tiếng mưa, ly cà phê, tấm vé) chứ không phải cảm giác trong người ("ngực dịu lại") — mở bằng cảm giác trừu tượng là trừ nặng nhất.
+   b) Câu ở đoạn mở phải RẤT NGẮN, 10–20 ký tự. Câu 35 ký tự ở giây thứ 26 đã làm bản tệ mất 35 điểm giữ chân.
+   c) Có CÂU HỎI đặt thẳng cho người xem trước giây 60 (「〜していますか」). Bản tốt hỏi ở giây 52 rồi gần như không rớt thêm; bản tệ không hỏi câu nào cả phút đầu.
+   d) CHƯA giải thích cơ chế / não bộ / nghiên cứu trong phút đầu. Bản tệ giải thích ngay giây 54 và tụt còn 49%.
+   Nếu tiêu đề có con số: Ý THỨ NHẤT phải bắt đầu trong 8 câu đầu. Ra sau mốc đó thì TỐI ĐA 5 điểm. Ghi rõ trong "cho_de_rot" ý thứ nhất nằm ở câu thứ mấy.
+2. ĐƯỜNG CONG GIỮA BÀI: mỗi đoạn giải thích phải có một CẢNH ĐỜI THƯỜNG đi kèm ngay sau — hai đoạn giải thích liền nhau là trừ. Ở phút 11 bản tốt vẫn đang tả cảnh, bản tệ vẫn đang giải thích: một bên giữ 28% tới cuối, bên kia 12%. Cứ khoảng 2 phút phải có một cú trả thưởng (ý mới, cảnh "đúng là tôi", con số gây ngạc nhiên), có câu mở nút để muốn nghe tiếp, không có đoạn trũng chỉ giải thích chung chung; bám cấu trúc, các ý, nghiên cứu, con số, ẩn dụ chính của bản gốc — vì bản gốc đã chứng minh giữ được người xem
 3. ĐOẠN CUỐI: ý mạnh nhất để dành cho cuối, câu hỏi cụ thể để bình luận đặt TRƯỚC câu kết và gắn với trải nghiệm vừa kể, kết gợi mở sang video tiếp kèm một lời mời đăng ký ngắn; kết nhạt, thiếu câu hỏi hoặc thiếu lời mời đăng ký là trừ
 4. KHÔNG CHÉP: trùng nguyên văn trên 45% là gần chép, trừ nặng
 5. ĐỘ DÀI: trần <<PHUT>> phút đọc (≈ <<CHARS>> ký tự). Vượt trần trên 20% thì TỐI ĐA 5 điểm; vượt trên 50% thì TỐI ĐA 3 điểm — dài quá thì rớt giữa bài. Ngắn hơn 20% cũng trừ nặng vì mất thời lượng xem.

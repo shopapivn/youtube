@@ -13,18 +13,18 @@ short means a 9-minute video where a 10-minute one was planned.
 ## How to change the length without hurting the script
 
 **Count in SENTENCES, not characters — you cannot count characters reliably.**
-Each numbered point in the body should run **13-16 sentences**: one naming the
-trait, two or three explaining it through psychology, **six or seven telling one
+Each numbered point in the body should run **18-22 short sentences**: one naming the
+trait, two or three explaining it through psychology, **eight to ten telling one
 concrete everyday scene** (a place, an action, a felt sensation), one or two
 closing it. A point shorter than that is the reason the script comes up short.
 
-**Also check sentence length.** Natural Japanese narration runs 40-50 characters
-per sentence. If the draft averages 25-30, it is clipped: rewrite those into full
-sentences with subject, situation and nuance (のです · ものです · かもしれません ·
-ことがあります). Clipped sentences alone can cost a third of the target length.
+**Do NOT lengthen by making sentences longer.** Measured on this channel's
+best-retaining video: 29 characters per sentence — short sentences, easy to
+follow when read aloud. Reach the target by writing MORE sentences: another beat
+of the scene, another concrete detail, another short line that lets a point land.
 
 - **To lengthen:** find the points that are missing the everyday scene and write
-  it in — six or seven sentences each, with a place, an action, and a feeling in
+  it in — eight to ten sentences each, with a place, an action, and a feeling in
   the body. Deepen what is already there; never pad with filler, never repeat a
   point already made.
 - **To shorten:** cut hedging, cut restatements, tighten sentences. Never cut
