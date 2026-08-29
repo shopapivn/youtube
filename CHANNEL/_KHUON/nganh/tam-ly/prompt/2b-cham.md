@@ -7,7 +7,7 @@ mục đích duy nhất: THỜI LƯỢNG XEM. video được YouTube đề xuấ
    b) Câu ở đoạn mở phải RẤT NGẮN, 10–20 ký tự. Câu 35 ký tự ở giây thứ 26 đã làm bản tệ mất 35 điểm giữ chân.
    c) Có CÂU HỎI đặt thẳng cho người xem trước giây 60 (「〜していますか」). Bản tốt hỏi ở giây 52 rồi gần như không rớt thêm; bản tệ không hỏi câu nào cả phút đầu.
    d) CHƯA giải thích cơ chế / não bộ / nghiên cứu trong phút đầu. Bản tệ giải thích ngay giây 54 và tụt còn 49%.
-   Nếu tiêu đề có con số: Ý THỨ NHẤT phải bắt đầu trong 8 câu đầu. Ra sau mốc đó thì TỐI ĐA 5 điểm. Ghi rõ trong "cho_de_rot" ý thứ nhất nằm ở câu thứ mấy.
+   Nếu tiêu đề có con số: Ý THỨ NHẤT phải bắt đầu trong khoảng 10% đầu bài (đo bằng tỉ lệ ký tự, không đếm câu). Ra sau 20% thì TỐI ĐA 5 điểm. Ghi rõ trong "cho_de_rot" ý thứ nhất nằm ở khoảng bao nhiêu phần trăm bài.
 2. ĐƯỜNG CONG GIỮA BÀI: mỗi đoạn giải thích phải có một CẢNH ĐỜI THƯỜNG đi kèm ngay sau — hai đoạn giải thích liền nhau là trừ. Ở phút 11 bản tốt vẫn đang tả cảnh, bản tệ vẫn đang giải thích: một bên giữ 28% tới cuối, bên kia 12%. Cứ khoảng 2 phút phải có một cú trả thưởng (ý mới, cảnh "đúng là tôi", con số gây ngạc nhiên), có câu mở nút để muốn nghe tiếp, không có đoạn trũng chỉ giải thích chung chung; bám cấu trúc, các ý, nghiên cứu, con số, ẩn dụ chính của bản gốc — vì bản gốc đã chứng minh giữ được người xem
 3. ĐOẠN CUỐI: ý mạnh nhất để dành cho cuối, câu hỏi cụ thể để bình luận đặt TRƯỚC câu kết và gắn với trải nghiệm vừa kể, kết gợi mở sang video tiếp kèm một lời mời đăng ký ngắn; kết nhạt, thiếu câu hỏi hoặc thiếu lời mời đăng ký là trừ
 4. KHÔNG CHÉP: trùng nguyên văn trên 45% là gần chép, trừ nặng

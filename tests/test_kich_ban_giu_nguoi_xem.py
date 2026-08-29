@@ -95,8 +95,11 @@ class TestLoiNhacViet:
         """Chỗ chết đo được của kênh là giây 15–60. Tiêu đề hứa N mục thì mục
         đầu phải nằm trong vùng người xem còn ở lại."""
         v = _doc(thu_muc, "2-viet.md")
-        assert "8 câu đầu" in v, (
-            "{0}: thiếu ràng buộc ý thứ nhất vào trong 8 câu đầu".format(nhan))
+        # Đo bằng TỈ LỆ BÀI, không đếm câu: hai tiêu chí "câu ngắn" và "ý 1 trong
+        # 8 câu" đá nhau — lượt 0002 viết câu 23 ký tự nên 12 câu mở đầu chỉ tốn
+        # 250 ký tự (6,5% bài, sớm gấp đôi V2) mà vẫn bị đếm là "quá 8 câu".
+        assert "10% đầu bài" in v, (
+            "{0}: ràng buộc ý thứ nhất phải đo bằng tỉ lệ bài".format(nhan))
 
     def test_hoan_thien_duoc_phep_nen(self, nhan, thu_muc):
         """Bản cũ ra lệnh 'giữ nguyên độ dài' nên bản cuối phình 7.093 → 7.589."""

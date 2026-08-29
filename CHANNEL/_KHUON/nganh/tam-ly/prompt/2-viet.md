@@ -36,7 +36,7 @@ Cứ mỗi đoạn giải thích, phải có một cảnh đời thường đi k
 MỞ ĐẦU — 30 giây đầu quyết định video sống hay chết:
 - Ba câu đầu phải nêu ngay lời hứa của tiêu đề, kèm một cảnh cụ thể để người xem thấy chính mình.
 - CẤM mở bằng tả cảnh dài. CẤM kể lể vòng vo rồi mới vào ý.
-- Nếu tiêu đề có con số (6 đặc điểm, 7 điều, 5 dấu hiệu…) thì Ý THỨ NHẤT phải bắt đầu **trong 8 câu đầu tiên** của bài. Phần dẫn nhập trước đó tối đa 6–7 câu.
+- Nếu tiêu đề có con số (6 đặc điểm, 7 điều, 5 dấu hiệu…) thì Ý THỨ NHẤT phải bắt đầu **trong khoảng 10% đầu bài** — đo bằng tỉ lệ, không đếm câu, vì câu ở đây rất ngắn nên đếm câu ra kết quả lệch. Video giữ chân tốt nhất của kênh vào ý 1 ở mốc 15% bài; sớm hơn thì tốt hơn.
 - Không dành cả một đoạn để hứa "tôi sẽ kể sáu điều": nói một câu rồi vào ý thứ nhất luôn.
 
 THÂN BÀI — ĐỘ DÀI ĐO BẰNG SỐ CÂU, VÌ ĐẾM KÝ TỰ KHÔNG BÁM ĐƯỢC:
