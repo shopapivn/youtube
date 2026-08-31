@@ -1,0 +1,25 @@
+{
+  "video_id": null,
+  "gio_sau_dang": null,
+  "thoi_luong_giay": null,
+  "vung": {
+    "JP": 47.08,
+    "VN": 1.65
+  },
+  "traffic": {},
+  "thiet_bi": {
+    "mobile": 52.91,
+    "pc": 22.26,
+    "tablet": 15.41,
+    "tv": 9.4
+  },
+  "phu_de": {
+    "none": 51.42,
+    "ja": 5.25,
+    "en#": 0.15
+  },
+  "external_chi_tiet": {},
+  "views": 667,
+  "subs": 13,
+  "watch_hours": 36.48
+}

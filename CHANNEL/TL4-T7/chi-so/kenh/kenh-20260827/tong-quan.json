@@ -1,0 +1,40 @@
+{
+  "video_id": null,
+  "gio_sau_dang": null,
+  "thoi_luong_giay": null,
+  "vung": {
+    "JP": 61.62,
+    "VN": 11.11
+  },
+  "traffic": {
+    "related": 60.61,
+    "channel_page": 16.16,
+    "browse": 11.11,
+    "search": 5.05,
+    "external": 3.03,
+    "unknown_mobile_or_direct": 2.02,
+    "other": 2.02
+  },
+  "thiet_bi": {
+    "mobile": 49.91,
+    "pc": 20.9,
+    "tablet": 17.34,
+    "tv": 11.86
+  },
+  "phu_de": {
+    "none": 89.9,
+    "ja": 9.09,
+    "en#": 1.01
+  },
+  "external_chi_tiet": {
+    "telegram.org": 66.67,
+    "Google Search": 33.33
+  },
+  "impressions": 0,
+  "ctr": 0,
+  "views": 209,
+  "views_that": 0,
+  "subs": 6,
+  "watch_hours": 19.79,
+  "avd_giay": 0
+}
