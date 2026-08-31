@@ -274,3 +274,43 @@ def test_moc_gio_lay_tu_ten_thu_muc():
     assert _gio_tu_ten_moc("tay-20260828") is None       # bản chụp tay không phải mốc
     assert _gio_tu_ten_moc("kenh-20260826") is None
     assert _gio_tu_ten_moc("") is None
+
+
+# ───────────────────────── dia chi tram nhan phai song sot qua lan cai lai
+def test_extension_di_kem_co_tep_cau_hinh():
+    """Go tien ich roi cai lai thi Chrome XOA SACH `chrome.storage.local`.
+
+    Dia chi tram nhan bay mat theo. Va khi o dia chi trong, tien ich KHONG bao loi — no
+    lang le quay ve ghi vao thu muc Tai xuong cua chinh may ao. Nhin tu ngoai moi thu van
+    chay, chi la khong goi nao ve toi noi can. Mat trang mot luot chup vi dung chuyen nay,
+    31/08/2026.
+
+    Tep nam trong thu muc tien ich nen song sot qua moi lan cai lai.
+    """
+    import json
+    goc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "core", "ytb_extension")
+    p = os.path.join(goc, "cau-hinh.json")
+    assert os.path.isfile(p), "thieu cau-hinh.json trong tien ich di kem"
+    assert "host" in json.load(io.open(p, encoding="utf-8"))
+
+    mf = json.load(io.open(os.path.join(goc, "manifest.json"), encoding="utf-8"))
+    war = mf.get("web_accessible_resources") or []
+    assert any("cau-hinh.json" in (r.get("resources") or []) for r in war), \
+        "service worker khong doc duoc cau-hinh.json neu no khong nam trong web_accessible_resources"
+
+    bg = io.open(os.path.join(goc, "background.js"), encoding="utf-8").read()
+    assert "napCauHinh" in bg and "cau-hinh.json" in bg
+    # chi dien khi o dang trong — nguoi dung tu sua thi lan cai sau khong duoc ghi de
+    assert "if (await st('host', '')) return;" in bg
+
+
+def test_ban_giao_khach_le_khong_kem_dia_chi_may_ai(tmp_path):
+    """Ban di kem cong cu phai de TRONG.
+
+    Ghi cung mot dia chi vao day la moi khach deu tro ve mot may khong phai cua ho.
+    """
+    import json
+    goc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       "core", "ytb_extension")
+    assert json.load(io.open(os.path.join(goc, "cau-hinh.json"), encoding="utf-8"))["host"] == ""

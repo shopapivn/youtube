@@ -454,7 +454,32 @@ chrome.alarms.onAlarm.addListener(async (a) => {
   else if (k === 'tu-kiem') await datLich();
 });
 
+// Địa chỉ trạm nhận lấy từ `cau-hinh.json` đi kèm thư mục tiện ích.
+//
+// ═══ VÌ SAO PHẢI GHI VÀO TỆP, KHÔNG CHỈ VÀO Ô NHẬP ═══
+//
+// Gỡ tiện ích rồi cài lại — việc phải làm mỗi lần cập nhật bản chưa đóng gói — thì Chrome
+// **xoá sạch `chrome.storage.local`**, kéo theo địa chỉ trạm nhận. Mà khi địa chỉ trống,
+// tiện ích không báo lỗi: nó lặng lẽ quay về ghi vào thư mục Tải xuống của chính máy ảo.
+// Nhìn từ ngoài thì mọi thứ vẫn chạy, chỉ là không gói nào về tới nơi cần.
+//
+// Đã mất một lượt chụp vì đúng chuyện này, 31/08/2026.
+//
+// Tệp cấu hình nằm trong thư mục tiện ích nên nó sống sót qua mọi lần cài lại. Công cụ ghi
+// sẵn địa chỉ máy của bạn vào đó lúc bấm "Lưu tiện ích ra máy".
+//
+// CHỈ điền khi ô đang trống — người dùng tự sửa địa chỉ thì lần cài sau không bị ghi đè.
+async function napCauHinh() {
+  if (await st('host', '')) return;
+  try {
+    const r = await fetch(chrome.runtime.getURL('cau-hinh.json'));
+    const c = await r.json();
+    if (c && c.host) { await luu('host', c.host); log(`địa chỉ trạm nhận từ cấu hình: ${c.host}`); }
+  } catch (e) {}
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
+  await napCauHinh();
   const v = chrome.runtime.getManifest().version;
   const cu = await st('phien_ban', '');
   if (cu !== v) {

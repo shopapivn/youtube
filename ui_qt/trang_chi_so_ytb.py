@@ -232,8 +232,41 @@ class TrangChiSoYTB(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Không lưu được", str(e))
             return
-        self._nhan_cai.setText(f"✓ Đã lưu vào <b>{dich}</b> — chọn đúng thư mục này ở bước Tải tiện ích.")
+        dia_chi = self._ghi_dia_chi_vao_ban_sao(dich)
+        them = (f" Đã ghi sẵn địa chỉ máy này (<b>{dia_chi}</b>) vào tiện ích." if dia_chi else "")
+        self._nhan_cai.setText(
+            f"✓ Đã lưu vào <b>{dich}</b> — chọn đúng thư mục này ở bước Tải tiện ích.{them}")
         mo_thu_muc(dich)
+
+    def _ghi_dia_chi_vao_ban_sao(self, dich: str) -> str:
+        """Đóng địa chỉ trạm nhận vào ngay trong bản tiện ích vừa chép ra.
+
+        ═══ VÌ SAO KHÔNG ĐỂ NGƯỜI DÙNG TỰ ĐIỀN MỖI LẦN ═══
+
+        Gỡ tiện ích rồi cài lại — việc phải làm mỗi lần cập nhật bản chưa đóng gói — thì
+        Chrome xoá sạch `chrome.storage.local`, kéo theo địa chỉ trạm nhận. Và khi ô địa chỉ
+        trống, tiện ích KHÔNG báo lỗi: nó lặng lẽ quay về ghi vào thư mục Tải xuống của chính
+        máy chạy nó. Nhìn từ ngoài mọi thứ vẫn chạy, chỉ là không gói nào về tới nơi cần —
+        đã mất trắng một lượt chụp vì đúng chuyện này, 31/08/2026.
+
+        Tệp nằm trong thư mục tiện ích nên sống sót qua mọi lần cài lại. Chỉ ghi khi máy này
+        thật sự có địa chỉ mạng nội bộ; không có thì để trống, và tiện ích lưu vào Tải xuống
+        như bản dành cho khách lẻ.
+        """
+        ds = tr.dia_chi_may(self._tram.cong)
+        if not ds:
+            return ""
+        p = os.path.join(dich, "cau-hinh.json")
+        try:
+            import json
+            with open(p, "w", encoding="utf-8", newline="\n") as f:
+                json.dump({"host": ds[0], "_ghi_chu":
+                           "Cong cu tu dien khi ban bam 'Luu tien ich ra may'. "
+                           "De trong = ghi vao thu muc Tai xuong cua may chay tien ich."},
+                          f, ensure_ascii=False, indent=2)
+        except OSError:
+            return ""
+        return ds[0]
 
     def _mo_trang_extension(self) -> None:
         """Mở chrome://extensions. Chrome không cho mở địa chỉ này từ dòng lệnh của
