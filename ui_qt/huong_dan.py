@@ -97,15 +97,22 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "─── MỤC ĐỐI THỦ ───",
             "Chọn kênh của bạn ở ô Kênh — mỗi kênh một sổ riêng, nằm trong thư "
             "mục CHANNEL/<kênh>/nghien-cuu. Dán link các kênh đối thủ vào ô "
-            "danh sách (mỗi dòng một kênh, tự lưu khi gõ).",
-            "Bấm “Lấy content đối thủ” — content của CẢ danh sách đổ về bảng: "
-            "tiêu đề, link, ngày đăng, thời lượng, view, like, comment, "
-            "hashtag, mô tả. Như bảng bạn vẫn làm trên trang tính, nhưng nằm "
-            "ngay trong tool.",
-            "Cột “Tuyến / Kênh” là cột CỦA BẠN: bấm đúp vào ô để phân loại "
-            "video vào tuyến nội dung. Tự lưu ngay khi sửa, và lấy dữ liệu lần "
-            "sau: số liệu mới đè lên, tuyến đã điền GIỮ NGUYÊN — video đối thủ "
-            "đã ẩn cũng không mất khỏi sổ.",
+            "danh sách (mỗi dòng một kênh, tự lưu khi gõ), rồi bấm “Quét đối "
+            "thủ” — content của cả danh sách đổ về bảng: tiêu đề, link, ngày "
+            "đăng, thời lượng, view, like, comment, hashtag, mô tả.",
+            "Gặp một video ngon lẻ? Dán link vào ô “dán link video ngon” rồi "
+            "Enter — video đó vào thẳng sổ, không phải quét cả kênh của nó.",
+            "Bật “Tự quét mỗi ngày” là tool tự quét lại khi đang mở, và cột "
+            "“Tăng/ngày” cho biết mỗi video đang lên thêm bao nhiêu view một "
+            "ngày — bấm tiêu đề cột đó xếp giảm dần là thấy ngay video nào "
+            "đang nổ. Tool tắt thì không quét được: máy phải đang chạy.",
+            "Bảng dùng như trang tính: sửa ô nào cũng được, tự lưu ngay; "
+            "“Thêm cột…” tạo cột riêng của bạn (trạng thái làm, điểm chấm…); "
+            "“Thêm dòng” chèn dòng trống để ghi chú; “Xoá dòng đã chọn” dọn "
+            "sổ. Cột “Tuyến / Kênh” và “Ghi chú” có sẵn để phân loại.",
+            "Quét lại KHÔNG làm mất công của bạn: số liệu mới đè lên đúng các "
+            "cột số liệu, còn tuyến, ghi chú, cột tự thêm giữ nguyên; video "
+            "đối thủ đã ẩn vẫn còn vết trong sổ.",
             "Ô lọc góc phải bảng: gõ tên tuyến hay chữ trong tiêu đề là bảng "
             "chỉ còn các dòng đó — như lọc trên trang tính.",
             "─── MỤC CHỈ SỐ KÊNH ───",
