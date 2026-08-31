@@ -38,11 +38,12 @@ from .doi_thu import COT_VIDEO
 from .kenh import duong_kenh
 
 __all__ = ["COT_TUYEN", "COT_GHI_CHU", "COT_TANG", "COT_VIEW_TRUOC",
-           "COT_LINK", "COT_SO", "cot_mac_dinh",
-           "TEP_DOI_THU", "TEP_BANG", "TEP_CAI",
+           "COT_LINK", "COT_SO", "cot_mac_dinh", "cot_cua_khach",
+           "TEP_DOI_THU", "TEP_BANG", "TEP_CAI", "THU_MUC_SAO_LUU",
+           "SO_BAN_SAO",
            "thu_muc_nghien_cuu", "ten_kenh_an_toan",
            "doc_doi_thu", "luu_doi_thu",
-           "doc_bang", "luu_bang", "gop_bang",
+           "doc_bang", "luu_bang", "gop_bang", "khoi_tu_clipboard",
            "doc_cai", "luu_cai", "den_han_quet"]
 
 #: Cột của KHÁCH, có sẵn từ đầu. Tên đúng như cột họ dùng trên trang tính.
@@ -63,6 +64,12 @@ TEP_DOI_THU = "doi-thu.txt"
 TEP_BANG = "content.csv"
 TEP_CAI = "cai-dat.json"
 
+#: Sao lưu bảng — vì đây là sổ khách nuôi bằng tay hàng tuần. Mỗi NGÀY đầu
+#: tiên có ghi là chép nguyên bảng hiện tại vào đây trước khi đè; giữ hai tuần.
+#: Lỡ tay xoá nhầm cả trăm dòng thì mở thư mục này lấy lại được bản hôm qua.
+THU_MUC_SAO_LUU = "sao-luu"
+SO_BAN_SAO = 14
+
 #: Quét định kỳ: coi là "đến hạn" khi đã qua ngần này giờ từ lượt trước.
 #: 22 chứ không phải 24: mở tool sớm hơn hôm qua hai tiếng vẫn được tính.
 _GIO_MOT_NGAY = 22.0
@@ -78,6 +85,16 @@ def cot_mac_dinh() -> List[str]:
     cot = list(COT_VIDEO)
     cot.insert(cot.index("View") + 1, COT_TANG)
     return cot + [COT_TUYEN, COT_GHI_CHU, COT_VIEW_TRUOC]
+
+
+def cot_cua_khach(ten: str) -> bool:
+    """Cột này có phải khách tự thêm không — chỉ cột đó được đổi tên/xoá.
+
+    Cột số liệu là chỗ máy quét ghi vào; cột theo dõi là chỗ máy tính toán;
+    Tuyến và Ghi chú là chỗ mã khác (điền tuyến hàng loạt) đang trỏ theo tên.
+    Đụng vào tên các cột ấy là những chỗ kia trỏ vào khoảng không.
+    """
+    return ten not in cot_mac_dinh()
 
 
 def ten_kenh_an_toan(ten: str) -> str:
@@ -157,18 +174,69 @@ def doc_bang(goc: str, kenh: str) -> Tuple[List[str], List[List[str]]]:
     return cot, hang
 
 
+def _sao_luu_hom_nay(thu_muc: str, duong_bang: str) -> None:
+    """Ngày đầu tiên có ghi: chép bảng HIỆN TẠI ra một bản trước khi đè.
+
+    Chép bản *trước khi sửa* chứ không phải sau: thứ cần cứu là trạng thái
+    ngay trước lượt phá — xoá nhầm trăm dòng, quét đè sai. Giữ `SO_BAN_SAO`
+    bản mới nhất; tên file theo ngày nên sắp theo tên là sắp theo thời gian.
+    """
+    if not os.path.exists(duong_bang):
+        return
+    ngan = os.path.join(thu_muc, THU_MUC_SAO_LUU)
+    dich = os.path.join(ngan, "content-{0}.csv".format(
+        time.strftime("%Y-%m-%d")))
+    if os.path.exists(dich):
+        return          # hôm nay đã có bản rồi — một ngày một bản là đủ
+    os.makedirs(ngan, exist_ok=True)
+    with open(duong_bang, "rb") as nguon, open(dich, "wb") as ra:
+        ra.write(nguon.read())
+    try:
+        cu = sorted(t for t in os.listdir(ngan)
+                    if t.startswith("content-") and t.endswith(".csv"))
+        for thua in cu[:-SO_BAN_SAO]:
+            os.remove(os.path.join(ngan, thua))
+    except OSError:
+        pass            # dọn không được thì thừa vài file, không mất gì
+
+
 def luu_bang(goc: str, kenh: str, cot: Sequence[str],
              hang: Sequence[Sequence[str]]) -> None:
-    """Ghi cả bảng. `utf-8-sig` để mở bằng Excel không vỡ chữ Việt."""
+    """Ghi cả bảng — GHI NGUYÊN TỬ, có sao lưu ngày.
+
+    Nguyên tử (ghi file tạm rồi `os.replace`): sổ này được ghi lại sau MỖI ô
+    khách sửa; tool tắt ngang hay máy sập giữa một lượt ghi thẳng là file CSV
+    đứt đôi và cả sổ thành rác. `utf-8-sig` để mở bằng Excel không vỡ chữ Việt.
+    """
     thu_muc = thu_muc_nghien_cuu(goc, kenh)
     os.makedirs(thu_muc, exist_ok=True)
-    with open(os.path.join(thu_muc, TEP_BANG), "w",
-              encoding="utf-8-sig", newline="") as tep:
+    duong = os.path.join(thu_muc, TEP_BANG)
+    _sao_luu_hom_nay(thu_muc, duong)
+    tam = duong + ".tmp"
+    with open(tam, "w", encoding="utf-8-sig", newline="") as tep:
         but = csv.writer(tep)
         but.writerow(list(cot))
         for dong in hang:
             dong = [str(o) for o in list(dong)[:len(cot)]]
             but.writerow(dong + [""] * (len(cot) - len(dong)))
+    os.replace(tam, duong)
+
+
+def khoi_tu_clipboard(chu: str) -> List[List[str]]:
+    """Khối ô từ clipboard (Excel/Sheets chép ra): Tab ngăn cột, xuống dòng
+    ngăn hàng. Trả về hình chữ nhật — hàng ngắn được nối ô rỗng cho vuông.
+
+    >>> khoi_tu_clipboard("a\\tb\\nc")
+    [['a', 'b'], ['c', '']]
+    """
+    dong = str(chu or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    while dong and dong[-1] == "":
+        dong.pop()
+    khoi = [d.split("\t") for d in dong]
+    if not khoi:
+        return []
+    rong = max(len(d) for d in khoi)
+    return [d + [""] * (rong - len(d)) for d in khoi]
 
 
 def _so_nguyen(chu: str) -> Optional[int]:
@@ -255,8 +323,11 @@ def luu_cai(goc: str, kenh: str, **thay_doi) -> None:
     cai.update(thay_doi)
     thu_muc = thu_muc_nghien_cuu(goc, kenh)
     os.makedirs(thu_muc, exist_ok=True)
-    with open(os.path.join(thu_muc, TEP_CAI), "w", encoding="utf-8") as tep:
+    duong = os.path.join(thu_muc, TEP_CAI)
+    tam = duong + ".tmp"
+    with open(tam, "w", encoding="utf-8") as tep:
         json.dump(cai, tep, ensure_ascii=False, indent=1)
+    os.replace(tam, duong)
 
 
 def den_han_quet(goc: str, kenh: str, bay_gio: Optional[float] = None) -> bool:

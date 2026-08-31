@@ -127,6 +127,41 @@ class TestKhoTrenDia:
         assert ":" not in so.ten_kenh_an_toan("a:b")
         assert so.ten_kenh_an_toan("  TL4-T7  ") == "TL4-T7"
 
+    def test_ghi_de_co_sao_luu_ngay_va_khong_de_lai_file_tam(self, tmp_path):
+        """Bản sao lưu là trạng thái TRƯỚC lượt ghi đầu tiên trong ngày —
+        thứ cần cứu khi lỡ tay xoá nhầm cả trăm dòng."""
+        goc = str(tmp_path)
+        cot = _cot()
+        so.luu_bang(goc, "K1", cot,
+                    so.gop_bang(cot, [], [_dong_moi("https://y/1")]))
+        # Lượt ghi ĐẦU chưa có gì để sao lưu (file chưa tồn tại trước đó).
+        ngan = os.path.join(so.thu_muc_nghien_cuu(goc, "K1"), so.THU_MUC_SAO_LUU)
+        assert not os.path.exists(ngan)
+        # Lượt ghi thứ hai: bản trước đó phải nằm trong sao-luu.
+        so.luu_bang(goc, "K1", cot, [])
+        ban_sao = os.listdir(ngan)
+        assert len(ban_sao) == 1 and ban_sao[0].startswith("content-")
+        with open(os.path.join(ngan, ban_sao[0]), encoding="utf-8-sig") as tep:
+            assert "https://y/1" in tep.read(), \
+                "bản sao phải là bảng TRƯỚC khi đè, không phải bảng rỗng mới"
+        # Ghi thêm trong cùng ngày không đẻ thêm bản sao.
+        so.luu_bang(goc, "K1", cot, [])
+        assert len(os.listdir(ngan)) == 1
+        # Ghi nguyên tử: không để lại file .tmp nào.
+        thu_muc = so.thu_muc_nghien_cuu(goc, "K1")
+        assert not [t for t in os.listdir(thu_muc) if t.endswith(".tmp")]
+
+    def test_khoi_tu_clipboard_vuong_va_chiu_moi_kieu_xuong_dong(self):
+        assert so.khoi_tu_clipboard("a\tb\r\nc") == [["a", "b"], ["c", ""]]
+        assert so.khoi_tu_clipboard("mot\n") == [["mot"]]
+        assert so.khoi_tu_clipboard("") == []
+
+    def test_cot_cua_khach_phan_biet_dung(self):
+        assert so.cot_cua_khach("Trạng thái làm")
+        for ten in ("View", so.COT_TANG, so.COT_TUYEN, so.COT_GHI_CHU):
+            assert not so.cot_cua_khach(ten), \
+                "{0} là cột tool đang trỏ theo tên — cấm đổi/xoá".format(ten)
+
 
 class TestQuetDinhKy:
     def test_den_han_khi_bat_va_qua_mot_ngay(self, tmp_path):
@@ -266,3 +301,86 @@ class TestTrangDoiThu:
         trang._doi_kenh()
         trang._chay()
         assert trang._app.thong_bao, "phải nói ra, không im lặng bỏ qua"
+
+    def test_phim_delete_xoa_chu_trong_o_va_luu(self, trang):
+        goc = trang._app.base_dir
+        cot = _mot_dong_vao_so(goc)
+        trang._doi_kenh()
+        c = cot.index(so.COT_TUYEN)
+        trang._bang.item(0, c).setText("sắp xoá")
+        trang._bang.setCurrentCell(0, c)
+        trang._bang.item(0, c).setSelected(True)
+        trang._xoa_o()
+        _c, hang = so.doc_bang(goc, "K1")
+        assert _o(cot, hang[0], so.COT_TUYEN) == ""
+        assert len(hang) == 1, "Delete xoá chữ trong ô, KHÔNG xoá dòng"
+
+    def test_dan_mot_gia_tri_vao_nhieu_o_dang_chon(self, trang):
+        """Khối 1×1 + chọn nhiều ô = điền cả loạt, đúng thói quen Sheets."""
+        from PyQt5.QtWidgets import QApplication
+
+        goc = trang._app.base_dir
+        cot = _cot()
+        so.luu_bang(goc, "K1", cot,
+                    so.gop_bang(cot, [], [_dong_moi("https://y/1"),
+                                          _dong_moi("https://y/2")]))
+        trang._doi_kenh()
+        c = cot.index(so.COT_TUYEN)
+        QApplication.clipboard().setText("kinh dị")
+        for i in (0, 1):
+            trang._bang.item(i, c).setSelected(True)
+        trang._dan_vung()
+        _c, hang = so.doc_bang(goc, "K1")
+        assert [_o(cot, d, so.COT_TUYEN) for d in hang] == ["kinh dị"] * 2
+
+    def test_dien_tuyen_hang_loat(self, trang, monkeypatch):
+        goc = trang._app.base_dir
+        cot = _cot()
+        so.luu_bang(goc, "K1", cot,
+                    so.gop_bang(cot, [], [_dong_moi("https://y/1"),
+                                          _dong_moi("https://y/2")]))
+        trang._doi_kenh()
+        from PyQt5.QtWidgets import QInputDialog
+
+        monkeypatch.setattr(QInputDialog, "getItem",
+                            staticmethod(lambda *a, **k: ("tuyến hài", True)))
+        for i in (0, 1):
+            trang._bang.item(i, 0).setSelected(True)
+        trang._dien_tuyen()
+        _c, hang = so.doc_bang(goc, "K1")
+        assert [_o(cot, d, so.COT_TUYEN) for d in hang] == ["tuyến hài"] * 2
+
+    def test_doi_ten_va_xoa_chi_cot_cua_khach(self, trang, monkeypatch):
+        goc = trang._app.base_dir
+        _mot_dong_vao_so(goc)
+        trang._doi_kenh()
+        from PyQt5.QtWidgets import QInputDialog, QMessageBox
+
+        # Thêm cột riêng rồi đổi tên nó.
+        monkeypatch.setattr(QInputDialog, "getText",
+                            staticmethod(lambda *a, **k: ("Cột A", True)))
+        trang._them_cot()
+        monkeypatch.setattr(QInputDialog, "getText",
+                            staticmethod(lambda *a, **k: ("Cột B", True)))
+        trang._doi_ten_cot(trang._cot.index("Cột A"))
+        cot, _h = so.doc_bang(goc, "K1")
+        assert "Cột B" in cot and "Cột A" not in cot
+        # Xoá cột riêng thì được…
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: QMessageBox.Yes))
+        trang._xoa_cot(trang._cot.index("Cột B"))
+        cot, _h = so.doc_bang(goc, "K1")
+        assert "Cột B" not in cot
+        # …còn cột của tool thì hàm phân biệt phải chặn từ menu.
+        assert not so.cot_cua_khach("View")
+
+    def test_keo_rong_cot_duoc_nho_theo_kenh(self, trang):
+        goc = trang._app.base_dir
+        _mot_dong_vao_so(goc)
+        trang._doi_kenh()
+        trang._bang.setColumnWidth(0, 199)
+        trang._luu_rong_cot()
+        assert so.doc_cai(goc, "K1").get("rong_cot", {}).get("Kênh") == 199
+        trang._doi_kenh()
+        assert trang._bang.columnWidth(0) == 199, \
+            "mở lại sổ phải thấy đúng độ rộng đã kéo"
