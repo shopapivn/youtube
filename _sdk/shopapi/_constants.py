@@ -159,7 +159,13 @@ MAX_TEXT_LENGTH = 100_000
 #: tài liệu hợp đồng API). Trước đây SDK chặn ở 5.000
 #: trong khi máy chủ nhận 8.000: cùng một prompt 6.000 ký tự thì gọi bằng cURL
 #: chạy ngon còn gọi bằng SDK báo lỗi — người ta kết luận SDK hỏng và gỡ đi.
-MAX_PROMPT_LENGTH = 8_000
+#: ⚠ 5.000, KHÔNG PHẢI 8.000 — con số này thuộc về NHÀ MÁY, không phải API.
+#: Sự cố 29/08/2026: nhà máy veo3 (`engine/media.py::MAX_PROMPT_CHARS`) chặn ở
+#: 5.000, còn cổng API và mọi SDK đều khai 8.000. Prompt dài 5.001-8.000 vì thế
+#: lọt qua mọi phép kiểm, được nhận (202), xếp hàng, rồi CHẾT HẲN ở nhà máy với
+#: `retryable:false`. Khách chờ mấy phút để nhận một lời từ chối lẽ ra biết ngay.
+#: Nới ở đây trước khi nới `MAX_PROMPT_CHARS` là dựng lại đúng cái bẫy đó.
+MAX_PROMPT_LENGTH = 5_000
 #: Số ảnh tham chiếu tối đa mỗi job ảnh.
 #:
 #: ⚠ Cùng lý do như ``MAX_PROMPT_LENGTH`` ngay trên: phải bằng ĐÚNG

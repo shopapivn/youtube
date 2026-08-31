@@ -52,7 +52,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 __all__ = ["la_noi_canh", "chuoi_theo_boi_canh", "tham_chieu_noi_canh", "prompt_noi_canh", "bo_duoi_noi_canh",
-           "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO", "CuMayDai", "chia_doan", "prompt_doan", "hanh_dong_clip",
+           "ghep_duoi", "cat_clip_theo_canh", "khung_cuoi", "DUOI_NOI_CANH", "noi_tiep_khong_cat", "bat_dau_cat", "engine_giu_khung_dau", "giu_khung_dau", "bo_cum_co_khung", "prompt_neo_lai", "THU_MUC_KHUNG", "THU_MUC_THO", "CuMayDai", "chia_doan", "prompt_doan", "hanh_dong_clip",
            "prompt_khung_cuoi", "noi_cac_clip", "cu_may_cua_canh", "don_cu_may", "bo_chi_dao_may", "THU_MUC_DOAN", "GIAY_CLIP_VEO"]
 
 #: Thư mục khung cuối mỗi cảnh (`6-clip/khung/<n>.png`) và clip thô 8 giây.
@@ -155,15 +155,53 @@ def prompt_noi_canh(img_prompt: str, co_khung_truoc: bool) -> str:
     if not co_khung_truoc:
         return p
     if len(p) + len(DUOI_NOI_CANH) <= TRAN_PROMPT:
-        return p + DUOI_NOI_CANH
+        return ghep_duoi(p, DUOI_NOI_CANH)
     # Cổng ảnh chặn lời nhắc > 5.000 ký tự (cảnh 161, 26/08). Khối khoá ba tham
     # chiếu dài thì rút mỗi dòng mô tả còn 220 ký tự rồi mới nối đuôi ngắn.
     p = rut_khoi_khoa(p)
-    return p + DUOI_NOI_CANH_NGAN
+    return ghep_duoi(p, DUOI_NOI_CANH_NGAN)
 
 
 #: Trần lời nhắc ảnh của cổng (5.000) trừ một khoảng an toàn.
 TRAN_PROMPT = 4800
+
+
+def ghep_duoi(p: str, duoi: str, gioi_han: int = TRAN_PROMPT) -> str:
+    """Nối `duoi` vào `p` mà CHẮC CHẮN không vượt `gioi_han`. Cắt THÂN, giữ ĐUÔI.
+
+    ═══ VÌ SAO PHẢI CÓ MỘT CHỐT CUỐI, DÙ ĐÃ RÚT Ở TRÊN ═══
+
+    Ba chỗ nối đuôi (`prompt_noi_canh`, `prompt_neo_lai`, `khung_cuoi`) đều theo
+    cùng một khuôn: thấy dài thì gọi `rut_khoi_khoa(p)` rồi nối đuôi. Nhưng
+    **không chỗ nào kiểm lại sau khi rút** — mà `rut_khoi_khoa` chỉ rút KHỐI KHOÁ
+    (phần REFERENCE IMAGES); thân mô tả do AI viết thì nó không đụng tới. Thân dài
+    bất thường ⇒ rút xong vẫn vượt, và lời nhắc đi thẳng ra cổng.
+
+    Đo 29/08/2026 trên máy chủ thật: **6 job ảnh** chết trong 30 phút với
+    `'prompt' quá dài (>5000 ký tự)` kèm `retryable:false` — cảnh mất hẳn, không
+    có lượt thử lại nào cứu được.
+
+    ⚠ CẮT THÂN, KHÔNG CẮT ĐUÔI. Đuôi mang chỉ dẫn "ảnh cuối là khung trước" —
+    mất nó thì ảnh vẫn ra nhưng SAI Ý (không nối được cảnh), tức là hỏng một cách
+    im lặng. Thân mô tả ngắn đi vài chục ký tự thì ảnh vẫn đúng ý.
+
+    ⚠ Cắt ở RANH GIỚI TỪ, và chỉ khi chỗ cắt không quá gần đầu chuỗi — cắt giữa
+    một từ làm lời nhắc đọc như bị nghẹn.
+    """
+    than = str(p or "")
+    duoi = str(duoi or "")
+    con = int(gioi_han) - len(duoi)
+    if con <= 0:
+        # Đuôi một mình đã quá trần: trả đuôi, vì mất chỉ dẫn khung là hỏng nặng
+        # hơn mất mô tả. Trường hợp này chỉ xảy ra nếu ai đó viết đuôi quá dài.
+        return duoi[: int(gioi_han)]
+    if len(than) <= con:
+        return than + duoi
+    cat = than[:con]
+    cho = cat.rfind(" ")
+    if cho > con * 0.6:
+        cat = cat[:cho]
+    return cat.rstrip() + duoi
 DUOI_NOI_CANH_NGAN = (
     "\nThe LAST attached reference image is the final frame of the previous shot: this picture is "
     "the NEXT moment in the same place and light, characters where that frame left them; frame it "
@@ -338,7 +376,7 @@ def prompt_neo_lai(img_prompt: str) -> str:
     p = dau + tach + khoa
     if len(p) + len(DUOI_NEO_LAI) > TRAN_PROMPT:
         p = rut_khoi_khoa(p)
-    return p + DUOI_NEO_LAI
+    return ghep_duoi(p, DUOI_NEO_LAI)
 
 
 class ChuoiNoiCanh:
@@ -618,7 +656,7 @@ def prompt_khung_cuoi(img_prompt: str) -> str:
     p = bo_cum_co_khung(dau) + tach + khoa
     if len(p) + len(DUOI_KHUNG_CUOI) > TRAN_PROMPT:
         p = rut_khoi_khoa(p)
-    return p + DUOI_KHUNG_CUOI
+    return ghep_duoi(p, DUOI_KHUNG_CUOI)
 
 
 def cu_may_cua_canh(canh: Sequence[Dict[str, Any]], so_canh: int) -> List[Dict[str, Any]]:
