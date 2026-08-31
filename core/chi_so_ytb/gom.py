@@ -14,6 +14,7 @@ import glob
 import io
 import json
 import os
+import re
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -38,9 +39,45 @@ def doc_retention(p):
 
 
 def luc_chup(tm):
-    """Thời điểm chụp thật = file raw mới nhất (nhãn thư mục không phải lúc nào cũng là giờ chụp)."""
-    ts = [os.path.getmtime(p) for p in glob.glob(os.path.join(tm, "raw", "*"))]
-    t = max(ts) if ts else os.path.getmtime(tm)
+    """Thời điểm chụp thật, đọc TRONG gói chứ không lấy mtime của tệp.
+
+    ═══ VÌ SAO KHÔNG DÙNG MTIME ═══
+
+    Bản cũ lấy mtime của tệp raw mới nhất. Đúng chừng nào tệp còn nằm nguyên chỗ tiện ích
+    ghi ra — và sai ngay khi nó được chép đi, vì mtime lúc đó là **giờ chép**, không phải
+    giờ chụp.
+
+    Đúng cảnh đang dùng: tiện ích chạy trong máy ảo, đẩy gói về trạm nhận ở máy này. Mọi
+    tệp tới trong cùng một lượt nên mang cùng một mtime.
+
+    Hỏng dây chuyền, không phải hỏng một ô:
+      1. mọi lần chụp có cùng `luc_chup`;
+      2. `gio_dang()` suy ngược giờ đăng = lúc chụp − mốc, rồi mốc được TÍNH LẠI từ đó, nên
+         mọi lần chụp của một video nhận cùng một mốc;
+      3. khoá gộp là `(video, mốc)` → tất cả trùng khoá và gộp làm một.
+    Đo thật: 52 lần chụp có chỉ số còn **5**, mỗi video một dòng, mất sạch trục thời gian —
+    tức mất luôn cách so hai video ở cùng mốc giờ, thứ cả phương pháp dựa vào.
+
+    Tiện ích đã ghi `captured_at` (ISO, giờ UTC) vào đầu MỌI gói. Con số ấy đi theo tệp qua
+    mọi lần chép, nên đọc nó. Chỉ đọc 400 byte đầu vì đó là khoá đầu tiên của gói — quét cả
+    97 MB raw chỉ để lấy một dấu thời gian là phí.
+    """
+    moc = []
+    for p in glob.glob(os.path.join(tm, "raw", "*")):
+        try:
+            with io.open(p, "r", encoding="utf-8", errors="ignore") as f:
+                m = re.search(r'"captured_at"\s*:\s*"([^"]+)"', f.read(400))
+            if m:
+                t = datetime.datetime.strptime(m.group(1)[:19], "%Y-%m-%dT%H:%M:%S")
+                moc.append(t.replace(tzinfo=datetime.timezone.utc).astimezone().timestamp())
+                continue
+        except Exception:
+            pass
+        try:
+            moc.append(os.path.getmtime(p))     # gói cũ chưa có captured_at
+        except OSError:
+            pass
+    t = max(moc) if moc else os.path.getmtime(tm)
     return datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")
 
 

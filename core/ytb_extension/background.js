@@ -101,24 +101,45 @@ async function datTab(id) {
   await luu('tab_lam_viec', id);
 }
 
-// Đổi link MỘT lần. Chỉ tải lại khi sau 9 giây vẫn chưa có dữ liệu nào (Studio render hỏng).
-async function moLink(tabId, url, nhan) {
+// Đổi link MỘT lần rồi chờ tới khi gói CHỈ SỐ về.
+//
+// ═══ VÌ SAO PHẢI PHÂN BIỆT GÓI, KHÔNG ĐẾM CHUNG ═══
+//
+// Bản cũ chỉ đếm `count` — MỌI gói đều tính. Nhưng mỗi trang Studio bắn ít nhất hai loại:
+// `creator/get_creator_videos` (danh sách video ở thanh bên, KHÔNG có chỉ số nào) về trước,
+// rồi `yta_web/get_screen` và `get_cards` (chỗ chứa chỉ số thật) về sau vài giây.
+//
+// Vòng chờ thoát khi "có gói + im 4 giây". Gói danh sách về lúc :20, gói chỉ số lẽ ra về lúc
+// :26 — nhưng :24 là đã im đủ 4 giây nên ta đóng trang và đi tiếp. Mất trắng.
+//
+// Đo trên dữ liệu thật của kênh, 12 mốc tự động của video 1:
+//   mốc 159h TỐT : :20 danh sách · :20 get_screen · :23 get_cards   (đều lọt cửa sổ 4 giây)
+//   mốc 139h HỎNG: get_screen về, get_cards KHÔNG  → chỉ có 3 chỉ số mặc định, thiếu impressions
+//   mốc 168h HỎNG: CHỈ có gói danh sách            → tệp tổng quan rỗng hoàn toàn
+// Hai mốc hỏng đều ghi `impressions=None`. Tỉ lệ hỏng 2/12.
+//
+// `can` nói gói nào mới là đủ: 'card' cho trang tổng quan (chỉ `get_cards` mới mang bộ chỉ số ta
+// đặt trong CHI_SO — `get_screen` chỉ có ba chỉ số mặc định của YouTube), 'so' cho bảng chi tiết.
+async function moLink(tabId, url, nhan, can = null) {
   nhanHienTai = nhan;
-  captures[tabId] = { count: 0, last: 0 };
-  try { await chrome.tabs.update(tabId, { url, active: true }); } catch (e) { return 0; }
+  captures[tabId] = { count: 0, last: 0, so: 0, card: 0 };
+  try { await chrome.tabs.update(tabId, { url, active: true }); } catch (e) { return { tong: 0, card: 0, so: 0 }; }
   const batDau = Date.now();
   let daTaiLai = false;
-  while (Date.now() - batDau < 30000) {
+  const du = (c) => (can === 'card' ? c.card > 0 : can === 'so' ? c.so > 0 : c.count > 0);
+  while (Date.now() - batDau < 45000) {
     await cho(500);
-    const c = captures[tabId] || { count: 0, last: 0 };
-    if (c.count > 0 && Date.now() - c.last > 4000) break;          // dữ liệu đã ngừng về → xong
-    if (!daTaiLai && c.count === 0 && Date.now() - batDau > 9000) { // chưa có gì → tải lại đúng 1 lần
-      daTaiLai = true;
-      log('trang chưa có dữ liệu → tải lại');
+    const c = captures[tabId] || { count: 0, last: 0, so: 0, card: 0 };
+    if (du(c) && Date.now() - c.last > 4000) break;      // đã có thứ cần + ngừng về → xong
+    if (!daTaiLai && !du(c) && Date.now() - batDau > 12000) {
+      daTaiLai = true;                                    // vẫn thiếu → tải lại đúng 1 lần
+      log(`chưa thấy gói ${can || 'nào'} → tải lại`);
       try { await chrome.tabs.reload(tabId, { bypassCache: true }); } catch (e) {}
     }
   }
-  return (captures[tabId] || {}).count || 0;
+  const c = captures[tabId] || { count: 0, so: 0, card: 0 };
+  if (can && !du(c)) log(`THIẾU gói ${can} sau 45 giây (${c.count} gói khác)`);
+  return { tong: c.count || 0, card: c.card || 0, so: c.so || 0 };
 }
 
 // Bấm nút "Xuất → .csv" của chính Studio (mọi ngôn ngữ đều có chữ .csv).
@@ -216,8 +237,12 @@ async function luuCapture(msg, sender) {
   try { res = JSON.parse(msg.resText); } catch (e) { res = { _raw: msg.resText }; }
   if (/creator_videos|get_video/.test(ep)) nhanDienVideo(res, ep).catch(() => {});
 
-  const c = (captures[tabId] = captures[tabId] || { count: 0, last: 0 });
+  const c = (captures[tabId] = captures[tabId] || { count: 0, last: 0, so: 0, card: 0 });
   c.count += 1; c.last = Date.now();
+  // Đếm riêng: `so` = gói có chỉ số, `card` = gói mang đúng bộ chỉ số ta đặt trong CHI_SO.
+  // `get_creator_videos` / `list_creator_videos` chỉ là danh sách video, không tính.
+  if (/get_screen|get_cards|join|csv_export/.test(ep)) c.so += 1;
+  if (/get_cards/.test(ep)) c.card += 1;
   const ten = `${stamp()}_${tab}_${ep}_${c.count}.json`;
   const goi = { captured_at: new Date().toISOString(), href: msg.href, url: msg.url, request: req, response: res };
   await luuGoi(kenh, vid, lb, ten, goi, msg.resText.length);
@@ -248,7 +273,12 @@ async function luuGoi(kenh, vid, nhan, ten, goi, cỡ = 0, im = false) {
 }
 
 // ---------------------------------------------------------------- các lượt chụp
-const CHI_SO = 't_metrics=VIDEO_THUMBNAIL_IMPRESSIONS&t_metrics=VIDEO_THUMBNAIL_IMPRESSIONS_VTR&t_metrics=EXTERNAL_VIEWS&t_metrics=AVERAGE_WATCH_TIME&t_metrics=EXTERNAL_WATCH_TIME';
+// Từ 24/08/2026 YouTube đếm một lượt xem CÔNG KHAI ngay từ khung hình đầu, không cần xem
+// tối thiểu bao lâu. Chỉ số cũ đổi tên thành ENGAGED_VIEWS và VẪN LÀ THỨ TÍNH TIỀN cùng
+// điều kiện bật kiếm tiền. Đo trên kênh thật ngày 28/08: video mới có 176 lượt công khai
+// nhưng chỉ 97 lượt thật — 55%. Thiếu ENGAGED_VIEWS là mọi tỷ lệ tính từ lượt xem đều lệch
+// gần gấp đôi. (AVERAGE_WATCH_TIME của Studio vốn đã tính trên lượt thật, không phải công khai.)
+const CHI_SO = 't_metrics=VIDEO_THUMBNAIL_IMPRESSIONS&t_metrics=VIDEO_THUMBNAIL_IMPRESSIONS_VTR&t_metrics=EXTERNAL_VIEWS&t_metrics=ENGAGED_VIEWS&t_metrics=AVERAGE_WATCH_TIME&t_metrics=EXTERNAL_WATCH_TIME';
 const kho = (id, chieu, them = '') =>
   `https://studio.youtube.com/video/${id}/analytics/tab-reach_viewers/period-default/explore?entity_type=VIDEO&entity_id=${id}${them}&time_period=lifetime&explore_type=TABLE_AND_CHART&metric=EXTERNAL_VIEWS&granularity=DAY&${CHI_SO}&dimension=${chieu}&o_column=VIDEO_THUMBNAIL_IMPRESSIONS&o_direction=ANALYTICS_ORDER_DIRECTION_DESC`;
 // Sắp theo IMPRESSIONS, không phải views. Bảng tải dần khi cuộn và Xuất→.csv chỉ lấy phần đã tải,
@@ -259,10 +289,11 @@ const kho = (id, chieu, them = '') =>
 
 // [url, có xuất CSV không]
 // [url, có xuất CSV không]
+// [link, có xuất CSV, gói bắt buộc phải về]
 const LINK_VIDEO = (id) => [
-  [`https://studio.youtube.com/video/${id}/analytics/tab-overview/period-since_publish`, false],
-  [kho(id, 'TRAFFIC_SOURCE_DETAIL', '&ddr_dimension=TRAFFIC_SOURCE_TYPE&ddr_value=YT_RELATED'), true],  // pool đề xuất
-  [kho(id, 'COUNTRY'), true],                                                                            // vùng đầy đủ
+  [`https://studio.youtube.com/video/${id}/analytics/tab-overview/period-since_publish`, false, 'card'],
+  [kho(id, 'TRAFFIC_SOURCE_DETAIL', '&ddr_dimension=TRAFFIC_SOURCE_TYPE&ddr_value=YT_RELATED'), true, 'so'],  // pool đề xuất
+  [kho(id, 'COUNTRY'), true, 'so'],                                                                           // vùng đầy đủ
 ];
 
 async function nghi(tabId) {
@@ -290,9 +321,11 @@ async function chupVideo(videoId, label, ep = false) {
   try {
     const tabId = await layTab();
     log(`chụp ${videoId} [${label}]`);
-    let tong = 0;
-    for (const [url, canCSV] of LINK_VIDEO(videoId)) {
-      tong += await moLink(tabId, url, { videoId, label });
+    let tong = 0, coCard = false;
+    for (const [url, canCSV, can] of LINK_VIDEO(videoId)) {
+      const r = await moLink(tabId, url, { videoId, label }, can);
+      tong += r.tong;
+      if (can === 'card' && r.card > 0) coCard = true;
       if (canCSV) { log(`xuất csv: ${await xuatCSV(tabId)}`); await cho(4000); }
     }
     await nghi(tabId);
@@ -312,6 +345,17 @@ async function chupVideo(videoId, label, ep = false) {
       // vẫn đọc được nhưng không biết là của video nào, dài bao nhiêu, ở mốc mấy giờ.
       await luuGoi(xong.kenh, videoId, label, '_thong-tin.json', xong, 0, true);
     }
+    // ═══ CHỈ ĐÁNH DẤU ĐÃ CHỤP KHI THẬT SỰ CÓ CHỈ SỐ ═══
+    //
+    // Bản cũ ghi vào `daChup` vô điều kiện, kể cả lượt về tay không. Mốc đó vĩnh viễn không bao
+    // giờ được chụp lại — mốc 139h và 168h của video 1 nằm đó rỗng suốt, và không có cách nào
+    // lấy lại vì Studio chỉ giữ chuỗi theo giờ trong một cửa sổ ngắn.
+    //
+    // Thà chụp lại thừa một lượt còn hơn mất hẳn một mốc.
+    if (!coCard) {
+      log(`HỎNG ${videoId} [${label}]: không có gói chỉ số — để lần chạy sau chụp lại`);
+      return tong;
+    }
     const daChup = await st('daChup', {});
     (daChup[videoId] = daChup[videoId] || []).push(label);
     await luu('daChup', daChup);
@@ -330,7 +374,7 @@ async function chupKenh() {
     const label = `kenh-${stamp().slice(0, 8)}`;
     log(`chụp kênh ${ch}`);
     for (const tab of ['tab-overview', 'tab-content', 'tab-build_audience']) {
-      await moLink(tabId, `https://studio.youtube.com/channel/${ch}/analytics/${tab}/period-default`, { videoId: 'kenh', label });
+      await moLink(tabId, `https://studio.youtube.com/channel/${ch}/analytics/${tab}/period-default`, { videoId: 'kenh', label }, 'so');
     }
     await nghi(tabId);
   } finally { dangChay = false; tatGiuThuc(); }

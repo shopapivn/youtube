@@ -26,13 +26,15 @@ import glob
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 __all__ = ["TEN_THU_MUC", "thu_muc_tai_xuong", "thu_muc_du_lieu", "liet_ke_kenh",
-           "doc_kenh", "bao_cao_cho_ai", "BanGhi", "thu_muc_extension"]
+           "doc_kenh", "bao_cao_cho_ai", "BanGhi", "thu_muc_extension",
+           "thu_muc_cua_kenh"]
 
 #: Tên thư mục extension ghi vào, tính từ thư mục Tải xuống. Phải khớp mặc định
 #: `thu_muc` trong `background.js` — đổi một bên mà quên bên kia thì công cụ đi tìm
@@ -64,12 +66,74 @@ def thu_muc_du_lieu() -> str:
     return os.path.join(thu_muc_tai_xuong(), TEN_THU_MUC)
 
 
+def thu_muc_cua_kenh(goc: str, kenh: str) -> str:
+    """Thư mục chứa các lần chụp của một kênh — hai bố cục cùng tồn tại.
+
+    Tiện ích ghi vào Tải xuống thì cây là::
+
+        <goc>/<kênh>/<videoId>/<mốc>/raw/
+
+    Còn trạm nhận trong công cụ đổ vào thư mục kênh, cạnh `prompt/`, nên thừa một cấp::
+
+        <goc>/<kênh>/chi-so/<videoId>/<mốc>/raw/
+
+    Không hiểu cấp thừa ấy thì bộ đọc coi từng `videoId` là một kênh, và bảng ra rỗng
+    trong khi dữ liệu nằm ngay đó.
+    """
+    con = os.path.join(goc, kenh, "chi-so")
+    return con if os.path.isdir(con) else os.path.join(goc, kenh)
+
+
+def _co_du_lieu(d: str) -> bool:
+    """Thư mục này có lần chụp nào chưa (một `raw/` hoặc bản đã giải mã ở dưới)."""
+    for goc_con in (d, os.path.join(d, "chi-so")):
+        if not os.path.isdir(goc_con):
+            continue
+        for vid in os.listdir(goc_con)[:80]:
+            p = os.path.join(goc_con, vid)
+            if not os.path.isdir(p):
+                continue
+            for moc in os.listdir(p)[:40]:
+                if (os.path.isdir(os.path.join(p, moc, "raw"))
+                        or os.path.isfile(os.path.join(p, moc, "tong-quan.json"))):
+                    return True
+    return False
+
+
+def _la_khuon_san_xuat(d: str) -> bool:
+    """Đây là khuôn dựng nội dung, không phải thư mục số liệu.
+
+    Nhận ra bằng `kenh.yaml` / `prompt/` — hai thứ chỉ khuôn mới có.
+    """
+    return (os.path.isfile(os.path.join(d, "kenh.yaml"))
+            or os.path.isdir(os.path.join(d, "prompt")))
+
+
 def liet_ke_kenh(goc: Optional[str] = None) -> List[str]:
+    """Những kênh chọn được trong thư mục này.
+
+    Thư mục kênh RỖNG vẫn hiện: tiện ích tạo nó ra ngay khi nhận diện được kênh, trước cả
+    lần chụp đầu tiên, và giấu đi thì người dùng tưởng tiện ích chưa thấy kênh của mình.
+
+    Nhưng khi thư mục trỏ vào `CHANNEL/` của công cụ thì ở đó còn có khuôn sản xuất của mọi
+    ngách (`openstory`, `timelapse`, …). Chúng không phải kênh; liệt kê tuốt thì người dùng
+    chọn một cái rồi nhận bảng rỗng, và tưởng trạm nhận hỏng. Khuôn nào đã có số liệu thì
+    vẫn hiện — đó chính là kênh đang chạy.
+    """
     goc = goc or thu_muc_du_lieu()
     if not os.path.isdir(goc):
         return []
-    return sorted(d for d in os.listdir(goc)
-                  if os.path.isdir(os.path.join(goc, d)) and not d.startswith("_"))
+    ra = []
+    for d in sorted(os.listdir(goc)):
+        p = os.path.join(goc, d)
+        if d.startswith("_") or not os.path.isdir(p):
+            continue
+        try:
+            if _co_du_lieu(p) or not _la_khuon_san_xuat(p):
+                ra.append(d)
+        except OSError:
+            pass
+    return ra
 
 
 @dataclass
@@ -101,6 +165,26 @@ class BanGhi:
     thu_muc: str = ""
 
 
+def _gio_tu_ten_moc(ten: str) -> Optional[int]:
+    """Mốc giờ nằm ngay trong tên thư mục: `48h`, `159h`. Bản chụp tay (`tay-…`) thì không có.
+
+    ═══ VÌ SAO PHẢI LẤY TỪ TÊN ═══
+
+    Số giờ sau khi đăng KHÔNG có trong gói nào của Studio — tiện ích tự tính rồi gửi kèm.
+    Nhưng khi tiện ích đẩy về một trạm nhận, thông tin ấy đi đường `/done` riêng, và nếu
+    đường đó lỡ mất gói thì `tong-quan.json` không còn mốc giờ nào.
+
+    Hậu quả nặng hơn vẻ ngoài: khoá gộp bản ghi là `(video, mốc giờ)`, mốc rỗng thì mọi lần
+    chụp của cùng một video trùng khoá và **gộp làm một**. Đo trên dữ liệu thật: 52 lần chụp
+    có chỉ số bị gộp còn **5** — mỗi video một dòng, mất sạch trục thời gian, tức mất luôn
+    cách so hai video ở cùng mốc giờ.
+
+    Tên thư mục vốn đã mang đúng con số ấy, nên lấy từ đó chứ đừng để rỗng.
+    """
+    m = re.fullmatch(r"(\d+)h", str(ten).strip())
+    return int(m.group(1)) if m else None
+
+
 def _giai_ma_con_thieu(kenh_dir: str) -> int:
     """Giải mã những lần chụp chưa có `tong-quan.json`. Trả về số lần vừa giải mã.
 
@@ -113,14 +197,32 @@ def _giai_ma_con_thieu(kenh_dir: str) -> int:
         snap = os.path.dirname(raw)
         if os.path.exists(os.path.join(snap, "tong-quan.json")):
             continue
+        lenh = [sys.executable, gm, raw, "--out", snap]
+        gio = _gio_tu_ten_moc(os.path.basename(snap))
+        if gio is not None:
+            lenh += ["--gio", str(gio)]
         try:
-            subprocess.run([sys.executable, gm, raw, "--out", snap],
-                           capture_output=True, timeout=120)
+            subprocess.run(lenh, capture_output=True, timeout=120)
             if os.path.exists(os.path.join(snap, "tong-quan.json")):
                 n += 1
         except Exception:
             pass
     return n
+
+
+def _va_mo_gio(snap: str) -> None:
+    """Bản đã giải mã từ trước mà thiếu mốc giờ thì vá lại từ tên thư mục."""
+    tq = os.path.join(snap, "tong-quan.json")
+    gio = _gio_tu_ten_moc(os.path.basename(snap))
+    if gio is None or not os.path.exists(tq):
+        return
+    try:
+        q = json.load(io.open(tq, encoding="utf-8"))
+    except Exception:
+        return
+    if q.get("gio_sau_dang") is None:
+        q["gio_sau_dang"] = gio
+        io.open(tq, "w", encoding="utf-8").write(json.dumps(q, ensure_ascii=False, indent=2))
 
 
 def _gan_thong_tin(snap: str) -> None:
@@ -154,13 +256,14 @@ def _gan_thong_tin(snap: str) -> None:
 def doc_kenh(kenh: str, goc: Optional[str] = None) -> List[BanGhi]:
     """Đọc toàn bộ lần chụp của một kênh, giải mã cái nào chưa giải mã."""
     goc = goc or thu_muc_du_lieu()
-    kenh_dir = os.path.join(goc, kenh)
+    kenh_dir = thu_muc_cua_kenh(goc, kenh)
     if not os.path.isdir(kenh_dir):
         return []
     _giai_ma_con_thieu(kenh_dir)
     for snap in glob.glob(os.path.join(kenh_dir, "*", "*")):
         if os.path.isdir(snap):
             _gan_thong_tin(snap)
+            _va_mo_gio(snap)
 
     from . import gom as _gom
     tho = _gom.gom(kenh_dir, {"tu_khoa_manh": [], "tu_khoa_yeu": [], "loai_tru": []})

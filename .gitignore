@@ -60,3 +60,10 @@ THAM-KHAO/
 # (`core/claude_code.DUOI_SAO_LUU`). Nó là cấu hình RIÊNG của máy đang chạy,
 # không phải mã của tool.
 *.shopapi-backup
+
+# Goi tho tu YouTube Studio, do tram nhan ghi vao CHANNEL/<kenh>/chi-so/.
+# Chung to (59 MB cho ba video, 66 moc) va la du lieu trung gian: moi con so
+# can dung deu da nam trong `tong-quan.json` + cac tep .csv cung thu muc, cong
+# lai chua toi 2 MB. Giu ban da giai ma, bo goi tho.
+CHANNEL/*/chi-so/*/*/raw/
+CHANNEL/_chi-so-chua-ro/

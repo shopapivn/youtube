@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chỉ số kênh YouTube",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Tự lấy số liệu kênh và từng video từ YouTube Studio, lưu vào máy bạn để đưa cho AI phân tích.",
   "permissions": [
     "storage",

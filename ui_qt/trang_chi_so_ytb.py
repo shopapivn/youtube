@@ -38,6 +38,7 @@ from PyQt5.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QHeaderView,
                              QTableWidgetItem, QVBoxLayout, QWidget)
 
 from core import chi_so_ytb as cs
+from core.chi_so_ytb import tram as tr
 from ui_qt import theme
 from ui_qt.widgets import (ChonThuMuc, HangXuongDong, mo_thu_muc, nhan,
                            nut_chinh, nut_phu, the, tieu_de_trang)
@@ -55,6 +56,19 @@ def _mmss(giay) -> str:
     return f"{giay // 60}:{giay % 60:02d}"
 
 
+def _thu_muc_dau() -> str:
+    """Mở ra là trỏ sẵn vào chỗ ĐANG có số liệu.
+
+    Hai nguồn cùng tồn tại: trạm nhận đổ vào `CHANNEL/` của công cụ, còn tiện ích chạy ngay
+    trên máy này thì ghi vào Tải xuống. Trỏ cứng vào một chỗ là nửa số người dùng mở lên
+    thấy trống, rồi kết luận là chưa lấy được gì.
+    """
+    kho = os.path.join(tr.GOC, "CHANNEL")
+    if cs.liet_ke_kenh(kho):
+        return kho
+    return cs.thu_muc_du_lieu()
+
+
 def _s(v, hau: str = "") -> str:
     if v is None:
         return "—"
@@ -65,11 +79,16 @@ def _s(v, hau: str = "") -> str:
 
 class TrangChiSoYTB(QWidget):
     _xong = pyqtSignal(object, str)
+    _dong_log = pyqtSignal(str)
 
     def __init__(self, app):
         super().__init__()
         self._app = app
         self._ban_ghi: List[cs.BanGhi] = []
+        # Trạm nhận ghi nhật ký từ luồng ổ cắm của chính nó. Qt cấm chạm vào ô chữ từ luồng
+        # khác luồng giao diện — chạm thẳng thì không báo lỗi mà thỉnh thoảng sập cả cửa sổ —
+        # nên mọi dòng đi qua tín hiệu để Qt chuyển về đúng luồng.
+        self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m))
 
         ngoai = QVBoxLayout(self)
         ngoai.setContentsMargins(0, 0, 0, 0)
@@ -79,9 +98,93 @@ class TrangChiSoYTB(QWidget):
             "Lấy số liệu thật từ Studio về máy bạn, rồi đưa cho AI đọc giúp"))
 
         ngoai.addWidget(self._the_cai())
+        ngoai.addWidget(self._the_tram())
         ngoai.addWidget(self._the_doc())
         ngoai.addStretch(1)
         self._xong.connect(self._nhan_ket_qua)
+        self._dong_log.connect(self._them_log)
+
+    # ------------------------------------------------------------------ trạm nhận
+    def _the_tram(self) -> QWidget:
+        """Nhận số liệu từ tiện ích chạy trong MÁY ẢO, đổ thẳng vào thư mục kênh.
+
+        Tiện ích của Chrome chỉ ghi được vào thư mục Tải xuống của chính máy chạy nó. Mà
+        Studio lại phải mở trong máy ảo — mỗi kênh một phiên đăng nhập riêng — nên số liệu
+        kẹt lại bên đó, còn công cụ dựng nội dung thì nằm ở máy này. Chép tay qua ổ đĩa chia
+        sẻ được một hai lần; mỗi ngày vài mốc giờ, nhiều kênh, thì không.
+
+        Thẻ này mở một cổng để tiện ích đẩy thẳng về `CHANNEL/<kênh>/chi-so/` — nằm ngay
+        cạnh `prompt/`, là chỗ sẽ đọc nó để sửa lời nhắc.
+        """
+        khung = the()
+        doc = QVBoxLayout(khung)
+        doc.setSpacing(8)
+        doc.addWidget(nhan("Bước 2 — Nhận số liệu từ máy ảo (nếu Studio mở ở máy khác)", "h2"))
+        doc.addWidget(nhan(
+            "Bật cổng nhận ở máy này, rồi dán địa chỉ bên dưới vào ô <b>Máy chủ</b> của tiện "
+            "ích trong máy ảo. Số liệu rơi thẳng vào thư mục kênh của công cụ, không phải "
+            "chép tay qua ổ đĩa chia sẻ nữa."))
+
+        hang = HangXuongDong()
+        self._nut_tram = nut_chinh("Bật cổng nhận", self._bat_tat_tram, rong=170)
+        hang.addWidget(self._nut_tram)
+        hang.addWidget(nut_phu("Chép địa chỉ", self._chep_dia_chi, rong=140))
+        hang.addWidget(nut_phu("Mở thư mục số liệu", self._mo_thu_muc_kenh, rong=180))
+        doc.addLayout(hang)
+
+        self._nhan_tram = nhan("Đang tắt.", "muted")
+        doc.addWidget(self._nhan_tram)
+
+        self._log = QPlainTextEdit()
+        self._log.setReadOnly(True)
+        self._log.setMaximumHeight(150)
+        self._log.setPlaceholderText("Nhật ký nhận số liệu sẽ hiện ở đây…")
+        doc.addWidget(self._log)
+
+        doc.addWidget(nhan(
+            "Trong tiện ích ở máy ảo nhớ điền ô <b>Mã kênh</b> đúng bằng tên thư mục kênh "
+            "của công cụ (ví dụ <b>TL4-T7</b>) — đó là cách công cụ biết số liệu này của "
+            "kênh nào. Điền sai thì vẫn nhận được, nhưng nằm ở "
+            "<b>CHANNEL/_chi-so-chua-ro/</b>.", "muted"))
+        return khung
+
+    def _bat_tat_tram(self) -> None:
+        if self._tram.dang_chay:
+            self._tram.tat()
+            self._nut_tram.setText("Bật cổng nhận")
+            self._nhan_tram.setText("Đang tắt.")
+            return
+        try:
+            self._tram.bat()
+        except OSError as e:
+            # Cổng bị chương trình khác giữ là ca hay gặp nhất: một bản công cụ nữa đang mở,
+            # hoặc trạm nhận cũ còn chạy ngoài dòng lệnh. Nói thẳng, đừng để nút im lặng.
+            QMessageBox.warning(
+                self, "Không mở được cổng",
+                "Cổng {} đang bị chương trình khác giữ.\n\nChi tiết: {}".format(self._tram.cong, e))
+            return
+        self._nut_tram.setText("Tắt cổng nhận")
+        ds = tr.dia_chi_may(self._tram.cong)
+        self._nhan_tram.setText(
+            "Đang nhận. Dán vào tiện ích: <b>" + "</b> hoặc <b>".join(ds) + "</b>"
+            if ds else "Đang nhận, nhưng máy này chưa có địa chỉ mạng nội bộ nào.")
+
+    def _chep_dia_chi(self) -> None:
+        ds = tr.dia_chi_may(self._tram.cong)
+        if not ds:
+            QMessageBox.information(
+                self, "Chưa có địa chỉ",
+                "Máy này chưa có địa chỉ mạng nội bộ nào để máy ảo gọi tới.")
+            return
+        from PyQt5.QtWidgets import QApplication
+        QApplication.clipboard().setText(ds[0])
+        self._nhan_tram.setText("Đã chép <b>{}</b> — dán vào ô Máy chủ của tiện ích.".format(ds[0]))
+
+    def _mo_thu_muc_kenh(self) -> None:
+        mo_thu_muc(os.path.join(tr.GOC, "CHANNEL"))
+
+    def _them_log(self, m: str) -> None:
+        self._log.appendPlainText(m)
 
     # ------------------------------------------------------------------ bước 1
     def _the_cai(self) -> QWidget:
@@ -153,13 +256,13 @@ class TrangChiSoYTB(QWidget):
         khung = the()
         doc = QVBoxLayout(khung)
         doc.setSpacing(8)
-        doc.addWidget(nhan("Bước 2 — Đọc số liệu đã lấy được", "h2"))
+        doc.addWidget(nhan("Bước 3 — Đọc số liệu đã lấy được", "h2"))
         doc.addWidget(nhan(
             "Tiện ích tự chụp ở các mốc 24 giờ, 48 giờ, 72 giờ, 7 ngày, 28 ngày sau khi đăng. "
             "Muốn xem ngay thì bấm <b>Chụp ngay tất cả</b> trong tiện ích, đợi khoảng một phút "
             "mỗi video rồi quay lại đây."))
 
-        self._o_thu_muc = ChonThuMuc(cs.thu_muc_du_lieu(), "Dữ liệu ở:", self._doi_thu_muc)
+        self._o_thu_muc = ChonThuMuc(_thu_muc_dau(), "Dữ liệu ở:", self._doi_thu_muc)
         doc.addWidget(self._o_thu_muc)
 
         hang = HangXuongDong()
