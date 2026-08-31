@@ -15,12 +15,12 @@ hoặc muốn tắt máy nhà mà việc vẫn chạy, thì cần cái thứ hai
 người đang tìm cái này nhìn thấy cái kia — tách hai tab thì phần lớn khách sẽ
 không bao giờ mở tab thứ hai.
 
-═══ THỨ TỰ HAI MỤC, VÀ VÌ SAO GPM ĐỨNG TRƯỚC ═══
+═══ THỨ TỰ HAI MỤC: VPS ĐỨNG TRƯỚC ═══
 
-GPM Login miễn phí và chạy ngay không cần gì; VPS tốn tiền và cần có khoá API.
-Mở tab lần đầu mà thấy ngay một bảng đòi khoá rồi mời trả 200.000₫ là một lời
-chào không hay. Mục miễn phí đứng trước, mục tính tiền đứng sau — ai cần thì
-bấm sang, và họ chỉ bấm khi đã hiểu mình cần gì.
+Bản đầu để GPM trước vì nó miễn phí. Chủ dự án, 31/08/2026: *"ở tab kênh thì
+để vps là tab 1 mặc định đi"* — tab này giờ nằm trong nhóm KÊNH, và với người
+nuôi kênh thì VPS là chỗ họ vào hằng ngày (máy chạy 24/7), còn GPM Login là
+việc cài một lần. Mục dùng hằng ngày đứng trước.
 
 ═══ MỘT TIÊU ĐỀ, KHÔNG PHẢI HAI ═══
 
@@ -51,15 +51,15 @@ class TrangGpmVps(QWidget):
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(10)
         doc.addWidget(tieu_de_trang(
-            "GPM & VPS",
-            "Hồ sơ Chrome sạch trên máy bạn, và máy ảo chạy 24/7 ở nơi khác.",
+            "VPS & GPM",
+            "Máy ảo chạy 24/7 ở nơi khác, và hồ sơ Chrome sạch trên máy bạn.",
             "chrome-sach"))
 
         self.tabs = QTabWidget()
         self.gpm = TrangChromeSach(app, co_tieu_de=False)
         self.vps = TrangVps(app)
-        self.tabs.addTab(self.gpm, "GPM Login")
         self.tabs.addTab(self.vps, "VPS")
+        self.tabs.addTab(self.gpm, "GPM Login")
         doc.addWidget(self.tabs, 1)
 
     # ── Chuyển tiếp cho mã cũ ────────────────────────────────────────────────

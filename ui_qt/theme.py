@@ -54,6 +54,9 @@ QLabel {{ background: transparent; }}
 #sidebar {{ background: {THE}; border-right: 1px solid {VIEN}; }}
 #brand    {{ font-size: 20px; font-weight: 700; color: {NHAN}; }}
 #brandSub {{ font-size: 11px; color: {CHU_MO}; }}
+/* Tiêu đề nhóm trên thanh bên — chữ kẻ, không bấm được. */
+#navNhom  {{ font-size: 10px; font-weight: 700; letter-spacing: 1px;
+             color: {CHU_MO}; padding: 2px 13px 0 13px; }}
 
 QPushButton#nav {{
     background: transparent; border: none; border-radius: 10px;

@@ -1297,8 +1297,8 @@ class TrangPromptVisuals(QWidget):
         if self._app.client is None:
             self._app.show_message(
                 "Chưa đăng nhập",
-                "Tạo ảnh và clip cần ví ShopAPI. Mở tab Tài khoản, gõ email và "
-                "mật khẩu để đăng nhập trước.")
+                "Tạo ảnh và clip cần ví ShopAPI. Mở tab Tài khoản & Cài đặt, "
+                "gõ email và mật khẩu để đăng nhập trước.")
             return
         n = min(int(self._so_thu.currentData() or 1), len(self._canh_hien),
                 self._bang_xem.rowCount())

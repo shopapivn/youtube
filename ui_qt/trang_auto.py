@@ -180,7 +180,8 @@ class TrangTuDong(QWidget):
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(12)
         doc.addWidget(tieu_de_trang(
-            "Tự động", "Một nút: từ link tư liệu ra video hoàn thiện."))
+            "Video sản xuất tự động",
+            "Một nút: từ link tư liệu ra video hoàn thiện."))
         doc.addWidget(self._the_chay())
         doc.addWidget(self._the_tien_do(), 1)
 

@@ -165,7 +165,8 @@ class NutCapNhat:
             # Khách tự tắt ở tab Cài đặt. Nút vẫn ở đó để bấm tay.
             self.nut.setText("Kiểm tra bản mới")
             self.nut.setToolTip(
-                "Tự hỏi đang tắt (tab Cài đặt). Bấm để hỏi một lần.")
+                "Tự hỏi đang tắt (mục Cài đặt trong tab Tài khoản & Cài đặt). "
+                "Bấm để hỏi một lần.")
             return
         self.nut.setText("Đang kiểm tra…")
         self._app.run_bg(lambda: kiem_ban_moi(dang_dung, tai_https),
@@ -210,7 +211,8 @@ class NutCapNhat:
         self._app.show_message(
             "Đang cập nhật lên bản {0}".format(ban_moi),
             "Tôi tải bản mới rồi tự mở lại, khoảng một phút.\n\n"
-            "Không muốn tự cập nhật nữa thì tắt ở tab Cài đặt.")
+            "Không muốn tự cập nhật nữa thì tắt ở mục Cài đặt trong tab "
+            "Tài khoản & Cài đặt.")
         self._bam()
 
     def _bam(self) -> None:

@@ -111,10 +111,20 @@ def test_du_tam_trang_deu_dung_len_duoc(cua_so):
 
 
 def test_tab_tu_dong_dung_dau_va_khong_co_icon(cua_so):
-    """Chủ dự án, 21/08/2026: Tài khoản lên đầu, không có icon."""
+    """Thứ tự thanh bên là lệnh trực tiếp của chủ dự án — đừng tự xếp lại.
+
+    31/08/2026: nhóm miễn phí *"đề ở trên cùng, đổi tên luôn thành Công cụ
+    YTB"* — tab skill lên đầu (trang MỞ ĐẦU vẫn là Tài khoản, xem TRANG_DAU).
+    """
     from ui_qt.app import TRANG
 
-    assert TRANG[0][0] == "wallet", "tab Tài khoản phải đứng đầu"
+    assert TRANG[0][0] == "skill", "nhóm Công cụ YTB phải đứng đầu thanh bên"
+    # Chủ dự án, 31/08/2026: nhóm AUTOMATION bốn tab theo đúng thứ tự họ đọc —
+    # "tab 1 là VPS & GPM… tab 4 - QUẢN LÝ KÊNH" — rồi *"Quản lý đẩy xuống
+    # dưới cùng đi"*: Tài khoản & Cài đặt chốt sổ thanh bên.
+    assert [k for k, _b, _n in TRANG[-5:]] == \
+        ["chrome-sach", "phan-tich", "auto", "quan-ly-kenh", "wallet"], \
+        "AUTOMATION rồi tới QUẢN LÝ ở cuối, đúng thứ tự chủ dự án đặt"
     co_icon = [k for k, bt, _nh in TRANG if str(bt).strip()]
     assert not co_icon, "thanh bên không được có icon: {0}".format(co_icon)
 

@@ -313,12 +313,16 @@ def test_tab_co_dung_hai_muc_gpm_va_vps(tmp_path):
     t.show()
     app.processEvents()
     try:
-        assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == ["GPM Login", "VPS"]
-        # Mục miễn phí đứng trước mục tính tiền — xem chú thích đầu
+        assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == ["VPS", "GPM Login"]
+        # Chủ dự án 31/08/2026: "để vps là tab 1 mặc định" — xem chú thích đầu
         # `ui_qt/trang_gpm_vps.py`.
-        assert t.tabs.indexOf(t.gpm) == 0
-        # Chưa có khoá API thì mục VPS phải NÓI RA, không để bảng trống câm lặng.
-        assert "khoá API" in t.vps._nhan_trang_thai.text()
+        assert t.tabs.indexOf(t.vps) == 0
+        assert t.tabs.currentWidget() is t.vps
+        # Chưa đăng nhập thì mục VPS phải NÓI RA, không để bảng trống câm lặng —
+        # và phải CHỈ ĐƯỜNG tới đúng tab đăng nhập (31/08/2026: khoá lấy bằng
+        # đăng nhập ở tab Tài khoản & Cài đặt, không phải dán tay ở Cài đặt).
+        assert "đăng nhập" in t.vps._nhan_trang_thai.text()
+        assert "Tài khoản & Cài đặt" in t.vps._nhan_trang_thai.text()
     finally:
         t.dong_het()
         t.close()

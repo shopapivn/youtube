@@ -131,8 +131,8 @@ class TrangVps(QWidget):
             self._kho = {}
             self._ve()
             self._nhan_trang_thai.setText(
-                "Chưa có khoá API. Vào tab Cài đặt dán khoá ShopAPI vào, "
-                "mục này sẽ hiện máy của bạn.")
+                "Chưa đăng nhập. Vào tab Tài khoản & Cài đặt, đăng nhập bằng "
+                "email shopapi.vn — mục này sẽ hiện máy của bạn.")
             return
 
         def viec() -> Dict[str, Any]:
@@ -553,7 +553,9 @@ class TrangVps(QWidget):
         client = getattr(self._app, "client", None)
         if client is None:
             self._app.show_message(
-                "Chưa có khoá API", "Vào tab Cài đặt dán khoá ShopAPI vào trước nhé.")
+                "Chưa đăng nhập",
+                "Vào tab Tài khoản & Cài đặt, đăng nhập bằng email shopapi.vn "
+                "trước nhé.")
             return
         if not self._kho.get("con_trong"):
             self._app.show_message("Hết máy", "Kho đang hết máy. Bạn thử lại sau nhé.")

@@ -60,16 +60,12 @@ _NHIP_MS = 150
 #: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
 #: xem `ui_qt/bang_viec.py` để biết vì sao.
 TRANG = (
-    # Chủ dự án, 21/08/2026: đưa Tài khoản lên đầu, Auto về sau Dựng video.
-    ("wallet", "", "Tài khoản"),
-    ("skill", "", "Công cụ YTB"),
-    # Chủ dự án, 26/08/2026: tab độc lập, "phát triển nó như một phần mềm GPM".
-    # 28/08/2026: tách làm hai mục — "GPM Login" (hồ sơ Chrome trên máy khách,
-    # miễn phí) và "VPS" (máy ảo thuê theo tháng). Khoá vẫn là `chrome-sach` để
-    # bài hướng dẫn, `core/cai_dat.py` và mọi chỗ đã nhớ khoá này không phải sửa
-    # theo — đổi khoá chỉ để chữ trên màn hình khớp tên file là đổi một thứ mười
-    # chỗ đang đọc, để lấy về đúng số không.
-    ("chrome-sach", "", "GPM & VPS"),
+    # Chủ dự án, 31/08/2026: nhóm miễn phí *"đề ở trên cùng, đổi tên luôn thành
+    # Công cụ YTB"* — tab share free không cần api, khách chưa có tài khoản mở
+    # tool ra là thấy ngay thứ dùng được liền. Tên "Công cụ YTB" nằm ở TIÊU ĐỀ
+    # NHÓM (`NHOM_TRANG`); dòng tab ghi "Skill miễn phí" để hai dòng liền nhau
+    # không lặp cùng một chữ.
+    ("skill", "", "Skill miễn phí"),
     ("content", "", "Viết kịch bản"),
     ("voice", "", "Voice"),
     # Đứng ngay sau Voice vì nó dùng đúng hai thứ tab Voice vừa sinh ra và vừa
@@ -80,20 +76,56 @@ TRANG = (
     # Gộp từ hai tab "Tạo ảnh" + "Tạo video" (12/08/2026).
     ("media", "", "Tạo ảnh+video (Veo3)"),
     ("edit", "", "Edit video"),
-    # "Tự động" đứng sau Edit video: tab chạy cả pipeline mà khách đã biết từng
-    # khâu xong mới thật sự dùng — đặt cuối là hướng dẫn ngầm đọc từ trên xuống.
-    ("auto", "", "Tự động"),
-    # "Agent xây tool" từng đứng đây; từ 21/08/2026 nó nằm trong tab Cài đặt.
-    # Xem `trang_cai_dat._the_agent`.
-    ("cai-dat", "", "Cài đặt"),
+    # ── Nhóm AUTOMATION — khu kênh tự chạy, chủ dự án vẽ ngày 31/08/2026 ─────
+    #
+    # *"thay mục KÊNH và TỰ ĐỘNG thành AUTOMATION và ở trong đó có các tab:
+    # tab 1 là VPS & GPM, tab 2 là PHÂN TÍCH DỮ LIỆU & NGHIÊN CỨU, tab 3 —
+    # VIDEO SẢN XUẤT TỰ ĐỘNG, tab 4 — QUẢN LÝ KÊNH"*.
+    #
+    # Đích đến (lời họ): một kênh như TL4-T7 tự chạy — agent đọc chỉ số để
+    # đánh giá, agent sản xuất theo tín hiệu phản hồi, agent làm khán giả chấm
+    # trước khi đăng. Bốn tab này là bốn mảnh của bức đó, xếp theo dòng dữ
+    # liệu: máy chạy kênh → số liệu về → sản xuất → quản kênh.
+    #
+    # Khoá `chrome-sach` giữ nguyên dù nhãn đổi ("GPM & VPS" → "VPS & GPM"):
+    # bài hướng dẫn, `core/cai_dat.py` và mọi chỗ đã nhớ khoá không phải sửa.
+    ("chrome-sach", "", "VPS & GPM"),
+    ("phan-tich", "", "Phân tích & Nghiên cứu"),
+    ("auto", "", "Video sản xuất tự động"),
+    ("quan-ly-kenh", "", "Quản lý kênh"),
+    # Chủ dự án, 31/08/2026: *"Quản lý đẩy xuống dưới cùng đi"* — đăng nhập và
+    # nạp tiền là việc làm một lần rồi thôi, không cần chiếm chỗ đầu bảng.
+    # Trang Cài đặt là mục con trong này (`trang_quan_ly.py`), khoá vẫn là
+    # `wallet` để TRANG_DAU, bài hướng dẫn và bài kiểm không phải sửa theo.
+    # Trang MỞ ĐẦU vẫn là trang này (TRANG_DAU) — vị trí trên thanh bên không
+    # đổi chuyện đó. ("Agent xây tool" nằm trong mục Cài đặt,
+    # xem `trang_cai_dat._the_agent`.)
+    ("wallet", "", "Tài khoản & Cài đặt"),
 )
+
+#: Tiêu đề nhóm trên thanh bên: `{khoá trang đứng đầu nhóm: tên nhóm}`.
+#:
+#: Chủ dự án, 31/08/2026, ba lượt góp ý trong một buổi: chia nhóm theo cách họ
+#: tự mô tả tool; rồi nắn — Công cụ YTB *"để riêng… tab share free không cần
+#: api"*, tên "LÀM TỪNG KHÂU" *"nghe khó hiểu quá"* nên thành "LÀM VIDEO";
+#: rồi gộp hai nhóm KÊNH + TỰ ĐỘNG thành **AUTOMATION** bốn tab (xem chú
+#: thích trong `TRANG`).
+#:
+#: Chỉ là chữ kẻ trên thanh bên — không thêm trang, không đổi khoá. Vỏ nào
+#: dựng `ThanhBen` mà không truyền `nhom` thì thanh bên y như cũ.
+NHOM_TRANG = {
+    "skill": "CÔNG CỤ YTB",
+    "content": "LÀM VIDEO",
+    "chrome-sach": "AUTOMATION",
+    "wallet": "QUẢN LÝ",
+}
 
 
 class ThanhBen(QFrame):
     def __init__(self, on_chon: Callable[[str], None], nav=TRANG,
                  ten_hien: str = "My Tool",
                  cau_duoi: str = "Tool của bạn, do bạn tạo",
-                 duoi_ten=None):
+                 duoi_ten=None, nhom=None):
         super().__init__()
         self.setObjectName("sidebar")
         self.setFixedWidth(240)
@@ -110,11 +142,22 @@ class ThanhBen(QFrame):
             doc.addSpacing(10)
             doc.addWidget(duoi_ten)
         doc.addSpacing(18)
+        nhom = dict(nhom or {})
         for khoa, bieu_tuong, ten in nav:
+            # Tiêu đề nhóm — chỉ là chữ, không bấm được. Gắn theo khoá của
+            # trang ĐỨNG ĐẦU nhóm (`NHOM_TRANG`) nên vỏ nào thu hẹp danh sách
+            # trang (như bản vận hành) thì nhóm của trang bị cắt cũng tự biến
+            # mất theo, không để lại một dòng tiêu đề trỏ vào khoảng trống.
+            tieu_de_nhom = nhom.get(khoa)
+            if tieu_de_nhom:
+                doc.addSpacing(10)
+                doc.addWidget(nhan(tieu_de_nhom, "navNhom"))
             # Chỉ còn chữ. Biểu tượng vẫn nằm trong `TRANG` cho nơi khác dùng,
             # nhưng thanh bên không vẽ nữa — chủ dự án, 13/08/2026: *"icon đang
             # trẻ con quá, bỏ hết icon đi"*.
-            nut = QPushButton("   " + ten)
+            # Qt coi `&` trong nhãn nút là phím tắt và GIẤU nó đi — "GPM & VPS"
+            # hiện thành "GPM VPS" suốt mà không ai báo lỗi. Nhân đôi để hiện thật.
+            nut = QPushButton("   " + ten.replace("&", "&&"))
             nut.setObjectName("nav")
             nut.setCheckable(True)
             nut.setCursor(Qt.PointingHandCursor)
@@ -162,6 +205,8 @@ class CuaSoChinh(QWidget):
 
     #: Trang sản phẩm hiện trên thanh bên. Bản khách lấy đủ.
     TRANG_SAN_PHAM = TRANG
+    #: Tiêu đề nhóm trên thanh bên. Vỏ vận hành để `{}` là thanh bên phẳng như cũ.
+    NHOM_BEN = NHOM_TRANG
     #: Tên hiện ở đầu thanh bên và trên thanh tiêu đề cửa sổ.
     #:
     #: Chủ dự án, 13/08/2026: *"tool khách chạy mày đổi tên My Tool"*. Đổi ở
@@ -307,7 +352,9 @@ class CuaSoChinh(QWidget):
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
         ngang.setSpacing(0)
-        self._ben = ThanhBen(self.show_page, self._nav, self.TEN_HIEN, self.CAU_DUOI_TEN, self.widget_duoi_ten())
+        self._ben = ThanhBen(self.show_page, self._nav, self.TEN_HIEN,
+                             self.CAU_DUOI_TEN, self.widget_duoi_ten(),
+                             nhom=self.NHOM_BEN)
         ngang.addWidget(self._ben)
         #: khoá -> vùng cuộn bọc ngoài trang. Xem `_boc_cuon`.
         self._vo_cuon: Dict[str, QWidget] = {}
@@ -375,15 +422,18 @@ class CuaSoChinh(QWidget):
         from .trang_prompt_visuals import TrangPromptVisuals
         from .trang_auto import TrangTuDong
         from .trang_skill import TrangSkill
-        from .trang_cai_dat import TrangCaiDat
-        from .trang_tai_khoan import TrangTaiKhoan
+        from .trang_quan_ly import TrangQuanLy
         from .trang_voice import TrangGiongNoi
         from .trang_phu_de import TrangPhuDe
         from .trang_gpm_vps import TrangGpmVps
+        from .trang_phan_tich import TrangPhanTich
+        from .trang_quan_ly_kenh import TrangQuanLyKenh
 
         xuong = {
             "skill": lambda: TrangSkill(self),
             "chrome-sach": lambda: TrangGpmVps(self),
+            "phan-tich": lambda: TrangPhanTich(self),
+            "quan-ly-kenh": lambda: TrangQuanLyKenh(self),
             "content": lambda: TrangKichBan(self),
             "voice": lambda: TrangGiongNoi(self),
             "phu-de": lambda: TrangPhuDe(self),
@@ -391,8 +441,8 @@ class CuaSoChinh(QWidget):
             "media": lambda: TrangAnhVideo(self),
             "prompt-visuals": lambda: TrangPromptVisuals(self),
             "edit": lambda: TrangDungVideo(self),
-            "wallet": lambda: TrangTaiKhoan(self),
-            "cai-dat": lambda: TrangCaiDat(self),
+            # Tài khoản + Cài đặt gộp một trang (31/08/2026), khoá giữ `wallet`.
+            "wallet": lambda: TrangQuanLy(self),
         }
         # Xưởng của vỏ đặt SAU, để vỏ vận hành đè được lên trang cùng khoá nếu cần.
         xuong.update(self.trang_them())
@@ -745,11 +795,12 @@ class CuaSoChinh(QWidget):
         self.show_message(
             "Việc này cần đăng nhập",
             "Việc bạn vừa bấm gọi mô hình trên máy chủ nên cần đăng nhập. "
-            "Vào trang Tài khoản, gõ email và mật khẩu shopapi.vn rồi bấm Đăng nhập.\n\n"
-            "Chưa có tài khoản cũng không sao: hai phần này chạy ngay trên máy "
+            "Vào trang Tài khoản & Cài đặt, gõ email và mật khẩu shopapi.vn "
+            "rồi bấm Đăng nhập.\n\n"
+            "Chưa có tài khoản cũng không sao: mấy phần này chạy ngay trên máy "
             "bạn, miễn phí, không cần khoá —\n"
-            "  • Skill → Lấy dữ liệu đối thủ\n"
-            "  • Dựng video")
+            "  • Công cụ YTB (lấy dữ liệu đối thủ, lời thoại, đo từ khoá…)\n"
+            "  • Edit video")
 
     def dat_khoa(self, khoa: str) -> None:
         """Lưu khoá API rồi **dựng lại đường ra máy chủ ngay**, không bắt mở lại tool.

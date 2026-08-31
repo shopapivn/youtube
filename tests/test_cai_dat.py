@@ -74,12 +74,20 @@ pytest.importorskip("PyQt5.QtWidgets", reason="máy chạy test không có giao 
 
 
 class TestTrangCaiDat:
-    def test_co_trong_thanh_ben_va_dung_cuoi(self):
+    def test_nam_trong_tab_quan_ly_khong_con_dung_rieng(self):
+        """Chủ dự án 31/08/2026: *"tài khoản với cài đặt có thể chung 1 tab"*.
+
+        Cài đặt rời thanh bên, thành mục con của "Tài khoản & Cài đặt" (khoá
+        vẫn `wallet` — đổi khoá là mười chỗ đang đọc phải sửa theo). Bài này
+        chốt cả hai chiều: không mọc lại tab riêng, và không rơi mất mục con.
+        """
         from ui_qt.app import TRANG
+        from ui_qt import trang_quan_ly
 
         khoa = [k for k, _b, _n in TRANG]
-        assert "cai-dat" in khoa
-        assert khoa[-1] == "cai-dat", "cài đặt là thứ ít mở nhất, để cuối"
+        assert "cai-dat" not in khoa, "Cài đặt đã gộp vào tab Tài khoản & Cài đặt"
+        assert "wallet" in khoa
+        assert trang_quan_ly.TAB_CON == ("Tài khoản", "Cài đặt")
 
     def test_moi_tuy_chon_deu_co_cau_giai_thich(self):
         """Tên kỹ thuật không giúp người không biết code quyết được gì."""

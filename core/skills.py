@@ -8,9 +8,15 @@ tả SEO, chấm điểm kịch bản, chia cảnh. Gộp mỗi thứ thành m�
 bên dài hai chục dòng và khách không tìm nổi thứ mình cần.
 
 Lấy dữ liệu đối thủ **là một Skill**, không phải một tab riêng — nó cũng chỉ là
-"đưa vào một thứ, nhận về một kết quả". Nó là Skill duy nhất chạy hoàn toàn trên
-máy khách (đọc dữ liệu YouTube công khai bằng `yt-dlp`), nên không tốn tiền và
-không cần đăng nhập; các Skill còn lại gọi mô hình ngôn ngữ.
+"đưa vào một thứ, nhận về một kết quả", và chạy hoàn toàn trên máy khách
+(yt-dlp, miễn phí, không cần đăng nhập). Ngày 31/08/2026 nó từng bị chuyển sang
+tab Phân tích & Nghiên cứu vài giờ; chủ dự án đòi lại ngay trong buổi: *"tab
+này có cái skill lấy danh sách content của kênh - lúc trước có giờ không
+thấy"*. Đừng dọn nó đi lần nữa.
+
+Riêng "Chỉ số kênh" thì chuyển hẳn sang tab **Phân tích & Nghiên cứu** của
+nhóm AUTOMATION (`ui_qt/trang_phan_tich.py`) — số liệu của chính kênh là đầu
+vào của dây chuyền sản xuất, không phải một việc vặt.
 
 ═══ VÌ SAO KHAI BÁO BẰNG DỮ LIỆU ═══
 
@@ -43,10 +49,10 @@ MA_XOA_LOGO = "xoa-logo"
 #: xem `core/tu_khoa_youtube.py`.
 MA_TU_KHOA = "tu-khoa"
 
-#: Số liệu kênh CỦA CHÍNH KHÁCH, lấy từ YouTube Studio bằng một tiện ích Chrome.
-#: Khác mọi Skill còn lại ở chỗ nó cần khách cài thêm một thứ vào trình duyệt —
-#: vì những con số quyết định (lượt hiển thị, tỷ lệ bấm, video mình bị xếp cạnh)
-#: KHÔNG có trong API công khai nào của YouTube, chỉ hiện sau khi đăng nhập Studio.
+#: Trang "Chỉ số kênh" — nay nằm trong tab Phân tích & Nghiên cứu, không còn
+#: trong `SKILL`. Số liệu lấy từ YouTube Studio bằng tiện ích Chrome, vì những
+#: con số quyết định (lượt hiển thị, tỷ lệ bấm, video mình bị xếp cạnh) KHÔNG
+#: có trong API công khai nào của YouTube, chỉ hiện sau khi đăng nhập Studio.
 MA_CHI_SO = "chi-so-ytb"
 
 # "Chrome sạch" từng là một Skill ở đây (26/08/2026, vài giờ). Chủ dự án: *"có
@@ -96,17 +102,6 @@ SKILL: Tuple[Skill, ...] = (
               "Tôi đo hình dạng dấu rồi trừ ngược ra khỏi ảnh, nên phần ảnh bên "
               "dưới hiện lại đúng như ban đầu. Chạy trên máy bạn, 27 mili giây "
               "một ảnh.",
-        loai="may",
-    ),
-    Skill(
-        ma=MA_CHI_SO,
-        ten="Chỉ số kênh của bạn",
-        bieu_tuong="📊",
-        mo_ta="Lấy số liệu thật từ YouTube Studio của chính bạn — lượt hiển thị, "
-              "tỷ lệ bấm, thời gian xem, khán giả ở nước nào, video của bạn đang bị "
-              "xếp cạnh video nào — rồi chép sang ChatGPT hay Claude để hỏi kênh đang "
-              "nghẽn ở đâu. Cần cài một tiện ích vào Chrome, làm một lần. Chạy trên "
-              "máy bạn — miễn phí.",
         loai="may",
     ),
     Skill(

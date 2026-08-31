@@ -814,7 +814,7 @@ class TrangGiongNoi(QWidget):
         self._nut_dung.setEnabled(co_duong_dung and dang_chay)
         self._nut_dung.setToolTip(
             "Chưa nối được với máy chủ nên không có gì để dừng. "
-            "Đăng nhập ở tab Tài khoản trước." if not co_duong_dung else
+            "Đăng nhập ở tab Tài khoản & Cài đặt trước." if not co_duong_dung else
             "Dừng lô đang chạy. Job chưa gửi thì bỏ luôn, job đã gửi được huỷ "
             "và hoàn tiền đầy đủ.")
 

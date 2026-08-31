@@ -44,7 +44,7 @@ __all__ = ["HUONG_DAN", "HopHuongDan", "nut_huong_dan", "co_huong_dan"]
 #: Hướng dẫn theo khoá tab. Khoá trùng với `ui_qt/app.py:TRANG`.
 HUONG_DAN: Dict[str, Dict[str, object]] = {
     "skill": {
-        "tieu_de": "Skill",
+        "tieu_de": "Công cụ YTB",
         "tom_tat": "Những việc lẻ làm một phát ra kết quả: đưa vào một thứ, "
                    "nhận về một thứ.",
         "buoc": [
@@ -53,8 +53,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Kết quả hiện ngay bên dưới, sao chép hoặc lưu ra file được.",
         ],
         "luu_y": [
-            "“Lấy dữ liệu đối thủ” chạy hoàn toàn trên máy bạn — không cần tài "
-            "khoản riêng của bạn.",
+            "“Lấy dữ liệu đối thủ” dán một hay nhiều kênh YouTube là ra danh "
+            "sách content của kênh đó: từng video kèm view, view/subs, ngày "
+            "đăng, thời lượng, like, comment, hashtag, mô tả — xem trên bảng "
+            "rồi xuất CSV. Chạy hoàn toàn trên máy bạn, không cần tài khoản.",
+            "“Chỉ số kênh” (số liệu Studio của CHÍNH kênh bạn) đã dọn sang tab "
+            "“Phân tích & Nghiên cứu” trong nhóm AUTOMATION — vẫn miễn phí, "
+            "chỉ đổi chỗ.",
             "“Xoá logo cho ảnh” gỡ dấu của nhà cung cấp ở góc phải dưới, chọn "
             "được cả thư mục một lượt. Ảnh chạy từ tab Tự động đã được xoá sẵn "
             "ngay lúc tải về, Skill này dành cho ảnh cũ hoặc ảnh lấy từ chỗ "
@@ -78,7 +83,17 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Chọn được 131 nước, gõ vào ô nước để tìm nhanh. Từ khoá ngách quá "
             "thì có thể không có gợi ý nào — đó là câu trả lời thật, không "
             "phải lỗi.",
-            "“Chỉ số kênh của bạn” lấy số liệu thật từ YouTube Studio CỦA CHÍNH "
+            "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
+            "mất khi cập nhật tool.",
+        ],
+    },
+    "phan-tich": {
+        "tieu_de": "Phân tích & Nghiên cứu",
+        "tom_tat": "Số liệu đổ về đây trước khi tiêu tiền sản xuất: chỉ số "
+                   "Studio của CHÍNH KÊNH BẠN. Chạy trên máy bạn — miễn phí, "
+                   "không cần đăng nhập.",
+        "buoc": [
+            "“Chỉ số kênh” lấy số liệu thật từ YouTube Studio CỦA CHÍNH "
             "BẠN: video được đưa ra trước mặt người xem bao nhiêu lần, bao nhiêu "
             "phần trăm trong đó bấm vào, xem được bao lâu, khán giả ở nước nào, và "
             "video của bạn đang bị xếp cạnh những video nào. Không API nào của "
@@ -95,15 +110,39 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "gửi đi đâu cả. Quay lại đây bấm “Đọc dữ liệu” là thấy bảng, rồi bấm "
             "“Chép cho ChatGPT / Claude” và dán vào khung chat — khối chữ đó đã kèm "
             "sẵn giải thích từng cột và câu hỏi cần hỏi.",
+            "Studio mở trong máy ảo (VPS)? Bật “cổng nhận” ở mục Chỉ số kênh rồi "
+            "dán địa chỉ vào tiện ích bên máy ảo — số liệu rơi thẳng về thư mục "
+            "kênh của tool, không phải chép tay.",
+        ],
+        "luu_y": [
+            "Muốn xem dữ liệu kênh ĐỐI THỦ thì dùng “Lấy dữ liệu đối thủ” trong "
+            "tab Công cụ YTB — cũng miễn phí, chạy trên máy bạn.",
             "Mốc 24 giờ đầu chưa nói lên nhiều: YouTube thường mất vài ngày mới tìm "
             "ra tệp khán giả cho một video. Đọc theo cả đường đi qua nhiều mốc thì "
             "mới thấy video đang lên hay đã dừng.",
-            "Skill do bạn tự đặt làm nằm trong thư mục skill-cua-toi và không "
-            "mất khi cập nhật tool.",
+        ],
+    },
+    "quan-ly-kenh": {
+        "tieu_de": "Quản lý kênh",
+        "tom_tat": "Mỗi kênh một hồ sơ nằm trong thư mục CHANNEL: phong cách "
+                   "hình ảnh, lời nhắc từng khâu, cách dựng video. Tab này là "
+                   "cửa chính để mở, tạo và nhân bản kênh.",
+        "buoc": [
+            "Nháy đúp một kênh (hoặc chọn rồi bấm “Mở kênh”) để mở trình thiết "
+            "kế: phong cách, nhân vật, lời nhắc, cách dựng.",
+            "“Tạo kênh mới” dựng một kênh trống theo từng bước.",
+            "“Nhân bản” chép một kênh thành bản riêng của bạn — sửa thoải mái, "
+            "cập nhật tool không đụng vào.",
+            "Chạy sản xuất cho kênh nằm ở tab “Video sản xuất tự động”; số liệu "
+            "kênh xem ở tab “Phân tích & Nghiên cứu”.",
+        ],
+        "luu_y": [
+            "Kênh MẪU của tool được cập nhật đè theo tool — đừng sửa thẳng vào "
+            "kênh mẫu, hãy Nhân bản trước rồi sửa bản riêng.",
         ],
     },
     "chrome-sach": {
-        "tieu_de": "GPM & VPS",
+        "tieu_de": "VPS & GPM",
         "tom_tat": "Hai mức của cùng một việc. **GPM Login**: mỗi hồ sơ Chrome "
                    "là một máy riêng trong mắt YouTube/Google (cookie riêng, IP "
                    "riêng, đồng hồ khớp IP) — chạy trên máy bạn, miễn phí. "
@@ -139,7 +178,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "IP + cách mở Chrome + hành vi; giả vân tay còn làm điểm tụt vì "
             "tạo ra một cái máy không có ngoài đời.",
             "─── MỤC VPS ───",
-            "Máy ảo cần khoá API (tab Cài đặt). Mỗi máy là một thẻ, bấm “Mở "
+            "Máy ảo cần đăng nhập (tab Tài khoản & Cài đặt). Mỗi máy là một thẻ, bấm “Mở "
             "máy” là vào thẳng — tôi cất sẵn mật khẩu cho Remote Desktop nên "
             "thường không phải gõ gì. Nếu Windows vẫn hỏi thì mật khẩu đã nằm "
             "sẵn trong bộ nhớ tạm, dán vào rồi bấm “Ghi nhớ tôi”.",
@@ -316,7 +355,7 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "auto": {
-        "tieu_de": "Tự động",
+        "tieu_de": "Video sản xuất tự động",
         "tom_tat": "Dán link tư liệu, bấm một nút, ra video hoàn thiện.",
         "buoc": [
             "Chọn kênh. Kênh quyết định tiếng nói, giọng đọc, nhân vật và "
