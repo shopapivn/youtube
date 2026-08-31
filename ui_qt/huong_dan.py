@@ -89,10 +89,26 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     },
     "phan-tich": {
         "tieu_de": "Phân tích & Nghiên cứu",
-        "tom_tat": "Số liệu đổ về đây trước khi tiêu tiền sản xuất: chỉ số "
-                   "Studio của CHÍNH KÊNH BẠN. Chạy trên máy bạn — miễn phí, "
-                   "không cần đăng nhập.",
+        "tom_tat": "Trả lời câu “kênh này nên làm content gì tiếp theo”: sổ "
+                   "theo dõi đối thủ của từng kênh, và chỉ số Studio của chính "
+                   "kênh bạn. Cả hai chạy trên máy bạn — miễn phí, không cần "
+                   "đăng nhập.",
         "buoc": [
+            "─── MỤC ĐỐI THỦ ───",
+            "Chọn kênh của bạn ở ô Kênh — mỗi kênh một sổ riêng, nằm trong thư "
+            "mục CHANNEL/<kênh>/nghien-cuu. Dán link các kênh đối thủ vào ô "
+            "danh sách (mỗi dòng một kênh, tự lưu khi gõ).",
+            "Bấm “Lấy content đối thủ” — content của CẢ danh sách đổ về bảng: "
+            "tiêu đề, link, ngày đăng, thời lượng, view, like, comment, "
+            "hashtag, mô tả. Như bảng bạn vẫn làm trên trang tính, nhưng nằm "
+            "ngay trong tool.",
+            "Cột “Tuyến / Kênh” là cột CỦA BẠN: bấm đúp vào ô để phân loại "
+            "video vào tuyến nội dung. Tự lưu ngay khi sửa, và lấy dữ liệu lần "
+            "sau: số liệu mới đè lên, tuyến đã điền GIỮ NGUYÊN — video đối thủ "
+            "đã ẩn cũng không mất khỏi sổ.",
+            "Ô lọc góc phải bảng: gõ tên tuyến hay chữ trong tiêu đề là bảng "
+            "chỉ còn các dòng đó — như lọc trên trang tính.",
+            "─── MỤC CHỈ SỐ KÊNH ───",
             "“Chỉ số kênh” lấy số liệu thật từ YouTube Studio CỦA CHÍNH "
             "BẠN: video được đưa ra trước mặt người xem bao nhiêu lần, bao nhiêu "
             "phần trăm trong đó bấm vào, xem được bao lâu, khán giả ở nước nào, và "
@@ -115,8 +131,10 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "kênh của tool, không phải chép tay.",
         ],
         "luu_y": [
-            "Muốn xem dữ liệu kênh ĐỐI THỦ thì dùng “Lấy dữ liệu đối thủ” trong "
-            "tab Công cụ YTB — cũng miễn phí, chạy trên máy bạn.",
+            "Khác gì “Lấy dữ liệu đối thủ” bên tab Công cụ YTB? Bên đó là lượt "
+            "lẻ: lấy → nhìn → xuất, xong là thôi. Bên này là SỔ của một kênh: "
+            "danh sách đối thủ nằm lại, bảng nằm lại, có cột tuyến để phân "
+            "loại — dùng cho việc theo dõi lâu dài.",
             "Mốc 24 giờ đầu chưa nói lên nhiều: YouTube thường mất vài ngày mới tìm "
             "ra tệp khán giả cho một video. Đọc theo cả đường đi qua nhiều mốc thì "
             "mới thấy video đang lên hay đã dừng.",
