@@ -208,3 +208,112 @@ def test_extension_co_mat_doc_trang_chu():
         "chỉ chạy ở trang chủ — không bám theo mọi trang xem"
     nen = (tm / "background.js").read_text(encoding="utf-8")
     assert "'/doi-thu'" in nen and "doi_thu" in nen
+
+
+def _nap_nguon_tool():
+    spec = importlib.util.spec_from_file_location(
+        "vm_nguon_tool", GOC / "vm" / "nguon_tool.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestNguonTool:
+    """Nửa sau GĐ4: dang.py ăn kế hoạch của tool qua đúng khổ dòng cũ."""
+
+    def _don_cache(self):
+        for ten in ("ke-hoach-TL4-T7.csv", "cho-bao-TL4-T7.json"):
+            p = GOC / "vm" / ten
+            if p.exists():
+                p.unlink()
+
+    @pytest.fixture()
+    def san(self, tmp_path):
+        from core import ke_hoach_dang as kh
+
+        self._don_cache()
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        kh.luu_bang(str(tmp_path), "TL4-T7", [
+            ["GOI-01", "02/09/2026", "19:00", "Video một", "mô tả 1",
+             "tag1, tag2", "https://y/1", "", "", "", "x", "", ""],
+            ["GOI-02", "02/09/2026", "20:00", "Video hai", "", "", "", "", "",
+             "", "", "", ""],                       # chưa duyệt (Sẵn sàng trống)
+            ["GOI-03", "01/09/2026", "08:00", "Video ba", "", "", "", "", "",
+             "", "x", "ĐÃ ĐĂNG", ""],               # đã đăng rồi
+        ])
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        yield tram, "http://127.0.0.1:{0}".format(tram._may.server_address[1]), str(tmp_path)
+        tram.tat()
+        self._don_cache()
+
+    def test_dung_kho_dong_cu_cua_dang_py(self, san):
+        _tram, dia_chi, _goc = san
+        nt = _nap_nguon_tool()
+        cfg = {"TRAM": dia_chi, "CHANNEL_CODE": "TL4-T7"}
+        rows = nt.get_rows(cfg, trang_thai_ok="EDIT XONG")
+        assert len(rows) == 4                      # 1 tiêu đề giả + 3 gói
+        r = rows[1]
+        assert len(r) > 61, "get_all_ready_codes đòi len(row) > 61"
+        assert r[0] == "GOI-01" and r[34] == "TL4-T7"
+        assert r[47] == "EDIT XONG" and r[53] == "Video một"
+        assert r[37] == "tag1, tag2" and r[55] == "https://y/1"
+        assert r[60] == "02/09/2026" and r[61] == "19:00"
+        assert rows[2][47] == "", "chưa duyệt thì không được mang trạng thái OK"
+        assert rows[3][47] == "ĐÃ ĐĂNG", "gói đã đăng phải kể thật để vòng dọn dẹp thấy"
+
+    def test_tram_tat_thi_dung_ban_da_tai(self, san):
+        _tram, dia_chi, _goc = san
+        nt = _nap_nguon_tool()
+        cfg = {"TRAM": dia_chi, "CHANNEL_CODE": "TL4-T7"}
+        assert len(nt.get_rows(cfg)) == 4          # lượt này ghi cache
+        cfg_hong = {"TRAM": "http://127.0.0.1:9", "CHANNEL_CODE": "TL4-T7"}
+        assert len(nt.get_rows(cfg_hong)) == 4, "trạm tắt phải còn bản đã tải"
+
+    def test_bao_dang_ghi_vao_ke_hoach_va_gui_bu_khi_tram_tat(self, san):
+        from core import ke_hoach_dang as kh
+
+        tram, dia_chi, goc = san
+        nt = _nap_nguon_tool()
+        cfg = {"TRAM": dia_chi, "CHANNEL_CODE": "TL4-T7"}
+        assert nt.bao_dang(cfg, "GOI-01")
+        cot, hang = kh.doc_bang(goc, "TL4-T7")
+        o = cot.index("Trạng thái đăng")
+        assert [d[o] for d in hang] == ["ĐÃ ĐĂNG", "", "ĐÃ ĐĂNG"]
+        # Trạm tắt lúc báo: KHÔNG được mất — mất là lần sau đăng LẶP video thật.
+        cfg_hong = {"TRAM": "http://127.0.0.1:9", "CHANNEL_CODE": "TL4-T7"}
+        assert not nt.bao_dang(cfg_hong, "GOI-02")
+        assert (GOC / "vm" / "cho-bao-TL4-T7.json").exists()
+        assert nt.bao_dang(cfg, "GOI-02")          # trạm sống lại: gửi bù cả sổ
+        _c, hang = kh.doc_bang(goc, "TL4-T7")
+        assert hang[1][o] == "ĐÃ ĐĂNG"
+        assert not (GOC / "vm" / "cho-bao-TL4-T7.json").exists()
+
+
+class TestGhepToolDang:
+    def test_ghep_du_bon_diem_va_neo_lech_thi_dung(self, tmp_path):
+        import importlib.util as iu
+
+        spec = iu.spec_from_file_location("vm_ghep", GOC / "vm" / "ghep_tool_dang.py")
+        ghep = iu.module_from_spec(spec)
+        spec.loader.exec_module(ghep)
+        gia = tmp_path / "dang.py"
+        gia.write_text(
+            'STATUS_COL        = CFG.get("STATUS_COL", 48)\n'
+            'def get_rows_fast(sheet_name, timeout=20, tries=4):\n'
+            '    pass\n'
+            'def update_source_status(client, code, status="ĐÃ ĐĂNG"):\n'
+            '    pass\n'
+            'def main():\n'
+            '    client = gs_client()\n'
+            'def cleanup():\n'
+            '    client = gs_client()\n', encoding="utf-8")
+        ra = ghep.ghep(str(gia), str(tmp_path / "dang-tool.py"))
+        chu = (tmp_path / "dang-tool.py").read_text(encoding="utf-8")
+        assert chu.count('NGUON == "tool"') == 3
+        assert 'gs_client() if NGUON != "tool" else None' in chu
+        assert "DUNG SUA TAY" in chu.splitlines()[0]
+        # Neo lệch (dang.py bản mới đổi mã) → phải DỪNG, không vá bừa.
+        gia.write_text("khong con neo nao het\n", encoding="utf-8")
+        with pytest.raises(AssertionError):
+            ghep.ghep(str(gia), str(tmp_path / "x.py"))

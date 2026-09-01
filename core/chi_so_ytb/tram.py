@@ -427,6 +427,21 @@ def _lam_xu_ly(tram: "Tram"):
                                    str(b.get("ket_qua") or ""),
                                    str(b.get("loi") or ""))
                     return self._tra(b"ok")
+                if self.path == "/dang-xong":
+                    # Tool đăng trên máy ảo báo một gói đã đăng (hoặc hỏng) —
+                    # ghi vào cột "Trạng thái đăng" của kế hoạch, tìm theo MÃ.
+                    from core import ke_hoach_dang  # noqa: PLC0415
+
+                    duoc = ke_hoach_dang.danh_dau(
+                        tram.goc, an_toan(b.get("kenh") or ""),
+                        str(b.get("ma") or ""),
+                        str(b.get("trang_thai") or "ĐÃ ĐĂNG"))
+                    tram.ghi("kênh {0}: gói {1} → {2}{3}".format(
+                        an_toan(b.get("kenh") or ""), b.get("ma"),
+                        b.get("trang_thai") or "ĐÃ ĐĂNG",
+                        "" if duoc else " (KHÔNG thấy mã trong kế hoạch)"))
+                    return self._tra(json.dumps({"ok": duoc}).encode("utf-8"),
+                                     "application/json; charset=utf-8")
                 if self.path == "/doi-thu":
                     them = tram.nhan_doi_thu(b.get("kenh") or "",
                                              list(b.get("danh_sach") or []))

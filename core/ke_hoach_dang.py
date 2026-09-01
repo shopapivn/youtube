@@ -9,8 +9,18 @@ Chỗ lưu: `CHANNEL/<kênh>/ke-hoach-dang/ke-hoach.csv` — CSV để chủ d�
 mở bằng Excel/Sheets sửa tay được trong lúc giao diện soạn kế hoạch chưa xây
 (giai đoạn 4 của `vm/KE-HOACH.md`).
 
-Bộ cột là BẢN NHÁP — chốt hẳn khi khiêng `dang.py` về (nó cần gì thêm thì cột
-mọc theo). Ghi chú này để người sau không tưởng đây là khuôn đã đóng đinh.
+Bộ cột CHỐT theo đúng thứ tool đăng (`D:\\upload\\dang.py`) tiêu thụ — đọc mã
+nó ngày 01/09/2026 thì nó cần: **Mã gói** (tên thư mục chứa mp4+srt+ảnh trong
+`AUTO/done/<mã>` trên ổ chia sẻ), ngày + giờ hẹn, tiêu đề, mô tả, thẻ SEO,
+tối đa 4 link video gắn thẻ màn hình cuối, và hai cột trạng thái:
+
+* `Sẵn sàng` — tool/người duyệt điền gì đó (thường "x") nghĩa là gói đủ đồ,
+  cho phép đăng. Trống = chưa duyệt, máy ảo bỏ qua.
+* `Trạng thái đăng` — máy ảo ghi "ĐÃ ĐĂNG" khi xong (qua `POST /dang-xong`
+  của trạm → :func:`danh_dau`).
+
+Ngày `dd/mm/yyyy` (hoặc dạng `_parse_date` của tool đăng nuốt được), giờ
+`HH:MM` — giữ nguyên chuỗi, bên đọc tự hiểu.
 """
 
 from __future__ import annotations
@@ -22,12 +32,11 @@ from typing import List, Sequence, Tuple
 from .kenh import duong_kenh
 
 __all__ = ["COT", "TEP", "duong_ke_hoach", "doc_van_ban", "doc_bang",
-           "luu_bang"]
+           "luu_bang", "danh_dau"]
 
-#: Bộ cột nháp — đủ cho một lượt đăng có hẹn giờ. `Trạng thái`: trống = chờ,
-#: máy ảo sẽ ghi lại khi đăng xong (giai đoạn 4).
-COT = ("Ngày giờ đăng", "Tệp video", "Tiêu đề", "Mô tả", "Thẻ",
-       "Trạng thái", "Ghi chú")
+COT = ("Mã gói", "Ngày đăng", "Giờ đăng", "Tiêu đề", "Mô tả", "Thẻ SEO",
+       "Link card 1", "Link card 2", "Link card 3", "Link card 4",
+       "Sẵn sàng", "Trạng thái đăng", "Ghi chú")
 
 TEP = "ke-hoach.csv"
 
@@ -74,3 +83,26 @@ def luu_bang(goc: str, kenh: str, hang: Sequence[Sequence[str]],
             dong = [str(o) for o in list(dong)[:len(cot)]]
             but.writerow(dong + [""] * (len(cot) - len(dong)))
     os.replace(tam, duong)
+
+
+def danh_dau(goc: str, kenh: str, ma_goi: str, trang_thai: str) -> bool:
+    """Máy ảo báo về một gói: ghi vào cột `Trạng thái đăng` của đúng dòng ấy.
+
+    Tìm theo **Mã gói** chứ không theo số dòng: kế hoạch có thể được chủ dự án
+    sắp xếp lại trong Excel giữa lúc máy ảo đang đăng — số dòng lúc gửi đi và
+    lúc báo về không còn là một.
+    """
+    cot, hang = doc_bang(goc, kenh)
+    if "Mã gói" not in cot or "Trạng thái đăng" not in cot:
+        return False
+    o_ma = cot.index("Mã gói")
+    o_tt = cot.index("Trạng thái đăng")
+    ma_goi = str(ma_goi).strip()
+    thay = False
+    for dong in hang:
+        if dong[o_ma].strip() == ma_goi:
+            dong[o_tt] = str(trang_thai)
+            thay = True
+    if thay:
+        luu_bang(goc, kenh, hang, cot)
+    return thay

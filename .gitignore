@@ -68,3 +68,6 @@ THAM-KHAO/
 CHANNEL/*/chi-so/*/*/raw/
 CHANNEL/_chi-so-chua-ro/
 vm/agent.log
+vm/ke-hoach-*.csv
+vm/cho-bao-*.json
+vm/trang-thai.json

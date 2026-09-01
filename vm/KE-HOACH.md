@@ -66,16 +66,32 @@ Hai bên nối nhau qua **trạm** — cổng HTTP có sẵn của tool
   (`nghien-cuu/doi-thu.txt`, khử trùng). Logic chủ dự án: *"nắm được hết đối
   thủ là nắm được hết content"*. LƯU Ý THẬT THÀ: phần đọc DOM chưa chạy thử
   trên YouTube thật — lần chạy đầu phải soi nhật ký extension.
-- **Giai đoạn 4 — đăng theo kế hoạch của tool (NỬA ĐẦU ĐÃ XÂY, 01/09):**
-  khuôn kế hoạch nằm ở `CHANNEL/<kênh>/ke-hoach-dang/ke-hoach.csv`
-  (`core/ke_hoach_dang.py` — cột nháp, chốt hẳn khi khiêng `dang.py` về);
-  trạm phát qua `GET /ke-hoach`; agent nhận lệnh `dang-video` là tải kế
-  hoạch về máy ảo và (nếu điền `tool_dang`) mở tool đăng `D:\upload` lên.
-  NỬA SAU còn lại: khiêng `dang.py` về đọc kế hoạch này thay trang tính, và
-  đường chuyển TỆP VIDEO sang máy ảo (đang đi qua ổ chia sẻ của Remote
-  Desktop). Tab Máy VM thêm phần soạn lịch đăng khi khuôn cột đã chốt.
-- **Giai đoạn 5 — trả lời bình luận:** khiêng `cmt.py` về cùng khuôn. Chủ dự
-  án nói *"việc này chưa cần quan tâm vì tao có logic rồi"* — chờ lệnh.
+- **Giai đoạn 4 — đăng theo kế hoạch của tool (ĐÃ XÂY, 01/09 — chờ chạy
+  thật một vòng):** khuôn kế hoạch CHỐT theo đúng thứ `dang.py` tiêu thụ
+  (`core/ke_hoach_dang.py`: Mã gói / ngày / giờ / tiêu đề / mô tả / thẻ /
+  4 link card / Sẵn sàng / Trạng thái đăng); trạm phát `GET /ke-hoach` và
+  nhận `POST /dang-xong` (ghi "ĐÃ ĐĂNG" vào kế hoạch theo MÃ). Phía máy ảo:
+  `vm/nguon_tool.py` giả đúng khổ dòng trang tính cũ cho `dang.py`, và
+  `vm/ghep_tool_dang.py` vá `dang.py` tại chỗ thành `dang-tool.py` (ba điểm
+  chạm; `dang.py` KHÔNG được chép vào kho — kho công khai, đó là đồ riêng).
+  Đã ghép thử với `D:\upload\dang.py` thật: biên dịch sạch. Báo "ĐÃ ĐĂNG"
+  có sổ chờ gửi bù — trạm tắt đúng lúc báo cũng không mất, vì mất là lần
+  chạy sau đăng LẶP video thật. Tệp video vẫn đi đường ổ chia sẻ
+  `AUTO/done/<mã gói>` như luồng cũ — không đổi thứ đang chạy.
+  Còn lại: chạy thật một vòng trên VM; phần soạn kế hoạch trong tool (sinh
+  dòng kế hoạch từ lượt chạy DONE của tab Tự động) khi chu kỳ (GĐ6) xây.
+- **Giai đoạn 5 — trả lời bình luận:** khiêng `cmt.py` về cùng khuôn (qua
+  `ghep_tool_dang.py` kiểu tương tự). Chủ dự án nói *"việc này chưa cần quan
+  tâm vì tao có logic rồi"* — chờ lệnh.
+- **Giai đoạn 6 — CHU KỲ 24/7 (khung, chủ dự án vẽ 01/09):** tool chạy suốt,
+  có những việc theo chu kỳ: *"chốt số liệu → quyết định làm content gì →
+  sản xuất → bàn giao cho VM đăng"*. Các mảnh đã nằm sẵn: số liệu tự về
+  (GĐ2 + tự quét sổ đối thủ), đối thủ mới tự vào sổ (GĐ3), đường bàn giao
+  (GĐ4). Mảnh CHƯA có là bộ não giữa chu kỳ: khâu "quyết định làm content
+  gì" — một lượt AI đọc `chi-so/` + `nghien-cuu/` của kênh, chọn đề tài,
+  đẩy vào tab Video sản xuất tự động, và khi lượt DONE thì tự ghi một dòng
+  vào kế hoạch đăng. Xây sau khi GĐ3–GĐ4 chạy thật ổn một tuần — quyết định
+  bằng số liệu thật, không quyết định bằng số liệu chưa từng chảy.
 
 ## Còn để ngỏ (chủ dự án còn mơ hồ — ghi để khỏi quên)
 
