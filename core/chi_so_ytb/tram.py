@@ -385,6 +385,18 @@ def _lam_xu_ly(tram: "Tram"):
                     "ok": True, "cong": tram.cong, "so_goi": tram.so_goi,
                     "thu_muc": os.path.join(tram.goc, "CHANNEL").replace("\\", "/"),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            if self.path.startswith("/ke-hoach"):
+                # Máy ảo tải kế hoạch đăng của kênh về (giai đoạn 4 — xem
+                # vm/KE-HOACH.md). Trả nguyên văn CSV, máy ảo tự cất.
+                from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+                from core import ke_hoach_dang  # noqa: PLC0415
+
+                q = parse_qs(urlparse(self.path).query)
+                kenh = an_toan((q.get("kenh") or [""])[0])
+                chu = ke_hoach_dang.doc_van_ban(tram.goc, kenh) if kenh else ""
+                return self._tra(chu.encode("utf-8"),
+                                 "text/csv; charset=utf-8")
             if self.path.startswith("/viec"):
                 # Agent máy ảo hỏi việc: /viec?kenh=TL4-T7&may=vm-01
                 from urllib.parse import parse_qs, urlparse  # noqa: PLC0415

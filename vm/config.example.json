@@ -5,5 +5,11 @@
     "chrome": "C:\\GoogleChromePortable\\GoogleChromePortable.exe",
     "studio_url": "https://studio.youtube.com",
     "cho_quet_giay": 480,
-    "dong_chrome_sau_quet": false
+    "cho_trang_chu_giay": 90,
+    "dong_chrome_sau_quet": false,
+
+    "gio_quet": "07:30",
+    "quet_trang_chu_hang_ngay": true,
+
+    "tool_dang": ""
 }

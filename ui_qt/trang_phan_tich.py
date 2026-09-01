@@ -904,6 +904,21 @@ class TrangMayVM(QWidget):
         d0b.addWidget(nut_tc)
         d0b.addStretch(1)
         v.addLayout(d0b)
+        # Hàng kế hoạch đăng — giai đoạn 4 (nửa đầu): kế hoạch nằm ở
+        # CHANNEL/<kênh>/ke-hoach-dang/ke-hoach.csv, sửa bằng Excel trong lúc
+        # giao diện soạn chưa xây; agent tải về máy ảo qua trạm.
+        d0c = QHBoxLayout()
+        nut_kh = nut_phu("Gửi kế hoạch đăng cho máy ảo", self._gui_ke_hoach,
+                         rong=230)
+        nut_kh.setToolTip(
+            "Agent tải kế hoạch đăng của kênh về máy ảo (tệp "
+            "ke-hoach-<kênh>.csv cạnh agent). Máy ảo có điền đường tool đăng "
+            "(tool_dang trong config) thì tool đăng được mở lên luôn.")
+        d0c.addWidget(nut_kh)
+        d0c.addWidget(nut_phu("Mở thư mục kế hoạch", self._mo_ke_hoach,
+                              rong=180))
+        d0c.addStretch(1)
+        v.addLayout(d0c)
         doc.addWidget(khung)
 
         khung2 = the()
@@ -960,6 +975,22 @@ class TrangMayVM(QWidget):
 
     def _quet_trang_chu(self) -> None:
         self._giao("quet-trang-chu")
+
+    def _gui_ke_hoach(self) -> None:
+        self._giao("dang-video")
+
+    def _mo_ke_hoach(self) -> None:
+        import os
+
+        from core.ke_hoach_dang import duong_ke_hoach
+
+        kenh = self._chon_kenh.currentText().strip()
+        if not kenh:
+            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
+            return
+        duong = duong_ke_hoach(self._app.base_dir, kenh)
+        os.makedirs(os.path.dirname(duong), exist_ok=True)
+        mo_thu_muc(os.path.dirname(duong))
 
     def _ve(self) -> None:
         tram = self._tram()

@@ -53,19 +53,27 @@ Hai bên nối nhau qua **trạm** — cổng HTTP có sẵn của tool
   máy ảo (nhịp tim + nhận việc + mở Studio cho extension cào), tab con
   **Máy VM** trong Phân tích & Nghiên cứu: thấy máy nào đang nối, lần cuối
   lên tiếng, xếp lệnh "Quét Studio ngay".
-- **Giai đoạn 2 — lịch cố định trên agent:** agent tự quét Studio mỗi ngày
-  theo giờ đặt trong `config.json` (không cần tool ra lệnh); tool vẫn
-  "khống chế" được — lệnh tay luôn chen trước lịch.
-- **Giai đoạn 3 — đối thủ mới từ trang chủ:** agent mở trang chủ YouTube của
-  phiên kênh, gom kênh đăng các video được đề xuất, đẩy về `POST /doi-thu` —
-  trạm nối thẳng vào SỔ ĐỐI THỦ (`nghien-cuu/doi-thu.txt`), lượt "Quét đối
-  thủ" sau đó tự phủ content của họ. Logic chủ dự án: *"nắm được hết đối thủ
-  là nắm được hết content"*. Cách đọc trang chủ (extension đọc DOM, hay
-  agent đọc nguồn trang) chọn ở giai đoạn này sau khi đo thử cả hai.
-- **Giai đoạn 4 — đăng theo kế hoạch của tool:** khiêng `dang.py` từ
-  `D:\upload` vào `vm/`, thay phần đọc trang tính bằng đọc
-  `CHANNEL/<kênh>/ke-hoach-dang/` (tool ghi kế hoạch, agent nhận qua hộp
-  việc kèm đường tải tệp). Tab Máy VM thêm phần soạn lịch đăng.
+- **Giai đoạn 2 — lịch cố định trên agent (ĐÃ XÂY, 01/09):** điền
+  `"gio_quet": "07:30"` là mỗi ngày agent tự quét Studio (và trang chủ nếu
+  bật `quet_trang_chu_hang_ngay`); mở agent trễ giờ vẫn quét bù trong ngày;
+  lệnh tay luôn chen trước lịch. Mốc "đã quét hôm nay" nằm ở
+  `trang-thai.json` cạnh agent.
+- **Giai đoạn 3 — đối thủ mới từ trang chủ (ĐÃ XÂY, 01/09 — cần thử trên
+  máy ảo thật):** chọn đường EXTENSION đọc DOM (nó sống sẵn trong phiên đăng
+  nhập, agent đọc nguồn trang thì không có cookie). Extension v2.3.0 thêm
+  `trang-chu.js`: mở trang chủ là cuộn vài màn, gom link kênh của các video
+  được đề xuất, `POST /doi-thu` về trạm → trạm nối vào SỔ ĐỐI THỦ
+  (`nghien-cuu/doi-thu.txt`, khử trùng). Logic chủ dự án: *"nắm được hết đối
+  thủ là nắm được hết content"*. LƯU Ý THẬT THÀ: phần đọc DOM chưa chạy thử
+  trên YouTube thật — lần chạy đầu phải soi nhật ký extension.
+- **Giai đoạn 4 — đăng theo kế hoạch của tool (NỬA ĐẦU ĐÃ XÂY, 01/09):**
+  khuôn kế hoạch nằm ở `CHANNEL/<kênh>/ke-hoach-dang/ke-hoach.csv`
+  (`core/ke_hoach_dang.py` — cột nháp, chốt hẳn khi khiêng `dang.py` về);
+  trạm phát qua `GET /ke-hoach`; agent nhận lệnh `dang-video` là tải kế
+  hoạch về máy ảo và (nếu điền `tool_dang`) mở tool đăng `D:\upload` lên.
+  NỬA SAU còn lại: khiêng `dang.py` về đọc kế hoạch này thay trang tính, và
+  đường chuyển TỆP VIDEO sang máy ảo (đang đi qua ổ chia sẻ của Remote
+  Desktop). Tab Máy VM thêm phần soạn lịch đăng khi khuôn cột đã chốt.
 - **Giai đoạn 5 — trả lời bình luận:** khiêng `cmt.py` về cùng khuôn. Chủ dự
   án nói *"việc này chưa cần quan tâm vì tao có logic rồi"* — chờ lệnh.
 

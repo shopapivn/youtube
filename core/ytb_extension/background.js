@@ -525,6 +525,24 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       }
       reply({ ok: true });
     }
+    else if (msg.type === 'doi_thu') {
+      // trang-chu.js gom kênh đứng sau video được đề xuất — chuyển về trạm để
+      // nối vào sổ đối thủ của kênh (trạm tự khử trùng). Không có trạm thì
+      // thôi: đây là dữ liệu phụ, không đáng ghi file lằng nhằng vào máy ảo.
+      const host = await st('host', HOST_MAC_DINH);
+      const kenh = (await st('ma_kenh', '')) || (await st('kenh', '')) || 'kenh';
+      const ds = (msg.danh_sach || []).slice(0, 300);
+      if (host && ds.length) {
+        try {
+          const r = await fetch(host + '/doi-thu', { method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kenh, danh_sach: ds }) });
+          const j = await r.json().catch(() => ({}));
+          log(`trang chủ: thấy ${ds.length} kênh, trạm nhận thêm ${j.them ?? '?'} đối thủ mới`);
+        } catch (e) { log(`trang chủ: không gửi được về trạm (${e})`); }
+      } else if (!host) { log('trang chủ: chưa có địa chỉ trạm — bỏ qua'); }
+      reply({ ok: true });
+    }
     else if (msg.type === 'kham_pha') { khamPha(); reply({ ok: true }); }
     else if (msg.type === 'chup_kenh') { chupKenh(); reply({ ok: true }); }
     else if (msg.type === 'xoa_lich') {

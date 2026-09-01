@@ -95,7 +95,7 @@ class TestAgentGoiVe:
     def test_viec_chua_toi_giai_doan_thi_noi_that(self, tram_song):
         tram, dia_chi = tram_song
         agent = _nap_agent()
-        tram.giao_viec("TL4-T7", "dang-video")
+        tram.giao_viec("TL4-T7", "tra-loi-binh-luan")   # giai đoạn 5, chưa xây
         cau_hinh = {"tram": dia_chi, "kenh": "TL4-T7", "ten_may": "vm-thu"}
         agent.chay(cau_hinh, mot_vong=True)   # không được ném ra ngoài
         assert tram.viec_cho() == [], "việc lạ vẫn phải được rút và BÁO hỏng"
@@ -119,3 +119,92 @@ def test_thu_muc_vm_du_bo():
     bat = (GOC / "vm" / "CHAY-AGENT.bat").read_bytes()
     assert bat.count(b"\n") == bat.count(b"\r\n") and all(b <= 127 for b in bat), \
         ".bat phải CRLF thuần + ASCII — xem bài học 01/09"
+
+
+class TestLichHangNgay:
+    """Giai đoạn 2: agent tự quét mỗi ngày theo giờ trong config."""
+
+    def test_den_gio_quet(self):
+        agent = _nap_agent()
+        # 08:00 sáng 01/09, hẹn 07:30, chưa quét hôm nay -> quét (kể cả trễ giờ)
+        luc = time.mktime((2026, 9, 1, 8, 0, 0, 0, 0, -1))
+        assert agent.den_gio_quet("07:30", "2026-08-31", luc)
+        assert agent.den_gio_quet("07:30", "", luc)
+        # đã quét hôm nay rồi thì thôi
+        assert not agent.den_gio_quet("07:30", "2026-09-01", luc)
+        # chưa tới giờ thì chưa
+        som = time.mktime((2026, 9, 1, 7, 0, 0, 0, 0, -1))
+        assert not agent.den_gio_quet("07:30", "", som)
+        # không đặt giờ / giờ rác thì không bao giờ tự quét
+        assert not agent.den_gio_quet("", "", luc)
+        assert not agent.den_gio_quet("rác", "", luc)
+
+    def test_lich_ghi_moc_truoc_khi_quet(self, tmp_path):
+        """Quét hỏng giữa chừng cũng không được quét dồn dập cả ngày."""
+        agent = _nap_agent()
+        cau_hinh = {"gio_quet": "00:00", "thu_muc_du_lieu": str(tmp_path),
+                    "chrome": ""}   # chrome rỗng -> quét hỏng ngay
+        agent.viec_theo_lich(cau_hinh)
+        tt = agent._doc_trang_thai(cau_hinh)
+        assert tt.get("quet_cuoi") == time.strftime("%Y-%m-%d")
+        # vòng hai trong cùng ngày: không làm gì nữa
+        agent.viec_theo_lich(cau_hinh)
+
+
+class TestKeHoachDang:
+    """Giai đoạn 4 (nửa đầu): kế hoạch từ tool về tới máy ảo."""
+
+    def test_khuon_ke_hoach_di_mot_vong_dia(self, tmp_path):
+        from core import ke_hoach_dang as kh
+
+        goc = str(tmp_path)
+        os.makedirs(os.path.join(goc, "CHANNEL", "TL4-T7"))
+        kh.luu_bang(goc, "TL4-T7",
+                    [["2026-09-02 19:00", "0001.mp4", "Tiêu đề, có phẩy",
+                      "mô tả", "#tag", "", ""]])
+        cot, hang = kh.doc_bang(goc, "TL4-T7")
+        assert cot == list(kh.COT)
+        assert hang[0][2] == "Tiêu đề, có phẩy"
+        assert kh.doc_van_ban(goc, "kenh-chua-co") == ""
+
+    def test_agent_tai_ke_hoach_ve_qua_tram(self, tmp_path):
+        from core import ke_hoach_dang as kh
+
+        goc_tool = tmp_path / "tool"
+        os.makedirs(goc_tool / "CHANNEL" / "TL4-T7")
+        kh.luu_bang(str(goc_tool), "TL4-T7",
+                    [["2026-09-02 19:00", "0001.mp4", "video 1", "", "", "", ""]])
+        tram = Tram(cong=0, goc=str(goc_tool))
+        tram.bat()
+        try:
+            dia_chi = "http://127.0.0.1:{0}".format(tram._may.server_address[1])
+            goc_vm = tmp_path / "vm"
+            os.makedirs(goc_vm)
+            agent = _nap_agent()
+            tram.giao_viec("TL4-T7", "dang-video")
+            cau_hinh = {"tram": dia_chi, "kenh": "TL4-T7", "ten_may": "vm-thu",
+                        "thu_muc_du_lieu": str(goc_vm)}
+            agent.chay(cau_hinh, mot_vong=True)
+            tep = goc_vm / "ke-hoach-TL4-T7.csv"
+            assert tep.exists(), "kế hoạch phải nằm lại trên máy ảo"
+            assert "video 1" in tep.read_text(encoding="utf-8-sig")
+        finally:
+            tram.tat()
+
+
+def test_extension_co_mat_doc_trang_chu():
+    """Extension v2.3.0: trang-chu.js gom đối thủ, background gửi /doi-thu."""
+    import json as json_mod
+
+    tm = GOC / "core" / "ytb_extension"
+    mf = json_mod.loads((tm / "manifest.json").read_text(encoding="utf-8"))
+    assert tuple(int(x) for x in mf["version"].split(".")) >= (2, 3, 0)
+    khop = [c for c in mf["content_scripts"]
+            if "trang-chu.js" in c.get("js", [])]
+    assert khop and "https://www.youtube.com/*" in khop[0]["matches"]
+    chu = (tm / "trang-chu.js").read_text(encoding="utf-8")
+    assert "doi_thu" in chu and "/@" in chu
+    assert "location.pathname !== '/'" in chu, \
+        "chỉ chạy ở trang chủ — không bám theo mọi trang xem"
+    nen = (tm / "background.js").read_text(encoding="utf-8")
+    assert "'/doi-thu'" in nen and "doi_thu" in nen
