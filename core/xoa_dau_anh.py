@@ -104,7 +104,8 @@ import threading
 from typing import Any, Optional, Tuple
 
 __all__ = ["xoa_dau", "xoa_dau_tep", "xoa_dau_neu_la_anh", "la_anh",
-           "co_dung_duoc", "TEP_DAU", "NGUONG_CO_DAU", "DUOI_ANH"]
+           "co_dung_duoc", "TEP_DAU", "NGUONG_CO_DAU", "DUOI_ANH",
+           "xoa_trong_vung", "xoa_trong_vung_tep", "CANH_VUNG_TOI_DA"]
 
 #: Đuôi tệp coi là ảnh. Đúng những đuôi cổng trả về, cộng vài đuôi thường gặp
 #: ở ảnh khách tự mang từ chỗ khác về.
@@ -220,8 +221,13 @@ def _ncc_tim(np, anh, mau):
     return float(ncc[i, j]), int(i), int(j)
 
 
-def _tim_va_xoa(d, A):
-    """Đường dò: tìm ngôi sao quanh góc phải dưới rồi trừ. Xem đầu tệp.
+def _tim_va_xoa(d, A, cua_so=None, nguong: float = None, muc=None):
+    """Đường dò: tìm ngôi sao rồi trừ. Xem đầu tệp.
+
+    Mặc định quét góc phải dưới (nơi nhà cung cấp đặt dấu). `cua_so`
+    `(x0, y0, x1, y1)` thu hẹp vùng quét — dùng khi KHÁCH tự khoanh chỗ có
+    dấu; lúc ấy van (`nguong`, `muc`) được nới vì người đã khẳng định ở đó
+    có dấu, máy chỉ còn việc căn cho khớp.
 
     Trả về `(vùng ảnh đã sửa tại chỗ, độ mờ)` hoặc `None` khi không thấy gì
     đáng tin. `A` bị sửa TẠI CHỖ khi tìm thấy.
@@ -229,10 +235,23 @@ def _tim_va_xoa(d, A):
     np = d["np"]
     H, W = A.shape[:2]
     s = d["s"]
+    nguong = NGUONG_TIM if nguong is None else nguong
+    muc = MUC_TIM if muc is None else muc
     if H < s * 2 or W < s * 2:
         return None
-    vh, vw = min(300, H), min(300, W)
-    xam = A[H - vh:, W - vw:, :].mean(axis=2)
+    if cua_so is None:
+        vh, vw = min(300, H), min(300, W)
+        x_cs, y_cs = W - vw, H - vh
+    else:
+        # Nới cửa sổ mỗi bên một khuôn sao để mẫu ở mép vùng vẫn khớp được.
+        x0c, y0c, x1c, y1c = cua_so
+        x_cs = max(0, int(x0c) - s)
+        y_cs = max(0, int(y0c) - s)
+        vw = min(W, int(x1c) + s) - x_cs
+        vh = min(H, int(y1c) + s) - y_cs
+        if vw < s or vh < s:
+            return None
+    xam = A[y_cs:y_cs + vh, x_cs:x_cs + vw, :].mean(axis=2)
 
     # 1. Dò thô: so khớp mẫu nhiều cỡ, lấy chỗ khớp nhất làm tâm ứng viên.
     tot = None
@@ -247,8 +266,8 @@ def _tim_va_xoa(d, A):
     if tot is None:
         return None
     _diem, k0, i, j = tot
-    cx = W - vw + j + k0 // 2
-    cy = H - vh + i + k0 // 2
+    cx = x_cs + j + k0 // 2
+    cy = y_cs + i + k0 // 2
 
     # 2. Tinh chỉnh dịch/cỡ quanh tâm — đo thật: lệch 1–2px hay lệch cỡ 5px là
     #    trừ chỉ làm xấu thêm. Sơ tuyển bằng ba mức mờ cho rẻ, chấm chung kết
@@ -281,7 +300,7 @@ def _tim_va_xoa(d, A):
     khong = _go_vien_theo(np, mau, vien, v, 0.0)
     am = min(d["muc_rong"], key=lambda m: _go_vien_theo(np, mau, vien, v, m))
     ct = (khong - _go_vien_theo(np, mau, vien, v, am)) / max(khong, 1e-9)
-    if ct < NGUONG_TIM or not (MUC_TIM[0] <= am <= MUC_TIM[1]):
+    if ct < nguong or not (muc[0] <= am <= muc[1]):
         return None
     a = np.clip(mau * am, 0.0, 0.93)[:, :, None]
     A[y0:y0 + k, x0:x0 + k, :] = np.clip((v - a * 255.0) / (1.0 - a), 0, 255)
@@ -337,6 +356,130 @@ def xoa_dau(im: Any, tra_alpha: bool = False):
         return (ra, float(am)) if tra_alpha else ra
     except Exception:  # noqa: BLE001 — làm đẹp hỏng không được làm hỏng cả mẻ
         return (im, 0.0) if tra_alpha else im
+
+
+#: Vùng khách khoanh to nhất chịu vá. To hơn thì không phải "xoá logo" nữa mà
+#: là vẽ lại một mảng tranh — việc phép vá màu không làm nổi cho tử tế.
+CANH_VUNG_TOI_DA = 600
+
+
+def _va_vung(np, A, x0: int, y0: int, x1: int, y1: int) -> None:
+    """Vá `A[y0:y1, x0:x1]` bằng màu lan từ mép vào — sửa TẠI CHỖ.
+
+    Đây là đường LÙI cho watermark lạ (chữ, logo kênh khác…) mà phép trừ
+    ngôi sao không với tới: thay vùng bằng màu loang từ xung quanh (giải
+    Laplace bằng lặp trung bình 4 láng giềng). Nền trơn hay chuyển sắc thì
+    gần như tàng hình; nền nhiều chi tiết thì thành một mảng mịn — giao diện
+    nói thẳng điều đó để khách khoanh vùng càng sát dấu càng tốt.
+
+    Giải trên bản thu nhỏ trước rồi phóng lên làm mồi: lặp thẳng trên vùng
+    300px cần cả vạn vòng mới loang tới giữa, còn mồi từ bản nhỏ thì trăm
+    vòng tinh chỉnh là mượt.
+    """
+    from PIL import Image
+
+    h, w = y1 - y0, x1 - x0
+    vung = A[y0:y1, x0:x1, :]
+    # Mồi: thu nhỏ cả vùng (mép thật kéo theo) về cạnh <=48, lặp cho loang
+    # hết, rồi phóng lại đúng cỡ.
+    nho_w, nho_h = max(4, min(48, w)), max(4, min(48, h))
+    moi = np.asarray(Image.fromarray(vung.astype(np.uint8)).resize(
+        (nho_w, nho_h), Image.BILINEAR), dtype=np.float64)
+    # RUỘT khởi từ màu trung bình của vành mép, không giữ màu dấu: mồi còn
+    # dính màu logo thì lặp bao nhiêu cũng chỉ nhoà logo chứ không thay được
+    # nó — đo thật trên nền chuyển sắc: lệch 15,6 thay vì 0,6.
+    vanh = np.concatenate([moi[0], moi[-1], moi[:, 0], moi[:, -1]]).mean(axis=0)
+    moi[1:-1, 1:-1] = vanh
+    for _ in range(1500):
+        giua = (np.roll(moi, 1, 0) + np.roll(moi, -1, 0)
+                + np.roll(moi, 1, 1) + np.roll(moi, -1, 1)) / 4.0
+        moi[1:-1, 1:-1] = giua[1:-1, 1:-1]
+    lam_day = np.asarray(Image.fromarray(moi.astype(np.uint8)).resize(
+        (w, h), Image.BILINEAR), dtype=np.float64)
+    ket = vung.copy()
+    ket[1:-1, 1:-1] = lam_day[1:-1, 1:-1]
+    # Tinh chỉnh ở cỡ thật để màu nối liền với mép: giữ vành 1px là ảnh thật.
+    for _ in range(200):
+        giua = (np.roll(ket, 1, 0) + np.roll(ket, -1, 0)
+                + np.roll(ket, 1, 1) + np.roll(ket, -1, 1)) / 4.0
+        ket[1:-1, 1:-1] = giua[1:-1, 1:-1]
+    A[y0:y1, x0:x1, :] = ket
+
+
+def xoa_trong_vung(im: Any, vung: Tuple[int, int, int, int],
+                   tra_cach: bool = False):
+    """Xoá dấu trong VÙNG KHÁCH KHOANH. Trả ảnh mới (không sửa `im`).
+
+    Chủ dự án, 01/09/2026: *"watermark thì mỗi một loại sẽ khác nhau — phải
+    cho người dùng chọn vị trí hoặc chỗ xoá để chuẩn hơn"*.
+
+    Hai nước, từ sạch nhất xuống:
+
+    1. Trong vùng có NGÔI SAO quen? Trừ ngược như thường lệ — phần ảnh dưới
+       dấu hiện lại đúng như ban đầu. Van nới lỏng hơn đường tự dò, vì người
+       đã khẳng định chỗ này có dấu.
+    2. Không phải sao → VÁ bằng màu loang từ xung quanh (`_va_vung`).
+
+    `tra_cach=True` thì trả `(ảnh, "sao" | "va" | "")` để nơi gọi kể thật đã
+    xoá bằng cách nào.
+    """
+    d = _nap()
+    try:
+        from PIL import Image
+
+        np = d["np"] if d else None
+        x0, y0, x1, y1 = (int(v) for v in vung)
+        if d is None:
+            return (im, "") if tra_cach else im
+        A = np.asarray(im.convert("RGB"), dtype=np.float64)
+        H, W = A.shape[:2]
+        x0, x1 = max(0, min(x0, x1)), min(W, max(x0, x1))
+        y0, y1 = max(0, min(y0, y1)), min(H, max(y0, y1))
+        if x1 - x0 < 4 or y1 - y0 < 4:
+            return (im, "") if tra_cach else im
+        if x1 - x0 > CANH_VUNG_TOI_DA or y1 - y0 > CANH_VUNG_TOI_DA:
+            return (im, "") if tra_cach else im
+        # Nước 1: ngôi sao quen trong vùng — van nới vì khách đã chỉ tay.
+        ket = _tim_va_xoa(d, A, cua_so=(x0, y0, x1, y1),
+                          nguong=0.06, muc=(0.10, 0.70))
+        if ket is not None:
+            A, _am = ket
+            ra = Image.fromarray(A.astype(np.uint8))
+            return (ra, "sao") if tra_cach else ra
+        # Nước 2: vá bằng màu xung quanh.
+        _va_vung(np, A, x0, y0, x1, y1)
+        ra = Image.fromarray(A.astype(np.uint8))
+        return (ra, "va") if tra_cach else ra
+    except Exception:  # noqa: BLE001 — làm đẹp hỏng không được làm hỏng cả mẻ
+        return (im, "") if tra_cach else im
+
+
+def xoa_trong_vung_tep(duong: str, vung: Tuple[int, int, int, int]) -> str:
+    """Xoá theo vùng NGAY TRÊN TỆP. Trả `"sao"` / `"va"` / `""` (không sửa).
+
+    Ghi qua tệp tạm rồi đổi tên — y luật của :func:`xoa_dau_tep`.
+    """
+    if not os.path.isfile(duong):
+        return ""
+    try:
+        from PIL import Image
+
+        with Image.open(duong) as im:
+            im.load()
+            sach, cach = xoa_trong_vung(im, vung, tra_cach=True)
+            if sach is im or not cach:
+                return ""
+            dinh_dang = (im.format or "PNG").upper()
+        tam = duong + ".tam"
+        sach.save(tam, format=dinh_dang)
+        os.replace(tam, duong)
+        return cach
+    except Exception:  # noqa: BLE001
+        try:
+            os.remove(duong + ".tam")
+        except OSError:
+            pass
+        return ""
 
 
 def la_anh(duong: str) -> bool:

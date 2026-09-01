@@ -64,6 +64,12 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "được cả thư mục một lượt. Ảnh chạy từ tab Tự động đã được xoá sẵn "
             "ngay lúc tải về, Skill này dành cho ảnh cũ hoặc ảnh lấy từ chỗ "
             "khác. Ô “Giữ bản gốc” bật sẵn nên ảnh cũ không mất.",
+            "Dấu KHÔNG nằm góc phải dưới, hay là loại dấu lạ? Bấm “Mở ảnh để "
+            "khoanh” rồi kéo chuột vẽ khung quanh dấu — khung áp cho cả danh "
+            "sách ảnh. Trong khung, gặp ngôi sao quen thì bóc ngược nguyên "
+            "bản; dấu lạ thì vá bằng màu xung quanh (nền trơn gần như tàng "
+            "hình, nền nhiều chi tiết sẽ thành một mảng mịn — khoanh càng sát "
+            "dấu càng đẹp).",
             "“Đo từ khoá YouTube” cho biết từ khoá nào đang được tìm nhiều "
             "hơn NGAY TRÊN YOUTUBE — khác với lượt tìm trên Google, vì người "
             "ta lên Google để đọc còn lên YouTube để xem. Gõ các từ khoá cách "

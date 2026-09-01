@@ -296,3 +296,83 @@ class TestDuongDo:
         co_dau, _ = _dan_dau_lech(nho, 0.34, cach_phai=90, cach_duoi=90)
         _ra, am = xoa_dau(co_dau, tra_alpha=True)
         assert am > 0
+
+
+class TestXoaTrongVung:
+    """Khách tự khoanh vùng — chủ dự án 01/09/2026: *"watermark thì mỗi một
+    loại sẽ khác nhau… cho người dùng chọn vị trí hoặc chỗ xoá để chuẩn hơn"*."""
+
+    def _nen_chuyen_sac(self, w=800, h=500):
+        x, y = np.meshgrid(np.linspace(60, 180, w), np.linspace(40, 140, h))
+        return np.stack([x, (x + y) / 2, y], axis=2)
+
+    def test_sao_trong_vung_thi_boc_nguoc(self):
+        """Sao nằm GIỮA ảnh — tự dò góc không thấy, khách khoanh là bóc được."""
+        from core.xoa_dau_anh import xoa_trong_vung
+
+        nen = self._nen_chuyen_sac()
+        d = np.load(TEP_DAU)
+        hinh = d["hinh"].astype(np.float64)
+        s = hinh.shape[0]
+        A = nen.copy()
+        a = np.clip(hinh * 0.32, 0.0, 0.93)[:, :, None]
+        A[200:200 + s, 350:350 + s, :] = (a * 255.0
+                                          + (1 - a) * A[200:200 + s, 350:350 + s, :])
+        ra, cach = xoa_trong_vung(Image.fromarray(A.astype(np.uint8)),
+                                  (320, 170, 470, 320), tra_cach=True)
+        assert cach == "sao"
+        R = np.asarray(ra, dtype=float)
+        lech = np.abs(R[200:200 + s, 350:350 + s] - nen[200:200 + s, 350:350 + s]).mean()
+        assert lech < 3, "bóc sao phải trả lại gần đúng ảnh gốc (lệch {0:.1f})".format(lech)
+
+    def test_dau_la_thi_va_bang_mau_xung_quanh(self):
+        from core.xoa_dau_anh import xoa_trong_vung
+
+        nen = self._nen_chuyen_sac()
+        B = nen.copy()
+        B[400:440, 600:720, :] = 0.5 * 255 + 0.5 * B[400:440, 600:720, :]
+        ra, cach = xoa_trong_vung(Image.fromarray(B.astype(np.uint8)),
+                                  (590, 392, 730, 448), tra_cach=True)
+        assert cach == "va"
+        R = np.asarray(ra, dtype=float)
+        lech = np.abs(R[400:440, 600:720] - nen[400:440, 600:720]).mean()
+        assert lech < 4, "trên nền chuyển sắc, vá phải gần như tàng hình"
+
+    def test_vung_ti_hon_hoac_qua_to_thi_giu_nguyen(self):
+        from core.xoa_dau_anh import CANH_VUNG_TOI_DA, xoa_trong_vung
+
+        im = Image.fromarray(self._nen_chuyen_sac().astype(np.uint8))
+        for vung in ((10, 10, 12, 12),
+                     (0, 0, CANH_VUNG_TOI_DA + 50, 300)):
+            ra, cach = xoa_trong_vung(im, vung, tra_cach=True)
+            assert cach == "" and ra is im
+
+    def test_vung_khoanh_ap_len_tep_va_anh_khac_kho_thi_bo_qua(self, tmp_path):
+        """Đường cả thư mục: cùng khung cho mọi ảnh; ảnh nhỏ hơn khung thì giữ
+        nguyên và được ĐẾM, không im lặng."""
+        from core.xoa_dau_anh import xoa_trong_vung_tep
+
+        nen = self._nen_chuyen_sac()
+        B = nen.copy()
+        B[400:440, 600:720, :] = 255.0 * 0.5 + 0.5 * B[400:440, 600:720, :]
+        to = str(tmp_path / "to.png")
+        Image.fromarray(B.astype(np.uint8)).save(to)
+        nho = str(tmp_path / "nho.png")
+        Image.fromarray(self._nen_chuyen_sac(200, 150).astype(np.uint8)).save(nho)
+        assert xoa_trong_vung_tep(to, (590, 392, 730, 448)) == "va"
+        assert xoa_trong_vung_tep(nho, (590, 392, 730, 448)) == "", \
+            "khung ngoài khổ ảnh thì không được xử bừa"
+
+
+def test_doi_khung_hien_ve_toa_do_goc():
+    """Sai một phép nhân là khách khoanh chỗ này, tool xoá chỗ khác."""
+    from ui_qt.trang_xoa_logo import vung_goc_tu_hien
+
+    assert vung_goc_tu_hien((100, 50, 200, 150), 2.99, (1376, 768)) == \
+        (299, 150, 598, 449)
+    # Kéo ngược tay (từ phải qua trái) vẫn phải ra khung xuôi.
+    assert vung_goc_tu_hien((200, 150, 100, 50), 2.0, (1376, 768)) == \
+        (200, 100, 400, 300)
+    # Kẹp trong mép ảnh.
+    assert vung_goc_tu_hien((0, 0, 9999, 9999), 3.0, (1376, 768)) == \
+        (0, 0, 1376, 768)
