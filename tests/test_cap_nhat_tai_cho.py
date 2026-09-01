@@ -353,3 +353,78 @@ class TestMoLaiSauCapNhat:
         assert "shopapi_studio_qt.py" in chu
         assert (goc / "shopapi_studio_qt.py").exists(), \
             "điểm vào launcher mở lại phải thật sự tồn tại"
+
+
+class TestKhongCapNhatGiuaLucCoViec:
+    """Khách 31/08/2026: *"ấn update mãi không được - nó toàn báo lỗi"*.
+
+    Một đường hỏng lặp được: bấm Cập nhật lúc đang có job → tool đóng cửa sổ
+    nhưng tiến trình nấn ná chạy nốt việc (luồng pool không phải daemon) →
+    launcher hết kiên nhẫn, bỏ cuộc → lần mở sau hiện "Lần cập nhật trước chưa
+    xong" → khách bấm Cập nhật lại giữa lúc lô vẫn chạy → lặp. Ba chốt chặn:
+    """
+
+    def test_dang_co_job_thi_tu_choi_va_noi_ro(self):
+        import os
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt5.QtWidgets import QApplication
+
+        global _APP_GIU_QT
+        _APP_GIU_QT = QApplication.instance() or QApplication([])
+        from ui_qt.cap_nhat import NutCapNhat
+
+        class _Jobs:
+            is_running = True
+
+        class _App:
+            base_dir = "."
+            jobs = _Jobs()
+            thong_bao = []
+            goi_nen = []
+
+            def show_message(self, tieu_de, noi_dung):
+                self.thong_bao.append((tieu_de, noi_dung))
+
+            def run_bg(self, viec, **_k):
+                self.goi_nen.append(viec)
+
+        app = _App()
+        nut = NutCapNhat(app)
+        nut._ban_moi = "9.9.9"
+        nut._bam()
+        assert app.thong_bao, "phải nói lý do, không im lặng bỏ qua"
+        assert not app.goi_nen, "không được tải gói khi job đang chạy"
+
+    def test_launcher_cho_du_lau(self):
+        """60 giây là bỏ cuộc giữa lúc tool đang thoát tử tế; giờ chờ 10 phút."""
+        import importlib.util
+
+        duong = Path(__file__).resolve().parent.parent / "cap-nhat.py"
+        spec = importlib.util.spec_from_file_location("cap_nhat_launcher", duong)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        import inspect
+
+        mac_dinh = inspect.signature(mod.wait_for_exit).parameters["timeout"].default
+        assert mac_dinh >= 600, "launcher phải chờ tool thoát ít nhất 10 phút"
+
+    def test_dong_tool_khong_bung_them_viec_xep_hang(self):
+        """`cancel_futures=True`: việc chưa gửi thì bỏ (đã nằm trong sổ phiên),
+        không lặng lẽ tiêu tiền sau khi cửa sổ đóng — và không níu tiến trình
+        sống thêm hàng phút làm launcher chờ mòn mỏi."""
+        import inspect
+
+        from core.jobs import JobManager
+
+        assert "cancel_futures=True" in inspect.getsource(JobManager.shutdown)
+
+    def test_tai_goi_duoc_cho_rong_hon_hoi_version(self):
+        """Gói ~26 MB cần trần chờ rộng hơn lượt hỏi VERSION vài trăm byte."""
+        from ui_qt import cap_nhat as cn
+
+        assert cn.CHO_TAI_GOI_GIAY >= 60
+        import inspect
+
+        assert "CHO_TAI_GOI_GIAY" in inspect.getsource(cn.NutCapNhat._bam), \
+            "lượt tải gói phải dùng trần chờ rộng"

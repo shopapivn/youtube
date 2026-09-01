@@ -55,7 +55,20 @@ def _con_song(pid: int) -> bool:
         k32.CloseHandle(handle)
 
 
-def wait_for_exit(pid: int, timeout: float = 60.0) -> None:
+def wait_for_exit(pid: int, timeout: float = 600.0) -> None:
+    """Chờ tool thoát hẳn rồi mới tráo.
+
+    ═══ VÌ SAO 10 PHÚT CHỨ KHÔNG PHẢI 60 GIÂY ═══
+
+    Cửa sổ đóng không có nghĩa tiến trình chết ngay: các luồng nền đang dở một
+    lượt gọi mạng (tải một clip, chờ một job) là luồng KHÔNG-daemon — Python
+    đợi chúng xong mới thoát, có thể mất vài phút. Trần cũ 60 giây bỏ cuộc
+    đúng giữa quãng đó: khách thấy "Lần cập nhật trước chưa xong" lặp lại mà
+    chẳng ai làm gì sai. Ngồi chờ thêm thì không tốn của ai cái gì — launcher
+    không cửa sổ, không CPU — còn bỏ cuộc sớm thì tốn một vòng cập nhật hỏng.
+    (Tool giờ cũng từ chối cập nhật khi đang có job chạy — đây là lưới đỡ thứ
+    hai, cho những đường thoát chậm không đoán trước.)
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if not _con_song(pid):
@@ -63,7 +76,10 @@ def wait_for_exit(pid: int, timeout: float = 60.0) -> None:
             time.sleep(0.6)
             return
         time.sleep(0.2)
-    raise RuntimeError("Studio chưa thoát sau 60 giây; chưa áp dụng cập nhật")
+    raise RuntimeError(
+        "Tool chưa thoát hẳn sau {0:.0f} phút (thường do một việc nền chưa "
+        "xong); chưa áp dụng cập nhật. Mở lại tool, chờ hết việc rồi bấm Cập "
+        "nhật lần nữa.".format(timeout / 60))
 
 
 def main(argv=None) -> int:

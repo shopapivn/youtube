@@ -835,7 +835,14 @@ class JobManager:
             dieu_phoi.join(timeout=2 * NHIP_DIEU_PHOI + 0.5)
         pool, self._pool = self._pool, None
         if pool is not None:
-            pool.shutdown(wait=False)
+            # `cancel_futures=True`: việc ĐÃ gửi máy chủ thì luồng của nó chạy
+            # nốt cho xong (tiền đã trừ, phải lấy kết quả về), nhưng việc còn
+            # XẾP HÀNG thì bỏ — không có nó thì pool cứ lặng lẽ bung việc mới
+            # sau khi cửa sổ đã đóng: vừa tiêu tiền không màn hình nào nhìn,
+            # vừa giữ tiến trình sống thêm hàng phút — đủ để launcher cập nhật
+            # (`cap-nhat.py`) chờ mãi không thấy tool chết. Việc bị bỏ đã nằm
+            # trong sổ phiên (`_save_session` ở trên), mở tool lại là chạy tiếp.
+            pool.shutdown(wait=False, cancel_futures=True)
         client, self._client = self._client, None
         if client is not None:
             try:

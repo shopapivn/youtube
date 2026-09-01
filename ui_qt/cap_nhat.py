@@ -35,6 +35,12 @@ __all__ = ["NutCapNhat", "doc_phien_ban", "tai_https"]
 #: là khách tưởng tool đơ.
 CHO_GIAY = 15
 
+#: Riêng lượt tải GÓI thì chờ rộng tay hơn. Gói đã lớn lên ~26 MB (kênh mẫu,
+#: ảnh mẫu phong cách) — trên đường mạng chập chờn, một quãng nghẽn quá 15 giây
+#: giữa chừng là đứt cả lượt tải, và khách bấm lại lần nào cũng đứt đúng kiểu
+#: đó. 120 giây là ngưỡng "mạng thật sự có vấn đề" chứ không phải "mạng chậm".
+CHO_TAI_GOI_GIAY = 120
+
 
 def doc_phien_ban(base_dir: str) -> str:
     try:
@@ -44,7 +50,7 @@ def doc_phien_ban(base_dir: str) -> str:
         return ""
 
 
-def tai_https(url: str) -> bytes:
+def tai_https(url: str, cho: float = CHO_GIAY) -> bytes:
     """Tải một địa chỉ HTTPS. **Chạy ở luồng nền.**
 
     Gắn `User-Agent` vì GitHub từ chối một số client không khai tên. Kiểm lại
@@ -65,7 +71,7 @@ def tai_https(url: str) -> bytes:
         "Cache-Control": "no-cache, max-age=0",
         "Pragma": "no-cache",
     })
-    with urlopen(yeu_cau, timeout=CHO_GIAY) as tra_loi:  # noqa: S310 — đã chốt https
+    with urlopen(yeu_cau, timeout=cho) as tra_loi:  # noqa: S310 — đã chốt https
         return tra_loi.read()
 
 
@@ -220,6 +226,22 @@ class NutCapNhat:
             # Đang ở bản mới nhất (hoặc lần hỏi trước hỏng) — bấm là hỏi lại.
             self.do_ngam()
             return
+        # ═══ ĐANG CÓ VIỆC CHẠY THÌ KHÔNG CẬP NHẬT ═══
+        #
+        # Cập nhật là tool phải THOÁT để launcher tráo thư mục. Đang có job
+        # (ảnh/video/giọng — tiền thật) thì hoặc mất kết quả, hoặc tool nấn ná
+        # thoát cho xong việc và launcher chờ hết kiên nhẫn rồi bỏ cuộc — khách
+        # thấy "Lần cập nhật trước chưa xong" lặp đi lặp lại mà không hiểu vì
+        # sao. Nói thẳng lý do ngay lúc bấm, đỡ một vòng hỏng.
+        jobs = getattr(self._app, "jobs", None)
+        if jobs is not None and getattr(jobs, "is_running", False):
+            self._app.show_message(
+                "Đang có việc chạy — chưa cập nhật vội",
+                "Tool đang tạo ảnh/video/giọng đọc. Cập nhật bây giờ là phải "
+                "tắt tool giữa chừng và có thể mất phần đang chạy.\n\n"
+                "Bạn chờ lô này xong (hoặc bấm Dừng ở tab đang chạy) rồi bấm "
+                "Cập nhật lại nhé.")
+            return
         self.nut.setEnabled(False)
         self.nut.setText("Đang tải bản {0}…".format(self._ban_moi))
         ban_moi, goc = self._ban_moi, self._app.base_dir
@@ -229,7 +251,9 @@ class NutCapNhat:
         cho_dung = os.path.join(os.path.dirname(os.path.abspath(goc)),
                                 "ShopAPI-Studio-cap-nhat")
         self._app.run_bg(
-            lambda: tai_ve_va_dung_san(ban_moi, cho_dung, tai_https),
+            lambda: tai_ve_va_dung_san(
+                ban_moi, cho_dung,
+                lambda url: tai_https(url, cho=CHO_TAI_GOI_GIAY)),
             on_ok=self._tai_xong, on_err=self._hong)
 
     def _tai_xong(self, duong_dan: str) -> None:
@@ -264,6 +288,19 @@ class NutCapNhat:
         self._app.close()
 
     def _hong(self, loi: BaseException) -> None:
+        """Nói rõ hỏng ở khâu tải/dựng, kèm nguyên văn lỗi.
+
+        Không đi qua `show_error`/`describe`: bộ dịch đó viết cho lỗi GỌI API
+        ("bạn KHÔNG bị trừ tiền…") — lạc đề ở đây, và câu chung chung khiến
+        khách chỉ báo lại được đúng bốn chữ "nó toàn báo lỗi". Hộp này in
+        nguyên văn để một tấm ảnh chụp là đủ biết hỏng chỗ nào.
+        """
         self.nut.setEnabled(True)
         self.nut.setText("Cập nhật lên {0}".format(self._ban_moi or ""))
-        self._app.show_error(loi)
+        self._app.show_message(
+            "Cập nhật chưa tải được",
+            "Tải/dựng bản {0} chưa xong. Lỗi gốc:\n\n{1}: {2}\n\n"
+            "Bạn thử lại giúp mình; nếu vẫn vậy thì tắt VPN/phần mềm chặn "
+            "mạng rồi thử, hoặc chụp đúng hộp này gửi hỗ trợ — dòng lỗi ở "
+            "trên là thứ giúp tìm ra bệnh.".format(
+                self._ban_moi or "?", type(loi).__name__, loi))
