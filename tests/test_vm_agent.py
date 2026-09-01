@@ -114,11 +114,13 @@ class TestAgentGoiVe:
 
 def test_thu_muc_vm_du_bo():
     for ten in ("KE-HOACH.md", "agent.py", "config.example.json",
-                "CHAY-AGENT.bat"):
+                "CHAY-AGENT.bat", "CAI-DAT-VM.bat", "nguon_tool.py",
+                "ghep_tool_dang.py"):
         assert (GOC / "vm" / ten).exists(), "thiếu vm/" + ten
-    bat = (GOC / "vm" / "CHAY-AGENT.bat").read_bytes()
-    assert bat.count(b"\n") == bat.count(b"\r\n") and all(b <= 127 for b in bat), \
-        ".bat phải CRLF thuần + ASCII — xem bài học 01/09"
+    for ten_bat in ("CHAY-AGENT.bat", "CAI-DAT-VM.bat"):
+        bat = (GOC / "vm" / ten_bat).read_bytes()
+        assert bat.count(b"\n") == bat.count(b"\r\n") and all(b <= 127 for b in bat), \
+            ten_bat + ": .bat phải CRLF thuần + ASCII — xem bài học 01/09"
 
 
 class TestLichHangNgay:

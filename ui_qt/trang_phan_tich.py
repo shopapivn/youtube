@@ -26,6 +26,7 @@ qua trong `nghien-cuu/sao-luu/`.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Callable, Dict, List, Optional
@@ -51,10 +52,9 @@ from .widgets import (
 
 __all__ = ["TrangPhanTich", "TrangDoiThu"]
 
-#: Nhãn các mục con. Đối thủ trước: câu "làm content gì tiếp theo" bắt đầu từ
-#: việc xem ngách đang xem gì. "Máy VM" đứng cuối — nó là hạ tầng, mở tới khi
-#: cần chứ không phải hằng ngày.
-TAB_CON = ("Đối thủ", "Chỉ số kênh", "Máy VM")
+#: Nhãn các mục con — xếp theo dòng chảy: xem ngách (Đối thủ) → xem mình
+#: (Chỉ số kênh) → chốt (Quyết định content). "Máy VM" đứng cuối — hạ tầng.
+TAB_CON = ("Đối thủ", "Chỉ số kênh", "Quyết định content", "Máy VM")
 
 #: Nhịp tự kiểm "đến hạn quét chưa" khi tool đang mở. Nửa tiếng một lần hỏi
 #: cái đồng hồ trên đĩa — không phải một lượt gọi mạng nào.
@@ -848,6 +848,139 @@ class TrangDoiThu(QWidget):
         self._log.appendPlainText(chu)
 
 
+class TrangQuyetDinh(QWidget):
+    """Bộ não của chu kỳ: đọc HẾT dữ liệu kênh → đề xuất sản xuất gì tiếp.
+
+    Chủ dự án, 01/09/2026: *"từ phân tích all các dữ liệu studio để nắm bắt
+    được kênh → dữ liệu content hiện tại có → ra quyết định sản xuất gì tiếp
+    theo"*. Ba nguồn nó đọc đều do các mục bên cạnh nuôi: chỉ số Studio,
+    sổ đối thủ, sổ đã sản xuất/đã đăng — nguồn nào trống thì bản đề xuất
+    nói thẳng phần đó thiếu.
+
+    Một lượt bấm = MỘT lượt gọi mô hình viết chữ (loại rẻ, trừ ví như các
+    Skill chữ) — nói rõ ngay trên nút để không ai bất ngờ vì hoá đơn.
+    """
+
+    def __init__(self, app):
+        super().__init__()
+        self._app = app
+        self._dang_chay = False
+
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(24, 20, 24, 20)
+        doc.setSpacing(12)
+        doc.addWidget(tieu_de_trang(
+            "Quyết định content",
+            "Đọc chỉ số kênh + sổ đối thủ + sổ đã đăng, đề xuất 5 đề tài."))
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 16, 18, 16)
+        v.setSpacing(8)
+        d0 = QHBoxLayout()
+        d0.addWidget(nhan("Kênh:", "h2"))
+        self._chon_kenh = QComboBox()
+        self._chon_kenh.setEditable(True)
+        self._chon_kenh.setMinimumWidth(200)
+        for ma in liet_ke_kenh(self._app.base_dir):
+            self._chon_kenh.addItem(ma)
+        d0.addWidget(self._chon_kenh)
+        d0.addStretch(1)
+        v.addLayout(d0)
+        d1 = QHBoxLayout()
+        # "&&" vì Qt coi "&" trong nhãn nút là phím tắt và nuốt mất — đúng
+        # bệnh đã bắt được ở thanh bên hôm 31/08.
+        self._nut_chay = nut_chinh("Phân tích && đề xuất (1 lượt gọi chữ)",
+                                   self._chay, rong=280)
+        d1.addWidget(self._nut_chay)
+        self._nut_xem = nut_phu("Xem dữ liệu sẽ gửi", self._xem_du_lieu,
+                                rong=170)
+        self._nut_xem.setToolTip(
+            "Hiện đúng khối dữ liệu sẽ đưa cho AI — miễn phí, để bạn biết nó "
+            "nhìn thấy gì trước khi tốn một lượt gọi.")
+        d1.addWidget(self._nut_xem)
+        d1.addStretch(1)
+        v.addLayout(d1)
+        doc.addWidget(khung)
+
+        khung2 = the()
+        v2 = QVBoxLayout(khung2)
+        v2.setContentsMargins(18, 14, 18, 16)
+        v2.setSpacing(8)
+        d2 = QHBoxLayout()
+        d2.addWidget(nhan("Bản đề xuất", "h2"))
+        self._nhan_luu = nhan("", "phu")
+        d2.addWidget(self._nhan_luu)
+        d2.addStretch(1)
+        d2.addWidget(nut_phu("Chép", self._chep, rong=90))
+        v2.addLayout(d2)
+        self._ket_qua = QPlainTextEdit()
+        self._ket_qua.setReadOnly(True)
+        self._ket_qua.setPlaceholderText(
+            "Bấm “Phân tích & đề xuất” — kết quả hiện ở đây và tự lưu vào "
+            "CHANNEL/<kênh>/nghien-cuu/de-xuat-<ngày>.md")
+        self._ket_qua.setMinimumHeight(260)
+        v2.addWidget(self._ket_qua, 1)
+        doc.addWidget(khung2, 1)
+
+    def _kenh(self) -> str:
+        return self._chon_kenh.currentText().strip()
+
+    def _xem_du_lieu(self) -> None:
+        from core.quyet_dinh_content import gom_du_lieu  # noqa: PLC0415
+
+        kenh = self._kenh()
+        if not kenh:
+            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
+            return
+        self._nhan_luu.setText("(đang xem dữ liệu — chưa gọi AI, chưa tốn gì)")
+        self._ket_qua.setPlainText(gom_du_lieu(self._app.base_dir, kenh))
+
+    def _chay(self) -> None:
+        kenh = self._kenh()
+        if not kenh:
+            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
+            return
+        if self._app.client is None:
+            self._app.bao_can_khoa()
+            return
+        if self._dang_chay:
+            return
+        self._dang_chay = True
+        self._nut_chay.setEnabled(False)
+        self._nhan_luu.setText("đang phân tích…")
+        goc, client = self._app.base_dir, self._app.client
+
+        def viec() -> tuple:
+            from core.quyet_dinh_content import (  # noqa: PLC0415
+                de_xuat, luu_de_xuat,
+            )
+
+            chu = de_xuat(client, goc, kenh)
+            return chu, luu_de_xuat(goc, kenh, chu)
+
+        self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
+
+    def _xong(self, ket: tuple) -> None:
+        chu, duong = ket
+        self._dang_chay = False
+        self._nut_chay.setEnabled(True)
+        self._ket_qua.setPlainText(chu)
+        self._nhan_luu.setText("đã lưu: " + os.path.basename(duong))
+
+    def _hong(self, loi: BaseException) -> None:
+        self._dang_chay = False
+        self._nut_chay.setEnabled(True)
+        self._nhan_luu.setText("")
+        self._app.show_error(loi)
+
+    def _chep(self) -> None:
+        from PyQt5.QtWidgets import QApplication as _App
+
+        _App.clipboard().setText(self._ket_qua.toPlainText())
+        self._nhan_luu.setText("đã chép vào bộ nhớ tạm")
+
+
 class TrangMayVM(QWidget):
     """Nhìn và điều khiển các máy ảo của kênh — giai đoạn 1 của `vm/KE-HOACH.md`.
 
@@ -1249,10 +1382,12 @@ class TrangPhanTich(QWidget):
         self.tabs = QTabWidget()
         self.doi_thu = TrangDoiThu(app)
         self.chi_so = TrangChiSoYTB(app)
+        self.quyet_dinh = TrangQuyetDinh(app)
         self.may_vm = TrangMayVM(app, self.chi_so)
         self.tabs.addTab(self.doi_thu, TAB_CON[0])
         self.tabs.addTab(self.chi_so, TAB_CON[1])
-        self.tabs.addTab(self.may_vm, TAB_CON[2])
+        self.tabs.addTab(self.quyet_dinh, TAB_CON[2])
+        self.tabs.addTab(self.may_vm, TAB_CON[3])
         doc.addWidget(self.tabs, 1)
 
     def doi_du_an(self, ten: str) -> None:

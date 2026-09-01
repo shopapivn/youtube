@@ -83,6 +83,16 @@ Hai bên nối nhau qua **trạm** — cổng HTTP có sẵn của tool
 - **Giai đoạn 5 — trả lời bình luận:** khiêng `cmt.py` về cùng khuôn (qua
   `ghep_tool_dang.py` kiểu tương tự). Chủ dự án nói *"việc này chưa cần quan
   tâm vì tao có logic rồi"* — chờ lệnh.
+- **Giai đoạn 6 — bước đầu ĐÃ XÂY (01/09): tab "Quyết định content".**
+  `core/quyet_dinh_content.py` gom BỐN nguồn của kênh (chỉ số Studio qua
+  đúng bộ dựng "Chép cho AI", sổ đối thủ xếp theo Tăng/ngày, sổ đã đăng,
+  lượt đã sản xuất) thành một khối máy đọc, hỏi mô hình MỘT lượt chữ (loại
+  rẻ) theo đề bài bốn phần: kênh đang ở đâu (dẫn số) → đối thủ đang nổ gì →
+  5 đề tài kế tiếp (cấm trùng đã làm) → nên thử/nên dừng. Nút "Xem dữ liệu
+  sẽ gửi" miễn phí để soi trước; bản đề xuất tự lưu
+  `nghien-cuu/de-xuat-<ngày>.md`. Nguồn nào trống thì đề xuất nói thẳng
+  thiếu gì. Phần TỰ ĐỘNG HOÁ chu kỳ (đề xuất → bấm chạy sản xuất → bàn
+  giao) vẫn theo khung dưới:
 - **Giai đoạn 6 — CHU KỲ 24/7 (khung, chủ dự án vẽ 01/09):** tool chạy suốt,
   có những việc theo chu kỳ: *"chốt số liệu → quyết định làm content gì →
   sản xuất → bàn giao cho VM đăng"*. Các mảnh đã nằm sẵn: số liệu tự về
