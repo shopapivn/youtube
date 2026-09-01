@@ -26,13 +26,14 @@ Ngày `dd/mm/yyyy` (hoặc dạng `_parse_date` của tool đăng nuốt đượ
 from __future__ import annotations
 
 import csv
+import json
 import os
 from typing import List, Sequence, Tuple
 
 from .kenh import duong_kenh
 
 __all__ = ["COT", "TEP", "duong_ke_hoach", "doc_van_ban", "doc_bang",
-           "luu_bang", "danh_dau"]
+           "luu_bang", "danh_dau", "doc_cai", "luu_cai"]
 
 COT = ("Mã gói", "Ngày đăng", "Giờ đăng", "Tiêu đề", "Mô tả", "Thẻ SEO",
        "Link card 1", "Link card 2", "Link card 3", "Link card 4",
@@ -82,6 +83,29 @@ def luu_bang(goc: str, kenh: str, hang: Sequence[Sequence[str]],
         for dong in hang:
             dong = [str(o) for o in list(dong)[:len(cot)]]
             but.writerow(dong + [""] * (len(cot) - len(dong)))
+    os.replace(tam, duong)
+
+
+def doc_cai(goc: str, kenh: str) -> dict:
+    """Cài đặt bàn giao của kênh (vd `thu_muc_done`) — cạnh tệp kế hoạch."""
+    try:
+        with open(os.path.join(os.path.dirname(duong_ke_hoach(goc, kenh)),
+                               "cai-dat.json"), "r", encoding="utf-8") as tep:
+            du_lieu = json.load(tep)
+        return du_lieu if isinstance(du_lieu, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def luu_cai(goc: str, kenh: str, **thay_doi) -> None:
+    cai = doc_cai(goc, kenh)
+    cai.update(thay_doi)
+    duong = os.path.join(os.path.dirname(duong_ke_hoach(goc, kenh)),
+                         "cai-dat.json")
+    os.makedirs(os.path.dirname(duong), exist_ok=True)
+    tam = duong + ".tmp"
+    with open(tam, "w", encoding="utf-8") as tep:
+        json.dump(cai, tep, ensure_ascii=False, indent=1)
     os.replace(tam, duong)
 
 

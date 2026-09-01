@@ -317,3 +317,83 @@ class TestGhepToolDang:
         gia.write_text("khong con neo nao het\n", encoding="utf-8")
         with pytest.raises(AssertionError):
             ghep.ghep(str(gia), str(tmp_path / "x.py"))
+
+
+class TestBanGiaoDang:
+    """Nửa TRÊN TOOL của GĐ4 — chủ dự án: "luồng mới nó nằm ở trên tool mà"."""
+
+    def _dung_luot(self, tmp_path, kenh="TL4-T7", luot="0004"):
+        from core.auto import duong_luot
+
+        goc = str(tmp_path)
+        d = duong_luot(goc, kenh, luot)
+        os.makedirs(os.path.join(d, "7-thumbnail"))
+        os.makedirs(os.path.join(goc, "CHANNEL", kenh), exist_ok=True)
+        with open(os.path.join(d, "8-video.mp4"), "wb") as tep:
+            tep.write(b"mp4")
+        with open(os.path.join(d, "3-phu-de.srt"), "w", encoding="utf-8") as tep:
+            tep.write("1\n00:00:00,000 --> 00:00:01,000\nchao\n")
+        with open(os.path.join(d, "7-thumbnail", "CHON-thumb_001.jpg"), "wb") as tep:
+            tep.write(b"jpg")
+        with open(os.path.join(d, "1-tieu-de.txt"), "w", encoding="utf-8") as tep:
+            tep.write("TITLE: Video thử nghiệm\nTHUMB: chữ bìa\n")
+        with open(os.path.join(d, "1-seo.txt"), "w", encoding="utf-8") as tep:
+            tep.write("DESCRIPTION:\nMô tả dòng một\ndòng hai\n\n"
+                      "HASHTAGS:\n#a #b\n\nKEYWORDS:\ntag1, tag2, tag3\n")
+        return goc, d
+
+    def test_ban_giao_du_bo_va_len_ke_hoach(self, tmp_path):
+        from core import ban_giao_dang as bg
+        from core import ke_hoach_dang as kh
+
+        goc, _d = self._dung_luot(tmp_path)
+        done = str(tmp_path / "done")
+        ma, moi = bg.ban_giao(goc, "TL4-T7", "0004", done)
+        assert ma == "TL4-T7-0004" and moi
+        goi = os.path.join(done, ma)
+        assert sorted(os.listdir(goi)) == ["3-phu-de.srt", "8-video.mp4",
+                                           "CHON-thumb_001.jpg"], \
+            "đúng bộ mp4+srt+ảnh mà tool đăng kiểm (has_required_files)"
+        cot, hang = kh.doc_bang(goc, "TL4-T7")
+        dong = hang[0]
+        assert dong[cot.index("Mã gói")] == ma
+        assert dong[cot.index("Tiêu đề")] == "Video thử nghiệm"
+        assert "Mô tả dòng một" in dong[cot.index("Mô tả")]
+        assert dong[cot.index("Thẻ SEO")] == "tag1, tag2, tag3"
+        assert dong[cot.index("Sẵn sàng")] == "x"
+        assert dong[cot.index("Ngày đăng")] == "" and dong[cot.index("Giờ đăng")] == "", \
+            "van an toàn: chưa đặt giờ thì máy ảo không bao giờ chọn"
+
+    def test_ban_giao_lai_khong_nhan_doi_dong(self, tmp_path):
+        from core import ban_giao_dang as bg
+        from core import ke_hoach_dang as kh
+
+        goc, _d = self._dung_luot(tmp_path)
+        done = str(tmp_path / "done")
+        bg.ban_giao(goc, "TL4-T7", "0004", done)
+        kh.danh_dau(goc, "TL4-T7", "TL4-T7-0004", "ĐÃ ĐĂNG")
+        _ma, moi = bg.ban_giao(goc, "TL4-T7", "0004", done)
+        assert not moi
+        cot, hang = kh.doc_bang(goc, "TL4-T7")
+        assert len(hang) == 1
+        assert hang[0][cot.index("Trạng thái đăng")] == "ĐÃ ĐĂNG", \
+            "bàn giao lại không được xoá dấu ĐÃ ĐĂNG — xoá là đăng lặp"
+
+    def test_thieu_bo_thi_dung_va_noi_thieu_gi(self, tmp_path):
+        from core import ban_giao_dang as bg
+
+        goc, d = self._dung_luot(tmp_path)
+        os.remove(os.path.join(d, "3-phu-de.srt"))
+        with pytest.raises(RuntimeError) as loi:
+            bg.ban_giao(goc, "TL4-T7", "0004", str(tmp_path / "done"))
+        assert "phụ đề" in str(loi.value)
+
+    def test_goi_dang_do_khong_lot_sang_may_ao(self, tmp_path):
+        """Chép qua .tam rồi đổi tên — tool đăng liếc thư mục giữa chừng
+        không được vớ tệp mp4 chép nửa."""
+        import inspect
+
+        from core import ban_giao_dang as bg
+
+        ma = inspect.getsource(bg.xuat_goi)
+        assert ".tam" in ma and "os.replace" in ma

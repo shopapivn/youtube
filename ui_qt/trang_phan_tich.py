@@ -921,6 +921,8 @@ class TrangMayVM(QWidget):
         v.addLayout(d0c)
         doc.addWidget(khung)
 
+        doc.addWidget(self._the_ban_giao())
+
         khung2 = the()
         v2 = QVBoxLayout(khung2)
         v2.setContentsMargins(18, 14, 18, 16)
@@ -947,6 +949,194 @@ class TrangMayVM(QWidget):
         self._dong_ho.timeout.connect(self._ve)
         self._dong_ho.start(5000)
         self._ve()
+        self._doi_kenh_ban_giao()
+
+    def _the_ban_giao(self) -> QWidget:
+        """Nửa TRÊN TOOL của đường đăng: sản xuất xong → bàn giao → duyệt.
+
+        Chủ dự án, 01/09/2026: *"luồng mới nó nằm ở trên tool mà"*. Máy ảo chỉ
+        là tay đăng; chỗ này là nơi xuất gói (mp4+srt+ảnh bìa sang thư mục
+        `AUTO/done` mà máy ảo thấy qua ổ chia sẻ), lên kế hoạch và ĐẶT GIỜ —
+        đặt giờ chính là cú "cho phép đăng": còn trống thì máy ảo không chọn.
+        """
+        from .widgets import ChonThuMuc  # noqa: PLC0415
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Bàn giao & kế hoạch đăng", "h2"))
+        chu = nhan(
+            "Chọn một lượt đã DONE của kênh rồi bấm Bàn giao: bộ video + phụ "
+            "đề + ảnh bìa được chép sang thư mục AUTO/done (nơi máy ảo nhìn "
+            "thấy qua ổ chia sẻ), tiêu đề/mô tả/thẻ tự vào bảng kế hoạch bên "
+            "dưới. Sửa bảng như trang tính — ĐẶT NGÀY GIỜ là cho phép đăng, "
+            "còn trống thì máy ảo không bao giờ chọn dòng ấy.", "muted")
+        chu.setMinimumWidth(1)
+        v.addWidget(chu)
+
+        d0 = QHBoxLayout()
+        d0.addWidget(nhan("Lượt DONE:"))
+        self._chon_luot = QComboBox()
+        self._chon_luot.setMinimumWidth(140)
+        d0.addWidget(self._chon_luot)
+        d0.addWidget(nut_phu("Làm mới", self._nap_luot, rong=100))
+        d0.addWidget(nut_chinh("Bàn giao lượt này", self._ban_giao, rong=170))
+        d0.addStretch(1)
+        v.addLayout(d0)
+
+        self._o_done = ChonThuMuc("", nhan_text="Thư mục AUTO/done:")
+        v.addWidget(self._o_done)
+
+        self._bang_kh = QTableWidget(0, 0)
+        self._bang_kh.verticalHeader().setVisible(False)
+        self._bang_kh.setEditTriggers(
+            QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
+        self._bang_kh.setMinimumHeight(150)
+        self._bang_kh.itemChanged.connect(self._kh_doi)
+        v.addWidget(self._bang_kh, 1)
+
+        hang = HangXuongDong()
+        hang.addWidget(nut_phu("Xoá dòng kế hoạch đã chọn", self._kh_xoa_dong,
+                               rong=210))
+        v.addLayout(hang)
+
+        self._dang_do_kh = False
+        self._chon_kenh.activated.connect(lambda _i: self._doi_kenh_ban_giao())
+        self._chon_kenh.lineEdit().returnPressed.connect(self._doi_kenh_ban_giao)
+        return khung
+
+    # ── Bàn giao & kế hoạch ──────────────────────────────────────────────────
+
+    def _kenh_hien(self) -> str:
+        return self._chon_kenh.currentText().strip()
+
+    def _doi_kenh_ban_giao(self) -> None:
+        from core import ke_hoach_dang as kh  # noqa: PLC0415
+
+        kenh = self._kenh_hien()
+        cai = kh.doc_cai(self._app.base_dir, kenh) if kenh else {}
+        # `dat_thang` chứ không phải `dat`: đây là nạp cấu hình CỦA KÊNH vừa
+        # chọn — thư mục done theo kênh, phải thay hẳn chứ không nhường ô cũ.
+        self._o_done.dat_thang(str(cai.get("thu_muc_done") or ""))
+        self._nap_luot()
+        self._ve_ke_hoach()
+
+    def _nap_luot(self) -> None:
+        """Các lượt của kênh ĐỦ BỘ để bàn giao và CHƯA nằm trong kế hoạch."""
+        from core import ban_giao_dang as bg  # noqa: PLC0415
+        from core import ke_hoach_dang as kh  # noqa: PLC0415
+        from core.auto import liet_ke_luot  # noqa: PLC0415
+
+        self._chon_luot.clear()
+        kenh = self._kenh_hien()
+        if not kenh:
+            return
+        cot, hang = kh.doc_bang(self._app.base_dir, kenh)
+        da_co = {d[cot.index("Mã gói")].strip() for d in hang}
+        try:
+            for luot in liet_ke_luot(self._app.base_dir, kenh):
+                if bg.kiem_du_bo(luot.thu_muc):
+                    continue
+                if bg.ma_goi(kenh, luot.ma_luot) in da_co:
+                    continue
+                self._chon_luot.addItem(luot.ma_luot)
+        except Exception:  # noqa: BLE001 — kênh chưa có lượt nào cũng bình thường
+            pass
+
+    def _ban_giao(self) -> None:
+        from core import ban_giao_dang as bg  # noqa: PLC0415
+        from core import ke_hoach_dang as kh  # noqa: PLC0415
+
+        kenh = self._kenh_hien()
+        luot = self._chon_luot.currentText().strip()
+        thu_muc_done = self._o_done.value.strip()
+        if not kenh or not luot:
+            self._app.show_message("Chưa chọn lượt",
+                                   "Chọn kênh và một lượt DONE trước đã "
+                                   "(bấm Làm mới nếu danh sách trống).")
+            return
+        if not thu_muc_done:
+            self._app.show_message(
+                "Chưa chọn thư mục AUTO/done",
+                "Chọn thư mục mà máy ảo nhìn thấy qua ổ chia sẻ (thường là "
+                "D:\\AUTO\\done) — bộ video sẽ được chép vào đó.")
+            return
+        kh.luu_cai(self._app.base_dir, kenh, thu_muc_done=thu_muc_done)
+        try:
+            ma, moi = bg.ban_giao(self._app.base_dir, kenh, luot, thu_muc_done)
+        except Exception as loi:  # noqa: BLE001 — nói rõ thiếu gì
+            self._app.show_message("Chưa bàn giao được", str(loi))
+            return
+        self._app.show_message(
+            "Đã bàn giao gói {0}".format(ma),
+            "Bộ video + phụ đề + ảnh bìa đã nằm trong {0}\\{1}.\n\n{2}".format(
+                thu_muc_done, ma,
+                "Đã thêm dòng kế hoạch — đặt NGÀY GIỜ ở bảng dưới là máy ảo "
+                "sẽ đăng." if moi else
+                "Dòng kế hoạch của gói này đã có sẵn, giữ nguyên."))
+        self._nap_luot()
+        self._ve_ke_hoach()
+
+    def _ve_ke_hoach(self) -> None:
+        from core import ke_hoach_dang as kh  # noqa: PLC0415
+
+        kenh = self._kenh_hien()
+        cot, hang = (kh.doc_bang(self._app.base_dir, kenh) if kenh
+                     else (list(kh.COT), []))
+        self._dang_do_kh = True
+        try:
+            self._bang_kh.setRowCount(0)
+            self._bang_kh.setColumnCount(len(cot))
+            self._bang_kh.setHorizontalHeaderLabels(cot)
+            dau = self._bang_kh.horizontalHeader()
+            dau.setSectionResizeMode(QHeaderView.Interactive)
+            for i, ten in enumerate(cot):
+                self._bang_kh.setColumnWidth(
+                    i, 200 if ten in ("Tiêu đề", "Mô tả") else 90)
+            self._bang_kh.setRowCount(len(hang))
+            for i, dong in enumerate(hang):
+                for c in range(len(cot)):
+                    self._bang_kh.setItem(
+                        i, c, QTableWidgetItem(
+                            dong[c] if c < len(dong) else ""))
+        finally:
+            self._dang_do_kh = False
+
+    def _kh_doi(self, _muc) -> None:
+        if self._dang_do_kh or not self._kenh_hien():
+            return
+        self._kh_luu()
+
+    def _kh_luu(self) -> None:
+        from core import ke_hoach_dang as kh  # noqa: PLC0415
+
+        cot = [self._bang_kh.horizontalHeaderItem(i).text()
+               for i in range(self._bang_kh.columnCount())]
+        hang = [[(self._bang_kh.item(i, c).text()
+                  if self._bang_kh.item(i, c) else "")
+                 for c in range(len(cot))]
+                for i in range(self._bang_kh.rowCount())]
+        try:
+            kh.luu_bang(self._app.base_dir, self._kenh_hien(), hang, cot)
+        except OSError as loi:
+            self._app.show_message("Không lưu được kế hoạch", str(loi))
+
+    def _kh_xoa_dong(self) -> None:
+        chon = sorted({m.row() for m in self._bang_kh.selectedIndexes()},
+                      reverse=True)
+        if not chon:
+            self._app.show_message("Chưa chọn dòng",
+                                   "Bấm vào dòng kế hoạch muốn xoá trước đã.")
+            return
+        self._dang_do_kh = True
+        try:
+            for i in chon:
+                self._bang_kh.removeRow(i)
+        finally:
+            self._dang_do_kh = False
+        self._kh_luu()
+        self._nap_luot()
 
     def _tram(self):
         return getattr(self._chi_so, "_tram", None)
