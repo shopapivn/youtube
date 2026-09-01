@@ -412,6 +412,16 @@ class CuaSoChinh(QWidget):
         self._dong_ho.start(_NHIP_MS)
         self.refresh_prices()
         self._cap_nhat.do_ngam()
+        # Lối tắt "My Tool" ngoài màn hình mà đang trỏ vào chỗ không còn (chạy
+        # SETUP từ trong file nén, dời thư mục tool…) thì hiện icon TRẮNG và
+        # nhấp đúp không mở gì — khách 01/09/2026 gửi đúng ảnh đó. Tool đang
+        # chạy tức là biết thư mục thật của mình, nên tự sửa. Ở luồng nền:
+        # tiện nghi không được cản khởi động; chỉ sửa cái hỏng, không tự mọc
+        # lại lối tắt khách đã xoá — xem `core/loi_tat.py`.
+        from core import loi_tat
+
+        self.run_bg(lambda: loi_tat.sua_ngam(self.base_dir),
+                    on_ok=lambda _k: None, on_err=lambda _l: None)
 
     # ── Dựng trang ───────────────────────────────────────────────────────────
 

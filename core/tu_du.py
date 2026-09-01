@@ -179,20 +179,56 @@ def can_cai(goc: str) -> str:
     return ""
 
 
+def _dong_yeu_cau(goc: str) -> List[str]:
+    """Từng dòng yêu cầu NGUYÊN VĂN (`faster-whisper>=1.0`…), bỏ chú thích."""
+    ra: List[str] = []
+    try:
+        with open(duong_yeu_cau(goc), "r", encoding="utf-8") as tep:
+            for dong in tep:
+                dong = dong.split("#", 1)[0].strip()
+                if dong and not dong.startswith("-"):
+                    ra.append(dong)
+    except OSError:
+        pass
+    return ra
+
+
+def _trong_venv() -> bool:
+    """Đang chạy trong môi trường riêng của thư mục tool (`.venv`) không."""
+    return sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+
+
+def _python_32_bit() -> bool:
+    return sys.maxsize <= 2 ** 32
+
+
+#: Câu chẩn đoán cho máy chạy Python 32-bit. Nhiều thư viện của tool
+#: (faster-whisper/ctranslate2, numpy, PyQt5 bản mới…) CHỈ phát hành bản
+#: 64-bit — pip trên Python 32-bit tìm không ra và câu lỗi của nó thì không ai
+#: đọc nổi. Khách 31/08/2026 báo đúng kiểu này: "gì mà 32 bit… có 2 gói".
+LOI_KHUYEN_32_BIT = (
+    "Python của máy là bản 32-bit — mấy gói trên chỉ có bản 64-bit nên cài "
+    "kiểu gì cũng trượt. Cách chữa: nhấp đúp SETUP.bat trong thư mục tool, "
+    "nó sẽ cài Python 64-bit và dựng môi trường riêng ngay trong thư mục tool."
+)
+
+
 def cai(goc: str, ghi: Optional[Callable[[str], None]] = None,
         tran_giay: float = 1800.0) -> Tuple[bool, str]:
     """Chạy `pip install -r requirements.txt`. Trả `(xong chưa, lời giải thích)`.
 
-    ═══ HAI LƯỢT, GIỐNG HỆT `SETUP.bat` ═══
+    ═══ BA LƯỢT, TỪ CẢ CỤM XUỐNG TỪNG GÓI ═══
 
-    Lượt đầu cài bình thường. Hỏng thì cài lại kèm `--user`: máy nào có Python
-    nằm trong `Program Files` thì ghi vào thư mục chung cần quyền quản trị, mà
-    tool thì chạy bằng quyền thường. `--user` ghi vào thư mục riêng của người
-    đang đăng nhập nên không cần xin quyền gì.
-
-    Đây là đúng hai lượt `SETUP.bat` đã làm từ trước. Giữ giống nhau là có chủ
-    ý: hai đường cài mà xử khác nhau thì sẽ có ngày máy chạy được `SETUP.bat`
-    nhưng không tự cài được, và không ai đoán ra vì sao.
+    1. Cài cả cụm — đường thường, giống `SETUP.bat`.
+    2. Hỏng thì thêm `--user` (Python nằm trong `Program Files` cần quyền quản
+       trị; `--user` ghi vào thư mục riêng của người đang đăng nhập). Bỏ lượt
+       này khi đang chạy trong `.venv` của thư mục tool: pip trong venv không
+       nhận `--user`, thử chỉ tốn thời gian.
+    3. Vẫn hỏng thì **cài từng gói một, bỏ gói kẹt** — pip cài cả cụm là "một
+       gói trượt, cả cụm về không": máy Python 32-bit kẹt đúng vài gói chỉ có
+       bản 64-bit mà thành ra không nhận được cả những gói cài được. Cuối cùng
+       nói rõ TÊN gói còn kẹt (và vì sao, nếu đoán được) — "pip báo lỗi" chay
+       là câu khách không làm gì được.
 
     `ghi` được gọi cho từng dòng `pip` in ra, để chỗ gọi hiện tiến độ. Cài mấy
     trăm MB mà cửa sổ đứng im không nói gì thì khách tưởng tool treo.
@@ -211,11 +247,13 @@ def cai(goc: str, ghi: Optional[Callable[[str], None]] = None,
         # Bản đóng gói thành .exe không có `sys.executable` trỏ tới Python.
         return False, "không biết gọi Python bằng đường nào"
 
-    chung = [sys.executable, "-m", "pip", "install", "-r", yeu_cau,
-             "--disable-pip-version-check", "--no-input"]
+    goc_lenh = [sys.executable, "-m", "pip", "install",
+                "--disable-pip-version-check", "--no-input"]
+    chung = goc_lenh + ["-r", yeu_cau]
     han = time.monotonic() + float(tran_giay)
     loi_cuoi = ""
-    for lan, them in enumerate(([], ["--user"])):
+    cac_luot = ([],) if _trong_venv() else ([], ["--user"])
+    for lan, them in enumerate(cac_luot):
         if lan:
             noi("Thử lại, lần này cài vào thư mục riêng của bạn…")
         ma, tho = _chay(chung + them, han, noi)
@@ -224,7 +262,25 @@ def cai(goc: str, ghi: Optional[Callable[[str], None]] = None,
         loi_cuoi = tho
         if time.monotonic() >= han:
             return False, "cài lâu quá mức chờ, tôi dừng lại"
-    return False, loi_cuoi or "pip báo lỗi"
+
+    # ── Lượt 3: từng gói một, bỏ gói kẹt ─────────────────────────────────────
+    ket: List[str] = []
+    noi("Cài cả cụm không được — chuyển sang cài từng gói, bỏ gói kẹt…")
+    for dong in _dong_yeu_cau(goc):
+        ma, tho = _chay(goc_lenh + [dong], han, noi)
+        if ma != 0:
+            ket.append(dong)
+            loi_cuoi = tho or loi_cuoi
+        if time.monotonic() >= han:
+            return False, "cài lâu quá mức chờ, tôi dừng lại"
+    if not ket:
+        return True, "đã cài xong (phải đi từng gói một)"
+    thong_bao = "cài được phần lớn, còn kẹt: {0}".format(", ".join(ket))
+    if _python_32_bit():
+        thong_bao += ". " + LOI_KHUYEN_32_BIT
+    elif loi_cuoi:
+        thong_bao += ". Dòng lỗi cuối của pip: {0}".format(loi_cuoi[:200])
+    return False, thong_bao
 
 
 def _chay(lenh: List[str], han: float,

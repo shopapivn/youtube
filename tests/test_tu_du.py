@@ -163,13 +163,42 @@ class TestCai:
         assert "--user" not in gia.lenh[0]
         assert "--user" in gia.lenh[1]
 
-    def test_hong_ca_hai_luot_thi_bao_that(self, tmp_path, monkeypatch):
+    def test_hong_ca_hai_luot_thi_di_tung_goi_va_bao_that(self, tmp_path,
+                                                          monkeypatch):
+        """Cả cụm trượt hai lượt → lượt ba đi từng gói; vẫn kẹt thì nói TÊN gói."""
         goc = _dung_goc(tmp_path, "pillow>=10.0\n")
-        gia = _PipGia(ma_thoat=(1, 1), in_ra=("ERROR: het cho trong o dia",))
+        gia = _PipGia(ma_thoat=(1, 1, 1), in_ra=("ERROR: het cho trong o dia",))
         monkeypatch.setattr(tu_du.subprocess, "Popen", gia)
+        monkeypatch.setattr(tu_du, "_python_32_bit", lambda: False)
         duoc, loi_nhan = tu_du.cai(goc)
-        assert not duoc and "het cho" in loi_nhan
-        assert len(gia.lenh) == 2
+        assert not duoc
+        assert "pillow>=10.0" in loi_nhan, "phải nói rõ gói nào kẹt"
+        assert "het cho" in loi_nhan
+        assert len(gia.lenh) == 3
+        assert gia.lenh[2][-1] == "pillow>=10.0", "lượt ba cài từng gói một"
+
+    def test_tung_goi_cuu_duoc_phan_cai_duoc(self, tmp_path, monkeypatch):
+        """Một gói kẹt không được kéo cả cụm về không — pip cài cả cụm là vậy."""
+        goc = _dung_goc(tmp_path, "pillow>=10.0\nfaster-whisper>=1.0\n")
+        # cụm hỏng, --user hỏng, rồi: pillow ĐƯỢC, faster-whisper KẸT.
+        gia = _PipGia(ma_thoat=(1, 1, 0, 1))
+        monkeypatch.setattr(tu_du.subprocess, "Popen", gia)
+        monkeypatch.setattr(tu_du, "_python_32_bit", lambda: True)
+        duoc, loi_nhan = tu_du.cai(goc)
+        assert not duoc
+        assert "faster-whisper" in loi_nhan and "pillow" not in loi_nhan.split(".")[0], \
+            "chỉ kể gói còn kẹt, không kể gói đã cài được"
+        assert "32-bit" in loi_nhan and "SETUP.bat" in loi_nhan, \
+            "máy Python 32-bit phải được chỉ đúng đường chữa"
+
+    def test_trong_venv_thi_khong_thu_user(self, tmp_path, monkeypatch):
+        """pip trong .venv từ chối `--user` — thử chỉ tốn thời gian của khách."""
+        goc = _dung_goc(tmp_path, "pillow>=10.0\n")
+        gia = _PipGia(ma_thoat=(1, 0))
+        monkeypatch.setattr(tu_du.subprocess, "Popen", gia)
+        monkeypatch.setattr(tu_du, "_trong_venv", lambda: True)
+        tu_du.cai(goc)
+        assert all("--user" not in lenh for lenh in gia.lenh)
 
     def test_tien_do_duoc_bao_ra_ngoai(self, tmp_path, monkeypatch):
         """Cài mấy trăm MB mà cửa sổ im lặng thì khách tưởng tool treo."""

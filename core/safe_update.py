@@ -65,6 +65,12 @@ PRESERVE = (
                       # khách trong đó (`core.claude_code`). Mất là mỗi lần cập
                       # nhật khách lại phải vào tab Agent bấm lại từ đầu — mà họ
                       # sẽ không đoán được vì sao Claude Code đòi đăng nhập lại.
+    ".venv",          # môi trường Python RIÊNG của thư mục tool (SETUP.bat
+                      # dựng, 01/09/2026 — "những gì tool cần thì nằm trong thư
+                      # mục tool"). Cả trăm MB thư viện; xoá là tool KHÔNG MỞ
+                      # LÊN ĐƯỢC ngay sau cập nhật vì lối tắt trỏ thẳng vào
+                      # .venv\Scripts\pythonw.exe.
+    "venv",           # tên cũ cùng vai — hai launcher đều nhận cả hai tên.
 )
 #: Thư mục **hoà vào nhau**: giữ nguyên thứ khách đang có, chỉ thêm thứ còn thiếu.
 #:

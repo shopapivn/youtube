@@ -160,6 +160,36 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+REM --- Python 32-bit thi khong dung ------------------------------------------
+REM  Nhieu thu vien cua tool (faster-whisper/ctranslate2, numpy, PyQt5 ban moi)
+REM  CHI phat hanh ban 64-bit. pip tren Python 32-bit truot voi cau loi khong
+REM  ai doc noi - khach 31/08/2026 dinh dung bay nay ("gi ma 32 bit... 2 goi").
+REM  May Windows 64-bit (tuyet dai da so) thi cai ban 64-bit ve la xong; may
+REM  Windows 32-bit that su thi noi thang tool khong chay du duoc.
+%PYEXE% -c "import sys; sys.exit(0 if sys.maxsize > 2**32 else 1)"
+if errorlevel 1 (
+  if defined DA_THU_64 (
+    echo.
+    echo   !!! VAN DANG NHAN PHAI PYTHON 32-BIT sau khi da cai ban 64-bit.
+    echo   -^> Go het Python 32-bit trong "Add or remove programs" roi chay lai
+    echo      SETUP.bat, hoac cai tay Python 64-bit tu python.org.
+    echo.
+    pause
+    exit /b 1
+  )
+  if /i "%PROCESSOR_ARCHITECTURE%"=="x86" if not defined PROCESSOR_ARCHITEW6432 (
+    echo.
+    echo   !!! WINDOWS NAY LA BAN 32-BIT. Tool can Windows 64-bit — nhieu thu
+    echo   vien tao anh/giong noi khong co ban 32-bit de cai.
+    echo.
+    pause
+    exit /b 1
+  )
+  echo   - Python dang co la ban 32-BIT; thu vien cua tool can ban 64-bit.
+  echo     Dang cai them Python 64-bit chinh thuc, khong dung ban 32-bit nua...
+  set "DA_THU_64=1"
+  goto :python_tai_thang
+)
 echo.
 
 REM --- [2/5] Bao dam co pip --------------------------------------------------
@@ -189,6 +219,34 @@ REM nay^), nen may khong co mang luc nay cung khong sao. Khong kiem errorlevel.
 echo   - pip: OK
 echo.
 
+REM --- [2.5/5] Moi truong Python RIENG trong thu muc tool --------------------
+REM
+REM  Chu du an, 01/09/2026: "nhung gi tool chay va can se dung o thu muc, tuc
+REM  setup tai ve vao thu muc va dung cung o do, de cac may khong bi xung dot".
+REM
+REM  Thu vien cai vao .venv NGAY TRONG thu muc tool thay vi vao Python he
+REM  thong. Duoc ba thu cung luc:
+REM    - may co san Python khac / 32-bit / cua phan mem khac: khong ai gianh
+REM      thu vien cua ai nua;
+REM    - khong can --user, khong can "Run as administrator";
+REM    - xoa thu muc tool la sach may, chep thu muc tool sang may khac (cung
+REM      Windows 64-bit) la gan nhu chay duoc ngay.
+REM  CHAY-GON.vbs va CHAY-QT.bat von UU TIEN .venv tu truoc, con duong cap
+REM  nhat giu nguyen .venv (PRESERVE trong core/safe_update.py).
+echo [2.5/5] Moi truong rieng trong thu muc tool...
+if not exist "%~dp0.venv\Scripts\python.exe" (
+  echo   - Dang tao .venv trong thu muc tool...
+  %PYEXE% -m venv "%~dp0.venv"
+)
+if exist "%~dp0.venv\Scripts\python.exe" (
+  set PYEXE="%~dp0.venv\Scripts\python.exe"
+  set "DUNG_VENV=1"
+  echo   - Tu gio thu vien nam trong: .venv cua thu muc tool
+) else (
+  echo   - Chua tao duoc .venv ^(khong sao^) — dung tam Python he thong.
+)
+echo.
+
 REM --- [3/5] Thu vien --------------------------------------------------------
 REM
 REM  "-q" o day KHONG phai de cho dep. Khong co no, buoc nay do ra ~20 dong
@@ -208,8 +266,10 @@ if errorlevel 1 (
   REM Tren may cong ty / may cai Python cho "moi nguoi dung", thu muc thu vien
   REM nam trong Program Files va can quyen quan tri. "--user" ghi vao thu muc
   REM rieng cua khach nen khong can quyen gi ca. Thu cach nay TRUOC khi bat
-  REM khach di tim nut "Run as administrator".
-  %PYEXE% -m pip install -q -r requirements.txt --user --disable-pip-version-check
+  REM khach di tim nut "Run as administrator". Rieng khi da cai vao .venv cua
+  REM thu muc tool thi khong co chuyen quyen — pip trong venv con tu choi
+  REM "--user" — nen bo qua luot nay (errorlevel giu nguyen, roi xuong bao loi).
+  if not defined DUNG_VENV %PYEXE% -m pip install -q -r requirements.txt --user --disable-pip-version-check
   if errorlevel 1 (
     echo.
     echo   !!! CAI THU VIEN THAT BAI.
@@ -266,8 +326,10 @@ echo.
 
 REM Chon dung ban x64 hay x86 theo chinh Python dang dung - khong theo Windows.
 REM Python 32-bit tren Windows 64-bit thi phai lay ban x86, lay nham la vo ich.
+REM (Da dung .venv thi chac chan 64-bit — buoc kiem o tren ep vay — va PYEXE
+REM  luc nay mang san dau nhay, nhet vao for /f la cmd xen nhay hong lenh.)
 set "VCARCH=x64"
-for /f "delims=" %%i in ('%PYEXE% -c "import struct;print('x64' if struct.calcsize('P')==8 else 'x86')" 2^>nul') do set "VCARCH=%%i"
+if not defined DUNG_VENV for /f "delims=" %%i in ('%PYEXE% -c "import struct;print('x64' if struct.calcsize('P')==8 else 'x86')" 2^>nul') do set "VCARCH=%%i"
 
 set "VCEXE=%TEMP%\shopapi-vc_redist.%VCARCH%.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$ProgressPreference='SilentlyContinue';Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.%VCARCH%.exe' -OutFile '%VCEXE%' -UseBasicParsing}catch{exit 1}"
@@ -467,14 +529,16 @@ REM  va powershell. Duong dan co dau cach ("C:\Users\A Plus Computer\...") nen
 REM  tham so bat buoc phai duoc boc nhay.
 echo Dang tao loi tat "My Tool" ngoai man hinh chinh...
 set "PYW="
-for /f "delims=" %%i in ('%PYEXE% -c "import os,sys;d=os.path.dirname(sys.executable);p=os.path.join(d,'pythonw.exe');print(p if os.path.isfile(p) else '')" 2^>nul') do set "PYW=%%i"
+set "PYARG=%~dp0shopapi_studio_qt.py"
+REM Uu tien pythonw cua .venv trong thu muc tool — cung mot nguyen tac "moi
+REM thu tool can nam trong thu muc tool", va khoi phai hoi Python he thong.
+if defined DUNG_VENV if exist "%~dp0.venv\Scripts\pythonw.exe" set "PYW=%~dp0.venv\Scripts\pythonw.exe"
+if not defined PYW for /f "delims=" %%i in ('%PYEXE% -c "import os,sys;d=os.path.dirname(sys.executable);p=os.path.join(d,'pythonw.exe');print(p if os.path.isfile(p) else '')" 2^>nul') do set "PYW=%%i"
 if not defined PYW (
   REM Khong tim ra pythonw thi lui ve duong cu. Ban Python rut gon co the
   REM khong kem pythonw.exe; luc do wscript+vbs van hon la khong co loi tat.
   set "PYW=%SystemRoot%\System32\wscript.exe"
   set "PYARG=%~dp0CHAY-GON.vbs"
-) else (
-  set "PYARG=%~dp0shopapi_studio_qt.py"
 )
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$q=[char]34;$g='%~dp0'.TrimEnd('\');$w=New-Object -ComObject WScript.Shell;$p=Join-Path $w.SpecialFolders('Desktop') 'My Tool.lnk';$s=$w.CreateShortcut($p);$s.TargetPath='%PYW%';$s.Arguments=$q+'%PYARG%'+$q;$s.WorkingDirectory=$g;$s.IconLocation=(Join-Path $g 'ui_qt\logo.ico');$s.Description='My Tool';$s.Save();Write-Host ('  - Da tao loi tat tren Desktop -> ' + (Split-Path $s.TargetPath -Leaf))}catch{Write-Host '  - Chua tao duoc loi tat (khong sao, nhay dup CHAY-QT.bat trong thu muc nay)'}"
 echo.
