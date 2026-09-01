@@ -397,3 +397,74 @@ class TestBanGiaoDang:
 
         ma = inspect.getsource(bg.xuat_goi)
         assert ".tam" in ma and "os.replace" in ma
+
+
+class TestDangTay:
+    """Giai đoạn chuyển tiếp: chủ kênh ghép nhạc CapCut rồi ĐĂNG TAY —
+    tool chỉ cần ghi sổ. Chủ dự án 01/09: "tao đăng xong tao sẽ tự cập nhật
+    trạng thái tool"."""
+
+    def test_ghi_so_khong_can_du_bo(self, tmp_path):
+        from core import ban_giao_dang as bg
+        from core import ke_hoach_dang as kh
+        from core.auto import duong_luot
+
+        goc = str(tmp_path)
+        d = duong_luot(goc, "TL4-T7", "0005")
+        os.makedirs(d)
+        os.makedirs(os.path.join(goc, "CHANNEL", "TL4-T7"))
+        # KHÔNG có mp4/srt/ảnh — bản đăng thật đã đi qua CapCut, tool không giữ.
+        with open(os.path.join(d, "1-tieu-de.txt"), "w", encoding="utf-8") as tep:
+            tep.write("TITLE: Video đăng tay\n")
+        ma, moi = bg.ghi_nhan_dang_tay(goc, "TL4-T7", "0005")
+        assert ma == "TL4-T7-0005" and moi
+        cot, hang = kh.doc_bang(goc, "TL4-T7")
+        dong = hang[0]
+        assert dong[cot.index("Trạng thái đăng")] == bg.TRANG_THAI_DANG_TAY
+        assert dong[cot.index("Sẵn sàng")] == "", \
+            "dòng đăng tay không bao giờ được rơi vào tay máy ảo"
+        assert dong[cot.index("Tiêu đề")] == "Video đăng tay"
+        assert dong[cot.index("Ngày đăng")] and dong[cot.index("Giờ đăng")]
+
+    def test_luot_da_ban_giao_thi_chi_doi_trang_thai(self, tmp_path):
+        from core import ban_giao_dang as bg
+        from core import ke_hoach_dang as kh
+        from core.auto import duong_luot
+
+        goc = str(tmp_path)
+        d = duong_luot(goc, "TL4-T7", "0006")
+        os.makedirs(os.path.join(d, "7-thumbnail"))
+        os.makedirs(os.path.join(goc, "CHANNEL", "TL4-T7"))
+        for ten, du_lieu in (("8-video.mp4", b"x"), ("3-phu-de.srt", b"1")):
+            with open(os.path.join(d, ten), "wb") as tep:
+                tep.write(du_lieu)
+        with open(os.path.join(d, "7-thumbnail", "CHON-t.jpg"), "wb") as tep:
+            tep.write(b"x")
+        bg.ban_giao(goc, "TL4-T7", "0006", str(tmp_path / "done"))
+        _ma, moi = bg.ghi_nhan_dang_tay(goc, "TL4-T7", "0006")
+        assert not moi, "không mọc dòng thứ hai cho cùng một lượt"
+        cot, hang = kh.doc_bang(goc, "TL4-T7")
+        assert len(hang) == 1
+        assert hang[0][cot.index("Trạng thái đăng")] == bg.TRANG_THAI_DANG_TAY
+
+    def test_dong_dang_tay_khong_lot_sang_dang_py(self, tmp_path):
+        """Qua mắt nguon_tool: trạng thái phải là 'ĐÃ ĐĂNG (tay)', không bao
+        giờ thành STATUS_OK — thành là máy ảo đăng LẶP video đã lên sóng."""
+        from core import ban_giao_dang as bg
+        from core.auto import duong_luot
+
+        goc = str(tmp_path)
+        os.makedirs(duong_luot(goc, "TL4-T7", "0007"))
+        os.makedirs(os.path.join(goc, "CHANNEL", "TL4-T7"))
+        bg.ghi_nhan_dang_tay(goc, "TL4-T7", "0007")
+        tram = Tram(cong=0, goc=goc)
+        tram.bat()
+        try:
+            dia_chi = "http://127.0.0.1:{0}".format(tram._may.server_address[1])
+            nt = _nap_nguon_tool()
+            rows = nt.get_rows({"TRAM": dia_chi, "CHANNEL_CODE": "TL4-T7"},
+                               trang_thai_ok="EDIT XONG")
+            assert rows[1][47] == bg.TRANG_THAI_DANG_TAY
+        finally:
+            tram.tat()
+        (GOC / "vm" / "ke-hoach-TL4-T7.csv").unlink(missing_ok=True)

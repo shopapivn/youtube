@@ -28,7 +28,13 @@ from typing import Dict, List, Optional, Tuple
 from . import ke_hoach_dang
 
 __all__ = ["ma_goi", "doc_gioi_thieu", "kiem_du_bo", "xuat_goi", "ban_giao",
-           "TEP_VIDEO", "TEP_SRT"]
+           "ghi_nhan_dang_tay", "TRANG_THAI_DANG_TAY", "TEP_VIDEO", "TEP_SRT"]
+
+#: Trạng thái ghi khi chủ kênh đăng TAY. Khác chuỗi "ĐÃ ĐĂNG" của máy một
+#: chút là cố ý: nhìn sổ biết ngay video nào máy đăng, video nào người đăng —
+#: và vòng dọn dẹp của tool đăng (so bằng đúng chuỗi "ĐÃ ĐĂNG") không đi xoá
+#: thư mục của một gói chưa từng được xuất.
+TRANG_THAI_DANG_TAY = "ĐÃ ĐĂNG (tay)"
 
 TEP_VIDEO = "8-video.mp4"
 TEP_SRT = "3-phu-de.srt"
@@ -153,6 +159,49 @@ def ban_giao(goc: str, kenh: str, luot: str, thu_muc_done: str,
     dong.update({"Mã gói": ma, "Ngày đăng": ngay, "Giờ đăng": gio,
                  "Tiêu đề": gt["tieu_de"], "Mô tả": gt["mo_ta"],
                  "Thẻ SEO": gt["the"], "Sẵn sàng": "x"})
+    hang.append([dong.get(ten, "") for ten in cot])
+    ke_hoach_dang.luu_bang(goc, kenh, hang, cot)
+    return ma, True
+
+
+def ghi_nhan_dang_tay(goc: str, kenh: str, luot: str,
+                      ghi_chu: str = "") -> Tuple[str, bool]:
+    """Chủ kênh vừa ĐĂNG TAY một lượt — ghi vào sổ kế hoạch cho tool biết.
+
+    Chủ dự án, 01/09/2026: *"tool edit xong vẫn còn 1 bước nữa là tao làm thủ
+    công đưa vào CapCut ghép nhạc và xem lại, sau đó mới xuất ra rồi mới đưa
+    sang vm để đăng… tao sẽ edit hoàn thiện và đăng tay trước mắt — nên thiết
+    kế 1 kiểu gì đó tao đăng xong tao sẽ tự cập nhật trạng thái tool"*.
+
+    Đây là cái nút ấy. KHÔNG xuất gói, KHÔNG đòi đủ bộ (bản đăng thật đã đi
+    qua CapCut, tool không giữ nó): chỉ ghi một dòng sổ — tiêu đề/mô tả/thẻ
+    lấy từ lượt để sổ tự đọc được, ngày giờ là LÚC GHI NHẬN, `Sẵn sàng` để
+    trống và trạng thái là :data:`TRANG_THAI_DANG_TAY` nên máy ảo không bao
+    giờ đụng vào dòng này. Lượt từng được bàn giao rồi thì chỉ đổi trạng thái,
+    không mọc dòng mới.
+
+    Sổ này về sau là trí nhớ của bộ não chu kỳ (GĐ6): đề tài nào đã đăng —
+    tay hay máy — đều nằm một chỗ.
+    """
+    import time as _time
+
+    from .auto import duong_luot  # noqa: PLC0415 — tránh vòng nhập
+
+    ma = ma_goi(kenh, luot)
+    cot, hang = ke_hoach_dang.doc_bang(goc, kenh)
+    o_ma = cot.index("Mã gói")
+    if any(d[o_ma].strip() == ma for d in hang):
+        ke_hoach_dang.danh_dau(goc, kenh, ma, TRANG_THAI_DANG_TAY)
+        return ma, False
+    gt = doc_gioi_thieu(duong_luot(goc, kenh, luot))
+    dong = {ten: "" for ten in cot}
+    dong.update({"Mã gói": ma,
+                 "Ngày đăng": _time.strftime("%d/%m/%Y"),
+                 "Giờ đăng": _time.strftime("%H:%M"),
+                 "Tiêu đề": gt["tieu_de"], "Mô tả": gt["mo_ta"],
+                 "Thẻ SEO": gt["the"],
+                 "Trạng thái đăng": TRANG_THAI_DANG_TAY,
+                 "Ghi chú": ghi_chu})
     hang.append([dong.get(ten, "") for ten in cot])
     ke_hoach_dang.luu_bang(goc, kenh, hang, cot)
     return ma, True

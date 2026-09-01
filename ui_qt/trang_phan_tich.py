@@ -967,11 +967,12 @@ class TrangMayVM(QWidget):
         v.setSpacing(8)
         v.addWidget(nhan("Bàn giao & kế hoạch đăng", "h2"))
         chu = nhan(
-            "Chọn một lượt đã DONE của kênh rồi bấm Bàn giao: bộ video + phụ "
-            "đề + ảnh bìa được chép sang thư mục AUTO/done (nơi máy ảo nhìn "
-            "thấy qua ổ chia sẻ), tiêu đề/mô tả/thẻ tự vào bảng kế hoạch bên "
-            "dưới. Sửa bảng như trang tính — ĐẶT NGÀY GIỜ là cho phép đăng, "
-            "còn trống thì máy ảo không bao giờ chọn dòng ấy.", "muted")
+            "Hai đường, cùng một sổ. ĐƯỜNG TAY (đang dùng): tool edit xong, "
+            "bạn ghép nhạc CapCut, xem lại, tự đăng — xong quay về đây bấm "
+            "“Tôi đã đăng tay” để tool ghi sổ. ĐƯỜNG MÁY (khi sẵn sàng): bấm "
+            "Bàn giao để chép bộ video + phụ đề + ảnh bìa sang thư mục "
+            "AUTO/done cho máy ảo, rồi ĐẶT NGÀY GIỜ trong bảng là máy đăng — "
+            "còn trống thì máy không bao giờ chọn dòng ấy.", "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
 
@@ -981,9 +982,19 @@ class TrangMayVM(QWidget):
         self._chon_luot.setMinimumWidth(140)
         d0.addWidget(self._chon_luot)
         d0.addWidget(nut_phu("Làm mới", self._nap_luot, rong=100))
-        d0.addWidget(nut_chinh("Bàn giao lượt này", self._ban_giao, rong=170))
         d0.addStretch(1)
         v.addLayout(d0)
+        d0b = QHBoxLayout()
+        nut_tay = nut_chinh("Tôi đã đăng tay lượt này", self._dang_tay, rong=210)
+        nut_tay.setToolTip(
+            "Ghi vào sổ kế hoạch: lượt này đã được bạn đăng bằng tay (qua "
+            "CapCut). Không chép tệp gì cả — chỉ ghi sổ để tool biết đề tài "
+            "này đã lên sóng.")
+        d0b.addWidget(nut_tay)
+        d0b.addWidget(nut_phu("Bàn giao cho máy ảo đăng", self._ban_giao,
+                              rong=200))
+        d0b.addStretch(1)
+        v.addLayout(d0b)
 
         self._o_done = ChonThuMuc("", nhan_text="Thư mục AUTO/done:")
         v.addWidget(self._o_done)
@@ -1023,7 +1034,12 @@ class TrangMayVM(QWidget):
         self._ve_ke_hoach()
 
     def _nap_luot(self) -> None:
-        """Các lượt của kênh ĐỦ BỘ để bàn giao và CHƯA nằm trong kế hoạch."""
+        """Các lượt của kênh CHƯA nằm trong sổ kế hoạch.
+
+        Không lọc "đủ bộ" ở đây: đường ĐĂNG TAY không cần đủ bộ (bản đăng
+        thật đã đi qua CapCut) — còn đường Bàn giao tự kiểm và nói thiếu gì
+        khi bấm.
+        """
         from core import ban_giao_dang as bg  # noqa: PLC0415
         from core import ke_hoach_dang as kh  # noqa: PLC0415
         from core.auto import liet_ke_luot  # noqa: PLC0415
@@ -1036,13 +1052,34 @@ class TrangMayVM(QWidget):
         da_co = {d[cot.index("Mã gói")].strip() for d in hang}
         try:
             for luot in liet_ke_luot(self._app.base_dir, kenh):
-                if bg.kiem_du_bo(luot.thu_muc):
-                    continue
                 if bg.ma_goi(kenh, luot.ma_luot) in da_co:
                     continue
                 self._chon_luot.addItem(luot.ma_luot)
         except Exception:  # noqa: BLE001 — kênh chưa có lượt nào cũng bình thường
             pass
+
+    def _dang_tay(self) -> None:
+        from core import ban_giao_dang as bg  # noqa: PLC0415
+
+        kenh = self._kenh_hien()
+        luot = self._chon_luot.currentText().strip()
+        if not kenh or not luot:
+            self._app.show_message("Chưa chọn lượt",
+                                   "Chọn kênh và lượt vừa đăng tay trước đã "
+                                   "(bấm Làm mới nếu danh sách trống).")
+            return
+        try:
+            ma, _moi = bg.ghi_nhan_dang_tay(self._app.base_dir, kenh, luot)
+        except Exception as loi:  # noqa: BLE001
+            self._app.show_message("Chưa ghi sổ được", str(loi))
+            return
+        self._app.show_message(
+            "Đã ghi sổ: {0}".format(ma),
+            "Sổ kế hoạch ghi nhận lượt này đã được bạn đăng tay. Tool sẽ "
+            "không đề xuất lại đề tài này, và máy ảo không bao giờ đụng vào "
+            "dòng ấy.")
+        self._nap_luot()
+        self._ve_ke_hoach()
 
     def _ban_giao(self) -> None:
         from core import ban_giao_dang as bg  # noqa: PLC0415
