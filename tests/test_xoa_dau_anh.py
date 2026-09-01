@@ -235,3 +235,64 @@ def test_skill_xoa_logo_co_trong_danh_sach():
     assert MA_XOA_LOGO in ma
     s = [x for x in SKILL if x.ma == MA_XOA_LOGO][0]
     assert s.loai == "may", "chạy trên máy khách, không gọi mô hình"
+
+
+def _dan_dau_lech(im, alpha, cach_phai=120, cach_duoi=120, ti_le=1.0):
+    """Dán sao ở VỊ TRÍ VÀ CỠ TUỲ Ý — mô phỏng dấu đặt theo khổ ảnh."""
+    d = np.load(TEP_DAU)
+    hinh = d["hinh"].astype(np.float64)
+    s = hinh.shape[0]
+    k = int(round(s * ti_le))
+    if k != s:
+        hinh = np.asarray(Image.fromarray((hinh * 255).astype(np.uint8))
+                          .resize((k, k), Image.BILINEAR),
+                          dtype=np.float64) / 255.0
+    A = np.asarray(im.convert("RGB"), dtype=np.float64)
+    H, W = A.shape[:2]
+    x0 = W - cach_phai - k // 2
+    y0 = H - cach_duoi - k // 2
+    a = np.clip(hinh * alpha, 0.0, 0.93)[:, :, None]
+    A[y0:y0 + k, x0:x0 + k, :] = (a * 255.0
+                                  + (1 - a) * A[y0:y0 + k, x0:x0 + k, :])
+    return Image.fromarray(A.astype(np.uint8)), (x0, y0, k)
+
+
+class TestDuongDo:
+    """Dấu KHÔNG nằm ở toạ độ đóng đinh — ảnh khách 01/09/2026: khổ 1376×768,
+    tâm sao cách góc (120, 120) thay vì (97, 98), tool phán sạch và bỏ qua."""
+
+    def test_dau_lech_cho_van_xoa_duoc(self):
+        co_dau, (x0, y0, k) = _dan_dau_lech(_nhieu(), 0.34)
+        ra, am = xoa_dau(co_dau, tra_alpha=True)
+        assert am > 0, "phải DÒ ra dấu lệch chỗ, không phán sạch"
+        goc = np.asarray(_nhieu().convert("RGB"), dtype=float)
+        sach = np.asarray(ra.convert("RGB"), dtype=float)
+        lech = np.abs(sach - goc)[y0:y0 + k, x0:x0 + k].mean()
+        assert lech < 6, "vùng dấu phải về gần ảnh gốc (lệch TB {0:.1f})".format(lech)
+
+    def test_dau_lech_ca_co_cung_xoa_duoc(self):
+        co_dau, (x0, y0, k) = _dan_dau_lech(_nhieu(hat=11), 0.30,
+                                            cach_phai=130, cach_duoi=110,
+                                            ti_le=1.15)
+        _ra, am = xoa_dau(co_dau, tra_alpha=True)
+        assert am > 0, "dấu to hơn 15% vẫn phải dò ra"
+
+    def test_anh_sach_khong_bi_duong_do_boi_ban(self):
+        """Đường dò quét cả góc — ảnh sạch tuyệt đối không được bị trừ bừa."""
+        for im in (_anh(), _nhieu(hat=3)):
+            ra, am = xoa_dau(im, tra_alpha=True)
+            assert am == 0.0 and ra is im
+
+    def test_xoa_dau_lech_hai_lan_khong_nhat_di(self):
+        co_dau, _ = _dan_dau_lech(_nhieu(hat=5), 0.34)
+        lan1, am1 = xoa_dau(co_dau, tra_alpha=True)
+        lan2, am2 = xoa_dau(lan1, tra_alpha=True)
+        assert am1 > 0 and am2 == 0.0, \
+            "xoá xong mà lần hai lại trừ tiếp là ảnh nhạt dần sau mỗi lần bấm"
+
+    def test_anh_nho_hon_khuon_dong_dinh_van_do(self):
+        """Ảnh 300×300 nằm ngoài toạ độ đóng đinh — trước đây bị bỏ qua thẳng."""
+        nho = _nhieu(w=300, h=300, hat=9)
+        co_dau, _ = _dan_dau_lech(nho, 0.34, cach_phai=90, cach_duoi=90)
+        _ra, am = xoa_dau(co_dau, tra_alpha=True)
+        assert am > 0
