@@ -142,6 +142,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Studio mở trong máy ảo (VPS)? Bật “cổng nhận” ở mục Chỉ số kênh rồi "
             "dán địa chỉ vào tiện ích bên máy ảo — số liệu rơi thẳng về thư mục "
             "kênh của tool, không phải chép tay.",
+            "─── MỤC MÁY VM ───",
+            "Cài agent (thư mục vm/ của tool) lên máy ảo của kênh là máy ấy tự "
+            "gọi về hỏi việc mỗi 30 giây — bảng ở đây cho biết máy nào đang "
+            "nối, lần cuối lên tiếng lúc nào. Bấm “Quét Studio ngay” là agent "
+            "mở Studio cho tiện ích cào, không phải vào máy ảo bấm tay. Kế "
+            "hoạch lớn hơn (quét trang chủ lấy đối thủ mới, đăng video, trả "
+            "lời bình luận) nằm trong vm/KE-HOACH.md — đang xây từng bước.",
         ],
         "luu_y": [
             "Khác gì “Lấy dữ liệu đối thủ” bên tab Công cụ YTB? Bên đó là lượt "

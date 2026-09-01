@@ -51,9 +51,10 @@ from .widgets import (
 
 __all__ = ["TrangPhanTich", "TrangDoiThu"]
 
-#: Nhãn hai mục con. Đối thủ trước: câu "làm content gì tiếp theo" bắt đầu từ
-#: việc xem ngách đang xem gì.
-TAB_CON = ("Đối thủ", "Chỉ số kênh")
+#: Nhãn các mục con. Đối thủ trước: câu "làm content gì tiếp theo" bắt đầu từ
+#: việc xem ngách đang xem gì. "Máy VM" đứng cuối — nó là hạ tầng, mở tới khi
+#: cần chứ không phải hằng ngày.
+TAB_CON = ("Đối thủ", "Chỉ số kênh", "Máy VM")
 
 #: Nhịp tự kiểm "đến hạn quét chưa" khi tool đang mở. Nửa tiếng một lần hỏi
 #: cái đồng hồ trên đĩa — không phải một lượt gọi mạng nào.
@@ -847,6 +848,137 @@ class TrangDoiThu(QWidget):
         self._log.appendPlainText(chu)
 
 
+class TrangMayVM(QWidget):
+    """Nhìn và điều khiển các máy ảo của kênh — giai đoạn 1 của `vm/KE-HOACH.md`.
+
+    Trạm (cổng nhận) là CỦA mục Chỉ số kênh — tab này chỉ mượn: đọc nhịp tim
+    và xếp việc vào hộp. Một trạm hai chủ là hai nút bật/tắt cãi nhau.
+    """
+
+    def __init__(self, app, chi_so: TrangChiSoYTB):
+        super().__init__()
+        self._app = app
+        self._chi_so = chi_so
+
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(24, 20, 24, 20)
+        doc.setSpacing(12)
+        doc.addWidget(tieu_de_trang(
+            "Máy VM của kênh",
+            "Agent trên máy ảo tự gọi về hỏi việc — xem vm/KE-HOACH.md."))
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Ra lệnh cho máy ảo", "h2"))
+        chu = nhan(
+            "Cài agent lên máy ảo (thư mục vm/ của tool, xem KE-HOACH.md), "
+            "bật “cổng nhận” ở mục Chỉ số kênh, rồi ra lệnh ở đây. Lệnh nằm "
+            "chờ trong hộp; agent ghé hỏi mỗi 30 giây là nhận. Nhật ký chi "
+            "tiết hiện ở ô nhật ký của mục Chỉ số kênh.", "muted")
+        chu.setMinimumWidth(1)
+        v.addWidget(chu)
+
+        d0 = QHBoxLayout()
+        d0.addWidget(nhan("Kênh:"))
+        self._chon_kenh = QComboBox()
+        self._chon_kenh.setEditable(True)
+        self._chon_kenh.setMinimumWidth(180)
+        for ma in liet_ke_kenh(self._app.base_dir):
+            self._chon_kenh.addItem(ma)
+        d0.addWidget(self._chon_kenh)
+        d0.addStretch(1)
+        v.addLayout(d0)
+        # Nút xuống hàng riêng — dồn chung hàng chọn kênh là hàng đó đòi hơn
+        # 760px và cả trang không co được (`test_bo_cuc` canh mốc này).
+        d0b = QHBoxLayout()
+        d0b.addWidget(nut_chinh("Quét Studio ngay", self._quet_studio, rong=170))
+        nut_tc = nut_phu("Quét trang chủ lấy đối thủ", self._quet_trang_chu,
+                         rong=220)
+        nut_tc.setToolTip(
+            "Giai đoạn 3 của kế hoạch: agent mở trang chủ YouTube của kênh, "
+            "gom các kênh được đề xuất rồi nối vào sổ Đối thủ. Bản agent hiện "
+            "tại sẽ trả lời 'chưa làm được' — lệnh vẫn xếp được để thử đường "
+            "dây.")
+        d0b.addWidget(nut_tc)
+        d0b.addStretch(1)
+        v.addLayout(d0b)
+        doc.addWidget(khung)
+
+        khung2 = the()
+        v2 = QVBoxLayout(khung2)
+        v2.setContentsMargins(18, 14, 18, 16)
+        v2.setSpacing(8)
+        d1 = QHBoxLayout()
+        d1.addWidget(nhan("Máy đang nối", "h2"))
+        self._tom_tat = nhan("", "phu")
+        d1.addWidget(self._tom_tat)
+        d1.addStretch(1)
+        v2.addLayout(d1)
+        self._bang = QTableWidget(0, 4)
+        self._bang.setHorizontalHeaderLabels(
+            ["Kênh", "Máy", "Địa chỉ", "Lần cuối lên tiếng"])
+        self._bang.verticalHeader().setVisible(False)
+        self._bang.setEditTriggers(QTableWidget.NoEditTriggers)
+        dau = self._bang.horizontalHeader()
+        dau.setSectionResizeMode(QHeaderView.Stretch)
+        self._bang.setMinimumHeight(160)
+        v2.addWidget(self._bang, 1)
+        doc.addWidget(khung2, 1)
+
+        # Làm mới mỗi 5 giây — chỉ đọc hai danh sách trong RAM, không tốn gì.
+        self._dong_ho = QTimer(self)
+        self._dong_ho.timeout.connect(self._ve)
+        self._dong_ho.start(5000)
+        self._ve()
+
+    def _tram(self):
+        return getattr(self._chi_so, "_tram", None)
+
+    def _giao(self, loai: str) -> None:
+        kenh = self._chon_kenh.currentText().strip()
+        if not kenh:
+            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
+            return
+        tram = self._tram()
+        if tram is None or not tram.dang_chay:
+            self._app.show_message(
+                "Cổng nhận đang tắt",
+                "Sang mục “Chỉ số kênh” bấm “Bật cổng nhận” trước — agent "
+                "trong máy ảo gọi về qua cổng đó.")
+            return
+        so = tram.giao_viec(kenh, loai)
+        self._app.show_message(
+            "Đã xếp việc #{0}".format(so),
+            "Agent của kênh {0} sẽ nhận trong vòng ~30 giây (nếu đang chạy). "
+            "Theo dõi ở ô nhật ký của mục Chỉ số kênh.".format(kenh))
+        self._ve()
+
+    def _quet_studio(self) -> None:
+        self._giao("quet-studio")
+
+    def _quet_trang_chu(self) -> None:
+        self._giao("quet-trang-chu")
+
+    def _ve(self) -> None:
+        tram = self._tram()
+        may = tram.may_dang_noi() if tram is not None else []
+        cho = tram.viec_cho() if tram is not None else []
+        self._bang.setRowCount(len(may))
+        for i, m in enumerate(may):
+            for c, gia_tri in enumerate((m.get("kenh", ""), m.get("may", ""),
+                                         m.get("ip", ""), m.get("luc", ""))):
+                self._bang.setItem(i, c, QTableWidgetItem(str(gia_tri)))
+        phan = []
+        if tram is None or not tram.dang_chay:
+            phan.append("cổng nhận đang tắt")
+        phan.append("{0} máy từng lên tiếng".format(len(may)))
+        if cho:
+            phan.append("{0} việc đang chờ giao".format(len(cho)))
+        self._tom_tat.setText(" · ".join(phan))
+
+
 class TrangPhanTich(QWidget):
     def __init__(self, app):
         super().__init__()
@@ -859,8 +991,10 @@ class TrangPhanTich(QWidget):
         self.tabs = QTabWidget()
         self.doi_thu = TrangDoiThu(app)
         self.chi_so = TrangChiSoYTB(app)
+        self.may_vm = TrangMayVM(app, self.chi_so)
         self.tabs.addTab(self.doi_thu, TAB_CON[0])
         self.tabs.addTab(self.chi_so, TAB_CON[1])
+        self.tabs.addTab(self.may_vm, TAB_CON[2])
         doc.addWidget(self.tabs, 1)
 
     def doi_du_an(self, ten: str) -> None:

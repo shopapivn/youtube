@@ -155,6 +155,21 @@ class Tram:
         self.so_goi = 0
         self.so_rac = 0
         self.so_chan = 0
+        # ── Hộp việc cho agent trên máy ảo (vm/agent.py) ─────────────────────
+        #
+        # Chiều VỀ (extension đẩy số liệu) đã có. Chiều ĐI — tool ra lệnh cho
+        # máy ảo — đi qua hộp này: agent trong máy ảo tự GỌI VỀ hỏi việc
+        # (`GET /viec`), không phải mở cổng nào trên máy ảo. Lượt hỏi nào cũng
+        # được ghi làm nhịp tim, nên tool biết máy nào đang nối.
+        #
+        # Hộp nằm trong RAM: lệnh là thứ "bấm rồi chờ vài phút", tắt tool thì
+        # lệnh chưa giao coi như bỏ — người bấm lại một cái là xong, không
+        # đáng một tệp trạng thái. (Kế hoạch ĐĂNG VIDEO thì khác hẳn — nó nằm
+        # trên đĩa theo kênh, xem `vm/KE-HOACH.md`.)
+        self._khoa_viec = threading.Lock()
+        self._viec: List[dict] = []          # [{id, kenh, loai, tham_so, luc}]
+        self._so_viec = 0
+        self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
 
     # ------------------------------------------------------------------ ghi log
     def ghi(self, m: str) -> None:
@@ -241,6 +256,73 @@ class Tram:
             self._bung_zip(goi, os.path.dirname(tm))
         return "ok"
 
+    # ------------------------------------------------------------------ hộp việc
+    def giao_viec(self, kenh: str, loai: str, tham_so: Optional[dict] = None) -> int:
+        """Xếp một lệnh cho máy ảo của `kenh`. Trả về số hiệu việc."""
+        with self._khoa_viec:
+            self._so_viec += 1
+            viec = {"id": self._so_viec, "kenh": an_toan(kenh), "loai": str(loai),
+                    "tham_so": tham_so or {}, "luc": datetime.now().isoformat(timespec="seconds")}
+            self._viec.append(viec)
+        self.ghi(f"xếp việc #{viec['id']} [{loai}] cho kênh {viec['kenh']}")
+        return viec["id"]
+
+    def lay_viec(self, kenh: str, may: str, ip: str = "") -> Optional[dict]:
+        """Agent hỏi việc: trả việc CŨ NHẤT của kênh đó (rồi rút khỏi hộp).
+
+        Lượt hỏi nào — kể cả tay không — cũng ghi nhịp tim, để tab Máy VM nói
+        được máy nào đang nối và lần cuối lên tiếng lúc nào.
+        """
+        kenh = an_toan(kenh)
+        with self._khoa_viec:
+            self._nhip_tim[(kenh, an_toan(may))] = {
+                "ip": str(ip), "luc": datetime.now().isoformat(timespec="seconds")}
+            for i, viec in enumerate(self._viec):
+                if viec["kenh"] == kenh:
+                    return self._viec.pop(i)
+        return None
+
+    def viec_xong(self, kenh: str, so: int, ket_qua: str = "", loi: str = "") -> None:
+        """Agent báo đã làm xong (hay hỏng) một việc — chỉ để kể lại cho người."""
+        if loi:
+            self.ghi(f"máy ảo kênh {an_toan(kenh)}: việc #{so} HỎNG — {str(loi)[:200]}")
+        else:
+            self.ghi(f"máy ảo kênh {an_toan(kenh)}: việc #{so} xong. {str(ket_qua)[:200]}")
+
+    def may_dang_noi(self) -> List[dict]:
+        """Các máy ảo từng lên tiếng, mới nhất trước — cho tab Máy VM vẽ bảng."""
+        with self._khoa_viec:
+            ra = [{"kenh": k, "may": m, **v} for (k, m), v in self._nhip_tim.items()]
+        return sorted(ra, key=lambda x: x.get("luc", ""), reverse=True)
+
+    def viec_cho(self) -> List[dict]:
+        with self._khoa_viec:
+            return [dict(v) for v in self._viec]
+
+    def nhan_doi_thu(self, kenh: str, danh_sach: List[str]) -> int:
+        """Máy ảo quét trang chủ thấy kênh lạ → nối vào SỔ ĐỐI THỦ của kênh.
+
+        Logic của chủ dự án (01/09/2026): *"trang chủ là nơi có content được
+        đề xuất… cái đuôi để nắm không phải content mà là ĐỐI THỦ — nắm được
+        hết đối thủ là nắm được hết content"*. Sổ ở `nghien-cuu/doi-thu.txt`
+        — đúng chỗ tab Đối thủ đang đọc, thêm vào là lượt quét sau quét luôn.
+        """
+        from core import doi_thu_kenh as so  # noqa: PLC0415 — tránh vòng nhập
+
+        cu = so.doc_doi_thu(self.goc, kenh)
+        da_co = {d.strip() for d in cu.splitlines() if d.strip()}
+        moi = []
+        for d in danh_sach:
+            d = str(d).strip()
+            if d and d not in da_co:
+                moi.append(d)
+                da_co.add(d)    # trùng NGAY TRONG một gói cũng chỉ tính một
+        if moi:
+            so.luu_doi_thu(self.goc, kenh, (cu.strip() + "\n" if cu.strip() else "")
+                           + "\n".join(moi))
+            self.ghi(f"kênh {an_toan(kenh)}: +{len(moi)} đối thủ mới từ trang chủ")
+        return len(moi)
+
     def _bung_zip(self, goi: dict, snap: str) -> None:
         """Studio trả bảng dưới dạng ZIP nén base64 — bung ra thành .csv đọc được.
 
@@ -303,6 +385,18 @@ def _lam_xu_ly(tram: "Tram"):
                     "ok": True, "cong": tram.cong, "so_goi": tram.so_goi,
                     "thu_muc": os.path.join(tram.goc, "CHANNEL").replace("\\", "/"),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            if self.path.startswith("/viec"):
+                # Agent máy ảo hỏi việc: /viec?kenh=TL4-T7&may=vm-01
+                from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+                q = parse_qs(urlparse(self.path).query)
+                kenh = (q.get("kenh") or [""])[0]
+                may = (q.get("may") or ["?"])[0]
+                ip = self.client_address[0] if self.client_address else ""
+                viec = tram.lay_viec(kenh, may, ip) if kenh else None
+                return self._tra(json.dumps(viec or {}, ensure_ascii=False)
+                                 .encode("utf-8"),
+                                 "application/json; charset=utf-8")
             return self._tra(b"ok")
 
         def do_POST(self):
@@ -316,6 +410,16 @@ def _lam_xu_ly(tram: "Tram"):
             try:
                 if self.path == "/capture":
                     return self._tra(tram.nhan_capture(b).encode("utf-8"))
+                if self.path == "/viec-xong":
+                    tram.viec_xong(b.get("kenh") or "", int(b.get("id") or 0),
+                                   str(b.get("ket_qua") or ""),
+                                   str(b.get("loi") or ""))
+                    return self._tra(b"ok")
+                if self.path == "/doi-thu":
+                    them = tram.nhan_doi_thu(b.get("kenh") or "",
+                                             list(b.get("danh_sach") or []))
+                    return self._tra(json.dumps({"them": them}).encode("utf-8"),
+                                     "application/json; charset=utf-8")
                 if self.path == "/done":
                     kd = thu_muc_kenh(b.get("kenh") or "kenh", tram.goc)
                     tm = os.path.join(kd, an_toan(b.get("id")), an_toan(b.get("label")))

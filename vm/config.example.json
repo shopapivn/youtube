@@ -1,0 +1,9 @@
+{
+    "tram": "http://192.168.1.10:8765",
+    "kenh": "TL4-T7",
+    "ten_may": "vm-tl4",
+    "chrome": "C:\\GoogleChromePortable\\GoogleChromePortable.exe",
+    "studio_url": "https://studio.youtube.com",
+    "cho_quet_giay": 480,
+    "dong_chrome_sau_quet": false
+}
