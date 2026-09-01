@@ -26,17 +26,20 @@ set PYTHONUTF8=1
 title My Tool (cua so den de xem loi)
 
 REM --- Tim Python THAT (khong phai ban gia Microsoft Store) ------------------
+REM  LUAT: dat PYEXE la DUONG DAN thi bo NHAY vao trong gia tri
+REM  (set PYEXE="C:\...\python.exe") - ten nguoi dung hay thu muc tool co dau
+REM  cach thi goi khong nhay se bi cat o dau cach. Xem chu thich SETUP.bat.
 set "PYEXE="
 
 REM 1) Moi truong ao cua tool (neu co) - dung dung bo thu vien SETUP da cai.
-if exist "%~dp0.venv\Scripts\python.exe" set "PYEXE=%~dp0.venv\Scripts\python.exe"
-if not defined PYEXE if exist "%~dp0venv\Scripts\python.exe" set "PYEXE=%~dp0venv\Scripts\python.exe"
+if exist "%~dp0.venv\Scripts\python.exe" set PYEXE="%~dp0.venv\Scripts\python.exe"
+if not defined PYEXE if exist "%~dp0venv\Scripts\python.exe" set PYEXE="%~dp0venv\Scripts\python.exe"
 
 REM 2) Python Install Manager (Python 3.14+): %LocalAppData%\Python\pythoncore-*
-if not defined PYEXE for /d %%d in ("%LocalAppData%\Python\pythoncore-*") do if not defined PYEXE if exist "%%d\python.exe" set "PYEXE=%%d\python.exe"
+if not defined PYEXE for /d %%d in ("%LocalAppData%\Python\pythoncore-*") do if not defined PYEXE if exist "%%d\python.exe" set PYEXE="%%d\python.exe"
 
 REM 3) Ban cai thong thuong cho current user: %LocalAppData%\Programs\Python\Python3*
-if not defined PYEXE for /d %%d in ("%LocalAppData%\Programs\Python\Python3*") do if not defined PYEXE if exist "%%d\python.exe" set "PYEXE=%%d\python.exe"
+if not defined PYEXE for /d %%d in ("%LocalAppData%\Programs\Python\Python3*") do if not defined PYEXE if exist "%%d\python.exe" set PYEXE="%%d\python.exe"
 
 REM 4) Lenh "python" trong PATH - CHI dung neu KHONG phai ban gia WindowsApps.
 if defined PYEXE goto :co_python

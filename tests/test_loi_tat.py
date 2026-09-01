@@ -115,3 +115,34 @@ def test_setup_dung_venv_va_chan_python_32_bit():
     from core.safe_update import PRESERVE
 
     assert ".venv" in PRESERVE, "cập nhật mà xoá .venv là tool không mở lại được"
+
+
+def test_launcher_khong_dat_pyexe_duong_dan_khong_nhay():
+    r"""Tên người dùng có dấu cách ("C:\Users\hoang xuan\...") làm mọi lời gọi
+    `%PYEXE%` không nháy đứt ở dấu cách — khách 01/09/2026 dính thật, SETUP
+    chạy ra 'C:\Users\hoang' is not recognized rồi rơi nhầm vào "PYTHON QUA
+    CU". Luật: đặt PYEXE là ĐƯỜNG DẪN thì nháy phải nằm TRONG giá trị."""
+    from pathlib import Path
+
+    goc = Path(__file__).resolve().parent.parent
+    for ten in ("SETUP.bat", "CHAY-QT.bat"):
+        chu = (goc / ten).read_text(encoding="utf-8", errors="replace")
+        assert 'set "PYEXE=%LocalAppData%' not in chu, ten
+        assert 'set "PYEXE=%~dp0' not in chu, ten
+        assert 'set "PYEXE=%%d' not in chu, ten
+
+
+def test_file_khoi_dong_phai_crlf_va_thuan_ascii():
+    """cmd.exe băm nát file .bat xuống dòng LF — tái hiện được 01/09/2026:
+    'M' / 'ho' / 'tle' is not recognized. `.gitattributes` đã khoá `-text`,
+    bài này canh phần còn lại: byte trên đĩa phải CRLF thuần, .bat thuần ASCII."""
+    from pathlib import Path
+
+    goc = Path(__file__).resolve().parent.parent
+    for ten in ("SETUP.bat", "CHAY-QT.bat", "KIEM-TRA.bat", "CHAY-GON.vbs"):
+        b = (goc / ten).read_bytes()
+        assert b.count(b"\n") == b.count(b"\r\n"), ten + ": co dong LF tran"
+        if ten.endswith(".bat"):
+            assert all(byte <= 127 for byte in b), ten + ": phai thuan ASCII"
+    thuoc_tinh = (goc / ".gitattributes").read_text(encoding="utf-8")
+    assert "*.bat -text" in thuoc_tinh

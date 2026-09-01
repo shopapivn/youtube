@@ -97,8 +97,16 @@ if errorlevel 1 goto :python_manual
 
 REM Process cmd dang chay khong tu nhan PATH moi. Tim thang vi tri mac dinh cua
 REM goi winget; py launcher la duong lui neu installer da dang ky no.
+REM
+REM === LUAT DAT PYEXE: la DUONG DAN thi bo NHAY vao trong gia tri ===
+REM   set PYEXE="C:\...\python.exe"   (dung)
+REM   set "PYEXE=C:\...\python.exe"   (SAI - ten nguoi dung co dau cach la
+REM   "C:\Users\hoang xuan\..." bi cat o dau cach, cmd chay 'C:\Users\hoang'
+REM   roi bao not recognized - khach dinh that 01/09/2026, anh chup 2 dong
+REM   loi + roi nham vao nhanh "PYTHON QUA CU").
+REM   Rieng "python" / "py -3" (lenh + tham so) thi KHONG duoc bo nhay.
 if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
-  set "PYEXE=%LocalAppData%\Programs\Python\Python312\python.exe"
+  set PYEXE="%LocalAppData%\Programs\Python\Python312\python.exe"
   goto :found
 )
 py -3.12 --version >nul 2>&1
@@ -127,7 +135,7 @@ echo   Dang cai Python (khong hoi gi them)...
 "%PYSETUP%" /quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_pip=1
 del /q "%PYSETUP%" >nul 2>&1
 if exist "%LocalAppData%\Programs\Python\Python312\python.exe" (
-  set "PYEXE=%LocalAppData%\Programs\Python\Python312\python.exe"
+  set PYEXE="%LocalAppData%\Programs\Python\Python312\python.exe"
   goto :found
 )
 py -3.12 --version >nul 2>&1
