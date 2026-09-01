@@ -179,7 +179,7 @@ if errorlevel 1 (
   )
   if /i "%PROCESSOR_ARCHITECTURE%"=="x86" if not defined PROCESSOR_ARCHITEW6432 (
     echo.
-    echo   !!! WINDOWS NAY LA BAN 32-BIT. Tool can Windows 64-bit — nhieu thu
+    echo   !!! WINDOWS NAY LA BAN 32-BIT. Tool can Windows 64-bit - nhieu thu
     echo   vien tao anh/giong noi khong co ban 32-bit de cai.
     echo.
     pause
@@ -243,7 +243,7 @@ if exist "%~dp0.venv\Scripts\python.exe" (
   set "DUNG_VENV=1"
   echo   - Tu gio thu vien nam trong: .venv cua thu muc tool
 ) else (
-  echo   - Chua tao duoc .venv ^(khong sao^) — dung tam Python he thong.
+  echo   - Chua tao duoc .venv ^(khong sao^) - dung tam Python he thong.
 )
 echo.
 
@@ -267,8 +267,8 @@ if errorlevel 1 (
   REM nam trong Program Files va can quyen quan tri. "--user" ghi vao thu muc
   REM rieng cua khach nen khong can quyen gi ca. Thu cach nay TRUOC khi bat
   REM khach di tim nut "Run as administrator". Rieng khi da cai vao .venv cua
-  REM thu muc tool thi khong co chuyen quyen — pip trong venv con tu choi
-  REM "--user" — nen bo qua luot nay (errorlevel giu nguyen, roi xuong bao loi).
+  REM thu muc tool thi khong co chuyen quyen - pip trong venv con tu choi
+  REM "--user" - nen bo qua luot nay (errorlevel giu nguyen, roi xuong bao loi).
   if not defined DUNG_VENV %PYEXE% -m pip install -q -r requirements.txt --user --disable-pip-version-check
   if errorlevel 1 (
     echo.
@@ -326,7 +326,7 @@ echo.
 
 REM Chon dung ban x64 hay x86 theo chinh Python dang dung - khong theo Windows.
 REM Python 32-bit tren Windows 64-bit thi phai lay ban x86, lay nham la vo ich.
-REM (Da dung .venv thi chac chan 64-bit — buoc kiem o tren ep vay — va PYEXE
+REM (Da dung .venv thi chac chan 64-bit - buoc kiem o tren ep vay - va PYEXE
 REM  luc nay mang san dau nhay, nhet vao for /f la cmd xen nhay hong lenh.)
 set "VCARCH=x64"
 if not defined DUNG_VENV for /f "delims=" %%i in ('%PYEXE% -c "import struct;print('x64' if struct.calcsize('P')==8 else 'x86')" 2^>nul') do set "VCARCH=%%i"
@@ -530,7 +530,7 @@ REM  tham so bat buoc phai duoc boc nhay.
 echo Dang tao loi tat "My Tool" ngoai man hinh chinh...
 set "PYW="
 set "PYARG=%~dp0shopapi_studio_qt.py"
-REM Uu tien pythonw cua .venv trong thu muc tool — cung mot nguyen tac "moi
+REM Uu tien pythonw cua .venv trong thu muc tool - cung mot nguyen tac "moi
 REM thu tool can nam trong thu muc tool", va khoi phai hoi Python he thong.
 if defined DUNG_VENV if exist "%~dp0.venv\Scripts\pythonw.exe" set "PYW=%~dp0.venv\Scripts\pythonw.exe"
 if not defined PYW for /f "delims=" %%i in ('%PYEXE% -c "import os,sys;d=os.path.dirname(sys.executable);p=os.path.join(d,'pythonw.exe');print(p if os.path.isfile(p) else '')" 2^>nul') do set "PYW=%%i"

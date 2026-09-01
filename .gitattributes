@@ -1,0 +1,20 @@
+# ═══ FILE KHOI DONG WINDOWS: GIU NGUYEN BYTE, KHONG DOI XUONG DONG ═══
+#
+# cmd.exe co mot loi kinh dien voi file .bat xuong dong kieu Unix (LF): khi
+# mot khoi lenh vat qua ranh gioi bo dem doc, no nhay sai vi tri va CHAY
+# NHUNG MAU CHU GIUA DONG. Khach 01/09/2026 gui anh dung canh do:
+#
+#     'M' is not recognized as an internal or external command
+#     'ho' is not recognized as an internal or external command
+#
+# Truoc do Git normalize cac file nay ve LF trong kho (autocrlf), nen ZIP
+# khach tai tu GitHub mang .bat dang LF - hong tren may khach, trong khi may
+# nguoi lam tool thi chay ngon vi ban checkout da duoc doi lai CRLF. Vi tri
+# vo con xe dich theo do dai file, nen sua file .bat la benh tu nhien xuat
+# hien o cho khac.
+#
+# "-text" = Git coi la nhi phan: khong bao gio doi xuong dong, byte trong kho
+# la byte tren may khach, ZIP tai ve la CRLF dung nhu da ghi.
+*.bat -text
+*.cmd -text
+*.vbs -text
