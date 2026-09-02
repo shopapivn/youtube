@@ -118,4 +118,14 @@ def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
     with open(tam, "w", encoding="utf-8") as tep:
         json.dump(cau_hinh, tep, ensure_ascii=False, indent=4)
     os.replace(tam, duong)
+    # Số bản đi kèm gói — bảng VM hiện nó trên tiêu đề và so với GitHub
+    # (kiểu MyTool: mở lên là biết mình bản mấy, có bản mới thì tự thay).
+    try:
+        with open(os.path.join(goc, "VERSION"), encoding="utf-8") as tep:
+            ban = tep.read().strip()
+        with open(os.path.join(goc, "vm", "phien-ban.txt"), "w",
+                  encoding="utf-8") as tep:
+            tep.write(ban)
+    except OSError:
+        pass
     return duong

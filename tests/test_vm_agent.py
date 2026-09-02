@@ -1142,3 +1142,108 @@ class TestTuCapNhat:
         (thu_log / "dang.log").write_text("dang dang video...")
         assert gd._may_dang_ban(str(thu_log)), \
             "log còn nóng = có thể đang đăng dở — cấm tự thay bản giữa chừng"
+
+
+class TestNumDinhVaPhienBan:
+    """02/09: 'tao tắt việc đăng... mở lên nó vẫn bật' + 'không thấy phiên
+    bản' — núm gạt phải DÍNH (báo ngược về tool), bản phải hiện và tự soi."""
+
+    def test_gat_num_tren_vm_sua_nguon_su_that(self, tmp_path):
+        from core import vm_cai_dat
+
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            ra = agent._goi(dia_chi, "/thiet-lap-vm",
+                            {"kenh": "TL4-T7", "tu_dang": False,
+                             "tu_tra_loi_cmt": False,
+                             "gio_quet": "01:00"})     # khoá lạ phải rơi ra
+            assert ra == {"ok": True}
+            cai = vm_cai_dat.doc(str(tmp_path), "TL4-T7")
+            assert cai["tu_dang"] is False and cai["tu_tra_loi_cmt"] is False
+            assert cai["gio_quet"] == "07:30", \
+                "cửa này chỉ nhận 2 núm bật/tắt — không cho chỉnh gì khác"
+        finally:
+            tram.tat()
+
+    def test_kenh_ma_khong_duoc_de_tu_goi_mang(self, tmp_path):
+        import urllib.error
+
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            with pytest.raises(urllib.error.HTTPError) as loi:
+                agent._goi("http://127.0.0.1:{0}".format(tram.cong),
+                           "/thiet-lap-vm", {"kenh": "KENH-MA",
+                                             "tu_dang": False})
+            assert loi.value.code == 400
+            assert not os.path.isdir(tmp_path / "CHANNEL" / "KENH-MA")
+        finally:
+            tram.tat()
+
+    def test_giai_nen_hieu_ca_zip_github_lan_zip_tram(self, tmp_path):
+        import importlib.util
+        import io as io_mod
+        import zipfile
+
+        spec = importlib.util.spec_from_file_location(
+            "vm_giao_dien3", GOC / "vm" / "giao_dien.py")
+        gd = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gd)
+
+        def nen(cac_muc):
+            bo = io_mod.BytesIO()
+            with zipfile.ZipFile(bo, "w") as z:
+                for ten, chu in cac_muc:
+                    z.writestr(ten, chu)
+            return bo.getvalue()
+
+        # Khổ GitHub: mọi thứ dưới <kho>-main/, chỉ lấy vm/, bỏ đồ riêng
+        goc1 = tmp_path / "a"
+        os.makedirs(goc1)
+        (goc1 / "config.json").write_text('{"kenh":"X"}')
+        so = gd._giai_nen_goi_vm(nen([
+            ("youtube-main/vm/agent.py", "moi"),
+            ("youtube-main/vm/config.json", "DO NHA NGUOI TA"),
+            ("youtube-main/core/khac.py", "khong lien quan"),
+        ]), str(goc1))
+        assert so == 1
+        assert (goc1 / "agent.py").read_text() == "moi"
+        assert (goc1 / "config.json").read_text() == '{"kenh":"X"}', \
+            "config của máy không được đè"
+        assert not (goc1 / "core").exists()
+
+        # Khổ trạm: tệp nằm trần
+        goc2 = tmp_path / "b"
+        os.makedirs(goc2)
+        so = gd._giai_nen_goi_vm(nen([
+            ("agent.py", "tu tram"), ("icon/a.png", "anh"),
+            ("agent.log", "log nha nguoi ta"),
+        ]), str(goc2))
+        assert so == 2
+        assert (goc2 / "agent.py").read_text() == "tu tram"
+        assert not (goc2 / "agent.log").exists()
+
+    def test_dong_goi_kem_so_ban(self, tmp_path):
+        from core import vm_cai_dat
+
+        (tmp_path / "VERSION").write_text("9.9.9\n")
+        vm_cai_dat.dong_goi_vm(str(tmp_path), "TL4-T7", ["http://a:1"])
+        assert (tmp_path / "vm" / "phien-ban.txt").read_text() == "9.9.9", \
+            "bảng VM phải biết mình đang bản mấy"
+
+    def test_trang_thai_mang_so_ban_kho(self, tmp_path):
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            ra = agent._goi("http://127.0.0.1:{0}".format(tram.cong),
+                            "/trang-thai")
+            assert "phien_ban" in ra, \
+                "VM chỉ-IPv6 không hỏi được GitHub thì hỏi trạm số bản"
+        finally:
+            tram.tat()

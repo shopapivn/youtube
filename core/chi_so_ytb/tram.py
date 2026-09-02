@@ -157,6 +157,15 @@ def _tep_goi_vm(goc_vm: Optional[str] = None) -> List[tuple]:
     return ra
 
 
+def _phien_ban_kho() -> str:
+    """Số bản trong tệp VERSION của tool — cho máy ảo soi kiểu MyTool."""
+    try:
+        with io.open(os.path.join(GOC, "VERSION"), encoding="utf-8") as tep:
+            return tep.read().strip()
+    except OSError:
+        return ""
+
+
 def dau_van_goi_vm(goc_vm: Optional[str] = None) -> str:
     """Phiên bản của gói tool VM — TỰ SINH từ nội dung mã, không ai phải
     nhớ nâng số (chủ dự án 02/09/2026: "tự động thay đổi phiên bản nếu
@@ -685,6 +694,9 @@ def _lam_xu_ly(tram: "Tram"):
                     # dấu vân gói tool VM — máy ảo so với bản của nó để TỰ
                     # cập nhật khi tool nhà có mã mới
                     "goi_vm": dau_van_goi_vm(),
+                    # số bản của kho — máy ảo chỉ-IPv6 không hỏi được GitHub
+                    # thì hỏi đây (bảng VM soi bản mới kiểu MyTool)
+                    "phien_ban": _phien_ban_kho(),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             if self.path.startswith("/kenh"):
                 # Danh sách kênh của tool — bộ cài trên máy ảo hiện menu bấm
@@ -786,6 +798,27 @@ def _lam_xu_ly(tram: "Tram"):
                     them = tram.nhan_doi_thu(b.get("kenh") or "",
                                              list(b.get("danh_sach") or []))
                     return self._tra(json.dumps({"them": them}).encode("utf-8"),
+                                     "application/json; charset=utf-8")
+                if self.path == "/thiet-lap-vm":
+                    # Người dùng gạt núm NGAY TRÊN BẢNG máy ảo (02/09: "tao
+                    # tắt việc đăng... mở lên nó vẫn bật" — vì thiết lập tool
+                    # đẩy xuống thắng và đè lại). Chữa tận gốc: gạt ở máy ảo
+                    # là báo về đây, tool sửa NGUỒN SỰ THẬT (may-ao.json) —
+                    # hai bên hết cãi nhau. Chỉ nhận đúng HAI núm bật/tắt;
+                    # kênh phải có thật, không đẻ kênh ma từ gói mạng.
+                    from core import vm_cai_dat  # noqa: PLC0415
+                    from core.kenh import duong_kenh  # noqa: PLC0415
+
+                    kenh = an_toan(b.get("kenh") or "")
+                    thay = {k: bool(b[k]) for k in ("tu_dang", "tu_tra_loi_cmt")
+                            if k in b}
+                    if not kenh or not os.path.isdir(
+                            os.path.join(duong_kenh(tram.goc), kenh)):
+                        return self._tra(b"kenh la", ma=400)
+                    if thay:
+                        vm_cai_dat.luu(tram.goc, kenh, **thay)
+                        tram.ghi("máy ảo {0} gạt núm: {1}".format(kenh, thay))
+                    return self._tra(json.dumps({"ok": True}).encode("utf-8"),
                                      "application/json; charset=utf-8")
                 if self.path == "/van-ban":
                     # Máy ảo nhờ tool viết chữ (trả lời bình luận) bằng KEY

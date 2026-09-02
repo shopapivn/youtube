@@ -163,6 +163,104 @@ def cam_loi_tat():
         pass
 
 
+#: Cập nhật kiểu MyTool (chủ dự án 02/09: "như kiểu khách dùng MyTool - mở
+#: lên là có phiên bản mới... đưa lên github phần đó"): vm/ nằm ngay trong
+#: kho MyTool, nên phiên bản = VERSION của kho, gói = zip nhánh chính.
+KHO_GITHUB = "shopapivn/youtube"
+NHANH = "main"
+URL_PHIEN_BAN = ("https://raw.githubusercontent.com/{0}/{1}/VERSION"
+                 .format(KHO_GITHUB, NHANH))
+URL_GOI_GITHUB = ("https://github.com/{0}/archive/refs/heads/{1}.zip"
+                  .format(KHO_GITHUB, NHANH))
+TEP_PHIEN_BAN = os.path.join(GOC, "phien-ban.txt")
+
+
+def doc_phien_ban():
+    try:
+        with open(TEP_PHIEN_BAN, encoding="utf-8") as tep:
+            return tep.read().strip() or "?"
+    except OSError:
+        return "?"
+
+
+def _ghi_phien_ban(v):
+    try:
+        with open(TEP_PHIEN_BAN, "w", encoding="utf-8") as tep:
+            tep.write(str(v).strip())
+    except OSError:
+        pass
+
+
+def _tai(url, cho=30):
+    import urllib.request
+    yeu_cau = urllib.request.Request(url, headers={"User-Agent": "MyToolVM"})
+    with urllib.request.urlopen(yeu_cau, timeout=cho) as tra:
+        return tra.read()
+
+
+def _bat_ipv4(bat):
+    """VM đa phần CHỈ có IPv6 mà GitHub chỉ nói IPv4 — bật IPv4 tạm lúc
+    tải rồi tắt lại (đúng chiêu tool upload cũ vẫn dùng, cần quyền admin)."""
+    dong = "Enable" if bat else "Disable"
+    lenh = ("Get-NetAdapter | ForEach-Object {{ {0}-NetAdapterBinding "
+            "-Name $_.Name -ComponentID ms_tcpip -ErrorAction "
+            "SilentlyContinue }}").format(dong)
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-Command", lenh],
+                       capture_output=True, creationflags=CREATE_NO_WINDOW,
+                       timeout=60)
+        if bat:
+            subprocess.run(["powershell", "-NoProfile", "-Command",
+                            "Get-NetAdapter | Where-Object {$_.Status -eq "
+                            "'Up'} | ForEach-Object { "
+                            "Set-DnsClientServerAddress -InterfaceIndex "
+                            "$_.ifIndex -ServerAddresses 8.8.8.8 "
+                            "-ErrorAction SilentlyContinue }"],
+                           capture_output=True,
+                           creationflags=CREATE_NO_WINDOW, timeout=60)
+            time.sleep(6)
+    except Exception:
+        pass
+
+
+def _giai_nen_goi_vm(du_lieu, goc_vm):
+    """Bung phần vm/ của một gói zip vào chỗ mình — nhận CẢ HAI khổ:
+    zip của GitHub (kho-x/vm/agent.py...) lẫn zip của trạm (agent.py...).
+    Đồ RIÊNG của máy (config, log, token...) không bao giờ bị đè."""
+    import io as io_mod
+    import zipfile
+    so = 0
+    with zipfile.ZipFile(io_mod.BytesIO(du_lieu)) as goi:
+        cac_ten = [m.filename.replace("\\", "/") for m in goi.infolist()]
+        # GitHub zip: mọi thứ nằm dưới "<kho>-<nhánh>/..." — chỉ lấy vm/.
+        # Zip của trạm: tệp nằm trần ("agent.py", "icon/…") — lấy hết.
+        kieu_github = any("/vm/" in t for t in cac_ten)
+        for muc in goi.infolist():
+            if muc.is_dir():
+                continue
+            ten = muc.filename.replace("\\", "/")
+            if kieu_github:
+                if "/vm/" not in ten:
+                    continue
+                rel = ten.split("/vm/", 1)[1]
+            else:
+                rel = ten[3:] if ten.startswith("vm/") else ten
+            if not rel:
+                continue
+            goc_ten = os.path.basename(rel)
+            if (goc_ten in _BO_TEP
+                    or goc_ten.startswith(("ke-hoach-", "cho-bao-"))
+                    or goc_ten.endswith((".log", ".pid"))
+                    or rel.split("/")[0] in _BO_THU):
+                continue
+            dich = os.path.join(goc_vm, rel.replace("/", os.sep))
+            os.makedirs(os.path.dirname(dich) or goc_vm, exist_ok=True)
+            with goi.open(muc) as nguon, open(dich, "wb") as ra:
+                ra.write(nguon.read())
+            so += 1
+    return so
+
+
 #: Soi gương của luật loại trừ bên trạm (`core/chi_so_ytb/tram._tep_goi_vm`)
 #: — sửa một bên thì sửa cả bên kia, có test so hai bên cho bằng nhau.
 _BO_TEP = {"config.json", "cai-dat-tool.json", "agent.pid",
@@ -231,9 +329,11 @@ class BangDieuKhien:
         self._nhip = 0
         self._dang_cap_nhat = False
         self._co_ban_moi = False       # luồng soi nền bật cờ, vòng chính áp
+        self._ban_moi_nhat = ""        # số bản mới nhất mà lần soi thấy
 
         self.cua = tk.Tk()
-        self.cua.title("MyTool VM — " + self._ten_kenh())
+        self.cua.title("MyTool VM — {0} — bản {1}".format(
+            self._ten_kenh(), doc_phien_ban()))
         self.cua.configure(bg=NEN)
         self.cua.geometry("1000x600")
         self.cua.protocol("WM_DELETE_WINDOW", self.dong)
@@ -311,13 +411,52 @@ class BangDieuKhien:
 
     # ------------------------------------------------------------------
     def doi_cong_tac(self):
-        luu_cong_tac(self.o_dang.get(), self.o_cmt.get())
-        self.cong_tac["tu_dang"] = bool(self.o_dang.get())
-        self.cong_tac["tu_tra_loi_cmt"] = bool(self.o_cmt.get())
+        """Gạt núm trên bảng — phải DÍNH, không bị tool ở nhà đè lại.
+
+        02/09, chủ dự án: *"tao tắt việc đăng và trả lời bình luận, mở lên
+        nó vẫn bật"* — vì thiết lập tool đẩy xuống mỗi nhịp tim THẮNG và đè
+        ngược. Chữa tận gốc: gạt ở đây là (1) ghi cục bộ, (2) ghi đè luôn
+        tệp thiết-lập-tool để 12 giây sau không tự lật, (3) BÁO VỀ TOOL sửa
+        nguồn sự thật (POST /thiet-lap-vm) — hai bên cùng một giá trị.
+        """
+        d, c = bool(self.o_dang.get()), bool(self.o_cmt.get())
+        luu_cong_tac(d, c)
+        try:
+            duong = os.path.join(GOC, "cai-dat-tool.json")
+            du = (json.load(open(duong, encoding="utf-8"))
+                  if os.path.isfile(duong) else {})
+            du["tu_dang"], du["tu_tra_loi_cmt"] = d, c
+            with open(duong + ".tmp", "w", encoding="utf-8") as tep:
+                json.dump(du, tep, ensure_ascii=False, indent=1)
+            os.replace(duong + ".tmp", duong)
+        except Exception:
+            pass
+        self.cong_tac["tu_dang"], self.cong_tac["tu_tra_loi_cmt"] = d, c
+        import threading
+        threading.Thread(target=self._bao_cong_tac, args=(d, c),
+                         daemon=True).start()
         for khoa in ("tu_dang", "tu_tra_loi_cmt"):
             if not self.cong_tac[khoa] and self._song(khoa):
                 giet(self.tt[khoa])
                 self.tt[khoa] = None
+
+    def _bao_cong_tac(self, d, c):
+        """(luồng nền) báo núm về tool để nguồn sự thật đổi theo — trạm tắt
+        thì thôi, bản cục bộ đã ghi; khi tool mở lại nó sẽ đẩy giá trị cũ
+        xuống, nên nối được lúc nào báo lúc đó là quan trọng."""
+        tram = self._tram()
+        if not tram:
+            return
+        try:
+            import urllib.request
+            du = json.dumps({"kenh": self._ten_kenh(), "tu_dang": d,
+                             "tu_tra_loi_cmt": c}).encode("utf-8")
+            urllib.request.urlopen(urllib.request.Request(
+                tram.rstrip("/") + "/thiet-lap-vm", data=du,
+                headers={"Content-Type": "application/json"}),
+                timeout=10).read()
+        except Exception:
+            pass
 
     def chay_lai_het(self):
         for khoa, _ten, tep, log in CAC_CON:
@@ -339,61 +478,83 @@ class BangDieuKhien:
                           os.path.join(GOC, "may_cmt.py"), "setup"],
                          cwd=GOC, creationflags=CREATE_NEW_CONSOLE, env=env)
 
-    def _soi_ban_moi(self):
-        """(luồng nền) hỏi trạm dấu vân gói — khác bản mình thì bật cờ."""
+    def _tram(self):
         try:
-            import urllib.request
-            tram = ""
-            try:
-                tram = str(json.load(open(os.path.join(
-                    GOC, "cai-dat-tool.json"), encoding="utf-8")).get("tram") or "")
-            except Exception:
-                return
-            if not tram:
-                return
-            with urllib.request.urlopen(tram.rstrip("/") + "/trang-thai",
-                                        timeout=10) as tra:
-                cua_tram = str(json.load(tra).get("goi_vm") or "")
-            if cua_tram and cua_tram != dau_van_cuc_bo():
-                self._co_ban_moi = True
+            return str(json.load(open(os.path.join(
+                GOC, "cai-dat-tool.json"), encoding="utf-8")).get("tram") or "")
         except Exception:
-            pass
+            return ""
+
+    def _soi_ban_moi(self):
+        """(luồng nền) Có bản mới không — hỏi GitHub như MyTool; VM chỉ có
+        IPv6 không với tới GitHub thì hỏi TRẠM (nó biết VERSION của kho)."""
+        moi = ""
+        try:
+            moi = _tai(URL_PHIEN_BAN, cho=10).decode("utf-8",
+                                                     "replace").strip()
+            if len(moi) > 20 or "<" in moi:   # trang 404 HTML, không phải số
+                moi = ""
+        except Exception:
+            moi = ""
+        if not moi:
+            tram = self._tram()
+            if tram:
+                try:
+                    import urllib.request
+                    with urllib.request.urlopen(
+                            tram.rstrip("/") + "/trang-thai", timeout=10) as t:
+                        moi = str(json.load(t).get("phien_ban") or "").strip()
+                except Exception:
+                    moi = ""
+        if moi:
+            self._ban_moi_nhat = moi
+            self._co_ban_moi = (moi != doc_phien_ban())
 
     def cap_nhat(self):
-        """Tải gói vm/ mới nhất từ TRẠM (máy nhà) rồi mở lại bảng.
+        """Thay bản mới rồi mở lại bảng — nguồn theo thứ tự khôn:
 
-        Máy nhà cập nhật MyTool là trạm có bản mới — VM không cần GitHub.
-        Giữ lại: config.json, log, token/dữ liệu (gói không đụng tới chúng).
+        1. GitHub thẳng (VM có đường IPv4/đường ra GitHub)
+        2. GitHub sau khi BẬT IPv4 tạm (VM chỉ IPv6 — chiêu của tool cũ),
+           tắt IPv4 lại ngay dù thành hay bại
+        3. Gói từ TRẠM của máy nhà (/goi-vm) — không cần Internet
+
+        Giữ nguyên: config.json, log, token/dữ liệu — gói không đè chúng.
         """
         if self._dang_cap_nhat:
             return
         self._dang_cap_nhat = True
-        self.dong_tt.config(text="đang tải bản mới từ trạm…")
+        self.dong_tt.config(text="đang tải bản mới…")
         self.cua.update_idletasks()
+        du = b""
         try:
-            import io as _io
-            import urllib.request
-            import zipfile
-
-            tram = ""
             try:
-                tram = str(json.load(open(os.path.join(
-                    GOC, "cai-dat-tool.json"), encoding="utf-8")).get("tram") or "")
+                du = _tai(URL_GOI_GITHUB, cho=120)
             except Exception:
-                pass
-            if not tram:
-                self.dong_tt.config(
-                    text="chưa nối trạm — mở MyTool ở máy nhà rồi thử lại")
-                self._dang_cap_nhat = False
-                return
-            with urllib.request.urlopen(tram.rstrip("/") + "/goi-vm",
-                                        timeout=60) as tra:
-                du = tra.read()
+                self.dong_tt.config(text="GitHub chưa với tới — bật IPv4 tạm…")
+                self.cua.update_idletasks()
+                _bat_ipv4(True)
+                try:
+                    du = _tai(URL_GOI_GITHUB, cho=180)
+                except Exception:
+                    du = b""
+                finally:
+                    _bat_ipv4(False)
+            if not du:
+                tram = self._tram()
+                if tram:
+                    self.dong_tt.config(text="lấy gói qua trạm máy nhà…")
+                    self.cua.update_idletasks()
+                    du = _tai(tram.rstrip("/") + "/goi-vm", cho=60)
+            if not du:
+                raise RuntimeError("không tải được từ GitHub lẫn trạm")
             for khoa, _ten, _tep, _log in CAC_CON:
                 giet(self.tt[khoa])
                 self.tt[khoa] = None
-            with zipfile.ZipFile(_io.BytesIO(du)) as goi:
-                goi.extractall(GOC)
+            so = _giai_nen_goi_vm(du, GOC)
+            if not so:
+                raise RuntimeError("gói rỗng — không thay gì")
+            if getattr(self, "_ban_moi_nhat", ""):
+                _ghi_phien_ban(self._ban_moi_nhat)
             # mở lại bảng bằng mã MỚI; bảng cũ tự thoát
             subprocess.Popen([tim_python(), os.path.join(GOC, "giao_dien.py")],
                              cwd=GOC, creationflags=CREATE_NO_WINDOW)
@@ -413,17 +574,23 @@ class BangDieuKhien:
         try:
             self._nhip += 1
             bay_gio = time.time()
-            # Tự cập nhật: ~30 phút soi trạm một lần (lần đầu sau ~1 phút).
-            # Thấy dấu vân khác -> chờ lúc máy đăng/cmt NGUỘI rồi tự thay
-            # bản mới — "tự động update khi có thay đổi" (02/09).
-            if self._nhip in (24,) or self._nhip % 720 == 0:
+            # Tự cập nhật kiểu MyTool: soi NGAY khi mở (nhịp 2 ~ 5 giây) và
+            # ~30 phút một lần. Thấy bản mới -> chờ máy đăng/cmt NGUỘI rồi
+            # tự thay — "mở lên là có phiên bản mới" (02/09).
+            if self._nhip in (2,) or self._nhip % 720 == 0:
                 import threading
                 threading.Thread(target=self._soi_ban_moi, daemon=True).start()
-            if (self._co_ban_moi and not self._dang_cap_nhat
-                    and not _may_dang_ban(THU_LOG)):
-                self._co_ban_moi = False
-                self.cap_nhat()
-                return
+            if self._co_ban_moi and not self._dang_cap_nhat:
+                if not _may_dang_ban(THU_LOG):
+                    self._co_ban_moi = False
+                    self.cap_nhat()
+                    return
+                self.dong_tt.config(
+                    text="bản {0} · CÓ BẢN {1} — tự thay khi máy rảnh".format(
+                        doc_phien_ban(), self._ban_moi_nhat))
+            elif not self._dang_cap_nhat and self._ban_moi_nhat:
+                self.dong_tt.config(
+                    text="bản {0} · mới nhất".format(doc_phien_ban()))
             # Thiết lập tool đẩy xuống — đọc lại ~12 giây/lần, đổi là theo ngay
             if self._nhip % 5 == 2:
                 moi = doc_cong_tac()
