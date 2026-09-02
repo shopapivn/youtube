@@ -149,6 +149,9 @@ class BanGhi:
     impressions_24h: Optional[float] = None
     ctr: Optional[float] = None
     views: Optional[float] = None
+    #: Lượt xem CÓ TƯƠNG TÁC (ENGAGED) — luật 8 của sổ tay kênh: YPP tính
+    #: theo lượt thật, view công khai đếm cả khung hình đầu (~54% ảo).
+    views_that: Optional[float] = None
     unique_viewers: Optional[float] = None
     watch_hours: Optional[float] = None
     avd_giay: Optional[float] = None
@@ -277,7 +280,9 @@ def doc_kenh(kenh: str, goc: Optional[str] = None) -> List[BanGhi]:
             ngay_dang=b.get("ngay_dang"), moc_gio=b.get("moc_gio"),
             luc_chup=b.get("luc_chup") or "", thoi_luong_giay=b.get("thoi_luong_giay"),
             impressions=b.get("impressions"), impressions_24h=b.get("impressions_24h"),
-            ctr=b.get("ctr"), views=b.get("views"), unique_viewers=b.get("unique_viewers"),
+            ctr=b.get("ctr"), views=b.get("views"),
+            views_that=b.get("views_that"),
+            unique_viewers=b.get("unique_viewers"),
             watch_hours=b.get("watch_hours"), avd_giay=b.get("avd_giay"), avd_pct=b.get("avd_pct"),
             subs=b.get("subs"), traffic=b.get("traffic") or {}, thiet_bi=b.get("thiet_bi") or {},
             vung=b.get("vung") or {}, vung_tong_views=b.get("vung_tong_views") or 0,
@@ -388,19 +393,32 @@ def xuat_tom_tat(kenh: str, goc: Optional[str] = None) -> str:
         cu = moi_nhat.get(b.video_id)
         if cu is None or (b.moc_gio or 0) >= (cu.moc_gio or 0):
             moi_nhat[b.video_id] = b
+    # Cột theo đúng SỔ TAY của kênh (CHANNEL/<kênh>/CLAUDE.md): xem THẬT ước
+    # (luật 8 — YPP tính lượt thật), view/người (luật 5 — >2 tuần đầu là số
+    # bẩn), JP % (ngưỡng phân loại ≥80%).
     dong = ["Tiêu đề,Mã video,Ngày đăng,Dài,Mốc mới nhất,Lượt hiển thị,"
-            "Tỷ lệ bấm,Lượt xem,Xem TB,% độ dài,Đăng ký,Số lần chụp"]
+            "Tỷ lệ bấm,Lượt xem,Xem thật ước,View/người,JP %,Xem TB,"
+            "% độ dài,Đăng ký,Số lần chụp"]
     def _o(v):
         chu = "" if v is None else str(v)
         return '"' + chu.replace('"', '""') + '"'
     for b in sorted(moi_nhat.values(),
                     key=lambda x: x.ngay_dang or "", reverse=True):
+        vn = ""
+        if b.views and b.unique_viewers:
+            vn = round(b.views / b.unique_viewers, 1)
+        jp = ""
+        if b.vung and b.vung_tong_views:
+            jp_views = (b.vung.get("JP") or {}).get("views") or 0
+            jp = round(jp_views * 100.0 / b.vung_tong_views, 1)
         dong.append(",".join([
             _o(b.tieu_de or b.video_id), _o(b.video_id), _o(b.ngay_dang),
             _o(_mmss(b.thoi_luong_giay) if b.thoi_luong_giay else ""),
             _o(f"{b.moc_gio}h" if b.moc_gio is not None else ""),
             _o(b.impressions), _o(f"{b.ctr}%" if b.ctr is not None else ""),
-            _o(b.views), _o(_mmss(b.avd_giay) if b.avd_giay else ""),
+            _o(b.views), _o(b.views_that), _o(vn),
+            _o(f"{jp}%" if jp != "" else ""),
+            _o(_mmss(b.avd_giay) if b.avd_giay else ""),
             _o(f"{b.avd_pct}%" if b.avd_pct is not None else ""),
             _o(b.subs), _o(so_moc.get(b.video_id, 0)),
         ]))
