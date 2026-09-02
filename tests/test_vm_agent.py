@@ -1166,7 +1166,7 @@ class TestNumDinhVaPhienBan:
             assert ra == {"ok": True}
             cai = vm_cai_dat.doc(str(tmp_path), "TL4-T7")
             assert cai["tu_dang"] is False and cai["tu_tra_loi_cmt"] is False
-            assert cai["gio_quet"] == "07:30", \
+            assert cai["gio_quet"] == vm_cai_dat.MAC_DINH["gio_quet"], \
                 "cửa này chỉ nhận 2 núm bật/tắt — không cho chỉnh gì khác"
         finally:
             tram.tat()
