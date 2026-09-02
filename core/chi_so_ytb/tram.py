@@ -698,6 +698,13 @@ def _lam_xu_ly(tram: "Tram"):
                     # thì hỏi đây (bảng VM soi bản mới kiểu MyTool)
                     "phien_ban": _phien_ban_kho(),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            if self.path.startswith("/may-noi"):
+                # Nhìn từ ngoài vào: máy nào đang nối, việc nào đang chờ —
+                # để ra lệnh qua mạng xong còn biết lệnh đi tới đâu.
+                return self._tra(json.dumps({
+                    "may": tram.may_dang_noi(), "viec_cho": tram.viec_cho(),
+                }, ensure_ascii=False, default=str).encode("utf-8"),
+                    "application/json; charset=utf-8")
             if self.path.startswith("/kenh"):
                 # Danh sách kênh của tool — bộ cài trên máy ảo hiện menu bấm
                 # số thay vì bắt ai gõ tên kênh.
@@ -798,6 +805,29 @@ def _lam_xu_ly(tram: "Tram"):
                     them = tram.nhan_doi_thu(b.get("kenh") or "",
                                              list(b.get("danh_sach") or []))
                     return self._tra(json.dumps({"them": them}).encode("utf-8"),
+                                     "application/json; charset=utf-8")
+                if self.path == "/giao-viec":
+                    # Xếp việc vào hộp QUA MẠNG — trước giờ chỉ nút bấm trong
+                    # GUI làm được. Mở cửa này để agent xây tool (02/09:
+                    # "mày ra lệnh nó chạy cào studio xem") và mai kia là
+                    # agent điều kênh tự ra lệnh. Chỉ loại việc đã có tay
+                    # làm; kênh phải có thật.
+                    from core.kenh import duong_kenh  # noqa: PLC0415
+
+                    kenh = an_toan(b.get("kenh") or "")
+                    loai = str(b.get("loai") or "")
+                    if loai not in ("quet-studio", "quet-trang-chu",
+                                    "dang-video"):
+                        return self._tra(b"loai viec la", ma=400)
+                    if not kenh or not os.path.isdir(
+                            os.path.join(duong_kenh(tram.goc), kenh)):
+                        return self._tra(b"kenh la", ma=400)
+                    so = tram.giao_viec(kenh, loai,
+                                        dict(b.get("tham_so") or {}))
+                    tram.ghi("việc #{0} [{1}] xếp cho {2} (qua mạng)".format(
+                        so, loai, kenh))
+                    return self._tra(json.dumps({"ok": True, "id": so})
+                                     .encode("utf-8"),
                                      "application/json; charset=utf-8")
                 if self.path == "/thiet-lap-vm":
                     # Người dùng gạt núm NGAY TRÊN BẢNG máy ảo (02/09: "tao

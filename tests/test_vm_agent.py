@@ -1247,3 +1247,44 @@ class TestNumDinhVaPhienBan:
                 "VM chỉ-IPv6 không hỏi được GitHub thì hỏi trạm số bản"
         finally:
             tram.tat()
+
+
+class TestRaLenhQuaMang:
+    """02/09: 'mày ra lệnh nó chạy cào studio xem' — trạm nhận lệnh xếp việc
+    qua HTTP, và nhìn được máy đang nối / việc đang chờ từ ngoài."""
+
+    def test_giao_viec_qua_http_va_agent_nhan_duoc(self, tmp_path):
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            ra = agent._goi(dia_chi, "/giao-viec",
+                            {"kenh": "TL4-T7", "loai": "quet-studio"})
+            assert ra.get("ok") and ra.get("id")
+            viec = tram.lay_viec("TL4-T7", "vm-thu")
+            assert viec and viec["loai"] == "quet-studio", \
+                "lệnh qua mạng phải rơi đúng hộp mà agent vẫn hỏi"
+            nhin = agent._goi(dia_chi, "/may-noi")
+            assert nhin["viec_cho"] == [] and len(nhin["may"]) == 1
+        finally:
+            tram.tat()
+
+    def test_loai_viec_la_va_kenh_ma_bi_chan(self, tmp_path):
+        import urllib.error
+
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            for goi in ({"kenh": "TL4-T7", "loai": "xoa-het-o-cung"},
+                        {"kenh": "KENH-MA", "loai": "quet-studio"}):
+                with pytest.raises(urllib.error.HTTPError) as loi:
+                    agent._goi(dia_chi, "/giao-viec", goi)
+                assert loi.value.code == 400
+            assert tram.viec_cho() == []
+        finally:
+            tram.tat()
