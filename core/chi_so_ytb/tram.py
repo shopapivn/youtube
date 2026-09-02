@@ -294,6 +294,7 @@ class Tram:
         self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
         self._ket_qua_viec: List[dict] = []  # 20 kết quả việc gần nhất
         self._goi_moc: dict = {}             # id việc -> (loại, so_goi lúc giao)
+        self._tom_tat_luc: dict = {}         # kênh -> lần làm bảng tóm tắt cuối
         # ── Khách mời: VPS của CHÍNH CHỦ, nằm ngoài mạng nội bộ ──────────────
         #
         # Chủ dự án, 02/09/2026: *"tool đang có cái vps tl4-t7 nó có ip của
@@ -563,7 +564,31 @@ class Tram:
         goi = b.get("goi") or {}
         if "csv_export" in str(goi.get("url", "")):
             self._bung_zip(goi, os.path.dirname(tm))
+        self._lam_moi_tom_tat(an_toan(b.get("kenh") or "kenh"))
         return "ok"
+
+    def _lam_moi_tom_tat(self, kenh: str) -> None:
+        """Làm mới `bang-tom-tat.csv` — bảng cho NGƯỜI ở cửa thư mục chi-so.
+
+        Gói về theo chùm (một lượt quét = vài chục gói) nên ghìm 5 phút mỗi
+        kênh: chùm nào cũng có một lượt làm mới, mà không giải mã lại cả
+        kho mấy chục lần. Chạy luồng riêng — extension đang chờ HTTP trả
+        lời, không bắt nó đợi mình đọc đĩa.
+        """
+        gio = time.time()
+        if gio - self._tom_tat_luc.get(kenh, 0) < 300:
+            return
+        self._tom_tat_luc[kenh] = gio
+
+        def lam():
+            try:
+                from core import chi_so_ytb as _cs  # noqa: PLC0415
+                duong_kenh_goc = os.path.join(self.goc, "CHANNEL")
+                _cs.xuat_tom_tat(kenh, goc=duong_kenh_goc)
+            except Exception as loi:  # noqa: BLE001 — bảng phụ, hỏng không được chặn gói
+                self.ghi(f"làm bảng tóm tắt hỏng: {loi}")
+
+        threading.Thread(target=lam, daemon=True, name="tom-tat").start()
 
     # ------------------------------------------------------------------ hộp việc
     def giao_viec(self, kenh: str, loai: str, tham_so: Optional[dict] = None) -> int:

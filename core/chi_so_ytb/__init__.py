@@ -305,6 +305,73 @@ def _mmss(giay) -> str:
     return f"{giay // 60}:{giay % 60:02d}"
 
 
+_CHU_DOC_O_DAY = """THU MUC NAY LA GI (chi-so cua kenh)
+
+Day la kho so lieu THO ma extension cao tu YouTube Studio - bo cuc cho MAY doc:
+
+    <ma video>/<moc gio>h/raw/*.json   goi tho tung lan chup (dung xoa, dung sua)
+    <ma video>/<moc gio>h/*.csv        bang da giai ma cua lan chup do
+    kenh/                              so lieu cap KENH (chup moi ngay)
+
+NGUOI thi doc hai cho nay, dung boi trong cac thu muc ma:
+
+    bang-tom-tat.csv        mo bang Excel - moi video mot dong, so moi nhat.
+                            Tram tu lam moi moi khi co so lieu ve.
+    Tab "Chi so kenh" trong MyTool - bam "Phan tich" de AI doc gium.
+
+Muon phan tich sau: cac ban phan-tich-*.md nam o ../nghien-cuu/
+"""
+
+
+def xuat_tom_tat(kenh: str, goc: Optional[str] = None) -> str:
+    """Viết `bang-tom-tat.csv` + `DOC-O-DAY.txt` ngay cửa thư mục chi-so.
+
+    Chủ dự án, 02/09/2026: *"tao vào mục chi-so thấy mọi thứ lộn xộn không
+    có logic và rất khó quản lý"* — đúng, vì bố cục đó dựng cho MÁY (mã
+    video làm tên, gói raw theo mốc). Không đảo bố cục máy (extension đang
+    ghi vào đó); đặt một BẢNG CHO NGƯỜI ở cửa: mỗi video một dòng, tiêu đề
+    thật, số mới nhất, mở bằng Excel. Trả về đường tệp bảng.
+    """
+    goc = goc or thu_muc_du_lieu()
+    kenh_dir = thu_muc_cua_kenh(goc, kenh)
+    if not os.path.isdir(kenh_dir):
+        return ""
+    ban_ghi = doc_kenh(kenh, goc)
+    moi_nhat: Dict[str, BanGhi] = {}
+    so_moc: Dict[str, int] = {}
+    for b in ban_ghi:
+        so_moc[b.video_id] = so_moc.get(b.video_id, 0) + 1
+        cu = moi_nhat.get(b.video_id)
+        if cu is None or (b.moc_gio or 0) >= (cu.moc_gio or 0):
+            moi_nhat[b.video_id] = b
+    dong = ["Tiêu đề,Mã video,Ngày đăng,Dài,Mốc mới nhất,Lượt hiển thị,"
+            "Tỷ lệ bấm,Lượt xem,Xem TB,% độ dài,Đăng ký,Số lần chụp"]
+    def _o(v):
+        chu = "" if v is None else str(v)
+        return '"' + chu.replace('"', '""') + '"'
+    for b in sorted(moi_nhat.values(),
+                    key=lambda x: x.ngay_dang or "", reverse=True):
+        dong.append(",".join([
+            _o(b.tieu_de or b.video_id), _o(b.video_id), _o(b.ngay_dang),
+            _o(_mmss(b.thoi_luong_giay) if b.thoi_luong_giay else ""),
+            _o(f"{b.moc_gio}h" if b.moc_gio is not None else ""),
+            _o(b.impressions), _o(f"{b.ctr}%" if b.ctr is not None else ""),
+            _o(b.views), _o(_mmss(b.avd_giay) if b.avd_giay else ""),
+            _o(f"{b.avd_pct}%" if b.avd_pct is not None else ""),
+            _o(b.subs), _o(so_moc.get(b.video_id, 0)),
+        ]))
+    duong = os.path.join(kenh_dir, "bang-tom-tat.csv")
+    # utf-8-sig để Excel trên Windows đọc đúng tiếng Việt/Nhật
+    with io.open(duong + ".tmp", "w", encoding="utf-8-sig", newline="") as tep:
+        tep.write("\r\n".join(dong) + "\r\n")
+    os.replace(duong + ".tmp", duong)
+    doc_o_day = os.path.join(kenh_dir, "DOC-O-DAY.txt")
+    if not os.path.isfile(doc_o_day):
+        with io.open(doc_o_day, "w", encoding="utf-8") as tep:
+            tep.write(_CHU_DOC_O_DAY)
+    return duong
+
+
 def bao_cao_cho_ai(ban_ghi: List[BanGhi], ten_kenh: str = "") -> str:
     """Dựng khối chữ dán thẳng vào ChatGPT / Claude.
 

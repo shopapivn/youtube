@@ -317,3 +317,20 @@ def test_ban_giao_khach_le_khong_kem_dia_chi_may_ai(tmp_path):
     goc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "core", "ytb_extension")
     assert json.load(io.open(os.path.join(goc, "cau-hinh.json"), encoding="utf-8"))["host"] == ""
+
+
+def test_bang_tom_tat_cho_nguoi(tmp_path):
+    """02/09: 'vào mục chi-so thấy mọi thứ lộn xộn' — cửa thư mục phải có
+    bảng cho NGƯỜI (Excel mở được) + tờ giải thích, kể cả khi chưa có gói."""
+    import os
+
+    from core import chi_so_ytb as cs
+
+    os.makedirs(tmp_path / "TL4-T7" / "chi-so" / "vid1" / "24h" / "raw")
+    duong = cs.xuat_tom_tat("TL4-T7", goc=str(tmp_path))
+    assert duong.endswith("bang-tom-tat.csv") and os.path.isfile(duong)
+    dau = open(duong, encoding="utf-8-sig").readline()
+    assert "Tiêu đề" in dau and "Tỷ lệ bấm" in dau
+    assert (tmp_path / "TL4-T7" / "chi-so" / "DOC-O-DAY.txt").is_file()
+    # gọi lại không hỏng, không nhân đôi
+    assert cs.xuat_tom_tat("TL4-T7", goc=str(tmp_path)) == duong
