@@ -1075,3 +1075,70 @@ class TestToolVmDayDu:
             cau_hinh = json.load(tep)
         assert cau_hinh["NGUON"] == "tool", "máy đăng phải đọc kế hoạch TỪ TOOL"
         assert cau_hinh["CHANNEL_CODE"] == "TL4-T7"
+
+
+class TestTuCapNhat:
+    """02/09: 'tự động update khi có thay đổi và tự động thay đổi phiên bản'
+    — phiên bản gói vm/ TỰ SINH từ nội dung mã; VM soi trạm và tự thay."""
+
+    def _dung_goi(self, tmp_path):
+        goc_vm = tmp_path / "vm"
+        os.makedirs(goc_vm / "icon")
+        (goc_vm / "agent.py").write_text("print(1)\n")
+        (goc_vm / "icon" / "a.png").write_bytes(b"anh")
+        (goc_vm / "config.json").write_text('{"kenh": "X"}')
+        (goc_vm / "agent.log").write_text("log rieng cua may")
+        return goc_vm
+
+    def test_dau_van_tu_sinh_va_bo_do_rieng(self, tmp_path):
+        from core.chi_so_ytb import tram as tr
+
+        goc_vm = self._dung_goi(tmp_path)
+        v1 = tr.dau_van_goi_vm(str(goc_vm))
+        # đổi đồ RIÊNG của máy: dấu vân đứng yên — không có "bản mới" ma
+        (goc_vm / "config.json").write_text('{"kenh": "Y"}')
+        (goc_vm / "agent.log").write_text("log khac")
+        assert tr.dau_van_goi_vm(str(goc_vm)) == v1
+        # đổi MỘT BYTE mã: dấu vân đổi — không ai phải nhớ nâng số
+        (goc_vm / "agent.py").write_text("print(2)\n")
+        assert tr.dau_van_goi_vm(str(goc_vm)) != v1
+
+    def test_hai_dau_tinh_dau_van_giong_nhau(self, tmp_path, monkeypatch):
+        # Trạm và máy ảo mỗi bên một bản tính — lệch nhau là VM tự cập nhật
+        # vòng quanh mãi. Khoá: cùng thư mục phải ra cùng dấu vân.
+        import importlib.util
+
+        from core.chi_so_ytb import tram as tr
+
+        goc_vm = self._dung_goi(tmp_path)
+        spec = importlib.util.spec_from_file_location(
+            "vm_giao_dien", GOC / "vm" / "giao_dien.py")
+        gd = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gd)
+        assert gd.dau_van_cuc_bo(str(goc_vm)) == tr.dau_van_goi_vm(str(goc_vm))
+
+    def test_trang_thai_mang_dau_van(self, tmp_path):
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            ra = agent._goi("http://127.0.0.1:{0}".format(tram.cong),
+                            "/trang-thai")
+            assert ra.get("ok") and ra.get("goi_vm"), \
+                "nhịp /trang-thai phải mang dấu vân để VM biết có bản mới"
+        finally:
+            tram.tat()
+
+    def test_khong_tu_thay_khi_may_dang_nong(self, tmp_path):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "vm_giao_dien2", GOC / "vm" / "giao_dien.py")
+        gd = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gd)
+        thu_log = tmp_path / "logs"
+        os.makedirs(thu_log)
+        assert not gd._may_dang_ban(str(thu_log)), "không log = nguội"
+        (thu_log / "dang.log").write_text("dang dang video...")
+        assert gd._may_dang_ban(str(thu_log)), \
+            "log còn nóng = có thể đang đăng dở — cấm tự thay bản giữa chừng"

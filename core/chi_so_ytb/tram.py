@@ -130,6 +130,51 @@ def dia_chi_may(cong: int = CONG_MAC_DINH) -> List[str]:
     return ra
 
 
+#: Đồ RIÊNG của từng máy — không bao giờ nằm trong gói phát đi.
+_GOI_VM_BO_TEP = {"config.json", "cai-dat-tool.json", "agent.pid",
+                  "agent.log", "trang-thai.json"}
+_GOI_VM_BO_THU = {"__pycache__", "logs", "tien-ich", "tokens",
+                  "clients", "replied", "transcripts"}
+
+
+def _tep_goi_vm(goc_vm: Optional[str] = None) -> List[tuple]:
+    """Các tệp MÃ của tool VM, xếp ổn định — nguồn chung cho gói phát đi
+    (/goi-vm) và dấu vân phiên bản (`dau_van_goi_vm`). Hai nơi phải cùng
+    một danh sách, không thì dấu vân nói "có bản mới" cho thứ không phát.
+    Bên máy ảo có bản soi gương (`giao_dien.dau_van_cuc_bo`) — sửa luật
+    loại trừ ở đây thì sửa cả bên đó."""
+    tm = goc_vm or os.path.join(GOC, "vm")
+    ra = []
+    for goc_tm, thu_muc, cac_tep in os.walk(tm):
+        thu_muc[:] = sorted(t for t in thu_muc if t not in _GOI_VM_BO_THU)
+        for ten in sorted(cac_tep):
+            if (ten in _GOI_VM_BO_TEP
+                    or ten.startswith(("ke-hoach-", "cho-bao-"))
+                    or ten.endswith((".log", ".pid"))):
+                continue
+            duong = os.path.join(goc_tm, ten)
+            ra.append((os.path.relpath(duong, tm).replace("\\", "/"), duong))
+    return ra
+
+
+def dau_van_goi_vm(goc_vm: Optional[str] = None) -> str:
+    """Phiên bản của gói tool VM — TỰ SINH từ nội dung mã, không ai phải
+    nhớ nâng số (chủ dự án 02/09/2026: "tự động thay đổi phiên bản nếu
+    biết có thay đổi"). Đổi một byte mã là đổi dấu vân; đổi config/log
+    của máy thì không."""
+    import hashlib  # noqa: PLC0415
+
+    bam = hashlib.sha1()
+    for rel, duong in _tep_goi_vm(goc_vm):
+        bam.update(rel.encode("utf-8"))
+        try:
+            with open(duong, "rb") as tep:
+                bam.update(tep.read())
+        except OSError:
+            continue
+    return bam.hexdigest()[:16]
+
+
 def dia_chi_dong_goi(cong: int = CONG_MAC_DINH) -> List[str]:
     """Mọi địa chỉ máy này mà một máy ảo CÓ THỂ gọi về — cho bộ cài VM.
 
@@ -637,6 +682,9 @@ def _lam_xu_ly(tram: "Tram"):
                 return self._tra(json.dumps({
                     "ok": True, "cong": tram.cong, "so_goi": tram.so_goi,
                     "thu_muc": os.path.join(tram.goc, "CHANNEL").replace("\\", "/"),
+                    # dấu vân gói tool VM — máy ảo so với bản của nó để TỰ
+                    # cập nhật khi tool nhà có mã mới
+                    "goi_vm": dau_van_goi_vm(),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             if self.path.startswith("/kenh"):
                 # Danh sách kênh của tool — bộ cài trên máy ảo hiện menu bấm
@@ -660,28 +708,13 @@ def _lam_xu_ly(tram: "Tram"):
                             z.write(duong, os.path.relpath(duong, tm))
                 return self._tra(bo_nho.getvalue(), "application/zip")
             if self.path.startswith("/goi-vm"):
-                # Tool VM tự cập nhật TỪ TRẠM (nút "Cập nhật từ tool" trên
-                # bảng điều khiển máy ảo): máy nhà cập nhật MyTool là vm/ ở
-                # đây mới — máy ảo tải về, không cần GitHub. Chỉ phát MÃ,
-                # không phát đồ của riêng cái máy: config, log, khoá, token,
-                # kế hoạch đã tải, dữ liệu cmt.
-                tm = os.path.join(GOC, "vm")
-                bo_qua_tep = {"config.json", "cai-dat-tool.json", "agent.pid",
-                              "agent.log", "trang-thai.json"}
-                bo_qua_thu = {"__pycache__", "logs", "tien-ich", "tokens",
-                              "clients", "replied", "transcripts"}
+                # Tool VM tự cập nhật TỪ TRẠM: máy nhà cập nhật MyTool là
+                # vm/ ở đây mới — máy ảo tải về, không cần GitHub. Chỉ phát
+                # MÃ, không phát đồ của riêng cái máy (xem _tep_goi_vm).
                 bo_nho = io.BytesIO()
                 with zipfile.ZipFile(bo_nho, "w", zipfile.ZIP_DEFLATED) as z:
-                    for goc_tm, thu_muc, cac_tep in os.walk(tm):
-                        thu_muc[:] = [t for t in thu_muc
-                                      if t not in bo_qua_thu]
-                        for ten in cac_tep:
-                            if (ten in bo_qua_tep
-                                    or ten.startswith(("ke-hoach-", "cho-bao-"))
-                                    or ten.endswith((".log", ".pid"))):
-                                continue
-                            duong = os.path.join(goc_tm, ten)
-                            z.write(duong, os.path.relpath(duong, tm))
+                    for rel, duong in _tep_goi_vm():
+                        z.write(duong, rel)
                 tram.ghi("máy ảo tải gói tool VM mới")
                 return self._tra(bo_nho.getvalue(), "application/zip")
             if self.path.startswith("/ke-hoach"):

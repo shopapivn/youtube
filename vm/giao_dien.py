@@ -163,6 +163,52 @@ def cam_loi_tat():
         pass
 
 
+#: Soi gương của luật loại trừ bên trạm (`core/chi_so_ytb/tram._tep_goi_vm`)
+#: — sửa một bên thì sửa cả bên kia, có test so hai bên cho bằng nhau.
+_BO_TEP = {"config.json", "cai-dat-tool.json", "agent.pid",
+           "agent.log", "trang-thai.json"}
+_BO_THU = {"__pycache__", "logs", "tien-ich", "tokens",
+           "clients", "replied", "transcripts"}
+
+
+def dau_van_cuc_bo(goc_vm=None):
+    """Dấu vân MÃ đang có trên máy này — so với `goi_vm` trạm trả trong
+    /trang-thai: khác nhau nghĩa là máy nhà có bản mới, tự cập nhật."""
+    import hashlib
+    bam = hashlib.sha1()
+    tm = goc_vm or GOC
+    for goc_tm, thu_muc, cac_tep in os.walk(tm):
+        thu_muc[:] = sorted(t for t in thu_muc if t not in _BO_THU)
+        for ten in sorted(cac_tep):
+            if (ten in _BO_TEP or ten.startswith(("ke-hoach-", "cho-bao-"))
+                    or ten.endswith((".log", ".pid"))):
+                continue
+            duong = os.path.join(goc_tm, ten)
+            bam.update(os.path.relpath(duong, tm).replace("\\", "/")
+                       .encode("utf-8"))
+            try:
+                with open(duong, "rb") as tep:
+                    bam.update(tep.read())
+            except OSError:
+                continue
+    return bam.hexdigest()[:16]
+
+
+def _may_dang_ban(thu_log, gan_day_giay=600):
+    """Máy đăng/cmt có vẻ ĐANG LÀM VIỆC không — nhìn log còn nóng không.
+
+    Lúc làm việc hai con in log liên tục; lúc ngủ (3 tiếng / 12 tiếng một
+    nhịp) log nguội. Tự cập nhật chỉ diễn ra lúc log nguội — không giết
+    một lượt đăng đang dở giữa chừng."""
+    for ten in ("dang.log", "cmt.log"):
+        try:
+            if time.time() - os.path.getmtime(os.path.join(thu_log, ten)) < gan_day_giay:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def mot_minh_gui():
     """Chỉ một bảng điều khiển — cổng khoá kiểu agent, chết là HĐH nhả."""
     import socket
@@ -184,6 +230,7 @@ class BangDieuKhien:
         self.cong_tac = doc_cong_tac()
         self._nhip = 0
         self._dang_cap_nhat = False
+        self._co_ban_moi = False       # luồng soi nền bật cờ, vòng chính áp
 
         self.cua = tk.Tk()
         self.cua.title("MyTool VM — " + self._ten_kenh())
@@ -292,6 +339,26 @@ class BangDieuKhien:
                           os.path.join(GOC, "may_cmt.py"), "setup"],
                          cwd=GOC, creationflags=CREATE_NEW_CONSOLE, env=env)
 
+    def _soi_ban_moi(self):
+        """(luồng nền) hỏi trạm dấu vân gói — khác bản mình thì bật cờ."""
+        try:
+            import urllib.request
+            tram = ""
+            try:
+                tram = str(json.load(open(os.path.join(
+                    GOC, "cai-dat-tool.json"), encoding="utf-8")).get("tram") or "")
+            except Exception:
+                return
+            if not tram:
+                return
+            with urllib.request.urlopen(tram.rstrip("/") + "/trang-thai",
+                                        timeout=10) as tra:
+                cua_tram = str(json.load(tra).get("goi_vm") or "")
+            if cua_tram and cua_tram != dau_van_cuc_bo():
+                self._co_ban_moi = True
+        except Exception:
+            pass
+
     def cap_nhat(self):
         """Tải gói vm/ mới nhất từ TRẠM (máy nhà) rồi mở lại bảng.
 
@@ -346,6 +413,17 @@ class BangDieuKhien:
         try:
             self._nhip += 1
             bay_gio = time.time()
+            # Tự cập nhật: ~30 phút soi trạm một lần (lần đầu sau ~1 phút).
+            # Thấy dấu vân khác -> chờ lúc máy đăng/cmt NGUỘI rồi tự thay
+            # bản mới — "tự động update khi có thay đổi" (02/09).
+            if self._nhip in (24,) or self._nhip % 720 == 0:
+                import threading
+                threading.Thread(target=self._soi_ban_moi, daemon=True).start()
+            if (self._co_ban_moi and not self._dang_cap_nhat
+                    and not _may_dang_ban(THU_LOG)):
+                self._co_ban_moi = False
+                self.cap_nhat()
+                return
             # Thiết lập tool đẩy xuống — đọc lại ~12 giây/lần, đổi là theo ngay
             if self._nhip % 5 == 2:
                 moi = doc_cong_tac()
