@@ -5545,7 +5545,10 @@ def _khau_dung(bc: BoiCanh):
             moi = _nguon_moi_hon_video(dich, os.path.join(d, "6-clip"),
                                        os.path.join(d, "2-giong-doc.mp3"))
             if not moi:
-                return {"da_co": True}
+                # Video còn tốt — nhưng phần đuôi CapCut (nếu kênh bật) có thể
+                # chưa làm hoặc hỏng lần trước. Chạy nốt rồi mới nhận "đã có".
+                tep_cc = _xuat_capcut_neu_bat(bc, d, dich)
+                return {"da_co": True, **({"capcut": tep_cc} if tep_cc else {})}
             bc.ghi("  video đã có nhưng {0} mới hơn nó — dựng lại (bản cũ giữ ở "
                    "8-video.cu.mp4).".format(moi))
             try:
@@ -5669,10 +5672,12 @@ def _khau_dung(bc: BoiCanh):
                 lam_sach_video(ffmpeg, dich)
         except Exception:  # noqa: BLE001 — vệ sinh hỏng không được hỏng video
             pass
+        tep_cc = _xuat_capcut_neu_bat(bc, d, dich)
         return {"so_clip": len(manh), "giay_hinh": round(sum(giay)),
                 "phu_de_dot": dot, "tieng_canh": giu_tieng,
                 "nhac": os.path.basename(nhac) if nhac else "",
-                "do_phan_giai": ten_dpg}
+                "do_phan_giai": ten_dpg,
+                **({"capcut": tep_cc} if tep_cc else {})}
 
     def soi_lai(luot: LuotChay) -> bool:
         """Video cũ còn đúng không — hỏi TRƯỚC khi bỏ qua khâu dựng.
@@ -5695,12 +5700,44 @@ def _khau_dung(bc: BoiCanh):
         dich = os.path.join(d, "8-video.mp4")
         if not os.path.exists(dich):
             return True     # chưa có video thì không phải việc của cửa này
-        return not _nguon_moi_hon_video(
-            dich, os.path.join(d, "6-clip"),
-            os.path.join(d, "2-giong-doc.mp3"))
+        if _nguon_moi_hon_video(dich, os.path.join(d, "6-clip"),
+                                os.path.join(d, "2-giong-doc.mp3")):
+            return False
+        # Kênh bật xuất qua CapCut thì bản CapCut cũng phải có và không cũ
+        # hơn video — thiếu nó là khâu phải chạy lại (chỉ chạy phần đuôi).
+        if getattr(bc.kenh, "xuat_capcut", False):
+            cc = os.path.join(d, "9-video-capcut.mp4")
+            if (not os.path.exists(cc)
+                    or os.path.getmtime(cc) < os.path.getmtime(dich)):
+                return False
+        return True
 
     lam.soi_lai = soi_lai
     return lam
+
+
+def _xuat_capcut_neu_bat(bc: BoiCanh, thu_muc: str, video: str) -> str:
+    """Đuôi của khâu dựng: kênh bật `xuat_capcut` thì đưa video vào CapCut
+    xuất lại thành `9-video-capcut.mp4`. Trả tên tệp, hoặc rỗng khi kênh tắt.
+
+    Chạy trên máy, không tốn tiền. Hỏng thì ném — khâu dựng mang dấu HỎNG với
+    câu chữ thật của `core.capcut`, còn `8-video.mp4` vẫn nguyên; bấm "Chạy
+    tiếp" là chỉ làm lại đúng phần đuôi này (video có rồi thì khâu đi thẳng
+    vào đây, xem nhánh `da_co`).
+    """
+    if not getattr(bc.kenh, "xuat_capcut", False):
+        return ""
+    dich = os.path.join(thu_muc, "9-video-capcut.mp4")
+    if (os.path.exists(dich)
+            and os.path.getmtime(dich) >= os.path.getmtime(video)):
+        return "9-video-capcut.mp4"
+    from .capcut import xuat_qua_capcut  # noqa: PLC0415
+
+    bc.ghi("  đưa video vào CapCut để xuất lại (chạy trên máy, miễn phí — "
+           "CapCut sẽ tự mở, tự bấm rồi tự đóng; đừng dùng chuột phím trong "
+           "lúc nó bấm).")
+    xuat_qua_capcut(video, dich, ghi=bc.ghi, dung=bc.kiem_dung)
+    return "9-video-capcut.mp4"
 
 
 def _muc_nen(goc: str) -> str:

@@ -1969,8 +1969,18 @@ _MAU_ID = re.compile(r"\b((?:nv|loc)\d+[a-z]?)\b(?!\s*\[reference)")
 DAI_NHAN_CO_DINH = 100
 
 #: Tu noi khong duoc dung cuoi nhan — cat o do la nhan cut nghia.
-_TU_NOI_CUT = frozenset(("with", "and", "the", "of", "in", "on", "a",
-                         "along", "over", "under", "at", "to", "for"))
+#: Tu bi cut o duoi nhan phai bo di — nhan phai doc duoc thanh cau.
+#:
+#: Do 31/08/2026 tren phim `tl4-t7-ok/0002` canh 41: nhan cua con soi bi cat
+#: thanh *"Friendly comic 3D animated wolf standing upright on two legs like a
+#: person, very big and tall but"* — dang lung mot lien tu, roi dam thang vao
+#: `(Image 1)`. Them cac lien tu va gioi tu con thieu.
+_TU_NOI_CUT = frozenset(("with", "and", "the", "of", "in", "on", "a", "an",
+                         "along", "over", "under", "at", "to", "for",
+                         "but", "or", "nor", "yet", "so", "as", "by",
+                         "from", "into", "onto", "than", "that", "while",
+                         "when", "who", "which", "his", "her", "its",
+                         "their", "up", "down", "near", "beside"))
 
 
 def _nhan_co_dinh(e, mac_dinh: str = "") -> str:

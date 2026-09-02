@@ -153,6 +153,13 @@ class Kenh:
     #: đuôi clip không trôi — đo 27/08/2026: cảnh 11 đi 2 → 4 điểm, cảnh 2 đi
     #: 3 → 4. Mặc định TẮT.
     ghim_hai_dau: bool = False
+    #: Sau khi dựng xong `8-video.mp4`: đưa video vào CapCut (bản máy tính,
+    #: phải cài sẵn) rồi TỰ BẤM Xuất, ra thêm `9-video-capcut.mp4` — video
+    #: được chính CapCut mã hoá lại. Chủ dự án 28/08/2026: *"video sau khi
+    #: xong tao còn cho vào capcut"*; 02/09/2026 muốn bước ấy tự động. Chạy
+    #: trên máy, miễn phí, nhưng CapCut sẽ tự mở tự bấm trên màn hình — nên
+    #: mặc định TẮT, chỉ bật cho kênh nào chủ ý dùng. Xem `core/capcut.py`.
+    xuat_capcut: bool = False
     #: Nghỉ mấy giây giữa hai PHẦN của kịch bản (dòng `---` trong bản đọc).
     #:
     #: Khoảng lặng THẬT, chèn lúc ghép tiếng — không phải thẻ `[long pause]`,
@@ -555,6 +562,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         khung_dau=bool(cai.get("khung_dau", False)),
         cham_anh=bool(cai.get("cham_anh", False)),
         ghim_hai_dau=bool(cai.get("ghim_hai_dau", False)),
+        xuat_capcut=bool(cai.get("xuat_capcut", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
         mau_cua_tool=_co(cai.get("mau_cua_tool")),
         kenh_rieng=_co(cai.get("kenh_rieng")),

@@ -360,6 +360,12 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
             continue
         if _muon_anh_giai_doan(bc, d, man, ma_id):
             continue
+        if _ve_khong_quan_ao(bc, d, man, ma_id, lam, cham):
+            continue
+        if _ve_toi_gian(bc, d, man, ma_id, lam, cham):
+            continue
+        if _muon_khuon_ban_da_ve(bc, d, man, ma_id, lam, cham):
+            continue
         con_thieu.append(ma_id)
         bc.ghi("    tham chiếu {0}: KHÔNG tạo được — bỏ {0} khỏi mọi cảnh để số thứ "
                "tự ảnh không lệch. Sửa mô tả trong 4-canh-dan.json rồi “Làm lại "
@@ -367,6 +373,301 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
     if con_thieu and canh is not None:
         _bo_id_khoi_canh(bc, luot, man, canh, con_thieu)
     return con_thieu
+
+
+#: Mệnh đề TẢ QUẦN ÁO trong lời nhắc chân dung. Cắt tới ranh giới mệnh đề
+#: (`;`, `—`, `.`) chứ không tới dấu phẩy: một bộ đồ thường kể qua nhiều dấu
+#: phẩy ("a vest with a tall collar and cream trim at the cuffs, plain sleeves
+#: rolled to the elbow, simple trousers, and bare paws").
+_MO_QUAN_AO = (r"[,;]?\s*(?:(?:he|she|it|they)\s+(?:now\s+)?wears?|wearing|"
+               r"dressed in|clad in)\b")
+#: Bộ đồ kể qua NHIỀU dấu phẩy ("a vest with cream trim at the cuffs, plain
+#: sleeves rolled to the elbow, simple trousers, and bare paws") nên khi có
+#: ranh giới mệnh đề (`;` `—` `.`) thì ăn tới đó.
+_QUAN_AO_DAI = re.compile(_MO_QUAN_AO + r"[^;—.]*(?=[;—.])", re.I)
+#: Không có ranh giới nào thì chỉ ăn tới dấu phẩy — nếu không, "wearing a red
+#: coat, calm eyes" sẽ nuốt luôn "calm eyes" (đo khi viết bài kiểm, 31/08).
+_QUAN_AO_NGAN = re.compile(_MO_QUAN_AO + r"[^,;—.]*", re.I)
+
+
+def _bo_quan_ao(chu: str) -> str:
+    """Bỏ mệnh đề quần áo khỏi lời nhắc chân dung."""
+    ra = _QUAN_AO_DAI.sub("", str(chu or ""))
+    ra = _QUAN_AO_NGAN.sub("", ra)
+    ra = re.sub(r"\s{2,}", " ", ra).replace(" ,", ",").replace(",,", ",")
+    return re.sub(r"[;,]\s*([;,])", r"\1", ra).strip().rstrip(" ,;")
+
+
+#: Đuôi AN TOÀN cho chân dung tối giản — chỉ khung hình, không một chữ nào về
+#: vai, đồ vật, hay bộ đồ. Đo 31/08/2026: đúng hình dạng này đi lọt bộ lọc với
+#: con sói, trong khi lời nhắc đầy đủ bị chặn mười chín lượt liền.
+_DUOI_TOI_GIAN = (
+    ", big round friendly eyes, a rounded appealing cartoon silhouette, "
+    "calm neutral expression, gazing straight ahead, full body seen from the "
+    "front, arms relaxed at its sides, plain pale background with nothing else "
+    "in frame, 16:9")
+
+
+def _chan_dung_toi_gian(nv: Dict[str, Any], style: str = "") -> str:
+    """Chân dung dựng lại từ ĐÚNG hai mệnh đề đầu: loài + màu lông/nét chính.
+
+    Bỏ hết phần còn lại — nhãn vai, món đồ đặc trưng, "màu đặc trưng", câu chối
+    bản quyền, đoạn POSTURE, và bộ đồ. Mỗi thứ ấy đều là chữ mà ảnh tham chiếu
+    không cần: tấm gốc chỉ để giữ NHẬN DẠNG.
+    """
+    from .viet_lai_prompt import lam_lanh_tho  # noqa: PLC0415
+
+    tho = lam_lanh_tho(_bo_quan_ao(str(nv.get("english_prompt") or "")))
+    manh = [m.strip() for m in tho.split(",") if m.strip()]
+    dau = ", ".join(manh[:3])[:240].rstrip(" ,;")
+    if not dau:
+        return ""
+    duoi = (", " + style.strip().rstrip(".,")) if style.strip() else ""
+    return dau + _DUOI_TOI_GIAN + duoi + ", no text, no letters, no watermark."
+
+
+def _ve_khong_quan_ao(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
+                      lam: Callable, cham: Optional[Callable] = None) -> bool:
+    """Bị bộ lọc chặn thì vẽ lại chân dung KHÔNG mặc quần áo.
+
+    ═══ ĐO 31/08/2026, PHÉP ĐỔI MỘT BIẾN ═══
+
+    Con sói `nv5` của phim `openstory/0012` bị `content_rejected` mọi đường:
+    lời nhắc gốc, bản AI viết lại, bản thiết kế lại nhân vật, bản gỡ hết chữ
+    nghi ngờ, bản đổi "wolf" thành "husky dog", bản rút xuống một câu, bản đổi
+    khung chân dung sang khung cảnh. Mười sáu lượt thử, chặn cả mười sáu.
+
+    Rồi lấy đúng một lời nhắc, bỏ **đúng mệnh đề quần áo**, mọi chữ còn lại
+    giữ nguyên từng byte::
+
+        "…a long bushy grey tail, …, wearing a plum-purple buttoned vest with
+         cream trim and simple plum trousers, calm neutral expression…"   → CHẶN
+        "…a long bushy grey tail, …, calm neutral expression…"            → VẼ ĐƯỢC
+
+    Tức bộ lọc chặn **con sói mặc quần áo**, không chặn con sói. Con lợn mặc
+    yếm thì qua; con sói mặc áo ghi-lê thì không.
+
+    ═══ VÌ SAO BỎ QUẦN ÁO LÀ CÁI GIÁ RẺ NHẤT ═══
+
+    Ảnh tham chiếu sinh ra để giữ **NHẬN DẠNG** — loài, màu lông, tai, đuôi,
+    dáng. Bộ đồ thì mọi cảnh đều tả lại bằng chữ. Mất bộ đồ trên tấm gốc là
+    mất một chi tiết mà lời nhắc cảnh vẫn nói; mất cả tấm gốc là mất nhân vật.
+
+    Thử đường này TRƯỚC `_muon_khuon_ban_da_ve`: ở đây con sói vẫn là con sói,
+    còn mượn khuôn của bạn khác thì ra con vật của bạn ấy.
+    """
+    nv = None
+    for c in man.get("characters") or []:
+        if str(c.get("id") or "") == ma_id:
+            nv = c
+            break
+    if nv is None:
+        return False
+    goc = str(nv.get("sheet_prompt") or "")
+    prompt = _bo_quan_ao(goc)
+    if not prompt or prompt == goc:
+        return False        # không có mệnh đề quần áo nào để bỏ
+    dich = os.path.join(d, ma_id + ".png")
+    bc.ghi("    tham chiếu {0}: vẽ lại KHÔNG mặc quần áo (bộ lọc chặn thú mặc "
+           "đồ) — bộ đồ vẫn được tả trong từng cảnh.".format(ma_id))
+    try:
+        lam(ma_id, prompt, dich)
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("    tham chiếu {0}: bỏ quần áo cũng không được ({1}).".format(
+            ma_id, str(loi)[:90]))
+        return False
+    if not os.path.isfile(dich):
+        return False
+    if cham is not None:
+        try:
+            diem, thieu = cham(dich, _bo_quan_ao(str(nv.get("english_prompt") or "")),
+                               str(nv.get("role") or nv.get("name") or ma_id))
+        except Exception:  # noqa: BLE001
+            diem, thieu = None, ""
+        if diem is not None and diem < DIEM_CHAN_DUNG_DAT:
+            bc.ghi("    tham chiếu {0}: bản không quần áo vẽ ra không đúng "
+                   "({1}/5 — thiếu: {2}) — bỏ tấm này.".format(
+                       ma_id, diem, (thieu or "?")[:80]))
+            try:
+                os.remove(dich)
+            except OSError:
+                pass
+            return False
+    nv["sheet_prompt"] = prompt
+    nv["english_prompt"] = _bo_quan_ao(str(nv.get("english_prompt") or ""))
+    return True
+
+
+def _ve_toi_gian(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
+                 lam: Callable, cham: Optional[Callable] = None) -> bool:
+    """Nấc cuối trước khi bỏ cuộc: chân dung dựng lại từ hai mệnh đề đầu.
+
+    ═══ ĐO 31/08/2026 — MƯỜI CHÍN LƯỢT MỚI RA ═══
+
+    Con sói `nv5` (phim `openstory/0012`, Ba chú heo con) bị `content_rejected`
+    ở mọi đường: lời nhắc gốc, AI viết lại, thiết kế lại nhân vật, gỡ chữ nghi
+    ngờ, đổi "wolf" → "husky dog", bỏ "muzzle", đổi khung chân dung sang khung
+    cảnh, bỏ quần áo. Chặn hết.
+
+    Bản ĐI LỌT là bản chỉ giữ **hai mệnh đề đầu** — loài và màu lông — rồi lắp
+    một cái đuôi khung hình cố định. Thứ bị bỏ: nhãn vai ("rival and villain"),
+    món đồ đặc trưng, "màu đặc trưng", câu chối bản quyền, đoạn POSTURE, và bộ
+    đồ. Không thứ nào trong đó là NHẬN DẠNG — mà nhận dạng mới là việc của tấm
+    ảnh gốc.
+
+    Vẫn phải qua bộ chấm chân dung: vẽ được không có nghĩa là vẽ đúng con vật
+    (bài học của `_muon_khuon_ban_da_ve`, cùng ngày).
+    """
+    nv = None
+    for c in man.get("characters") or []:
+        if str(c.get("id") or "") == ma_id:
+            nv = c
+            break
+    if nv is None:
+        return False
+    style = str(((man.get("settings") or {}).get("style") or {}).get("image_style") or "")
+    prompt = _chan_dung_toi_gian(nv, style)
+    if not prompt:
+        return False
+    dich = os.path.join(d, ma_id + ".png")
+    bc.ghi("    tham chiếu {0}: vẽ bản TỐI GIẢN (chỉ loài + màu + khung hình) — "
+           "mọi chi tiết khác vẫn nằm trong lời nhắc từng cảnh.".format(ma_id))
+    try:
+        lam(ma_id, prompt, dich)
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("    tham chiếu {0}: bản tối giản cũng không được ({1}).".format(
+            ma_id, str(loi)[:90]))
+        return False
+    if not os.path.isfile(dich):
+        return False
+    if cham is not None:
+        try:
+            diem, thieu = cham(dich, prompt,
+                               str(nv.get("role") or nv.get("name") or ma_id))
+        except Exception:  # noqa: BLE001
+            diem, thieu = None, ""
+        if diem is not None and diem < DIEM_CHAN_DUNG_DAT:
+            bc.ghi("    tham chiếu {0}: bản tối giản vẽ ra không đúng ({1}/5 — "
+                   "thiếu: {2}) — bỏ tấm này.".format(
+                       ma_id, diem, (thieu or "?")[:80]))
+            try:
+                os.remove(dich)
+            except OSError:
+                pass
+            return False
+    nv["sheet_prompt"] = prompt
+    return True
+
+
+def _cum_mo_dau(chu: str) -> str:
+    """Cụm mở đầu của một lời nhắc chân dung — phần nói ĐÂY LÀ CON GÌ.
+
+    Cắt tới dấu phẩy đầu tiên: mọi lời tả trong dàn đều mở bằng loài + dáng
+    ("a sturdy young pig standing upright on two legs like a person, …").
+    """
+    chu = str(chu or "").strip()
+    i = chu.find(",")
+    return chu[:i].strip() if i > 20 else chu[:120].strip()
+
+
+def _muon_khuon_ban_da_ve(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
+                          lam: Callable, cham: Optional[Callable] = None) -> bool:
+    """Mượn KHUÔN lời nhắc của một nhân vật đã vẽ được, chỉ thay cụm mở đầu.
+
+    ═══ VÌ SAO CÓ ĐƯỜNG LUI NÀY ═══
+
+    Bộ lọc an toàn của nhà máy ảnh từ chối một số con vật, và nó từ chối theo
+    NGỮ CẢNH chứ không theo từng chữ — nên gỡ từng chữ là đuổi hình bắt bóng.
+
+    Đo 31/08/2026 bằng phép thử MỘT BIẾN trên phim `openstory/0012` (Ba chú
+    heo con). Lấy đúng lời nhắc chân dung của con lợn `nv2` — tấm ĐÃ VẼ ĐƯỢC —
+    rồi chỉ đổi cụm mở đầu, mọi chữ còn lại giữ nguyên từng byte:
+
+        "a sturdy young pig"           → VẼ ĐƯỢC
+        "a tall lanky grey wolf"       → content_rejected
+        "a tall lanky grey husky dog"  → VẼ ĐƯỢC  (thử hai lần, cả hai lần được)
+
+    Còn lời nhắc RIÊNG của con sói thì bị từ chối cả khi đã gỡ hết chữ nghi
+    ngờ: bỏ nhãn "villain", bỏ "hungry", bỏ "muzzle", đổi "wolf" thành "husky
+    dog", rút xuống một câu tối giản — vẫn bị chặn. Nên thứ hỏng không nằm ở
+    một chữ nào, mà ở cả đoạn văn ấy.
+
+    Vậy thì đừng chữa đoạn văn — **mượn đoạn văn đã đi lọt**.
+
+    ═══ ĐÁNH ĐỔI, NÓI THẲNG ═══
+
+    Nhân vật mượn khuôn sẽ mặc bộ đồ của nhân vật cho mượn. Mất bộ đồ riêng là
+    mất một nét phân biệt — nhưng đổi lại là CÓ ảnh gốc. Không có ảnh gốc thì
+    mỗi cảnh máy vẽ một con khác, và đó mới là thứ người xem thấy ngay (chủ dự
+    án, 31/08: *"câu chuyện kể về nhân vật này mà ảnh ra nhân vật khác"*).
+
+    Nhật ký ghi rõ đã mượn của ai, để còn sửa tay được.
+    """
+    from .viet_lai_prompt import lam_lanh_tho  # noqa: PLC0415
+
+    nv = None
+    mau = None
+    for c in man.get("characters") or []:
+        i = str(c.get("id") or "")
+        if i == ma_id:
+            nv = c
+        elif (mau is None and str(c.get("sheet_prompt") or "").strip()
+              and os.path.isfile(os.path.join(d, i + ".png"))):
+            mau = c
+    if nv is None or mau is None:
+        return False
+    dau_mau = _cum_mo_dau(mau.get("sheet_prompt"))
+    dau_moi = _cum_mo_dau(lam_lanh_tho(str(nv.get("english_prompt")
+                                           or nv.get("sheet_prompt") or "")))
+    if not dau_mau or not dau_moi or dau_mau not in str(mau.get("sheet_prompt")):
+        return False
+    prompt = str(mau["sheet_prompt"]).replace(dau_mau, dau_moi, 1)
+    # Khuôn mượn về mà GIỐNG HỆT lời nhắc vừa bị từ chối thì gửi lại là trả
+    # tiền cho đúng một câu trả lời đã biết. Bỏ qua.
+    if prompt.strip() == str(nv.get("sheet_prompt") or "").strip():
+        return False
+    dich = os.path.join(d, ma_id + ".png")
+    bc.ghi("    tham chiếu {0}: mượn khuôn lời nhắc của {1} (chỉ đổi cụm mở "
+           "đầu) — bộ đồ sẽ giống {1}, nhưng có ảnh gốc còn hơn không."
+           .format(ma_id, mau.get("id")))
+    try:
+        lam(ma_id, prompt, dich)
+    except Exception as loi:  # noqa: BLE001 — mượn cũng hỏng thì thôi
+        bc.ghi("    tham chiếu {0}: mượn khuôn cũng không được ({1}).".format(
+            ma_id, str(loi)[:90]))
+        return False
+    if not os.path.isfile(dich):
+        return False
+    # ═══ VẼ ĐƯỢC KHÔNG CÓ NGHĨA LÀ VẼ ĐÚNG ═══
+    #
+    # Bản đầu của đường lui này chỉ kiểm "máy chủ có nhận không". Đo 31/08/2026
+    # trên phim `openstory/0013`: con sói `nv5` mượn khuôn của `nv1` (heo mẹ) và
+    # ra một **con heo mẹ mặc tạp dề đội mũ trùm** — vì phần đuôi của khuôn còn
+    # nguyên "da hồng, mõm tròn, tai cụp" của heo. Cổng trả 200, tôi báo xong,
+    # mà 90 cảnh con sói giờ là heo mẹ.
+    #
+    # Đúng cái bẫy ghi ở `core/cham_anh.py`: một cửa chặn nói CÓ không đồng
+    # nghĩa với kết quả đúng. Nên bắt tấm mượn đi qua chính bộ chấm chân dung
+    # mà tool vẫn dùng — sai mô tả thì bỏ tấm ấy đi, thà không có còn hơn có
+    # một con vật khác hẳn đứng thế chỗ suốt phim.
+    if cham is not None:
+        try:
+            diem, thieu = cham(dich, str(nv.get("english_prompt") or ""),
+                               str(nv.get("role") or nv.get("name") or ma_id))
+        except Exception:  # noqa: BLE001 — chấm hỏng thì coi như không chấm
+            diem, thieu = None, ""
+        if diem is not None and diem < DIEM_CHAN_DUNG_DAT:
+            bc.ghi("    tham chiếu {0}: khuôn mượn vẽ ra KHÔNG đúng nhân vật "
+                   "({1}/5 — thiếu: {2}) — bỏ tấm này.".format(
+                       ma_id, diem, (thieu or "?")[:80]))
+            try:
+                os.remove(dich)
+            except OSError:
+                pass
+            return False
+    nv["sheet_prompt"] = prompt
+    nv["english_prompt"] = dau_moi
+    return True
 
 
 def _muon_anh_giai_doan(bc: Any, d: str, man: Dict[str, Any], ma_id: str) -> bool:
@@ -406,11 +707,32 @@ def _bo_id_khoi_canh(bc: Any, luot: Any, man: Dict[str, Any],
         c["reference_files"] = json.dumps(con)
         c["characters_used"] = ", ".join(
             x for x in str(c.get("characters_used") or "").replace(",", " ").split() if x not in bo)
-        # Cắt khối khoá cũ rồi để `_khoa_nhan_dang` dựng lại từ đầu.
+        # ═══ CẮT CẢ MỐC `(Image N)` NẰM TRONG CÂU, KHÔNG CHỈ KHỐI CUỐI ═══
+        #
+        # Bản trước chỉ cắt khối "REFERENCE IMAGES…" ở cuối rồi để
+        # `_khoa_nhan_dang` dựng lại. Nhưng các mốc `(Image 1)`, `(Image 2)`
+        # nằm RẢI TRONG CÂU vẫn còn nguyên — và chúng đánh số theo danh sách
+        # ảnh CŨ, tức danh sách vừa bị bớt mất một tấm.
+        #
+        # Đo 31/08/2026 trên phim `tl4-t7-ok/0002` (Ba chú lợn con, 85 cảnh):
+        # ảnh gốc con sói không tạo được, nên `nv5` bị bỏ khỏi 24 cảnh. Cảnh 38
+        # chỉ còn đúng MỘT ảnh (`loc6`), mà câu văn vẫn ghi:
+        #
+        #     "…a friendly comic 3D animated wolf …, (Image 1) politely tapping
+        #      the braided straw door of the straw house (Image 2)…"
+        #
+        # tức bảo máy vẽ *"Image 1 là con sói"* trong khi Image 1 chính là ngôi
+        # nhà rơm, còn Image 2 thì không tồn tại. Chú thích ở dưới lại ghi
+        # ngược lại: "Image 1 = ngôi nhà rơm". Ba lệnh đá nhau cho cùng một
+        # tấm — và 24 cảnh của con sói ra 24 con sói khác nhau.
+        #
+        # Cắt sạch mốc trong câu là hết mâu thuẫn: `_khoa_nhan_dang` đánh số
+        # lại từ đầu theo danh sách ảnh THẬT.
         chu = str(c.get("img_prompt") or "")
         k = chu.find("\nREFERENCE IMAGES are attached")
         if k >= 0:
-            c["img_prompt"] = chu[:k]
+            chu = chu[:k]
+        c["img_prompt"] = re.sub(r"\s*\(\s*Image\s+\d+\s*\)", "", chu)
         doi.append(c)
     if not doi:
         return

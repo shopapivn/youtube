@@ -73,7 +73,66 @@ _THAY_THO = [
     (re.compile(r"\b(?:open|gaping|wide)\s+(?:mouth|jaws|maw)\b", re.I), "big smile"),
     (re.compile(r"\b(?:tongue|fangs|sharp teeth|claws)\b", re.I), ""),
     # "wide comic mouth dropping open" (cảnh 157, 26/08) vẫn bị chặn: cứ chữ mồm là thay.
-    (re.compile(r"\b(?:mouths?|jaws|maw|snout)\b", re.I), "face"),
+    # `muzzle` thêm 31/08/2026: chữ ấy còn nghĩa "rọ mõm" và "đầu nòng súng",
+    # nên bộ lọc bắt — mà mọi lời tả chó sói đều có nó.
+    (re.compile(r"\b(?:mouths?|jaws|maw|snouts?|muzzles?)\b", re.I), "face"),
+    # ═══ NHÃN VAI ÁC: KHÔNG TẢ HÌNH, MÀ ĐỦ LÀM BỘ LỌC CHẶN ═══
+    #
+    # Đo 31/08/2026, phim `openstory/0012` (Ba chú heo con): ảnh gốc con sói
+    # `nv5` bị `content_rejected` — *"bạo lực, máu me"* — cả bản đầu, bản AI
+    # viết lại, lẫn bản thiết kế lại nhân vật. Lời tả đã rất hiền: *"rounded
+    # friendly cartoon silhouette"*, *"big round eyes that look hungry but not
+    # scary"*.
+    #
+    # Thứ còn lại là mấy chữ NHÃN VAI: *"styled as the story's rival and
+    # villain"*. Chúng không tả một nét vẽ nào — ảnh chân dung chỉ cần biết
+    # nhân vật TRÔNG như thế nào — nhưng đúng là loại chữ bộ lọc bắt.
+    (re.compile(r",?\s*styled as the story's [^,.;]*", re.I), ""),
+    (re.compile(r"\b(?:villain(?:ous)?|antagonist|evil|wicked|sinister|"
+                r"vicious|ferocious|fierce|predator(?:y)?|prowling|"
+                r"bloodthirsty|ravenous)\b", re.I), ""),
+    # ═══ CÂU PHỦ ĐỊNH TỰ NÓ MANG CHỮ NGUY HIỂM ═══
+    #
+    # Cùng lượt ấy: *"with no weapons, no rips, no patches and nothing
+    # revealing"*. Câu ấy VIẾT RA để cho lành, nhưng nó đặt thẳng chữ
+    # "weapons" và "revealing" vào lời nhắc — bộ lọc đọc chữ, không đọc chữ
+    # "no" đứng trước. Bỏ cả mệnh đề: thiếu nó ảnh vẫn đúng, vì mấy thứ ấy
+    # vốn không có trong lời tả.
+    #
+    # ⚠ Mấy dòng phủ định phải đứng TRƯỚC dòng thay từ tâm trạng ngay dưới.
+    # Để sau thì "hungry"→"curious" và "scary"→"curious" chạy trước, cụm
+    # "but not scary" không còn khớp, và câu ra thành *"eyes that look curious
+    # but not curious"* — đo đúng như thế lần đầu viết bảng này.
+    (re.compile(r"\bbut not (?:scary|frightening|menacing|threatening)\b", re.I), ""),
+    (re.compile(r",?\s*(?:with\s+)?no\s+(?:weapons?|blood|gore|wounds?|scars?|"
+                r"rips?|tears?)\b[^,.;]*", re.I), ""),
+    (re.compile(r",?\s*(?:and\s+)?nothing revealing\b", re.I), ""),
+    (re.compile(r"\b(?:hungry|starving|grumpy|angry|furious|scary|"
+                r"frightening|threatening)\b", re.I), "curious"),
+    # ═══ CÓ NHỮNG CON VẬT BỘ LỌC KHÔNG CHO VẼ, DÙ TẢ HIỀN TỚI ĐÂU ═══
+    #
+    # Đo 31/08/2026 bằng phép thử MỘT BIẾN trên phim `openstory/0012` (Ba chú
+    # heo con). Lấy đúng lời nhắc chân dung của con lợn `nv2` — tấm đã vẽ được
+    # — rồi chỉ đổi **cụm mở đầu**, mọi chữ còn lại giữ nguyên từng byte:
+    #
+    #     "a sturdy young pig"          → VẼ ĐƯỢC
+    #     "a tall lanky grey wolf"      → content_rejected (bạo lực, máu me)
+    #     "a tall lanky grey husky dog" → VẼ ĐƯỢC
+    #
+    # Tức chữ "wolf" là thứ bị chặn, không phải lời tả. Trước đó tôi đoán là
+    # nhãn "villain", là chữ "muzzle", là "thú đi hai chân mặc quần áo" — sai
+    # cả ba, vì mỗi lần tôi đổi nhiều thứ một lúc. Đổi một biến mới ra.
+    #
+    # Thay bằng một giống chó trông y hệt: lông xám, tai nhọn, đuôi xù vẫn còn
+    # nguyên trong lời tả, nên trẻ con nhìn vẫn ra con sói. Truyện "Ba chú heo
+    # con" hay "Cô bé quàng khăn đỏ" không làm được nếu thiếu con sói, mà
+    # không tấm ảnh gốc thì mỗi cảnh một con khác — tệ hơn nhiều.
+    #
+    # ⚠ Bảng này chỉ chạy SAU khi bị từ chối, nên nó không đụng vào lượt nào
+    # đang chạy ngon. Gặp con vật khác bị chặn thì đo đúng kiểu trên — đổi MỘT
+    # cụm mở đầu trên một lời nhắc đã vẽ được — rồi thêm một dòng vào đây.
+    (re.compile(r"\bwolves\b", re.I), "large grey husky dogs"),
+    (re.compile(r"\bwolf\b", re.I), "large grey husky dog"),
 ]
 
 

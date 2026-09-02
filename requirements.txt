@@ -94,6 +94,16 @@ huggingface-hub>=0.20
 pyyaml>=6.0
 imageio-ffmpeg>=0.4
 
+# --- Xuat lai video qua CapCut (core/capcut.py) ------------------------------
+#
+#   uiautomation  : dieu khien cua so CapCut tren Windows (tim cua so, dua len
+#                   truoc, go phim, bam chuot theo toa do). Chi khau "xuat lai
+#                   qua CapCut" dung; thieu no thi khau ay bao thieu va cach
+#                   sua (chay lai SETUP.bat), cac khau khac khong anh huong.
+#                   Keo theo goi comtypes. Chay tren MAY KHACH, mien phi.
+
+uiautomation>=2.0
+
 #  KHONG co dong "shopapi" o day. SDK shopapi CHUA phat hanh len PyPI, nen
 #  "pip install shopapi" luon that bai voi loi "No matching distribution found".
 #  Ban khach tai ve da kem san SDK trong thu muc  _sdk/  - xem dong-goi.py va
