@@ -992,7 +992,8 @@ class TrangMayVM(QWidget):
     """
 
     def __init__(self, app, chi_so=None, co_tieu_de=True,
-                 phan=("lenh", "thiet_lap", "ban_giao", "bang")):
+                 phan=("lenh", "thiet_lap", "ban_giao", "bang"),
+                 kenh_mac_dinh=""):
         """`phan` chọn thẻ — 02/09 chủ dự án chia trang này ra hai chỗ:
 
             ("lenh","thiet_lap","bang")  →  nằm CHUNG trang VPS ("máy vm
@@ -1027,6 +1028,9 @@ class TrangMayVM(QWidget):
         self._chon_kenh.setMinimumWidth(180)
         for ma in liet_ke_kenh(self._app.base_dir):
             self._chon_kenh.addItem(ma)
+        if kenh_mac_dinh:
+            # Mở từ nút "Điều khiển…" của MỘT thẻ máy — kênh đã biết sẵn.
+            self._chon_kenh.setCurrentText(kenh_mac_dinh)
         hang_kenh.addWidget(self._chon_kenh)
         hang_kenh.addStretch(1)
         doc.addLayout(hang_kenh)

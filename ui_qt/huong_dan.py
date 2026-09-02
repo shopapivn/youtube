@@ -152,13 +152,12 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "chrome-sach": {
-        "tieu_de": "VPS & Máy VM",
-        "tom_tat": "Mọi thứ về NHỮNG CÁI MÁY của kênh, một chỗ. **VPS**: thuê "
-                   "máy Windows chạy 24/7, mỗi máy một địa chỉ IPv6 riêng — "
-                   "200.000₫/tháng, bấm một cú là vào. **Chỉ số kênh**: trạm "
-                   "nhận số liệu Studio mà tiện ích trên máy ảo gửi về, và nơi "
-                   "đọc số. **Máy VM**: điều khiển agent trên máy ảo — tạo bộ "
-                   "cài, ra lệnh quét, thiết lập từng kênh, bàn giao đăng.",
+        "tieu_de": "VPS",
+        "tom_tat": "Mọi thứ về NHỮNG CÁI MÁY của kênh. Mỗi thẻ máy có nút Mở "
+                   "máy và dải “Máy VM” ngay trên thẻ: kênh nào đang chạy, "
+                   "nhịp tim, nút Quét Studio, nút Điều khiển… (ra lệnh + "
+                   "thiết lập của đúng máy đó). Mục “Thuê máy” lo thuê/hạn/"
+                   "huỷ; mục “Trạm & tiện ích” là hạ tầng cào số liệu.",
         "buoc": [
             "Bấm “Thêm hồ sơ”, đặt tên, dán proxy (ip:port:user:pass hoặc "
             "socks5://…). Không có proxy thì để trống — vẫn được hồ sơ riêng, "

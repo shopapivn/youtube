@@ -316,16 +316,18 @@ def test_tab_co_dung_hai_muc_gpm_va_vps(tmp_path):
     t.show()
     app.processEvents()
     try:
-        # 02/09 lần 2: "máy vm tích hợp luôn chỗ vps" — VPS + Máy VM chung
-        # MỘT mục cuộn dọc; mục hai là hạ tầng cào (trạm + tiện ích); phần
-        # ĐỌC số nằm bên tab Phân tích.
+        # 02/09 lần 3: "ra lệnh / thiết lập máy ảo là setting CỦA CÁC MÁY ẢO
+        # ĐÓ" — đồ nghề agent nằm trên TỪNG thẻ máy (dải Máy VM), không còn
+        # trang Máy VM chung; tab lớn tên gọn "VPS".
         assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == \
-            ["VPS && Máy VM", "Thuê máy", "Trạm && tiện ích"]
+            ["VPS", "Thuê máy", "Trạm && tiện ích"]
         assert t.tabs.indexOf(t.gpm) == -1, "GPM ẩn — chủ dự án không dùng"
         assert t.gpm is not None and hasattr(t.gpm, "dong_het"), \
             "GPM vẫn phải DỰNG ngầm: nó là đường dọn Chrome con khi đóng tool"
-        assert t.may_vm is not None and t.chi_so._tram is not None, \
-            "trạm phải sống ở trang máy (Máy VM mượn nó)"
+        assert t.chi_so._tram is not None, \
+            "trạm phải sống ở trang máy (dải Máy VM trên thẻ máy mượn nó)"
+        assert t.vps._lay_tram is not None, \
+            "thẻ máy phải được nối với trạm để vẽ dải Máy VM"
         # Chủ dự án 31/08/2026: "để vps là tab 1 mặc định" — xem chú thích đầu
         # `ui_qt/trang_gpm_vps.py`.
         # VPS nằm trong mục GỘP đầu tiên (cuộn dọc), và mục đó là mặc định.
@@ -589,3 +591,57 @@ def test_tach_lam_viec_va_thue(tmp_path):
     assert any("Huỷ" in t for t in chu_thue), "mục thuê phải có Huỷ thuê"
     assert not any("Mở máy" in t for t in chu_thue), \
         "mở máy là việc của mục làm việc"
+
+
+def test_dai_may_vm_tren_the_may(tmp_path):
+    """02/09 lần 3: đồ nghề agent nằm TRÊN thẻ máy — có trạm thì thẻ máy mang
+    dải Máy VM (Quét Studio + Điều khiển…), khớp nhịp tim theo IP."""
+    pytest.importorskip("PyQt5.QtWidgets", reason="máy chạy test không có giao diện")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt5.QtWidgets import QApplication, QPushButton
+
+    from core.chi_so_ytb.tram import Tram
+    from ui_qt.trang_vps import TrangVps
+
+    class _AppGia:
+        base_dir = str(tmp_path)
+        client = None
+
+        def show_message(self, *_a):
+            pass
+
+        def show_error(self, *_a):
+            pass
+
+        def run_bg(self, viec, *, on_ok=None, on_err=None):
+            try:
+                kq = viec()
+            except Exception as loi:  # noqa: BLE001
+                if on_err:
+                    on_err(loi)
+                return
+            if on_ok:
+                on_ok(kq)
+
+    app = QApplication.instance() or QApplication([])
+    tram = Tram(cong=0, goc=str(tmp_path))
+    tram.bat()
+    try:
+        tram.lay_viec("TL4-T7", "PC9", ip="2001:db8::9")   # nhịp tim giả
+        t = TrangVps(_AppGia(), che_do="lam_viec", lay_tram=lambda: tram)
+        t._may = [{"id": "t1", "trang_thai": "ok", "may": {"ten": "PC9"},
+                   "ket_noi": {"ipv6": "2001:db8::9", "dia_chi": "x",
+                               "tai_khoan": "a", "mat_khau": "b"}}]
+        t._ve()
+        app.processEvents()
+        chu_nut = [b.text() for b in t.findChildren(QPushButton)]
+        assert any("Quét Studio" in c for c in chu_nut)
+        assert any("Điều khiển" in c for c in chu_nut)
+        # dải phải khớp đúng kênh theo IP nhịp tim
+        assert t._kenh_cua_may("2001:db8::9") == "TL4-T7"
+        # bấm Quét là lệnh vào hộp của trạm
+        t._quet_may("2001:db8::9", "PC9")
+        viec = tram.lay_viec("TL4-T7", "PC9")
+        assert viec and viec["loai"] == "quet-studio"
+    finally:
+        tram.tat()

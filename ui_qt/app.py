@@ -89,7 +89,7 @@ TRANG = (
     #
     # Khoá `chrome-sach` giữ nguyên dù nhãn đổi ("GPM & VPS" → "VPS & GPM"):
     # bài hướng dẫn, `core/cai_dat.py` và mọi chỗ đã nhớ khoá không phải sửa.
-    ("chrome-sach", "", "VPS & Máy VM"),
+    ("chrome-sach", "", "VPS"),
     ("phan-tich", "", "Phân tích & Nghiên cứu"),
     ("auto", "", "Video sản xuất tự động"),
     ("quan-ly-kenh", "", "Quản lý kênh"),

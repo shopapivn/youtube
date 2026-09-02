@@ -73,7 +73,7 @@ _HIEN_GIAY = 6
 
 
 class TrangVps(QWidget):
-    def __init__(self, app, che_do: str = "du"):
+    def __init__(self, app, che_do: str = "du", lay_tram=None):
         """`che_do` — 02/09 chủ dự án: *"chỗ vps có thể tách ra... 1 tab nhỏ
         để thuê — còn gần như chỗ vps có thể để làm việc"*:
 
@@ -85,8 +85,17 @@ class TrangVps(QWidget):
         super().__init__()
         self._app = app
         self._che_do = che_do
+        #: Mượn trạm (qua hàm, không giữ thẳng) để vẽ dải "Máy VM" trên từng
+        #: thẻ máy — 02/09 chủ dự án: *"ra lệnh cho máy ảo hay thiết lập máy
+        #: ảo là setting CỦA CÁC MÁY ẢO ĐÓ"* — đồ nghề nằm trên thẻ máy.
+        self._lay_tram = lay_tram
+        self._giai_may: List[tuple] = []   # (nhãn, ip trần) để đồng hồ cập nhật
         self._may: List[Dict[str, Any]] = []
         self._kho: Dict[str, Any] = {}
+        if lay_tram is not None and che_do == "lam_viec":
+            self._dong_ho_may = QTimer(self)
+            self._dong_ho_may.timeout.connect(self._ve_dai_may)
+            self._dong_ho_may.start(5000)
         self._dang_doi_mk: Dict[str, str] = {}   # thue_id -> mật khẩu cũ
         #: Máy bạn tự thêm. Chỉ nằm trên máy này, ShopAPI không biết nó tồn tại.
         self._kho_rieng = KhoVpsRieng(app.base_dir)
@@ -182,6 +191,7 @@ class TrangVps(QWidget):
         giữa hai lần vẽ**. Sửa tại chỗ trên một danh sách đổi được là chỗ đẻ ra
         loại lỗi tệ nhất ở đây — một cái nút còn trỏ vào hợp đồng đã hết hạn.
         """
+        self._giai_may.clear()   # thẻ sắp bị dựng lại — nhãn cũ chết hết
         while self._cot.count():
             muc = self._cot.takeAt(0)
             w = muc.widget()
@@ -224,6 +234,135 @@ class TrangVps(QWidget):
                 self._cot.addWidget(self._the_rieng(m))
 
         self._cot.addStretch(1)
+
+    # ── Dải "Máy VM" trên từng thẻ máy ──────────────────────────────────────
+    #
+    # 02/09 chủ dự án: *"ra lệnh cho máy ảo hay thiết lập máy ảo là setting
+    # của các PC đó, của các máy ảo đó"* — nên đồ nghề agent nằm NGAY TRÊN
+    # thẻ máy: kênh nào đang chạy (khớp nhịp tim theo IP), nhịp tim bao lâu
+    # trước, nút Quét và nút Điều khiển (mở hộp thoại ra-lệnh + thiết lập
+    # của đúng máy đó). Không còn đống thẻ chung xếp dưới trang.
+
+    def _tram_song(self):
+        tram = self._lay_tram() if self._lay_tram else None
+        return tram if (tram is not None and tram.dang_chay) else None
+
+    def _khop_nhip_tim(self, ip_may: str):
+        """Nhịp tim nào thuộc máy này — khớp theo IP (chuẩn hoá 2 đầu)."""
+        tram = self._lay_tram() if self._lay_tram else None
+        if tram is None or not ip_may:
+            return None
+        from core.chi_so_ytb.tram import _thuan  # noqa: PLC0415
+        chuan = _thuan(ip_may)
+        for m in tram.may_dang_noi():
+            if _thuan(m.get("ip") or "") == chuan:
+                return m
+        return None
+
+    def _dai_may_vm(self, ten_may: str, ip_may: str) -> QHBoxLayout:
+        hang = QHBoxLayout()
+        hang.setSpacing(8)
+        nh = nhan("Máy VM", "phu")
+        nh.setFixedWidth(90)
+        hang.addWidget(nh)
+        tinh_trang = nhan("…", "muted")
+        tinh_trang.setWordWrap(True)
+        tinh_trang.setMinimumWidth(1)
+        hang.addWidget(tinh_trang, 1)
+        self._giai_may.append((tinh_trang, ip_may))
+        hang.addWidget(nut_phu(
+            "Quét Studio", lambda: self._quet_may(ip_may, ten_may), rong=110))
+        hang.addWidget(nut_phu(
+            "Điều khiển…", lambda: self._dieu_khien_may(ip_may, ten_may),
+            rong=110))
+        self._ve_dai_may()
+        return hang
+
+    def _ve_dai_may(self) -> None:
+        """Cập nhật chữ tình trạng trên mọi dải — đồng hồ 5 giây gọi."""
+        import datetime as dt
+        for o_chu, ip in list(self._giai_may):
+            try:
+                nhip = self._khop_nhip_tim(ip)
+                if self._tram_song() is None:
+                    o_chu.setText("cổng nhận đang tắt (mục Trạm & tiện ích)")
+                elif nhip is None:
+                    o_chu.setText("agent chưa lên tiếng — đã cài MyTool VM "
+                                  "trên máy này chưa?")
+                else:
+                    giay = ""
+                    try:
+                        luc = dt.datetime.fromisoformat(str(nhip.get("luc")))
+                        giay = " · {0} giây trước".format(
+                            max(0, int((dt.datetime.now() - luc)
+                                       .total_seconds())))
+                    except ValueError:
+                        pass
+                    o_chu.setText("kênh <b>{0}</b> · máy {1}{2}".format(
+                        nhip.get("kenh") or "?", nhip.get("may") or "?", giay))
+            except RuntimeError:
+                # thẻ đã bị _ve() dựng lại — nhãn chết, bỏ khỏi sổ
+                self._giai_may.remove((o_chu, ip))
+
+    def _kenh_cua_may(self, ip_may: str) -> str:
+        nhip = self._khop_nhip_tim(ip_may)
+        return str((nhip or {}).get("kenh") or "")
+
+    def _quet_may(self, ip_may: str, ten_may: str) -> None:
+        tram = self._tram_song()
+        if tram is None:
+            self._app.show_message("Cổng nhận đang tắt",
+                                   "Bật ở mục “Trạm & tiện ích” trước đã.")
+            return
+        kenh = self._kenh_cua_may(ip_may)
+        if not kenh:
+            self._app.show_message(
+                "Chưa biết máy này chạy kênh nào",
+                "Agent của máy chưa lên tiếng — mở MyTool VM trên máy ảo "
+                "(hoặc bấm “Điều khiển…” để chọn kênh bằng tay).")
+            return
+        so = tram.giao_viec(kenh, "quet-studio")
+        self._nhan_trang_thai.setText(
+            "Đã xếp lệnh quét #{0} cho {1} (kênh {2}) — agent nhận trong "
+            "~30 giây.".format(so, ten_may, kenh))
+
+    def _dieu_khien_may(self, ip_may: str, ten_may: str) -> None:
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout as _V  # noqa: PLC0415
+
+        from .trang_phan_tich import TrangMayVM  # noqa: PLC0415
+
+        class _ChiSoMuon:
+            """TrangMayVM chỉ cần `_tram` + `bao_dam_bat` từ chi_so."""
+
+            def __init__(self, lay):
+                self._lay = lay
+
+            @property
+            def _tram(self):
+                return self._lay() if self._lay else None
+
+            def bao_dam_bat(self):
+                tram = self._tram
+                if tram is None:
+                    return "cổng nhận chưa dựng"
+                if tram.dang_chay:
+                    return ""
+                try:
+                    tram.bat()
+                    return ""
+                except OSError as loi:
+                    return str(loi)
+
+        hop = QDialog(self)
+        hop.setWindowTitle("Điều khiển {0}".format(ten_may))
+        hop.setMinimumWidth(760)
+        v = _V(hop)
+        bang = TrangMayVM(self._app, _ChiSoMuon(self._lay_tram),
+                          co_tieu_de=False,
+                          phan=("lenh", "thiet_lap"),
+                          kenh_mac_dinh=self._kenh_cua_may(ip_may))
+        v.addWidget(bang)
+        hop.exec_()
 
     def _hang_quan_thue(self, may: Dict[str, Any]) -> QWidget:
         """Một hàng quản THUÊ gọn: tên · hạn kỳ · Huỷ — mục "Thuê máy" chỉ lo
@@ -280,6 +419,10 @@ class TrangVps(QWidget):
             "Mật khẩu", str(ket.get("mat_khau") or "—"),
             nut_them=nut_phu("Đổi", lambda: self._doi_mat_khau(thue_id), rong=64),
         ))
+
+        if self._che_do == "lam_viec" and self._lay_tram is not None:
+            doc.addLayout(self._dai_may_vm(
+                str(m.get("ten") or "Máy ảo"), v.may_chu_rdp(may)))
 
         doc.addWidget(_vach())
 
@@ -452,6 +595,10 @@ class TrangVps(QWidget):
         mo.setFixedWidth(120)
         dau.addWidget(mo)
         doc.addLayout(dau)
+        if self._che_do == "lam_viec" and self._lay_tram is not None:
+            ip_r = v.may_chu_rdp({"ket_noi": {"ipv6": m.dia_chi,
+                                              "dia_chi": m.dia_chi}})
+            doc.addLayout(self._dai_may_vm(m.ten, ip_r))
 
         doc.addLayout(self._dong_chep("Địa chỉ", m.dia_chi or "—"))
         doc.addLayout(self._dong_chep("Đăng nhập", m.tai_khoan or "—"))

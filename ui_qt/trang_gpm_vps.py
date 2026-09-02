@@ -1,15 +1,16 @@
-"""Tab **VPS & Máy VM** — mọi thứ về NHỮNG CÁI MÁY của kênh, một chỗ.
+"""Tab **VPS** — mọi thứ về NHỮNG CÁI MÁY của kênh, một chỗ.
 
-Chủ dự án, 02/09/2026: *"chỉ số kênh và máy vm tao nghĩ là dồn về 1 tab
-hoặc cái tab vps & gpm (tao nghĩ bỏ cái tab gpm đi vì tao không dùng)"*.
-Nên tab này giờ là:
+Ba lượt nắn trong ngày 02/09/2026 của chủ dự án chốt hình này:
 
-    VPS          mở máy ảo (Remote Desktop một cú bấm)
-    Chỉ số kênh  trạm nhận + extension + đọc số liệu Studio
-    Máy VM       điều khiển agent trên máy ảo, bộ cài, bàn giao đăng
+    VPS              thẻ từng máy: Mở máy + dải "Máy VM" (kênh nào, nhịp
+                     tim, Quét, Điều khiển…) — *"ra lệnh / thiết lập máy
+                     ảo là setting CỦA CÁC MÁY ẢO ĐÓ"*, đồ nghề nằm ngay
+                     trên thẻ máy, không xếp thẻ chung dưới trang
+    Thuê máy         thuê mới / hạn kỳ / huỷ — chuyện tiền một chỗ
+    Trạm & tiện ích  hạ tầng cào: cài tiện ích + cổng nhận
 
-— còn tab Phân tích & Nghiên cứu chỉ giữ đúng phần NGHIÊN CỨU (Đối thủ,
-Quyết định content). Máy một nơi, nghiên cứu một nơi.
+— còn tab Phân tích & Nghiên cứu giữ phần NGHIÊN CỨU (Đối thủ, Chỉ số
+kênh bản chỉ-đọc, Quyết định content). Máy một nơi, nghiên cứu một nơi.
 
 ═══ GPM LOGIN: ẨN, KHÔNG XOÁ ═══
 
@@ -35,7 +36,6 @@ from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from .trang_chi_so_ytb import TrangChiSoYTB
 from .trang_chrome_sach import TrangChromeSach
-from .trang_phan_tich import TrangMayVM
 from .trang_vps import TrangVps
 from .widgets import tieu_de_trang
 
@@ -51,38 +51,29 @@ class TrangGpmVps(QWidget):
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(10)
         doc.addWidget(tieu_de_trang(
-            "VPS & Máy VM",
-            "Máy ảo của kênh: mở máy, trạm chỉ số, điều khiển agent.",
+            "VPS",
+            "Máy ảo của kênh: mở máy, điều khiển agent ngay trên từng thẻ máy.",
             "chrome-sach"))
 
         self.tabs = QTabWidget()
         # GPM dựng NGẦM, không addTab — xem đầu tệp (dọn Chrome con khi đóng).
         self.gpm = TrangChromeSach(app, co_tieu_de=False)
+        # Chỉ số kênh dựng TRƯỚC vì thẻ máy mượn trạm của nó (dải "Máy VM").
+        self.chi_so = TrangChiSoYTB(app, phan=("cai", "tram"))
         # 02/09: "chỗ vps... để làm việc, 1 tab nhỏ để thuê" — mục làm việc
         # chỉ còn thẻ MỞ máy; chuyện thuê/huỷ/hết hạn nằm mục "Thuê máy".
-        self.vps = TrangVps(app, che_do="lam_viec")
+        # 02/09 (lần 3): "ra lệnh / thiết lập máy ảo là setting CỦA CÁC MÁY
+        # ẢO ĐÓ" — đồ nghề agent nằm NGAY TRÊN từng thẻ máy (dải Máy VM +
+        # hộp thoại Điều khiển), không còn đống thẻ chung xếp dưới trang.
+        self.vps = TrangVps(app, che_do="lam_viec",
+                            lay_tram=lambda: self.chi_so._tram)
         self.thue = TrangVps(app, che_do="thue")
-        # Chỉ số kênh ở đây chỉ giữ HẠ TẦNG (cài tiện ích + trạm) — phần ĐỌC
-        # số nằm bên tab Phân tích & Nghiên cứu (02/09: "cái đọc số liệu đã
-        # lấy được... đưa về bên phân tích và nghiên cứu").
-        self.chi_so = TrangChiSoYTB(app, phan=("cai", "tram"))
-        # Máy VM "tích hợp luôn chỗ vps" (02/09): VPS + điều khiển agent nằm
-        # CHUNG một mục cuộn dọc; thẻ Bàn giao & kế hoạch đăng đã dọn sang
-        # tab Quản lý kênh.
-        self.may_vm = TrangMayVM(app, self.chi_so, co_tieu_de=False,
-                                 phan=("lenh", "thiet_lap", "bang"))
         from PyQt5.QtWidgets import QScrollArea  # noqa: PLC0415
-        gop = QWidget()
-        gop_doc = QVBoxLayout(gop)
-        gop_doc.setContentsMargins(0, 0, 0, 0)
-        gop_doc.setSpacing(0)
-        gop_doc.addWidget(self.vps)
-        gop_doc.addWidget(self.may_vm)
         cuon = QScrollArea()
         cuon.setWidgetResizable(True)
         cuon.setFrameShape(QScrollArea.NoFrame)
-        cuon.setWidget(gop)
-        self.tabs.addTab(cuon, "VPS && Máy VM")
+        cuon.setWidget(self.vps)
+        self.tabs.addTab(cuon, "VPS")
         self.tabs.addTab(self.thue, "Thuê máy")
         self.tabs.addTab(self.chi_so, "Trạm && tiện ích")
         doc.addWidget(self.tabs, 1)
