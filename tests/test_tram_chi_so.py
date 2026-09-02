@@ -418,7 +418,12 @@ def test_bang_tinh_trang_cham_theo_so_tay():
         bg(views=906, views_that=566, unique_viewers=381, impressions=22000))[0]
     assert "SỐ BẨN" in _tinh_trang(
         bg(views=386, views_that=118, unique_viewers=46))[0]
-    # JP < 80% phải bị réo tên
-    kq = _tinh_trang(bg(impressions=22000,
-                        vung={"JP": {"views": 60}}, vung_tong_views=100))
+    # JP < 80% phải bị réo tên — nhưng CHỈ khi bảng nước đủ tin (>=3 nước)
+    day_du = {"JP": {"views": 60}, "VN": {"views": 25}, "US": {"views": 15}}
+    kq = _tinh_trang(bg(impressions=22000, vung=day_du, vung_tong_views=100))
     assert "JP 60%" in kq[0]
+    # Bảng nước lèo tèo (dòng JP đứng im, Total nhảy — đo thật 02/09) thì
+    # KHÔNG được phán bừa: thà im còn hơn dẫn người ta quyết sai.
+    kq2 = _tinh_trang(bg(impressions=22000,
+                         vung={"JP": {"views": 60}}, vung_tong_views=100))
+    assert "JP" not in kq2[0]

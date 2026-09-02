@@ -55,6 +55,30 @@ _COT = ["Video", "Đăng", "Mốc", "Hiển thị", "CTR", "Xem", "Thật", "V/n
         "JP %", "AVD %", "Sub", "Tình trạng"]
 
 
+def _jp_pct(b):
+    """% khán giả Nhật — trả None khi bảng nước KHÔNG ĐỦ TIN.
+
+    ⚠ Đo thật 02/09/2026 trên video dR8fA42KTCY, đọc thẳng `geo.csv`:
+
+        mốc 138h:  Total 728 · JP 501  → 68,8%
+        mốc 146h:  Total 906 · JP 501  → 55,3%
+
+    Dòng JP đứng im TỪNG CHỮ SỐ (501 view · 224 thật · 0:03:26 · 13,0135
+    giờ) trong khi dòng Total nhảy 728→906. Số người Nhật không thể đứng im
+    khi tổng tăng — tức bảng nước của Studio trả về CHẬM một nhịp so với
+    Total, còn ta thì chia hai số của hai thời điểm khác nhau. Tỉ lệ 92% →
+    69% → 55% của kênh này là ẢO, không phải tệp khán giả đang trôi.
+
+    Luật tạm cho tới khi chuẩn hoá được: chỉ tin khi bảng bắt được **từ 3
+    nước trở lên** (dấu hiệu bảng đã tải đủ), còn lại trả None và giao diện
+    hiện "?" — thà nói không biết còn hơn dẫn người ta quyết sai.
+    """
+    if not b.vung or not b.vung_tong_views or len(b.vung) < 3:
+        return None
+    jp = b.vung.get("JP") or {}
+    return (jp.get("views") or 0) * 100.0 / b.vung_tong_views
+
+
 def _tinh_trang(b) -> tuple:
     """(chữ tình trạng, màu) cho một video — luật lấy từ CHANNEL/<kênh>/CLAUDE.md:
     imp chết <1.500 · sống 20.000 · CTR thấp <3,5% · AVD ổn 35%/thấp <25% ·
@@ -69,9 +93,7 @@ def _tinh_trang(b) -> tuple:
     # nhưng 2,57 thật; dR8f 1,5 thật = sạch).
     xem = b.views_that if b.views_that else b.views
     vn = (xem / b.unique_viewers) if (xem and b.unique_viewers) else None
-    jp = None
-    if b.vung and b.vung_tong_views:
-        jp = ((b.vung.get("JP") or {}).get("views") or 0) * 100.0 / b.vung_tong_views
+    jp = _jp_pct(b)
     duoi = " · tệp JP {0:.0f}%".format(jp) if (jp is not None and jp < 80) else ""
     if vn is not None and vn > 2 and tuoi <= 168:
         return ("SỐ BẨN (xem lặp {0:.1f} lượt/người) — đọc lại mốc sau"
@@ -664,11 +686,9 @@ class TrangChiSoYTB(QWidget):
             vn = ""
             if b.views and b.unique_viewers:
                 vn = "{0:.1f}".format(b.views / b.unique_viewers)
-            jp = ""
-            if b.vung and b.vung_tong_views:
-                jp = "{0:.0f}%".format(
-                    ((b.vung.get("JP") or {}).get("views") or 0)
-                    * 100.0 / b.vung_tong_views)
+            gt_jp = _jp_pct(b)
+            # "?" = bảng nước chưa đủ tin (xem _jp_pct) — không bịa số.
+            jp = "{0:.0f}%".format(gt_jp) if gt_jp is not None else "?"
             trang_thai, mau = _tinh_trang(b)
             o = [b.tieu_de or b.video_id, b.ngay_dang or "—",
                  f"{b.moc_gio}h" if b.moc_gio is not None else "—",
@@ -684,8 +704,8 @@ class TrangChiSoYTB(QWidget):
                 if c == 4 and b.ctr is not None:
                     tô = theme.DO if b.ctr < 3.5 else (
                         theme.XANH if b.ctr >= 5 else "")
-                elif c == 8 and jp:
-                    tô = theme.XANH if float(jp[:-1]) >= 80 else theme.DO
+                elif c == 8 and gt_jp is not None:
+                    tô = theme.XANH if gt_jp >= 80 else theme.DO
                 elif c == 9 and b.avd_pct is not None:
                     tô = theme.DO if b.avd_pct < 25 else (
                         theme.XANH if b.avd_pct >= 35 else "")
