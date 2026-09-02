@@ -731,6 +731,27 @@ class TestKhongPhaiGoGi:
         ra = agent.chon_tram({"tram": "http://x:1", "tram_ung_vien": []})
         assert ra["tram"] == "http://x:1"
 
+    def test_chon_tram_phai_noi_ro_khi_khong_goi_duoc(self):
+        # 02/09, khách chạy bộ cài: "sao rồi không thấy gì" — nó dò trong câm
+        # lặng. Dò phải nói từng bước và nói thật khi không ai đáp.
+        agent = _nap_agent()
+        loi = []
+        agent.chon_tram({"tram": "", "tram_ung_vien": ["http://127.0.0.1:9"]},
+                        in_ra=loi.append)
+        chu = "\n".join(loi)
+        assert "thử gọi trạm" in chu
+        assert "CHƯA GỌI ĐƯỢC TRẠM NÀO" in chu
+        assert "Bật cổng nhận" in chu, "phải chỉ đúng chỗ cần kiểm tra"
+
+    def test_dia_chi_dong_goi_khong_duoc_tran_lan(self):
+        # Windows đẻ địa chỉ IPv6 tạm mỗi ngày và giữ xác — máy chủ dự án có
+        # ~120 cái. Đóng gói hết là bên VM thử 8 phút câm lặng. Chỉ lấy địa
+        # chỉ đang dùng thật.
+        from core.chi_so_ytb import tram as tr
+        ds = tr.dia_chi_dong_goi(8765)
+        assert len(ds) <= 6, ds
+        assert all(d.startswith("http://") for d in ds)
+
     def test_tram_tu_goi_sang_vps_dinh_ky_khong_can_bam_gi(self, tmp_path):
         # Bản đầu bắt bấm nút đúng lúc bên VPS đang chờ — chủ dự án: "đơn
         # giản hóa đi". Giờ trạm bật là loa tự gọi các VPS đã lưu, định kỳ.
@@ -788,3 +809,74 @@ class TestKhongPhaiGoGi:
             assert sorted(ra) == ["KENH-B", "TL4-T7"]
         finally:
             tram.tat()
+
+
+class TestVeSinhDaiHan:
+    """02/09: 'thiết kế để... không có bug khi dùng dài hạn' — không agent
+    xác sống, và VM bật lên là agent tự chạy."""
+
+    def test_mot_minh_don_agent_cu_roi_thay_cho(self, tmp_path):
+        import socket
+        import subprocess
+        import sys
+
+        agent = _nap_agent()
+        o = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        o.bind(("127.0.0.1", 0))
+        cong = o.getsockname()[1]
+        o.close()
+        duong_pid = str(tmp_path / "agent.pid")
+        # "Agent cũ": một tiến trình THẬT giữ cổng khoá và ghi PID của nó.
+        con = subprocess.Popen(
+            [sys.executable, "-c",
+             "import socket,os,time;"
+             "o=socket.socket();o.bind(('127.0.0.1',{0}));o.listen(1);"
+             "open(r'{1}','w').write(str(os.getpid()));"
+             "print('san sang',flush=True);time.sleep(60)".format(
+                 cong, duong_pid)],
+            stdout=subprocess.PIPE, text=True)
+        try:
+            con.stdout.readline()          # chờ nó cầm cổng xong
+            assert agent.mot_minh(cong=cong, duong_pid=duong_pid) is True, \
+                "bản mới phải dọn được bản cũ rồi thay chỗ"
+            con.wait(10)
+            assert con.poll() is not None, "bản cũ phải bị dọn hẳn"
+            with open(duong_pid, encoding="ascii") as tep:
+                import os as _os
+                assert int(tep.read()) == _os.getpid(), \
+                    "agent.pid giờ phải là PID của bản mới"
+        finally:
+            if con.poll() is None:
+                con.kill()
+
+    def test_mot_minh_khong_co_gi_giu_thi_vao_thang(self, tmp_path):
+        import socket
+
+        agent = _nap_agent()
+        o = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        o.bind(("127.0.0.1", 0))
+        cong = o.getsockname()[1]
+        o.close()
+        assert agent.mot_minh(cong=cong,
+                              duong_pid=str(tmp_path / "agent.pid")) is True
+
+    def test_dang_ky_tu_chay_ghi_vao_khoi_dong(self, tmp_path, monkeypatch):
+        import importlib.util
+
+        khoi = tmp_path / "Microsoft" / "Windows" / "Start Menu" / \
+            "Programs" / "Startup"
+        os.makedirs(khoi)
+        monkeypatch.setenv("APPDATA", str(tmp_path))
+        monkeypatch.syspath_prepend(str(GOC / "vm"))
+        spec = importlib.util.spec_from_file_location(
+            "vm_cai_dat_vm", GOC / "vm" / "cai_dat_vm.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        duong = mod.dang_ky_tu_chay()
+        assert duong and os.path.isfile(duong)
+        du_lieu = open(duong, "rb").read()
+        assert b"\r\n" in du_lieu, ".bat phải CRLF (bài SETUP.bat)"
+        assert b"CHAY-NGAM.vbs" in du_lieu, "phải trỏ bản chạy ngầm"
+        # CHAY-NGAM.vbs phải có thật và cũng CRLF — không thì lối tắt trỏ ma.
+        vbs = open(GOC / "vm" / "CHAY-NGAM.vbs", "rb").read()
+        assert b"\r\n" in vbs and b"CAI-DAT-VM.bat" in vbs

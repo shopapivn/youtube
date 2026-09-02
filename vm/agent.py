@@ -81,7 +81,7 @@ def _goi(tram: str, duong: str, du_lieu: dict = None, cho: float = 20.0) -> dict
         return {"chu": chu}
 
 
-def chon_tram(cau_hinh: dict) -> dict:
+def chon_tram(cau_hinh: dict, in_ra=None) -> dict:
     """Chốt địa chỉ trạm từ các ứng viên tool đã điền sẵn lúc đóng gói.
 
     Đường đơn giản nhất (chủ dự án, 02/09/2026: *"bên tool chỉ cần setup để
@@ -99,16 +99,35 @@ def chon_tram(cau_hinh: dict) -> dict:
            if d]
     ung = list(dict.fromkeys(ung))
     if not ung:
+        if in_ra:
+            in_ra("config chưa có địa chỉ trạm nào — trên tool bấm "
+                  "'Tạo bộ cài VM' rồi chép lại thư mục vm/ sang đây.")
         return cau_hinh
-    if len(ung) > 1:
-        for d in ung:
-            try:
-                if _goi(d, "/trang-thai", cho=4.0).get("ok"):
-                    cau_hinh["tram"] = d
-                    return cau_hinh
-            except Exception:  # noqa: BLE001 — ứng viên chết là chuyện dự tính
-                continue
+    # Câm lặng lúc dò là người dùng tưởng treo (02/09: "sao rồi không thấy
+    # gì") — nên có in_ra thì nói từng bước, kể cả khi chỉ một ứng viên.
+    if in_ra:
+        in_ra("thử gọi trạm ({0} địa chỉ, mỗi địa chỉ chờ tối đa 4 giây)..."
+              .format(len(ung)))
+    for d in ung:
+        try:
+            dap = _goi(d, "/trang-thai", cho=4.0).get("ok")
+        except Exception:  # noqa: BLE001 — ứng viên chết là chuyện dự tính
+            dap = False
+        if in_ra:
+            in_ra("  {0} ... {1}".format(d, "ĐÁP ✓" if dap else "lặng"))
+        if dap:
+            cau_hinh["tram"] = d
+            if in_ra:
+                in_ra("NỐI ĐƯỢC TRẠM ✓ — cứ để cửa sổ này mở, agent tự làm "
+                      "việc. Trên tool, tab Máy VM sẽ thấy máy này trong "
+                      "vòng nửa phút.")
+            return cau_hinh
     cau_hinh["tram"] = ung[0]
+    if in_ra:
+        in_ra("CHƯA GỌI ĐƯỢC TRẠM NÀO. Kiểm tra bên máy chính: tool đang "
+              "mở chưa? mục Chỉ số kênh đã bấm 'Bật cổng nhận' chưa? "
+              "Agent vẫn chạy và tự thử lại đều — không phải làm lại gì "
+              "ở đây.")
     return cau_hinh
 
 
@@ -608,14 +627,66 @@ def viec_theo_lich(cau_hinh: dict) -> None:
 # ── Vòng đời ─────────────────────────────────────────────────────────────────
 
 
+_O_MOT_MINH = None      # giữ tham chiếu — ổ khoá sống theo tiến trình
+
+
+def mot_minh(cong: int = 8767, duong_pid: str = "") -> bool:
+    """Chỉ MỘT agent mỗi máy — bản mới tự DỌN bản cũ rồi thay chỗ.
+
+    Chủ dự án, 02/09/2026: *"thiết kế để... không có bug khi dùng dài hạn"*.
+    Bug dài hạn số một của loại chương trình này là XÁC SỐNG: nhấp đúp hai
+    lần là hai agent cùng hỏi việc, cùng nuôi Chrome, cùng đăng video.
+
+    Ổ khoá là một cổng TCP chỉ nghe 127.0.0.1: tiến trình chết kiểu gì HĐH
+    cũng tự nhả cổng — không có khoá mồ côi như lock file. `agent.pid` chỉ
+    để bản mới biết PID bản cũ mà dọn (taskkill cả cây — bản cũ có thể đang
+    cầm tool đăng con).
+    """
+    global _O_MOT_MINH
+    duong_pid = duong_pid or os.path.join(GOC, "agent.pid")
+    for lan in range(2):
+        try:
+            o = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # KHÔNG SO_REUSEADDR: trên Windows, bind mặc định là độc quyền —
+            # đúng thứ một ổ khoá cần.
+            o.bind(("127.0.0.1", int(cong)))
+            o.listen(1)
+            _O_MOT_MINH = o
+            try:
+                with open(duong_pid, "w", encoding="ascii") as tep:
+                    tep.write(str(os.getpid()))
+            except OSError:
+                pass
+            return True
+        except OSError:
+            if lan:
+                break
+            try:
+                with open(duong_pid, "r", encoding="ascii") as tep:
+                    pid = int(tep.read().strip())
+            except (OSError, ValueError):
+                return False
+            if pid and pid != os.getpid():
+                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                               capture_output=True)
+                ghi("đã dọn agent cũ (PID {0}) — bản này thay chỗ".format(pid))
+                time.sleep(1.0)
+    return False
+
+
 def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
-    cau_hinh = chon_tram(cau_hinh)
+    if not mot_vong and not mot_minh():
+        ghi("một agent khác đang chạy mà không dọn được — thoát, không chạy "
+            "đôi (chạy đôi là hỏi việc đôi, đăng video đôi).")
+        return
     if not cau_hinh.get("ten_may"):
         # Config đóng gói sẵn từ tool để trống tên máy — lấy tên máy THẬT
         # lúc chạy, không phải tên máy đã đóng gói.
         cau_hinh["ten_may"] = os.environ.get("COMPUTERNAME", "vm")
-    ghi("agent kênh {0} — hỏi việc {1} mỗi {2}s".format(
-        cau_hinh.get("kenh"), cau_hinh.get("tram"), NHIP_GIAY))
+    ghi("agent kênh {0}, máy {1}".format(
+        cau_hinh.get("kenh"), cau_hinh.get("ten_may")))
+    cau_hinh = chon_tram(cau_hinh, in_ra=ghi)
+    ghi("hỏi việc {0} mỗi {1}s".format(cau_hinh.get("tram"), NHIP_GIAY))
     chrome = tim_chrome(cau_hinh)
     ghi("Chrome của kênh: {0}".format(chrome or "CHƯA THẤY — đặt vm cạnh "
                                       "Chrome hoặc điền chrome= trong config"))
@@ -652,8 +723,14 @@ def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
                     str(loi)[:120]))
             if hong_lien_tiep % 10 == 0:
                 # Im lâu có khi không phải trạm tắt mà là địa chỉ đổi (IPv6
-                # nhà mạng cấp lại) — dò lại các ứng viên đã đóng gói.
+                # nhà mạng cấp lại) — dò lại các ứng viên đã đóng gói, rồi
+                # ngồi nghe loa gọi của trạm một lát: trạm bật là nó tự réo
+                # các VPS đã lưu mỗi ~60 giây, nghe 65 giây là đủ một vòng.
                 cau_hinh = chon_tram(cau_hinh)
+                ra = cho_gioi_thieu(cong=8765, cho_giay=65.0)
+                if ra:
+                    cau_hinh["tram"] = ra
+                    ghi("trạm gọi sang giới thiệu: {0}".format(ra))
         # Lịch cố định chạy cả khi trạm tắt: quét Studio không cần trạm sống
         # (extension tự ghi vào Tải xuống khi không có trạm). Dùng cấu hình
         # HIỆU LỰC — trạm tắt thì giữ thiết lập tool đẩy xuống lần cuối.

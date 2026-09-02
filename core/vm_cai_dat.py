@@ -94,7 +94,9 @@ def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
     duong = os.path.join(goc, "vm", "config.json")
     cau_hinh = {
         "tram": "",
-        "tram_ung_vien": [str(d) for d in (ung_vien or []) if d],
+        # Chặn trên 12 ứng viên: mỗi cái chết tốn 4 giây thử bên máy ảo —
+        # danh sách dài là bộ cài câm lặng hàng phút, người dùng tưởng treo.
+        "tram_ung_vien": [str(d) for d in (ung_vien or []) if d][:12],
         "kenh": str(kenh or "").strip(),
         "ten_may": "",
         "chrome": "",

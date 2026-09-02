@@ -54,8 +54,14 @@ def chon_kenh(tram: str) -> str:
 
 def cai() -> dict:
     if os.path.isfile(DUONG_CONFIG):
-        print("  - Da co config.json, dung nguyen. Muon dat lai thi xoa no di.")
-        return agent.doc_cau_hinh()
+        cau_hinh = agent.doc_cau_hinh()
+        so = len([d for d in ([str(cau_hinh.get("tram") or "")] +
+                              [str(x) for x in (cau_hinh.get("tram_ung_vien") or [])])
+                  if d])
+        print("  - Da co config.json: kenh {0}, {1} dia chi tram de thu.".format(
+            cau_hinh.get("kenh") or "(chua dien)", so))
+        print("    (Muon dat lai thi xoa config.json roi chay lai.)")
+        return cau_hinh
 
     print("  Dang tim tram trong mang...")
     tram = agent.tim_tram()
@@ -97,10 +103,41 @@ def cai() -> dict:
     return cau_hinh
 
 
+def dang_ky_tu_chay() -> str:
+    """Ghi lối tắt vào thư mục Khởi động của Windows — VM bật là agent tự chạy.
+
+    Chủ dự án, 02/09/2026: *"vm sẽ có lúc tắt, thì thiết kế cài đặt để khi
+    bên vm máy chạy thì mọi thứ tự chạy auto"*. Lối tắt trỏ CHAY-NGAM.vbs
+    (chạy ẩn, không cửa sổ đen); agent có khoá một-mình nên bật chồng mấy
+    lần cũng chỉ còn đúng một agent sống.
+    """
+    khoi_dong = os.path.join(os.environ.get("APPDATA", ""), "Microsoft",
+                             "Windows", "Start Menu", "Programs", "Startup")
+    if not os.path.isdir(khoi_dong):
+        return ""
+    duong = os.path.join(khoi_dong, "shopapi-vm-agent.bat")
+    noi_dung = '@echo off\r\nstart "" wscript.exe "{0}"\r\n'.format(
+        os.path.join(GOC, "CHAY-NGAM.vbs"))
+    try:
+        # .bat phải thuần ASCII + CRLF (bài SETUP.bat); đường có dấu tiếng
+        # Việt thì lùi về bảng mã ANSI của máy — cmd vẫn đọc được đa số ca.
+        with open(duong, "w", encoding="ascii", newline="") as tep:
+            tep.write(noi_dung)
+    except UnicodeEncodeError:
+        with open(duong, "w", encoding="mbcs", newline="") as tep:  # noqa: PLE1310
+            tep.write(noi_dung)
+    except OSError:
+        return ""
+    return duong
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("   Cai agent cua kenh len may ao nay")
     print("=" * 60)
     cau_hinh = cai()
+    if dang_ky_tu_chay():
+        print("  - May ao bat len la agent TU CHAY ngam (da ghi vao thu muc "
+              "Khoi dong).")
     print()
     agent.chay(cau_hinh)

@@ -141,16 +141,25 @@ def dia_chi_dong_goi(cong: int = CONG_MAC_DINH) -> List[str]:
     ở đây không phải là mở cửa.
     """
     ra = list(dia_chi_may(cong))
+    # Địa chỉ toàn cầu ĐANG DÙNG — hỏi hệ điều hành "đi ra Internet thì đi
+    # bằng địa chỉ nào" (connect UDP không gửi gói nào, chỉ để HĐH chọn
+    # đường). KHÔNG liệt kê getaddrinfo: Windows đẻ địa chỉ IPv6 tạm mỗi
+    # ngày và giữ lại xác, máy chủ dự án đo được ~120 cái — nướng hết vào
+    # config là bên VM ngồi thử 4 giây × 120 = 8 phút câm lặng
+    # (02/09/2026: "sao rồi không thấy gì").
     try:
-        for m in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET6):
-            ip = str(m[4][0])
-            if trong_mang_nha(ip) or ip.lower().startswith("fe80") or ip == "::1":
-                continue
+        o = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        try:
+            o.connect(("2001:4860:4860::8888", 53))
+            ip = str(o.getsockname()[0])
+        finally:
+            o.close()
+        if not trong_mang_nha(ip) and not ip.lower().startswith("fe80"):
             d = f"http://[{ip}]:{cong}"
             if d not in ra:
                 ra.append(d)
     except OSError:
-        pass
+        pass  # máy không có đường IPv6 ra ngoài — thôi, còn địa chỉ mạng trong
     return ra
 
 

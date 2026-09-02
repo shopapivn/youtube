@@ -158,3 +158,22 @@ Lưới đỡ, tự chạy ngầm, người dùng không cần biết:
 
 Máy lạ gọi vào trạm vẫn bị 403 — không mở toang ra Internet. Trên tool,
 tab Máy VM sẽ thấy máy hiện lên trong vòng nửa phút sau khi agent chạy.
+
+Vệ sinh dài hạn (02/09, "không có bug khi dùng dài hạn"):
+
+- **Địa chỉ đóng gói phải là địa chỉ ĐANG DÙNG.** Windows đẻ địa chỉ IPv6
+  tạm mỗi ngày và giữ xác — máy chủ dự án đo được ~120 cái; `getaddrinfo`
+  liệt hết vào config làm bên VM thử 4 giây × 120 = 8 phút câm lặng ("sao
+  rồi không thấy gì"). Giờ hỏi HĐH "đi ra ngoài bằng địa chỉ nào" (connect
+  UDP không gửi gói) — một địa chỉ toàn cầu, cộng vài địa chỉ mạng trong.
+- **Bộ cài phải NÓI:** thử địa chỉ nào, đáp hay lặng, nối được hay chưa,
+  và chưa nối được thì chỉ đúng chỗ cần kiểm tra (tool mở chưa, Bật cổng
+  nhận chưa) — tuyệt đối không im lặng quá vài giây.
+- **Khoá một-mình (`mot_minh`):** ổ khoá là cổng TCP 127.0.0.1:8767 —
+  tiến trình chết kiểu gì HĐH cũng nhả, không có khoá mồ côi. Nhấp đúp
+  lần nữa là bản mới taskkill cả cây bản cũ (PID trong agent.pid) rồi
+  thay chỗ — không bao giờ hai agent cùng hỏi việc/cùng đăng.
+- **VM bật là tự chạy:** bộ cài ghi `shopapi-vm-agent.bat` vào thư mục
+  Khởi động của Windows, trỏ `CHAY-NGAM.vbs` (chạy ẩn, tìm Python bằng
+  chính CAI-DAT-VM.bat). Agent lạc trạm lâu (10 nhịp hỏng) thì tự dò lại
+  ứng viên + ngồi nghe loa gọi của trạm 65 giây.
