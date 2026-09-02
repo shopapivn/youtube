@@ -618,3 +618,57 @@ class TestMatVaChrome:
         # tool tắt núm -> không nuôi nữa
         agent.giu_chrome({"chrome": str(chrome), "giu_chrome_mo": False})
         assert len(da_mo) == 1
+
+
+class TestKhongPhaiGoGi:
+    """02/09: 'tao cần mọi thứ đơn giản dễ dùng' — cài VM không phải gõ gì:
+    trạm tự dò (UDP), kênh tự đoán (nếp <MÃ>/<MÃ>.exe), Chrome tự tìm."""
+
+    def test_tu_do_thay_tram_qua_udp(self, tmp_path):
+        # Trạm cổng 0 -> TCP lấy cổng ngẫu nhiên; tai UDP nghe cùng số cổng.
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            cong = tram._may.server_address[1]
+            tram.cong = cong        # tai dò mở theo tram.cong
+            tram._mo_tai_do()
+            time.sleep(0.2)
+            agent = _nap_agent()
+            ra = agent.tim_tram(cong=cong, cho_giay=3.0, dich=["127.0.0.1"])
+            assert ra == "http://127.0.0.1:{0}".format(cong)
+        finally:
+            tram.tat()
+
+    def test_khong_co_tram_thi_tra_rong_khong_treo(self):
+        agent = _nap_agent()
+        assert agent.tim_tram(cong=9, cho_giay=0.3, dich=["127.0.0.1"]) == ""
+
+    def test_doan_kenh_theo_nep_thu_muc(self, tmp_path, monkeypatch):
+        agent = _nap_agent()
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        monkeypatch.setattr(agent, "GOC", str(goc_vm))
+        assert agent.doan_kenh() == "", "không thấy thì trả rỗng, không bịa"
+        os.makedirs(tmp_path / "upload" / "KA2-T2" / "KA2-T2")
+        (tmp_path / "upload" / "KA2-T2" / "KA2-T2" / "KA2-T2.exe").write_bytes(b"x")
+        assert agent.doan_kenh() == "KA2-T2"
+        # hai kênh cùng nằm cạnh -> chịu, đoán bừa còn tệ hơn hỏi
+        os.makedirs(tmp_path / "upload" / "TL4-T7")
+        (tmp_path / "upload" / "TL4-T7" / "TL4-T7.exe").write_bytes(b"x")
+        assert agent.doan_kenh() == ""
+
+    def test_tram_phat_danh_sach_kenh(self, tmp_path):
+        # `liet_ke_kenh` chỉ nhận thư mục có kenh.yaml — kênh thật đều có.
+        for ten in ("TL4-T7", "KENH-B"):
+            os.makedirs(tmp_path / "CHANNEL" / ten)
+            (tmp_path / "CHANNEL" / ten / "kenh.yaml").write_text(
+                "ma: " + ten, encoding="utf-8")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            dia_chi = "http://127.0.0.1:{0}".format(tram._may.server_address[1])
+            agent = _nap_agent()
+            ra = agent._goi(dia_chi, "/kenh")
+            assert sorted(ra) == ["KENH-B", "TL4-T7"]
+        finally:
+            tram.tat()

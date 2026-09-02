@@ -184,6 +184,49 @@ class Tram:
     def dang_chay(self) -> bool:
         return self._may is not None
 
+    # ------------------------------------------------------------------ tai dò
+    def _mo_tai_do(self) -> None:
+        """Tai UDP: máy ảo hú "trạm đâu?" là đáp — cài agent khỏi hỏi địa chỉ.
+
+        Chủ dự án, 02/09/2026: *"tao thấy nó phức tạp thế"* (về ba câu hỏi
+        lúc cài). Địa chỉ trạm là câu khó nhất với người không rành mạng —
+        nên để máy tự tìm nhau: agent phát một gói UDP quảng bá, trạm nghe
+        thấy thì đáp lại; agent lấy luôn địa chỉ NGUỒN của gói đáp làm địa
+        chỉ trạm. Chỉ đáp cho máy trong mạng nội bộ, và chỉ đáp — không nhận
+        lệnh gì qua đường này.
+        """
+        tram = self
+
+        def nghe():
+            try:
+                o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                o.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                o.bind(("0.0.0.0", tram.cong))
+                o.settimeout(1.0)
+                tram._o_do = o
+            except OSError:
+                return
+            while tram._may is not None:
+                try:
+                    goi, nguon = o.recvfrom(64)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    return
+                if goi.strip() == b"shopapi-tram?" and trong_mang_nha(nguon[0]):
+                    try:
+                        o.sendto(json.dumps({"shopapi_tram": True,
+                                             "cong": tram.cong}).encode("utf-8"),
+                                 nguon)
+                    except OSError:
+                        pass
+            try:
+                o.close()
+            except OSError:
+                pass
+
+        threading.Thread(target=nghe, daemon=True, name="tram-do").start()
+
     def bat(self) -> None:
         if self._may:
             return
@@ -214,6 +257,7 @@ class Tram:
 
         self._luong = threading.Thread(target=self._may.serve_forever, daemon=True)
         self._luong.start()
+        self._mo_tai_do()
         self.ghi(f"trạm nhận đang nghe cổng {self.cong} → {os.path.join(self.goc, 'CHANNEL')}")
         for d in dia_chi_may(self.cong):
             self.ghi(f"  dán vào extension: {d}")
@@ -228,6 +272,13 @@ class Tram:
             pass
         self._may = None
         self._luong = None
+        o = getattr(self, "_o_do", None)
+        if o is not None:
+            try:
+                o.close()
+            except OSError:
+                pass
+            self._o_do = None
         self.ghi("trạm nhận đã dừng")
 
     # ------------------------------------------------------------------ nhận gói
@@ -385,6 +436,14 @@ def _lam_xu_ly(tram: "Tram"):
                     "ok": True, "cong": tram.cong, "so_goi": tram.so_goi,
                     "thu_muc": os.path.join(tram.goc, "CHANNEL").replace("\\", "/"),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            if self.path.startswith("/kenh"):
+                # Danh sách kênh của tool — bộ cài trên máy ảo hiện menu bấm
+                # số thay vì bắt ai gõ tên kênh.
+                from core.kenh import liet_ke_kenh  # noqa: PLC0415
+
+                return self._tra(json.dumps(liet_ke_kenh(tram.goc),
+                                            ensure_ascii=False).encode("utf-8"),
+                                 "application/json; charset=utf-8")
             if self.path.startswith("/tien-ich"):
                 # Agent máy ảo tải EXTENSION về — để việc cài mắt cào không
                 # còn là bước tay. Chủ dự án 02/09/2026: *"sao không để tool

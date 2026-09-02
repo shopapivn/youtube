@@ -1,15 +1,9 @@
 {
-    "tram": "http://192.168.1.10:8765",
-    "kenh": "TL4-T7",
-    "ten_may": "vm-tl4",
-    "chrome": "C:\\GoogleChromePortable\\GoogleChromePortable.exe",
+    "_ghi_chu": "Chi con thu cua RIENG cai may nay. Moi num van (gio quet, giu Chrome...) chinh tren TOOL: tab Phan tich & Nghien cuu > May VM.",
+    "tram": "",
+    "kenh": "",
+    "ten_may": "",
+    "chrome": "",
     "studio_url": "https://studio.youtube.com",
-    "cho_quet_giay": 480,
-    "cho_trang_chu_giay": 90,
-    "dong_chrome_sau_quet": false,
-
-    "gio_quet": "07:30",
-    "quet_trang_chu_hang_ngay": true,
-
     "tool_dang": ""
 }

@@ -80,6 +80,65 @@ def _goi(tram: str, duong: str, du_lieu: dict = None) -> dict:
         return {"chu": chu}
 
 
+def tim_tram(cong: int = 8765, cho_giay: float = 3.0, dich=None) -> str:
+    """Tự dò trạm trong mạng — hú một gói UDP quảng bá, trạm nghe thấy là đáp.
+
+    Địa chỉ trạm là câu hỏi khó nhất với người không rành mạng — nên không
+    hỏi nữa: lấy địa chỉ NGUỒN của gói đáp làm địa chỉ trạm. Không thấy thì
+    trả "" để bộ cài hỏi tay (đường lùi, không phải đường chính).
+    """
+    o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        o.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        o.settimeout(cho_giay)
+        for noi in (dich or ["255.255.255.255"]):
+            try:
+                o.sendto(b"shopapi-tram?", (noi, cong))
+            except OSError:
+                pass
+        het = time.time() + cho_giay
+        while time.time() < het:
+            try:
+                goi, nguon = o.recvfrom(256)
+            except socket.timeout:
+                break
+            except OSError:
+                # Windows: gói dội "cổng đóng" (WinError 10054) nổ ngay trên
+                # recvfrom — không phải hết giờ, chỉ là chưa ai đáp. Chờ nhẹ
+                # rồi nghe tiếp tới hạn.
+                time.sleep(0.05)
+                continue
+            try:
+                du_lieu = json.loads(goi.decode("utf-8", "replace"))
+            except ValueError:
+                continue
+            if du_lieu.get("shopapi_tram"):
+                return "http://{0}:{1}".format(
+                    nguon[0], int(du_lieu.get("cong") or cong))
+    finally:
+        o.close()
+    return ""
+
+
+def doan_kenh() -> str:
+    """Đoán mã kênh theo nếp thư mục: trình duyệt kênh là `<MÃ>\\<MÃ>.exe`.
+
+    Thư mục vm nằm cạnh Chrome của kênh (nếp của tool đăng) — quét các thư
+    mục hàng xóm, thấy đúng MỘT bộ dạng `<X>\\<X>.exe` thì X là mã kênh.
+    Thấy nhiều hay không thấy thì trả "" — đoán bừa còn tệ hơn hỏi.
+    """
+    cha = os.path.dirname(GOC)
+    thay = []
+    try:
+        for ten in os.listdir(cha):
+            if os.path.isfile(os.path.join(cha, ten, ten + ".exe")) or \
+                    os.path.isfile(os.path.join(cha, ten, ten, ten + ".exe")):
+                thay.append(ten)
+    except OSError:
+        pass
+    return thay[0] if len(thay) == 1 else ""
+
+
 def hoi_viec(cau_hinh: dict) -> dict:
     q = urllib.parse.urlencode({
         "kenh": cau_hinh.get("kenh") or "kenh",
