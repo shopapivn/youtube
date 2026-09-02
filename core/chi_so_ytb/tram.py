@@ -399,16 +399,24 @@ def _lam_xu_ly(tram: "Tram"):
                                  "text/csv; charset=utf-8")
             if self.path.startswith("/viec"):
                 # Agent máy ảo hỏi việc: /viec?kenh=TL4-T7&may=vm-01
+                #
+                # Phản hồi kèm luôn THIẾT LẬP của kênh (giờ quét, quét trang
+                # chủ…): chỉnh trên tool là máy ảo nhận ngay ở nhịp tim kế,
+                # không tốn thêm lượt gọi nào — chủ dự án 02/09/2026: *"những
+                # cái ở vm thì ở tool điều chỉnh được, kiểm soát được"*.
                 from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+                from core import vm_cai_dat  # noqa: PLC0415
 
                 q = parse_qs(urlparse(self.path).query)
                 kenh = (q.get("kenh") or [""])[0]
                 may = (q.get("may") or ["?"])[0]
                 ip = self.client_address[0] if self.client_address else ""
                 viec = tram.lay_viec(kenh, may, ip) if kenh else None
-                return self._tra(json.dumps(viec or {}, ensure_ascii=False)
-                                 .encode("utf-8"),
-                                 "application/json; charset=utf-8")
+                cai = vm_cai_dat.doc(tram.goc, an_toan(kenh)) if kenh else {}
+                return self._tra(json.dumps(
+                    {"viec": viec, "cai_dat": cai}, ensure_ascii=False)
+                    .encode("utf-8"), "application/json; charset=utf-8")
             return self._tra(b"ok")
 
         def do_POST(self):

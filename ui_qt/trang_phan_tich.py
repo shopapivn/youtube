@@ -1054,6 +1054,7 @@ class TrangMayVM(QWidget):
         v.addLayout(d0c)
         doc.addWidget(khung)
 
+        doc.addWidget(self._the_thiet_lap())
         doc.addWidget(self._the_ban_giao())
 
         khung2 = the()
@@ -1083,6 +1084,109 @@ class TrangMayVM(QWidget):
         self._dong_ho.start(5000)
         self._ve()
         self._doi_kenh_ban_giao()
+
+    def _the_thiet_lap(self) -> QWidget:
+        """Núm vặn của máy ảo — NẰM Ở TOOL, theo từng kênh.
+
+        Chủ dự án, 02/09/2026: *"những cái ở vm thì ở tool có thể điều chỉnh
+        được, kiểm soát được"*. Lưu vào `CHANNEL/<kênh>/may-ao.json`; trạm
+        đính vào phản hồi mỗi nhịp tim nên chỉnh xong là máy ảo nhận trong
+        ~30 giây — không ai phải mở Remote Desktop sửa config tay nữa.
+        Lưu ngay khi đổi, không có nút Lưu (luật chung của tab Cài đặt).
+        """
+        from PyQt5.QtWidgets import QSpinBox  # noqa: PLC0415
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Thiết lập máy ảo (theo kênh)", "h2"))
+        chu = nhan(
+            "Chỉnh ở đây là máy ảo của kênh nhận trong ~30 giây (nhịp tim kế "
+            "tiếp). Tool là nơi kiểm soát — không phải sửa config trên máy ảo.",
+            "muted")
+        chu.setMinimumWidth(1)
+        v.addWidget(chu)
+
+        # Mỗi núm MỘT HÀNG — dồn hai núm chung hàng là hàng đòi ~1187px và
+        # trang không co được 760px (`test_bo_cuc` đã đỏ thật vì đúng chỗ này).
+        self._dang_do_vm = True
+        d0 = QHBoxLayout()
+        d0.addWidget(nhan("Giờ quét Studio mỗi ngày:"))
+        self._o_gio_quet = QLineEdit()
+        self._o_gio_quet.setPlaceholderText("07:30")
+        self._o_gio_quet.setFixedWidth(70)
+        self._o_gio_quet.setToolTip(
+            "Dạng GIỜ:PHÚT, ví dụ 07:30. Để TRỐNG là tắt quét theo lịch — "
+            "chỉ còn lệnh tay. Mở máy trễ giờ vẫn quét bù trong ngày.")
+        self._o_gio_quet.editingFinished.connect(self._luu_thiet_lap)
+        d0.addWidget(self._o_gio_quet)
+        d0.addStretch(1)
+        v.addLayout(d0)
+
+        d0b = QHBoxLayout()
+        d0b.addWidget(nhan("Chờ quét xong (phút):"))
+        self._o_cho_quet = QSpinBox()
+        self._o_cho_quet.setRange(1, 60)
+        self._o_cho_quet.setValue(8)
+        self._o_cho_quet.setFixedWidth(70)
+        self._o_cho_quet.setToolTip(
+            "Mở Studio xong, agent đợi ngần này phút cho tiện ích cào rồi "
+            "mới coi là xong việc. Kênh nhiều video thì tăng lên.")
+        self._o_cho_quet.valueChanged.connect(lambda _v: self._luu_thiet_lap())
+        d0b.addWidget(self._o_cho_quet)
+        d0b.addStretch(1)
+        v.addLayout(d0b)
+
+        d1 = QHBoxLayout()
+        self._o_quet_tc = QCheckBox("Quét trang chủ lấy đối thủ mỗi ngày")
+        self._o_quet_tc.setToolTip(
+            "Kèm lượt quét hằng ngày: mở trang chủ YouTube của kênh để tiện "
+            "ích gom các kênh được đề xuất vào sổ Đối thủ.")
+        self._o_quet_tc.toggled.connect(lambda _b: self._luu_thiet_lap())
+        d1.addWidget(self._o_quet_tc)
+        d1.addStretch(1)
+        v.addLayout(d1)
+
+        d1b = QHBoxLayout()
+        self._o_dong_chrome = QCheckBox("Đóng Chrome sau khi quét")
+        self._o_dong_chrome.setToolTip(
+            "Bật nếu máy ảo yếu — quét xong là đóng Chrome cho nhẹ máy. Tắt "
+            "thì Chrome mở nguyên, tiện ích tiếp tục tự chụp theo mốc giờ.")
+        self._o_dong_chrome.toggled.connect(lambda _b: self._luu_thiet_lap())
+        d1b.addWidget(self._o_dong_chrome)
+        d1b.addStretch(1)
+        v.addLayout(d1b)
+        self._dang_do_vm = False
+        return khung
+
+    def _nap_thiet_lap(self) -> None:
+        from core import vm_cai_dat  # noqa: PLC0415
+
+        kenh = self._kenh_hien()
+        cai = vm_cai_dat.doc(self._app.base_dir, kenh) if kenh else dict(
+            vm_cai_dat.MAC_DINH)
+        self._dang_do_vm = True
+        try:
+            self._o_gio_quet.setText(str(cai.get("gio_quet") or ""))
+            self._o_cho_quet.setValue(
+                max(1, min(60, int(cai.get("cho_quet_giay") or 480) // 60)))
+            self._o_quet_tc.setChecked(bool(cai.get("quet_trang_chu_hang_ngay")))
+            self._o_dong_chrome.setChecked(bool(cai.get("dong_chrome_sau_quet")))
+        finally:
+            self._dang_do_vm = False
+
+    def _luu_thiet_lap(self) -> None:
+        if self._dang_do_vm or not self._kenh_hien():
+            return
+        from core import vm_cai_dat  # noqa: PLC0415
+
+        vm_cai_dat.luu(
+            self._app.base_dir, self._kenh_hien(),
+            gio_quet=self._o_gio_quet.text().strip(),
+            cho_quet_giay=int(self._o_cho_quet.value()) * 60,
+            quet_trang_chu_hang_ngay=self._o_quet_tc.isChecked(),
+            dong_chrome_sau_quet=self._o_dong_chrome.isChecked())
 
     def _the_ban_giao(self) -> QWidget:
         """Nửa TRÊN TOOL của đường đăng: sản xuất xong → bàn giao → duyệt.
@@ -1163,6 +1267,7 @@ class TrangMayVM(QWidget):
         # `dat_thang` chứ không phải `dat`: đây là nạp cấu hình CỦA KÊNH vừa
         # chọn — thư mục done theo kênh, phải thay hẳn chứ không nhường ô cũ.
         self._o_done.dat_thang(str(cai.get("thu_muc_done") or ""))
+        self._nap_thiet_lap()
         self._nap_luot()
         self._ve_ke_hoach()
 

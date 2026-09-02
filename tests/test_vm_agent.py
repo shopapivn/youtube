@@ -63,6 +63,17 @@ class TestHopViec:
 class TestAgentGoiVe:
     @pytest.fixture()
     def tram_song(self, tmp_path):
+        # Thiết lập máy ảo giờ do TOOL phát kèm nhịp tim và THẮNG config máy
+        # (02/09) — test phải khai giá trị tí hon qua đúng cửa vm_cai_dat,
+        # không thì agent ngủ đúng 480 giây mặc định (đã treo thật một lượt).
+        from core import vm_cai_dat
+
+        os.makedirs(os.path.join(str(tmp_path), "CHANNEL", "TL4-T7"),
+                    exist_ok=True)
+        vm_cai_dat.luu(str(tmp_path), "TL4-T7", gio_quet="",
+                       cho_quet_giay=0.05, cho_trang_chu_giay=0.05,
+                       quet_trang_chu_hang_ngay=False,
+                       dong_chrome_sau_quet=True)
         tram = Tram(cong=0, goc=str(tmp_path))
         tram.bat()
         cong = tram._may.server_address[1]
@@ -73,9 +84,11 @@ class TestAgentGoiVe:
         tram, dia_chi = tram_song
         agent = _nap_agent()
         cau_hinh = {"tram": dia_chi, "kenh": "TL4-T7", "ten_may": "vm-thu"}
-        assert agent.hoi_viec(cau_hinh) == {}, "hộp trống thì tay không"
+        tra = agent.hoi_viec(cau_hinh)
+        assert tra["viec"] is None, "hộp trống thì tay không"
+        assert tra["cai_dat"]["gio_quet"] == "", "nhịp tim phải kèm thiết lập"
         tram.giao_viec("TL4-T7", "quet-studio")
-        viec = agent.hoi_viec(cau_hinh)
+        viec = agent.hoi_viec(cau_hinh)["viec"]
         assert viec.get("loai") == "quet-studio"
         agent.bao_xong(cau_hinh, int(viec["id"]), ket_qua="thử")
         may = tram.may_dang_noi()
@@ -104,7 +117,8 @@ class TestAgentGoiVe:
         from core import doi_thu_kenh as so
 
         tram, dia_chi = tram_song
-        os.makedirs(os.path.join(str(tmp_path), "CHANNEL", "TL4-T7"))
+        os.makedirs(os.path.join(str(tmp_path), "CHANNEL", "TL4-T7"),
+                    exist_ok=True)
         agent = _nap_agent()
         ra = agent._goi(dia_chi, "/doi-thu",
                         {"kenh": "TL4-T7", "danh_sach": ["@a", "@b"]})
@@ -172,8 +186,11 @@ class TestKeHoachDang:
     def test_agent_tai_ke_hoach_ve_qua_tram(self, tmp_path):
         from core import ke_hoach_dang as kh
 
+        from core import vm_cai_dat
+
         goc_tool = tmp_path / "tool"
         os.makedirs(goc_tool / "CHANNEL" / "TL4-T7")
+        vm_cai_dat.luu(str(goc_tool), "TL4-T7", gio_quet="")
         kh.luu_bang(str(goc_tool), "TL4-T7",
                     [["2026-09-02 19:00", "0001.mp4", "video 1", "", "", "", ""]])
         tram = Tram(cong=0, goc=str(goc_tool))
@@ -470,3 +487,60 @@ class TestDangTay:
         finally:
             tram.tat()
         (GOC / "vm" / "ke-hoach-TL4-T7.csv").unlink(missing_ok=True)
+
+
+class TestThietLapTuTool:
+    """02/09: núm vặn của máy ảo nằm TRÊN TOOL — trạm đính thiết lập vào mỗi
+    nhịp tim, agent nhận trong <=30 giây, không ai sửa config trên VM nữa."""
+
+    def test_hai_dau_cung_mot_danh_sach_khoa(self):
+        """Thêm khoá điều khiển mới mà quên một đầu là nó rơi im lặng."""
+        from core.vm_cai_dat import KHOA_DIEU_KHIEN
+
+        agent = _nap_agent()
+        assert set(agent.KHOA_TU_TOOL) == set(KHOA_DIEU_KHIEN)
+
+    def test_vm_cai_dat_doc_luu_va_chi_nhan_khoa_hop_le(self, tmp_path):
+        from core import vm_cai_dat
+
+        goc = str(tmp_path)
+        os.makedirs(os.path.join(goc, "CHANNEL", "TL4-T7"))
+        vm_cai_dat.luu(goc, "TL4-T7", gio_quet="21:00",
+                       chrome="C:/doc-hai.exe")   # khoá lạ phải rơi ra
+        cai = vm_cai_dat.doc(goc, "TL4-T7")
+        assert cai["gio_quet"] == "21:00"
+        assert "chrome" not in cai
+        assert cai["cho_quet_giay"] == 480, "khoá chưa chỉnh thì theo mặc định"
+
+    def test_nhip_tim_mang_thiet_lap_va_agent_ap_dung(self, tmp_path):
+        from core import vm_cai_dat
+
+        goc = str(tmp_path)
+        os.makedirs(os.path.join(goc, "CHANNEL", "TL4-T7"))
+        vm_cai_dat.luu(goc, "TL4-T7", gio_quet="", cho_quet_giay=120)
+        tram = Tram(cong=0, goc=goc)
+        tram.bat()
+        try:
+            dia_chi = "http://127.0.0.1:{0}".format(tram._may.server_address[1])
+            agent = _nap_agent()
+            tra = agent.hoi_viec({"tram": dia_chi, "kenh": "TL4-T7",
+                                  "ten_may": "vm-thu"})
+            assert tra["viec"] is None and tra["cai_dat"]["cho_quet_giay"] == 120
+            hieu_luc = agent.ap_cai_dat_tool(
+                {"tram": dia_chi, "kenh": "TL4-T7", "chrome": "C:/x.exe",
+                 "gio_quet": "07:30"}, tra["cai_dat"])
+            assert hieu_luc["gio_quet"] == "", "thiết lập tool phải THẮNG config máy"
+            assert hieu_luc["cho_quet_giay"] == 120
+            assert hieu_luc["chrome"] == "C:/x.exe", \
+                "đường Chrome là của máy — tool không đụng"
+        finally:
+            tram.tat()
+
+    def test_agent_loc_khoa_la_tu_tram(self):
+        agent = _nap_agent()
+        ra = agent.ap_cai_dat_tool({"chrome": "C:/x.exe"},
+                                   {"chrome": "C:/doc-hai.exe",
+                                    "tool_dang": "C:/la.bat",
+                                    "gio_quet": "05:00"})
+        assert ra["chrome"] == "C:/x.exe" and "tool_dang" not in ra
+        assert ra["gio_quet"] == "05:00"
