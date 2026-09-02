@@ -81,3 +81,10 @@ vm/clients/
 vm/replied/
 vm/transcripts/
 vm/phien-ban.txt
+# Du lieu KINH DOANH cua tung kenh - khong bao gio len GitHub cong khai
+# (kho nay khach cung tai ve): so lieu Studio, so doi thu, ke hoach dang,
+# thiet lap may ao. Khuon san xuat (prompt/) van di theo kho nhu cu.
+CHANNEL/*/chi-so/
+CHANNEL/*/nghien-cuu/
+CHANNEL/*/ke-hoach-dang/
+CHANNEL/*/may-ao.json

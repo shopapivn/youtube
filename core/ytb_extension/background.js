@@ -439,7 +439,11 @@ async function datLich() {
   }
   if (!co.has('kham-pha')) await chrome.alarms.create('kham-pha', { periodInMinutes: 720 });
   if (!co.has('tu-kiem')) await chrome.alarms.create('tu-kiem', { periodInMinutes: 30 });
-  if (!co.has('kenh')) await chrome.alarms.create('kenh', { when: Date.now() + 6 * 3600e3, periodInMinutes: 7 * 24 * 60 });
+  // 02/09: chụp KÊNH mỗi ngày, không phải mỗi tuần — đọc kênh để quyết định
+  // content là việc hằng ngày; 7 ngày/lần thì thư mục kenh/ trống trong khi
+  // từng video đầy số. Xoá lịch tuần đời cũ còn nằm trong Chrome.
+  if (co.has('kenh')) await chrome.alarms.clear('kenh');
+  if (!co.has('kenh-ngay')) await chrome.alarms.create('kenh-ngay', { when: Date.now() + 15 * 60e3, periodInMinutes: 24 * 60 });
   if (n) log(`đặt thêm ${n} lịch`);
 }
 
@@ -450,7 +454,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
     const v = (await st('videos', {}))[id];
     await chupVideo(id, `${v ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : 0}h`);
   } else if (k === 'kham-pha') await khamPha();
-  else if (k === 'kenh') await chupKenh();
+  else if (k === 'kenh' || k === 'kenh-ngay') await chupKenh();
   else if (k === 'tu-kiem') await datLich();
 });
 
