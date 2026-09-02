@@ -71,3 +71,5 @@ vm/agent.log
 vm/ke-hoach-*.csv
 vm/cho-bao-*.json
 vm/trang-thai.json
+vm/config.json
+vm/tien-ich/

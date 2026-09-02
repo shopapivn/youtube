@@ -625,14 +625,11 @@ class TestKhongPhaiGoGi:
     trạm tự dò (UDP), kênh tự đoán (nếp <MÃ>/<MÃ>.exe), Chrome tự tìm."""
 
     def test_tu_do_thay_tram_qua_udp(self, tmp_path):
-        # Trạm cổng 0 -> TCP lấy cổng ngẫu nhiên; tai UDP nghe cùng số cổng.
+        # Trạm cổng 0 -> bat() tự chốt cổng thật, tai UDP nghe cùng số cổng.
         tram = Tram(cong=0, goc=str(tmp_path))
         tram.bat()
         try:
-            cong = tram._may.server_address[1]
-            tram.cong = cong        # tai dò mở theo tram.cong
-            tram._mo_tai_do()
-            time.sleep(0.2)
+            cong = tram.cong
             agent = _nap_agent()
             ra = agent.tim_tram(cong=cong, cho_giay=3.0,
                                 dich=["127.0.0.1"], dich6=[])
@@ -646,10 +643,7 @@ class TestKhongPhaiGoGi:
         tram = Tram(cong=0, goc=str(tmp_path))
         tram.bat()
         try:
-            cong = tram._may.server_address[1]
-            tram.cong = cong
-            tram._mo_tai_do()
-            time.sleep(0.2)
+            cong = tram.cong
             agent = _nap_agent()
             ra = agent.tim_tram(cong=cong, cho_giay=3.0,
                                 dich=[], dich6=["::1"])
@@ -676,8 +670,7 @@ class TestKhongPhaiGoGi:
             "trạm chưa bật thì không được vờ là gọi thành công"
         tram.bat()
         try:
-            cong = tram._may.server_address[1]
-            tram.cong = cong
+            cong = tram.cong
             o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             o.bind(("127.0.0.1", 0))
             cong_nghe = o.getsockname()[1]
@@ -706,6 +699,65 @@ class TestKhongPhaiGoGi:
         tram.moi_khach("1.2.3.4")
         assert tram.cho_phep("::ffff:1.2.3.4"), "IPv4 qua ổ hai tầng"
         assert not tram.cho_phep("2001:db8::6"), "mời máy nào mở máy đó thôi"
+
+    def test_dong_goi_san_va_agent_chot_ung_vien_song(self, tmp_path):
+        # Đường ĐƠN GIẢN NHẤT (chủ dự án 02/09: "bên tool chỉ cần setup để
+        # thư mục vm chuẩn... copy sang bên vm là được kết nối"): tool điền
+        # sẵn địa chỉ ứng viên vào vm/config.json; agent thử lần lượt, cái
+        # nào đáp thì chốt.
+        import json
+
+        from core import vm_cai_dat
+
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            song = "http://127.0.0.1:{0}".format(tram.cong)
+            duong = vm_cai_dat.dong_goi_vm(
+                str(tmp_path), "TL4-T7", ["http://127.0.0.1:9", song])
+            with open(duong, encoding="utf-8") as tep:
+                cau_hinh = json.load(tep)
+            assert cau_hinh["kenh"] == "TL4-T7"
+            assert cau_hinh["tram_ung_vien"] == ["http://127.0.0.1:9", song]
+            agent = _nap_agent()
+            ra = agent.chon_tram(cau_hinh)
+            assert ra["tram"] == song, "ứng viên chết bị bỏ, ứng viên sống thắng"
+        finally:
+            tram.tat()
+
+    def test_chon_tram_khong_ung_vien_thi_giu_nguyen(self):
+        agent = _nap_agent()
+        assert agent.chon_tram({"tram": ""}).get("tram") == ""
+        ra = agent.chon_tram({"tram": "http://x:1", "tram_ung_vien": []})
+        assert ra["tram"] == "http://x:1"
+
+    def test_tram_tu_goi_sang_vps_dinh_ky_khong_can_bam_gi(self, tmp_path):
+        # Bản đầu bắt bấm nút đúng lúc bên VPS đang chờ — chủ dự án: "đơn
+        # giản hóa đi". Giờ trạm bật là loa tự gọi các VPS đã lưu, định kỳ.
+        import socket
+        import threading
+
+        o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        o.bind(("127.0.0.1", 0))
+        cong_nghe = o.getsockname()[1]
+        o.close()
+        tram = Tram(cong=0, goc=str(tmp_path),
+                    nguon_khach=lambda: ["127.0.0.1"], nhip_gioi_thieu=0.2)
+        tram.cong_khach = cong_nghe
+        agent = _nap_agent()
+        ket = {}
+        luong = threading.Thread(
+            target=lambda: ket.setdefault(
+                "ra", agent.cho_gioi_thieu(cong=cong_nghe, cho_giay=6.0)))
+        luong.start()
+        time.sleep(0.2)
+        tram.bat()              # bật là tự gọi — không ai bấm thêm gì
+        try:
+            luong.join(8.0)
+            assert ket.get("ra") == "http://127.0.0.1:{0}".format(tram.cong)
+            assert tram.cho_phep("127.0.0.1"), "máy được gọi thành khách mời"
+        finally:
+            tram.tat()
 
     def test_doan_kenh_theo_nep_thu_muc(self, tmp_path, monkeypatch):
         agent = _nap_agent()

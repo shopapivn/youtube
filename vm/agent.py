@@ -64,7 +64,7 @@ def ghi(dong: str) -> None:
         pass
 
 
-def _goi(tram: str, duong: str, du_lieu: dict = None) -> dict:
+def _goi(tram: str, duong: str, du_lieu: dict = None, cho: float = 20.0) -> dict:
     """Một lượt gọi trạm. Ném lỗi ra cho vòng ngoài xử — nó biết phải chờ."""
     url = tram.rstrip("/") + duong
     if du_lieu is None:
@@ -73,12 +73,43 @@ def _goi(tram: str, duong: str, du_lieu: dict = None) -> dict:
         yeu_cau = urllib.request.Request(
             url, data=json.dumps(du_lieu, ensure_ascii=False).encode("utf-8"),
             headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(yeu_cau, timeout=20) as tra_loi:
+    with urllib.request.urlopen(yeu_cau, timeout=cho) as tra_loi:
         chu = tra_loi.read().decode("utf-8", "replace")
     try:
         return json.loads(chu)
     except ValueError:
         return {"chu": chu}
+
+
+def chon_tram(cau_hinh: dict) -> dict:
+    """Chốt địa chỉ trạm từ các ứng viên tool đã điền sẵn lúc đóng gói.
+
+    Đường đơn giản nhất (chủ dự án, 02/09/2026: *"bên tool chỉ cần setup để
+    thư mục vm chuẩn... sau đó copy sang bên vm là được kết nối"*): tool ghi
+    sẵn MỌI địa chỉ của máy nó vào `tram_ung_vien` trong config trước khi
+    người dùng chép thư mục vm/ đi. Ghi nhiều vì máy ảo cạnh nhà thì với
+    được địa chỉ mạng trong, VPS thuê ngoài thì phải đi địa chỉ IPv6 toàn
+    cầu — agent cứ thử lần lượt, cái nào đáp thì chốt vào `tram`.
+
+    Không cái nào đáp (tool đang tắt?) thì giữ cái đầu — vòng hỏi việc vốn
+    chịu được trạm im, và lúc trạm im lâu nó sẽ gọi lại hàm này.
+    """
+    ung = [d for d in ([str(cau_hinh.get("tram") or "")] +
+                       [str(d) for d in (cau_hinh.get("tram_ung_vien") or [])])
+           if d]
+    ung = list(dict.fromkeys(ung))
+    if not ung:
+        return cau_hinh
+    if len(ung) > 1:
+        for d in ung:
+            try:
+                if _goi(d, "/trang-thai", cho=4.0).get("ok"):
+                    cau_hinh["tram"] = d
+                    return cau_hinh
+            except Exception:  # noqa: BLE001 — ứng viên chết là chuyện dự tính
+                continue
+    cau_hinh["tram"] = ung[0]
+    return cau_hinh
 
 
 def tim_tram(cong: int = 8765, cho_giay: float = 3.0, dich=None,
@@ -578,6 +609,11 @@ def viec_theo_lich(cau_hinh: dict) -> None:
 
 
 def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
+    cau_hinh = chon_tram(cau_hinh)
+    if not cau_hinh.get("ten_may"):
+        # Config đóng gói sẵn từ tool để trống tên máy — lấy tên máy THẬT
+        # lúc chạy, không phải tên máy đã đóng gói.
+        cau_hinh["ten_may"] = os.environ.get("COMPUTERNAME", "vm")
     ghi("agent kênh {0} — hỏi việc {1} mỗi {2}s".format(
         cau_hinh.get("kenh"), cau_hinh.get("tram"), NHIP_GIAY))
     chrome = tim_chrome(cau_hinh)
@@ -614,6 +650,10 @@ def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
             if hong_lien_tiep in (1, 10) or hong_lien_tiep % 120 == 0:
                 ghi("chưa gọi được trạm ({0}) — cứ thử lại đều".format(
                     str(loi)[:120]))
+            if hong_lien_tiep % 10 == 0:
+                # Im lâu có khi không phải trạm tắt mà là địa chỉ đổi (IPv6
+                # nhà mạng cấp lại) — dò lại các ứng viên đã đóng gói.
+                cau_hinh = chon_tram(cau_hinh)
         # Lịch cố định chạy cả khi trạm tắt: quét Studio không cần trạm sống
         # (extension tự ghi vào Tải xuống khi không có trạm). Dùng cấu hình
         # HIỆU LỰC — trạm tắt thì giữ thiết lập tool đẩy xuống lần cuối.

@@ -122,29 +122,39 @@ Hai bên nối nhau qua **trạm** — cổng HTTP có sẵn của tool
   xong). Khi nào có việc dài hơi (kế hoạch đăng) thì kế hoạch nằm trên đĩa
   theo kênh, không nằm trong hộp.
 
-## Cài agent lên máy ảo — KHÔNG PHẢI GÕ GÌ (chốt 02/09/2026)
+## Cài agent lên máy ảo — TOOL ĐÓNG GÓI SẴN (chốt 02/09/2026, lần 3)
 
-Chủ dự án xem bản cài ba câu hỏi: *"tao thấy nó phức tạp thế… tao cần mọi
-thứ đơn giản dễ dùng"*. Bản mới chỉ còn hai bước:
+Chủ dự án chốt cách nghĩ đúng: *"bên tool chỉ cần setup để thư mục vm
+chuẩn — ấn cái gì — sau đó copy sang bên vm là được kết nối"*. Thư mục
+`vm/` nằm sẵn TRÊN máy tool, thì tool điền luôn địa chỉ của chính nó vào
+đó trước khi chép đi. Ba bước, không gõ gì:
 
-1. Chép thư mục `vm/` vào máy ảo, đặt **cạnh thư mục Chrome của kênh**
-   (cùng chỗ vẫn để tool đăng — nếp `<MÃ>\<MÃ>.exe`).
-2. Nhấp đúp `CAI-DAT-VM.bat`.
+1. Trên tool: tab Phân tích & Nghiên cứu → Máy VM → chọn kênh → bấm
+   **"Tạo bộ cài VM"**. Tool ghi mọi địa chỉ của máy này (mạng trong +
+   IPv6 toàn cầu, thành `tram_ung_vien`) và mã kênh vào `vm/config.json`
+   rồi mở thư mục vm/ ra.
+2. Chép **cả thư mục `vm/`** sang máy ảo, đặt cạnh Chrome của kênh.
+3. Nhấp đúp `CAI-DAT-VM.bat`. Agent thử lần lượt các địa chỉ ứng viên
+   (`chon_tram`), cái nào đáp thì chốt — máy ảo cạnh nhà đi đường mạng
+   trong, VPS thuê ngoài đi đường IPv6 toàn cầu, cùng MỘT bộ cài. Trạm im
+   lâu (IPv6 nhà mạng cấp lại?) thì agent tự dò lại các ứng viên.
 
-Mọi thứ tự lo, nhờ ba đường ngầm:
+`vm/config.json` đã đóng gói KHÔNG được lên GitHub (.gitignore) — trong đó
+có địa chỉ máy của người dùng.
 
-- **Trạm tự dò:** trạm mở tai UDP cùng số cổng; bộ cài hú `shopapi-tram?`
-  quảng bá, trạm đáp kèm số cổng, địa chỉ lấy từ NGUỒN gói đáp. (Tool phải
-  đang mở và đã Bật cổng nhận. Windows: gói dội "cổng đóng" WinError 10054
-  nổ ngay trên `recvfrom` — phải nuốt và nghe tiếp tới hạn.)
-- **Kênh tự đoán:** thư mục `<MÃ>\<MÃ>.exe` duy nhất nằm cạnh → đó là mã
-  kênh. Không đoán được thì hỏi trạm `GET /kenh` → menu BẤM SỐ chọn.
-- **Chrome tự tìm mỗi lần chạy** (đã có từ trước): `config.json` để trống
-  `chrome`, agent tra thư mục cạnh bên.
+Lưới đỡ, tự chạy ngầm, người dùng không cần biết:
 
-Với **VPS thuê ngoài** (mạng khác, đa phần chỉ IPv6): gói dò không với tới,
-bộ cài sẽ tự chuyển sang ngồi nghe tối đa 10 phút — sang máy chính bấm
-"Kết nối máy ảo VPS" ở tab Máy VM là trạm gọi sang giới thiệu, bên VPS vẫn
-không phải gõ gì. Đường lùi cuối cùng (không mạng, không nếp thư mục) mới
-phải gõ tay như cũ. Trên tool, tab Phân tích & Nghiên cứu → Máy VM sẽ thấy
-máy hiện lên trong vòng nửa phút.
+- **Tai dò UDP** (cùng cổng trạm, cả IPv4 lẫn IPv6-multicast ff02::1 — tai
+  IPv6 phải GHI DANH nhóm trên từng cạc mạng): thư mục vm/ chép mộc không
+  qua nút đóng gói vẫn tự tìm được trạm trong mạng gần.
+- **Loa gọi:** trạm bật là tự gửi gói giới thiệu sang các VPS đã lưu ở tab
+  VPS mỗi ~60 giây (`nguon_khach`), và mời đúng các địa chỉ đó qua cổng
+  chặn (`khach_moi` — cái van "danh sách IP" đã chốt). Bộ cài không thấy
+  trạm thì ngồi nghe 10 phút là bắt được. KHÔNG còn nút bấm nào phải canh
+  giờ — bản "bấm Kết nối máy ảo VPS đúng lúc" đã bỏ ngay trong ngày
+  ("mày đang thiết kế cái gì thế - đơn giản hóa đi").
+- **Kênh tự đoán** theo nếp `<MÃ>\<MÃ>.exe` cạnh bên, lùi nữa là menu bấm
+  số từ `GET /kenh`; **Chrome tự tìm** mỗi lần chạy.
+
+Máy lạ gọi vào trạm vẫn bị 403 — không mở toang ra Internet. Trên tool,
+tab Máy VM sẽ thấy máy hiện lên trong vòng nửa phút sau khi agent chạy.

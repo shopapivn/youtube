@@ -22,7 +22,7 @@ from typing import Dict
 
 from .kenh import duong_kenh
 
-__all__ = ["MAC_DINH", "KHOA_DIEU_KHIEN", "TEP", "doc", "luu"]
+__all__ = ["MAC_DINH", "KHOA_DIEU_KHIEN", "TEP", "doc", "luu", "dong_goi_vm"]
 
 TEP = "may-ao.json"
 
@@ -75,3 +75,35 @@ def luu(goc: str, kenh: str, **thay_doi) -> None:
     with open(tam, "w", encoding="utf-8") as tep:
         json.dump(cai, tep, ensure_ascii=False, indent=1)
     os.replace(tam, duong)
+
+
+def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
+    """Điền sẵn `vm/config.json` để thư mục vm/ chép đi là chạy được luôn.
+
+    Chủ dự án, 02/09/2026: *"bên tool chỉ cần setup để thư mục vm chuẩn —
+    ấn cái gì — sau đó copy sang bên vm là được kết nối"*. Đúng vậy: thư mục
+    vm/ nằn sẵn TRÊN máy tool, thì tool ghi luôn địa chỉ của chính nó và mã
+    kênh vào đó trước khi người dùng chép đi — bên máy ảo không phải dò,
+    không phải chờ, không phải gõ.
+
+    Ghi NHIỀU địa chỉ ứng viên (`tram_ung_vien`): máy ảo cạnh nhà với được
+    địa chỉ mạng trong, VPS thuê ngoài phải đi địa chỉ IPv6 toàn cầu —
+    agent tự thử lần lượt (`vm/agent.chay` → `chon_tram`). Tên máy để
+    trống cho agent lấy tên máy THẬT lúc chạy.
+    """
+    duong = os.path.join(goc, "vm", "config.json")
+    cau_hinh = {
+        "tram": "",
+        "tram_ung_vien": [str(d) for d in (ung_vien or []) if d],
+        "kenh": str(kenh or "").strip(),
+        "ten_may": "",
+        "chrome": "",
+        "studio_url": "https://studio.youtube.com",
+        "tool_dang": "",
+    }
+    os.makedirs(os.path.dirname(duong), exist_ok=True)
+    tam = duong + ".tmp"
+    with open(tam, "w", encoding="utf-8") as tep:
+        json.dump(cau_hinh, tep, ensure_ascii=False, indent=4)
+    os.replace(tam, duong)
+    return duong

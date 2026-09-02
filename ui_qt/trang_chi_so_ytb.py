@@ -88,7 +88,12 @@ class TrangChiSoYTB(QWidget):
         # Trạm nhận ghi nhật ký từ luồng ổ cắm của chính nó. Qt cấm chạm vào ô chữ từ luồng
         # khác luồng giao diện — chạm thẳng thì không báo lỗi mà thỉnh thoảng sập cả cửa sổ —
         # nên mọi dòng đi qua tín hiệu để Qt chuyển về đúng luồng.
-        self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m))
+        # Địa chỉ các máy VPS thuê ShopAPI — đọc một lần lúc bật cổng nhận
+        # (một lượt hỏi máy chủ, không phải lượt sinh nội dung). Máy riêng thì
+        # đọc từ đĩa mỗi nhịp, khỏi cache.
+        self._khach_thue: List[str] = []
+        self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m),
+                             nguon_khach=self._dia_chi_vps)
 
         ngoai = QVBoxLayout(self)
         ngoai.setContentsMargins(0, 0, 0, 0)
@@ -148,6 +153,41 @@ class TrangChiSoYTB(QWidget):
             "<b>CHANNEL/_chi-so-chua-ro/</b>.", "muted"))
         return khung
 
+    def _dia_chi_vps(self) -> List[str]:
+        """Địa chỉ các VPS đã lưu — trạm gọi từ luồng riêng, không đụng Qt.
+
+        Máy riêng đọc thẳng từ đĩa mỗi nhịp (rẻ, thêm máy là nhịp sau thấy);
+        máy thuê dùng danh sách đã nạp lúc bật cổng nhận.
+        """
+        from core import vps as v
+        from core.vps_rieng import KhoVpsRieng
+
+        ra = list(self._khach_thue)
+        try:
+            for m in KhoVpsRieng(self._app.base_dir).doc():
+                d = v.may_chu_rdp(
+                    {"ket_noi": {"ipv6": m.dia_chi, "dia_chi": m.dia_chi}})
+                if d:
+                    ra.append(d)
+        except Exception:  # noqa: BLE001 — tệp hỏng thì thôi máy riêng, còn máy thuê
+            pass
+        return list(dict.fromkeys(ra))
+
+    def _nap_khach_thue(self) -> None:
+        """Nạp địa chỉ máy thuê ShopAPI (chạy nền, lỗi mạng thì thôi)."""
+        client = getattr(self._app, "client", None)
+        if client is None:
+            return
+
+        def doc() -> List[str]:
+            from core import vps as v
+            return [d for d in (v.may_chu_rdp(m) for m in v.danh_sach(client))
+                    if d]
+
+        self._app.run_bg(doc,
+                         on_ok=lambda ds: setattr(self, "_khach_thue", ds),
+                         on_err=lambda _l: None)
+
     def _bat_tat_tram(self) -> None:
         if self._tram.dang_chay:
             self._tram.tat()
@@ -164,6 +204,7 @@ class TrangChiSoYTB(QWidget):
                 "Cổng {} đang bị chương trình khác giữ.\n\nChi tiết: {}".format(self._tram.cong, e))
             return
         self._nut_tram.setText("Tắt cổng nhận")
+        self._nap_khach_thue()
         ds = tr.dia_chi_may(self._tram.cong)
         self._nhan_tram.setText(
             "Đang nhận. Dán vào tiện ích: <b>" + "</b> hoặc <b>".join(ds) + "</b>"

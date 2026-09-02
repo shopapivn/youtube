@@ -1026,7 +1026,13 @@ class TrangMayVM(QWidget):
         # Nút xuống hàng riêng — dồn chung hàng chọn kênh là hàng đó đòi hơn
         # 760px và cả trang không co được (`test_bo_cuc` canh mốc này).
         d0b = QHBoxLayout()
-        d0b.addWidget(nut_chinh("Quét Studio ngay", self._quet_studio, rong=170))
+        nut_goi = nut_chinh("Tạo bộ cài VM", self._tao_bo_cai, rong=150)
+        nut_goi.setToolTip(
+            "Điền sẵn địa chỉ máy này và mã kênh vào vm/config.json rồi mở "
+            "thư mục vm/ — chép cả thư mục đó sang máy ảo, nhấp đúp "
+            "CAI-DAT-VM.bat là nối luôn, không phải gõ gì.")
+        d0b.addWidget(nut_goi)
+        d0b.addWidget(nut_phu("Quét Studio ngay", self._quet_studio, rong=170))
         nut_tc = nut_phu("Quét trang chủ lấy đối thủ", self._quet_trang_chu,
                          rong=220)
         nut_tc.setToolTip(
@@ -1052,20 +1058,6 @@ class TrangMayVM(QWidget):
                               rong=180))
         d0c.addStretch(1)
         v.addLayout(d0c)
-        # Máy ảo VPS thuê ngoài: gói dò của nó không với tới đây, nhưng tool
-        # BIẾT địa chỉ VPS (tab VPS đã lưu) — nên chiều kết nối đảo lại: tool
-        # gọi sang. Chủ dự án 02/09: "tool đang có cái vps tl4-t7 nó có ip
-        # của ipv6 mà".
-        d0d = QHBoxLayout()
-        nut_vps = nut_phu("Kết nối máy ảo VPS", self._ket_noi_vps, rong=190)
-        nut_vps.setToolTip(
-            "Bên VPS đang chạy CAI-DAT-VM.bat và ngồi chờ? Bấm nút này: trạm "
-            "gọi sang từng máy VPS đã lưu ở tab VPS && GPM để giới thiệu địa "
-            "chỉ của mình — bên đó không phải gõ gì. Các máy được gọi cũng "
-            "được mở cửa qua cổng chặn của trạm.")
-        d0d.addWidget(nut_vps)
-        d0d.addStretch(1)
-        v.addLayout(d0d)
         doc.addWidget(khung)
 
         doc.addWidget(self._the_thiet_lap())
@@ -1484,60 +1476,40 @@ class TrangMayVM(QWidget):
         os.makedirs(os.path.dirname(duong), exist_ok=True)
         mo_thu_muc(os.path.dirname(duong))
 
-    def _ket_noi_vps(self) -> None:
-        """Gọi sang từng máy VPS đã lưu để giới thiệu địa chỉ trạm.
+    def _tao_bo_cai(self) -> None:
+        """Điền sẵn vm/config.json rồi mở thư mục vm/ — chép đi là nối được.
 
-        Gom địa chỉ từ CẢ hai nhóm của tab VPS — máy thuê ShopAPI (hỏi máy
-        chủ) lẫn máy riêng (tệp trên máy này) — rồi `tram.gioi_thieu` từng
-        cái. Chạy nền vì mỗi lượt giới thiệu ngủ ~0.6 giây giữa các gói UDP.
+        Chủ dự án, 02/09/2026: *"bên tool chỉ cần setup để thư mục vm chuẩn
+        — ấn cái gì — sau đó copy sang bên vm là được kết nối"*.
         """
-        tram = self._tram()
-        if tram is None or not tram.dang_chay:
-            self._app.show_message(
-                "Trạm chưa bật",
-                "Vào mục Chỉ số kênh, bật “cổng nhận” trước — bật rồi hãy "
-                "gọi sang VPS.")
+        import os
+
+        from core import vm_cai_dat
+        from core.chi_so_ytb import tram as tr
+
+        kenh = self._chon_kenh.currentText().strip()
+        if not kenh:
+            self._app.show_message("Chưa chọn kênh",
+                                   "Chọn kênh cho máy ảo này trước đã.")
             return
-        client = getattr(self._app, "client", None)
-        base = self._app.base_dir
-
-        def viec():
-            from core import vps as v
-            from core.vps_rieng import KhoVpsRieng
-
-            dia = []
-            for m in KhoVpsRieng(base).doc():
-                d = v.may_chu_rdp(
-                    {"ket_noi": {"ipv6": m.dia_chi, "dia_chi": m.dia_chi}})
-                if d:
-                    dia.append(d)
-            if client is not None:
-                try:
-                    for may in v.danh_sach(client):
-                        d = v.may_chu_rdp(may)
-                        if d:
-                            dia.append(d)
-                except Exception:  # noqa: BLE001 — máy thuê lỗi mạng thì vẫn
-                    pass           # gọi được máy riêng, không vì thế mà thôi
-            dia = list(dict.fromkeys(dia))
-            goi_duoc = sum(1 for d in dia if tram.gioi_thieu(d))
-            return goi_duoc, len(dia)
-
-        def xong(kq) -> None:
-            goi_duoc, tong = kq
-            if not tong:
-                self._app.show_message(
-                    "Chưa có máy VPS nào",
-                    "Tab VPS && GPM chưa lưu máy nào — thêm máy ở đó trước, "
-                    "tool mới biết địa chỉ mà gọi sang.")
-                return
+        ung = tr.dia_chi_dong_goi(tr.CONG_MAC_DINH)
+        if not ung:
             self._app.show_message(
-                "Đã gọi sang {0}/{1} máy".format(goi_duoc, tong),
-                "Bên VPS nào đang chạy CAI-DAT-VM.bat sẽ tự nhận địa chỉ "
-                "trạm trong vài giây. Máy chưa chạy bộ cài thì bấm lại nút "
-                "này sau khi chạy — gọi thừa không hại gì.")
-
-        self._app.run_bg(viec, on_ok=xong, on_err=self._app.show_error)
+                "Máy này chưa có địa chỉ mạng",
+                "Không tìm thấy địa chỉ nào để máy ảo gọi về — kiểm tra lại "
+                "mạng của máy này rồi bấm lại.")
+            return
+        duong = vm_cai_dat.dong_goi_vm(self._app.base_dir, kenh, ung)
+        mo_thu_muc(os.path.dirname(duong))
+        tram = self._tram()
+        nhac = ("" if (tram is not None and tram.dang_chay) else
+                "\n\nNhớ bật “cổng nhận” ở mục Chỉ số kênh — máy ảo gọi về "
+                "qua cổng đó.")
+        self._app.show_message(
+            "Đã tạo bộ cài cho " + kenh,
+            "Chép CẢ thư mục vm/ vừa mở sang máy ảo (đặt cạnh Chrome của "
+            "kênh), rồi nhấp đúp CAI-DAT-VM.bat — xong, không phải gõ gì." +
+            nhac)
 
     def _ve(self) -> None:
         tram = self._tram()

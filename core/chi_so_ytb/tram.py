@@ -130,6 +130,30 @@ def dia_chi_may(cong: int = CONG_MAC_DINH) -> List[str]:
     return ra
 
 
+def dia_chi_dong_goi(cong: int = CONG_MAC_DINH) -> List[str]:
+    """Mọi địa chỉ máy này mà một máy ảo CÓ THỂ gọi về — cho bộ cài VM.
+
+    Khác `dia_chi_may` (chỉ gợi ý địa chỉ nội bộ cho người dán tay vào
+    extension): bộ cài máy ảo cần CẢ địa chỉ IPv6 toàn cầu, vì VPS thuê
+    ngoài chỉ với được đường đó — máy ảo của chủ dự án đa phần là loại này.
+    Ghi hết ra làm ứng viên, agent bên kia thử lần lượt cái nào đáp thì
+    dùng. Cổng chặn của trạm vẫn 403 máy lạ, nên liệt kê địa chỉ toàn cầu
+    ở đây không phải là mở cửa.
+    """
+    ra = list(dia_chi_may(cong))
+    try:
+        for m in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET6):
+            ip = str(m[4][0])
+            if trong_mang_nha(ip) or ip.lower().startswith("fe80") or ip == "::1":
+                continue
+            d = f"http://[{ip}]:{cong}"
+            if d not in ra:
+                ra.append(d)
+    except OSError:
+        pass
+    return ra
+
+
 def thu_muc_kenh(ma: str, goc: Optional[str] = None) -> str:
     """Số liệu của kênh nào thì nằm trong thư mục kênh ấy.
 
@@ -166,10 +190,21 @@ class Tram:
     """
 
     def __init__(self, cong: int = CONG_MAC_DINH, goc: Optional[str] = None,
-                 ghi: Optional[Callable[[str], None]] = None):
+                 ghi: Optional[Callable[[str], None]] = None,
+                 nguon_khach: Optional[Callable[[], List[str]]] = None,
+                 nhip_gioi_thieu: float = 60.0):
         self.cong = int(cong)
         self.goc = goc or GOC
         self._ghi = ghi
+        # Danh sách địa chỉ VPS của chính chủ (tab VPS đã lưu) — trạm TỰ gọi
+        # sang giới thiệu mình định kỳ, người dùng không phải bấm gì và không
+        # phải canh giờ. Là hàm chứ không phải danh sách chết: mỗi nhịp đọc
+        # lại, thêm máy mới ở tab VPS là nhịp sau tự với tới.
+        self._nguon_khach = nguon_khach
+        self._nhip_gioi_thieu = float(nhip_gioi_thieu)
+        self._nghi_goi = threading.Event()
+        #: Cổng bên VPS ngồi nghe lúc chạy bộ cài (CAI-DAT-VM.bat).
+        self.cong_khach = CONG_MAC_DINH
         self._may: Optional[ThreadingHTTPServer] = None
         self._luong: Optional[threading.Thread] = None
         self.so_goi = 0
@@ -225,7 +260,8 @@ class Tram:
         """Mạng nội bộ, hoặc khách đã mời — mọi cổng (HTTP lẫn tai UDP) tra đây."""
         return trong_mang_nha(ip) or _thuan(ip) in self.khach_moi
 
-    def gioi_thieu(self, ip: str, cong_nghe: int = CONG_MAC_DINH) -> bool:
+    def gioi_thieu(self, ip: str, cong_nghe: int = CONG_MAC_DINH,
+                   so_lan: int = 3) -> bool:
         """Gọi sang máy ảo VPS: "trạm ở đây này" — chiều ngược của tai dò.
 
         VPS ở mạng khác nên gói quảng bá của nó không tới được đây; nhưng tool
@@ -247,7 +283,7 @@ class Tram:
         except OSError:
             return False
         try:
-            for lan in range(3):
+            for lan in range(max(1, int(so_lan))):
                 if lan:
                     time.sleep(0.3)
                 o.sendto(goi, (s, int(cong_nghe)))
@@ -371,16 +407,54 @@ class Tram:
 
             self._may = May4(("0.0.0.0", self.cong), _lam_xu_ly(tram))
 
+        # cong=0 là "cổng ngẫu nhiên" (bộ test dùng) — chốt lại số thật trước
+        # khi tai dò và loa gọi dùng tới nó.
+        self.cong = self._may.server_address[1]
         self._luong = threading.Thread(target=self._may.serve_forever, daemon=True)
         self._luong.start()
         self._mo_tai_do()
+        self._mo_loa_goi()
         self.ghi(f"trạm nhận đang nghe cổng {self.cong} → {os.path.join(self.goc, 'CHANNEL')}")
         for d in dia_chi_may(self.cong):
             self.ghi(f"  dán vào extension: {d}")
 
+    def _mo_loa_goi(self) -> None:
+        """Loa gọi: trạm TỰ giới thiệu mình với các VPS đã lưu, định kỳ.
+
+        Bản đầu bắt người dùng bấm nút "Kết nối máy ảo VPS" đúng lúc bên VPS
+        đang ngồi chờ — chủ dự án (02/09/2026): *"mày đang thiết kế cái gì
+        thế - đơn giản hóa đi"*. Đúng: bắt hai bên canh giờ nhau là thiết kế
+        tồi. Giờ trạm cứ vài chục giây gọi sang một lượt (mỗi máy MỘT gói UDP
+        — vài chục byte, ai không nghe thì gói rơi vào im lặng, không hại
+        gì), nên bên VPS chạy bộ cài lúc nào cũng được: tool đang mở là tự
+        thấy nhau trong vòng một nhịp.
+
+        Dừng bằng `Event.wait` — nút tắt trạm tỉnh ngay, không ngủ dày.
+        """
+        if self._nguon_khach is None:
+            return
+        tram = self
+
+        def goi():
+            while tram._may is not None:
+                try:
+                    khach = list(tram._nguon_khach() or [])
+                except Exception:  # noqa: BLE001 — nguồn hỏng thì nhịp sau thử lại
+                    khach = []
+                for ip in khach:
+                    if tram._may is None:
+                        return
+                    tram.gioi_thieu(ip, cong_nghe=tram.cong_khach, so_lan=1)
+                if tram._nghi_goi.wait(tram._nhip_gioi_thieu):
+                    return
+
+        self._nghi_goi.clear()
+        threading.Thread(target=goi, daemon=True, name="tram-loa").start()
+
     def tat(self) -> None:
         if not self._may:
             return
+        self._nghi_goi.set()
         try:
             self._may.shutdown()
             self._may.server_close()
