@@ -382,3 +382,43 @@ def test_goi_ve_sau_khi_da_giai_ma_khong_bi_bo_quen(tmp_path, monkeypatch):
     cs._giai_ma_con_thieu(str(tmp_path / "TL4-T7" / "chi-so"))
     assert "cu" not in (snap / "tong-quan.json").read_text(encoding="utf-8"), \
         "gói chiều về phải được giải, không bị 'đã có tong-quan' chặn"
+
+
+def test_bang_tinh_trang_cham_theo_so_tay():
+    """02/09: 'thể hiện đúng để tao nắm bắt tình trạng video và kênh' — luật
+    chấm lấy từ sổ tay kênh: sống 20k · chết 1.500 · CTR 3,5 · AVD 25/35 ·
+    xem-lặp đo bằng lượt THẬT (luật 8) · luật 30 giờ."""
+    pytest.importorskip("PyQt5.QtWidgets", reason="máy chạy test không có giao diện")
+    import os as _os
+    _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from core.chi_so_ytb import BanGhi
+    from ui_qt.trang_chi_so_ytb import _tinh_trang
+
+    def bg(**thua):
+        goc = dict(video_id="v", tieu_de="t", ngay_dang="2026-09-01",
+                   moc_gio=48, luc_chup="", thoi_luong_giay=600,
+                   impressions=5000, impressions_24h=None, ctr=5.0,
+                   views=100, views_that=80, unique_viewers=60,
+                   watch_hours=1.0, avd_giay=200, avd_pct=33.0, subs=1,
+                   traffic={}, thiet_bi={}, vung={}, vung_tong_views=0,
+                   pool_so_nguon=0, pool_phu_pct=None, pool_top=[],
+                   retention=[], thu_muc="")
+        goc.update(thua)
+        return BanGhi(**goc)
+
+    assert "ĐANG SÓNG" in _tinh_trang(bg(impressions=22000))[0]
+    assert "CHỜ" in _tinh_trang(bg(moc_gio=24, impressions=60))[0]
+    assert "NGHẼN PHÂN PHỐI" in _tinh_trang(bg(moc_gio=76, impressions=900))[0]
+    assert "NGHẼN CỔNG BẤM" in _tinh_trang(bg(ctr=2.0))[0]
+    assert "NGHẼN GIỮ CHÂN" in _tinh_trang(bg(avd_pct=20.0))[0]
+    assert "KHOẺ" in _tinh_trang(bg(ctr=6.0, avd_pct=38.0))[0]
+    # Luật 8: 566 thật / 381 người = 1,5 -> SẠCH dù view công khai 906/381=2,4
+    assert "SỐ BẨN" not in _tinh_trang(
+        bg(views=906, views_that=566, unique_viewers=381, impressions=22000))[0]
+    assert "SỐ BẨN" in _tinh_trang(
+        bg(views=386, views_that=118, unique_viewers=46))[0]
+    # JP < 80% phải bị réo tên
+    kq = _tinh_trang(bg(impressions=22000,
+                        vung={"JP": {"views": 60}}, vung_tong_views=100))
+    assert "JP 60%" in kq[0]

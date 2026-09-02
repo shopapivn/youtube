@@ -25,11 +25,13 @@ tự nói được mình đang ở trạng thái nào — người quay lại sa
 
 from __future__ import annotations
 
+import io
 import os
 import shutil
 import subprocess
 import sys
 import threading
+import time
 from typing import List, Optional
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
@@ -45,8 +47,48 @@ from ui_qt.widgets import (ChonThuMuc, HangXuongDong, mo_thu_muc, nhan,
 
 __all__ = ["TrangChiSoYTB"]
 
-_COT = ["Video", "Mốc", "Lượt hiển thị", "Tỷ lệ bấm", "Lượt xem", "Người xem",
-        "Xem TB", "% dài", "Đăng ký", "Nguồn đề xuất", "Phủ bảng"]
+#: Bảng TÌNH TRẠNG — mỗi video MỘT dòng (bản chụp mới nhất), cột theo đúng
+#: sổ tay kênh (3 cổng + luật số bẩn + ngưỡng phân loại JP). Chủ dự án
+#: 02/09: *"thể hiện đúng để tao có thể nắm bắt được tình trạng video và
+#: kênh"* — nhìn bảng là biết video nghẽn ở cổng nào, không phải dò 11 cột.
+_COT = ["Video", "Đăng", "Mốc", "Hiển thị", "CTR", "Xem", "Thật", "V/ng",
+        "JP %", "AVD %", "Sub", "Tình trạng"]
+
+
+def _tinh_trang(b) -> tuple:
+    """(chữ tình trạng, màu) cho một video — luật lấy từ CHANNEL/<kênh>/CLAUDE.md:
+    imp chết <1.500 · sống 20.000 · CTR thấp <3,5% · AVD ổn 35%/thấp <25% ·
+    view/người >2 tuần đầu = số bẩn · luật 30 giờ · JP ≥80%."""
+    from . import theme as _t
+    imp = b.impressions or 0
+    ctr = b.ctr
+    avd = b.avd_pct
+    tuoi = b.moc_gio or 0
+    # Luật 8: đo xem-lặp bằng lượt xem THẬT (engaged) khi có — view công
+    # khai đếm cả khung hình đầu nên thổi tỉ lệ oan (V4: 8,4 công khai
+    # nhưng 2,57 thật; dR8f 1,5 thật = sạch).
+    xem = b.views_that if b.views_that else b.views
+    vn = (xem / b.unique_viewers) if (xem and b.unique_viewers) else None
+    jp = None
+    if b.vung and b.vung_tong_views:
+        jp = ((b.vung.get("JP") or {}).get("views") or 0) * 100.0 / b.vung_tong_views
+    duoi = " · tệp JP {0:.0f}%".format(jp) if (jp is not None and jp < 80) else ""
+    if vn is not None and vn > 2 and tuoi <= 168:
+        return ("SỐ BẨN (xem lặp {0:.1f} lượt/người) — đọc lại mốc sau"
+                .format(vn), _t.VANG)
+    if imp >= 20000:
+        return ("ĐANG SÓNG — vượt ngưỡng sống 20k imp" + duoi, _t.XANH)
+    if tuoi < 30 and imp < 1500:
+        return ("CHỜ — luật 30 giờ, chưa được phán", _t.VANG)
+    if imp < 1500:
+        return ("NGHẼN PHÂN PHỐI — imp dưới vùng chết 1.500" + duoi, _t.DO)
+    if ctr is not None and ctr < 3.5:
+        return ("NGHẼN CỔNG BẤM — CTR {0}% < 3,5%".format(ctr) + duoi, _t.DO)
+    if avd is not None and avd < 25:
+        return ("NGHẼN GIỮ CHÂN — AVD {0}% < 25%".format(avd) + duoi, _t.DO)
+    if (ctr or 0) >= 5 and (avd or 0) >= 35:
+        return ("KHOẺ — chờ YouTube mở phân phối" + duoi, _t.XANH)
+    return ("ỔN — theo dõi tiếp" + duoi, "")
 
 
 def _mmss(giay) -> str:
@@ -138,6 +180,11 @@ class TrangChiSoYTB(QWidget):
                 and "PYTEST_CURRENT_TEST" not in os.environ
                 and self._da_dung_vm()):
             QTimer.singleShot(300, self.bao_dam_bat)
+        # Trang ĐỌC: mở lên là tự đọc luôn — nhìn thấy tình trạng ngay,
+        # không bắt bấm (02/09: "nắm bắt được tình trạng video và kênh").
+        if ("doc" in self._phan and "PYTEST_CURRENT_TEST" not in os.environ
+                and self._chon_kenh.count()):
+            QTimer.singleShot(400, self._doc)
 
     def _da_dung_vm(self) -> bool:
         import glob
@@ -410,6 +457,13 @@ class TrangChiSoYTB(QWidget):
         hang.addWidget(self._chon_kenh)
         hang.addWidget(nut_chinh("Đọc dữ liệu", self._doc, rong=140))
         doc.addLayout(hang)
+        # Đổi kênh là đọc luôn — mở tab lên là thấy tình trạng, không phải bấm.
+        self._chon_kenh.activated.connect(lambda _i: self._doc())
+
+        self._nhan_tong = nhan("", "phu")
+        self._nhan_tong.setMinimumWidth(1)
+        self._nhan_tong.setVisible(False)
+        doc.addWidget(self._nhan_tong)
 
         self._tt = nhan("", "muted")
         doc.addWidget(self._tt)
@@ -429,20 +483,92 @@ class TrangChiSoYTB(QWidget):
         doc.addWidget(self._bang)
 
         hang2 = HangXuongDong()
-        self._nut_chep = nut_chinh("Chép cho ChatGPT / Claude", self._chep, rong=228)
+        self._nut_ai = nut_chinh("Phân tích bằng AI", self._phan_tich_ai,
+                                 rong=170)
+        self._nut_ai.setEnabled(False)
+        self._nut_ai.setToolTip(
+            "Gửi toàn bộ bảng số (kèm sổ tay luật của kênh nếu có) cho AI "
+            "của tool đọc: video nào chạy tốt, nghẽn ở cổng nào, làm gì "
+            "tiếp. MỘT lượt gọi API — có trừ tiền. Kết quả lưu vào "
+            "nghien-cuu/ của kênh.")
+        hang2.addWidget(self._nut_ai)
+        self._nut_chep = nut_phu("Chép cho ChatGPT / Claude", self._chep,
+                                 rong=210)
         self._nut_chep.setEnabled(False)
+        self._nut_chep.setToolTip(
+            "Miễn phí: chép khối số liệu vào khay nhớ tạm để dán vào "
+            "ChatGPT/Claude ngoài — đã kèm giải thích cột và câu hỏi.")
         hang2.addWidget(self._nut_chep)
         self._nut_luu = nut_phu("Lưu ra tệp .txt", self._luu_txt, rong=150)
         self._nut_luu.setEnabled(False)
         hang2.addWidget(self._nut_luu)
         doc.addLayout(hang2)
 
-        doc.addWidget(nhan(
-            "Bấm <b>Chép cho ChatGPT / Claude</b> rồi dán vào khung chat. Khối chữ đó đã kèm sẵn "
-            "giải thích từng cột và câu hỏi cần hỏi, nên dán xong là hỏi được ngay.", "muted"))
+        self._o_ai = QPlainTextEdit()
+        self._o_ai.setReadOnly(True)
+        self._o_ai.setMinimumHeight(180)
+        self._o_ai.setVisible(False)
+        doc.addWidget(self._o_ai)
 
         self._nap_danh_sach_kenh()
         return khung
+
+    def _phan_tich_ai(self) -> None:
+        """Con agent phân tích TẠI CHỖ — chủ dự án 02/09: *"tool có API mà…
+        xây 1 con agent ở đó để phân tích"*.
+
+        Gửi một lượt: khối số liệu đầy đủ (lịch sử mọi mốc + toàn kênh) và —
+        nếu kênh có — chính SỔ TAY LUẬT của kênh (CHANNEL/<kênh>/CLAUDE.md),
+        để AI chấm theo ngưỡng CỦA KÊNH chứ không phán chung chung. Kết quả
+        hiện tại chỗ và lưu vào nghien-cuu/ để phiên sau đọc tiếp.
+        """
+        client = getattr(self._app, "client", None)
+        if client is None:
+            self._tt.setText("Chưa đăng nhập — vào tab Tài khoản & Cài đặt "
+                             "đăng nhập rồi quay lại.")
+            return
+        kenh = self._chon_kenh.currentText().strip()
+        goc = self._o_thu_muc.value
+        de_bai = self._van_ban()
+        so_tay = os.path.join(goc, kenh, "CLAUDE.md")
+        try:
+            if os.path.isfile(so_tay) and os.path.getsize(so_tay) < 16000:
+                with io.open(so_tay, encoding="utf-8") as tep:
+                    de_bai = ("SỔ TAY LUẬT PHÂN TÍCH CỦA KÊNH (tuân thủ "
+                              "nghiêm):\n\n" + tep.read()
+                              + "\n\n════════\n\n" + de_bai)
+        except OSError:
+            pass
+        self._nut_ai.setEnabled(False)
+        self._tt.setText("AI đang đọc số liệu… (một lượt gọi, vài chục giây)")
+
+        def viec():
+            from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
+            return goi_van_ban(client,
+                               [{"role": "user", "content": de_bai}])
+
+        def xong(chu: str) -> None:
+            self._nut_ai.setEnabled(True)
+            self._o_ai.setPlainText(chu)
+            self._o_ai.setVisible(True)
+            duong = ""
+            try:
+                tm = os.path.join(goc, kenh, "nghien-cuu")
+                os.makedirs(tm, exist_ok=True)
+                duong = os.path.join(tm, "phan-tich-ai-{0}.md".format(
+                    time.strftime("%Y%m%d-%H%M")))
+                with io.open(duong, "w", encoding="utf-8") as tep:
+                    tep.write(chu)
+            except OSError:
+                pass
+            self._tt.setText("✓ AI phân tích xong{0}.".format(
+                " — đã lưu " + os.path.basename(duong) if duong else ""))
+
+        def hong(loi) -> None:
+            self._nut_ai.setEnabled(True)
+            self._tt.setText("AI phân tích hỏng: {0}".format(loi))
+
+        self._app.run_bg(viec, on_ok=xong, on_err=hong)
 
     def _doi_thu_muc(self, _duong_dan: str) -> None:
         self._nap_danh_sach_kenh()
@@ -471,37 +597,99 @@ class TrangChiSoYTB(QWidget):
         def chay():
             try:
                 bg = cs.doc_kenh(kenh, goc=goc)
-                self._xong.emit(bg, "")
+                try:
+                    tong = cs.doc_kenh_tong(kenh, goc=goc)
+                except Exception:  # noqa: BLE001 — thiếu khối kênh vẫn còn video
+                    tong = []
+                self._xong.emit((bg, tong), "")
             except Exception as e:      # noqa: BLE001 — lỗi nào cũng phải tới được màn hình
-                self._xong.emit([], str(e))
+                self._xong.emit(([], []), str(e))
 
         threading.Thread(target=chay, daemon=True).start()
 
-    def _nhan_ket_qua(self, ban_ghi, loi: str) -> None:
+    def _nhan_ket_qua(self, du_lieu, loi: str) -> None:
         if loi:
             self._tt.setText(f"Không đọc được: {loi}")
             return
+        ban_ghi, kenh_tong = du_lieu if isinstance(du_lieu, tuple) else (du_lieu, [])
         self._ban_ghi = list(ban_ghi)
-        self._bang.setRowCount(0)
+        self._kenh_tong = list(kenh_tong or [])
+
+        # ── Dòng TOÀN KÊNH: đường tới mốc bật kiếm tiền + đà ──
+        if self._kenh_tong:
+            g = self._kenh_tong[-1]
+            da = ""
+            if len(self._kenh_tong) >= 2:
+                t = self._kenh_tong[-2]
+                da = "  (hôm trước: {0} view · {1} giờ)".format(
+                    _s(t.get("views")), _s(t.get("watch_hours")))
+            self._nhan_tong.setText(
+                "<b>TOÀN KÊNH</b> — {0} lượt xem · <b>{1} / 4.000 giờ xem</b> · "
+                "{2} / 1.000 đăng ký{3} · chụp {4}".format(
+                    _s(g.get("views")), _s(g.get("watch_hours")),
+                    _s(g.get("subs")), da, g.get("luc_chup") or "?"))
+            self._nhan_tong.setVisible(True)
+        else:
+            self._nhan_tong.setVisible(False)
+
+        # ── Bảng tình trạng: MỖI VIDEO MỘT DÒNG (bản chụp mới nhất) ──
+        moi_nhat = {}
         for b in self._ban_ghi:
+            cu = moi_nhat.get(b.video_id)
+            if cu is None or (b.moc_gio or 0) >= (cu.moc_gio or 0):
+                moi_nhat[b.video_id] = b
+        hang_video = sorted(
+            (b for b in moi_nhat.values()
+             # Dòng MA: không tiêu đề, không view, vài imp lẻ — thường là
+             # bản đăng hỏng đã xoá. Ẩn khỏi bảng tình trạng cho đỡ nhiễu.
+             if (b.tieu_de or (b.views or 0) > 0 or (b.impressions or 0) > 10)),
+            key=lambda x: x.ngay_dang or "", reverse=True)
+        self._bang.setRowCount(0)
+        for b in hang_video:
             h = self._bang.rowCount()
             self._bang.insertRow(h)
-            o = [b.tieu_de or b.video_id,
+            vn = ""
+            if b.views and b.unique_viewers:
+                vn = "{0:.1f}".format(b.views / b.unique_viewers)
+            jp = ""
+            if b.vung and b.vung_tong_views:
+                jp = "{0:.0f}%".format(
+                    ((b.vung.get("JP") or {}).get("views") or 0)
+                    * 100.0 / b.vung_tong_views)
+            trang_thai, mau = _tinh_trang(b)
+            o = [b.tieu_de or b.video_id, b.ngay_dang or "—",
                  f"{b.moc_gio}h" if b.moc_gio is not None else "—",
-                 _s(b.impressions), _s(b.ctr, "%"), _s(b.views), _s(b.unique_viewers),
-                 _mmss(b.avd_giay), _s(b.avd_pct, "%"), _s(b.subs),
-                 _s(b.pool_so_nguon) if b.pool_so_nguon else "—",
-                 _s(b.pool_phu_pct, "%")]
+                 _s(b.impressions), _s(b.ctr, "%"), _s(b.views),
+                 _s(b.views_that), vn or "—", jp or "—",
+                 _s(b.avd_pct, "%"), _s(b.subs), trang_thai]
             for c, v in enumerate(o):
                 item = QTableWidgetItem(v)
-                if c:
+                if 0 < c < len(o) - 1:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                # Tô theo ngưỡng sổ tay: CTR (3,5/5) · JP (80) · AVD (25/35)
+                tô = ""
+                if c == 4 and b.ctr is not None:
+                    tô = theme.DO if b.ctr < 3.5 else (
+                        theme.XANH if b.ctr >= 5 else "")
+                elif c == 8 and jp:
+                    tô = theme.XANH if float(jp[:-1]) >= 80 else theme.DO
+                elif c == 9 and b.avd_pct is not None:
+                    tô = theme.DO if b.avd_pct < 25 else (
+                        theme.XANH if b.avd_pct >= 35 else "")
+                elif c == len(o) - 1 and mau:
+                    tô = mau
+                if tô:
+                    from PyQt5.QtGui import QBrush, QColor  # noqa: PLC0415
+                    item.setForeground(QBrush(QColor(tô)))
                 self._bang.setItem(h, c, item)
-        so_video = len({b.video_id for b in self._ban_ghi})
         if self._ban_ghi:
-            self._tt.setText(f"✓ Đọc được {len(self._ban_ghi)} lần chụp của {so_video} video.")
+            self._tt.setText(
+                "✓ {0} video · {1} lần chụp. Mỗi dòng là bản chụp MỚI NHẤT; "
+                "lịch sử đầy đủ nằm trong bản chép cho AI.".format(
+                    len(hang_video), len(self._ban_ghi)))
             self._nut_chep.setEnabled(True)
             self._nut_luu.setEnabled(True)
+            self._nut_ai.setEnabled(True)
         else:
             self._tt.setText(
                 "Thư mục có nhưng chưa có bản chụp nào đọc được. Nếu vừa bấm Chụp ngay thì "
