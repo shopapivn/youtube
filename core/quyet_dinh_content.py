@@ -76,7 +76,9 @@ def _khuc_chi_so(goc: str, kenh: str) -> str:
     try:
         from .chi_so_ytb import bao_cao_cho_ai, doc_kenh  # noqa: PLC0415
 
-        return _cat(bao_cao_cho_ai(doc_kenh(kenh, goc), kenh))
+        from core.chi_so_ytb import doc_kenh_tong  # noqa: PLC0415
+        return _cat(bao_cao_cho_ai(doc_kenh(kenh, goc), kenh,
+                                   kenh_tong=doc_kenh_tong(kenh, goc)))
     except Exception as loi:  # noqa: BLE001 — thiếu chỉ số thì nói thiếu
         return "Chưa đọc được chỉ số Studio ({0}).".format(loi)
 

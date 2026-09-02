@@ -334,3 +334,27 @@ def test_bang_tom_tat_cho_nguoi(tmp_path):
     assert (tmp_path / "TL4-T7" / "chi-so" / "DOC-O-DAY.txt").is_file()
     # gọi lại không hỏng, không nhân đôi
     assert cs.xuat_tom_tat("TL4-T7", goc=str(tmp_path)) == duong
+
+
+def test_so_lieu_toan_kenh_khong_bi_vut(tmp_path):
+    """02/09: các bản ghi video_id='kenh' mang GIỜ XEM tổng (đơn vị tiền của
+    mốc YPP) mà bộ đọc cũ vứt đi — doc_kenh_tong phải nhặt lại được, và
+    bao_cao_cho_ai phải in khối TOÀN KÊNH khi được đưa."""
+    from core import chi_so_ytb as cs
+
+    tong = [{"luc_chup": "2026-09-01 15:33", "views": 968,
+             "watch_hours": 46.0, "subs": 15, "impressions": None,
+             "ctr": None, "unique_viewers": None, "thu_muc": ""}]
+    khoi = cs._khoi_kenh_tong(tong)
+    assert "TOÀN KÊNH" in khoi and "968" in khoi and "4.000 giờ" in khoi
+    bg = [cs.BanGhi(video_id="v1", tieu_de="t", ngay_dang="2026-09-01",
+                    moc_gio=24, luc_chup="2026-09-02", thoi_luong_giay=600,
+                    impressions=100, impressions_24h=None, ctr=5.0, views=10,
+                    unique_viewers=8, watch_hours=1.0, avd_giay=60,
+                    avd_pct=10.0, subs=1, traffic={}, thiet_bi={}, vung={},
+                    vung_tong_views=0, pool_so_nguon=0, pool_phu_pct=None,
+                    pool_top=[], retention=[], thu_muc="")]
+    bao = cs.bao_cao_cho_ai(bg, "TL4-T7", kenh_tong=tong)
+    assert "TOÀN KÊNH THEO LẦN CHỤP" in bao
+    bao2 = cs.bao_cao_cho_ai(bg, "TL4-T7")
+    assert "TOÀN KÊNH" not in bao2, "không đưa thì không in — gọi cũ vẫn chạy"

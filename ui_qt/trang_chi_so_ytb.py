@@ -482,7 +482,12 @@ class TrangChiSoYTB(QWidget):
                 "đợi tiện ích chạy xong (khoảng một phút mỗi video) rồi đọc lại.")
 
     def _van_ban(self) -> str:
-        return cs.bao_cao_cho_ai(self._ban_ghi, self._chon_kenh.currentText().strip())
+        kenh = self._chon_kenh.currentText().strip()
+        try:
+            tong = cs.doc_kenh_tong(kenh, goc=self._o_thu_muc.value)
+        except Exception:  # noqa: BLE001 — thiếu khối kênh vẫn còn khối video
+            tong = None
+        return cs.bao_cao_cho_ai(self._ban_ghi, kenh, kenh_tong=tong)
 
     def _chep(self) -> None:
         from PyQt5.QtWidgets import QApplication

@@ -305,6 +305,50 @@ def _mmss(giay) -> str:
     return f"{giay // 60}:{giay % 60:02d}"
 
 
+def doc_kenh_tong(kenh: str, goc: Optional[str] = None) -> List[Dict]:
+    """Chuỗi số liệu TOÀN KÊNH theo lần chụp (khung 28 ngày mặc định Studio).
+
+    Bộ đọc video (`doc_kenh`) cố tình bỏ các bản ghi `video_id == "kenh"` —
+    02/09/2026 soi lại: chính chúng mang thứ quyết định mốc YPP (tổng GIỜ
+    XEM, sub, view toàn kênh). Trả về danh sách dict xếp theo lúc chụp.
+    """
+    goc = goc or thu_muc_du_lieu()
+    kenh_dir = thu_muc_cua_kenh(goc, kenh)
+    if not os.path.isdir(kenh_dir):
+        return []
+    _giai_ma_con_thieu(kenh_dir)
+    from . import gom as _gom
+    tho = _gom.gom(kenh_dir, {"tu_khoa_manh": [], "tu_khoa_yeu": [], "loai_tru": []})
+    ra = []
+    for b in tho:
+        if b["video_id"] != "kenh":
+            continue
+        if not any(b.get(k) for k in ("views", "watch_hours", "subs",
+                                      "impressions")):
+            continue
+        ra.append({k: b.get(k) for k in (
+            "luc_chup", "views", "watch_hours", "subs", "impressions",
+            "ctr", "unique_viewers", "thu_muc")})
+    return sorted(ra, key=lambda x: x.get("luc_chup") or "")
+
+
+def _khoi_kenh_tong(kenh_tong: List[Dict]) -> str:
+    """Khối chữ 'TOÀN KÊNH' cho báo cáo — chuỗi ngày để thấy đà."""
+    if not kenh_tong:
+        return ""
+    dong = ["TOÀN KÊNH THEO LẦN CHỤP (khung 28 ngày của Studio)",
+            "   Lúc chụp          Lượt xem   Giờ xem   Đăng ký   Hiển thị   Tỷ lệ bấm"]
+    for b in kenh_tong[-14:]:
+        dong.append("   {0:<16} {1:>9} {2:>9} {3:>9} {4:>10} {5:>10}".format(
+            str(b.get("luc_chup") or "?"), _s(b.get("views")),
+            _s(b.get("watch_hours"), lam_tron=1), _s(b.get("subs")),
+            _s(b.get("impressions")),
+            _s(b.get("ctr"), "%", 1) if b.get("ctr") is not None else "—"))
+    dong.append("(Mốc bật kiếm tiền: 4.000 giờ xem + 1.000 đăng ký — cột Giờ "
+                "xem là thứ phải nhìn mỗi ngày.)")
+    return "\n".join(dong) + "\n\n"
+
+
 _CHU_DOC_O_DAY = """THU MUC NAY LA GI (chi-so cua kenh)
 
 Day la kho so lieu THO ma extension cao tu YouTube Studio - bo cuc cho MAY doc:
@@ -360,6 +404,20 @@ def xuat_tom_tat(kenh: str, goc: Optional[str] = None) -> str:
             _o(f"{b.avd_pct}%" if b.avd_pct is not None else ""),
             _o(b.subs), _o(so_moc.get(b.video_id, 0)),
         ]))
+    # Bảng TOÀN KÊNH theo ngày — cột Giờ xem là đường tới mốc YPP 4.000h.
+    tong = doc_kenh_tong(kenh, goc)
+    if tong:
+        dong_k = ["Lúc chụp,Lượt xem,Giờ xem,Đăng ký,Lượt hiển thị,Tỷ lệ bấm"]
+        for b in tong:
+            dong_k.append(",".join(_o(x) for x in (
+                b.get("luc_chup"), b.get("views"), b.get("watch_hours"),
+                b.get("subs"), b.get("impressions"), b.get("ctr"))))
+        duong_k = os.path.join(kenh_dir, "kenh-theo-ngay.csv")
+        with io.open(duong_k + ".tmp", "w", encoding="utf-8-sig",
+                     newline="") as tep:
+            tep.write("\r\n".join(dong_k) + "\r\n")
+        os.replace(duong_k + ".tmp", duong_k)
+
     duong = os.path.join(kenh_dir, "bang-tom-tat.csv")
     # utf-8-sig để Excel trên Windows đọc đúng tiếng Việt/Nhật
     with io.open(duong + ".tmp", "w", encoding="utf-8-sig", newline="") as tep:
@@ -372,7 +430,8 @@ def xuat_tom_tat(kenh: str, goc: Optional[str] = None) -> str:
     return duong
 
 
-def bao_cao_cho_ai(ban_ghi: List[BanGhi], ten_kenh: str = "") -> str:
+def bao_cao_cho_ai(ban_ghi: List[BanGhi], ten_kenh: str = "",
+                   kenh_tong: Optional[List[Dict]] = None) -> str:
     """Dựng khối chữ dán thẳng vào ChatGPT / Claude.
 
     Viết cho MÁY ĐỌC chứ không phải để in ra cho đẹp: mỗi con số kèm đơn vị, mỗi bảng có
@@ -392,6 +451,9 @@ def bao_cao_cho_ai(ban_ghi: List[BanGhi], ten_kenh: str = "") -> str:
     L.append(f"SỐ LIỆU KÊNH YOUTUBE{(' — ' + ten_kenh) if ten_kenh else ''}")
     L.append(f"Lấy trực tiếp từ YouTube Studio · {len(theo_video)} video · {len(ban_ghi)} lần chụp")
     L.append("")
+    if kenh_tong:
+        L.append(_khoi_kenh_tong(kenh_tong).rstrip())
+        L.append("")
     L.append("Ý NGHĨA CÁC CỘT")
     L.append("- Mốc: số giờ tính từ lúc video được đăng.")
     L.append("- Lượt hiển thị: số lần hình đại diện video được YouTube đưa ra trước mặt người xem.")
