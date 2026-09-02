@@ -99,6 +99,10 @@ def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
     """
     duong = os.path.join(goc, "vm", "config.json")
     cau_hinh = {
+        # Hai khoá cho MÁY ĐĂNG (vm/may_dang.py — gốc là dang.py của kho
+        # upload): nguồn kế hoạch là TOOL, và mã kênh cho khổ dòng cũ.
+        "NGUON": "tool",
+        "CHANNEL_CODE": str(kenh or "").strip(),
         "tram": "",
         # Chặn trên 12 ứng viên: mỗi cái chết tốn 4 giây thử bên máy ảo —
         # danh sách dài là bộ cài câm lặng hàng phút, người dùng tưởng treo.

@@ -1,0 +1,12 @@
+pyautogui
+pyperclip
+opencv-python
+pillow
+requests
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+httplib2
+certifi
+youtube-transcript-api

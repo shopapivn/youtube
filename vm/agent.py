@@ -572,10 +572,13 @@ def giu_tool_dang(cau_hinh: dict) -> None:
     Theo dõi bằng chính tay cầm tiến trình (agent là người mở duy nhất —
     khoá `mot_minh` bảo đảm), nên không đụng bài dò tên kiểu Chrome.
     """
-    if os.path.isfile(os.path.join(os.path.dirname(GOC), "tool_gui.py")):
-        # Có GUI tool đăng nằm cạnh (bản đầy đủ D:\upload) thì GUI là người
-        # nuôi dang/cmt/agent — agent mà cũng nuôi là HAI người mở tool đăng,
-        # một video đăng hai lần. Một việc một chủ.
+    if (os.path.isfile(os.path.join(GOC, "giao_dien.py"))
+            or os.path.isfile(os.path.join(os.path.dirname(GOC),
+                                           "tool_gui.py"))):
+        # Có bảng điều khiển (giao_dien.py của MyTool VM, hoặc tool_gui.py
+        # của kho upload cũ nằm cạnh) thì BẢNG là người nuôi dang/cmt —
+        # agent mà cũng nuôi là HAI người mở tool đăng, một video đăng hai
+        # lần. Một việc một chủ.
         return
     duong = tim_tool_dang(cau_hinh)
     if not duong:

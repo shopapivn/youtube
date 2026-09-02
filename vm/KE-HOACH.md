@@ -159,6 +159,40 @@ Lưới đỡ, tự chạy ngầm, người dùng không cần biết:
 Máy lạ gọi vào trạm vẫn bị 403 — không mở toang ra Internet. Trên tool,
 tab Máy VM sẽ thấy máy hiện lên trong vòng nửa phút sau khi agent chạy.
 
+## vm/ LÀ TOOL VM ĐẦY ĐỦ (chốt 02/09/2026, quyết định lớn nhất)
+
+Chủ dự án: *"tao cần 1 tool bên vm và nó cài là chạy được các tính năng:
+quét studio, quét trang chủ lấy đối thủ, đăng, trả lời bình luận, và về
+sau còn cập nhật các tính năng mới... cái upload kia nó là của github
+khác"*. Nên vm/ giờ là MỘT TOOL TRỌN VẸN, phát triển ngay trong kho
+MyTool này, không dính kho upload cũ nữa:
+
+    giao_dien.py    bảng điều khiển (Tkinter) — thứ DUY NHẤT hiện trên
+                    màn hình; nuôi 3 con, đèn trạng thái, 2 công tắc
+                    (Tự đăng / Tự trả lời cmt), xem log, nút Lấy token,
+                    nút "Cập nhật từ tool"; tự cắm lối tắt MyTool VM ra
+                    màn hình + Khởi động (dọn lối tắt đời cũ)
+    agent.py        quét Studio + trang chủ, nối trạm, nhận thiết lập
+    may_dang.py     máy đăng — GỐC là dang.py kho upload, bản CHÍNH CHỦ
+                    sửa thẳng ở đây; nguồn mặc định = kế hoạch TỪ TOOL
+                    (nguon_tool.py); ảnh mẫu PyAutoGUI trong vm/icon/
+    may_cmt.py      máy trả lời cmt — GỐC là cmt.py; câu trả lời ƯU TIÊN
+                    key của MyTool qua trạm (/van-ban), Gemini dự phòng;
+                    kho dữ liệu (tokens/clients/replied/transcripts) ưu
+                    tiên cạnh mình, chưa có mà thư mục CHA có sẵn (VM cũ,
+                    đồ nằm trong upload/) thì dùng tiếp — token khỏi chép
+
+Cài: chép vm/ (đã bấm "Tạo bộ cài VM") sang, nhấp đúp CAI-DAT-VM.bat —
+nó tự cài thư viện (requirements-vm.txt, lần đầu hơi lâu) rồi mở bảng.
+Cập nhật: máy nhà cập nhật MyTool → trạm có vm/ mới → trên VM bấm
+"Cập nhật từ tool" (GET /goi-vm — chỉ phát MÃ, không phát config/token/
+log của máy). Ba con + bảng đều có khoá một-mình (cổng 8766/8767/8768/
+8769) — mở chồng kiểu gì cũng không chạy đôi, không đăng đôi.
+
+Kho upload cũ (github khác) đứng yên làm đồ cũ; tool_gui 1.8.1 bên đó
+vẫn chạy độc lập được nhưng ĐỪNG chạy song song hai bảng trên cùng máy
+— bảng MyTool VM đã tự dọn lối tắt Khởi động của bản cũ.
+
 **MỘT hành động mỗi bên, còn lại tự chạy** (chốt 02/09, sau "tao mệt với
 cách lv này... tư duy đơn giản đi"):
 

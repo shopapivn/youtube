@@ -75,3 +75,8 @@ vm/config.json
 vm/tien-ich/
 vm/agent.pid
 vm/cai-dat-tool.json
+vm/logs/
+vm/tokens/
+vm/clients/
+vm/replied/
+vm/transcripts/

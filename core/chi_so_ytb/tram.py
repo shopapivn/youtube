@@ -659,6 +659,31 @@ def _lam_xu_ly(tram: "Tram"):
                             duong = os.path.join(goc_tm, ten)
                             z.write(duong, os.path.relpath(duong, tm))
                 return self._tra(bo_nho.getvalue(), "application/zip")
+            if self.path.startswith("/goi-vm"):
+                # Tool VM tự cập nhật TỪ TRẠM (nút "Cập nhật từ tool" trên
+                # bảng điều khiển máy ảo): máy nhà cập nhật MyTool là vm/ ở
+                # đây mới — máy ảo tải về, không cần GitHub. Chỉ phát MÃ,
+                # không phát đồ của riêng cái máy: config, log, khoá, token,
+                # kế hoạch đã tải, dữ liệu cmt.
+                tm = os.path.join(GOC, "vm")
+                bo_qua_tep = {"config.json", "cai-dat-tool.json", "agent.pid",
+                              "agent.log", "trang-thai.json"}
+                bo_qua_thu = {"__pycache__", "logs", "tien-ich", "tokens",
+                              "clients", "replied", "transcripts"}
+                bo_nho = io.BytesIO()
+                with zipfile.ZipFile(bo_nho, "w", zipfile.ZIP_DEFLATED) as z:
+                    for goc_tm, thu_muc, cac_tep in os.walk(tm):
+                        thu_muc[:] = [t for t in thu_muc
+                                      if t not in bo_qua_thu]
+                        for ten in cac_tep:
+                            if (ten in bo_qua_tep
+                                    or ten.startswith(("ke-hoach-", "cho-bao-"))
+                                    or ten.endswith((".log", ".pid"))):
+                                continue
+                            duong = os.path.join(goc_tm, ten)
+                            z.write(duong, os.path.relpath(duong, tm))
+                tram.ghi("máy ảo tải gói tool VM mới")
+                return self._tra(bo_nho.getvalue(), "application/zip")
             if self.path.startswith("/ke-hoach"):
                 # Máy ảo tải kế hoạch đăng của kênh về (giai đoạn 4 — xem
                 # vm/KE-HOACH.md). Trả nguyên văn CSV, máy ảo tự cất.

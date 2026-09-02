@@ -128,10 +128,15 @@ class TestAgentGoiVe:
 
 
 def test_thu_muc_vm_du_bo():
+    # 02/09: vm/ là TOOL VM đầy đủ (chủ dự án: "1 tool bên vm cài là chạy
+    # được các tính năng") — bảng điều khiển + 3 con + bộ cài + ảnh mẫu.
     for ten in ("KE-HOACH.md", "agent.py", "config.example.json",
-                "CHAY-AGENT.bat", "CAI-DAT-VM.bat", "nguon_tool.py",
-                "ghep_tool_dang.py"):
+                "CHAY-AGENT.bat", "CAI-DAT-VM.bat", "CHAY-NGAM.vbs",
+                "nguon_tool.py", "ghep_tool_dang.py", "giao_dien.py",
+                "may_dang.py", "may_cmt.py", "requirements-vm.txt"):
         assert (GOC / "vm" / ten).exists(), "thiếu vm/" + ten
+    assert (GOC / "vm" / "icon" / "chonfile.png").exists(), \
+        "máy đăng cần ảnh mẫu PyAutoGUI trong vm/icon/"
     for ten_bat in ("CHAY-AGENT.bat", "CAI-DAT-VM.bat"):
         bat = (GOC / "vm" / ten_bat).read_bytes()
         assert bat.count(b"\n") == bat.count(b"\r\n") and all(b <= 127 for b in bat), \
@@ -1023,3 +1028,50 @@ class TestGuiVaKeyCuaTool:
         assert b"run.bat" in du_lieu, \
             "có GUI thì máy bật lên phải mở GUI (GUI nuôi cả agent)"
         assert b"CHAY-NGAM" not in du_lieu
+
+
+class TestToolVmDayDu:
+    """02/09: 'tao cần 1 tool bên vm... cài là chạy được các tính năng' —
+    vm/ là tool đầy đủ, tự cập nhật qua trạm, không dính kho upload cũ."""
+
+    def test_goi_vm_phat_ma_khong_phat_do_rieng(self, tmp_path):
+        import io as io_mod
+        import urllib.request
+        import zipfile
+
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            url = "http://127.0.0.1:{0}/goi-vm".format(tram.cong)
+            with urllib.request.urlopen(url, timeout=20) as tra:
+                du = tra.read()
+            with zipfile.ZipFile(io_mod.BytesIO(du)) as goi:
+                ten = set(goi.namelist())
+            for can in ("giao_dien.py", "agent.py", "may_dang.py",
+                        "may_cmt.py", "nguon_tool.py", "CAI-DAT-VM.bat"):
+                assert can in ten, "gói thiếu " + can
+            assert any(t.startswith("icon/") for t in ten), "gói thiếu ảnh mẫu"
+            # Đồ của RIÊNG cái máy không được phát đi
+            for cam in ("config.json", "cai-dat-tool.json", "agent.pid"):
+                assert cam not in ten, cam + " là đồ riêng của máy, cấm phát"
+            assert not any(t.startswith(("tokens/", "logs/", "clients/"))
+                           for t in ten)
+        finally:
+            tram.tat()
+
+    def test_may_dang_va_may_cmt_bien_dich_duoc(self):
+        import py_compile
+
+        for ten in ("may_dang.py", "may_cmt.py", "giao_dien.py"):
+            py_compile.compile(str(GOC / "vm" / ten), doraise=True)
+
+    def test_dong_goi_bake_khoa_cho_may_dang(self, tmp_path):
+        import json
+
+        from core import vm_cai_dat
+
+        duong = vm_cai_dat.dong_goi_vm(str(tmp_path), "TL4-T7", ["http://a:1"])
+        with open(duong, encoding="utf-8") as tep:
+            cau_hinh = json.load(tep)
+        assert cau_hinh["NGUON"] == "tool", "máy đăng phải đọc kế hoạch TỪ TOOL"
+        assert cau_hinh["CHANNEL_CODE"] == "TL4-T7"

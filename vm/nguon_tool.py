@@ -52,9 +52,25 @@ _C = {"ma": "Mã gói", "ngay": "Ngày đăng", "gio": "Giờ đăng",
 _C_LINK = ("Link card 1", "Link card 2", "Link card 3", "Link card 4")
 
 
+def _tram(cau_hinh: dict) -> str:
+    """Địa chỉ trạm: config trước; trống thì lấy bản agent đã CHỐT mỗi nhịp
+    tim (`cai-dat-tool.json` cạnh đây) — config đóng gói cố ý để trống `tram`
+    vì nó mang nhiều ứng viên, agent mới là người biết cái nào đang sống."""
+    tram = str(cau_hinh.get("TRAM") or cau_hinh.get("tram") or "").rstrip("/")
+    if tram:
+        return tram
+    try:
+        import json as _json
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "cai-dat-tool.json"), encoding="utf-8") as _f:
+            return str((_json.load(_f) or {}).get("tram") or "").rstrip("/")
+    except Exception:  # noqa: BLE001 — chưa có thì thôi
+        return ""
+
+
 def _tai_csv(cau_hinh: dict) -> str:
     """Kế hoạch tươi từ trạm; trạm tắt thì dùng bản đã tải lần trước."""
-    tram = str(cau_hinh.get("TRAM") or cau_hinh.get("tram") or "").rstrip("/")
+    tram = _tram(cau_hinh)
     kenh = str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or "")
     duong_cache = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                "ke-hoach-{0}.csv".format(kenh or "kenh"))
@@ -128,7 +144,7 @@ def bao_dang(cau_hinh: dict, ma: str, trang_thai: str = "ĐÃ ĐĂNG") -> bool:
     lần chạy sau) gửi bù — không được để mất một dòng "ĐÃ ĐĂNG": mất nó là
     lần chạy sau đăng LẶP đúng video ấy lên kênh thật.
     """
-    tram = str(cau_hinh.get("TRAM") or cau_hinh.get("tram") or "").rstrip("/")
+    tram = _tram(cau_hinh)
     kenh = str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or "")
     duong_cho = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "cho-bao-{0}.json".format(kenh or "kenh"))

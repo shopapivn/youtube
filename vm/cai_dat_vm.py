@@ -146,11 +146,24 @@ def dang_ky_tu_chay() -> str:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("   Cai agent cua kenh len may ao nay")
+    print("   MyTool VM - cai len may ao nay")
     print("=" * 60)
     cau_hinh = cai()
     if dang_ky_tu_chay():
-        print("  - May ao bat len la agent TU CHAY ngam (da ghi vao thu muc "
-              "Khoi dong).")
+        print("  - May ao bat len la tool TU CHAY (da ghi vao Khoi dong).")
     print()
-    agent.chay(cau_hinh)
+    # Co man hinh + tkinter thi mo BANG DIEU KHIEN (nuoi ca 3 con: quet,
+    # dang, tra loi cmt). Khong co thi chay rieng agent nhu cu.
+    try:
+        import tkinter  # noqa: F401
+        co_gui = os.path.isfile(os.path.join(GOC, "giao_dien.py"))
+    except ImportError:
+        co_gui = False
+    if co_gui:
+        print("  Mo bang dieu khien MyTool VM...")
+        import subprocess
+        import sys
+        subprocess.Popen([sys.executable, os.path.join(GOC, "giao_dien.py")],
+                         cwd=GOC)
+    else:
+        agent.chay(cau_hinh)
