@@ -1327,3 +1327,66 @@ class TestQuetXongMaKhongCoGoi:
         tram.lay_viec("TL4-T7", "PC4")
         tram.viec_xong("TL4-T7", so2, ket_qua="ok")
         assert tram._ket_qua_viec[-1]["canh_bao"] == ""
+
+
+class TestVanIpv4VaLichHaiKhe:
+    """02/09: 'chrome mở thì bắt buộc ipv4 phải tắt' — van IPv4 dùng chung,
+    và lịch quét 2 khe/ngày."""
+
+    def test_van_mo_thi_khong_nuoi_chrome_khong_quet(self, tmp_path, monkeypatch):
+        import json as j
+
+        agent = _nap_agent()
+        monkeypatch.setattr(agent, "GOC", str(tmp_path))
+        (tmp_path / "van-ipv4.json").write_text(
+            j.dumps({"ai": "may_dang"}), encoding="utf-8")
+        assert agent.van_ipv4_mo() is True
+        # giữ Chrome phải đứng im — nếu nó cố tìm/mở là nổ ngay vì config rỗng
+        goi = []
+        monkeypatch.setattr(agent, "tim_chrome",
+                            lambda c: goi.append(1) or "")
+        agent.giu_chrome({"giu_chrome_mo": True})
+        assert goi == [], "van đang mở mà còn đi tìm Chrome là sai luật"
+        # lệnh quét phải từ chối rõ ràng
+        import pytest as pt
+        with pt.raises(RuntimeError):
+            agent.quet_studio({"chrome": "x", "kenh": "K"})
+        # quét theo lịch: hoãn và KHÔNG ghi mốc — van nhổ là quét lại được
+        cau_hinh = {"gio_quet": "00:00", "thu_muc_du_lieu": str(tmp_path),
+                    "chrome": ""}
+        agent.viec_theo_lich(cau_hinh)
+        assert not agent._doc_trang_thai(cau_hinh).get("quet_cuoi"), \
+            "hoãn vì van thì không được ghi mốc"
+        # cờ già >30 phút = chủ cờ chết giữa chừng — bỏ qua
+        cu = __import__("time").time() - 3600
+        os.utime(tmp_path / "van-ipv4.json", (cu, cu))
+        assert agent.van_ipv4_mo() is False
+
+    def test_lich_hai_khe_moi_khe_mot_moc(self, tmp_path, monkeypatch):
+        agent = _nap_agent()
+        monkeypatch.setattr(agent, "GOC", str(tmp_path))
+        cau_hinh = {"gio_quet": "00:00,00:01",
+                    "thu_muc_du_lieu": str(tmp_path), "chrome": ""}
+        agent.viec_theo_lich(cau_hinh)          # khe 1
+        tt = agent._doc_trang_thai(cau_hinh)
+        assert tt.get("quet_cuoi@00:00") == time.strftime("%Y-%m-%d")
+        agent.viec_theo_lich(cau_hinh)          # khe 2
+        tt = agent._doc_trang_thai(cau_hinh)
+        assert tt.get("quet_cuoi@00:01") == time.strftime("%Y-%m-%d")
+        # cả hai khe xong: vòng ba không làm gì (không đổi trạng thái)
+        truoc = dict(tt)
+        agent.viec_theo_lich(cau_hinh)
+        assert agent._doc_trang_thai(cau_hinh) == truoc
+
+    def test_moc_cu_mot_khe_khong_quet_lap_khi_nang_cap(self, tmp_path, monkeypatch):
+        # Máy đang chạy bản 1 khe đã quét hôm nay (quet_cuoi cũ) — nâng lên
+        # bản nhiều khe thì khe ĐẦU không được quét lặp ngay.
+        agent = _nap_agent()
+        monkeypatch.setattr(agent, "GOC", str(tmp_path))
+        cau_hinh = {"gio_quet": "00:00", "thu_muc_du_lieu": str(tmp_path),
+                    "chrome": ""}
+        agent._luu_trang_thai(cau_hinh, quet_cuoi=time.strftime("%Y-%m-%d"))
+        agent.viec_theo_lich(cau_hinh)
+        tt = agent._doc_trang_thai(cau_hinh)
+        assert not tt.get("quet_cuoi@00:00"), \
+            "mốc cũ nói hôm nay quét rồi — khe đầu phải tôn trọng"

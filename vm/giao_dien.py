@@ -200,9 +200,54 @@ def _tai(url, cho=30):
         return tra.read()
 
 
+def _ten_trinh_duyet():
+    """Tên tiến trình trình duyệt cần diệt: chuẩn + browser kênh (<K>/<K>.exe
+    nằm cạnh thư mục cha — nếp của tool đăng)."""
+    ten = ["chrome.exe", "msedge.exe", "firefox.exe"]
+    cha = os.path.dirname(GOC)
+    try:
+        for t in os.listdir(cha):
+            if os.path.isfile(os.path.join(cha, t, t + ".exe")):
+                ten.append(t + ".exe")
+    except OSError:
+        pass
+    return ten
+
+
+def _giet_trinh_duyet_va_cho_chet(cho_giay=12):
+    """Đóng mọi trình duyệt và CHỜ chết hẳn — luật sắt: IPv4 chỉ được bật
+    khi không còn trình duyệt nào sống."""
+    ten = _ten_trinh_duyet()
+    for t in ten:
+        subprocess.run('taskkill /F /IM "{0}" /T'.format(t), shell=True,
+                       capture_output=True)
+    het = time.time() + cho_giay
+    while time.time() < het:
+        ra = subprocess.run("tasklist /fo csv /nh", shell=True,
+                            capture_output=True, text=True,
+                            errors="replace").stdout.lower()
+        if not any(t.lower() in ra for t in ten):
+            return True
+        time.sleep(1)
+    return False
+
+
 def _bat_ipv4(bat):
     """VM đa phần CHỈ có IPv6 mà GitHub chỉ nói IPv4 — bật IPv4 tạm lúc
-    tải rồi tắt lại (đúng chiêu tool upload cũ vẫn dùng, cần quyền admin)."""
+    tải rồi tắt lại (đúng chiêu tool upload cũ vẫn dùng, cần quyền admin).
+
+    Luật sắt của chủ kênh (02/09): Chrome KHÔNG BAO GIỜ sống khi IPv4 bật.
+    Nên trước khi bật: cắm CỜ VAN (vm/van-ipv4.json — agent thấy là đứng
+    im, không nuôi Chrome) + diệt trình duyệt và CHỜ chết hẳn. Tắt xong
+    thì nhổ cờ."""
+    van = os.path.join(GOC, "van-ipv4.json")
+    if bat:
+        try:
+            with open(van, "w", encoding="utf-8") as tep:
+                json.dump({"ai": "giao_dien", "pid": os.getpid()}, tep)
+        except Exception:
+            pass
+        _giet_trinh_duyet_va_cho_chet()
     dong = "Enable" if bat else "Disable"
     lenh = ("Get-NetAdapter | ForEach-Object {{ {0}-NetAdapterBinding "
             "-Name $_.Name -ComponentID ms_tcpip -ErrorAction "
@@ -223,6 +268,11 @@ def _bat_ipv4(bat):
             time.sleep(6)
     except Exception:
         pass
+    if not bat:
+        try:
+            os.remove(van)
+        except OSError:
+            pass
 
 
 def _giai_nen_goi_vm(du_lieu, goc_vm):

@@ -1123,8 +1123,9 @@ class TrangMayVM(QWidget):
         self._o_gio_quet.setPlaceholderText("07:30")
         self._o_gio_quet.setFixedWidth(70)
         self._o_gio_quet.setToolTip(
-            "Dạng GIỜ:PHÚT, ví dụ 07:30. Để TRỐNG là tắt quét theo lịch — "
-            "chỉ còn lệnh tay. Mở máy trễ giờ vẫn quét bù trong ngày.")
+            "Dạng GIỜ:PHÚT; nhiều lần trong ngày thì cách nhau dấu phẩy, "
+            "ví dụ 07:30,19:30 (mặc định — sáng và tối). Để TRỐNG là tắt "
+            "quét theo lịch, chỉ còn lệnh tay. Mở máy trễ giờ vẫn quét bù.")
         self._o_gio_quet.editingFinished.connect(self._luu_thiet_lap)
         d0.addWidget(self._o_gio_quet)
         d0.addStretch(1)

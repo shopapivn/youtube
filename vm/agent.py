@@ -475,6 +475,24 @@ def _chrome_dang_chay(chrome: str) -> bool:
     return False
 
 
+def van_ipv4_mo() -> bool:
+    """CỜ VAN IPv4 (`vm/van-ipv4.json`) — luật sắt của chủ kênh: Chrome
+    KHÔNG BAO GIỜ được sống khi IPv4 đang bật (02/09/2026: "chrome mở thì
+    bắt buộc là ipv4 phải tắt rồi").
+
+    Ai bật IPv4 (máy đăng chép file SMB, bảng cập nhật tải GitHub) phải cắm
+    cờ này TRƯỚC khi bật và nhổ sau khi tắt. Agent thấy cờ là ĐỨNG IM:
+    không nuôi Chrome, không quét. Cờ già quá 30 phút coi như chủ cờ chết
+    giữa chừng — bỏ qua để kênh không tê liệt vĩnh viễn (và người bật sau
+    cùng vẫn tự tắt IPv4 trong nhánh finally của nó).
+    """
+    try:
+        gia = time.time() - os.path.getmtime(os.path.join(GOC, "van-ipv4.json"))
+    except OSError:
+        return False
+    return gia <= 1800
+
+
 def giu_chrome(cau_hinh: dict) -> None:
     """Nuôi Chrome: chết thì mở lại — extension nhờ vậy luôn sống.
 
@@ -485,6 +503,8 @@ def giu_chrome(cau_hinh: dict) -> None:
     """
     if not bool(cau_hinh.get("giu_chrome_mo", True)):
         return
+    if van_ipv4_mo():
+        return   # IPv4 đang bật (van cắm cờ) — cấm mở Chrome lúc này
     chrome = tim_chrome(cau_hinh)
     if not chrome or _chrome_dang_chay(chrome):
         return
@@ -503,6 +523,8 @@ def quet_studio(cau_hinh: dict) -> str:
     thứ bấm chuột không lấy nổi, xem KE-HOACH.md). Chrome mở sẵn thì thôi
     dùng luôn: mở chồng cửa sổ chỉ tổ giành phiên của nhau.
     """
+    if van_ipv4_mo():
+        raise RuntimeError("van IPv4 đang mở (máy đăng đang chép file) — giao lại lệnh sau ít phút")
     chrome = tim_chrome(cau_hinh)
     url = cau_hinh.get("studio_url") or "https://studio.youtube.com"
     if not chrome:
@@ -526,6 +548,8 @@ def quet_trang_chu(cau_hinh: dict) -> str:
     Agent lại chỉ mở và đợi: mắt đọc là `trang-chu.js` của extension (nó cuộn
     vài màn, gom link kênh, POST /doi-thu về trạm). Xem vm/KE-HOACH.md GĐ3.
     """
+    if van_ipv4_mo():
+        raise RuntimeError("van IPv4 đang mở (máy đăng đang chép file) — giao lại lệnh sau ít phút")
     chrome = tim_chrome(cau_hinh)
     if not chrome:
         raise RuntimeError(
@@ -690,15 +714,38 @@ def _luu_trang_thai(cau_hinh: dict, **thay_doi) -> None:
 
 
 def viec_theo_lich(cau_hinh: dict) -> None:
-    """Đến giờ hẹn hằng ngày thì tự quét — lệnh tay luôn được xử TRƯỚC lịch."""
+    """Đến giờ hẹn thì tự quét — lệnh tay luôn được xử TRƯỚC lịch.
+
+    `gio_quet` nhận NHIỀU khe cách nhau dấu phẩy ("07:30,19:30") — chủ dự
+    án hỏi 02/09 "quét mấy lần 1 ngày": hai khe là đủ (số liệu phân tích
+    nằm ở các mốc 24/48/72h do extension tự chụp khi Chrome sống; khe quét
+    chỉ là lưới an toàn — sáng bắt sóng sau giờ đăng, tối chốt ngày). Mỗi
+    khe một mốc riêng (`quet_cuoi@<khe>`); mốc cũ `quet_cuoi` vẫn được tôn
+    trọng cho khe đầu để máy đang chạy nâng cấp lên không quét lặp.
+    """
     tt = _doc_trang_thai(cau_hinh)
-    if not den_gio_quet(str(cau_hinh.get("gio_quet") or ""),
-                        str(tt.get("quet_cuoi") or "")):
+    cac_khe = [g.strip() for g in str(cau_hinh.get("gio_quet") or "").split(",")
+               if g.strip()]
+    khe_toi = None
+    for khe in cac_khe:
+        da = str(tt.get("quet_cuoi@" + khe)
+                 or (tt.get("quet_cuoi") if khe == cac_khe[0] else "") or "")
+        if den_gio_quet(khe, da):
+            khe_toi = khe
+            break
+    if khe_toi is None:
         return
-    ghi("đến giờ quét hằng ngày ({0})".format(cau_hinh.get("gio_quet")))
+    if van_ipv4_mo():
+        # KHÔNG ghi mốc — van nhổ là lượt sau tới giờ vẫn quét được.
+        ghi("đến giờ quét nhưng van IPv4 đang mở (máy đăng đang chép file) "
+            "— hoãn, thử lại nhịp sau")
+        return
+    ghi("đến giờ quét hằng ngày (khe {0})".format(khe_toi))
     # Ghi mốc TRƯỚC khi quét: lượt quét kéo dài nhiều phút, hỏng giữa chừng
-    # cũng không được quét dồn dập cả ngày — mai lại tới lượt.
-    _luu_trang_thai(cau_hinh, quet_cuoi=time.strftime("%Y-%m-%d"))
+    # cũng không được quét dồn dập cả ngày — khe sau/mai lại tới lượt.
+    hom_nay = time.strftime("%Y-%m-%d")
+    _luu_trang_thai(cau_hinh, **{"quet_cuoi@" + khe_toi: hom_nay,
+                                 "quet_cuoi": hom_nay})
     try:
         ghi(quet_studio(cau_hinh))
     except Exception as loi:  # noqa: BLE001 — lịch hỏng hôm nay, mai vẫn chạy

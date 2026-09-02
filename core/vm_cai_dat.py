@@ -28,7 +28,10 @@ TEP = "may-ao.json"
 
 #: Mặc định — khớp với `vm/config.example.json` để hai bên không cãi nhau.
 MAC_DINH: Dict[str, object] = {
-    "gio_quet": "07:30",                 # "" = tắt quét theo lịch
+    # "" = tắt; nhiều khe cách nhau dấu phẩy. Hai khe mặc định (02/09):
+    # sáng bắt sóng quét-trang-chủ giờ 12–13 sau giờ đăng 18h JP, tối chốt
+    # số cuối ngày — số phân tích thật nằm ở mốc 24/48/72h extension tự chụp.
+    "gio_quet": "07:30,19:30",
     "quet_trang_chu_hang_ngay": True,
     "cho_quet_giay": 480,
     "cho_trang_chu_giay": 90,

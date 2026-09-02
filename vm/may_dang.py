@@ -690,25 +690,50 @@ def get_tomorrow_codes(rows, channel_code=None):
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
+#: CO VAN IPv4 dung chung voi agent (vm/van-ipv4.json). Luat sat cua chu
+#: kenh (02/09/2026): "chrome mo thi bat buoc la ipv4 phai tat". Ai bat
+#: IPv4 phai: (1) cam co de agent DUNG IM (khong nuoi Chrome, khong quet),
+#: (2) dong sach trinh duyet, (3) moi bat. Tat xong thi nho co.
+VAN_IPV4 = os.path.join(BASE_DIR, "van-ipv4.json")
+
+
 def _enable_ipv4():
-    """Bật IPv4 tạm thời."""
+    """Bật IPv4 tạm thời — cắm cờ van + đóng sạch trình duyệt TRƯỚC."""
+    try:
+        with open(VAN_IPV4, "w", encoding="utf-8") as f:
+            json.dump({"ai": "may_dang", "pid": os.getpid(),
+                       "luc": time.strftime("%Y-%m-%d %H:%M:%S")}, f)
+    except Exception:
+        pass
+    try:
+        close_browsers_gently_in_rdp()
+    except Exception as e:
+        logging.warning("dong trinh duyet truoc khi bat IPv4 loi (%s) - van dong tiep bang taskkill", e)
+        try:
+            subprocess.run('taskkill /F /IM chrome.exe /T', shell=True, capture_output=True)
+        except Exception:
+            pass
     try:
         subprocess.run(
             'powershell -Command "Get-NetAdapter | Enable-NetAdapterBinding -ComponentID ms_tcpip -ErrorAction SilentlyContinue"',
             shell=True, capture_output=True, timeout=15)
         time.sleep(5)
-        logging.info("IPv4 da bat.")
+        logging.info("IPv4 da bat (da cam co van + dong trinh duyet).")
     except Exception:
         pass
 
 
 def _disable_ipv4():
-    """Tắt IPv4."""
+    """Tắt IPv4 — và NHỔ CỜ van để agent mở lại Chrome."""
     try:
         subprocess.run(
             'powershell -Command "Get-NetAdapter | Disable-NetAdapterBinding -ComponentID ms_tcpip -ErrorAction SilentlyContinue"',
             shell=True, capture_output=True, timeout=15)
         logging.info("IPv4 da tat.")
+        try:
+            os.remove(VAN_IPV4)
+        except OSError:
+            pass
     except Exception:
         pass
 
