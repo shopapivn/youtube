@@ -55,7 +55,9 @@ CAC_CON = (
 def doc_cong_tac():
     """Núm tự đăng / tự trả lời: config.json là gốc, cai-dat-tool.json
     (MyTool ở máy nhà đẩy xuống qua agent) THẮNG. Agent luôn bật."""
-    ra = {"agent": True, "tu_dang": True, "tu_tra_loi_cmt": True}
+    # tu_dang mac dinh TAT (02/09 chu du an: dang tay la duong chinh,
+    # bat o tab Quan ly kenh cua MyTool khi san sang)
+    ra = {"agent": True, "tu_dang": False, "tu_tra_loi_cmt": True}
     for duong, khoa in ((os.path.join(GOC, "config.json"),
                          (("tu_dang", "tu_dang"), ("tu_tra_loi_cmt", "tu_tra_loi_cmt"))),
                         (os.path.join(GOC, "cai-dat-tool.json"),

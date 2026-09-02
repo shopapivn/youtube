@@ -81,9 +81,20 @@ class TrangChiSoYTB(QWidget):
     _xong = pyqtSignal(object, str)
     _dong_log = pyqtSignal(str)
 
-    def __init__(self, app):
+    def __init__(self, app, phan=("cai", "tram", "doc")):
+        """`phan` chọn thẻ nào được dựng — 02/09 chủ dự án tách trang này đôi:
+
+            ("cai", "tram")  →  hạ tầng MÁY (cài tiện ích + trạm nhận),
+                                 nằm ở tab "VPS & Máy VM"
+            ("doc",)         →  ĐỌC số liệu đã lấy được, nằm ở tab
+                                 "Phân tích & Nghiên cứu"
+
+        Chỉ bản nào có "tram" mới DỰNG `Tram` (một cổng, một chủ — hai bản
+        cùng mở cổng 8765 là bản sau chết OSError).
+        """
         super().__init__()
         self._app = app
+        self._phan = tuple(phan)
         self._ban_ghi: List[cs.BanGhi] = []
         # Trạm nhận ghi nhật ký từ luồng ổ cắm của chính nó. Qt cấm chạm vào ô chữ từ luồng
         # khác luồng giao diện — chạm thẳng thì không báo lỗi mà thỉnh thoảng sập cả cửa sổ —
@@ -92,27 +103,40 @@ class TrangChiSoYTB(QWidget):
         # (một lượt hỏi máy chủ, không phải lượt sinh nội dung). Máy riêng thì
         # đọc từ đĩa mỗi nhịp, khỏi cache.
         self._khach_thue: List[str] = []
-        self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m),
-                             nguon_khach=self._dia_chi_vps,
-                             goi_van_ban=self._viet_ho)
+        self._tram = None
+        if "tram" in self._phan:
+            self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m),
+                                 nguon_khach=self._dia_chi_vps,
+                                 goi_van_ban=self._viet_ho)
 
         ngoai = QVBoxLayout(self)
         ngoai.setContentsMargins(0, 0, 0, 0)
         ngoai.setSpacing(12)
-        ngoai.addWidget(tieu_de_trang(
-            "Chỉ số kênh YouTube",
-            "Lấy số liệu thật từ Studio về máy bạn, rồi đưa cho AI đọc giúp"))
+        if "doc" in self._phan and "tram" not in self._phan:
+            ngoai.addWidget(tieu_de_trang(
+                "Chỉ số kênh YouTube",
+                "Đọc số liệu Studio đã cào về, đưa cho AI phân tích giúp"))
+        else:
+            ngoai.addWidget(tieu_de_trang(
+                "Chỉ số kênh YouTube",
+                "Cài tiện ích + trạm nhận: số liệu Studio tự chảy về thư mục "
+                "kênh. Đọc số ở tab Phân tích & Nghiên cứu."))
 
-        ngoai.addWidget(self._the_cai())
-        ngoai.addWidget(self._the_tram())
-        ngoai.addWidget(self._the_doc())
+        if "cai" in self._phan:
+            ngoai.addWidget(self._the_cai())
+        if "tram" in self._phan:
+            ngoai.addWidget(self._the_tram())
+        if "doc" in self._phan:
+            ngoai.addWidget(self._the_doc())
         ngoai.addStretch(1)
         self._xong.connect(self._nhan_ket_qua)
         self._dong_log.connect(self._them_log)
         # Máy đã từng dùng máy ảo thì mở tool là cổng nhận TỰ BẬT — người
         # dùng không phải nhớ ghé đây bấm (02/09: "đừng nhiều tab nhiều mục
         # khó hiểu"). Máy chưa từng dùng thì không tự mở cổng làm gì.
-        if "PYTEST_CURRENT_TEST" not in os.environ and self._da_dung_vm():
+        if (self._tram is not None
+                and "PYTEST_CURRENT_TEST" not in os.environ
+                and self._da_dung_vm()):
             QTimer.singleShot(300, self.bao_dam_bat)
 
     def _da_dung_vm(self) -> bool:
@@ -221,6 +245,8 @@ class TrangChiSoYTB(QWidget):
         tool) — người dùng không phải nhớ ghé mục này bật tay nữa
         (02/09: "đừng nhiều tab nhiều mục khó hiểu").
         """
+        if self._tram is None:
+            return "trang này không giữ trạm (trạm ở tab VPS & Máy VM)"
         if self._tram.dang_chay:
             return ""
         try:

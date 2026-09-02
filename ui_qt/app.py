@@ -41,7 +41,7 @@ from core.jobs import JobManager, JobSpec
 from core.cham_anh import dung_cham_anh
 from core.viet_lai_prompt import dung_viet_lai
 from core.money import format_vnd
-from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_TTS, KIND_VIDEO
+from core.pricing import DEFAULT_PRICES, KIND_IMAGE, KIND_MUSIC, KIND_TTS, KIND_VIDEO
 from core.session import SESSION_FILENAME
 
 from . import logo, theme
@@ -67,7 +67,7 @@ TRANG = (
     # không lặp cùng một chữ.
     ("skill", "", "Skill miễn phí"),
     ("content", "", "Viết kịch bản"),
-    ("voice", "", "Voice"),
+    ("voice", "", "Voice + Music"),
     # Đứng ngay sau Voice vì nó dùng đúng hai thứ tab Voice vừa sinh ra và vừa
     # nhận vào: file .mp3 và chính file .txt đã đem đi đọc. Chủ dự án,
     # 28/08/2026: *"srt bị sai nội dung… input là mp3 + txt, đầu ra là srt"*.
@@ -433,7 +433,7 @@ class CuaSoChinh(QWidget):
         from .trang_auto import TrangTuDong
         from .trang_skill import TrangSkill
         from .trang_quan_ly import TrangQuanLy
-        from .trang_voice import TrangGiongNoi
+        from .trang_voice_music import TrangVoiceMusic
         from .trang_phu_de import TrangPhuDe
         from .trang_gpm_vps import TrangGpmVps
         from .trang_phan_tich import TrangPhanTich
@@ -445,7 +445,7 @@ class CuaSoChinh(QWidget):
             "phan-tich": lambda: TrangPhanTich(self),
             "quan-ly-kenh": lambda: TrangQuanLyKenh(self),
             "content": lambda: TrangKichBan(self),
-            "voice": lambda: TrangGiongNoi(self),
+            "voice": lambda: TrangVoiceMusic(self),
             "phu-de": lambda: TrangPhuDe(self),
             "auto": lambda: TrangTuDong(self),
             "media": lambda: TrangAnhVideo(self),
@@ -537,6 +537,7 @@ class CuaSoChinh(QWidget):
         "excel": "EXCEL",               # bảng phụ đề, bảng cảnh
         KIND_IMAGE: "VISUAL",           # ảnh
         KIND_VIDEO: "VISUAL",           # clip — cùng ngăn với ảnh, cùng là hình
+        KIND_MUSIC: "MUSIC",            # nhạc nền
         "video-hoan-chinh": "DONE",     # bản dựng xong
     }
 

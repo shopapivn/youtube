@@ -54,9 +54,10 @@ __all__ = ["TrangPhanTich", "TrangDoiThu"]
 
 #: Nhãn các mục con — xếp theo dòng chảy: xem ngách (Đối thủ) → xem mình
 #: (Chỉ số kênh) → chốt (Quyết định content). "Máy VM" đứng cuối — hạ tầng.
-# 02/09: "Chỉ số kênh" + "Máy VM" dọn sang tab VPS & Máy VM (chủ dự án:
-# "đang quá nhiều thứ linh tinh... dồn về 1 tab") — ở đây chỉ còn NGHIÊN CỨU.
-TAB_CON = ("Đối thủ", "Quyết định content")
+# 02/09 (lần 2): "cái đọc số liệu đã lấy được... đưa về bên phân tích và
+# nghiên cứu" — mục Chỉ số kênh Ở ĐÂY là bản CHỈ ĐỌC (phan=("doc",));
+# hạ tầng cào (trạm + tiện ích) và Máy VM nằm bên tab VPS & Máy VM.
+TAB_CON = ("Đối thủ", "Chỉ số kênh", "Quyết định content")
 
 #: Nhịp tự kiểm "đến hạn quét chưa" khi tool đang mở. Nửa tiếng một lần hỏi
 #: cái đồng hồ trên đĩa — không phải một lượt gọi mạng nào.
@@ -990,17 +991,47 @@ class TrangMayVM(QWidget):
     và xếp việc vào hộp. Một trạm hai chủ là hai nút bật/tắt cãi nhau.
     """
 
-    def __init__(self, app, chi_so: TrangChiSoYTB):
+    def __init__(self, app, chi_so=None, co_tieu_de=True,
+                 phan=("lenh", "thiet_lap", "ban_giao", "bang")):
+        """`phan` chọn thẻ — 02/09 chủ dự án chia trang này ra hai chỗ:
+
+            ("lenh","thiet_lap","bang")  →  nằm CHUNG trang VPS ("máy vm
+                                             tích hợp luôn chỗ vps")
+            ("ban_giao",)                →  thẻ Bàn giao & kế hoạch đăng,
+                                             nằm ở tab Quản lý kênh sau công
+                                             tắc "Đăng tự động" (mặc định TẮT)
+
+        `chi_so` (mượn trạm) chỉ bản nào có "lenh"/"bang" mới cần.
+        """
         super().__init__()
         self._app = app
         self._chi_so = chi_so
+        self._phan = tuple(phan)
+        self._dang_do_vm = False
+        self._dang_do_kh = False
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(12)
-        doc.addWidget(tieu_de_trang(
-            "Máy VM của kênh",
-            "Agent trên máy ảo tự gọi về hỏi việc — xem vm/KE-HOACH.md."))
+        if co_tieu_de:
+            doc.addWidget(tieu_de_trang(
+                "Máy VM của kênh",
+                "Agent trên máy ảo tự gọi về hỏi việc — xem vm/KE-HOACH.md."))
+
+        # Hàng chọn kênh — MỌI thẻ đều xoay quanh nó nên nằm NGOÀI thẻ,
+        # mode nào cũng có (thẻ bàn giao đứng một mình vẫn cần chọn kênh).
+        hang_kenh = QHBoxLayout()
+        hang_kenh.addWidget(nhan("Kênh:"))
+        self._chon_kenh = QComboBox()
+        self._chon_kenh.setEditable(True)
+        self._chon_kenh.setMinimumWidth(180)
+        for ma in liet_ke_kenh(self._app.base_dir):
+            self._chon_kenh.addItem(ma)
+        hang_kenh.addWidget(self._chon_kenh)
+        hang_kenh.addStretch(1)
+        doc.addLayout(hang_kenh)
+        self._chon_kenh.activated.connect(lambda _i: self._doi_kenh())
+        self._chon_kenh.lineEdit().returnPressed.connect(self._doi_kenh)
 
         khung = the()
         v = QVBoxLayout(khung)
@@ -1015,16 +1046,6 @@ class TrangMayVM(QWidget):
         chu.setMinimumWidth(1)
         v.addWidget(chu)
 
-        d0 = QHBoxLayout()
-        d0.addWidget(nhan("Kênh:"))
-        self._chon_kenh = QComboBox()
-        self._chon_kenh.setEditable(True)
-        self._chon_kenh.setMinimumWidth(180)
-        for ma in liet_ke_kenh(self._app.base_dir):
-            self._chon_kenh.addItem(ma)
-        d0.addWidget(self._chon_kenh)
-        d0.addStretch(1)
-        v.addLayout(d0)
         # Nút xuống hàng riêng — dồn chung hàng chọn kênh là hàng đó đòi hơn
         # 760px và cả trang không co được (`test_bo_cuc` canh mốc này).
         d0b = QHBoxLayout()
@@ -1060,10 +1081,15 @@ class TrangMayVM(QWidget):
                               rong=180))
         d0c.addStretch(1)
         v.addLayout(d0c)
-        doc.addWidget(khung)
+        if "lenh" in self._phan:
+            doc.addWidget(khung)
+        else:
+            khung.hide()
 
-        doc.addWidget(self._the_thiet_lap())
-        doc.addWidget(self._the_ban_giao())
+        if "thiet_lap" in self._phan:
+            doc.addWidget(self._the_thiet_lap())
+        if "ban_giao" in self._phan:
+            doc.addWidget(self._the_ban_giao())
 
         khung2 = the()
         v2 = QVBoxLayout(khung2)
@@ -1084,14 +1110,23 @@ class TrangMayVM(QWidget):
         dau.setSectionResizeMode(QHeaderView.Stretch)
         self._bang.setMinimumHeight(160)
         v2.addWidget(self._bang, 1)
-        doc.addWidget(khung2, 1)
+        if "bang" in self._phan:
+            doc.addWidget(khung2, 1)
+            # Làm mới mỗi 5 giây — chỉ đọc danh sách trong RAM, không tốn gì.
+            self._dong_ho = QTimer(self)
+            self._dong_ho.timeout.connect(self._ve)
+            self._dong_ho.start(5000)
+            self._ve()
+        else:
+            khung2.hide()
+        self._doi_kenh()
 
-        # Làm mới mỗi 5 giây — chỉ đọc hai danh sách trong RAM, không tốn gì.
-        self._dong_ho = QTimer(self)
-        self._dong_ho.timeout.connect(self._ve)
-        self._dong_ho.start(5000)
-        self._ve()
-        self._doi_kenh_ban_giao()
+    def _doi_kenh(self) -> None:
+        """Đổi kênh trên hàng chọn — thẻ nào có mặt thì thẻ ấy nạp lại."""
+        if hasattr(self, "_o_gio_quet"):
+            self._nap_thiet_lap()
+        if hasattr(self, "_bang_kh"):
+            self._doi_kenh_ban_giao()
 
     def _the_thiet_lap(self) -> QWidget:
         """Núm vặn của máy ảo — NẰM Ở TOOL, theo từng kênh.
@@ -1178,18 +1213,8 @@ class TrangMayVM(QWidget):
         d1b.addStretch(1)
         v.addLayout(d1b)
 
-        # Hai núm cho GUI tool đăng bên máy ảo (02/09: "giờ chưa cần đăng
-        # thì có thể tắt") — GUI đọc qua cai-dat-tool.json mà agent chép.
-        d1c = QHBoxLayout()
-        self._o_tu_dang = QCheckBox("Tự đăng video theo kế hoạch")
-        self._o_tu_dang.setToolTip(
-            "Tắt là GUI trên máy ảo dừng con đăng video — kế hoạch vẫn nằm "
-            "chờ, bật lại là chạy tiếp. Chỉnh ở đây, không phải mở máy ảo.")
-        self._o_tu_dang.toggled.connect(lambda _b: self._luu_thiet_lap())
-        d1c.addWidget(self._o_tu_dang)
-        d1c.addStretch(1)
-        v.addLayout(d1c)
-
+        # Núm "Tự đăng" đã DỌN sang tab Quản lý kênh (02/09: công tắc Đăng
+        # tự động, mặc định tắt) — ở đây chỉ còn núm trả lời bình luận.
         d1d = QHBoxLayout()
         self._o_tu_cmt = QCheckBox("Tự trả lời bình luận")
         self._o_tu_cmt.setToolTip(
@@ -1217,7 +1242,6 @@ class TrangMayVM(QWidget):
             self._o_quet_tc.setChecked(bool(cai.get("quet_trang_chu_hang_ngay")))
             self._o_giu_chrome.setChecked(bool(cai.get("giu_chrome_mo", True)))
             self._o_dong_chrome.setChecked(bool(cai.get("dong_chrome_sau_quet")))
-            self._o_tu_dang.setChecked(bool(cai.get("tu_dang", True)))
             self._o_tu_cmt.setChecked(bool(cai.get("tu_tra_loi_cmt", True)))
         finally:
             self._dang_do_vm = False
@@ -1234,7 +1258,6 @@ class TrangMayVM(QWidget):
             quet_trang_chu_hang_ngay=self._o_quet_tc.isChecked(),
             giu_chrome_mo=self._o_giu_chrome.isChecked(),
             dong_chrome_sau_quet=self._o_dong_chrome.isChecked(),
-            tu_dang=self._o_tu_dang.isChecked(),
             tu_tra_loi_cmt=self._o_tu_cmt.isChecked())
 
     def _the_ban_giao(self) -> QWidget:
@@ -1298,9 +1321,6 @@ class TrangMayVM(QWidget):
                                rong=210))
         v.addLayout(hang)
 
-        self._dang_do_kh = False
-        self._chon_kenh.activated.connect(lambda _i: self._doi_kenh_ban_giao())
-        self._chon_kenh.lineEdit().returnPressed.connect(self._doi_kenh_ban_giao)
         return khung
 
     # ── Bàn giao & kế hoạch ──────────────────────────────────────────────────
@@ -1316,7 +1336,6 @@ class TrangMayVM(QWidget):
         # `dat_thang` chứ không phải `dat`: đây là nạp cấu hình CỦA KÊNH vừa
         # chọn — thư mục done theo kênh, phải thay hẳn chứ không nhường ô cũ.
         self._o_done.dat_thang(str(cai.get("thu_muc_done") or ""))
-        self._nap_thiet_lap()
         self._nap_luot()
         self._ve_ke_hoach()
 
@@ -1575,13 +1594,15 @@ class TrangPhanTich(QWidget):
 
         self.tabs = QTabWidget()
         self.doi_thu = TrangDoiThu(app)
+        self.chi_so = TrangChiSoYTB(app, phan=("doc",))
         self.quyet_dinh = TrangQuyetDinh(app)
         self.tabs.addTab(self.doi_thu, TAB_CON[0])
-        self.tabs.addTab(self.quyet_dinh, TAB_CON[1])
+        self.tabs.addTab(self.chi_so, TAB_CON[1])
+        self.tabs.addTab(self.quyet_dinh, TAB_CON[2])
         doc.addWidget(self.tabs, 1)
 
     def doi_du_an(self, ten: str) -> None:
-        for con in (self.doi_thu,):
+        for con in (self.doi_thu, self.chi_so):
             tiep = getattr(con, "doi_du_an", None)
             if tiep is not None:
                 try:

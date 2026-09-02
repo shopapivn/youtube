@@ -64,7 +64,74 @@ class TrangQuanLyKenh(QWidget):
             "vào. Chạy sản xuất cho kênh nằm ở tab “Video sản xuất tự động”; "
             "số liệu kênh đổ về ở tab “Phân tích & Nghiên cứu”.", "muted"))
         doc.addWidget(khung, 1)
+        doc.addWidget(self._the_dang_tu_dong())
         self.nap_lai()
+
+    def _the_dang_tu_dong(self) -> QWidget:
+        """Công tắc ĐĂNG TỰ ĐỘNG + thẻ Bàn giao & kế hoạch đăng.
+
+        Chủ dự án, 02/09/2026: *"cái bàn giao và kế hoạch đăng... ở chỗ quản
+        lý kênh kiểu dạng bật tắt — nếu bật thì có logic về thời gian đăng và
+        chu kỳ đăng; cái này chưa quan trọng... cứ để mặc định là tắt"*.
+
+        Công tắc = núm `tu_dang` của kênh (mặc định TẮT) — bật là máy ảo được
+        phép tự đăng theo kế hoạch; sổ bàn giao/đăng-tay thì lúc nào cũng
+        dùng được (đường tay là đường ĐANG dùng). Logic giờ đăng + chu kỳ sẽ
+        mọc vào đây khi chủ dự án bật thật.
+        """
+        from PyQt5.QtWidgets import QCheckBox  # noqa: PLC0415
+
+        from .trang_phan_tich import TrangMayVM  # noqa: PLC0415
+
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Đăng tự động & sổ đăng của kênh", "h2"))
+        self._o_tu_dang = QCheckBox("Bật đăng tự động")
+        self._o_tu_dang.setToolTip(
+            "MẶC ĐỊNH TẮT. Bật là máy ảo của kênh được phép tự đăng những "
+            "dòng kế hoạch đã đặt ngày giờ. Logic giờ đăng và chu kỳ đăng "
+            "sẽ thêm sau — giờ cứ đăng tay và ghi sổ bên dưới.")
+        self._o_tu_dang.toggled.connect(self._luu_tu_dang)
+        v.addWidget(self._o_tu_dang)
+
+        # Thẻ bàn giao dùng lại NGUYÊN CON từ Máy VM (phan=("ban_giao",)) —
+        # một bộ mã hai cửa vào, đúng luật của trang này.
+        self._so_dang = TrangMayVM(self._app, None, co_tieu_de=False,
+                                   phan=("ban_giao",))
+        self._so_dang.layout().setContentsMargins(0, 0, 0, 0)
+        v.addWidget(self._so_dang)
+        self._so_dang._chon_kenh.activated.connect(
+            lambda _i: self._nap_tu_dang())
+        self._so_dang._chon_kenh.lineEdit().returnPressed.connect(
+            self._nap_tu_dang)
+        self._dang_do_td = False
+        self._nap_tu_dang()
+        return khung
+
+    def _kenh_dang_chon(self) -> str:
+        return self._so_dang._chon_kenh.currentText().strip()
+
+    def _nap_tu_dang(self) -> None:
+        from core import vm_cai_dat  # noqa: PLC0415
+
+        kenh = self._kenh_dang_chon()
+        self._dang_do_td = True
+        try:
+            cai = vm_cai_dat.doc(self._app.base_dir, kenh) if kenh else {}
+            self._o_tu_dang.setChecked(bool(cai.get("tu_dang", False)))
+        finally:
+            self._dang_do_td = False
+
+    def _luu_tu_dang(self, bat: bool) -> None:
+        if getattr(self, "_dang_do_td", False):
+            return
+        from core import vm_cai_dat  # noqa: PLC0415
+
+        kenh = self._kenh_dang_chon()
+        if kenh:
+            vm_cai_dat.luu(self._app.base_dir, kenh, tu_dang=bool(bat))
 
     # ── Danh sách ────────────────────────────────────────────────────────────
 

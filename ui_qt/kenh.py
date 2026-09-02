@@ -58,7 +58,9 @@ CANH_ANH = 150
 
 #: Giá trị dựng-video mặc định khi tạo kênh mới (kênh chưa có kenh.yaml để đọc).
 _MAC_DINH_VIDEO = {"dot_phu_de": True, "nhac_nen": "",
-                   "am_luong_nhac": 0.12, "do_phan_giai": ""}
+                   "am_luong_nhac": 0.12, "do_phan_giai": "",
+                   "giu_tieng_canh": False, "am_luong_tieng_canh": 0.35,
+                   "nguong_tieng_nguoi": 0}
 
 #: Nhãn NGẮN đặt trên mỗi THẺ prompt (tab). Giữ ngắn để hàng thẻ không kéo rộng
 #: trang quá mép. Khoá tệp lấy từ `BUOC_PROMPT` (core), chỉ đổi CÁCH GỌI ở giao
@@ -1580,6 +1582,56 @@ class HopKenh(QDialog):
             "Tắt: hình sạch, bạn tải tệp .srt lên YouTube riêng.")
         v.addWidget(self._o_dot_sub)
 
+        v.addWidget(nhan("Tiếng trong clip", "h2"))
+        v.addWidget(self._phu(
+            "Clip do máy dựng có sẵn tiếng nền — bước chân, chim hót, nước, "
+            "gió. Trước đây tool vứt hết; bật ô này thì giữ lại, nằm dưới "
+            "giọng đọc. Chỗ nào nhân vật nói tiếng nước ngoài thì tự tắt tiếng "
+            "riêng cảnh ấy."))
+        self._o_tieng_canh = QCheckBox("Giữ tiếng nền của clip")
+        self._o_tieng_canh.setChecked(
+            str(cai.get("giu_tieng_canh", False)).strip().lower() == "true")
+        self._o_tieng_canh.setToolTip(
+            "Video ra có tiếng nền; kèm một tệp 8-tieng-canh.m4a để bạn kéo "
+            "vào CapCut và tự chỉnh to nhỏ.")
+        v.addWidget(self._o_tieng_canh)
+
+        hang_tc = HangXuongDong()
+        hang_tc.addWidget(nhan("Độ to tiếng nền so với giọng đọc:", "phu"))
+        self._o_am_tc = QSpinBox()
+        self._o_am_tc.setRange(0, 100)
+        self._o_am_tc.setSuffix("%")
+        self._o_am_tc.setFixedWidth(90)
+        try:
+            pt_tc = int(round(float(cai.get("am_luong_tieng_canh", 0.35)) * 100))
+        except (TypeError, ValueError):
+            pt_tc = 35
+        self._o_am_tc.setValue(max(0, min(100, pt_tc)))
+        self._o_am_tc.setToolTip(
+            "35% đo trên phim thật: tiếng nền nghe rất nhỏ nhưng ĐỈNH của nó "
+            "(tiếng nước bắn, tiếng gỗ va) ngang hẳn giọng đọc, nên phải hạ.")
+        hang_tc.addWidget(self._o_am_tc)
+        v.addLayout(hang_tc)
+
+        hang_tn = HangXuongDong()
+        hang_tn.addWidget(nhan("Nhạy tay khi nghe ra tiếng người:", "phu"))
+        self._o_tieng_nguoi = QSpinBox()
+        self._o_tieng_nguoi.setRange(0, 100)
+        self._o_tieng_nguoi.setSuffix("%")
+        self._o_tieng_nguoi.setFixedWidth(90)
+        self._o_tieng_nguoi.setSpecialValueText("để tool tự lo")
+        try:
+            pt_tn = int(round(float(cai.get("nguong_tieng_nguoi", 0) or 0) * 100))
+        except (TypeError, ValueError):
+            pt_tn = 0
+        self._o_tieng_nguoi.setValue(max(0, min(100, pt_tn)))
+        self._o_tieng_nguoi.setToolTip(
+            "Để 0 là dùng mức chung (25%), mức đã đo trên phim thật.\n"
+            "Hạ xuống thì tắt tiếng gắt tay hơn; nâng lên thì giữ được nhiều "
+            "tiếng nền hơn — hợp kênh có tiếng chợ, tiếng đám đông.")
+        hang_tn.addWidget(self._o_tieng_nguoi)
+        v.addLayout(hang_tn)
+
         v.addWidget(nhan("Nhạc nền", "h2"))
         v.addWidget(self._phu(
             "Cổng ShopAPI không bán nhạc, nên đây phải là tệp bạn tự có. Chọn "
@@ -1719,6 +1771,12 @@ class HopKenh(QDialog):
         chu = _doc(duong)
         for khoa, gt in (
             ("dot_phu_de", "true" if self._o_dot_sub.isChecked() else "false"),
+            ("giu_tieng_canh",
+             "true" if self._o_tieng_canh.isChecked() else "false"),
+            ("am_luong_tieng_canh",
+             "{0:.2f}".format(self._o_am_tc.value() / 100.0)),
+            ("nguong_tieng_nguoi",
+             "{0:.2f}".format(self._o_tieng_nguoi.value() / 100.0)),
             ("nhac_nen", nhac),
             ("am_luong_nhac", "{0:.2f}".format(self._o_am.value() / 100.0)),
             ("do_phan_giai", "" if self._o_dpg.currentText() == THEO_CHUNG

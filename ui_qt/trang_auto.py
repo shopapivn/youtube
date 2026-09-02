@@ -342,6 +342,29 @@ class TrangTuDong(QWidget):
             "Xem xong bấm “Chạy tiếp” là tôi dựng video hoàn thiện.")
         v.addWidget(self._o_dung_truoc_dung)
 
+        # ═══ XUẤT LẠI QUA CAPCUT ═══
+        #
+        # Chủ dự án, 02/09/2026: muốn có chỗ bật tắt ngay trên tab — *"tạm
+        # thời thì cứ tắt để tao hoàn thiện tool sau đó tao bật để dùng"*.
+        # Nên mặc định TẮT, và tắt là KHÔNG một dòng mã CapCut nào chạy.
+        #
+        # Không ẩn CapCut đi được trong lúc nó bấm: cách duy nhất còn chạy với
+        # CapCut bản mới là bấm chuột thật theo toạ độ (xem `core/capcut.py`),
+        # mà chuột thật thì cần cửa sổ thật đang hiện. Vì thế tooltip nói
+        # thẳng chuyện CapCut sẽ tự mở trên màn hình chứ không hứa hươu.
+        self._o_xuat_capcut = QCheckBox("Xuất lại qua CapCut sau khi dựng")
+        self._o_xuat_capcut.setToolTip(
+            "Bật thì dựng xong video, tôi đưa nó vào CapCut trên máy này và tự "
+            "bấm Xuất — bạn có thêm 9-video-capcut.mp4 do chính CapCut mã hoá, "
+            "nằm cạnh 8-video.mp4. Chạy trên máy, không tốn tiền.\n\n"
+            "CapCut sẽ TỰ MỞ VÀ TỰ BẤM trên màn hình chừng một hai phút — lúc "
+            "đó đừng dùng chuột phím, xong nó tự đóng. CapCut đang mở dở cũng "
+            "bị đóng (bản nháp CapCut tự lưu nên không mất gì).\n\n"
+            "CapCut xuất theo đúng cỡ và chất lượng của lần bạn bấm Xuất tay "
+            "gần nhất trong CapCut.")
+        self._o_xuat_capcut.toggled.connect(self._kiem_co_capcut)
+        v.addWidget(self._o_xuat_capcut)
+
         v.addWidget(self._phu(
             "Tám khâu chạy lần lượt; khâu phụ đề và khâu dựng chạy ngay trên "
             "máy bạn. Bấm Dừng lúc nào cũng được — phần đã "
@@ -353,6 +376,20 @@ class TrangTuDong(QWidget):
         nh.setWordWrap(True)
         nh.setMinimumWidth(1)
         return nh
+
+    def _kiem_co_capcut(self, bat: bool) -> None:
+        """Vừa tích ô CapCut thì kiểm máy có CapCut không — nói ngay lúc bật,
+        đừng để tới cuối lượt chạy bốn mươi phút mới báo thiếu."""
+        if not bat:
+            return
+        from core.capcut import tim_capcut  # noqa: PLC0415
+
+        if not tim_capcut():
+            self._o_xuat_capcut.setChecked(False)
+            self._app.show_message(
+                "Máy chưa cài CapCut",
+                "Bước “Xuất lại qua CapCut” cần CapCut bản máy tính cài trên "
+                "chính máy này. Cài CapCut, mở nó một lần, rồi bật lại ô này.")
 
     # ── Khối 2: tiến độ ──────────────────────────────────────────────────────
 
@@ -1071,6 +1108,11 @@ class TrangTuDong(QWidget):
         if thieu:
             self._app.show_message("Kênh chưa đủ điều kiện", "\n".join(thieu))
             return
+        # Ô "Xuất lại qua CapCut" áp cho lượt sắp chạy — cả "Chạy" lẫn "Chạy
+        # tiếp" đều qua đây. Chỉ ÉP BẬT chứ không ép tắt: kênh nào chủ ý khai
+        # `xuat_capcut: true` trong kenh.yaml thì vẫn chạy dù ô không tích.
+        if self._o_xuat_capcut.isChecked():
+            k.xuat_capcut = True
         self._duong = luot.thu_muc
         self._duong_chay = luot.thu_muc
         self._huy = threading.Event()

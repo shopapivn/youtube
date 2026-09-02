@@ -59,11 +59,28 @@ class TrangGpmVps(QWidget):
         # GPM dựng NGẦM, không addTab — xem đầu tệp (dọn Chrome con khi đóng).
         self.gpm = TrangChromeSach(app, co_tieu_de=False)
         self.vps = TrangVps(app)
-        self.chi_so = TrangChiSoYTB(app)
-        self.may_vm = TrangMayVM(app, self.chi_so)
-        self.tabs.addTab(self.vps, "VPS")
-        self.tabs.addTab(self.chi_so, "Chỉ số kênh")
-        self.tabs.addTab(self.may_vm, "Máy VM")
+        # Chỉ số kênh ở đây chỉ giữ HẠ TẦNG (cài tiện ích + trạm) — phần ĐỌC
+        # số nằm bên tab Phân tích & Nghiên cứu (02/09: "cái đọc số liệu đã
+        # lấy được... đưa về bên phân tích và nghiên cứu").
+        self.chi_so = TrangChiSoYTB(app, phan=("cai", "tram"))
+        # Máy VM "tích hợp luôn chỗ vps" (02/09): VPS + điều khiển agent nằm
+        # CHUNG một mục cuộn dọc; thẻ Bàn giao & kế hoạch đăng đã dọn sang
+        # tab Quản lý kênh.
+        self.may_vm = TrangMayVM(app, self.chi_so, co_tieu_de=False,
+                                 phan=("lenh", "thiet_lap", "bang"))
+        from PyQt5.QtWidgets import QScrollArea  # noqa: PLC0415
+        gop = QWidget()
+        gop_doc = QVBoxLayout(gop)
+        gop_doc.setContentsMargins(0, 0, 0, 0)
+        gop_doc.setSpacing(0)
+        gop_doc.addWidget(self.vps)
+        gop_doc.addWidget(self.may_vm)
+        cuon = QScrollArea()
+        cuon.setWidgetResizable(True)
+        cuon.setFrameShape(QScrollArea.NoFrame)
+        cuon.setWidget(gop)
+        self.tabs.addTab(cuon, "VPS && Máy VM")
+        self.tabs.addTab(self.chi_so, "Trạm && tiện ích")
         doc.addWidget(self.tabs, 1)
 
     def doi_du_an(self, ten: str) -> None:

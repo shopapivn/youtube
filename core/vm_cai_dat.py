@@ -44,7 +44,9 @@ MAC_DINH: Dict[str, object] = {
     # setting để nó không tự đăng và trả lời cmt... ví dụ giờ chưa cần đăng
     # thì có thể tắt"). Agent chép xuống vm/cai-dat-tool.json, GUI đọc và
     # bật/tắt hai con dang/cmt theo đó.
-    "tu_dang": True,
+    # 02/09 chủ dự án: "cứ để mặc định là tắt" — đăng tự động chỉ bật khi
+    # chủ kênh gạt công tắc ở tab Quản lý kênh (đường đăng TAY đang là chính).
+    "tu_dang": False,
     "tu_tra_loi_cmt": True,
 }
 

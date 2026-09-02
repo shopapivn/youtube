@@ -249,6 +249,25 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "động tới dùng ngay. Giữ nguyên các ô <<…>> trong lời nhắc.",
         ],
     },
+    "nhac": {
+        "tieu_de": "Nhạc",
+        "tom_tat": "Sinh nhạc nền từ mô tả — mỗi bản tối đa 30 giây.",
+        "buoc": [
+            "Tab con “Một bản”: tả bản nhạc bạn muốn (thể loại, nhạc cụ, không "
+            "khí, nhịp độ) rồi bấm Tạo.",
+            "Tab con “Hàng loạt”: mỗi dòng một bản — 30 video cần 30 bản nhạc "
+            "nền thì dán 30 dòng.",
+            "Kéo thanh thời lượng nếu cần bản ngắn hơn 30 giây; bật “Nhạc không "
+            "lời” khi làm nền cho video có lời bình.",
+        ],
+        "luu_y": [
+            "Một bản tối đa 30 giây — giới hạn của nhà máy, không phải của tool. "
+            "Cần nhạc dài thì tạo nhiều bản rồi ghép ở tab Dựng video.",
+            "Bản ngắn hay dài đều tiêu một lượt tạo như nhau, nên 30 giây là "
+            "lợi nhất; tiền tính theo giây nhạc thật trong file trả về.",
+            "Giá hiện ngay trên nút Tạo trước khi bạn bấm.",
+        ],
+    },
     "voice": {
         "tieu_de": "Voice",
         "tom_tat": "Đọc chữ thành giọng nói, làm lẻ hoặc cả thư mục.",

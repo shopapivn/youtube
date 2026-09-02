@@ -316,15 +316,21 @@ def test_tab_co_dung_hai_muc_gpm_va_vps(tmp_path):
     t.show()
     app.processEvents()
     try:
+        # 02/09 lần 2: "máy vm tích hợp luôn chỗ vps" — VPS + Máy VM chung
+        # MỘT mục cuộn dọc; mục hai là hạ tầng cào (trạm + tiện ích); phần
+        # ĐỌC số nằm bên tab Phân tích.
         assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == \
-            ["VPS", "Chỉ số kênh", "Máy VM"]
+            ["VPS && Máy VM", "Trạm && tiện ích"]
         assert t.tabs.indexOf(t.gpm) == -1, "GPM ẩn — chủ dự án không dùng"
         assert t.gpm is not None and hasattr(t.gpm, "dong_het"), \
             "GPM vẫn phải DỰNG ngầm: nó là đường dọn Chrome con khi đóng tool"
+        assert t.may_vm is not None and t.chi_so._tram is not None, \
+            "trạm phải sống ở trang máy (Máy VM mượn nó)"
         # Chủ dự án 31/08/2026: "để vps là tab 1 mặc định" — xem chú thích đầu
         # `ui_qt/trang_gpm_vps.py`.
-        assert t.tabs.indexOf(t.vps) == 0
-        assert t.tabs.currentWidget() is t.vps
+        # VPS nằm trong mục GỘP đầu tiên (cuộn dọc), và mục đó là mặc định.
+        assert t.tabs.currentIndex() == 0
+        assert t.vps.isVisibleTo(t), "VPS phải hiện trong mục gộp"
         # Chưa đăng nhập thì mục VPS phải NÓI RA, không để bảng trống câm lặng —
         # và phải CHỈ ĐƯỜNG tới đúng tab đăng nhập (31/08/2026: khoá lấy bằng
         # đăng nhập ở tab Tài khoản & Cài đặt, không phải dán tay ở Cài đặt).
