@@ -33,6 +33,10 @@ MAC_DINH: Dict[str, object] = {
     "cho_quet_giay": 480,
     "cho_trang_chu_giay": 90,
     "dong_chrome_sau_quet": False,
+    # Chrome phải BẬT thì extension mới sống mà tự chụp theo mốc giờ — nên
+    # agent nuôi Chrome: chết là mở lại (chủ dự án 02/09: "tool kiểm soát
+    # all"). Bật sẵn; tắt cho máy nào chủ động đóng mở tay.
+    "giu_chrome_mo": True,
 }
 
 #: Những khoá tool được phép đẩy xuống máy ảo. Agent cũng lọc lại đúng danh

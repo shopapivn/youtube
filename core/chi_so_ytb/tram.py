@@ -385,6 +385,19 @@ def _lam_xu_ly(tram: "Tram"):
                     "ok": True, "cong": tram.cong, "so_goi": tram.so_goi,
                     "thu_muc": os.path.join(tram.goc, "CHANNEL").replace("\\", "/"),
                 }, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            if self.path.startswith("/tien-ich"):
+                # Agent máy ảo tải EXTENSION về — để việc cài mắt cào không
+                # còn là bước tay. Chủ dự án 02/09/2026: *"sao không để tool
+                # xử lý"*. Nén thẳng từ thư mục đi kèm tool: bản phát ra luôn
+                # là bản đang có, không có chuyện zip đóng gói lệch nguồn.
+                tm = os.path.join(GOC, "core", "ytb_extension")
+                bo_nho = io.BytesIO()
+                with zipfile.ZipFile(bo_nho, "w", zipfile.ZIP_DEFLATED) as z:
+                    for goc_tm, _thu_muc, cac_tep in os.walk(tm):
+                        for ten in cac_tep:
+                            duong = os.path.join(goc_tm, ten)
+                            z.write(duong, os.path.relpath(duong, tm))
+                return self._tra(bo_nho.getvalue(), "application/zip")
             if self.path.startswith("/ke-hoach"):
                 # Máy ảo tải kế hoạch đăng của kênh về (giai đoạn 4 — xem
                 # vm/KE-HOACH.md). Trả nguyên văn CSV, máy ảo tự cất.

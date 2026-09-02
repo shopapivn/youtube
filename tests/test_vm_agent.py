@@ -73,6 +73,7 @@ class TestAgentGoiVe:
         vm_cai_dat.luu(str(tmp_path), "TL4-T7", gio_quet="",
                        cho_quet_giay=0.05, cho_trang_chu_giay=0.05,
                        quet_trang_chu_hang_ngay=False,
+                       giu_chrome_mo=False,
                        dong_chrome_sau_quet=True)
         tram = Tram(cong=0, goc=str(tmp_path))
         tram.bat()
@@ -544,3 +545,76 @@ class TestThietLapTuTool:
                                     "gio_quet": "05:00"})
         assert ra["chrome"] == "C:/x.exe" and "tool_dang" not in ra
         assert ra["gio_quet"] == "05:00"
+
+
+class TestMatVaChrome:
+    """02/09: 'tool phải kiểm soát all' — agent tự cài mắt (extension), tự
+    tìm Chrome theo nếp 'vm nằm cạnh Chrome', và nuôi Chrome sống."""
+
+    def test_agent_tai_extension_tu_tram_va_dien_cau_hinh(self, tmp_path,
+                                                          monkeypatch):
+        tram = Tram(cong=0, goc=str(GOC))   # goc = repo: co core/ytb_extension
+        tram.bat()
+        try:
+            dia_chi = "http://127.0.0.1:{0}".format(tram._may.server_address[1])
+            agent = _nap_agent()
+            monkeypatch.setattr(agent, "THU_MUC_TIEN_ICH",
+                                str(tmp_path / "tien-ich"))
+            ra = agent.bao_dam_tien_ich({"tram": dia_chi, "kenh": "TL4-T7"})
+            assert ra and os.path.isfile(os.path.join(ra, "manifest.json"))
+            assert os.path.isfile(os.path.join(ra, "trang-chu.js"))
+            import json as json_mod
+
+            with open(os.path.join(ra, "cau-hinh.json"), encoding="utf-8") as tep:
+                cau = json_mod.load(tep)
+            assert cau["host"] == dia_chi and cau["ma_kenh"] == "TL4-T7", \
+                "extension phải tự biết trạm + kênh, không ai gõ popup nữa"
+        finally:
+            tram.tat()
+
+    def test_tim_chrome_theo_nep_nam_canh(self, tmp_path, monkeypatch):
+        """'Tool upload trước theo logic là để thư mục cạnh cái Chrome đó'."""
+        agent = _nap_agent()
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        monkeypatch.setattr(agent, "GOC", str(goc_vm))
+        assert agent.tim_chrome({"kenh": "KA2-T2"}) == ""
+        # Chrome Portable nằm cạnh thư mục vm (đúng chỗ của D:\upload)
+        chrome = tmp_path / "upload" / "GoogleChromePortable.exe"
+        chrome.write_bytes(b"exe")
+        assert agent.tim_chrome({"kenh": "KA2-T2"}) == str(chrome)
+        # config điền tay thì thắng
+        rieng = tmp_path / "rieng.exe"
+        rieng.write_bytes(b"exe")
+        assert agent.tim_chrome({"chrome": str(rieng)}) == str(rieng)
+
+    def test_lenh_chrome_kem_co_nap_extension(self, tmp_path, monkeypatch):
+        agent = _nap_agent()
+        monkeypatch.setattr(agent, "THU_MUC_TIEN_ICH", str(tmp_path / "ti"))
+        assert agent._lenh_chrome("C:/x.exe", "https://y") == \
+            ["C:/x.exe", "https://y"], "chưa có mắt thì đừng đeo cờ rỗng"
+        os.makedirs(tmp_path / "ti")
+        (tmp_path / "ti" / "manifest.json").write_text("{}")
+        lenh = agent._lenh_chrome("C:/x.exe", "https://y")
+        assert lenh[1].startswith("--load-extension=") and lenh[2] == "https://y"
+
+    def test_giu_chrome_chet_thi_mo_lai_song_thi_thoi(self, tmp_path,
+                                                      monkeypatch):
+        agent = _nap_agent()
+        chrome = tmp_path / "GoogleChromePortable.exe"
+        chrome.write_bytes(b"exe")
+        da_mo = []
+        monkeypatch.setattr(agent.subprocess, "Popen",
+                            lambda lenh, **_k: da_mo.append(lenh))
+        cau_hinh = {"chrome": str(chrome), "giu_chrome_mo": True}
+        # đang chạy -> không mở thêm (mở chồng là bệnh)
+        monkeypatch.setattr(agent, "_chrome_dang_chay", lambda _c: True)
+        agent.giu_chrome(cau_hinh)
+        assert da_mo == []
+        # chết -> mở lại
+        monkeypatch.setattr(agent, "_chrome_dang_chay", lambda _c: False)
+        agent.giu_chrome(cau_hinh)
+        assert len(da_mo) == 1 and str(chrome) in da_mo[0][0]
+        # tool tắt núm -> không nuôi nữa
+        agent.giu_chrome({"chrome": str(chrome), "giu_chrome_mo": False})
+        assert len(da_mo) == 1

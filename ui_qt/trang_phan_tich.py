@@ -1148,6 +1148,17 @@ class TrangMayVM(QWidget):
         d1.addStretch(1)
         v.addLayout(d1)
 
+        d1a = QHBoxLayout()
+        self._o_giu_chrome = QCheckBox("Giữ Chrome của kênh luôn mở")
+        self._o_giu_chrome.setToolTip(
+            "Agent nuôi Chrome: thấy tắt là mở lại. Chrome phải bật thì tiện "
+            "ích mới sống mà tự chụp số liệu theo mốc 24/48/72 giờ — đây là "
+            "núm nên để bật.")
+        self._o_giu_chrome.toggled.connect(lambda _b: self._luu_thiet_lap())
+        d1a.addWidget(self._o_giu_chrome)
+        d1a.addStretch(1)
+        v.addLayout(d1a)
+
         d1b = QHBoxLayout()
         self._o_dong_chrome = QCheckBox("Đóng Chrome sau khi quét")
         self._o_dong_chrome.setToolTip(
@@ -1172,6 +1183,7 @@ class TrangMayVM(QWidget):
             self._o_cho_quet.setValue(
                 max(1, min(60, int(cai.get("cho_quet_giay") or 480) // 60)))
             self._o_quet_tc.setChecked(bool(cai.get("quet_trang_chu_hang_ngay")))
+            self._o_giu_chrome.setChecked(bool(cai.get("giu_chrome_mo", True)))
             self._o_dong_chrome.setChecked(bool(cai.get("dong_chrome_sau_quet")))
         finally:
             self._dang_do_vm = False
@@ -1186,6 +1198,7 @@ class TrangMayVM(QWidget):
             gio_quet=self._o_gio_quet.text().strip(),
             cho_quet_giay=int(self._o_cho_quet.value()) * 60,
             quet_trang_chu_hang_ngay=self._o_quet_tc.isChecked(),
+            giu_chrome_mo=self._o_giu_chrome.isChecked(),
             dong_chrome_sau_quet=self._o_dong_chrome.isChecked())
 
     def _the_ban_giao(self) -> QWidget:

@@ -27,6 +27,7 @@ Chạy: `python agent.py` (hoặc nhấp đúp `CHAY-AGENT.bat`).
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import socket
@@ -34,6 +35,7 @@ import subprocess
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 
 #: Nhịp hỏi việc. 30 giây — lệnh tới chậm nhất nửa phút, đủ nhanh cho việc
 #: tính bằng phút, đủ thưa để không nện trạm.
@@ -91,7 +93,7 @@ def hoi_viec(cau_hinh: dict) -> dict:
 #: đây: trạm là cổng không mật khẩu, không để nó đổi được "chương trình nào
 #: sẽ chạy" trên máy này.
 KHOA_TU_TOOL = ("gio_quet", "quet_trang_chu_hang_ngay", "cho_quet_giay",
-                "cho_trang_chu_giay", "dong_chrome_sau_quet")
+                "cho_trang_chu_giay", "dong_chrome_sau_quet", "giu_chrome_mo")
 
 
 def ap_cai_dat_tool(cau_hinh: dict, tu_tool) -> dict:
@@ -114,6 +116,125 @@ def bao_xong(cau_hinh: dict, so: int, ket_qua: str = "", loi: str = "") -> None:
         "ket_qua": ket_qua, "loi": loi})
 
 
+# ── Mắt cào (extension) — agent tự lo, không bắt ai cài tay ─────────────────
+
+#: Thư mục extension nằm cạnh agent trên máy ảo.
+THU_MUC_TIEN_ICH = os.path.join(GOC, "tien-ich")
+
+
+def bao_dam_tien_ich(cau_hinh: dict) -> str:
+    """Tải extension từ trạm về cạnh agent, tự điền địa chỉ trạm + mã kênh.
+
+    Chủ dự án, 02/09/2026: *"đã cài tool bên vm rồi mà vẫn cần extension à…
+    sao không để tool xử lý"*. Extension vẫn là con mắt duy nhất đọc được gói
+    số liệu nội bộ của Studio — nhưng việc CÀI nó thì tool lo: trạm phát bản
+    đang có (`GET /tien-ich`), agent bung ra đây và mở Chrome kèm cờ
+    `--load-extension`. Trả về đường thư mục extension, hoặc "" nếu chưa tải
+    được (trạm tắt) — lúc ấy dùng bản đã có trên đĩa nếu có.
+    """
+    try:
+        url = cau_hinh["tram"].rstrip("/") + "/tien-ich"
+        with urllib.request.urlopen(url, timeout=30) as tra_loi:
+            goi = tra_loi.read()
+        with zipfile.ZipFile(io.BytesIO(goi)) as z:
+            z.extractall(THU_MUC_TIEN_ICH)
+        # Điền cấu hình để extension tự biết trạm + kênh, khỏi ai gõ popup.
+        with open(os.path.join(THU_MUC_TIEN_ICH, "cau-hinh.json"), "w",
+                  encoding="utf-8") as tep:
+            json.dump({"host": cau_hinh.get("tram", "").rstrip("/"),
+                       "ma_kenh": cau_hinh.get("kenh", "")},
+                      tep, ensure_ascii=False, indent=1)
+        ghi("đã cập nhật extension từ trạm → " + THU_MUC_TIEN_ICH)
+        return THU_MUC_TIEN_ICH
+    except Exception as loi:  # noqa: BLE001 — trạm tắt thì dùng bản đã có
+        if os.path.isfile(os.path.join(THU_MUC_TIEN_ICH, "manifest.json")):
+            return THU_MUC_TIEN_ICH
+        ghi("chưa tải được extension từ trạm ({0})".format(str(loi)[:120]))
+        return ""
+
+
+def tim_chrome(cau_hinh: dict) -> str:
+    """Chrome của kênh — điền trong config thì lấy, không thì TỰ TÌM.
+
+    Chủ dự án, 02/09/2026: *"cái tool upload trước nó theo logic là để thư
+    mục cạnh cái Chrome đó"* — giữ đúng nếp ấy: chép thư mục `vm/` vào CẠNH
+    Chrome của kênh là agent tự thấy, khỏi khai đường dẫn. Dò quanh thư mục
+    cha của agent: Chrome Portable, rồi bộ trình duyệt riêng của kênh
+    (`<kênh>\\<kênh>.exe` kiểu GPM).
+    """
+    duong = str(cau_hinh.get("chrome") or "")
+    if duong and os.path.isfile(duong):
+        return duong
+    kenh = str(cau_hinh.get("kenh") or "")
+    cha = os.path.dirname(GOC)
+    ung_vien = [
+        os.path.join(cha, "GoogleChromePortable.exe"),
+        os.path.join(cha, "GoogleChromePortable", "GoogleChromePortable.exe"),
+        os.path.join(GOC, "GoogleChromePortable.exe"),
+    ]
+    if kenh:
+        ung_vien += [
+            os.path.join(cha, kenh, kenh + ".exe"),
+            os.path.join(cha, kenh, kenh, kenh + ".exe"),
+        ]
+    for duong in ung_vien:
+        if os.path.isfile(duong):
+            return duong
+    return ""
+
+
+def _lenh_chrome(chrome: str, url: str) -> list:
+    """Dòng lệnh mở Chrome — kèm cờ nạp extension khi mắt đã nằm trên đĩa.
+
+    Trình duyệt nào không nhận cờ (Chrome chính hãng bản mới đã bỏ nó) thì
+    cờ rơi qua vô hại — lúc ấy extension cần được cài tay MỘT lần từ đúng
+    thư mục `tien-ich` cạnh agent (đã có sẵn trên máy, không phải chép gì).
+    """
+    lenh = [chrome]
+    if os.path.isfile(os.path.join(THU_MUC_TIEN_ICH, "manifest.json")):
+        lenh.append("--load-extension=" + THU_MUC_TIEN_ICH)
+    lenh.append(url)
+    return lenh
+
+
+def _chrome_dang_chay(chrome: str) -> bool:
+    """Chrome của kênh có đang chạy không — hỏi `tasklist` theo tên exe.
+
+    Hỏi theo TÊN chứ không giữ handle tiến trình: bản Portable/GPM là một
+    launcher, nó đẻ Chrome thật rồi có thể tự thoát — giữ handle là tưởng
+    Chrome chết trong khi nó đang sống, và agent sẽ mở CHỒNG cửa sổ mãi.
+    """
+    ten = os.path.basename(chrome)
+    for ung in {ten, "chrome.exe"}:
+        try:
+            ra = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq " + ung, "/NH"],
+                capture_output=True, text=True, timeout=15)
+            if ung.lower() in (ra.stdout or "").lower():
+                return True
+        except Exception:  # noqa: BLE001 — hỏi không được thì coi như đang chạy
+            return True    # thà không mở thêm còn hơn mở chồng
+    return False
+
+
+def giu_chrome(cau_hinh: dict) -> None:
+    """Nuôi Chrome: chết thì mở lại — extension nhờ vậy luôn sống.
+
+    Chủ dự án, 02/09/2026: *"chrome phải bật thì extension mới hoạt động
+    được — tức là cái tool nó phải kiểm soát all"*. Đúng: extension tự chụp
+    theo mốc 24/48/72 giờ chỉ khi Chrome đang chạy, nên agent chịu trách
+    nhiệm giữ nó chạy. Tắt được từ tool (núm `giu_chrome_mo`).
+    """
+    if not bool(cau_hinh.get("giu_chrome_mo", True)):
+        return
+    chrome = tim_chrome(cau_hinh)
+    if not chrome or _chrome_dang_chay(chrome):
+        return
+    url = cau_hinh.get("studio_url") or "https://studio.youtube.com"
+    subprocess.Popen(_lenh_chrome(chrome, url))
+    ghi("Chrome đang tắt — đã mở lại ({0})".format(os.path.basename(chrome)))
+
+
 # ── Các việc ─────────────────────────────────────────────────────────────────
 
 
@@ -124,11 +245,13 @@ def quet_studio(cau_hinh: dict) -> str:
     thứ bấm chuột không lấy nổi, xem KE-HOACH.md). Chrome mở sẵn thì thôi
     dùng luôn: mở chồng cửa sổ chỉ tổ giành phiên của nhau.
     """
-    chrome = cau_hinh.get("chrome") or ""
+    chrome = tim_chrome(cau_hinh)
     url = cau_hinh.get("studio_url") or "https://studio.youtube.com"
-    if not chrome or not os.path.isfile(chrome):
-        raise RuntimeError("config.json chưa trỏ đúng Chrome của kênh (chrome=...)")
-    con = subprocess.Popen([chrome, url])
+    if not chrome:
+        raise RuntimeError(
+            "không thấy Chrome của kênh — đặt thư mục vm CẠNH Chrome (đúng "
+            "nếp tool đăng) hoặc điền chrome=... trong config.json")
+    con = subprocess.Popen(_lenh_chrome(chrome, url))
     ghi("đã mở Studio, chờ extension cào (~{0} phút)…".format(CHO_QUET_GIAY // 60))
     time.sleep(float(cau_hinh.get("cho_quet_giay") or CHO_QUET_GIAY))
     if bool(cau_hinh.get("dong_chrome_sau_quet", False)):
@@ -145,10 +268,12 @@ def quet_trang_chu(cau_hinh: dict) -> str:
     Agent lại chỉ mở và đợi: mắt đọc là `trang-chu.js` của extension (nó cuộn
     vài màn, gom link kênh, POST /doi-thu về trạm). Xem vm/KE-HOACH.md GĐ3.
     """
-    chrome = cau_hinh.get("chrome") or ""
-    if not chrome or not os.path.isfile(chrome):
-        raise RuntimeError("config.json chưa trỏ đúng Chrome của kênh (chrome=...)")
-    con = subprocess.Popen([chrome, "https://www.youtube.com/"])
+    chrome = tim_chrome(cau_hinh)
+    if not chrome:
+        raise RuntimeError(
+            "không thấy Chrome của kênh — đặt thư mục vm CẠNH Chrome (đúng "
+            "nếp tool đăng) hoặc điền chrome=... trong config.json")
+    con = subprocess.Popen(_lenh_chrome(chrome, "https://www.youtube.com/"))
     cho = float(cau_hinh.get("cho_trang_chu_giay") or 90)
     ghi("đã mở trang chủ, chờ extension gom đối thủ (~{0}s)…".format(int(cho)))
     time.sleep(cho)
@@ -278,6 +403,13 @@ def viec_theo_lich(cau_hinh: dict) -> None:
 def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
     ghi("agent kênh {0} — hỏi việc {1} mỗi {2}s".format(
         cau_hinh.get("kenh"), cau_hinh.get("tram"), NHIP_GIAY))
+    chrome = tim_chrome(cau_hinh)
+    ghi("Chrome của kênh: {0}".format(chrome or "CHƯA THẤY — đặt vm cạnh "
+                                      "Chrome hoặc điền chrome= trong config"))
+    # Mắt cào: tải bản mới nhất từ trạm về cạnh agent (trạm tắt thì dùng bản
+    # đã có). Không bắt ai mở chrome://extensions nữa.
+    if not mot_vong:
+        bao_dam_tien_ich(cau_hinh)
     hong_lien_tiep = 0
     hieu_luc = dict(cau_hinh)      # cấu hình hiệu lực = máy + tool đẩy xuống
     while True:
@@ -312,6 +444,11 @@ def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
             viec_theo_lich(hieu_luc)
         except Exception as loi:  # noqa: BLE001
             ghi("lịch hằng ngày hỏng: {0}".format(loi))
+        # Nuôi Chrome mỗi vòng: chết là mở lại để extension luôn sống.
+        try:
+            giu_chrome(hieu_luc)
+        except Exception as loi:  # noqa: BLE001
+            ghi("giữ Chrome hỏng: {0}".format(loi))
         if mot_vong:
             return
         # Chờ giãn dần khi trạm im ắng lâu (tối đa 5 phút) — máy nhà tắt tool

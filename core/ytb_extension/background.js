@@ -470,11 +470,17 @@ chrome.alarms.onAlarm.addListener(async (a) => {
 //
 // CHỈ điền khi ô đang trống — người dùng tự sửa địa chỉ thì lần cài sau không bị ghi đè.
 async function napCauHinh() {
-  if (await st('host', '')) return;
   try {
     const r = await fetch(chrome.runtime.getURL('cau-hinh.json'));
     const c = await r.json();
-    if (c && c.host) { await luu('host', c.host); log(`địa chỉ trạm nhận từ cấu hình: ${c.host}`); }
+    if (c && c.host && !(await st('host', ''))) {
+      await luu('host', c.host); log(`địa chỉ trạm nhận từ cấu hình: ${c.host}`);
+    }
+    // Agent trên máy ảo điền sẵn mã kênh (02/09/2026) — người dùng khỏi gõ
+    // popup. Chỉ điền khi ô đang trống, ai tự sửa thì không bị ghi đè.
+    if (c && c.ma_kenh && !(await st('ma_kenh', ''))) {
+      await luu('ma_kenh', c.ma_kenh); log(`mã kênh từ cấu hình: ${c.ma_kenh}`);
+    }
   } catch (e) {}
 }
 

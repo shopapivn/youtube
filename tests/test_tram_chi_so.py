@@ -302,7 +302,10 @@ def test_extension_di_kem_co_tep_cau_hinh():
     bg = io.open(os.path.join(goc, "background.js"), encoding="utf-8").read()
     assert "napCauHinh" in bg and "cau-hinh.json" in bg
     # chi dien khi o dang trong — nguoi dung tu sua thi lan cai sau khong duoc ghi de
-    assert "if (await st('host', '')) return;" in bg
+    # 02/09/2026: napCauHinh doc them ma_kenh (agent tren may ao dien san),
+    # van giu luat cu: chi dien khi o DANG TRONG, ai tu sua khong bi ghi de.
+    assert "!(await st('host', ''))" in bg
+    assert "!(await st('ma_kenh', ''))" in bg
 
 
 def test_ban_giao_khach_le_khong_kem_dia_chi_may_ai(tmp_path):
