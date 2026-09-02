@@ -1390,3 +1390,40 @@ class TestVanIpv4VaLichHaiKhe:
         tt = agent._doc_trang_thai(cau_hinh)
         assert not tt.get("quet_cuoi@00:00"), \
             "mốc cũ nói hôm nay quét rồi — khe đầu phải tôn trọng"
+
+
+class TestRaLenhLaLam:
+    """02/09: 'tao đã ra lệnh thì nó cứ làm chứ' — lệnh tay quet-studio phải
+    ÉP tiện ích chụp lại tất cả; lượt theo lịch không đi qua đường này."""
+
+    def test_lenh_tay_de_lai_lenh_ep_cho_tien_ich(self, tmp_path):
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            agent._goi(dia_chi, "/giao-viec",
+                       {"kenh": "TL4-T7", "loai": "quet-studio"})
+            # tiện ích hỏi: nhận đúng lệnh ép, MỘT lần là hết
+            ra = agent._goi(dia_chi, "/lenh-tien-ich?kenh=TL4-T7")
+            assert ra == {"chup": "het"}
+            assert agent._goi(dia_chi, "/lenh-tien-ich?kenh=TL4-T7") == {}, \
+                "một lệnh = một lượt ép, không được lặp vô hạn"
+            # kênh khác không dính lệnh
+            assert agent._goi(dia_chi, "/lenh-tien-ich?kenh=KHAC") == {}
+        finally:
+            tram.tat()
+
+    def test_viec_khac_khong_de_lenh_ep(self, tmp_path):
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            agent._goi(dia_chi, "/giao-viec",
+                       {"kenh": "TL4-T7", "loai": "dang-video"})
+            assert agent._goi(dia_chi, "/lenh-tien-ich?kenh=TL4-T7") == {}
+        finally:
+            tram.tat()

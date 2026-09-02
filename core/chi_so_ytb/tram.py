@@ -294,6 +294,11 @@ class Tram:
         self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
         self._ket_qua_viec: List[dict] = []  # 20 kết quả việc gần nhất
         self._goi_moc: dict = {}             # id việc -> (loại, so_goi lúc giao)
+        # Lệnh cho TIỆN ÍCH (kênh -> lệnh, một lần lấy là hết): chủ dự án
+        # 02/09 — "tao đã ra lệnh thì nó cứ làm chứ". Lệnh tay quet-studio
+        # phải ÉP tiện ích chụp lại tất cả, bất kể mốc đã chụp; còn lượt
+        # theo lịch không đi qua đây nên luật chống chụp trùng vẫn giữ.
+        self._lenh_tien_ich: dict = {}
         self._tom_tat_luc: dict = {}         # kênh -> lần làm bảng tóm tắt cuối
         # ── Khách mời: VPS của CHÍNH CHỦ, nằm ngoài mạng nội bộ ──────────────
         #
@@ -598,6 +603,9 @@ class Tram:
             viec = {"id": self._so_viec, "kenh": an_toan(kenh), "loai": str(loai),
                     "tham_so": tham_so or {}, "luc": datetime.now().isoformat(timespec="seconds")}
             self._viec.append(viec)
+            if str(loai) == "quet-studio":
+                # Ra lệnh là LÀM: dặn tiện ích chụp lại TẤT CẢ khi nó hỏi.
+                self._lenh_tien_ich[viec["kenh"]] = {"chup": "het"}
         self.ghi(f"xếp việc #{viec['id']} [{loai}] cho kênh {viec['kenh']}")
         return viec["id"]
 
@@ -763,6 +771,19 @@ def _lam_xu_ly(tram: "Tram"):
                     "ket_qua_gan_day": ket_qua,
                 }, ensure_ascii=False, default=str).encode("utf-8"),
                     "application/json; charset=utf-8")
+            if self.path.startswith("/lenh-tien-ich"):
+                # Tiện ích hỏi mỗi phút: có lệnh ÉP nào cho kênh này không.
+                # Một lần lấy là hết (một lệnh = một lượt chụp ép).
+                from urllib.parse import parse_qs, urlparse  # noqa: PLC0415
+
+                q = parse_qs(urlparse(self.path).query)
+                kenh_hoi = an_toan((q.get("kenh") or [""])[0])
+                with tram._khoa_viec:
+                    lenh = tram._lenh_tien_ich.pop(kenh_hoi, None)
+                if lenh:
+                    tram.ghi(f"tiện ích kênh {kenh_hoi} nhận lệnh ép chụp")
+                return self._tra(json.dumps(lenh or {}).encode("utf-8"),
+                                 "application/json; charset=utf-8")
             if self.path.startswith("/kenh"):
                 # Danh sách kênh của tool — bộ cài trên máy ảo hiện menu bấm
                 # số thay vì bắt ai gõ tên kênh.

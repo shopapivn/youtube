@@ -409,6 +409,37 @@ async function khamPha() {
 
 // ---------------------------------------------------------------- lịch
 let lanKhamPha = 0;
+async function quetNgayHet(ids) {
+  // Chu dong muon chup lai -> cho EP, ke ca moc da co (nut "Chup ngay
+  // tat ca" cua popup, va lenh tu tram).
+  if (!Object.keys(await st('videos', {})).length) await khamPha();
+  const videos = await st('videos', {});
+  for (const id of (ids && ids.length ? ids : Object.keys(videos))) {
+    const v = videos[id];
+    await chupVideo(id, `${v ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : 0}h`, true);
+  }
+}
+
+async function hoiLenh() {
+  // Chu du an 02/09: "tao da ra lenh thi no cu lam chu" - lenh tay tren
+  // tool phai EP chup lai tat ca. Tram giu lenh (mot lan lay la het),
+  // tien ich hoi moi phut; luot theo lich khong qua duong nay nen luat
+  // chong chup trung moc van giu nguyen.
+  const host = await st('host', '');
+  const kenh = (await st('ma_kenh', '')) || (await st('kenh', ''));
+  if (!host || !kenh) return;
+  let lenh = null;
+  try {
+    const r = await fetch(host + '/lenh-tien-ich?kenh=' + encodeURIComponent(kenh));
+    if (r.ok) lenh = await r.json();
+  } catch (e) { return; }
+  if (lenh && lenh.chup === 'het') {
+    log('tram ra lenh: CHUP LAI TAT CA (lenh tay tu tool)');
+    await quetNgayHet();
+    await chupKenh();
+  }
+}
+
 async function datLich() {
   const videos = await st('videos', {});
   if (!Object.keys(videos).length) {
@@ -442,6 +473,7 @@ async function datLich() {
   // 02/09: chụp KÊNH mỗi ngày, không phải mỗi tuần — đọc kênh để quyết định
   // content là việc hằng ngày; 7 ngày/lần thì thư mục kenh/ trống trong khi
   // từng video đầy số. Xoá lịch tuần đời cũ còn nằm trong Chrome.
+  if (!co.has('hoi-lenh')) await chrome.alarms.create('hoi-lenh', { periodInMinutes: 1 });
   if (co.has('kenh')) await chrome.alarms.clear('kenh');
   if (!co.has('kenh-ngay')) await chrome.alarms.create('kenh-ngay', { when: Date.now() + 15 * 60e3, periodInMinutes: 24 * 60 });
   if (n) log(`đặt thêm ${n} lịch`);
@@ -455,6 +487,7 @@ chrome.alarms.onAlarm.addListener(async (a) => {
     await chupVideo(id, `${v ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : 0}h`);
   } else if (k === 'kham-pha') await khamPha();
   else if (k === 'kenh' || k === 'kenh-ngay') await chupKenh();
+  else if (k === 'hoi-lenh') await hoiLenh();
   else if (k === 'tu-kiem') await datLich();
 });
 
@@ -526,13 +559,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       reply({ ok: true });
     }
     else if (msg.type === 'quet_ngay') {
-      if (!Object.keys(await st('videos', {})).length) await khamPha();
-      const videos = await st('videos', {});
-      for (const id of (msg.ids && msg.ids.length ? msg.ids : Object.keys(videos))) {
-        const v = videos[id];
-        // Bấm nút là chủ động muốn chụp lại → cho ép, kể cả mốc đã có.
-        await chupVideo(id, `${v ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : 0}h`, true);
-      }
+      await quetNgayHet(msg.ids);
       reply({ ok: true });
     }
     else if (msg.type === 'doi_thu') {
