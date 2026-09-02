@@ -539,7 +539,12 @@ def quet_studio(cau_hinh: dict) -> str:
             con.terminate()
         except OSError:
             pass
-    return "đã mở Studio cho extension cào"
+    # Nói rõ luật chụp kẻo tưởng hỏng (02/09: "có nhận lệnh nhưng không
+    # thấy cào" — thật ra extension chỉ chụp phần TỚI HẠN, đúng thiết kế
+    # chống chụp trùng mốc).
+    return ("đã mở Studio cho extension cào — nó chỉ chụp phần TỚI HẠN "
+            "(cấp kênh + video vừa chạm mốc); video chưa tới mốc kế thì "
+            "không chụp lại, xem Lịch trong popup tiện ích")
 
 
 def quet_trang_chu(cau_hinh: dict) -> str:
