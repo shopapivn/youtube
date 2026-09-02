@@ -198,8 +198,20 @@ def _giai_ma_con_thieu(kenh_dir: str) -> int:
     n = 0
     for raw in sorted(glob.glob(os.path.join(kenh_dir, "*", "*", "raw"))):
         snap = os.path.dirname(raw)
-        if os.path.exists(os.path.join(snap, "tong-quan.json")):
-            continue
+        tq = os.path.join(snap, "tong-quan.json")
+        if os.path.exists(tq):
+            # Nhãn kiểu `tay-<ngày>` gom gói CẢ NGÀY: giải mã lúc sáng xong
+            # thì chiều gói phân tích mới về — bỏ qua vì "đã có tong-quan"
+            # là số chiều không bao giờ được đọc (dính thật 02/09/2026:
+            # gói kênh 292KB lúc 17:22 nằm chết cạnh tong-quan rỗng của
+            # đợt 16:07). Gói raw nào MỚI HƠN bản giải mã thì giải lại.
+            try:
+                moi_nhat = max((os.path.getmtime(os.path.join(raw, t))
+                                for t in os.listdir(raw)), default=0.0)
+            except OSError:
+                moi_nhat = 0.0
+            if moi_nhat <= os.path.getmtime(tq):
+                continue
         lenh = [sys.executable, gm, raw, "--out", snap]
         gio = _gio_tu_ten_moc(os.path.basename(snap))
         if gio is not None:

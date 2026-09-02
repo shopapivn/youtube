@@ -358,3 +358,27 @@ def test_so_lieu_toan_kenh_khong_bi_vut(tmp_path):
     assert "TOÀN KÊNH THEO LẦN CHỤP" in bao
     bao2 = cs.bao_cao_cho_ai(bg, "TL4-T7")
     assert "TOÀN KÊNH" not in bao2, "không đưa thì không in — gọi cũ vẫn chạy"
+
+
+def test_goi_ve_sau_khi_da_giai_ma_khong_bi_bo_quen(tmp_path, monkeypatch):
+    """02/09 dính thật: nhãn tay-<ngày> gom gói cả ngày; giải mã buổi sáng
+    xong thì gói buổi chiều về nằm chết cạnh tong-quan rỗng. Raw mới hơn
+    bản giải mã thì phải giải lại."""
+    import os
+    import time as t
+
+    from core import chi_so_ytb as cs
+
+    snap = tmp_path / "TL4-T7" / "chi-so" / "kenh" / "tay-x"
+    os.makedirs(snap / "raw")
+    (snap / "tong-quan.json").write_text('{"cu": true}', encoding="utf-8")
+    cu = t.time() - 3600
+    os.utime(snap / "tong-quan.json", (cu, cu))
+    # chưa có raw mới -> không đụng
+    cs._giai_ma_con_thieu(str(tmp_path / "TL4-T7" / "chi-so"))
+    assert "cu" in (snap / "tong-quan.json").read_text(encoding="utf-8")
+    # raw MỚI HƠN bản giải mã -> phải giải lại (tong-quan được viết mới)
+    (snap / "raw" / "goi.json").write_text("{}", encoding="utf-8")
+    cs._giai_ma_con_thieu(str(tmp_path / "TL4-T7" / "chi-so"))
+    assert "cu" not in (snap / "tong-quan.json").read_text(encoding="utf-8"), \
+        "gói chiều về phải được giải, không bị 'đã có tong-quan' chặn"
