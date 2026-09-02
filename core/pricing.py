@@ -37,6 +37,7 @@ __all__ = [
     "hold_for_image",
     "hold_for_video",
     "hold_for_music",
+    "chi_phi_music",
 ]
 
 KIND_TTS = "tts"
@@ -293,3 +294,17 @@ def hold_for_music(duration: int, prices: PriceTable = DEFAULT_PRICES) -> int:
     prices = prices or DEFAULT_PRICES  # bảng giá chưa nạp thì cứ ước theo giá mặc định
     giu_giay = -(-int(duration) * 12 // 10)  # ceil(duration × 1.2) bằng số nguyên
     return giu_giay * prices.music_per_second
+
+
+def chi_phi_music(duration: int, prices: PriceTable = DEFAULT_PRICES) -> int:
+    """µVND khách THỰC trả cho một bản `duration` giây — theo giây nhạc thật,
+    KHÔNG có đệm. Dùng để HIỂN THỊ (nút "~250đ"); khoản giữ tạm cao hơn 20% là
+    `hold_for_music`, phần thừa tự hoàn khi xong.
+
+    >>> chi_phi_music(30)          # 30 giây × 8,33đ/giây ≈ 250₫
+    249999990
+    """
+    if duration <= 0:
+        return 0
+    prices = prices or DEFAULT_PRICES
+    return int(duration) * prices.music_per_second

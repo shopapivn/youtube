@@ -12,14 +12,13 @@
 
 ═══ BA SỰ THẬT VỀ GIÁ VÀ TRẦN — nói thẳng trên giao diện, không giấu ═══
 
-1. **Một bản tối đa 30 giây.** Đây là trần của nhà máy (đo 02/09/2026: xin dài
-   hơn bị tự cắt về 30), không phải của tool. Cần nhạc dài thì tạo nhiều bản
-   rồi ghép ở tab Dựng video.
-2. **Bản ngắn hay dài đều tiêu một lượt như nhau** ở phía nhà máy, còn tiền thì
-   tính theo giây nhạc thật — nên 30 giây là lựa chọn lợi nhất và là mặc định.
-   Thanh trượt vẫn có cho ai cần bản ngắn khớp cảnh.
-3. **Tiền hiện trước khi bấm.** Nút chạy ghi thẳng "N bản · ~X₫" và con số đổi
-   ngay khi kéo thanh thời lượng hay thêm dòng — không có hoá đơn bất ngờ.
+1. **Mỗi bản 30 giây, giá phẳng ~250đ.** Nhà máy chặn cứng 30 giây một bản (đo
+   02/09/2026), và mỗi lần tạo tiêu ĐÚNG một lượt như nhau bất kể dài ngắn —
+   nên tool khoá luôn 30 giây cho đáng lượt, khách khỏi tính lắt nhắt.
+2. **Cần đoạn ngắn khớp cảnh** thì cắt ở tab Dựng video (miễn phí, chạy trên
+   máy); **cần nhạc dài hơn** thì tạo nhiều bản rồi ghép.
+3. **Tiền hiện trước khi bấm.** Nút chạy ghi thẳng "N bản · ~X₫", đổi ngay khi
+   thêm dòng — không có hoá đơn bất ngờ.
 """
 
 from __future__ import annotations
@@ -28,14 +27,13 @@ from typing import List
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QCheckBox, QHBoxLayout, QLabel, QPlainTextEdit, QSlider, QTabWidget,
-    QVBoxLayout, QWidget,
+    QCheckBox, QHBoxLayout, QPlainTextEdit, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from core.batch import split_prompts
 from core.jobs import JobSpec
 from core.money import format_vnd
-from core.pricing import KIND_MUSIC, hold_for_music
+from core.pricing import KIND_MUSIC, chi_phi_music, hold_for_music
 from core.validate import check_music
 
 from .bang_viec import BangViec
@@ -50,7 +48,7 @@ LOI_MOT_BAN = "Một bản"
 LOI_HANG_LOAT = "Hàng loạt"
 
 #: Sàn/trần thời lượng — chép từ SDK (nguồn sự thật phía khách), không gõ số rời.
-from shopapi import MUSIC_MAX_PROMPT_LENGTH, MUSIC_MAX_SECONDS, MUSIC_MIN_SECONDS  # noqa: E402
+from shopapi import MUSIC_MAX_PROMPT_LENGTH, MUSIC_MAX_SECONDS  # noqa: E402
 
 
 class TrangNhac(QWidget):
@@ -128,54 +126,43 @@ class TrangNhac(QWidget):
     # ── Bước 2: cài đặt bản nhạc ─────────────────────────────────────────────
 
     def _the_cai_dat(self) -> QWidget:
-        """Ba thứ áp cho MỌI bản trong lượt chạy: thời lượng, có lời, định dạng.
+        """Hai thứ khách chỉnh: có lời hay không, và định dạng.
 
-        Bày thẳng trên trang chứ không cất vào hộp thoại như phần giọng đọc:
-        thời lượng đổi cả GIÁ (hiện ngay trên nút chạy), giấu nó sau một nút
-        "Cài đặt" là giấu đúng thứ quyết định số tiền.
+        ═══ VÌ SAO BỎ THANH TRƯỢT THỜI LƯỢNG — chủ dự án chốt 02/09/2026 ═══
+
+        Ý chủ dự án: mỗi lần tạo tiêu ĐÚNG một lượt tài nguyên như nhau bất kể
+        bản dài ngắn, nên làm bản 10 giây là phí nửa lượt. Khoá cứng 30 giây thì
+        mỗi bản luôn **~250đ tròn**, khách không phải tính lắt nhắt, và tận dụng
+        hết mỗi lượt. Ai cần bản ngắn khớp cảnh thì cắt ở tab Dựng video (miễn
+        phí, chạy trên máy) — không tốn thêm lượt tạo nào.
+
+        (Chi tiết hạ tầng — vì sao "một lượt" — là bí mật vận hành, KHÔNG viết
+        vào chú thích của kho công khai này.)
         """
         khung = the()
         v = QVBoxLayout(khung)
         v.setContentsMargins(16, 12, 16, 13)
         v.setSpacing(8)
 
-        # HAI hàng chứ không phải một: dồn thanh trượt + checkbox + định dạng vào
-        # một hàng là trang cần 902px trong khi trần bố cục là 760px — bài kiểm
-        # `test_bo_cuc` bắt được ngay lần đầu. Phần thừa tràn khỏi mép phải và
-        # nút biến mất khi khách kéo hẹp cửa sổ.
-        hang1 = QHBoxLayout()
-        hang1.setSpacing(8)
-        hang1.addWidget(nhan("Thời lượng", "muted"))
-        self._truot_giay = QSlider(Qt.Horizontal)
-        self._truot_giay.setRange(MUSIC_MIN_SECONDS, MUSIC_MAX_SECONDS)
-        self._truot_giay.setValue(MUSIC_MAX_SECONDS)
-        self._truot_giay.setMaximumWidth(220)
-        self._truot_giay.valueChanged.connect(self._ve_lai)
-        hang1.addWidget(self._truot_giay, 1)
-        self._nhan_giay = QLabel("{0} giây".format(MUSIC_MAX_SECONDS))
-        self._nhan_giay.setMinimumWidth(56)
-        hang1.addWidget(self._nhan_giay)
-        hang1.addStretch(1)
-        v.addLayout(hang1)
-
-        hang2 = QHBoxLayout()
-        hang2.setSpacing(8)
+        hang = QHBoxLayout()
+        hang.setSpacing(8)
         self._khong_loi = QCheckBox("Nhạc không lời")
         self._khong_loi.setToolTip(
             "Bật: chắc chắn KHÔNG có giọng hát — hợp làm nhạc nền cho video có "
             "lời bình. Tắt: có lời hay không tuỳ mô tả của bạn.")
-        hang2.addWidget(self._khong_loi)
-        hang2.addSpacing(14)
-        hang2.addWidget(nhan("Định dạng", "muted"))
+        hang.addWidget(self._khong_loi)
+        hang.addSpacing(14)
+        hang.addWidget(nhan("Định dạng", "muted"))
         self._dinh_dang = NhomChon(DINH_DANG)
-        hang2.addWidget(self._dinh_dang)
-        hang2.addStretch(1)
-        v.addLayout(hang2)
+        hang.addWidget(self._dinh_dang)
+        hang.addStretch(1)
+        v.addLayout(hang)
 
         v.addWidget(nhan(
-            "30 giây là trần của MỘT bản (giới hạn nhà máy) và cũng là mức lợi "
-            "nhất: bản ngắn hay dài đều tiêu một lượt tạo như nhau. Cần nhạc dài "
-            "hơn thì tạo nhiều bản rồi ghép ở tab Dựng video.", "muted"))
+            "Mỗi bản dài 30 giây — mỗi lần tạo tiêu một lượt như nhau nên tool "
+            "luôn làm trọn 30 giây cho đáng. Cần đoạn ngắn khớp cảnh thì cắt ở "
+            "tab Dựng video (miễn phí). Cần nhạc dài hơn thì tạo nhiều bản rồi ghép.",
+            "muted"))
         return khung
 
     # ── Bước 3: lưu vào đâu, rồi chạy ────────────────────────────────────────
@@ -207,10 +194,7 @@ class TrangNhac(QWidget):
         return [mot] if mot else []
 
     def _ve_lai(self) -> None:
-        """Cập nhật bộ đếm ký tự, nhãn giây và GIÁ trên nút — mỗi lần gõ/kéo."""
-        giay = self._truot_giay.value()
-        self._nhan_giay.setText("{0} giây".format(giay))
-
+        """Cập nhật bộ đếm ký tự và GIÁ trên nút — mỗi lần gõ."""
         so_mot = len(self._o_mot.toPlainText())
         self._dem_mot.setText("{0}/{1} ký tự".format(so_mot, MUSIC_MAX_PROMPT_LENGTH))
         cac_dong = split_prompts(self._o_lo.toPlainText())
@@ -223,18 +207,20 @@ class TrangNhac(QWidget):
             self._nut_chay.setEnabled(False)
             return
         self._nut_chay.setEnabled(True)
-        tong = hold_for_music(giay, self._app.prices) * len(prompts)
+        # Nút hiện CHI PHÍ THẬT (~250đ/bản 30s), không phải khoản giữ có đệm —
+        # khách trả đúng số này; phần đệm 20% tự hoàn khi xong.
+        tong = chi_phi_music(MUSIC_MAX_SECONDS, self._app.prices) * len(prompts)
         if len(prompts) == 1:
-            self._nut_chay.setText("Tạo bản nhạc · ~{0}".format(format_vnd(tong)))
+            self._nut_chay.setText("Tạo bản nhạc 30 giây · ~{0}".format(format_vnd(tong)))
         else:
-            self._nut_chay.setText("Tạo {0} bản · ~{1}".format(
+            self._nut_chay.setText("Tạo {0} bản (30 giây) · ~{1}".format(
                 len(prompts), format_vnd(tong)))
 
     # ── Chạy ─────────────────────────────────────────────────────────────────
 
     def _chay(self) -> None:
         prompts = self._cac_prompt()
-        giay = int(self._truot_giay.value())
+        giay = MUSIC_MAX_SECONDS  # tool khoá 30 giây — xem `_the_cai_dat`
         dinh_dang = self._dinh_dang.get()
 
         loi = check_music(prompts, duration=giay, audio_format=dinh_dang)
