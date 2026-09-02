@@ -26,6 +26,7 @@ __all__ = [
     "KIND_TTS",
     "KIND_IMAGE",
     "KIND_VIDEO",
+    "KIND_MUSIC",
     "ENGINE_VEO3",
     "ENGINE_SEEDANCE",
     "VIDEO_DURATION_BY_ENGINE",
@@ -35,11 +36,13 @@ __all__ = [
     "hold_for_tts",
     "hold_for_image",
     "hold_for_video",
+    "hold_for_music",
 ]
 
 KIND_TTS = "tts"
 KIND_IMAGE = "image"
 KIND_VIDEO = "video"
+KIND_MUSIC = "music"
 
 ENGINE_VEO3 = "veo3"
 ENGINE_SEEDANCE = "seedance"
@@ -78,6 +81,13 @@ class PriceTable:
     #: µVND mỗi video Seedance (1.000₫) — đắt gấp đôi vì mỗi tài khoản nguồn chỉ
     #: ra được 2 clip/ngày, giá vốn thật cao hơn hẳn.
     video_seedance: int = 1_000_000_000
+    #: µVND cho mỗi giây NHẠC thật (500₫/phút ÷ 60). Đắt hơn giọng đọc mỗi giây
+    #: vì một lượt của nhà máy nhạc chỉ chở tối đa 30 giây, còn một lượt giọng
+    #: đọc chở tới ~80 giây audio.
+    music_per_second: int = 8_333_333
+    #: µVND cho mỗi phút nhạc khi NIÊM YẾT (500₫/phút) — cùng luật hai-con-số
+    #: với tts: niêm yết theo phút, quyết toán theo giây.
+    music_price_per_minute: int = 500_000_000
     #: Mức nạp tối thiểu, µVND. Máy chủ trả ở `min_topup` của `GET /v1/pricing`.
     #: 50.000₫ — PRICING.md §5, không có tín dụng tặng lúc đăng ký.
     min_topup_micro: int = 50_000_000_000
@@ -126,6 +136,8 @@ class PriceTable:
             "image_per_image": cls.image_per_image,
             "video_veo3": cls.video_veo3,
             "video_seedance": cls.video_seedance,
+            "music_per_second": cls.music_per_second,
+            "music_price_per_minute": cls.music_price_per_minute,
             "min_topup_micro": cls.min_topup_micro,
             "topup_bonus_percent": cls.topup_bonus_percent,
         }
@@ -186,6 +198,13 @@ class PriceTable:
                     values["video_veo3"] = unit_price
                 elif job_type == KIND_VIDEO and engine == ENGINE_SEEDANCE:
                     values["video_seedance"] = unit_price
+                elif job_type == KIND_MUSIC:
+                    values["music_per_second"] = unit_price
+                    # Niêm yết theo phút, cùng lý do không nhân *60 như tts ở trên.
+                    try:
+                        values["music_price_per_minute"] = parse_micro(rule.get("list_price"))
+                    except (TypeError, ValueError):
+                        pass
         return cls(**values)
 
     def summary_rows(self):
@@ -214,6 +233,13 @@ class PriceTable:
                 "Video Seedance",
                 "{0} / video".format(format_vnd(self.video_seedance)),
                 "Clip 10 giây — thời lượng cố định",
+            ),
+            (
+                "Nhạc",
+                "{0} / phút nhạc".format(format_vnd(self.music_price_per_minute)),
+                "Một bản tối đa 30 giây (~{0}/bản), tính theo giây nhạc thật".format(
+                    format_vnd(self.music_per_second * 30)
+                ),
             ),
         ]
 
@@ -250,3 +276,20 @@ def hold_for_video(engine: str, prices: PriceTable = DEFAULT_PRICES) -> int:
     """µVND bị tạm giữ cho một video. Giá theo engine, không theo thời lượng."""
     prices = prices or DEFAULT_PRICES  # bảng giá chưa nạp thì cứ ước theo giá mặc định
     return prices.video_price(engine)
+
+
+def hold_for_music(duration: int, prices: PriceTable = DEFAULT_PRICES) -> int:
+    """µVND bị tạm giữ cho một bản nhạc `duration` giây.
+
+    Cùng công thức máy chủ dùng: giữ `ceil(giây × 1,2)` giây có đệm — model đôi
+    khi trả dôi vài phần trăm so với số giây đặt, giữ đúng bằng là ví có thể âm.
+    Phần thừa tự hoàn khi quyết toán theo giây nhạc thật.
+
+    >>> hold_for_music(30)          # 30 giây → giữ 36 giây → 300₫
+    299999988
+    """
+    if duration <= 0:
+        return 0
+    prices = prices or DEFAULT_PRICES  # bảng giá chưa nạp thì cứ ước theo giá mặc định
+    giu_giay = -(-int(duration) * 12 // 10)  # ceil(duration × 1.2) bằng số nguyên
+    return giu_giay * prices.music_per_second

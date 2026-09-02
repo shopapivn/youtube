@@ -48,7 +48,7 @@ from .batch import duoi_cua_output, safe_filename, unique_path
 from .config import DEFAULT_CONCURRENCY, HARD_CAPS, redact
 from .download import DownloadError, download_to
 from .errors import ErrorAdvice, describe, retry_after_seconds
-from .pricing import KIND_IMAGE, KIND_TTS, KIND_VIDEO
+from .pricing import KIND_IMAGE, KIND_MUSIC, KIND_TTS, KIND_VIDEO
 from .cham_anh import NGUONG_LAM_LAI
 from .viet_lai_prompt import SO_LAN_VIET_LAI, la_bi_tu_choi
 
@@ -1153,6 +1153,16 @@ class JobManager:
                 n=int(params.get("n", 1)),
                 aspect_ratio=params.get("aspect_ratio", "16:9"),
                 reference_images=references,
+                idempotency_key=spec.khoa_gui or spec.idempotency_key,
+            )
+        if spec.kind == KIND_MUSIC:
+            return client.music.create(
+                prompt=spec.content,
+                # Trần 30 giây là của nhà máy; giao diện đã kẹp 10–30 nên tới
+                # đây chỉ việc gửi thẳng.
+                duration=int(params.get("duration", 30)),
+                instrumental=bool(params.get("instrumental", False)),
+                format=params.get("format", "mp3"),
                 idempotency_key=spec.khoa_gui or spec.idempotency_key,
             )
         if spec.kind == KIND_VIDEO:

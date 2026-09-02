@@ -49,6 +49,7 @@ from ._version import USER_AGENT
 from .resources import (
     AsyncBalance,
     AsyncImages,
+    AsyncMusic,
     AsyncJobs,
     AsyncLedger,
     AsyncPricing,
@@ -60,6 +61,7 @@ from .resources import (
     AsyncVideos,
     Balance,
     Images,
+    Music,
     Jobs,
     Ledger,
     Pricing,
@@ -397,6 +399,7 @@ class ShopAPI(BaseClient):
 
         self.tts = Tts(self)
         self.images = Images(self)
+        self.music = Music(self)
         self.videos = Videos(self)
         self.jobs = Jobs(self)
         self.uploads = Uploads(self)
@@ -486,7 +489,7 @@ class ShopAPI(BaseClient):
     # ── Chạy nhiều việc một lúc ──────────────────────────────────────────────
 
     def tran_song_song(self, loai: str) -> int:
-        """Trần chạy song song HIỆN TẠI cho một loại job (``tts``/``image``/``video``).
+        """Trần chạy song song HIỆN TẠI cho một loại job (``tts``/``image``/``video``/``music``).
 
         Con số này **không cố định**: máy chủ tính lại liên tục từ sức chứa còn
         trống của nhà máy chia cho số khách đang chờ. Vì vậy đừng gọi một lần rồi
@@ -578,7 +581,7 @@ class ShopAPI(BaseClient):
         dùng chung một vòng dò giữa nhiều mẻ chạy nối tiếp nhau — vòng dò càng
         sống lâu thì càng bám sát nhà máy.
         """
-        tao = {"tts": self.tts, "image": self.images, "video": self.videos}[loai]
+        tao = {"tts": self.tts, "image": self.images, "video": self.videos, "music": self.music}[loai]
 
         # Vòng dò phải là vòng dò mà TẦNG HTTP đang báo cáo về (`_bao_nhip_do`),
         # nếu không thì mọi cú 429/503 sẽ rơi vào một cái khác và vòng đang điều
@@ -766,6 +769,7 @@ class AsyncShopAPI(BaseClient):
 
         self.tts = AsyncTts(self)
         self.images = AsyncImages(self)
+        self.music = AsyncMusic(self)
         self.videos = AsyncVideos(self)
         self.jobs = AsyncJobs(self)
         self.uploads = AsyncUploads(self)

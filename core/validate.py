@@ -35,6 +35,7 @@ from .pricing import VIDEO_DURATION_BY_ENGINE
 __all__ = [
     "check_tts",
     "check_image",
+    "check_music",
     "check_video",
     "duration_for_engine",
     "MAX_TEXT_LENGTH",
@@ -83,6 +84,28 @@ def check_tts(
         problems.append(
             "Định dạng âm thanh phải là một trong: {0}.".format(", ".join(AUDIO_FORMATS))
         )
+    return problems
+
+
+def check_music(
+    prompts,
+    *,
+    duration: int,
+    audio_format: str,
+):
+    """Kiểm tham số cho phần Nhạc — trần/sàn khớp máy chủ (đừng hứa hơn nhà máy)."""
+    from shopapi import MUSIC_MAX_PROMPT_LENGTH, MUSIC_MAX_SECONDS, MUSIC_MIN_SECONDS
+
+    problems = _check_prompt_list(
+        prompts, limit=MUSIC_MAX_PROMPT_LENGTH, what="mô tả bản nhạc")
+    if not isinstance(duration, int) or duration < MUSIC_MIN_SECONDS or duration > MUSIC_MAX_SECONDS:
+        problems.append(
+            "Thời lượng nhạc phải từ {0} đến {1} giây (trần {1} giây là của nhà máy; "
+            "cần dài hơn thì tạo nhiều bản rồi ghép).".format(
+                MUSIC_MIN_SECONDS, MUSIC_MAX_SECONDS))
+    if audio_format not in AUDIO_FORMATS:
+        problems.append(
+            "Định dạng âm thanh phải là một trong: {0}.".format(", ".join(AUDIO_FORMATS)))
     return problems
 
 

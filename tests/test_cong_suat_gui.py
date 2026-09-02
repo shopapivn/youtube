@@ -76,7 +76,7 @@ def test_ap_luong_kep_trong_tran_cung():
 
     jm = JobManager(lambda: None, queue.Queue(), tu_do_nhip=True)
     # Số vượt hẳn mọi trần cứng (image giờ 6144) — phải bị kẹp về đúng trần.
-    jm.ap_luong({"tts": 99999, "image": 99999, "video": 99999})
+    jm.ap_luong({"tts": 99999, "image": 99999, "video": 99999, "music": 99999})
     for kind in HARD_CAPS:
         assert jm._cong[kind].suc_chua == HARD_CAPS[kind], "không được vượt trần cứng"
 

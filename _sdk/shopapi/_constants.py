@@ -42,6 +42,9 @@ __all__ = [
     "MIN_TOPUP_VND",
     "MAX_TOPUP_VND",
     "TYPICAL_SECONDS",
+    "MUSIC_MIN_SECONDS",
+    "MUSIC_MAX_SECONDS",
+    "MUSIC_MAX_PROMPT_LENGTH",
 ]
 
 #: CONTRACT.md §0
@@ -78,7 +81,7 @@ DEFAULT_VIDEO_DURATION_BY_ENGINE: Dict[str, int] = {
     "auto": 8,
 }
 
-SERVICE_TYPES: Tuple[str, ...] = ("tts", "image", "video")
+SERVICE_TYPES: Tuple[str, ...] = ("tts", "image", "video", "music")
 
 # ── Trạng thái job — CONTRACT.md §2.2 ─────────────────────────────────────────
 
@@ -213,7 +216,24 @@ RATE_LIMITS: Dict[str, Dict[str, object]] = {
 
 #: Trần CỨNG tuyệt đối của số job chạy song song, theo từng loại job — mức mà
 #: trần động không bao giờ vượt qua. KHÔNG phải trần gặp hằng ngày.
-CONCURRENCY_HARD_CAP: Dict[str, int] = {"tts": 16, "image": 384, "video": 64}
+
+# ── Nhạc AI — ``POST /v1/music/generations`` ──────────────────────────────────
+
+#: TRẦN 30 GIÂY MỘT BẢN NHẠC — khớp trần máy chủ đang kiểm.
+#:
+#: 30 giây là trần CỨNG của nhà máy (đo 02/09/2026: xin dài hơn bị tự kẹp về
+#: 30), không phải lựa chọn của shopapi — **đừng hứa hơn** với người dùng của
+#: bạn. 10 giây là mức thấp nhất đã kiểm chứng ra đúng độ dài.
+MUSIC_MIN_SECONDS = 10
+MUSIC_MAX_SECONDS = 30
+
+#: Mô tả bản nhạc tối đa 2.000 ký tự — CHẶT hơn trần 5.000 của ảnh/video, vì
+#: nhà máy nhạc chỉ nhận chừng đó. Thể loại, nhạc cụ, không khí, nhịp độ là đủ.
+MUSIC_MAX_PROMPT_LENGTH = 2_000
+
+#: ``music`` cùng trần với ``tts`` vì hai loại job này chạy trên cùng một dàn
+#: máy xử lý — nới một bên mà không nới nhà máy là hứa suông.
+CONCURRENCY_HARD_CAP: Dict[str, int] = {"tts": 16, "image": 384, "video": 64, "music": 16}
 
 # ── Header — CONTRACT.md §2.1, §5, §8 ─────────────────────────────────────────
 
@@ -276,4 +296,4 @@ MIN_TOPUP_VND = 50_000
 MAX_TOPUP_VND = 500_000_000
 
 #: Thời gian xử lý điển hình (giây) — số trung bình từ `GET /v1/stats`.
-TYPICAL_SECONDS: Dict[str, int] = {"tts": 42, "image": 18, "video": 95}
+TYPICAL_SECONDS: Dict[str, int] = {"tts": 42, "image": 18, "video": 95, "music": 30}

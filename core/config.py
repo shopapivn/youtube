@@ -90,7 +90,8 @@ DASHBOARD_LOGIN_URL = "https://shopapi.vn/login"
 #: dò (`NhipDo`) vẫn kẹp mức chạy THẬT về đúng trần `GET /v1/me` trong 20 giây
 #: đầu, nên số luồng mở ra vẫn bằng min(việc-đang-chờ, trần-máy-chủ) chứ không
 #: bao giờ chạm 6144. Vượt trần máy chủ thì máy chủ tự xếp hàng / phanh 429.
-HARD_CAPS: Dict[str, int] = {"tts": 16, "image": 6144, "video": 832}
+# `music` cùng dàn máy xử lý với `tts` nên cùng trần (khớp máy chủ).
+HARD_CAPS: Dict[str, int] = {"tts": 16, "image": 6144, "video": 832, "music": 16}
 
 #: Mức KHỞI ĐẦU mỗi loại — lấy đúng khuyến nghị đo được ở CONTRACT.md §8.1b.
 DEFAULT_CONCURRENCY: Dict[str, int] = {"tts": 3, "image": 8, "video": 8}

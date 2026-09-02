@@ -6,6 +6,7 @@ from .balance import AsyncBalance, Balance
 from .images import AsyncImages, Images
 from .jobs import AsyncJobs, Jobs
 from .ledger import AsyncLedger, Ledger
+from .music import AsyncMusic, Music
 from .pricing import AsyncPricing, Pricing
 from .stats import AsyncStats, Stats
 from .topup import AsyncTopup, Topup
@@ -21,6 +22,8 @@ __all__ = [
     "AsyncImages",
     "Videos",
     "AsyncVideos",
+    "Music",
+    "AsyncMusic",
     "Jobs",
     "AsyncJobs",
     "Uploads",

@@ -19,6 +19,9 @@ from ._constants import (
     MAX_SPEED,
     MAX_TEXT_LENGTH,
     MIN_SPEED,
+    MUSIC_MAX_PROMPT_LENGTH,
+    MUSIC_MAX_SECONDS,
+    MUSIC_MIN_SECONDS,
     VIDEO_DURATIONS_BY_ENGINE,
     VIDEO_ENGINES,
     VOICE_CATALOG,
@@ -34,6 +37,9 @@ _KHUON_VOICE_ID_NHA_CUNG_CAP = re.compile(r"^[A-Za-z0-9]{20}$")
 __all__ = [
     "validate_text",
     "validate_prompt",
+    "validate_music_prompt",
+    "validate_music_duration",
+    "validate_instrumental",
     "validate_speed",
     "validate_audio_format",
     "validate_voice_id",
@@ -247,6 +253,57 @@ def validate_video_duration(engine: str, duration: Any, *, param: str = "duratio
             param,
         )
     return duration
+
+
+def validate_music_prompt(prompt: Any, *, param: str = "prompt") -> str:
+    """1..2.000 ký tự — trần RIÊNG của nhạc, CHẶT hơn trần 5.000 của ảnh/video.
+
+    ⚠ KHÔNG dùng ``validate_prompt`` chung: nhà máy nhạc chỉ nhận 2.000 ký tự.
+    Dùng chung là để lọt prompt 2.001-5.000 qua SDK rồi chết ở máy chủ — đúng
+    cái bẫy "hai bên khai hai trần" của sự cố 29/08.
+    """
+    if not isinstance(prompt, str):
+        raise _fail(
+            "Trường `{0}` phải là chuỗi, bạn đang truyền {1}.".format(param, type(prompt).__name__), param
+        )
+    if not prompt.strip():
+        raise _fail(
+            "Bạn cần mô tả bản nhạc muốn tạo (thể loại, nhạc cụ, không khí, nhịp độ) — "
+            "`{0}` đang rỗng.".format(param),
+            param,
+        )
+    if len(prompt) > MUSIC_MAX_PROMPT_LENGTH:
+        raise _fail(
+            "Mô tả bản nhạc tối đa {0} ký tự, bạn đang gửi {1} ký tự. "
+            "Thể loại, nhạc cụ, không khí, nhịp độ là đủ.".format(
+                group_thousands(MUSIC_MAX_PROMPT_LENGTH), group_thousands(len(prompt))
+            ),
+            param,
+        )
+    return prompt
+
+
+def validate_music_duration(duration: Any, *, param: str = "duration") -> int:
+    """10..30 giây. Trần 30 là trần CỨNG của nhà máy — đừng hứa hơn."""
+    if isinstance(duration, bool) or not isinstance(duration, int):
+        raise _fail("Thời lượng nhạc `{0}` phải là số nguyên (giây).".format(param), param)
+    if duration < MUSIC_MIN_SECONDS or duration > MUSIC_MAX_SECONDS:
+        raise _fail(
+            "Thời lượng nhạc từ {0} đến {1} giây — bạn đang gửi {2} giây. "
+            "Trần {1} giây là trần cứng của nhà máy, cần bản dài hơn thì bạn tạo "
+            "nhiều bản rồi ghép lại.".format(MUSIC_MIN_SECONDS, MUSIC_MAX_SECONDS, duration),
+            param,
+        )
+    return duration
+
+
+def validate_instrumental(instrumental: Any, *, param: str = "instrumental") -> bool:
+    """Chỉ nhận bool thật — `"false"` (chuỗi) là truthy, gửi lên là sai ý khách."""
+    if not isinstance(instrumental, bool):
+        raise _fail(
+            "`{0}` chỉ nhận True (nhạc không lời) hoặc False.".format(param), param,
+        )
+    return instrumental
 
 
 def validate_webhook_url(url: Any, *, param: str = "webhook_url") -> str:
