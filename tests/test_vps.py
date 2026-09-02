@@ -281,7 +281,10 @@ def test_mo_ta_may_gon_mot_dong():
 
 
 def test_tab_co_dung_hai_muc_gpm_va_vps(tmp_path):
-    """Chủ dự án, 28/08/2026: *"chia thành 2 mục — GPM Login và VPS"*."""
+    """02/09/2026: *"chỉ số kênh và máy vm dồn về... tab vps & gpm (bỏ cái
+    tab gpm đi vì tao không dùng)"* — ba mục VPS · Chỉ số kênh · Máy VM;
+    GPM dựng NGẦM (đường dọn Chrome con khi đóng tool phải sống) nhưng
+    KHÔNG hiện."""
     pytest.importorskip("PyQt5.QtWidgets", reason="máy chạy test không có giao diện")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PyQt5.QtWidgets import QApplication
@@ -313,7 +316,11 @@ def test_tab_co_dung_hai_muc_gpm_va_vps(tmp_path):
     t.show()
     app.processEvents()
     try:
-        assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == ["VPS", "GPM Login"]
+        assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == \
+            ["VPS", "Chỉ số kênh", "Máy VM"]
+        assert t.tabs.indexOf(t.gpm) == -1, "GPM ẩn — chủ dự án không dùng"
+        assert t.gpm is not None and hasattr(t.gpm, "dong_het"), \
+            "GPM vẫn phải DỰNG ngầm: nó là đường dọn Chrome con khi đóng tool"
         # Chủ dự án 31/08/2026: "để vps là tab 1 mặc định" — xem chú thích đầu
         # `ui_qt/trang_gpm_vps.py`.
         assert t.tabs.indexOf(t.vps) == 0

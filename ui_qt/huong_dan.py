@@ -96,9 +96,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     "phan-tich": {
         "tieu_de": "Phân tích & Nghiên cứu",
         "tom_tat": "Trả lời câu “kênh này nên làm content gì tiếp theo”: sổ "
-                   "theo dõi đối thủ của từng kênh, và chỉ số Studio của chính "
-                   "kênh bạn. Cả hai chạy trên máy bạn — miễn phí, không cần "
-                   "đăng nhập.",
+                   "theo dõi đối thủ của từng kênh, và mục Quyết định content "
+                   "đọc toàn bộ số liệu giúp bạn. Chạy trên máy bạn, miễn phí. "
+                   "(Chỉ số kênh và Máy VM đã dọn sang tab “VPS & Máy VM”.)",
         "buoc": [
             "─── MỤC ĐỐI THỦ ───",
             "Chọn kênh của bạn ở ô Kênh — mỗi kênh một sổ riêng, nằm trong thư "
@@ -121,34 +121,6 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "đối thủ đã ẩn vẫn còn vết trong sổ.",
             "Ô lọc góc phải bảng: gõ tên tuyến hay chữ trong tiêu đề là bảng "
             "chỉ còn các dòng đó — như lọc trên trang tính.",
-            "─── MỤC CHỈ SỐ KÊNH ───",
-            "“Chỉ số kênh” lấy số liệu thật từ YouTube Studio CỦA CHÍNH "
-            "BẠN: video được đưa ra trước mặt người xem bao nhiêu lần, bao nhiêu "
-            "phần trăm trong đó bấm vào, xem được bao lâu, khán giả ở nước nào, và "
-            "video của bạn đang bị xếp cạnh những video nào. Không API nào của "
-            "YouTube cho những con số này — chúng chỉ hiện sau khi đăng nhập Studio, "
-            "nên phải cài một tiện ích nhỏ vào Chrome, làm một lần là xong.",
-            "Cách dùng: bấm “Lưu tiện ích ra máy…”, chọn một thư mục. Mở Chrome, gõ "
-            "chrome://extensions, bật “Chế độ dành cho nhà phát triển” ở góc phải "
-            "trên, bấm “Tải tiện ích đã giải nén”, chọn đúng thư mục vừa lưu. Rồi mở "
-            "YouTube Studio một lần để tiện ích nhận ra kênh.",
-            "Sau đó tiện ích tự chụp số liệu ở các mốc 24 giờ, 48 giờ, 72 giờ, 7 ngày "
-            "và 28 ngày sau khi bạn đăng video — Chrome phải đang mở. Muốn xem ngay "
-            "thì bấm “Chụp ngay tất cả” trong tiện ích, mỗi video khoảng một phút.",
-            "Số liệu nằm trong thư mục Tải xuống / chi-so-youtube trên máy bạn, không "
-            "gửi đi đâu cả. Quay lại đây bấm “Đọc dữ liệu” là thấy bảng, rồi bấm "
-            "“Chép cho ChatGPT / Claude” và dán vào khung chat — khối chữ đó đã kèm "
-            "sẵn giải thích từng cột và câu hỏi cần hỏi.",
-            "Studio mở trong máy ảo (VPS)? Bật “cổng nhận” ở mục Chỉ số kênh rồi "
-            "dán địa chỉ vào tiện ích bên máy ảo — số liệu rơi thẳng về thư mục "
-            "kênh của tool, không phải chép tay.",
-            "─── MỤC MÁY VM ───",
-            "Cài agent (thư mục vm/ của tool) lên máy ảo của kênh là máy ấy tự "
-            "gọi về hỏi việc mỗi 30 giây — bảng ở đây cho biết máy nào đang "
-            "nối, lần cuối lên tiếng lúc nào. Bấm “Quét Studio ngay” là agent "
-            "mở Studio cho tiện ích cào, không phải vào máy ảo bấm tay. Kế "
-            "hoạch lớn hơn (quét trang chủ lấy đối thủ mới, đăng video, trả "
-            "lời bình luận) nằm trong vm/KE-HOACH.md — đang xây từng bước.",
         ],
         "luu_y": [
             "Khác gì “Lấy dữ liệu đối thủ” bên tab Công cụ YTB? Bên đó là lượt "
@@ -180,12 +152,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
     },
     "chrome-sach": {
-        "tieu_de": "VPS & GPM",
-        "tom_tat": "Hai mức của cùng một việc. **GPM Login**: mỗi hồ sơ Chrome "
-                   "là một máy riêng trong mắt YouTube/Google (cookie riêng, IP "
-                   "riêng, đồng hồ khớp IP) — chạy trên máy bạn, miễn phí. "
-                   "**VPS**: thuê hẳn một máy Windows chạy 24/7 ở nơi khác, mỗi "
-                   "máy một địa chỉ IPv6 riêng — 200.000₫/tháng.",
+        "tieu_de": "VPS & Máy VM",
+        "tom_tat": "Mọi thứ về NHỮNG CÁI MÁY của kênh, một chỗ. **VPS**: thuê "
+                   "máy Windows chạy 24/7, mỗi máy một địa chỉ IPv6 riêng — "
+                   "200.000₫/tháng, bấm một cú là vào. **Chỉ số kênh**: trạm "
+                   "nhận số liệu Studio mà tiện ích trên máy ảo gửi về, và nơi "
+                   "đọc số. **Máy VM**: điều khiển agent trên máy ảo — tạo bộ "
+                   "cài, ra lệnh quét, thiết lập từng kênh, bàn giao đăng.",
         "buoc": [
             "Bấm “Thêm hồ sơ”, đặt tên, dán proxy (ip:port:user:pass hoặc "
             "socks5://…). Không có proxy thì để trống — vẫn được hồ sơ riêng, "
@@ -439,6 +412,16 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "hàng “ảnh bìa” có thể chạy số trước khi tới lượt chúng.",
             "Bấm Dừng lúc nào cũng được. Phần đã làm giữ nguyên; bấm “Chạy "
             "tiếp” là đi tiếp từ đúng chỗ đó.",
+            "Ô “Xuất lại qua CapCut sau khi dựng” (mặc định tắt): bật thì "
+            "dựng xong video, tôi đưa nó vào CapCut cài trên máy này và tự "
+            "bấm Xuất — bạn có thêm 9-video-capcut.mp4 do chính CapCut mã "
+            "hoá, nằm cạnh 8-video.mp4. Chạy trên máy, không tốn tiền. Lúc "
+            "đó CapCut TỰ MỞ VÀ TỰ BẤM trên màn hình chừng một hai phút — "
+            "đừng dùng chuột phím, xong nó tự đóng; CapCut đang mở dở cũng "
+            "bị đóng (bản nháp CapCut tự lưu nên không mất gì). Cỡ và chất "
+            "lượng xuất lấy theo lần bạn bấm Xuất tay gần nhất trong CapCut. "
+            "Nếu bước này hỏng, video dựng xong vẫn nguyên; bản nháp nằm ở ô "
+            "đầu trang chủ CapCut để bạn mở lên bấm Xuất tay.",
             "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "
             "kịch bản thì phải “Làm lại từ khâu này” — giọng đọc cũ đang đọc "
             "bản kịch bản không còn nữa.",

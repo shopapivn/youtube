@@ -1,32 +1,30 @@
-"""Tab **GPM & VPS** — hai mục, một bài toán.
+"""Tab **VPS & Máy VM** — mọi thứ về NHỮNG CÁI MÁY của kênh, một chỗ.
 
-Chủ dự án, 28/08/2026: *"có thể đổi tên tab và chia thành 2 mục — GPM Login và
-VPS."*
+Chủ dự án, 02/09/2026: *"chỉ số kênh và máy vm tao nghĩ là dồn về 1 tab
+hoặc cái tab vps & gpm (tao nghĩ bỏ cái tab gpm đi vì tao không dùng)"*.
+Nên tab này giờ là:
 
-═══ VÌ SAO HAI THỨ NÀY Ở CHUNG MỘT TAB ═══
+    VPS          mở máy ảo (Remote Desktop một cú bấm)
+    Chỉ số kênh  trạm nhận + extension + đọc số liệu Studio
+    Máy VM       điều khiển agent trên máy ảo, bộ cài, bàn giao đăng
 
-Chúng giải cùng một bài toán, ở hai mức:
+— còn tab Phân tích & Nghiên cứu chỉ giữ đúng phần NGHIÊN CỨU (Đối thủ,
+Quyết định content). Máy một nơi, nghiên cứu một nơi.
 
-    GPM Login  →  mỗi HỒ SƠ Chrome một đường ra riêng, trên máy của khách
-    VPS        →  mỗi CÁI MÁY một đường ra riêng, chạy 24/7 ở nơi khác
+═══ GPM LOGIN: ẨN, KHÔNG XOÁ ═══
 
-Khách nuôi một kênh thì hồ sơ Chrome là đủ, và miễn phí. Khách nuôi mười kênh,
-hoặc muốn tắt máy nhà mà việc vẫn chạy, thì cần cái thứ hai. Đặt cạnh nhau để
-người đang tìm cái này nhìn thấy cái kia — tách hai tab thì phần lớn khách sẽ
-không bao giờ mở tab thứ hai.
-
-═══ THỨ TỰ HAI MỤC: VPS ĐỨNG TRƯỚC ═══
-
-Bản đầu để GPM trước vì nó miễn phí. Chủ dự án, 31/08/2026: *"ở tab kênh thì
-để vps là tab 1 mặc định đi"* — tab này giờ nằm trong nhóm KÊNH, và với người
-nuôi kênh thì VPS là chỗ họ vào hằng ngày (máy chạy 24/7), còn GPM Login là
-việc cài một lần. Mục dùng hằng ngày đứng trước.
+Chủ dự án không dùng ("bỏ cái tab gpm đi") — mục GPM Login không hiện nữa
+NHƯNG `TrangChromeSach` vẫn được DỰNG ngầm: hai hàm `dang_mo()` /
+`dong_het()` của nó là đường dọn Chrome con khi tool đóng (Job Object +
+lối tắt "Chrome vẫn chạy") — gỡ hẳn là mồ côi tiến trình. Muốn hiện lại
+thì thêm một dòng addTab, mã còn nguyên.
 
 ═══ MỘT TIÊU ĐỀ, KHÔNG PHẢI HAI ═══
 
-Khung này vẽ tiêu đề trang, nên `TrangChromeSach` được dựng với
-`co_tieu_de=False`. Hai tiêu đề chồng nhau ăn mất ~60px ngay phần trên màn hình
-— đúng chỗ đắt nhất, và sáu trên tám trang của tool vốn đã cao hơn cửa sổ.
+Khung này vẽ tiêu đề trang, nên các trang con được dựng không tiêu đề
+riêng đâu cần. `TrangChiSoYTB` + `TrangMayVM` chuyển từ tab Phân tích
+sang NGUYÊN CON — Máy VM mượn trạm của Chỉ số kênh nên hai đứa phải đi
+cùng nhau (một trạm hai chủ là hai nút bật/tắt cãi nhau).
 """
 
 from __future__ import annotations
@@ -35,7 +33,9 @@ from typing import List
 
 from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
+from .trang_chi_so_ytb import TrangChiSoYTB
 from .trang_chrome_sach import TrangChromeSach
+from .trang_phan_tich import TrangMayVM
 from .trang_vps import TrangVps
 from .widgets import tieu_de_trang
 
@@ -51,16 +51,28 @@ class TrangGpmVps(QWidget):
         doc.setContentsMargins(24, 20, 24, 20)
         doc.setSpacing(10)
         doc.addWidget(tieu_de_trang(
-            "VPS & GPM",
-            "Máy ảo chạy 24/7 ở nơi khác, và hồ sơ Chrome sạch trên máy bạn.",
+            "VPS & Máy VM",
+            "Máy ảo của kênh: mở máy, trạm chỉ số, điều khiển agent.",
             "chrome-sach"))
 
         self.tabs = QTabWidget()
+        # GPM dựng NGẦM, không addTab — xem đầu tệp (dọn Chrome con khi đóng).
         self.gpm = TrangChromeSach(app, co_tieu_de=False)
         self.vps = TrangVps(app)
+        self.chi_so = TrangChiSoYTB(app)
+        self.may_vm = TrangMayVM(app, self.chi_so)
         self.tabs.addTab(self.vps, "VPS")
-        self.tabs.addTab(self.gpm, "GPM Login")
+        self.tabs.addTab(self.chi_so, "Chỉ số kênh")
+        self.tabs.addTab(self.may_vm, "Máy VM")
         doc.addWidget(self.tabs, 1)
+
+    def doi_du_an(self, ten: str) -> None:
+        tiep = getattr(self.chi_so, "doi_du_an", None)
+        if tiep is not None:
+            try:
+                tiep(ten)
+            except Exception:  # noqa: BLE001 — đổi kênh hỏng không sập trang
+                pass
 
     # ── Chuyển tiếp cho mã cũ ────────────────────────────────────────────────
     #

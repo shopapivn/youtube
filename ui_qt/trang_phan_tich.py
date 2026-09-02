@@ -54,7 +54,9 @@ __all__ = ["TrangPhanTich", "TrangDoiThu"]
 
 #: Nhãn các mục con — xếp theo dòng chảy: xem ngách (Đối thủ) → xem mình
 #: (Chỉ số kênh) → chốt (Quyết định content). "Máy VM" đứng cuối — hạ tầng.
-TAB_CON = ("Đối thủ", "Chỉ số kênh", "Quyết định content", "Máy VM")
+# 02/09: "Chỉ số kênh" + "Máy VM" dọn sang tab VPS & Máy VM (chủ dự án:
+# "đang quá nhiều thứ linh tinh... dồn về 1 tab") — ở đây chỉ còn NGHIÊN CỨU.
+TAB_CON = ("Đối thủ", "Quyết định content")
 
 #: Nhịp tự kiểm "đến hạn quét chưa" khi tool đang mở. Nửa tiếng một lần hỏi
 #: cái đồng hồ trên đĩa — không phải một lượt gọi mạng nào.
@@ -1573,17 +1575,13 @@ class TrangPhanTich(QWidget):
 
         self.tabs = QTabWidget()
         self.doi_thu = TrangDoiThu(app)
-        self.chi_so = TrangChiSoYTB(app)
         self.quyet_dinh = TrangQuyetDinh(app)
-        self.may_vm = TrangMayVM(app, self.chi_so)
         self.tabs.addTab(self.doi_thu, TAB_CON[0])
-        self.tabs.addTab(self.chi_so, TAB_CON[1])
-        self.tabs.addTab(self.quyet_dinh, TAB_CON[2])
-        self.tabs.addTab(self.may_vm, TAB_CON[3])
+        self.tabs.addTab(self.quyet_dinh, TAB_CON[1])
         doc.addWidget(self.tabs, 1)
 
     def doi_du_an(self, ten: str) -> None:
-        for con in (self.doi_thu, self.chi_so):
+        for con in (self.doi_thu,):
             tiep = getattr(con, "doi_du_an", None)
             if tiep is not None:
                 try:
