@@ -1174,6 +1174,29 @@ class TrangMayVM(QWidget):
         d1b.addWidget(self._o_dong_chrome)
         d1b.addStretch(1)
         v.addLayout(d1b)
+
+        # Hai núm cho GUI tool đăng bên máy ảo (02/09: "giờ chưa cần đăng
+        # thì có thể tắt") — GUI đọc qua cai-dat-tool.json mà agent chép.
+        d1c = QHBoxLayout()
+        self._o_tu_dang = QCheckBox("Tự đăng video theo kế hoạch")
+        self._o_tu_dang.setToolTip(
+            "Tắt là GUI trên máy ảo dừng con đăng video — kế hoạch vẫn nằm "
+            "chờ, bật lại là chạy tiếp. Chỉnh ở đây, không phải mở máy ảo.")
+        self._o_tu_dang.toggled.connect(lambda _b: self._luu_thiet_lap())
+        d1c.addWidget(self._o_tu_dang)
+        d1c.addStretch(1)
+        v.addLayout(d1c)
+
+        d1d = QHBoxLayout()
+        self._o_tu_cmt = QCheckBox("Tự trả lời bình luận")
+        self._o_tu_cmt.setToolTip(
+            "Tắt là GUI trên máy ảo dừng con trả lời bình luận. Câu trả lời "
+            "viết bằng key của tool (trừ ví tool), key Gemini cũ làm dự "
+            "phòng khi trạm tắt.")
+        self._o_tu_cmt.toggled.connect(lambda _b: self._luu_thiet_lap())
+        d1d.addWidget(self._o_tu_cmt)
+        d1d.addStretch(1)
+        v.addLayout(d1d)
         self._dang_do_vm = False
         return khung
 
@@ -1191,6 +1214,8 @@ class TrangMayVM(QWidget):
             self._o_quet_tc.setChecked(bool(cai.get("quet_trang_chu_hang_ngay")))
             self._o_giu_chrome.setChecked(bool(cai.get("giu_chrome_mo", True)))
             self._o_dong_chrome.setChecked(bool(cai.get("dong_chrome_sau_quet")))
+            self._o_tu_dang.setChecked(bool(cai.get("tu_dang", True)))
+            self._o_tu_cmt.setChecked(bool(cai.get("tu_tra_loi_cmt", True)))
         finally:
             self._dang_do_vm = False
 
@@ -1205,7 +1230,9 @@ class TrangMayVM(QWidget):
             cho_quet_giay=int(self._o_cho_quet.value()) * 60,
             quet_trang_chu_hang_ngay=self._o_quet_tc.isChecked(),
             giu_chrome_mo=self._o_giu_chrome.isChecked(),
-            dong_chrome_sau_quet=self._o_dong_chrome.isChecked())
+            dong_chrome_sau_quet=self._o_dong_chrome.isChecked(),
+            tu_dang=self._o_tu_dang.isChecked(),
+            tu_tra_loi_cmt=self._o_tu_cmt.isChecked())
 
     def _the_ban_giao(self) -> QWidget:
         """Nửa TRÊN TOOL của đường đăng: sản xuất xong → bàn giao → duyệt.

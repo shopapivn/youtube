@@ -934,3 +934,92 @@ class TestMotConDuyNhat:
         monkeypatch.setattr(agent, "GOC", str(goc_vm))
         agent.giu_tool_dang({})            # không được ném, không mở gì
         assert agent._TOOL_DANG["tt"] is None
+
+
+class TestGuiVaKeyCuaTool:
+    """02/09: GUI tool đăng là trung tâm trên VM; trả lời cmt dùng key của
+    TOOL qua trạm, Gemini cũ làm dự phòng."""
+
+    def test_tram_viet_ho_bang_key_cua_tool(self, tmp_path):
+        goi = []
+
+        def viet(de_bai):
+            goi.append(de_bai)
+            return "Cảm ơn bạn đã xem!"
+
+        tram = Tram(cong=0, goc=str(tmp_path), goi_van_ban=viet)
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            ra = agent._goi(dia_chi, "/van-ban",
+                            {"kenh": "TL4-T7", "de_bai": "Viết câu trả lời"})
+            assert ra == {"chu": "Cảm ơn bạn đã xem!"}
+            assert goi == ["Viết câu trả lời"]
+        finally:
+            tram.tat()
+
+    def test_chua_noi_nguon_chu_thi_noi_that(self, tmp_path):
+        import urllib.error
+
+        tram = Tram(cong=0, goc=str(tmp_path))     # không có goi_van_ban
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            with pytest.raises(urllib.error.HTTPError) as loi:
+                agent._goi(dia_chi, "/van-ban", {"de_bai": "x"})
+            assert loi.value.code == 503, "phải nói thật là chưa nối, không im"
+        finally:
+            tram.tat()
+
+    def test_ap_cai_dat_tool_chep_xuong_cho_gui(self, tmp_path, monkeypatch):
+        # GUI (tool_gui.py) đọc vm/cai-dat-tool.json để biết tự đăng/tự trả
+        # lời có được bật không và trạm ở đâu (cmt.py nhờ trạm viết).
+        import json
+
+        agent = _nap_agent()
+        monkeypatch.setattr(agent, "GOC", str(tmp_path))
+        agent.ap_cai_dat_tool({"tram": "http://127.0.0.1:9"},
+                              {"tu_dang": False, "tu_tra_loi_cmt": True})
+        with open(tmp_path / "cai-dat-tool.json", encoding="utf-8") as tep:
+            goi = json.load(tep)
+        assert goi["tu_dang"] is False
+        assert goi["tu_tra_loi_cmt"] is True
+        assert goi["tram"] == "http://127.0.0.1:9"
+
+    def test_co_gui_thi_agent_khong_nuoi_tool_dang(self, tmp_path, monkeypatch):
+        # GUI nuôi dang/cmt — agent mà cũng nuôi là MỘT video đăng HAI lần.
+        agent = _nap_agent()
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        monkeypatch.setattr(agent, "GOC", str(goc_vm))
+        (tmp_path / "upload" / "dang-tool.py").write_text(
+            "import time\ntime.sleep(60)\n")
+        (tmp_path / "upload" / "tool_gui.py").write_text("pass")
+        agent.giu_tool_dang({})
+        assert agent._TOOL_DANG["tt"] is None, \
+            "có GUI nằm cạnh thì GUI là người nuôi, agent đứng ngoài"
+
+    def test_khoi_dong_tro_gui_khi_co(self, tmp_path, monkeypatch):
+        import importlib.util
+
+        khoi = tmp_path / "Microsoft" / "Windows" / "Start Menu" / \
+            "Programs" / "Startup"
+        os.makedirs(khoi)
+        monkeypatch.setenv("APPDATA", str(tmp_path))
+        monkeypatch.syspath_prepend(str(GOC / "vm"))
+        spec = importlib.util.spec_from_file_location(
+            "vm_cai_dat_vm2", GOC / "vm" / "cai_dat_vm.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        (tmp_path / "upload" / "run.bat").write_bytes(b"@echo off\r\n")
+        (tmp_path / "upload" / "tool_gui.py").write_text("pass")
+        monkeypatch.setattr(mod, "GOC", str(goc_vm))
+        duong = mod.dang_ky_tu_chay()
+        du_lieu = open(duong, "rb").read()
+        assert b"run.bat" in du_lieu, \
+            "có GUI thì máy bật lên phải mở GUI (GUI nuôi cả agent)"
+        assert b"CHAY-NGAM" not in du_lieu

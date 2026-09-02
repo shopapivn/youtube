@@ -321,7 +321,8 @@ def hoi_viec(cau_hinh: dict) -> dict:
 #: đây: trạm là cổng không mật khẩu, không để nó đổi được "chương trình nào
 #: sẽ chạy" trên máy này.
 KHOA_TU_TOOL = ("gio_quet", "quet_trang_chu_hang_ngay", "cho_quet_giay",
-                "cho_trang_chu_giay", "dong_chrome_sau_quet", "giu_chrome_mo")
+                "cho_trang_chu_giay", "dong_chrome_sau_quet", "giu_chrome_mo",
+                "tu_dang", "tu_tra_loi_cmt")
 
 
 def ap_cai_dat_tool(cau_hinh: dict, tu_tool) -> dict:
@@ -335,7 +336,36 @@ def ap_cai_dat_tool(cau_hinh: dict, tu_tool) -> dict:
         for khoa in KHOA_TU_TOOL:
             if khoa in tu_tool:
                 ra[khoa] = tu_tool[khoa]
+    _chep_cho_gui(ra)
     return ra
+
+
+_GUI_DA_CHEP = {"chu": ""}      # bản đã ghi lần trước — chỉ ghi khi ĐỔI
+
+
+def _chep_cho_gui(hieu_luc: dict) -> None:
+    """Chép thiết lập hiệu lực + địa chỉ trạm xuống `cai-dat-tool.json`.
+
+    GUI tool đăng (tool_gui.py, nằm cạnh) đọc tệp này để biết: có được tự
+    đăng không (`tu_dang`), có được tự trả lời bình luận không
+    (`tu_tra_loi_cmt`), và trạm ở đâu (`tram` — cmt.py nhờ trạm viết câu trả
+    lời bằng key của tool). Ghi nguyên tử, và chỉ ghi khi nội dung đổi để
+    khỏi mài đĩa mỗi 30 giây.
+    """
+    goi = {khoa: hieu_luc.get(khoa) for khoa in KHOA_TU_TOOL
+           if khoa in hieu_luc}
+    goi["tram"] = str(hieu_luc.get("tram") or "")
+    chu = json.dumps(goi, ensure_ascii=False, indent=1, sort_keys=True)
+    if chu == _GUI_DA_CHEP["chu"]:
+        return
+    duong = os.path.join(GOC, "cai-dat-tool.json")
+    try:
+        with open(duong + ".tmp", "w", encoding="utf-8") as tep:
+            tep.write(chu)
+        os.replace(duong + ".tmp", duong)
+        _GUI_DA_CHEP["chu"] = chu
+    except OSError:
+        pass
 
 
 def bao_xong(cau_hinh: dict, so: int, ket_qua: str = "", loi: str = "") -> None:
@@ -542,6 +572,11 @@ def giu_tool_dang(cau_hinh: dict) -> None:
     Theo dõi bằng chính tay cầm tiến trình (agent là người mở duy nhất —
     khoá `mot_minh` bảo đảm), nên không đụng bài dò tên kiểu Chrome.
     """
+    if os.path.isfile(os.path.join(os.path.dirname(GOC), "tool_gui.py")):
+        # Có GUI tool đăng nằm cạnh (bản đầy đủ D:\upload) thì GUI là người
+        # nuôi dang/cmt/agent — agent mà cũng nuôi là HAI người mở tool đăng,
+        # một video đăng hai lần. Một việc một chủ.
+        return
     duong = tim_tool_dang(cau_hinh)
     if not duong:
         return

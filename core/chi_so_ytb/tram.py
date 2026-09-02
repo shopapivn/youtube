@@ -201,7 +201,8 @@ class Tram:
     def __init__(self, cong: int = CONG_MAC_DINH, goc: Optional[str] = None,
                  ghi: Optional[Callable[[str], None]] = None,
                  nguon_khach: Optional[Callable[[], List[str]]] = None,
-                 nhip_gioi_thieu: float = 60.0):
+                 nhip_gioi_thieu: float = 60.0,
+                 goi_van_ban: Optional[Callable[[str], str]] = None):
         self.cong = int(cong)
         self.goc = goc or GOC
         self._ghi = ghi
@@ -210,6 +211,9 @@ class Tram:
         # phải canh giờ. Là hàm chứ không phải danh sách chết: mỗi nhịp đọc
         # lại, thêm máy mới ở tab VPS là nhịp sau tự với tới.
         self._nguon_khach = nguon_khach
+        # Nhận đề bài chữ từ máy ảo (POST /van-ban) — trả đoạn chữ, dùng key
+        # của tool. None = cửa đóng, trả 503 nói thật.
+        self._goi_van_ban = goi_van_ban
         self._nhip_gioi_thieu = float(nhip_gioi_thieu)
         self._nghi_goi = threading.Event()
         #: Cổng bên VPS ngồi nghe lúc chạy bộ cài (CAI-DAT-VM.bat).
@@ -724,6 +728,27 @@ def _lam_xu_ly(tram: "Tram"):
                     them = tram.nhan_doi_thu(b.get("kenh") or "",
                                              list(b.get("danh_sach") or []))
                     return self._tra(json.dumps({"them": them}).encode("utf-8"),
+                                     "application/json; charset=utf-8")
+                if self.path == "/van-ban":
+                    # Máy ảo nhờ tool viết chữ (trả lời bình luận) bằng KEY
+                    # CỦA TOOL — chủ dự án 02/09: "cho nó dùng luôn api key
+                    # của tool, Gemini cũ để dự phòng". Key không bao giờ rời
+                    # máy này: máy ảo gửi đề bài, tool viết hộ, tiền trừ ví
+                    # tool. Mỗi lượt là một lần trừ tiền — cửa này chỉ mở cho
+                    # mạng nhà + khách mời như mọi cửa khác.
+                    if tram._goi_van_ban is None:
+                        return self._tra(json.dumps({
+                            "loi": "tool chưa nối nguồn viết chữ"
+                        }).encode("utf-8"), "application/json; charset=utf-8",
+                            ma=503)
+                    de_bai = str(b.get("de_bai") or "").strip()
+                    if not de_bai:
+                        return self._tra(b"thieu de_bai", ma=400)
+                    chu = tram._goi_van_ban(de_bai)
+                    tram.ghi("viết hộ máy ảo {0} ({1} chữ đề bài)".format(
+                        an_toan(b.get("kenh") or "?"), len(de_bai)))
+                    return self._tra(json.dumps({"chu": chu},
+                                                ensure_ascii=False).encode("utf-8"),
                                      "application/json; charset=utf-8")
                 if self.path == "/done":
                     kd = thu_muc_kenh(b.get("kenh") or "kenh", tram.goc)

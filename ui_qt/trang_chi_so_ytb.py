@@ -93,7 +93,8 @@ class TrangChiSoYTB(QWidget):
         # đọc từ đĩa mỗi nhịp, khỏi cache.
         self._khach_thue: List[str] = []
         self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m),
-                             nguon_khach=self._dia_chi_vps)
+                             nguon_khach=self._dia_chi_vps,
+                             goi_van_ban=self._viet_ho)
 
         ngoai = QVBoxLayout(self)
         ngoai.setContentsMargins(0, 0, 0, 0)
@@ -164,6 +165,19 @@ class TrangChiSoYTB(QWidget):
             "kênh nào. Điền sai thì vẫn nhận được, nhưng nằm ở "
             "<b>CHANNEL/_chi-so-chua-ro/</b>.", "muted"))
         return khung
+
+    def _viet_ho(self, de_bai: str) -> str:
+        """Viết chữ hộ máy ảo (trả lời bình luận) — key của tool, trừ ví tool.
+
+        Chạy trên luồng của trạm, không đụng Qt. Chưa đăng nhập thì ném lỗi
+        cho trạm trả 500 — máy ảo sẽ lùi về Gemini dự phòng.
+        """
+        from core.goi_van_ban import goi_van_ban
+
+        client = getattr(self._app, "client", None)
+        if client is None:
+            raise RuntimeError("tool chưa đăng nhập — vào Tài khoản & Cài đặt")
+        return goi_van_ban(client, [{"role": "user", "content": de_bai}])
 
     def _dia_chi_vps(self) -> List[str]:
         """Địa chỉ các VPS đã lưu — trạm gọi từ luồng riêng, không đụng Qt.

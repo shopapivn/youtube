@@ -37,6 +37,12 @@ MAC_DINH: Dict[str, object] = {
     # agent nuôi Chrome: chết là mở lại (chủ dự án 02/09: "tool kiểm soát
     # all"). Bật sẵn; tắt cho máy nào chủ động đóng mở tay.
     "giu_chrome_mo": True,
+    # Hai núm cho GUI tool đăng trên máy ảo (chủ dự án 02/09: "chỉ cần
+    # setting để nó không tự đăng và trả lời cmt... ví dụ giờ chưa cần đăng
+    # thì có thể tắt"). Agent chép xuống vm/cai-dat-tool.json, GUI đọc và
+    # bật/tắt hai con dang/cmt theo đó.
+    "tu_dang": True,
+    "tu_tra_loi_cmt": True,
 }
 
 #: Những khoá tool được phép đẩy xuống máy ảo. Agent cũng lọc lại đúng danh

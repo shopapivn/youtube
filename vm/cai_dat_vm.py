@@ -116,8 +116,21 @@ def dang_ky_tu_chay() -> str:
     if not os.path.isdir(khoi_dong):
         return ""
     duong = os.path.join(khoi_dong, "shopapi-vm-agent.bat")
-    noi_dung = '@echo off\r\nstart "" wscript.exe "{0}"\r\n'.format(
-        os.path.join(GOC, "CHAY-NGAM.vbs"))
+    # Có GUI tool đăng nằm cạnh (bản đầy đủ D:\upload) thì khởi động bằng
+    # run.bat của nó — GUI hiện ngoài màn hình và nuôi cả dang/cmt/agent
+    # (chủ dự án 02/09: "chạy GUI ở ngoài màn hình là có thể đủ hết").
+    # Không có GUI thì chạy agent ngầm như cũ.
+    run_gui = os.path.join(os.path.dirname(GOC), "run.bat")
+    if (os.path.isfile(run_gui)
+            and os.path.isfile(os.path.join(os.path.dirname(GOC),
+                                            "tool_gui.py"))):
+        dich = run_gui
+    else:
+        dich = os.path.join(GOC, "CHAY-NGAM.vbs")
+        dich = 'wscript.exe "{0}"'.format(dich)
+    if dich.endswith(".bat"):
+        dich = '"{0}"'.format(dich)
+    noi_dung = '@echo off\r\nstart "" {0}\r\n'.format(dich)
     try:
         # .bat phải thuần ASCII + CRLF (bài SETUP.bat); đường có dấu tiếng
         # Việt thì lùi về bảng mã ANSI của máy — cmd vẫn đọc được đa số ca.
