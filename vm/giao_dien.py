@@ -135,27 +135,29 @@ def duoi_log(duong, so_byte=60 * 1024):
 def cam_loi_tat():
     """Tự cắm lối tắt như MyTool: 'MyTool VM' ngoài màn hình + Khởi động.
 
-    Cả hai trỏ CHAY-NGAM.vbs (mở ẩn, tự tìm Python). Có rồi thì thôi; xoá đi
-    thì lần mở sau tự cắm lại. Dọn lối tắt đời cũ trong Khởi động để không
-    mở trùng."""
+    Cả hai trỏ CHAY-NGAM.vbs (mở ẩn, tự tìm Python) và mang ĐÚNG logo của
+    MyTool (vm/logo.ico — chủ dự án 02/09: "để logo như bên MyTool đi").
+    `CreateShortcut` mở được cả lối tắt ĐÃ CÓ, nên máy đã cắm từ bản trước
+    cũng được thay logo — không chỉ máy cắm mới. Dọn lối tắt đời cũ trong
+    Khởi động để không mở trùng."""
     vbs = os.path.join(GOC, "CHAY-NGAM.vbs").replace("'", "''")
+    ico = os.path.join(GOC, "logo.ico").replace("'", "''")
     ps = (
         "$sh=New-Object -ComObject WScript.Shell;"
-        "$d=[Environment]::GetFolderPath('Desktop');"
-        "$l=Join-Path $d 'MyTool VM.lnk';"
-        "if(!(Test-Path $l)){{$s=$sh.CreateShortcut($l);"
-        "$s.TargetPath='wscript.exe';$s.Arguments='\"{vbs}\"';"
-        "$s.WorkingDirectory='{goc}';$s.Save()}};"
+        "$ico='{ico}';"
         "$st=[Environment]::GetFolderPath('Startup');"
         "Remove-Item -LiteralPath (Join-Path $st 'shopapi-vm-agent.bat') "
         "-ErrorAction SilentlyContinue;"
         "Remove-Item -LiteralPath (Join-Path $st 'Tool Upload.lnk') "
         "-ErrorAction SilentlyContinue;"
-        "$l2=Join-Path $st 'MyTool VM.lnk';"
-        "if(!(Test-Path $l2)){{$s=$sh.CreateShortcut($l2);"
-        "$s.TargetPath='wscript.exe';$s.Arguments='\"{vbs}\"';"
-        "$s.WorkingDirectory='{goc}';$s.Save()}}"
-    ).format(vbs=vbs, goc=GOC.replace("'", "''"))
+        "foreach($noi in @([Environment]::GetFolderPath('Desktop'),$st)){{"
+        "$l=Join-Path $noi 'MyTool VM.lnk';"
+        "$s=$sh.CreateShortcut($l);"
+        "if(!$s.TargetPath){{$s.TargetPath='wscript.exe';"
+        "$s.Arguments='\"{vbs}\"';$s.WorkingDirectory='{goc}'}};"
+        "if(Test-Path $ico){{$s.IconLocation=$ico}};"
+        "$s.Save()}}"
+    ).format(ico=ico, vbs=vbs, goc=GOC.replace("'", "''"))
     try:
         subprocess.Popen(["powershell", "-NoProfile", "-Command", ps],
                          creationflags=CREATE_NO_WINDOW)
@@ -334,6 +336,10 @@ class BangDieuKhien:
         self.cua = tk.Tk()
         self.cua.title("MyTool VM — {0} — bản {1}".format(
             self._ten_kenh(), doc_phien_ban()))
+        try:
+            self.cua.iconbitmap(os.path.join(GOC, "logo.ico"))
+        except Exception:
+            pass
         self.cua.configure(bg=NEN)
         self.cua.geometry("1000x600")
         self.cua.protocol("WM_DELETE_WINDOW", self.dong)

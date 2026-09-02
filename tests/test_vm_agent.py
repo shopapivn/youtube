@@ -133,7 +133,8 @@ def test_thu_muc_vm_du_bo():
     for ten in ("KE-HOACH.md", "agent.py", "config.example.json",
                 "CHAY-AGENT.bat", "CAI-DAT-VM.bat", "CHAY-NGAM.vbs",
                 "nguon_tool.py", "ghep_tool_dang.py", "giao_dien.py",
-                "may_dang.py", "may_cmt.py", "requirements-vm.txt"):
+                "may_dang.py", "may_cmt.py", "requirements-vm.txt",
+                "logo.ico"):
         assert (GOC / "vm" / ten).exists(), "thiếu vm/" + ten
     assert (GOC / "vm" / "icon" / "chonfile.png").exists(), \
         "máy đăng cần ảnh mẫu PyAutoGUI trong vm/icon/"
@@ -1048,7 +1049,8 @@ class TestToolVmDayDu:
             with zipfile.ZipFile(io_mod.BytesIO(du)) as goi:
                 ten = set(goi.namelist())
             for can in ("giao_dien.py", "agent.py", "may_dang.py",
-                        "may_cmt.py", "nguon_tool.py", "CAI-DAT-VM.bat"):
+                        "may_cmt.py", "nguon_tool.py", "CAI-DAT-VM.bat",
+                        "logo.ico"):
                 assert can in ten, "gói thiếu " + can
             assert any(t.startswith("icon/") for t in ten), "gói thiếu ảnh mẫu"
             # Đồ của RIÊNG cái máy không được phát đi
