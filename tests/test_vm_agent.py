@@ -1290,3 +1290,40 @@ class TestRaLenhQuaMang:
             assert tram.viec_cho() == []
         finally:
             tram.tat()
+
+
+class TestQuetXongMaKhongCoGoi:
+    """02/09 đo thật: lệnh quét 'xong' đẹp đẽ nhưng 0 gói về (extension
+    chưa cài trong Chrome) — trạm phải nói toạc, và giữ kết quả đọc từ xa."""
+
+    def test_canh_bao_khi_so_goi_dung_im(self, tmp_path):
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            agent = _nap_agent()
+            dia_chi = "http://127.0.0.1:{0}".format(tram.cong)
+            so = agent._goi(dia_chi, "/giao-viec",
+                            {"kenh": "TL4-T7", "loai": "quet-studio"})["id"]
+            tram.lay_viec("TL4-T7", "PC4")
+            tram.viec_xong("TL4-T7", so, ket_qua="đã mở Studio")
+            nhin = agent._goi(dia_chi, "/may-noi")
+            kq = nhin["ket_qua_gan_day"][-1]
+            assert kq["id"] == so and "KHÔNG có gói" in kq["canh_bao"]
+            assert "tien-ich" in kq["canh_bao"], "phải chỉ đúng chỗ chữa"
+        finally:
+            tram.tat()
+
+    def test_co_goi_ve_thi_khong_keu_oan(self, tmp_path):
+        os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+        tram = Tram(cong=0, goc=str(tmp_path))
+        so = tram.giao_viec("TL4-T7", "quet-studio")
+        tram.lay_viec("TL4-T7", "PC4")
+        tram.so_goi += 3               # extension đã gửi gói trong lúc quét
+        tram.viec_xong("TL4-T7", so, ket_qua="ok")
+        assert tram._ket_qua_viec[-1]["canh_bao"] == ""
+        # việc đăng video không dính luật này
+        so2 = tram.giao_viec("TL4-T7", "dang-video")
+        tram.lay_viec("TL4-T7", "PC4")
+        tram.viec_xong("TL4-T7", so2, ket_qua="ok")
+        assert tram._ket_qua_viec[-1]["canh_bao"] == ""

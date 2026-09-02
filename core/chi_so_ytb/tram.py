@@ -292,6 +292,8 @@ class Tram:
         self._viec: List[dict] = []          # [{id, kenh, loai, tham_so, luc}]
         self._so_viec = 0
         self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
+        self._ket_qua_viec: List[dict] = []  # 20 kết quả việc gần nhất
+        self._goi_moc: dict = {}             # id việc -> (loại, so_goi lúc giao)
         # ── Khách mời: VPS của CHÍNH CHỦ, nằm ngoài mạng nội bộ ──────────────
         #
         # Chủ dự án, 02/09/2026: *"tool đang có cái vps tl4-t7 nó có ip của
@@ -586,15 +588,43 @@ class Tram:
                 "ip": str(ip), "luc": datetime.now().isoformat(timespec="seconds")}
             for i, viec in enumerate(self._viec):
                 if viec["kenh"] == kenh:
+                    # Ghi mốc số gói lúc GIAO — lúc báo xong mà số gói vẫn
+                    # y nguyên thì lượt quét đó không cào được gì.
+                    self._goi_moc[viec["id"]] = (viec["loai"], self.so_goi)
                     return self._viec.pop(i)
         return None
 
     def viec_xong(self, kenh: str, so: int, ket_qua: str = "", loi: str = "") -> None:
-        """Agent báo đã làm xong (hay hỏng) một việc — chỉ để kể lại cho người."""
+        """Agent báo xong (hay hỏng) một việc — kể cho người, và GIỮ LẠI.
+
+        02/09/2026, đo thật: lệnh quét chạy trọn 7 phút, agent báo "xong",
+        nhưng `so_goi` đứng im — Chrome mở mà extension không gửi được gói
+        nào (chưa cài trong Chrome của kênh). Người ngồi ngoài chỉ thấy
+        "xong" là bị lừa. Nên: so mốc số gói lúc giao với lúc xong — quét
+        "xong" mà 0 gói về thì nói toạc ra, và cất 20 kết quả gần nhất cho
+        `/may-noi` trả — ra lệnh từ xa xong còn đọc được đầu đuôi.
+        """
+        canh_bao = ""
+        loai, moc = self._goi_moc.pop(so, ("", None))
+        if (not loi and moc is not None and self.so_goi == moc
+                and loai in ("quet-studio", "quet-trang-chu")):
+            canh_bao = ("quét chạy trọn nhưng KHÔNG có gói số liệu nào về — "
+                        "extension đã cài trong Chrome của kênh chưa? "
+                        "(chrome://extensions → Tải tiện ích đã giải nén → "
+                        "thư mục vm/tien-ich)")
         if loi:
             self.ghi(f"máy ảo kênh {an_toan(kenh)}: việc #{so} HỎNG — {str(loi)[:200]}")
         else:
             self.ghi(f"máy ảo kênh {an_toan(kenh)}: việc #{so} xong. {str(ket_qua)[:200]}")
+        if canh_bao:
+            self.ghi(f"  ⚠ {canh_bao}")
+        with self._khoa_viec:
+            self._ket_qua_viec.append({
+                "id": so, "kenh": an_toan(kenh), "loai": loai,
+                "ket_qua": str(ket_qua)[:300], "loi": str(loi)[:300],
+                "canh_bao": canh_bao,
+                "luc": datetime.now().isoformat(timespec="seconds")})
+            del self._ket_qua_viec[:-20]
 
     def may_dang_noi(self) -> List[dict]:
         """Các máy ảo từng lên tiếng, mới nhất trước — cho tab Máy VM vẽ bảng."""
@@ -701,8 +731,11 @@ def _lam_xu_ly(tram: "Tram"):
             if self.path.startswith("/may-noi"):
                 # Nhìn từ ngoài vào: máy nào đang nối, việc nào đang chờ —
                 # để ra lệnh qua mạng xong còn biết lệnh đi tới đâu.
+                with tram._khoa_viec:
+                    ket_qua = list(tram._ket_qua_viec)
                 return self._tra(json.dumps({
                     "may": tram.may_dang_noi(), "viec_cho": tram.viec_cho(),
+                    "ket_qua_gan_day": ket_qua,
                 }, ensure_ascii=False, default=str).encode("utf-8"),
                     "application/json; charset=utf-8")
             if self.path.startswith("/kenh"):
