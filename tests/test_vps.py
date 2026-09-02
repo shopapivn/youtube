@@ -320,7 +320,7 @@ def test_tab_co_dung_hai_muc_gpm_va_vps(tmp_path):
         # MỘT mục cuộn dọc; mục hai là hạ tầng cào (trạm + tiện ích); phần
         # ĐỌC số nằm bên tab Phân tích.
         assert [t.tabs.tabText(i) for i in range(t.tabs.count())] == \
-            ["VPS && Máy VM", "Trạm && tiện ích"]
+            ["VPS && Máy VM", "Thuê máy", "Trạm && tiện ích"]
         assert t.tabs.indexOf(t.gpm) == -1, "GPM ẩn — chủ dự án không dùng"
         assert t.gpm is not None and hasattr(t.gpm, "dong_het"), \
             "GPM vẫn phải DỰNG ngầm: nó là đường dọn Chrome con khi đóng tool"
@@ -539,3 +539,53 @@ def test_thu_muc_luu_va_sua_duoc(tmp_path):
     assert kho.tim(m.ma).thu_muc == r"D:\kenh"
     kho.sua(m.ma, thu_muc=r"E:\khac")
     assert kho.tim(m.ma).duong_trong_may() == r"\\tsclient\E\khac"
+
+
+def test_tach_lam_viec_va_thue(tmp_path):
+    """02/09: 'chỗ vps để làm việc, 1 tab nhỏ để thuê' — mục làm việc không
+    được mang nút Huỷ thuê / thẻ mua; mục thuê lo trọn chuyện tiền."""
+    pytest.importorskip("PyQt5.QtWidgets", reason="máy chạy test không có giao diện")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt5.QtWidgets import QApplication, QPushButton
+
+    from ui_qt.trang_vps import TrangVps
+
+    class _AppGia:
+        base_dir = str(tmp_path)
+        client = None
+
+        def show_message(self, *_a):
+            pass
+
+        def show_error(self, *_a):
+            pass
+
+        def run_bg(self, viec, *, on_ok=None, on_err=None):
+            try:
+                kq = viec()
+            except Exception as loi:  # noqa: BLE001
+                if on_err:
+                    on_err(loi)
+                return
+            if on_ok:
+                on_ok(kq)
+
+    app = QApplication.instance() or QApplication([])
+    may = {"id": "t1", "trang_thai": "ok", "may": {"ten": "PC9"},
+           "ket_noi": {"dia_chi": "x", "tai_khoan": "a", "mat_khau": "b"}}
+
+    lam = TrangVps(_AppGia(), che_do="lam_viec")
+    lam._may = [may]
+    lam._ve()
+    chu_lam = [b.text() for b in lam.findChildren(QPushButton)]
+    assert any("Mở máy" in t for t in chu_lam)
+    assert not any("Huỷ" in t for t in chu_lam), \
+        "mục làm việc không được mang nút Huỷ thuê"
+
+    thue = TrangVps(_AppGia(), che_do="thue")
+    thue._may = [may]
+    thue._ve()
+    chu_thue = [b.text() for b in thue.findChildren(QPushButton)]
+    assert any("Huỷ" in t for t in chu_thue), "mục thuê phải có Huỷ thuê"
+    assert not any("Mở máy" in t for t in chu_thue), \
+        "mở máy là việc của mục làm việc"

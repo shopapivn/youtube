@@ -58,7 +58,10 @@ class TrangGpmVps(QWidget):
         self.tabs = QTabWidget()
         # GPM dựng NGẦM, không addTab — xem đầu tệp (dọn Chrome con khi đóng).
         self.gpm = TrangChromeSach(app, co_tieu_de=False)
-        self.vps = TrangVps(app)
+        # 02/09: "chỗ vps... để làm việc, 1 tab nhỏ để thuê" — mục làm việc
+        # chỉ còn thẻ MỞ máy; chuyện thuê/huỷ/hết hạn nằm mục "Thuê máy".
+        self.vps = TrangVps(app, che_do="lam_viec")
+        self.thue = TrangVps(app, che_do="thue")
         # Chỉ số kênh ở đây chỉ giữ HẠ TẦNG (cài tiện ích + trạm) — phần ĐỌC
         # số nằm bên tab Phân tích & Nghiên cứu (02/09: "cái đọc số liệu đã
         # lấy được... đưa về bên phân tích và nghiên cứu").
@@ -80,6 +83,7 @@ class TrangGpmVps(QWidget):
         cuon.setFrameShape(QScrollArea.NoFrame)
         cuon.setWidget(gop)
         self.tabs.addTab(cuon, "VPS && Máy VM")
+        self.tabs.addTab(self.thue, "Thuê máy")
         self.tabs.addTab(self.chi_so, "Trạm && tiện ích")
         doc.addWidget(self.tabs, 1)
 

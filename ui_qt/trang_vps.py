@@ -73,9 +73,18 @@ _HIEN_GIAY = 6
 
 
 class TrangVps(QWidget):
-    def __init__(self, app):
+    def __init__(self, app, che_do: str = "du"):
+        """`che_do` — 02/09 chủ dự án: *"chỗ vps có thể tách ra... 1 tab nhỏ
+        để thuê — còn gần như chỗ vps có thể để làm việc"*:
+
+            "lam_viec"  thẻ máy để MỞ và dùng (không nút Huỷ thuê, không
+                         thẻ mua) + máy riêng — nằm ở mục làm việc
+            "thue"      thuê mới / thuê thêm / huỷ / máy hết hạn — mục nhỏ
+            "du"        cả hai (bản cũ, giữ cho chỗ nào chưa tách)
+        """
         super().__init__()
         self._app = app
+        self._che_do = che_do
         self._may: List[Dict[str, Any]] = []
         self._kho: Dict[str, Any] = {}
         self._dang_doi_mk: Dict[str, str] = {}   # thue_id -> mật khẩu cũ
@@ -181,28 +190,59 @@ class TrangVps(QWidget):
 
         dang_thue = [m for m in self._may if str(m.get("trang_thai")) != "het_han"]
         het_han = [m for m in self._may if str(m.get("trang_thai")) == "het_han"]
+        lam_viec = self._che_do in ("du", "lam_viec")
+        thue = self._che_do in ("du", "thue")
 
-        for may in dang_thue:
-            self._cot.addWidget(self._the_may(may))
+        if lam_viec:
+            for may in dang_thue:
+                self._cot.addWidget(self._the_may(may))
+            if not dang_thue and self._che_do == "lam_viec":
+                self._cot.addWidget(_chu_dai(
+                    "Chưa có máy thuê nào. Thuê ở mục “Thuê máy” bên cạnh — "
+                    "hoặc thêm máy riêng của bạn ở dưới."))
 
-        if not dang_thue:
-            self._cot.addWidget(self._the_moi_thue())
-        elif self._con_thue_duoc():
-            self._cot.addWidget(self._hang_thue_them())
+        if thue:
+            if not dang_thue:
+                self._cot.addWidget(self._the_moi_thue())
+            elif self._con_thue_duoc():
+                self._cot.addWidget(self._hang_thue_them())
+            if self._che_do == "thue":
+                for may in dang_thue:
+                    self._cot.addWidget(self._hang_quan_thue(may))
+            for may in het_han:
+                self._cot.addWidget(self._the_het_han(may))
 
-        for may in het_han:
-            self._cot.addWidget(self._the_het_han(may))
-
-        # ── Máy riêng: nhóm TÁCH BẠCH, không trộn vào danh sách máy thuê ──
-        #
-        # Trộn hai loại là mời một nhầm lẫn đắt: bấm "Huỷ thuê" trên một cái máy
-        # bạn tự mua, hay tưởng máy riêng cũng được ShopAPI xoay mật khẩu hộ.
-        rieng = self._kho_rieng.doc()
-        self._cot.addWidget(self._dau_muc_rieng(len(rieng)))
-        for m in rieng:
-            self._cot.addWidget(self._the_rieng(m))
+        if lam_viec:
+            # ── Máy riêng: nhóm TÁCH BẠCH, không trộn vào danh sách máy thuê ──
+            #
+            # Trộn hai loại là mời một nhầm lẫn đắt: bấm "Huỷ thuê" trên một cái
+            # máy bạn tự mua, hay tưởng máy riêng cũng được ShopAPI xoay mật
+            # khẩu hộ.
+            rieng = self._kho_rieng.doc()
+            self._cot.addWidget(self._dau_muc_rieng(len(rieng)))
+            for m in rieng:
+                self._cot.addWidget(self._the_rieng(m))
 
         self._cot.addStretch(1)
+
+    def _hang_quan_thue(self, may: Dict[str, Any]) -> QWidget:
+        """Một hàng quản THUÊ gọn: tên · hạn kỳ · Huỷ — mục "Thuê máy" chỉ lo
+        chuyện tiền/hạn, việc MỞ máy nằm bên mục làm việc."""
+        thue_id = str(may.get("id") or "")
+        m = may.get("may") or {}
+        khung = the()
+        hang = QHBoxLayout(khung)
+        hang.setContentsMargins(18, 10, 18, 10)
+        hang.setSpacing(10)
+        hang.addWidget(nhan(str(m.get("ten") or "Máy ảo"), "h2"))
+        han = nhan(_cau_han_ky(may), "phu")
+        han.setWordWrap(True)
+        han.setMinimumWidth(1)
+        hang.addWidget(han, 1)
+        if not may.get("huy_cuoi_ky"):
+            hang.addWidget(nut_nguy_hiem("Huỷ thuê",
+                                         lambda: self._huy(thue_id), rong=100))
+        return khung
 
     def _con_thue_duoc(self) -> bool:
         toi_da = self._kho.get("toi_da_moi_khach") or 3
@@ -251,7 +291,7 @@ class TrangVps(QWidget):
         han.setMinimumWidth(1)
         cuoi.addWidget(han, 1)
         cuoi.addWidget(nut_phu("Khởi động lại", lambda: self._khoi_dong_lai(thue_id), rong=120))
-        if not may.get("huy_cuoi_ky"):
+        if not may.get("huy_cuoi_ky") and self._che_do != "lam_viec":
             cuoi.addWidget(nut_nguy_hiem("Huỷ thuê", lambda: self._huy(thue_id), rong=100))
         doc.addLayout(cuoi)
         return khung
