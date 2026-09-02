@@ -115,10 +115,26 @@ Hai bên nối nhau qua **trạm** — cổng HTTP có sẵn của tool
   xong). Khi nào có việc dài hơi (kế hoạch đăng) thì kế hoạch nằm trên đĩa
   theo kênh, không nằm trong hộp.
 
-## Cài agent lên máy ảo (giai đoạn 1)
+## Cài agent lên máy ảo — KHÔNG PHẢI GÕ GÌ (chốt 02/09/2026)
 
-1. Chép thư mục `vm/` vào máy ảo (nằm đâu cũng được).
-2. Chép `config.example.json` thành `config.json`, điền: địa chỉ trạm (lấy ở
-   mục Chỉ số kênh sau khi bật cổng nhận), mã kênh, đường Chrome của kênh.
-3. Nhấp đúp `CHAY-AGENT.bat`. Trên tool, tab Phân tích & Nghiên cứu → Máy VM
-   sẽ thấy máy hiện lên trong vòng nửa phút.
+Chủ dự án xem bản cài ba câu hỏi: *"tao thấy nó phức tạp thế… tao cần mọi
+thứ đơn giản dễ dùng"*. Bản mới chỉ còn hai bước:
+
+1. Chép thư mục `vm/` vào máy ảo, đặt **cạnh thư mục Chrome của kênh**
+   (cùng chỗ vẫn để tool đăng — nếp `<MÃ>\<MÃ>.exe`).
+2. Nhấp đúp `CAI-DAT-VM.bat`.
+
+Mọi thứ tự lo, nhờ ba đường ngầm:
+
+- **Trạm tự dò:** trạm mở tai UDP cùng số cổng; bộ cài hú `shopapi-tram?`
+  quảng bá, trạm đáp kèm số cổng, địa chỉ lấy từ NGUỒN gói đáp. (Tool phải
+  đang mở và đã Bật cổng nhận. Windows: gói dội "cổng đóng" WinError 10054
+  nổ ngay trên `recvfrom` — phải nuốt và nghe tiếp tới hạn.)
+- **Kênh tự đoán:** thư mục `<MÃ>\<MÃ>.exe` duy nhất nằm cạnh → đó là mã
+  kênh. Không đoán được thì hỏi trạm `GET /kenh` → menu BẤM SỐ chọn.
+- **Chrome tự tìm mỗi lần chạy** (đã có từ trước): `config.json` để trống
+  `chrome`, agent tra thư mục cạnh bên.
+
+Đường lùi cuối cùng (không mạng, không nếp thư mục) mới phải gõ tay như cũ.
+Trên tool, tab Phân tích & Nghiên cứu → Máy VM sẽ thấy máy hiện lên trong
+vòng nửa phút.
