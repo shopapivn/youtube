@@ -639,6 +639,18 @@ class Tram:
         """
         canh_bao = ""
         loai, moc = self._goi_moc.pop(so, ("", None))
+        # Lệnh ép còn nằm nguyên sau khi việc quét đã xong = tiện ích trong
+        # Chrome của máy ảo CHƯA HỎI lệnh lần nào → nó là bản cũ (agent tải
+        # bản mới về đĩa nhưng Chrome không tự nạp lại). Đo thật 02/09: lệnh
+        # nằm 15 phút không ai lấy. Nói toạc thay vì để người dùng ngồi đoán.
+        if loai == "quet-studio":
+            with self._khoa_viec:
+                con = an_toan(kenh) in self._lenh_tien_ich
+            if con:
+                canh_bao = ("tiện ích chưa hỏi lệnh ép chụp — bản trong "
+                            "Chrome còn cũ. Trên máy ảo mở chrome://extensions "
+                            "rồi bấm nút ↻ (Tải lại) ở tiện ích Chỉ số kênh, "
+                            "phiên bản phải là 2.4.1 trở lên.")
         if (not loi and moc is not None and self.so_goi == moc
                 and loai in ("quet-studio", "quet-trang-chu")):
             canh_bao = ("quét chạy trọn nhưng KHÔNG có gói số liệu nào về — "

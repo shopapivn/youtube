@@ -122,6 +122,7 @@ def _s(v, hau: str = "") -> str:
 class TrangChiSoYTB(QWidget):
     _xong = pyqtSignal(object, str)
     _dong_log = pyqtSignal(str)
+    _ai_tien = pyqtSignal(str)   # tiến trình AI (luồng nền → nhãn trạng thái)
 
     def __init__(self, app, phan=("cai", "tram", "doc")):
         """`phan` chọn thẻ nào được dựng — 02/09 chủ dự án tách trang này đôi:
@@ -173,6 +174,8 @@ class TrangChiSoYTB(QWidget):
         ngoai.addStretch(1)
         self._xong.connect(self._nhan_ket_qua)
         self._dong_log.connect(self._them_log)
+        if hasattr(self, "_tt"):
+            self._ai_tien.connect(self._tt.setText)
         # Máy đã từng dùng máy ảo thì mở tool là cổng nhận TỰ BẬT — người
         # dùng không phải nhớ ghé đây bấm (02/09: "đừng nhiều tab nhiều mục
         # khó hiểu"). Máy chưa từng dùng thì không tự mở cổng làm gì.
@@ -540,12 +543,22 @@ class TrangChiSoYTB(QWidget):
         except OSError:
             pass
         self._nut_ai.setEnabled(False)
-        self._tt.setText("AI đang đọc số liệu… (một lượt gọi, vài chục giây)")
+        self._tt.setText("AI đang đọc số liệu… lần chờ đầu có thể tới vài "
+                         "phút nếu máy chủ đang bận (cứ để yên, đừng bấm lại).")
+        t0 = time.time()
 
         def viec():
             from core.goi_van_ban import goi_van_ban  # noqa: PLC0415
-            return goi_van_ban(client,
-                               [{"role": "user", "content": de_bai}])
+
+            def bao(m):
+                # Máy chủ bận thì goi_van_ban tự đợi và kể lại — đưa lên nhãn
+                # để người dùng thấy nó ĐANG chạy, không tưởng treo (02/09:
+                # "mãi không trả kết quả" — thật ra đợi 8 phút vì 409).
+                self._ai_tien.emit("AI đang chạy ({0}s): {1}".format(
+                    int(time.time() - t0), str(m)[:90]))
+
+            return goi_van_ban(client, [{"role": "user", "content": de_bai}],
+                               on_log=bao)
 
         def xong(chu: str) -> None:
             self._nut_ai.setEnabled(True)

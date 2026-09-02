@@ -1320,6 +1320,7 @@ class TestQuetXongMaKhongCoGoi:
         so = tram.giao_viec("TL4-T7", "quet-studio")
         tram.lay_viec("TL4-T7", "PC4")
         tram.so_goi += 3               # extension đã gửi gói trong lúc quét
+        tram._lenh_tien_ich.pop("TL4-T7", None)   # và đã lấy lệnh ép (bản mới)
         tram.viec_xong("TL4-T7", so, ket_qua="ok")
         assert tram._ket_qua_viec[-1]["canh_bao"] == ""
         # việc đăng video không dính luật này
@@ -1427,3 +1428,26 @@ class TestRaLenhLaLam:
             assert agent._goi(dia_chi, "/lenh-tien-ich?kenh=TL4-T7") == {}
         finally:
             tram.tat()
+
+
+def test_lenh_ep_khong_ai_lay_thi_tram_noi_toac(tmp_path):
+    """02/09 đo thật: lệnh ép nằm 15 phút không ai lấy — tiện ích trong
+    Chrome còn bản cũ. Việc quét báo xong mà lệnh vẫn còn thì phải nói ra,
+    kèm đúng cách chữa (chrome://extensions → ↻)."""
+    os.makedirs(tmp_path / "CHANNEL" / "TL4-T7")
+    tram = Tram(cong=0, goc=str(tmp_path))
+    so = tram.giao_viec("TL4-T7", "quet-studio")     # để lại lệnh ép
+    tram.lay_viec("TL4-T7", "PC4")
+    tram.so_goi += 3                                  # có gói về, không phải lỗi đó
+    tram.viec_xong("TL4-T7", so, ket_qua="đã mở Studio")
+    kq = tram._ket_qua_viec[-1]
+    assert "chưa hỏi lệnh" in kq["canh_bao"]
+    assert "chrome://extensions" in kq["canh_bao"]
+
+    # Tiện ích CÓ hỏi (lệnh đã được lấy) thì không kêu oan
+    so2 = tram.giao_viec("TL4-T7", "quet-studio")
+    tram.lay_viec("TL4-T7", "PC4")
+    tram._lenh_tien_ich.pop("TL4-T7", None)           # tiện ích vừa lấy
+    tram.so_goi += 3
+    tram.viec_xong("TL4-T7", so2, ket_qua="đã mở Studio")
+    assert tram._ket_qua_viec[-1]["canh_bao"] == ""
