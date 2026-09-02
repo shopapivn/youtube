@@ -32,7 +32,7 @@ import sys
 import threading
 from typing import List, Optional
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QHeaderView,
                              QMessageBox, QPlainTextEdit, QTableWidget,
                              QTableWidgetItem, QVBoxLayout, QWidget)
@@ -108,6 +108,18 @@ class TrangChiSoYTB(QWidget):
         ngoai.addStretch(1)
         self._xong.connect(self._nhan_ket_qua)
         self._dong_log.connect(self._them_log)
+        # Máy đã từng dùng máy ảo thì mở tool là cổng nhận TỰ BẬT — người
+        # dùng không phải nhớ ghé đây bấm (02/09: "đừng nhiều tab nhiều mục
+        # khó hiểu"). Máy chưa từng dùng thì không tự mở cổng làm gì.
+        if "PYTEST_CURRENT_TEST" not in os.environ and self._da_dung_vm():
+            QTimer.singleShot(300, self.bao_dam_bat)
+
+    def _da_dung_vm(self) -> bool:
+        import glob
+        goc = self._app.base_dir
+        return (os.path.isfile(os.path.join(goc, "vm", "config.json"))
+                or bool(glob.glob(os.path.join(goc, "CHANNEL", "*",
+                                               "may-ao.json"))))
 
     # ------------------------------------------------------------------ trạm nhận
     def _the_tram(self) -> QWidget:
@@ -188,27 +200,39 @@ class TrangChiSoYTB(QWidget):
                          on_ok=lambda ds: setattr(self, "_khach_thue", ds),
                          on_err=lambda _l: None)
 
-    def _bat_tat_tram(self) -> None:
+    def bao_dam_bat(self) -> str:
+        """Cổng nhận đang mở thì thôi, chưa mở thì mở — trả "" khi ổn.
+
+        Là cửa cho chỗ khác gọi (nút "Tạo bộ cài VM", lượt tự bật lúc mở
+        tool) — người dùng không phải nhớ ghé mục này bật tay nữa
+        (02/09: "đừng nhiều tab nhiều mục khó hiểu").
+        """
         if self._tram.dang_chay:
-            self._tram.tat()
-            self._nut_tram.setText("Bật cổng nhận")
-            self._nhan_tram.setText("Đang tắt.")
-            return
+            return ""
         try:
             self._tram.bat()
         except OSError as e:
-            # Cổng bị chương trình khác giữ là ca hay gặp nhất: một bản công cụ nữa đang mở,
-            # hoặc trạm nhận cũ còn chạy ngoài dòng lệnh. Nói thẳng, đừng để nút im lặng.
-            QMessageBox.warning(
-                self, "Không mở được cổng",
-                "Cổng {} đang bị chương trình khác giữ.\n\nChi tiết: {}".format(self._tram.cong, e))
-            return
+            # Cổng bị chương trình khác giữ là ca hay gặp nhất: một bản công
+            # cụ nữa đang mở, hoặc trạm cũ còn chạy ngoài dòng lệnh.
+            return ("Cổng {0} đang bị chương trình khác giữ.\n\n"
+                    "Chi tiết: {1}".format(self._tram.cong, e))
         self._nut_tram.setText("Tắt cổng nhận")
         self._nap_khach_thue()
         ds = tr.dia_chi_may(self._tram.cong)
         self._nhan_tram.setText(
             "Đang nhận. Dán vào tiện ích: <b>" + "</b> hoặc <b>".join(ds) + "</b>"
             if ds else "Đang nhận, nhưng máy này chưa có địa chỉ mạng nội bộ nào.")
+        return ""
+
+    def _bat_tat_tram(self) -> None:
+        if self._tram.dang_chay:
+            self._tram.tat()
+            self._nut_tram.setText("Bật cổng nhận")
+            self._nhan_tram.setText("Đang tắt.")
+            return
+        loi = self.bao_dam_bat()
+        if loi:
+            QMessageBox.warning(self, "Không mở được cổng", loi)
 
     def _chep_dia_chi(self) -> None:
         ds = tr.dia_chi_may(self._tram.cong)

@@ -159,6 +159,20 @@ Lưới đỡ, tự chạy ngầm, người dùng không cần biết:
 Máy lạ gọi vào trạm vẫn bị 403 — không mở toang ra Internet. Trên tool,
 tab Máy VM sẽ thấy máy hiện lên trong vòng nửa phút sau khi agent chạy.
 
+**MỘT hành động mỗi bên, còn lại tự chạy** (chốt 02/09, sau "tao mệt với
+cách lv này... tư duy đơn giản đi"):
+
+- Bên tool: MỞ TOOL là trạm tự bật (máy đã từng dùng máy ảo — có
+  vm/config.json hay may-ao.json). Nút "Tạo bộ cài VM" cũng tự bật trạm
+  luôn — không còn bước "nhớ sang Chỉ số kênh bật cổng nhận".
+- Bên máy ảo: MÁY BẬT là agent tự chạy (Startup), agent là CON DUY NHẤT:
+  nuôi Chrome + extension (cào) và nuôi luôn tool đăng (`giu_tool_dang` —
+  tự nhận `dang-tool.py` nằm cạnh theo nếp D:\upload, KHÔNG tự chạy
+  `dang.py` gốc vì bản gốc đọc trang tính, hai nguồn lịch sẽ giẫm nhau).
+  "Bật tool đó là all mọi thứ" = bật MÁY là all mọi thứ.
+- Cài đặt là việc MỘT LẦN mỗi máy: bấm 1 nút → copy 1 thư mục (đè bản cũ,
+  config mới nằm sẵn trong đó) → nhấp đúp 1 lần.
+
 Vệ sinh dài hạn (02/09, "không có bug khi dùng dài hạn"):
 
 - **Địa chỉ đóng gói phải là địa chỉ ĐANG DÙNG.** Windows đẻ địa chỉ IPv6

@@ -33,6 +33,7 @@ import os
 import socket
 import struct
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -512,6 +513,53 @@ def quet_trang_chu(cau_hinh: dict) -> str:
     return "đã mở trang chủ cho extension gom đối thủ"
 
 
+def tim_tool_dang(cau_hinh: dict = None) -> str:
+    """Tool đăng nằm ở đâu — điền rõ thì theo, không thì tự tìm cạnh bên.
+
+    Nếp thư mục của chủ dự án: vm/ nằm trong thư mục tool đăng (D:\\upload),
+    cạnh `dang-tool.py` (bản đã nối nguồn tool, do `ghep_tool_dang` sinh).
+    CHỈ tự nhận `dang-tool.py` — không tự chạy `dang.py` gốc: bản gốc đọc
+    trang tính, tự mở nó là hai nguồn lịch giẫm nhau.
+    """
+    ro = str((cau_hinh or {}).get("tool_dang") or "").strip()
+    if ro:
+        return ro if os.path.isfile(ro) else ""
+    ung = os.path.join(os.path.dirname(GOC), "dang-tool.py")
+    return ung if os.path.isfile(ung) else ""
+
+
+_TOOL_DANG = {"tt": None}       # tiến trình tool đăng mà agent đang nuôi
+
+
+def giu_tool_dang(cau_hinh: dict) -> None:
+    """Nuôi tool đăng như nuôi Chrome — chết là mở lại.
+
+    Chủ dự án, 02/09/2026: *"tích hợp cái tool upload để tao bật tool đó là
+    all mọi thứ"*. Đảo lại cho đúng một đầu mối: trên máy ảo chỉ có MỘT con
+    chạy là agent; agent nuôi Chrome (để extension cào) và nuôi luôn tool
+    đăng (để lịch đăng chạy) — máy bật lên là đủ cả, không phải mở gì thêm.
+
+    Theo dõi bằng chính tay cầm tiến trình (agent là người mở duy nhất —
+    khoá `mot_minh` bảo đảm), nên không đụng bài dò tên kiểu Chrome.
+    """
+    duong = tim_tool_dang(cau_hinh)
+    if not duong:
+        return
+    tt = _TOOL_DANG.get("tt")
+    if tt is not None and tt.poll() is None:
+        return
+    if duong.lower().endswith(".py"):
+        lenh = [sys.executable, duong]
+    elif os.name == "nt" and duong.lower().endswith((".bat", ".cmd")):
+        lenh = ["cmd", "/c", duong]
+    else:
+        lenh = [duong]
+    _TOOL_DANG["tt"] = subprocess.Popen(lenh,
+                                        cwd=os.path.dirname(duong) or None)
+    ghi("tool đăng {0}: {1}".format(
+        "mở lại (đã tắt)" if tt is not None else "mở", duong))
+
+
 def dang_video(cau_hinh: dict) -> str:
     """Tải kế hoạch đăng của kênh về máy ảo; có tool đăng thì mở nó lên.
 
@@ -743,6 +791,11 @@ def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
             giu_chrome(hieu_luc)
         except Exception as loi:  # noqa: BLE001
             ghi("giữ Chrome hỏng: {0}".format(loi))
+        # Nuôi tool đăng y như vậy — "bật máy là all mọi thứ" (02/09).
+        try:
+            giu_tool_dang(hieu_luc)
+        except Exception as loi:  # noqa: BLE001
+            ghi("giữ tool đăng hỏng: {0}".format(loi))
         if mot_vong:
             return
         # Chờ giãn dần khi trạm im ắng lâu (tối đa 5 phút) — máy nhà tắt tool

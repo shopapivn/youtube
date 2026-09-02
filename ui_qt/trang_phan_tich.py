@@ -1500,16 +1500,21 @@ class TrangMayVM(QWidget):
                 "mạng của máy này rồi bấm lại.")
             return
         duong = vm_cai_dat.dong_goi_vm(self._app.base_dir, kenh, ung)
+        # Một nút lo hết: cổng nhận cũng tự mở luôn, không bắt người dùng
+        # ghé mục Chỉ số kênh bật tay (02/09: "đừng nhiều tab nhiều mục").
+        try:
+            loi_tram = self._chi_so.bao_dam_bat()
+        except Exception as e:  # noqa: BLE001
+            loi_tram = str(e)
         mo_thu_muc(os.path.dirname(duong))
-        tram = self._tram()
-        nhac = ("" if (tram is not None and tram.dang_chay) else
-                "\n\nNhớ bật “cổng nhận” ở mục Chỉ số kênh — máy ảo gọi về "
-                "qua cổng đó.")
+        nhac = ("\n\nCổng nhận đang mở sẵn — không phải bật gì thêm."
+                if not loi_tram else
+                "\n\nCHÚ Ý — chưa mở được cổng nhận: " + loi_tram)
         self._app.show_message(
             "Đã tạo bộ cài cho " + kenh,
-            "Chép CẢ thư mục vm/ vừa mở sang máy ảo (đặt cạnh Chrome của "
-            "kênh), rồi nhấp đúp CAI-DAT-VM.bat — xong, không phải gõ gì." +
-            nhac)
+            "Chép CẢ thư mục vm/ vừa mở sang máy ảo (đè lên bản cũ nếu có, "
+            "đặt cạnh Chrome của kênh), rồi nhấp đúp CAI-DAT-VM.bat — hết, "
+            "không phải gõ gì. Từ đó máy ảo bật lên là tự chạy." + nhac)
 
     def _ve(self) -> None:
         tram = self._tram()

@@ -880,3 +880,57 @@ class TestVeSinhDaiHan:
         # CHAY-NGAM.vbs phải có thật và cũng CRLF — không thì lối tắt trỏ ma.
         vbs = open(GOC / "vm" / "CHAY-NGAM.vbs", "rb").read()
         assert b"\r\n" in vbs and b"CAI-DAT-VM.bat" in vbs
+
+
+class TestMotConDuyNhat:
+    """02/09: 'tích hợp cái tool upload để tao bật tool đó là all mọi thứ' —
+    trên máy ảo chỉ MỘT con chạy: agent nuôi Chrome và nuôi luôn tool đăng."""
+
+    def test_tim_tool_dang_theo_nep_canh_ben(self, tmp_path, monkeypatch):
+        agent = _nap_agent()
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        monkeypatch.setattr(agent, "GOC", str(goc_vm))
+        assert agent.tim_tool_dang({}) == "", "chưa có thì trả rỗng"
+        # dang.py GỐC nằm cạnh cũng KHÔNG tự nhận — nó đọc trang tính, tự mở
+        # là hai nguồn lịch giẫm nhau.
+        (tmp_path / "upload" / "dang.py").write_text("pass")
+        assert agent.tim_tool_dang({}) == ""
+        (tmp_path / "upload" / "dang-tool.py").write_text("pass")
+        assert agent.tim_tool_dang({}) == str(tmp_path / "upload" / "dang-tool.py")
+        # điền rõ trong config thì theo config
+        rieng = tmp_path / "cho-khac" / "dang-tool.py"
+        os.makedirs(rieng.parent)
+        rieng.write_text("pass")
+        assert agent.tim_tool_dang({"tool_dang": str(rieng)}) == str(rieng)
+        assert agent.tim_tool_dang({"tool_dang": str(tmp_path / "ma.py")}) == ""
+
+    def test_giu_tool_dang_chet_la_mo_lai(self, tmp_path, monkeypatch):
+        agent = _nap_agent()
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        monkeypatch.setattr(agent, "GOC", str(goc_vm))
+        duong = tmp_path / "upload" / "dang-tool.py"
+        duong.write_text("import time\ntime.sleep(60)\n")
+        agent.giu_tool_dang({})
+        tt1 = agent._TOOL_DANG["tt"]
+        assert tt1 is not None and tt1.poll() is None, "phải mở tool đăng lên"
+        agent.giu_tool_dang({})
+        assert agent._TOOL_DANG["tt"] is tt1, "đang sống thì không mở chồng"
+        tt1.kill()
+        tt1.wait(10)
+        agent.giu_tool_dang({})
+        tt2 = agent._TOOL_DANG["tt"]
+        try:
+            assert tt2 is not tt1 and tt2.poll() is None, "chết là mở lại"
+        finally:
+            tt2.kill()
+            tt2.wait(10)
+
+    def test_khong_co_tool_dang_thi_im_lang(self, tmp_path, monkeypatch):
+        agent = _nap_agent()
+        goc_vm = tmp_path / "upload" / "vm"
+        os.makedirs(goc_vm)
+        monkeypatch.setattr(agent, "GOC", str(goc_vm))
+        agent.giu_tool_dang({})            # không được ném, không mở gì
+        assert agent._TOOL_DANG["tt"] is None
