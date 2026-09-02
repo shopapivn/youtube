@@ -634,14 +634,78 @@ class TestKhongPhaiGoGi:
             tram._mo_tai_do()
             time.sleep(0.2)
             agent = _nap_agent()
-            ra = agent.tim_tram(cong=cong, cho_giay=3.0, dich=["127.0.0.1"])
+            ra = agent.tim_tram(cong=cong, cho_giay=3.0,
+                                dich=["127.0.0.1"], dich6=[])
             assert ra == "http://127.0.0.1:{0}".format(cong)
+        finally:
+            tram.tat()
+
+    def test_tu_do_thay_tram_qua_ipv6(self, tmp_path):
+        # Máy ảo của chủ dự án đa phần CHỈ có IPv6 — tai dò phải nghe được
+        # tầng này, và địa chỉ trả về phải bọc ngoặc vuông cho urllib.
+        tram = Tram(cong=0, goc=str(tmp_path))
+        tram.bat()
+        try:
+            cong = tram._may.server_address[1]
+            tram.cong = cong
+            tram._mo_tai_do()
+            time.sleep(0.2)
+            agent = _nap_agent()
+            ra = agent.tim_tram(cong=cong, cho_giay=3.0,
+                                dich=[], dich6=["::1"])
+            assert ra == "http://[::1]:{0}".format(cong)
         finally:
             tram.tat()
 
     def test_khong_co_tram_thi_tra_rong_khong_treo(self):
         agent = _nap_agent()
-        assert agent.tim_tram(cong=9, cho_giay=0.3, dich=["127.0.0.1"]) == ""
+        assert agent.tim_tram(cong=9, cho_giay=0.3,
+                              dich=["127.0.0.1"], dich6=[]) == ""
+
+    def test_tool_goi_sang_vps_gioi_thieu_tram(self, tmp_path):
+        # VPS thuê ngoài: gói dò không với tới trạm, nhưng tool BIẾT địa chỉ
+        # VPS — nên đảo chiều: bên VPS ngồi nghe (cho_gioi_thieu), tool gọi
+        # sang (tram.gioi_thieu). Chủ dự án 02/09: "tool đang có cái vps
+        # tl4-t7 nó có ip của ipv6 mà".
+        import socket
+        import threading
+
+        tram = Tram(cong=0, goc=str(tmp_path))
+        agent = _nap_agent()
+        assert tram.gioi_thieu("127.0.0.1") is False, \
+            "trạm chưa bật thì không được vờ là gọi thành công"
+        tram.bat()
+        try:
+            cong = tram._may.server_address[1]
+            tram.cong = cong
+            o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            o.bind(("127.0.0.1", 0))
+            cong_nghe = o.getsockname()[1]
+            o.close()
+            ket = {}
+            luong = threading.Thread(
+                target=lambda: ket.setdefault(
+                    "ra", agent.cho_gioi_thieu(cong=cong_nghe, cho_giay=6.0)))
+            luong.start()
+            time.sleep(0.3)
+            assert tram.gioi_thieu("127.0.0.1", cong_nghe=cong_nghe)
+            luong.join(8.0)
+            assert ket.get("ra") == "http://127.0.0.1:{0}".format(cong)
+            # Địa chỉ được gọi phải thành khách mời — lượt HTTP về ngay sau
+            # đó không bị cổng chặn đá ra.
+            assert tram.cho_phep("127.0.0.1")
+        finally:
+            tram.tat()
+
+    def test_vps_duoc_moi_moi_qua_cong_chan(self, tmp_path):
+        tram = Tram(cong=0, goc=str(tmp_path))
+        assert not tram.cho_phep("2001:db8::5"), "IPv6 công cộng lạ: chặn"
+        tram.moi_khach("[2001:DB8::5]")           # tool lưu dạng có ngoặc/hoa
+        assert tram.cho_phep("2001:db8::5")
+        assert tram.cho_phep("2001:db8:0:0:0:0:0:5"), "cách viết dài cùng máy"
+        tram.moi_khach("1.2.3.4")
+        assert tram.cho_phep("::ffff:1.2.3.4"), "IPv4 qua ổ hai tầng"
+        assert not tram.cho_phep("2001:db8::6"), "mời máy nào mở máy đó thôi"
 
     def test_doan_kenh_theo_nep_thu_muc(self, tmp_path, monkeypatch):
         agent = _nap_agent()

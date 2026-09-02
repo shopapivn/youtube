@@ -43,7 +43,9 @@ import json
 import os
 import re
 import socket
+import struct
 import threading
+import time
 import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -79,6 +81,24 @@ def trong_mang_nha(ip: str) -> bool:
     if getattr(a, "ipv4_mapped", None):
         a = a.ipv4_mapped
     return any(a in m for m in _DAI_RIENG)
+
+
+def _thuan(ip) -> str:
+    """Một địa chỉ, một cách viết — để so sánh được với danh sách khách mời.
+
+    Cùng một máy có thể hiện ra là `[2001:db8::5]`, `2001:db8::5`,
+    `2001:DB8:0:0:0:0:0:5`, hay `::ffff:1.2.3.4` (IPv4 qua ổ hai tầng) —
+    đưa hết về dạng gọn của `ipaddress` rồi mới so, không thì mời một đằng
+    khách gõ cửa một nẻo.
+    """
+    s = str(ip or "").split("%")[0].strip().strip("[]")
+    try:
+        a = ipaddress.ip_address(s)
+    except ValueError:
+        return s
+    if getattr(a, "ipv4_mapped", None):
+        a = a.ipv4_mapped
+    return str(a)
 
 
 def an_toan(s) -> str:
@@ -170,6 +190,15 @@ class Tram:
         self._viec: List[dict] = []          # [{id, kenh, loai, tham_so, luc}]
         self._so_viec = 0
         self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
+        # ── Khách mời: VPS của CHÍNH CHỦ, nằm ngoài mạng nội bộ ──────────────
+        #
+        # Chủ dự án, 02/09/2026: *"tool đang có cái vps tl4-t7 nó có ip của
+        # ipv6 mà"* — máy ảo đa phần là VPS IPv6 thuê ngoài, quảng bá UDP
+        # không với tới và `trong_mang_nha` chặn cửa. Cái van có kiểm soát
+        # (KE-HOACH.md từng để ngỏ "danh sách IP?") chính là đây: chỉ những
+        # địa chỉ tool ĐÃ LƯU ở tab VPS — tức máy của chính người dùng — mới
+        # được mời qua cổng chặn. Không mở toang cho cả Internet.
+        self.khach_moi: set = set()
 
     # ------------------------------------------------------------------ ghi log
     def ghi(self, m: str) -> None:
@@ -184,6 +213,53 @@ class Tram:
     def dang_chay(self) -> bool:
         return self._may is not None
 
+    # ------------------------------------------------------------ khách mời VPS
+    def moi_khach(self, ip: str) -> str:
+        """Cho một địa chỉ ngoài mạng nội bộ (VPS của chính chủ) qua cổng chặn."""
+        s = _thuan(ip)
+        if s:
+            self.khach_moi.add(s)
+        return s
+
+    def cho_phep(self, ip: str) -> bool:
+        """Mạng nội bộ, hoặc khách đã mời — mọi cổng (HTTP lẫn tai UDP) tra đây."""
+        return trong_mang_nha(ip) or _thuan(ip) in self.khach_moi
+
+    def gioi_thieu(self, ip: str, cong_nghe: int = CONG_MAC_DINH) -> bool:
+        """Gọi sang máy ảo VPS: "trạm ở đây này" — chiều ngược của tai dò.
+
+        VPS ở mạng khác nên gói quảng bá của nó không tới được đây; nhưng tool
+        thì BIẾT địa chỉ VPS (tab VPS đã lưu). Vậy trạm gửi thẳng một gói UDP
+        sang đó — nội dung y hệt gói đáp của tai dò, agent bên kia lấy địa chỉ
+        NGUỒN làm địa chỉ trạm, không phải gõ gì. UDP có thể rơi gói dọc đường
+        nên gửi 3 phát; agent nhận trùng cũng không sao (gói nào cũng nói cùng
+        một điều). Địa chỉ được mời luôn vào `khach_moi` để lượt gọi HTTP về
+        ngay sau đó không bị cổng chặn đá ra.
+        """
+        s = self.moi_khach(ip)
+        if not s or not self.dang_chay:
+            return False
+        goi = json.dumps({"shopapi_tram": True,
+                          "cong": self.cong}).encode("utf-8")
+        gia_dinh = socket.AF_INET6 if ":" in s else socket.AF_INET
+        try:
+            o = socket.socket(gia_dinh, socket.SOCK_DGRAM)
+        except OSError:
+            return False
+        try:
+            for lan in range(3):
+                if lan:
+                    time.sleep(0.3)
+                o.sendto(goi, (s, int(cong_nghe)))
+        except OSError:
+            return False
+        finally:
+            try:
+                o.close()
+            except OSError:
+                pass
+        return True
+
     # ------------------------------------------------------------------ tai dò
     def _mo_tai_do(self) -> None:
         """Tai UDP: máy ảo hú "trạm đâu?" là đáp — cài agent khỏi hỏi địa chỉ.
@@ -196,24 +272,59 @@ class Tram:
         lệnh gì qua đường này.
         """
         tram = self
+        tram._o_do = []
 
-        def nghe():
+        def mo(gia_dinh, dia_chi):
+            """Một cái tai. Máy ảo của chủ dự án CHỈ có IPv6 — nên phải mở
+            tai cả hai tầng, thiếu tầng IPv6 là máy ảo hú không ai đáp."""
             try:
-                o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                o = socket.socket(gia_dinh, socket.SOCK_DGRAM)
                 o.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                o.bind(("0.0.0.0", tram.cong))
+                if gia_dinh == socket.AF_INET6:
+                    # Tách riêng hẳn với tai IPv4 (không dùng ổ hai tầng):
+                    # gói quảng bá IPv4 không chui vào ổ IPv6 trên Windows.
+                    try:
+                        o.setsockopt(socket.IPPROTO_IPV6,
+                                     socket.IPV6_V6ONLY, 1)
+                    except OSError:
+                        pass
+                o.bind((dia_chi, tram.cong))
+                if gia_dinh == socket.AF_INET6:
+                    # Agent hú qua multicast ff02::1 ("mọi máy cùng dây") —
+                    # Windows chỉ đưa gói đó vào ổ đã GHI DANH nhóm, và phải
+                    # ghi danh trên từng cạc mạng một. Đo thật 02/09/2026:
+                    # thiếu bước này thì bind ("::") vẫn điếc hẳn.
+                    nhom = socket.inet_pton(socket.AF_INET6, "ff02::1")
+                    try:
+                        cac_nga = [i for i, _t in socket.if_nameindex()]
+                    except OSError:
+                        cac_nga = [0]
+                    for nga in cac_nga:
+                        try:
+                            o.setsockopt(socket.IPPROTO_IPV6,
+                                         socket.IPV6_JOIN_GROUP,
+                                         nhom + struct.pack("I", nga))
+                        except OSError:
+                            pass
                 o.settimeout(1.0)
-                tram._o_do = o
             except OSError:
-                return
+                return None
+            tram._o_do.append(o)
+            return o
+
+        def nghe(o):
             while tram._may is not None:
                 try:
                     goi, nguon = o.recvfrom(64)
                 except socket.timeout:
                     continue
                 except OSError:
-                    return
-                if goi.strip() == b"shopapi-tram?" and trong_mang_nha(nguon[0]):
+                    # Windows: gói dội "cổng đóng" nổ ngay trên recvfrom
+                    # (WinError 10054) — tai chưa hỏng, nghe tiếp.
+                    if tram._may is None:
+                        return
+                    continue
+                if goi.strip() == b"shopapi-tram?" and tram.cho_phep(nguon[0]):
                     try:
                         o.sendto(json.dumps({"shopapi_tram": True,
                                              "cong": tram.cong}).encode("utf-8"),
@@ -225,7 +336,12 @@ class Tram:
             except OSError:
                 pass
 
-        threading.Thread(target=nghe, daemon=True, name="tram-do").start()
+        for gia_dinh, dia_chi in ((socket.AF_INET, "0.0.0.0"),
+                                  (socket.AF_INET6, "::")):
+            o = mo(gia_dinh, dia_chi)
+            if o is not None:
+                threading.Thread(target=nghe, args=(o,), daemon=True,
+                                 name="tram-do").start()
 
     def bat(self) -> None:
         if self._may:
@@ -272,13 +388,12 @@ class Tram:
             pass
         self._may = None
         self._luong = None
-        o = getattr(self, "_o_do", None)
-        if o is not None:
+        for o in (getattr(self, "_o_do", None) or []):
             try:
                 o.close()
             except OSError:
                 pass
-            self._o_do = None
+        self._o_do = []
         self.ghi("trạm nhận đã dừng")
 
     # ------------------------------------------------------------------ nhận gói
@@ -417,7 +532,7 @@ def _lam_xu_ly(tram: "Tram"):
 
         def _duoc_vao(self) -> bool:
             ip = self.client_address[0] if self.client_address else ""
-            if trong_mang_nha(ip):
+            if tram.cho_phep(ip):
                 return True
             tram.so_chan += 1
             if tram.so_chan % 20 == 1:

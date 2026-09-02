@@ -1052,6 +1052,20 @@ class TrangMayVM(QWidget):
                               rong=180))
         d0c.addStretch(1)
         v.addLayout(d0c)
+        # Máy ảo VPS thuê ngoài: gói dò của nó không với tới đây, nhưng tool
+        # BIẾT địa chỉ VPS (tab VPS đã lưu) — nên chiều kết nối đảo lại: tool
+        # gọi sang. Chủ dự án 02/09: "tool đang có cái vps tl4-t7 nó có ip
+        # của ipv6 mà".
+        d0d = QHBoxLayout()
+        nut_vps = nut_phu("Kết nối máy ảo VPS", self._ket_noi_vps, rong=190)
+        nut_vps.setToolTip(
+            "Bên VPS đang chạy CAI-DAT-VM.bat và ngồi chờ? Bấm nút này: trạm "
+            "gọi sang từng máy VPS đã lưu ở tab VPS && GPM để giới thiệu địa "
+            "chỉ của mình — bên đó không phải gõ gì. Các máy được gọi cũng "
+            "được mở cửa qua cổng chặn của trạm.")
+        d0d.addWidget(nut_vps)
+        d0d.addStretch(1)
+        v.addLayout(d0d)
         doc.addWidget(khung)
 
         doc.addWidget(self._the_thiet_lap())
@@ -1469,6 +1483,61 @@ class TrangMayVM(QWidget):
         duong = duong_ke_hoach(self._app.base_dir, kenh)
         os.makedirs(os.path.dirname(duong), exist_ok=True)
         mo_thu_muc(os.path.dirname(duong))
+
+    def _ket_noi_vps(self) -> None:
+        """Gọi sang từng máy VPS đã lưu để giới thiệu địa chỉ trạm.
+
+        Gom địa chỉ từ CẢ hai nhóm của tab VPS — máy thuê ShopAPI (hỏi máy
+        chủ) lẫn máy riêng (tệp trên máy này) — rồi `tram.gioi_thieu` từng
+        cái. Chạy nền vì mỗi lượt giới thiệu ngủ ~0.6 giây giữa các gói UDP.
+        """
+        tram = self._tram()
+        if tram is None or not tram.dang_chay:
+            self._app.show_message(
+                "Trạm chưa bật",
+                "Vào mục Chỉ số kênh, bật “cổng nhận” trước — bật rồi hãy "
+                "gọi sang VPS.")
+            return
+        client = getattr(self._app, "client", None)
+        base = self._app.base_dir
+
+        def viec():
+            from core import vps as v
+            from core.vps_rieng import KhoVpsRieng
+
+            dia = []
+            for m in KhoVpsRieng(base).doc():
+                d = v.may_chu_rdp(
+                    {"ket_noi": {"ipv6": m.dia_chi, "dia_chi": m.dia_chi}})
+                if d:
+                    dia.append(d)
+            if client is not None:
+                try:
+                    for may in v.danh_sach(client):
+                        d = v.may_chu_rdp(may)
+                        if d:
+                            dia.append(d)
+                except Exception:  # noqa: BLE001 — máy thuê lỗi mạng thì vẫn
+                    pass           # gọi được máy riêng, không vì thế mà thôi
+            dia = list(dict.fromkeys(dia))
+            goi_duoc = sum(1 for d in dia if tram.gioi_thieu(d))
+            return goi_duoc, len(dia)
+
+        def xong(kq) -> None:
+            goi_duoc, tong = kq
+            if not tong:
+                self._app.show_message(
+                    "Chưa có máy VPS nào",
+                    "Tab VPS && GPM chưa lưu máy nào — thêm máy ở đó trước, "
+                    "tool mới biết địa chỉ mà gọi sang.")
+                return
+            self._app.show_message(
+                "Đã gọi sang {0}/{1} máy".format(goi_duoc, tong),
+                "Bên VPS nào đang chạy CAI-DAT-VM.bat sẽ tự nhận địa chỉ "
+                "trạm trong vài giây. Máy chưa chạy bộ cài thì bấm lại nút "
+                "này sau khi chạy — gọi thừa không hại gì.")
+
+        self._app.run_bg(viec, on_ok=xong, on_err=self._app.show_error)
 
     def _ve(self) -> None:
         tram = self._tram()

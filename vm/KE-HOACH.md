@@ -107,10 +107,17 @@ Hai bên nối nhau qua **trạm** — cổng HTTP có sẵn của tool
 
 - Extension hay agent đọc trang chủ (giai đoạn 3) — đo rồi chọn.
 - Kế hoạch đăng trông thế nào (cột gì, ai duyệt) — chốt ở giai đoạn 4.
-- Máy ảo VPS hiện **chỉ có IPv6**, trạm chỉ nhận **mạng nội bộ** — hai máy
-  thấy nhau khi cùng mạng nhà hoặc qua đường IPv6 nội bộ. Máy ảo thuê ngoài
-  muốn gọi về nhà thì cần mở van có kiểm soát (mã bắt tay? danh sách IP?) —
-  chưa chốt, KHÔNG mở toang trạm ra Internet.
+- Máy ảo VPS đa phần **chỉ có IPv6** (chủ dự án nhấn lại 02/09) — nên mọi
+  cửa của trạm đều mở CẢ HAI TẦNG: HTTP là một ổ hai tầng, tai dò UDP là
+  hai tai riêng (IPv4 + IPv6, tai IPv6 phải GHI DANH nhóm multicast
+  `ff02::1` trên từng cạc mạng — đo thật 02/09: thiếu bước ghi danh là
+  điếc hẳn dù đã bind `::`).
+- Van "máy thuê ngoài gọi về nhà" ĐÃ CHỐT 02/09: **danh sách IP của chính
+  chủ**. Tab VPS của tool vốn lưu địa chỉ IPv6 từng máy — bấm "Kết nối máy
+  ảo VPS" (tab Máy VM) là trạm (a) gửi gói UDP giới thiệu sang từng địa
+  chỉ đó (bên VPS đang chạy bộ cài sẽ tự nhận địa chỉ trạm, không phải
+  gõ), và (b) mời đúng các địa chỉ đó qua cổng chặn. Vẫn KHÔNG mở toang
+  trạm ra Internet — máy lạ vẫn bị 403.
 - Hộp việc nằm trong RAM (tắt tool là lệnh chưa giao biến mất — bấm lại là
   xong). Khi nào có việc dài hơi (kế hoạch đăng) thì kế hoạch nằm trên đĩa
   theo kênh, không nằm trong hộp.
@@ -135,6 +142,9 @@ Mọi thứ tự lo, nhờ ba đường ngầm:
 - **Chrome tự tìm mỗi lần chạy** (đã có từ trước): `config.json` để trống
   `chrome`, agent tra thư mục cạnh bên.
 
-Đường lùi cuối cùng (không mạng, không nếp thư mục) mới phải gõ tay như cũ.
-Trên tool, tab Phân tích & Nghiên cứu → Máy VM sẽ thấy máy hiện lên trong
-vòng nửa phút.
+Với **VPS thuê ngoài** (mạng khác, đa phần chỉ IPv6): gói dò không với tới,
+bộ cài sẽ tự chuyển sang ngồi nghe tối đa 10 phút — sang máy chính bấm
+"Kết nối máy ảo VPS" ở tab Máy VM là trạm gọi sang giới thiệu, bên VPS vẫn
+không phải gõ gì. Đường lùi cuối cùng (không mạng, không nếp thư mục) mới
+phải gõ tay như cũ. Trên tool, tab Phân tích & Nghiên cứu → Máy VM sẽ thấy
+máy hiện lên trong vòng nửa phút.

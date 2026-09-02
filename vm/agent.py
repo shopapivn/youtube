@@ -31,6 +31,7 @@ import io
 import json
 import os
 import socket
+import struct
 import subprocess
 import time
 import urllib.parse
@@ -80,43 +81,160 @@ def _goi(tram: str, duong: str, du_lieu: dict = None) -> dict:
         return {"chu": chu}
 
 
-def tim_tram(cong: int = 8765, cho_giay: float = 3.0, dich=None) -> str:
-    """Tự dò trạm trong mạng — hú một gói UDP quảng bá, trạm nghe thấy là đáp.
+def tim_tram(cong: int = 8765, cho_giay: float = 3.0, dich=None,
+             dich6=None) -> str:
+    """Tự dò trạm trong mạng — hú một gói UDP, trạm nghe thấy là đáp.
 
     Địa chỉ trạm là câu hỏi khó nhất với người không rành mạng — nên không
     hỏi nữa: lấy địa chỉ NGUỒN của gói đáp làm địa chỉ trạm. Không thấy thì
     trả "" để bộ cài hỏi tay (đường lùi, không phải đường chính).
+
+    Hú CẢ HAI TẦNG: quảng bá IPv4 và multicast IPv6 (ff02::1 — "mọi máy
+    cùng dây"). Máy ảo của chủ dự án có con chỉ chạy IPv6 — thiếu tầng này
+    là bên đó điếc hẳn. IPv6 không có quảng bá, và gói multicast phải chỉ
+    rõ đi ra ngả nào, nên hú một vòng qua từng cạc mạng.
     """
-    o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    cac_o = []
+
+    def mo(gia_dinh):
+        try:
+            o = socket.socket(gia_dinh, socket.SOCK_DGRAM)
+            o.settimeout(0.2)
+            cac_o.append(o)
+            return o
+        except OSError:
+            return None
+
+    o4 = mo(socket.AF_INET)
+    o6 = mo(socket.AF_INET6)
     try:
-        o.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        o.settimeout(cho_giay)
-        for noi in (dich or ["255.255.255.255"]):
+        if o4 is not None:
             try:
-                o.sendto(b"shopapi-tram?", (noi, cong))
+                o4.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             except OSError:
                 pass
+            for noi in (dich if dich is not None else ["255.255.255.255"]):
+                try:
+                    o4.sendto(b"shopapi-tram?", (noi, cong))
+                except OSError:
+                    pass
+        if o6 is not None:
+            for noi in (dich6 if dich6 is not None else ["ff02::1"]):
+                if noi == "ff02::1":
+                    try:
+                        cac_nga = [i for i, _t in socket.if_nameindex()]
+                    except OSError:
+                        cac_nga = [0]
+                    for nga in cac_nga:
+                        try:
+                            o6.setsockopt(
+                                socket.IPPROTO_IPV6,
+                                socket.IPV6_MULTICAST_IF,
+                                struct.pack("I", nga))
+                            o6.sendto(b"shopapi-tram?", (noi, cong))
+                        except OSError:
+                            pass
+                else:
+                    try:
+                        o6.sendto(b"shopapi-tram?", (noi, cong))
+                    except OSError:
+                        pass
+
         het = time.time() + cho_giay
         while time.time() < het:
-            try:
-                goi, nguon = o.recvfrom(256)
-            except socket.timeout:
-                break
-            except OSError:
-                # Windows: gói dội "cổng đóng" (WinError 10054) nổ ngay trên
-                # recvfrom — không phải hết giờ, chỉ là chưa ai đáp. Chờ nhẹ
-                # rồi nghe tiếp tới hạn.
-                time.sleep(0.05)
-                continue
-            try:
-                du_lieu = json.loads(goi.decode("utf-8", "replace"))
-            except ValueError:
-                continue
-            if du_lieu.get("shopapi_tram"):
-                return "http://{0}:{1}".format(
-                    nguon[0], int(du_lieu.get("cong") or cong))
+            for o in cac_o:
+                try:
+                    goi, nguon = o.recvfrom(256)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    # Windows: gói dội "cổng đóng" (WinError 10054) nổ ngay
+                    # trên recvfrom — không phải hết giờ, chỉ là chưa ai đáp
+                    # ở tầng đó. Nghe tiếp tới hạn.
+                    continue
+                try:
+                    du_lieu = json.loads(goi.decode("utf-8", "replace"))
+                except ValueError:
+                    continue
+                if du_lieu.get("shopapi_tram"):
+                    return _dia_chi_tram(nguon, du_lieu, cong)
     finally:
-        o.close()
+        for o in cac_o:
+            try:
+                o.close()
+            except OSError:
+                pass
+    return ""
+
+
+def _dia_chi_tram(nguon, du_lieu, cong_mac_dinh: int) -> str:
+    """Địa chỉ trạm từ một gói giới thiệu: NGUỒN gói + số cổng trong gói."""
+    ip = str(nguon[0]).split("%")[0]
+    so_cong = int(du_lieu.get("cong") or cong_mac_dinh)
+    if ":" not in ip:
+        return "http://{0}:{1}".format(ip, so_cong)
+    # IPv6 phải bọc ngoặc vuông; địa chỉ "cùng dây" (fe80…) còn phải kèm số
+    # ngả về máy này, %-mã-hoá thành %25 cho urllib nuốt được.
+    if ip.lower().startswith("fe80") and len(nguon) > 3 and nguon[3]:
+        ip = "{0}%25{1}".format(ip, nguon[3])
+    return "http://[{0}]:{1}".format(ip, so_cong)
+
+
+def cho_gioi_thieu(cong: int = 8765, cho_giay: float = 600.0,
+                   in_ra=None) -> str:
+    """VPS thuê ngoài: gói quảng bá không với tới trạm, nhưng TOOL biết địa
+    chỉ VPS (tab VPS đã lưu). Nên đảo chiều: ngồi im nghe cổng UDP, trên tool
+    bấm "Kết nối máy ảo VPS" là trạm gửi sang một gói giới thiệu — lấy địa
+    chỉ NGUỒN của gói làm địa chỉ trạm, vẫn không phải gõ gì.
+
+    Chủ dự án, 02/09/2026: *"tool đang có cái vps tl4-t7 nó có ip của ipv6
+    mà"* — đúng, và đây là chỗ dùng cái địa chỉ đó.
+    """
+    cac_o = []
+    for gia_dinh, dia_chi in ((socket.AF_INET, "0.0.0.0"),
+                              (socket.AF_INET6, "::")):
+        try:
+            o = socket.socket(gia_dinh, socket.SOCK_DGRAM)
+            o.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if gia_dinh == socket.AF_INET6:
+                try:
+                    o.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                except OSError:
+                    pass
+            o.bind((dia_chi, cong))
+            o.settimeout(1.0)
+            cac_o.append(o)
+        except OSError:
+            pass
+    if not cac_o:
+        return ""
+    try:
+        het = time.time() + cho_giay
+        bao_luc = 0.0
+        while time.time() < het:
+            if in_ra and time.time() - bao_luc >= 60:
+                bao_luc = time.time()
+                in_ra("  ... van dang cho tool goi sang (con {0} phut)".format(
+                    max(1, int((het - time.time()) / 60))))
+            for o in cac_o:
+                try:
+                    goi, nguon = o.recvfrom(256)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    continue
+                try:
+                    du_lieu = json.loads(goi.decode("utf-8", "replace"))
+                except ValueError:
+                    continue
+                if du_lieu.get("shopapi_tram"):
+                    return _dia_chi_tram(nguon, du_lieu, cong)
+    finally:
+        for o in cac_o:
+            try:
+                o.close()
+            except OSError:
+                pass
     return ""
 
 

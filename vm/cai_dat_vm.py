@@ -62,9 +62,20 @@ def cai() -> dict:
     if tram:
         print("  - Thay tram:", tram)
     else:
-        print("  - Khong tu tim thay tram. Mo tool > Chi so kenh > Bat cong "
-              "nhan, roi dan dia chi vao day.")
-        tram = input("  Dia chi tram: ").strip()
+        # VPS thue ngoai: may nay hu khong toi duoc tram, nhung TOOL biet dia
+        # chi VPS nay (tab VPS da luu) — de tool goi sang, van khong phai go.
+        print("  - Chua thay tram trong mang gan. May nay la VPS? Sang MAY CHINH:")
+        print("      mo tool > tab Phan tich & Nghien cuu > May VM")
+        print("      > bam nut 'Ket noi may ao VPS'.")
+        print("    Toi ngoi cho tool goi sang, toi da 10 phut...")
+        print("    (Windows co hoi tuong lua thi bam Allow / Cho phep.)")
+        tram = agent.cho_gioi_thieu(cong=8765, cho_giay=600.0, in_ra=print)
+        if tram:
+            print("  - Tool da goi sang. Tram:", tram)
+        else:
+            print("  - Van chua thay. Mo tool > Chi so kenh > Bat cong nhan, "
+                  "roi dan dia chi vao day.")
+            tram = input("  Dia chi tram: ").strip()
 
     kenh = chon_kenh(tram)
     chrome = agent.tim_chrome({"kenh": kenh})
