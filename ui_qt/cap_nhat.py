@@ -22,7 +22,6 @@ import os
 import subprocess
 import sys
 from typing import Optional
-from urllib.request import Request, urlopen
 
 from core import cai_dat
 from core.cap_nhat_github import KHO, kiem_ban_moi, tai_ve_va_dung_san
@@ -59,6 +58,22 @@ def tai_https(url: str, cho: float = CHO_GIAY) -> bytes:
     """
     if not url.startswith("https://"):
         raise ValueError("Chỉ tải qua HTTPS")
+    # ═══ PHẢI ĐI QUA `mang_an_toan`, KHÔNG DÙNG `urlopen` TRẦN ═══
+    #
+    # `urlopen` trần lấy kho chứng chỉ của hệ điều hành, và trên Windows kho
+    # ấy hỏng theo đủ kiểu ngoài tầm tay khách. Máy khách ngày 03/09/2026 báo
+    # đúng cú đó khi bấm cập nhật lên 2.113.0:
+    #
+    #     [SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer certificate
+    #
+    # `core/mang_an_toan` mang theo bộ gốc `certifi` — đúng thứ `httpx` vẫn
+    # dùng cho đường gọi API, nên đường API chạy tốt còn đường này thì không.
+    #
+    # Chỗ này đáng sửa nhất trong cả tool: hỏng ở đây là khách **kẹt vĩnh
+    # viễn**, vì cập nhật là con đường duy nhất để mọi bản vá khác tới được
+    # với họ.
+    from core.mang_an_toan import tai_bytes  # noqa: PLC0415 — tránh vòng nhập
+
     # ═══ ĐỪNG ĐỂ MÁY CHỦ ĐỆM TRẢ LỜI CŨ ═══
     #
     # `raw.githubusercontent.com` đi qua CDN và giữ đệm chừng năm phút. Trong
@@ -66,13 +81,10 @@ def tai_https(url: str, cho: float = CHO_GIAY) -> bytes:
     # bình thản hiện **"Đã mới nhất (2.12.2)"** trong khi 2.12.3 đã có trên
     # kho. Khách bấm lại mấy lần cũng đúng câu ấy, và kết luận là nút cập nhật
     # hỏng. Xảy ra thật 15/08/2026.
-    yeu_cau = Request(url, headers={
-        "User-Agent": "ShopAPI-Studio",
+    return tai_bytes(url, cho=cho, headers={
         "Cache-Control": "no-cache, max-age=0",
         "Pragma": "no-cache",
     })
-    with urlopen(yeu_cau, timeout=cho) as tra_loi:  # noqa: S310 — đã chốt https
-        return tra_loi.read()
 
 
 class NutCapNhat:

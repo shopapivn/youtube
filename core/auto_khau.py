@@ -1076,13 +1076,38 @@ TRAN_CHO_TTS = 25 * 60.0
 #: Đọc chính câu máy chủ nói chứ không đoán theo mã lỗi: câu tiền nong là thứ
 #: cổng nói rất rõ ràng và rất ổn định, còn mã lỗi thì thêm bớt theo từng bản.
 _KHONG_TRU_TIEN = ("không bị trừ tiền", "khong bi tru tien",
-                   "engine_unavailable", "not charged")
+                   "engine_unavailable", "not charged",
+                   # Câu cổng dùng từ 02/09/2026 cho job hỏng sau khi thử lại:
+                   # "Toàn bộ tiền tạm giữ đã được hoàn về ví bạn".
+                   "tiền tạm giữ", "tien tam giu", "hoàn về ví", "refunded")
 
 
 def _khong_bi_tru_tien(loi_goi) -> bool:
     """Máy chủ có tự nói là chưa trừ tiền cho job này không."""
     chu = str(loi_goi).lower()
     return any(d in chu for d in _KHONG_TRU_TIEN)
+
+
+#: Mã lỗi / câu chữ nói rằng hỏng là do CHÍNH NỘI DUNG yêu cầu — đặt lại y
+#: nguyên bằng khoá mới thì hỏng y nguyên, chỉ tốn thời gian (tiền thì vẫn
+#: được hoàn, nhưng vòng lặp vô ích là thứ phải tránh).
+_LOI_DO_NOI_DUNG_MA = ("content_rejected", "invalid_prompt", "invalid_request",
+                       "validation_error", "rejected")
+_LOI_DO_NOI_DUNG_CHU = ("vi phạm", "vi pham", "quy định nội dung",
+                        "không hợp lệ", "khong hop le", "prohibited")
+
+
+def _hong_do_noi_dung(trang_thai: str, loi_goi) -> bool:
+    """Job hỏng vì nội dung yêu cầu (từ chối, sai định dạng) — không phải vì máy chủ."""
+    if str(trang_thai or "") == "rejected":
+        return True
+    ma = ""
+    if isinstance(loi_goi, dict):
+        ma = str(loi_goi.get("code") or "").strip().lower()
+    if ma in _LOI_DO_NOI_DUNG_MA:
+        return True
+    chu = str(loi_goi).lower()
+    return any(d in chu for d in _LOI_DO_NOI_DUNG_CHU)
 
 
 #: Những trạng thái nghĩa là "job này chấm hết rồi, đừng hỏi nữa".
@@ -1115,11 +1140,31 @@ def _ket_job(goi: Dict[str, Any]) -> Dict[str, Any]:
     if trang_thai in ("succeeded", "completed"):
         return goi
     loi_goi = goi.get("error") or trang_thai
-    # Xem ghi chú dài ở `_cho_job`: máy chủ tự khai chưa trừ tiền thì đặt lại
-    # bằng khoá mới không tốn thêm đồng nào.
-    if _khong_bi_tru_tien(loi_goi):
-        raise LoiKetJob("máy chủ bỏ dở việc này: {0}".format(loi_goi))
-    raise RuntimeError("máy chủ báo job hỏng: {0}".format(loi_goi))
+
+    # ═══ JOB HỎNG THÌ MẶC ĐỊNH LÀ ĐẶT LẠI ĐƯỢC — ĐO 03/09/2026 ═══
+    #
+    # Bản trước chỉ ném `LoiKetJob` (= cho phép khoá mới) khi câu lỗi có chữ
+    # "không bị trừ tiền". Ngày 03/09 cổng đổi câu thành *"Yêu cầu này không
+    # thể hoàn thành dù thử lại. Toàn bộ tiền tạm giữ đã được hoàn về ví"* —
+    # không khớp bảng chữ → rơi xuống `RuntimeError` thường → không đổi khoá →
+    # khâu ngoài thử lại ba lần bằng ĐÚNG khoá cũ → cổng phát lại ĐÚNG xác job
+    # cũ → ba lần "hỏng" y hệt trong tích tắc, kênh openstory lượt 0015 kẹt ở
+    # đoạn giọng đọc số 3 dù 5/6 đoạn kia đã xong. Một lỗi thoáng qua của máy
+    # chủ (job chết đúng lúc máy chủ đổi ca) hoá thành vĩnh viễn chỉ vì một
+    # câu chữ đổi.
+    #
+    # Luật đúng không nằm ở câu chữ: hợp đồng cổng ShopAPI (CONTRACT §2.2) là
+    # **job hỏng được hoàn 100% tiền** — mọi job `failed`/`cancelled` đều đã
+    # được hoàn, nên đặt lại bằng khoá mới KHÔNG BAO GIỜ tốn thêm đồng nào.
+    # Ngoại lệ duy nhất là hỏng vì chính NỘI DUNG yêu cầu (từ chối, sai định
+    # dạng): đặt lại y nguyên thì hỏng y nguyên — ném lỗi thường để khâu ngoài
+    # dừng và người ta sửa nội dung, đừng quay vòng vô ích.
+    if _hong_do_noi_dung(trang_thai, loi_goi):
+        raise RuntimeError("máy chủ báo job hỏng vì nội dung: {0}".format(loi_goi))
+    # Vẫn giữ chữ "job hỏng" trong câu để nhật ký/bài kiểm cũ đọc được;
+    # `LoiKetJob` là `RuntimeError` con, nơi bắt lỗi thường vẫn bắt được.
+    raise LoiKetJob(
+        "máy chủ báo job hỏng (đã hoàn tiền) — đặt lại bằng khoá mới: {0}".format(loi_goi))
 
 
 class SoTheoDoi:
@@ -1345,8 +1390,19 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
     goi = job.to_dict() if hasattr(job, "to_dict") else dict(job or {})
     ma = str(goi.get("id") or goi.get("job_id") or "")
     trang_thai = str(goi.get("status") or "")
-    if not ma or trang_thai in ("succeeded", "completed", "failed"):
+    if not ma:
         return goi
+    # ═══ JOB ĐÃ CHẤM HẾT NGAY LÚC ĐƯA VÀO — PHÂN XỬ NHƯ MỌI JOB CHẤM HẾT ═══
+    #
+    # Bản trước liệt kê `"failed"` chung với `"succeeded"` ở đây và **trả gói
+    # về như xong**. Đo 03/09/2026: khoá idempotency trùng → cổng phát lại gói
+    # 202 của một job đã `failed` → hàm này trả nó về nguyên xi → nơi gọi đem
+    # đi tải kết quả → `/download` trả 400 → `LoiTaiVe(400)` → phân loại `CHET`
+    # → khâu dừng với câu "tải kết quả hỏng (400)", che mất sự thật là job đã
+    # hỏng và đáng được đặt lại bằng khoá mới. Job chấm hết thì đi qua đúng một
+    # cửa `_ket_job`, dù nó chấm hết TRƯỚC hay SAU khi ta bắt đầu đợi.
+    if _xong_han(trang_thai):
+        return _ket_job(goi)
     if so is not None:
         return so.cho(ma, tran=tran, ten_viec=ten_viec)
     # ═══ HỎI THƯA DẦN, KHÔNG HỎI ĐỀU MỖI 2 GIÂY ═══
@@ -1381,26 +1437,12 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
         moi = bc.client.jobs.retrieve(ma)
         goi = moi.to_dict() if hasattr(moi, "to_dict") else dict(moi or {})
         trang_thai = str(goi.get("status") or "")
-        if trang_thai in ("succeeded", "completed"):
-            return goi
-        if trang_thai in ("failed", "cancelled", "canceled"):
-            loi_goi = goi.get("error") or trang_thai
-            # ═══ JOB HỎNG NHƯNG KHÔNG BỊ TRỪ TIỀN = ĐẶT LẠI ĐƯỢC ═══
-            #
-            # Xảy ra thật ở cảnh 112/112 (15/08/2026): `engine_unavailable` —
-            # *"Hệ thống thử lại nhiều lần không thành công. Bạn không bị trừ
-            # tiền."* Nhà máy KHÔNG tắt (111 cảnh trước vừa xong), chỉ là đúng
-            # job này không chen được chỗ.
-            #
-            # Chính máy chủ khẳng định chưa trừ tiền, nên đặt job mới bằng khoá
-            # mới không tốn thêm đồng nào — và đó là đường duy nhất, vì khoá cũ
-            # giờ đã dính vào một job `failed`.
-            #
-            # Trước đây chỗ này ném lỗi thường, và một cảnh chết làm dừng cả
-            # khâu: 111 clip đã trả tiền nằm đó, khách phải tự bấm Chạy tiếp.
-            if _khong_bi_tru_tien(loi_goi):
-                raise LoiKetJob("máy chủ bỏ dở việc này: {0}".format(loi_goi))
-            raise RuntimeError("máy chủ báo job hỏng: {0}".format(loi_goi))
+        # Job chấm hết (xong hay hỏng) → MỘT cửa phân xử duy nhất là `_ket_job`,
+        # chung với đường hỏi cả lượt của `SoTheoDoi`. Lịch sử vì sao job hỏng
+        # phải được đặt lại bằng khoá mới (cảnh 112/112 ngày 15/08/2026, đoạn
+        # giọng đọc 3 ngày 03/09/2026) ghi ở đó.
+        if _xong_han(trang_thai):
+            return _ket_job(goi)
         # ═══ NÓI RA TRONG LÚC ĐỢI ═══
         #
         # Vòng này từng đợi trong im lặng tuyệt đối. Đã xảy ra thật
@@ -2303,9 +2345,15 @@ def _khau_kich_ban(bc_goc: BoiCanh):
         if k.prompt.get("6-seo.md") and not os.path.exists(duong_seo):
             try:
                 bc.kiem_dung()
+                # CHANNEL_KEYWORDS từng lấy `style_name` — một KEY TÀI SẢN
+                # (vd `blank_white_figure_warm_peach`), và mô hình chép nguyên
+                # nó vào KEYWORDS của 1-seo.txt hai lượt liền (0004 + 0005,
+                # TL4-T7, 03/09/2026). Tên kênh mới là thứ mô tả kênh.
+                # CHAPTERS để trống: mốc thời gian THẬT chỉ có sau khâu phụ
+                # đề — `_chen_muc_luc_seo` sẽ chèn 目次 vào lúc đó.
                 seo = _goi(bc, _thay(k.prompt["6-seo.md"], dict(
                     chung, SCRIPT_OPENING=ban_nhap[:1500],
-                    CHANNEL_KEYWORDS=k.style.get("style_name", ""))),
+                    CHANNEL_KEYWORDS=k.ten, CHAPTERS="")),
                     _khoa_chat(luot, "seo"))
                 _ghi_chu(duong_seo, seo)
             except Exception as loi:  # noqa: BLE001
@@ -3005,6 +3053,99 @@ def _bao_dam_ffmpeg(bc: BoiCanh) -> str:
 # ── Khâu 3: phụ đề ───────────────────────────────────────────────────────────
 
 
+# ── Mục lục (目次) cho mô tả video ───────────────────────────────────────────
+#
+# Khâu SEO viết mô tả từ lúc kịch bản mới xong — khi CHƯA có giọng đọc, nên
+# không thể biết chương nào rơi vào phút nào. Kịch bản lại đặt sẵn một dòng
+# `---` ở ranh giới mỗi phần (xem `giay_nghi_phan`), và dòng ấy đi nguyên vào
+# SRT — nên SRT là nơi DUY NHẤT vừa có nhãn phần vừa có mốc thời gian THẬT.
+# Vậy: chèn 目次 vào 1-seo.txt ngay sau khi SRT ra đời, bằng ghép chuỗi thuần,
+# không tốn một lượt gọi AI nào. Chủ dự án yêu cầu 03/09/2026: "fix tool để
+# về sau nó làm đúng loại mô tả có [timestamps]".
+
+
+def _muc_luc_tu_srt(srt: str) -> "list[str]":
+    """Rút các dòng chương `MM:SS nhãn` từ dấu `---` trong phụ đề.
+
+    Chương đầu luôn là `00:00` lấy câu mở màn làm nhãn. Trả `[]` khi không đủ
+    3 chương — YouTube chỉ nhận mục lục từ 3 mốc trở lên, mốc đầu tại 00:00.
+    """
+    cau = []  # (giây bắt đầu, chữ)
+    for khoi in srt.replace("\r\n", "\n").split("\n\n"):
+        dong = [x for x in khoi.strip().split("\n") if x.strip()]
+        if len(dong) < 3 or "-->" not in dong[1]:
+            continue
+        giay = _giay_srt(dong[1].split("-->")[0].strip())
+        cau.append((giay, " ".join(dong[2:]).strip()))
+    if not cau:
+        return []
+
+    def nhan(chu: str) -> str:
+        return chu.lstrip("-—– ").strip().rstrip("。.、,").strip()[:60]
+
+    muc = [(0.0, nhan(cau[0][1]))]
+    for i, (giay, chu) in enumerate(cau):
+        if chu.startswith("---") and giay >= 10:
+            chu = nhan(chu)
+            # Dòng `---` đôi khi chỉ là câu chuyển ("では、") — cụt quá thì
+            # không làm nhãn chương được, ghép thêm câu ngay sau nó.
+            if len(chu) < 6 and i + 1 < len(cau):
+                chu = (chu + "、" + nhan(cau[i + 1][1])).lstrip("、")
+            muc.append((giay, chu))
+    if len(muc) < 3:
+        return []
+    ra = []
+    for giay, chu in muc:
+        phut, s = divmod(int(giay), 60)
+        gio, phut = divmod(phut, 60)
+        moc = ("{0}:{1:02d}:{2:02d}".format(gio, phut, s) if gio
+               else "{0:02d}:{1:02d}".format(phut, s))
+        ra.append("{0} {1}".format(moc, chu))
+    return ra
+
+
+def _chen_muc_luc_seo(bc: BoiCanh, d: str, duong_srt: str) -> None:
+    """Chèn khối 目次 (mốc thật từ SRT) vào DESCRIPTION trong `1-seo.txt`.
+
+    Không bao giờ ném lỗi ra ngoài, và chạy lại không chèn đúp: mô tả thiếu
+    mục lục vẫn đăng được video, không đáng làm vỡ khâu phụ đề.
+    """
+    try:
+        duong_seo = os.path.join(d, "1-seo.txt")
+        seo = _doc_chu(duong_seo)
+        if not seo or "目次" in seo or "Chapters\n" in seo:
+            return
+        muc = _muc_luc_tu_srt(_doc_chu(duong_srt))
+        if not muc:
+            return
+        dau = "📌 目次" if bc.kenh.ngon_ngu == "ja" else "📌 Chapters"
+        khoi = ("━━━━━━━━━━━━━━\n{0}\n".format(dau)
+                + "\n".join(muc) + "\n━━━━━━━━━━━━━━")
+        dong = seo.split("\n")
+        # Chèn cuối DESCRIPTION: trước nhãn HASHTAGS:, và trước cả dòng
+        # hashtag chốt mô tả nếu có — mục lục nằm trong mô tả, hashtag vẫn cuối.
+        vi_tri = None
+        for i, dg in enumerate(dong):
+            if dg.strip().upper().startswith("HASHTAGS:"):
+                vi_tri = i
+                break
+        if vi_tri is None:
+            dong += ["", khoi]
+        else:
+            j = vi_tri - 1
+            while j >= 0 and not dong[j].strip():
+                j -= 1
+            if j >= 0 and dong[j].lstrip().startswith("#"):
+                vi_tri = j
+            dong[vi_tri:vi_tri] = [khoi, ""]
+        _ghi_chu(duong_seo, "\n".join(dong))
+        bc.ghi("  đã chèn 目次 {0} chương (mốc thật từ SRT) vào 1-seo.txt."
+               .format(len(muc)))
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("  (không chèn được 目次 vào 1-seo.txt: {0})".format(
+            str(loi)[:100]))
+
+
 def _khau_phu_de(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         from .phu_de import (  # noqa: PLC0415
@@ -3014,6 +3155,9 @@ def _khau_phu_de(bc: BoiCanh):
         d = luot.thu_muc
         dich = os.path.join(d, "3-phu-de.srt")
         if os.path.exists(dich):
+            # SRT có sẵn từ lượt trước nhưng 1-seo.txt có thể chưa có mục lục
+            # (tệp do bản tool cũ ghi) — chèn bù, hàm tự bỏ qua nếu đã có.
+            _chen_muc_luc_seo(bc, d, dich)
             return {"da_co": True}
         mp3 = os.path.join(d, "2-giong-doc.mp3")
         if not os.path.exists(mp3):
@@ -3044,6 +3188,7 @@ def _khau_phu_de(bc: BoiCanh):
                    "là ước lượng (máy chưa nghe được file giọng đọc) — câu có "
                    "thể hiện sớm hoặc muộn vài phần mười giây.")
         _lam_sach_ket_qua(bc, dich)
+        _chen_muc_luc_seo(bc, d, dich)
         return {"so_cau": len(ket.cau), "khop": round(ket.ty_le_khop, 3),
                 "khop_chu": round(khop_chu, 3), "dang_tin": ket.dang_tin}
 

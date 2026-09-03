@@ -73,15 +73,14 @@ def phien_ban_da_tai(goc: str) -> str:
 
 def _tai_https(dia_chi: str, bao: Optional[Callable[[str], None]] = None) -> bytes:
     """Tải về bộ nhớ, báo tiến độ mỗi ~10 MB. Chỉ HTTPS."""
-    import urllib.request
+    # Xem `core/mang_an_toan`: kho chứng chỉ của hệ điều hành không đáng tin
+    # trên Windows, và tệp tải về đây là mã sắp chạy trên máy khách.
+    from .mang_an_toan import mo_url  # noqa: PLC0415 — cùng gói
 
-    if not dia_chi.startswith("https://"):
-        raise ValueError("Chỉ tải qua HTTPS")
-    yeu_cau = urllib.request.Request(dia_chi, headers={"User-Agent": "ShopAPI-Studio"})
     khuc = []
     da = 0
     moc = 0
-    with urllib.request.urlopen(yeu_cau, timeout=600) as tra_loi:  # noqa: S310
+    with mo_url(dia_chi, cho=600) as tra_loi:
         tong = int(tra_loi.headers.get("Content-Length") or 0)
         while True:
             phan = tra_loi.read(1 << 20)

@@ -50,7 +50,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 __all__ = [
     "MODEL", "MODEL_MAC_DINH", "KHUNG", "DIA_CHI", "THU_MUC_CONG_CU",
@@ -202,10 +202,11 @@ def tai_cong_cu(goc: str = "", ghi: Optional[Callable[[str], None]] = None,
 
     if tai is None:
         def tai(dia_chi: str) -> bytes:  # noqa: WPS440
-            import urllib.request  # noqa: PLC0415
+            # Xem `core/mang_an_toan` — `urlopen` trần chết SSL trên máy có
+            # kho chứng chỉ hệ điều hành hỏng.
+            from .mang_an_toan import tai_bytes  # noqa: PLC0415
 
-            with urllib.request.urlopen(dia_chi, timeout=180) as tra_loi:
-                return tra_loi.read(TRAN_TAI + 1)
+            return tai_bytes(dia_chi, cho=180, toi_da=TRAN_TAI + 1)
 
     noi("Đang tải công cụ nâng ảnh (khoảng 7 MB)…")
     try:

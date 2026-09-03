@@ -43,21 +43,23 @@ expression/body language matters: slight discomfort, guarded posture, introspect
 
 visual psychology: create curiosity and emotional contradiction, viewer should instantly wonder "why are they different?"
 
-composition: the reference character large (occupying 35-45% frame), asymmetrical framing, strong focus on face/body posture, background simplified
-negative space reserved for text
+composition: the reference character medium (occupying 28-38% frame), pushed to the RIGHT half, face and emotion still readable on a phone screen, background simplified to one prop and one place hint
+the LEFT half of the frame belongs to the text blocks
 
-TEXT STYLE (HIGH CTR YOUTUBE):
+TEXT STYLE (HIGH CTR YOUTUBE — MOBILE FIRST, most viewers watch on a phone):
 text: "<hook in the channel's language>"
 
-typography should feel emotionally charged, not flat
-"<secondary words>" smaller, placed above left like a trigger word
-"<MAIN WORD>" huge dominant word, partially cropped for impact
+the text is the STAR of this thumbnail: its blocks cover 45-55% of the frame area, anchored top-left
+"<MAIN WORD>" gigantic — each character roughly 35-40% of the image HEIGHT, maximum 5-6 characters, may crop slightly at the frame edge for impact
+"<secondary words>" on its own smaller block above, about half the main size, maximum 8 characters
+maximum 2 text blocks and 14 characters TOTAL — fewer characters = bigger characters
 <<THUMB_TEXT_FONT>>
 <<THUMB_TEXT_STYLE>>
-imperfect alignment for energy, slightly layered composition
+imperfect alignment for energy, blocks slightly overlapping, layered composition
 <<THUMB_TEXT_SHADOW>>
 slight tilt for dynamism (2-4 degrees max)
-text should integrate into composition, not float awkwardly
+keep the bottom-right corner (video duration badge) and the bottom 10% of the frame completely free of text
+final legibility test: the hook must stay clearly readable when the image is shrunk to 120 pixels wide — when in doubt, make the text BIGGER and the scene simpler
 
 cinematic lighting, dramatic contrast, emotional storytelling, subtle vignette, eye-catching composition optimized for thumbnails
 youtube thumbnail designed to trigger curiosity, emotional recognition, and controversy
@@ -88,8 +90,19 @@ no watermark, no logo, no extra text except the requested hook text
    strongest word — **never** a grammar word (the, a, no, and, of). Use the
    channel art style: <<THUMBNAIL_STYLE>>
 
-5. **Keep the `TEXT STYLE (HIGH CTR YOUTUBE)` block exactly as in the example.**
-   Change only the hook text and which words are secondary vs MAIN.
+5. **Keep the `TEXT STYLE (HIGH CTR YOUTUBE — MOBILE FIRST...)` block exactly as
+   in the example.** Change only the hook text and which words are secondary vs
+   MAIN. The size numbers (45-55% frame area, characters 35-40% of image height,
+   max 14 characters) are NON-NEGOTIABLE in all three concepts — the concepts
+   vary the SCENE, never the text dominance.
+
+   Why: ~76-79% of this channel's real viewers are on phones, where the
+   thumbnail renders ~160 px wide. Text that merely "fits nicely" on a desktop
+   mock disappears there. Split the hook into MAIN + secondary so the character
+   budget holds; if the hook is longer than 14 characters, cut words from the
+   hook rather than shrinking the type — UNLESS a MANDATORY block below fixes
+   the exact text: then keep it exactly as given, split it across the two
+   blocks, and let the secondary block shrink before the MAIN word ever does.
 
 6. Three different reasons to click — not three variations of one idea:
    - `portrait_main` — character close, one clear feeling. Safest, usually

@@ -259,7 +259,8 @@ def _ly_do_bo_qua(loi: BaseException) -> str:
     return ""
 
 
-def chi_tiet_video(url: str, *, cancel: Optional[threading.Event] = None) -> ChiTiet:
+def chi_tiet_video(url: str, *, cancel: Optional[threading.Event] = None,
+                   lang: str = "") -> ChiTiet:
     """Mở một video để lấy like/comment/hashtag/mô tả. **Có gọi mạng.**
 
     Dùng lại `youtube._extract` thay vì tự gọi `YoutubeDL`: hàm đó đã có sẵn ba
@@ -271,9 +272,14 @@ def chi_tiet_video(url: str, *, cancel: Optional[threading.Event] = None) -> Chi
     tiếng của video về nghe — nhồi vào vòng chạy này thì một lượt lấy dữ liệu
     10 kênh biến thành cả tiếng đồng hồ mà người dùng không hiểu vì sao.
     """
-    from .youtube import _extract  # noqa: PLC0415 — cùng gói, cố ý dùng lại
+    from .youtube import _args_ngon_ngu, _extract  # noqa: PLC0415 — cùng gói
 
-    thong_tin = _extract(url, {"extract_flat": False}, cancel=cancel) or {}
+    thong_tin = _extract(
+        url,
+        # Trên bảng thì tiêu đề gốc, mở chi tiết cũng phải gốc — không thì
+        # vòng chậm ghi đè bản dịch máy lên bản gốc vòng nhanh vừa lấy.
+        {"extract_flat": False, "extractor_args": _args_ngon_ngu(lang)},
+        cancel=cancel) or {}
     ngay = str(thong_tin.get("upload_date") or "")
     if len(ngay) == 8 and ngay.isdigit():
         ngay = "{0}-{1}-{2}".format(ngay[:4], ngay[4:6], ngay[6:8])
@@ -302,6 +308,7 @@ def bo_sung_chi_tiet(
     cancel: Optional[threading.Event] = None,
     on_log: Optional[Callable[[str], None]] = None,
     lay: Callable[..., ChiTiet] = chi_tiet_video,
+    lang: str = "",
 ) -> Dict[str, ChiTiet]:
     """Chạy vòng chậm cho **mọi video** đã lấy được, trả về bảng tra theo `video_id`.
 
@@ -324,7 +331,7 @@ def bo_sung_chi_tiet(
         if video.video_id in ket:
             continue
         try:
-            ket[video.video_id] = lay(video.url, cancel=cancel)
+            ket[video.video_id] = lay(video.url, cancel=cancel, lang=lang)
         except Exception as loi:  # noqa: BLE001 — yt-dlp ném đủ loại
             ly_do = _ly_do_bo_qua(loi)
             if ly_do:
@@ -438,6 +445,7 @@ def lay_du_lieu(
     cancel: Optional[threading.Event] = None,
     thu_thap: Callable[..., Tuple[List[Channel], List[SearchHit]]] = collect,
     lay_chi_tiet: Callable[..., ChiTiet] = chi_tiet_video,
+    lang: str = "",
 ) -> KetQua:
     """Chạy trọn một lượt: đọc ô nhập → lấy kênh → (tuỳ chọn) lấy chi tiết → chấm.
 
@@ -449,6 +457,10 @@ def lay_du_lieu(
 
     `thu_thap` và `lay_chi_tiet` tách ra thành tham số để test dựng dữ liệu giả
     chạy được không cần mạng — chứ không phải để đổi nhà cung cấp.
+
+    `lang` là mã ngôn ngữ của kênh (`ngon_ngu` trong `kenh.yaml`). Không truyền
+    thì YouTube trả tiêu đề **đã dịch máy** sang tiếng của máy đang xem — xem
+    `youtube._args_ngon_ngu`; đó là lỗi đã làm hỏng ~40% sổ đối thủ TL4-T7.
 
     `mo_rong=False` là mặc định vì Skill này tên là "Lấy dữ liệu đối thủ": khách
     đưa 5 kênh thì muốn đúng 5 kênh đó, không muốn tool tự lôi thêm 20 kênh lạ
@@ -466,6 +478,7 @@ def lay_du_lieu(
         expand=bool(mo_rong),
         cancel=cancel,
         on_log=ket.nhat_ky.append,
+        lang=lang,
     )
     ket.insights = [analyze_channel(k) for k in kenh]
     ket.hits = list(hits)
@@ -475,7 +488,7 @@ def lay_du_lieu(
             "Đang lấy chi tiết từng video (like, comment, hashtag, mô tả)…")
         ket.chi_tiet = bo_sung_chi_tiet(
             ket.insights, cancel=cancel, on_log=ket.nhat_ky.append,
-            lay=lay_chi_tiet)
+            lay=lay_chi_tiet, lang=lang)
 
     # `scanned` chỉ đúng khi thật sự có dò ngách; báo bừa là chấm điểm độ bão
     # hoà trên dữ liệu không tồn tại.

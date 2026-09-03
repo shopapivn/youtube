@@ -31,21 +31,28 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional
 
-from PyQt5.QtCore import Qt, QTimer, QUrl
-from PyQt5.QtGui import QDesktopServices, QKeySequence
+from PyQt5.QtCore import Qt, QSize, QTimer, QUrl
+from PyQt5.QtGui import (
+    QDesktopServices, QIcon, QKeySequence, QPixmap,
+)
 from PyQt5.QtWidgets import (
     QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
     QMenu, QMessageBox, QPlainTextEdit, QSpinBox, QTableWidget,
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
+from core import anh_doi_thu as kho_anh
+from core import cham_diem_content as cham
+from core import danh_ba_doi_thu as db
 from core import doi_thu_kenh as so
 from core.doi_thu import KetQua, lay_du_lieu
-from core.kenh import liet_ke_kenh
+from core.kenh import doc_kenh, liet_ke_kenh
 from core.youtube import parse_inputs
 
 from . import theme
+from .cua_so_loc_doi_thu import HopLocDoiThu
 from .trang_chi_so_ytb import TrangChiSoYTB
+from .trang_quan_ly_doi_thu import TrangDanhBa, TrangTuyen
 from .widgets import (
     HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu, the, tieu_de_trang,
 )
@@ -57,7 +64,7 @@ __all__ = ["TrangPhanTich", "TrangDoiThu"]
 # 02/09 (lần 2): "cái đọc số liệu đã lấy được... đưa về bên phân tích và
 # nghiên cứu" — mục Chỉ số kênh Ở ĐÂY là bản CHỈ ĐỌC (phan=("doc",));
 # hạ tầng cào (trạm + tiện ích) và Máy VM nằm bên tab VPS & Máy VM.
-TAB_CON = ("Đối thủ", "Chỉ số kênh", "Quyết định content")
+TAB_CON = ("Đối thủ", "Content", "Tuyến", "Chỉ số kênh", "Quyết định content")
 
 #: Nhịp tự kiểm "đến hạn quét chưa" khi tool đang mở. Nửa tiếng một lần hỏi
 #: cái đồng hồ trên đĩa — không phải một lượt gọi mạng nào.
@@ -73,7 +80,68 @@ _RONG_COT = {
     "Thời lượng": 74, "View": 70, so.COT_TANG: 80, "Like": 60, "Comment": 72,
     "Hashtag": 110, "Mô tả": 150, so.COT_TUYEN: 120, so.COT_GHI_CHU: 140,
     so.COT_VIEW_TRUOC: 92,
+    # Ảnh 16:9 vừa khung; tiêu đề Việt rộng gần bằng tiêu đề gốc.
+    so.COT_ANH: 100, so.COT_VIET: 250, so.COT_DIEM: 54,
+    so.COT_LAN_DAU: 92, so.COT_DA_LAM: 66,
 }
+
+#: Cỡ ảnh thumbnail trong ô bảng. Giữ đúng 16:9 — thumbnail bị bóp méo
+#: thì nhìn không ra nó đẹp hay xấu, mà đó là toàn bộ lý do cột này có mặt.
+_ANH_RONG, _ANH_CAO = 88, 50
+
+#: Tải thêm ngần này dòng trên và dưới vùng đang nhìn thấy — cuộn một
+#: nấc là ảnh đã nằm sẵn đó, không phải đợi.
+_ANH_DEM_THEM = 12
+
+#: Bốn cách xem của ô "Xem nhanh". Mỗi cách là một câu hỏi có thật:
+#:
+#:   Tất cả       cả sổ, như trang tính
+#:   Mới với sổ   "đối thủ có content mới nào không" — hỏi mỗi ngày
+#:   Đang nổ      "cái nào đang lên nhanh bất thường"
+#:   Tuyến của tôi "cái nào hợp kênh tôi đang làm"
+#:
+#: Ba cách sau chồng được với ô lọc chữ, nên "content mới của tuyến tôi có
+#: chữ 一人" là hai thao tác chứ không phải một câu truy vấn.
+_CACH_XEM = (
+    ("Tất cả", ""),
+    ("Mới với sổ", "moi"),
+    ("Đang nổ", "no"),
+    ("Tuyến của tôi", "tuyen_toi"),
+    ("Chưa làm", "chua_lam"),
+)
+
+#: "Mới" nghĩa là vào sổ trong ngần này ngày. 7 chứ không phải 1: khách không
+#: mở tool mỗi ngày, mà mở ra chỉ thấy đúng hôm nay thì bỏ sót cả tuần.
+_NGAY_COI_LA_MOI = 7
+
+#: Từ điểm này trở lên thì coi là "đang nổ". 80 = nhóm 20% nóng nhất sổ —
+#: xem `core/cham_diem_content.py`, điểm là thứ hạng chứ không phải số tuyệt đối.
+_DIEM_DANG_NO = 80
+
+#: Mỗi ĐỢT dịch làm nhiều nhất ngần này dòng rồi GHI XUỐNG, xong mới làm đợt
+#: tiếp. 50 dòng ≈ 5 lượt gọi ≈ vài phút — đủ ngắn để đóng tool giữa chừng
+#: cũng chỉ mất chỗ đang làm dở, không mất cả nửa tiếng đã trả tiền.
+_DICH_MOI_DOT = 50
+
+
+def _moc_ngay(so_ngay: int) -> str:
+    """Ngày cách đây `so_ngay` hôm, dạng `YYYY-MM-DD` để so chuỗi trực tiếp."""
+    import datetime as _dt  # noqa: PLC0415
+
+    return (_dt.date.today() - _dt.timedelta(days=so_ngay)).isoformat()
+
+
+def _so_o(muc) -> float:
+    """Số trong một ô bảng, kể cả khi nó được cất ở vai sắp xếp."""
+    gia_tri = muc.data(Qt.EditRole)
+    try:
+        return float(gia_tri)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return float(muc.text().strip() or 0)
+    except (TypeError, ValueError):
+        return 0.0
 _RONG_KHAC = 110
 
 
@@ -111,6 +179,9 @@ class TrangDoiThu(QWidget):
         self._huy: Optional[threading.Event] = None
         self._dang_do = False       # đang đổ dữ liệu vào widget — đừng tự lưu
         self._dang_quet = False
+        self._dang_tai_anh = False
+        self._dang_dich = False
+        self._diem: List = []
         self._kenh_dang_mo = ""
         self._kenh_dang_quet = ""
         self._cot: List[str] = so.cot_mac_dinh()
@@ -146,6 +217,17 @@ class TrangDoiThu(QWidget):
         self._cho_luu_rong.setSingleShot(True)
         self._cho_luu_rong.setInterval(800)
         self._cho_luu_rong.timeout.connect(self._luu_rong_cot)
+        # Cuộn xong mới đi lấy ảnh — xem `_hen_tai_anh`.
+        self._cho_tai_anh = QTimer(self)
+        self._cho_tai_anh.setSingleShot(True)
+        self._cho_tai_anh.setInterval(250)
+        self._cho_tai_anh.timeout.connect(self._tai_anh_dang_nhin)
+        self._bang.verticalScrollBar().valueChanged.connect(
+            lambda _v: self._hen_tai_anh())
+        # `_nap_kenh` ở trên đã đổ bảng xong TRƯỚC khi cái hẹn giờ này ra đời,
+        # nên lượt đổ đầu tiên không hẹn được ai. Hẹn bù một lần ở đây, không
+        # thì phải cuộn bảng mới thấy ảnh hiện ra.
+        self._hen_tai_anh()
 
     # ── Dựng giao diện ───────────────────────────────────────────────────────
 
@@ -171,14 +253,16 @@ class TrangDoiThu(QWidget):
         d0.addWidget(nut_phu("Mở thư mục dữ liệu", self._mo_thu_muc, rong=170))
         v.addLayout(d0)
 
-        v.addWidget(nhan("Danh sách đối thủ — mỗi dòng một kênh. Tự lưu khi gõ.",
-                         "muted"))
-        self._o_doi_thu = QPlainTextEdit()
-        self._o_doi_thu.setPlaceholderText(
-            "https://www.youtube.com/@tenkenh\n@tenkenh2")
-        self._o_doi_thu.setFixedHeight(76)
-        self._o_doi_thu.textChanged.connect(self._luu_doi_thu)
-        v.addWidget(self._o_doi_thu)
+        # Danh sách đối thủ KHÔNG sửa được ở đây nữa — nó về mục "Đối thủ".
+        #
+        # Trước đây ô nhập ở chỗ này ghi thẳng đè `doi-thu.txt` sau MỖI PHÍM
+        # GÕ. Từ khi tệp ấy thành HỘP THƯ ĐẾN (máy ảo quét trang chủ cũng đổ
+        # kênh vào — `chi_so_ytb.tram.nhan_doi_thu`), một ô ghi đè cả tệp là
+        # một đường mất dữ liệu có thật: sửa một dòng ở đây là xoá sạch những
+        # kênh máy ảo vừa nhặt về mà khách chưa kịp xem.
+        self._nhan_doi_thu = nhan("", "muted")
+        self._nhan_doi_thu.setMinimumWidth(1)
+        v.addWidget(self._nhan_doi_thu)
 
         d1 = QHBoxLayout()
         d1.addWidget(nhan("Số video mỗi kênh"))
@@ -226,6 +310,24 @@ class TrangDoiThu(QWidget):
         self._nut_dung.setEnabled(False)
         d2.addWidget(self._nut_dung)
         v.addLayout(d2)
+
+        # Hàng riêng cho hai việc "làm trước / làm sau" một lượt quét, để hàng
+        # trên không phình quá bề ngang tối thiểu của trang (`test_bo_cuc`).
+        d3 = HangXuongDong()
+        nut_loc = nut_phu("Lọc đối thủ…", self._mo_loc, rong=140)
+        nut_loc.setToolTip(
+            "Chấm từng kênh trong danh sách xem có thật là đối thủ không — "
+            "đúng tiếng, cùng khổ video, quy mô so được, và AI đọc tiêu đề "
+            "xem có đúng chủ đề kênh bạn. Làm việc này TRƯỚC khi quét thì "
+            "khỏi phải quét sâu những kênh không liên quan.")
+        d3.addWidget(nut_loc)
+        self._nut_dich = nut_phu("Dịch tiêu đề", self._dich, rong=140)
+        self._nut_dich.setToolTip(
+            "Dịch tiêu đề đối thủ sang tiếng Việt, điền vào cột “{0}”. Chỉ "
+            "điền ô còn trống — câu nào bạn đã sửa tay thì tôi không đụng."
+            .format(so.COT_VIET))
+        d3.addWidget(self._nut_dich)
+        v.addLayout(d3)
         return khung
 
     def _the_bang(self) -> QWidget:
@@ -239,9 +341,26 @@ class TrangDoiThu(QWidget):
         self._tom_tat = nhan("", "phu")
         d0.addWidget(self._tom_tat)
         d0.addStretch(1)
+        # Ô XEM NHANH — chỗ trả lời câu hỏi hằng ngày mà không phải tự lọc tay.
+        d0.addWidget(nhan("Xem:", "muted"))
+        self._xem = QComboBox()
+        self._xem.addItems([nhan_xem for nhan_xem, _ in _CACH_XEM])
+        # `setMaximumWidth` + `setMinimumWidth(1)` chứ KHÔNG `setFixedWidth`:
+        # cố định bề ngang là đòi đủ ngần ấy pixel kể cả lúc cửa sổ hẹp, và
+        # `test_bo_cuc` canh đúng chỗ đó — trang phải co xuống được 760px.
+        self._xem.setMaximumWidth(170)
+        self._xem.setMinimumWidth(1)
+        self._xem.setToolTip(
+            "“Mới với sổ” là content lần đầu vào sổ ở lượt quét gần đây — "
+            "đúng câu “đối thủ có gì mới”. “Đang nổ” là content đạt điểm cao, "
+            "tức đang lên view nhanh hoặc vượt hẳn mức thường của kênh nó.")
+        self._xem.currentIndexChanged.connect(lambda _i: self._loc())
+        d0.addWidget(self._xem)
+        d0.addSpacing(10)
         self._o_loc = QLineEdit()
         self._o_loc.setPlaceholderText("lọc — gõ gì chỉ dòng chứa chữ đó còn hiện…")
-        self._o_loc.setFixedWidth(250)
+        self._o_loc.setMaximumWidth(220)
+        self._o_loc.setMinimumWidth(1)
         self._o_loc.textChanged.connect(self._loc)
         d0.addWidget(self._o_loc)
         v.addLayout(d0)
@@ -302,10 +421,9 @@ class TrangDoiThu(QWidget):
         self._kenh_dang_mo = kenh
         self._dang_do = True
         try:
-            self._o_doi_thu.setPlainText(
-                so.doc_doi_thu(self._app.base_dir, kenh) if kenh else "")
+            self._cap_nhat_nhan_doi_thu()
             cai = so.doc_cai(self._app.base_dir, kenh) if kenh else {}
-            self._tu_quet.setChecked(bool(cai.get("tu_quet")))
+            self._tu_quet.setChecked(bool(cai.get("tu_quet", True)))
             rong = cai.get("rong_cot")
             self._rong = dict(rong) if isinstance(rong, dict) else {}
             try:
@@ -334,14 +452,19 @@ class TrangDoiThu(QWidget):
 
     # ── Tự lưu ───────────────────────────────────────────────────────────────
 
-    def _luu_doi_thu(self) -> None:
-        if self._dang_do or not self._kenh_dang_mo:
-            return
+    def _cap_nhat_nhan_doi_thu(self) -> None:
+        """Nhắc lại danh bạ đang theo dõi bao nhiêu kênh — chỉ đọc, không sửa."""
         try:
-            so.luu_doi_thu(self._app.base_dir, self._kenh_dang_mo,
-                           self._o_doi_thu.toPlainText())
-        except OSError:
-            pass    # đĩa hỏng thì lượt Quét sẽ báo, đừng chửi mỗi phím gõ
+            n = len(db.dang_theo_doi(self._app.base_dir, self._kenh_dang_mo))
+            cho = len(db.hop_thu(self._app.base_dir, self._kenh_dang_mo))
+        except Exception:  # noqa: BLE001 — kênh chưa có danh bạ cũng bình thường
+            n, cho = 0, 0
+        cau = ("Đang theo dõi {0} kênh đối thủ.".format(n) if n
+               else "Chưa có đối thủ nào đang theo dõi.")
+        if cho:
+            cau += "  Còn {0} kênh chờ bạn duyệt.".format(cho)
+        cau += "  Thêm / bỏ / phân tuyến ở mục “{0}”.".format(TAB_CON[0])
+        self._nhan_doi_thu.setText(cau)
 
     def _doi_tu_quet(self, bat: bool) -> None:
         if self._dang_do or not self._kenh_dang_mo:
@@ -378,16 +501,151 @@ class TrangDoiThu(QWidget):
             self._app.show_message("Không lưu được bảng", str(loi))
 
     def _hang_tren_bang(self) -> List[List[str]]:
+        """Đọc ngược cả bảng ra dữ liệu để lưu.
+
+        Cột Ảnh **dựng lại từ `Link video`** chứ không đọc chữ trong ô: ô ấy
+        cố ý không có chữ (chỉ có hình), nên đọc `text()` là ghi rỗng đè lên
+        cả cột. Dựng lại cũng đúng hơn — địa chỉ ảnh vốn là hệ quả của link,
+        không phải một dữ liệu độc lập có thể lệch.
+        """
+        c_anh = self._cot.index(so.COT_ANH) if so.COT_ANH in self._cot else -1
+        c_link = self._cot.index(so.COT_LINK) if so.COT_LINK in self._cot else -1
         hang = []
         for i in range(self._bang.rowCount()):
-            hang.append([
+            dong = [
                 (self._bang.item(i, c).text() if self._bang.item(i, c) else "")
-                for c in range(len(self._cot))])
+                for c in range(len(self._cot))]
+            if c_anh >= 0:
+                dong[c_anh] = (so.dia_chi_anh(dong[c_link])
+                               if c_link >= 0 else "")
+            hang.append(dong)
         return hang
+
+    # ── Ảnh thumbnail ────────────────────────────────────────────────────────
+
+    def _hen_tai_anh(self) -> None:
+        """Hẹn một nhịp rồi mới tải ảnh — cuộn nhanh không sinh chục lượt tải.
+
+        Kéo thanh cuộn một cái là Qt bắn ra hàng chục `valueChanged`; mỗi cái
+        một lượt gọi mạng thì vừa vô ích vừa đúng kiểu "hỏi dày" mà CLAUDE.md
+        cấm. Đợi im tay 250 ms rồi mới tải phần đang thật sự nhìn thấy.
+        """
+        if hasattr(self, "_cho_tai_anh"):
+            self._cho_tai_anh.start()
+
+    def _tai_anh_dang_nhin(self) -> None:
+        """Tải ảnh cho các dòng đang hiện trên màn hình (± lề đệm)."""
+        if self._dang_tai_anh or so.COT_ANH not in self._cot:
+            return
+        c_link = self._cot.index(so.COT_LINK) if so.COT_LINK in self._cot else -1
+        if c_link < 0 or not self._kenh_dang_mo:
+            return
+        khung = self._bang.viewport()
+        tren = self._bang.rowAt(0)
+        duoi = self._bang.rowAt(khung.height() - 1)
+        tren = 0 if tren < 0 else tren
+        duoi = self._bang.rowCount() - 1 if duoi < 0 else duoi
+        dau = max(0, tren - _ANH_DEM_THEM)
+        cuoi = min(self._bang.rowCount() - 1, duoi + _ANH_DEM_THEM)
+
+        goc, kenh = self._app.base_dir, self._kenh_dang_mo
+        can: List[str] = []
+        for i in range(dau, cuoi + 1):
+            if self._bang.isRowHidden(i):
+                continue
+            o_link = self._bang.item(i, c_link)
+            link = o_link.text().strip() if o_link else ""
+            if not link:
+                continue
+            duong = kho_anh.co_san(goc, kenh, link)
+            if duong:
+                self._dat_anh(i, duong)
+            elif link not in can:
+                can.append(link)
+        if not can:
+            return
+
+        self._dang_tai_anh = True
+
+        def viec() -> Dict[str, str]:
+            # LUỒNG NỀN — chỉ tải tệp về đĩa, không chạm widget.
+            return kho_anh.tai_lo(goc, kenh, can)
+
+        self._app.run_bg(viec, on_ok=self._anh_ve, on_err=self._anh_hong)
+
+    def _anh_ve(self, duong_theo_link: Dict[str, str]) -> None:
+        self._dang_tai_anh = False
+        if not duong_theo_link or so.COT_LINK not in self._cot:
+            return
+        c_link = self._cot.index(so.COT_LINK)
+        for i in range(self._bang.rowCount()):
+            o_link = self._bang.item(i, c_link)
+            link = o_link.text().strip() if o_link else ""
+            duong = duong_theo_link.get(link)
+            if duong:
+                self._dat_anh(i, duong)
+
+    def _anh_hong(self, _loi: BaseException) -> None:
+        """Không lấy được ảnh thì thôi — ô để trống, KHÔNG hiện hộp lỗi.
+
+        Ảnh thumbnail là thứ trang trí cho dễ nhìn; một cú rớt mạng lúc cuộn
+        bảng không đáng để dựng một hộp thoại chắn ngang việc của khách.
+        """
+        self._dang_tai_anh = False
+
+    def _dat_anh(self, dong: int, duong: str) -> None:
+        if so.COT_ANH not in self._cot:
+            return
+        muc = self._bang.item(dong, self._cot.index(so.COT_ANH))
+        if muc is None or not muc.icon().isNull():
+            return
+        anh = QPixmap(duong)
+        if anh.isNull():
+            return
+        self._dang_do = True
+        try:
+            muc.setIcon(QIcon(anh.scaled(
+                _ANH_RONG, _ANH_CAO,
+                Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+        finally:
+            self._dang_do = False
 
     # ── Bảng ─────────────────────────────────────────────────────────────────
 
+    def _cham_diem(self, cot: List[str], hang: List[List[str]]) -> List:
+        """Tính lại cột Điểm cho cả bảng, **ghi thẳng vào `hang`**.
+
+        Tính lại chứ không đọc từ đĩa: điểm là thứ hạng trong lô, nên thêm một
+        video là mọi dòng đổi điểm (xem `core/doi_thu_kenh.COT_DIEM`). Giá trị
+        vẫn được lưu xuống CSV ở lượt ghi sau để khâu "Quyết định content" đọc
+        được, nhưng nguồn sự thật là phép tính, không phải tệp.
+        """
+        if so.COT_DIEM not in cot:
+            return []
+        try:
+            subs = db.subs_theo_kenh(self._app.base_dir, self._kenh_dang_mo)
+        except Exception:  # noqa: BLE001 — chưa có danh bạ thì bỏ thước "vượt"
+            subs = {}
+        diem = cham.cham_bang(cot, hang, subs_theo_kenh=subs)
+        c = cot.index(so.COT_DIEM)
+        for dong, d in zip(hang, diem):
+            if c < len(dong):
+                dong[c] = str(d.diem) if d.diem else ""
+        # Cột "Đã làm" cũng tính lại ở đây, cùng một lý do: nó suy ra từ thư
+        # mục PROJECTS chứ không phải dữ liệu khách gõ, nên tin tệp CSV là tin
+        # một ảnh chụp có thể đã cũ.
+        try:
+            from core.da_lam import danh_dau_da_lam, doc_ma_da_lam  # noqa: PLC0415
+
+            danh_dau_da_lam(cot, hang,
+                            doc_ma_da_lam(self._app.base_dir, self._kenh_dang_mo),
+                            so.COT_DA_LAM)
+        except Exception:  # noqa: BLE001 — chưa sản xuất lượt nào cũng bình thường
+            pass
+        return diem
+
     def _do_bang(self, cot: List[str], hang: List[List[str]]) -> None:
+        self._diem = self._cham_diem(list(cot), hang)
         self._dang_do = True
         # Qt bắt buộc tắt sắp xếp trong lúc đổ dòng — không thì dòng vừa chèn
         # bị xếp lại giữa chừng và dữ liệu rơi sai hàng.
@@ -407,44 +665,103 @@ class TrangDoiThu(QWidget):
                 self._bang.setColumnWidth(
                     i, int(self._rong.get(ten)
                            or _RONG_COT.get(ten, _RONG_KHAC)))
+            cot_anh = (self._cot.index(so.COT_ANH)
+                       if so.COT_ANH in self._cot else -1)
+            cot_diem = (self._cot.index(so.COT_DIEM)
+                        if so.COT_DIEM in self._cot else -1)
+            if cot_anh >= 0:
+                self._bang.setIconSize(QSize(_ANH_RONG, _ANH_CAO))
             self._bang.setRowCount(len(hang))
             for i, dong in enumerate(hang):
                 for c in range(len(self._cot)):
                     o = str(dong[c]) if c < len(dong) else ""
                     muc = QTableWidgetItem()
-                    if c in cot_so and o.strip():
+                    if c == cot_anh:
+                        # Ô Ảnh giữ ĐỊA CHỈ trong vai người dùng và để trống
+                        # phần chữ: hiện cả cái link dài ngoằng cạnh tấm ảnh
+                        # thì cột rộng gấp ba mà chẳng ai đọc. Giá trị thật
+                        # được dựng lại từ `Link video` lúc lưu, xem
+                        # `_hang_tren_bang`.
+                        muc.setData(Qt.UserRole, o)
+                        muc.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                    elif c in cot_so and o.strip():
                         try:
                             muc.setData(Qt.EditRole, int(float(o)))
                         except (TypeError, ValueError):
                             muc.setText(o)
                     else:
                         muc.setText(o)
+                    if c == cot_diem and i < len(self._diem):
+                        # Điểm mà không nói được vì sao thì chỉ là một con số
+                        # để cãi nhau. Rê chuột là ra ba thước đã cộng vào nó.
+                        muc.setToolTip(self._diem[i].giai_thich())
                     self._bang.setItem(i, c, muc)
+                if cot_anh >= 0:
+                    self._bang.setRowHeight(i, _ANH_CAO + 4)
         finally:
             self._bang.setSortingEnabled(True)
             self._dang_do = False
         self._cap_nhat_tom_tat()
         self._loc()
+        self._hen_tai_anh()
 
     def _cap_nhat_tom_tat(self) -> None:
-        phan = ["{0} video".format(self._bang.rowCount())
-                if self._bang.rowCount() else "chưa có dữ liệu"]
+        tong = self._bang.rowCount()
+        hien = sum(1 for i in range(tong) if not self._bang.isRowHidden(i))
+        # Đang lọc thì phải nói rõ đang nhìn bao nhiêu trên bao nhiêu — không
+        # thì khách tưởng sổ chỉ có ngần ấy dòng và đi quét lại cho "đủ".
+        phan = ["{0}/{1} video".format(hien, tong) if hien != tong
+                else ("{0} video".format(tong) if tong else "chưa có dữ liệu")]
         if self._quet_luc > 0:
             phan.append("quét lần cuối {0}".format(
                 time.strftime("%H:%M %d/%m", time.localtime(self._quet_luc))))
         self._tom_tat.setText(" · ".join(phan))
 
     def _loc(self) -> None:
+        """Ẩn/hiện dòng theo Ô XEM NHANH **và** ô lọc chữ. Hai cái cùng lúc."""
         kim = self._o_loc.text().strip().lower()
+        cach = _CACH_XEM[max(0, self._xem.currentIndex())][1]
+        c_diem = self._cot.index(so.COT_DIEM) if so.COT_DIEM in self._cot else -1
+        c_moi = (self._cot.index(so.COT_LAN_DAU)
+                 if so.COT_LAN_DAU in self._cot else -1)
+        c_tuyen = (self._cot.index(so.COT_TUYEN)
+                   if so.COT_TUYEN in self._cot else -1)
+        c_lam = (self._cot.index(so.COT_DA_LAM)
+                 if so.COT_DA_LAM in self._cot else -1)
+        cua_toi = self._tuyen_cua_toi()
+        moc_moi = _moc_ngay(_NGAY_COI_LA_MOI)
+
         for i in range(self._bang.rowCount()):
-            if not kim:
-                self._bang.setRowHidden(i, False)
-                continue
-            thay = any(
-                self._bang.item(i, c) is not None
-                and kim in self._bang.item(i, c).text().lower()
-                for c in range(len(self._cot)))
-            self._bang.setRowHidden(i, not thay)
+            hien = True
+            if cach == "moi" and c_moi >= 0:
+                o = self._bang.item(i, c_moi)
+                hien = bool(o) and o.text().strip() >= moc_moi
+            elif cach == "no" and c_diem >= 0:
+                o = self._bang.item(i, c_diem)
+                hien = bool(o) and _so_o(o) >= _DIEM_DANG_NO
+            elif cach == "tuyen_toi" and c_tuyen >= 0:
+                o = self._bang.item(i, c_tuyen)
+                hien = bool(o) and o.text().strip() in cua_toi
+            elif cach == "chua_lam" and c_lam >= 0:
+                o = self._bang.item(i, c_lam)
+                hien = not (o and o.text().strip())
+            if hien and kim:
+                hien = any(
+                    self._bang.item(i, c) is not None
+                    and kim in self._bang.item(i, c).text().lower()
+                    for c in range(len(self._cot)))
+            self._bang.setRowHidden(i, not hien)
+        self._cap_nhat_tom_tat()
+
+    def _tuyen_cua_toi(self) -> set:
+        """Mã các tuyến mà kênh đang mở đang đánh — đọc từ sổ tuyến."""
+        try:
+            from core import tuyen_noi_dung as tn  # noqa: PLC0415
+
+            return set(tn.tuyen_cua_kenh(self._app.base_dir,
+                                         self._kenh_dang_mo, self._kenh_dang_mo))
+        except Exception:  # noqa: BLE001 — chưa có sổ tuyến cũng bình thường
+            return set()
 
     # ── Thao tác kiểu trang tính ─────────────────────────────────────────────
 
@@ -541,6 +858,7 @@ class TrangDoiThu(QWidget):
         menu.addAction("Mở video trong trình duyệt", self._mo_video)
         menu.addAction("Điền “{0}” cho dòng đã chọn…".format(so.COT_TUYEN),
                        self._dien_tuyen)
+        menu.addAction("Dịch lại tiêu đề dòng đã chọn", self._dich_lai)
         menu.addAction("Copy vùng chọn\tCtrl+C", self._chep_vung)
         menu.addAction("Xoá chữ trong ô\tDelete", self._xoa_o)
         menu.addSeparator()
@@ -744,7 +1062,14 @@ class TrangDoiThu(QWidget):
                                        "Chọn hoặc gõ tên kênh trước đã — sổ "
                                        "lưu theo kênh.")
             return
-        chu = self._o_doi_thu.toPlainText()
+        # Nguồn quét là DANH BẠ (chỉ kênh "theo dõi"), không phải cả hộp thư.
+        # Hộp thư có kênh máy ảo vừa nhặt về và kênh khách đã đánh "bỏ" — quét
+        # tuốt là quét cả những kênh đã biết là không liên quan.
+        links = db.dang_theo_doi(self._app.base_dir, self._kenh_dang_mo)
+        # Danh bạ trống = sổ chưa lên đời. Lùi về hộp thư cho lượt quét vẫn
+        # chạy được, chứ không bắt khách đi làm một bước lạ trước đã.
+        chu = "\n".join(links) if links else so.doc_doi_thu(
+            self._app.base_dir, self._kenh_dang_mo)
         if not parse_inputs(chu):
             if not tu_dong:
                 self._app.show_message(
@@ -770,6 +1095,160 @@ class TrangDoiThu(QWidget):
         self._ghi("Thêm video lẻ vào sổ…")
         self._bat_dau_quet(chu, la_quet=False)
 
+    # ── Lọc đối thủ & dịch tiêu đề ───────────────────────────────────────────
+
+    def _mo_loc(self) -> None:
+        """Mở cửa sổ chấm ứng viên. Chốt xong thì đổ danh sách mới vào ô nhập."""
+        if not self._kenh_dang_mo:
+            self._app.show_message("Chưa chọn kênh",
+                                   "Chọn hoặc gõ tên kênh trước đã — danh sách "
+                                   "đối thủ lưu theo kênh.")
+            return
+        hop = HopLocDoiThu(self._app, self._kenh_dang_mo, self)
+        if hop.exec_():
+            self._cap_nhat_nhan_doi_thu()
+            self._ghi("Đã chốt lại danh sách đối thủ. Bấm “Quét đối thủ” để "
+                      "lấy content của các kênh vừa giữ.")
+
+    def _dich_lai(self) -> None:
+        """Xoá bản dịch của các dòng đã chọn rồi dịch lại chúng.
+
+        Cần lối này vì nút "Dịch tiêu đề" cố ý CHỈ điền ô trống — để không đè
+        mất câu khách đã sửa tay. Nhưng khi một câu dịch bị cắt cụt (xem
+        `core/loc_doi_thu._bo_muc_bi_cat`) thì ô ấy không trống, và khách
+        không có cách nào bảo tool làm lại. Xoá rồi gọi lại chính đường cũ là
+        cách gọn nhất — không thêm một nhánh mã nào.
+        """
+        if so.COT_VIET not in self._cot:
+            return
+        dong_chon = sorted({m.row() for m in self._bang.selectedIndexes()})
+        if not dong_chon:
+            self._app.show_message(
+                "Chưa chọn dòng",
+                "Bôi chọn những dòng có bản dịch sai hoặc cụt trước đã.")
+            return
+        c = self._cot.index(so.COT_VIET)
+        self._dang_do = True
+        try:
+            for i in dong_chon:
+                self._dat_o(i, c, "")
+        finally:
+            self._dang_do = False
+        self._luu_tu_bang()
+        self._dich()
+
+    def _dich(self, im_lang: bool = False) -> None:
+        """Dịch tiêu đề đối thủ sang tiếng Việt — chỉ những ô còn TRỐNG.
+
+        Ô đã có chữ thì không đụng: có thể là bản dịch lượt trước, cũng có thể
+        là câu khách tự sửa cho sát ý. Dịch đè lên là xoá công sửa tay của họ
+        mà không hỏi.
+
+        `im_lang=True` là lúc TOOL tự gọi (sau mỗi lượt quét). Khi ấy mọi lối
+        rẽ "không làm được" chỉ ghi vào nhật ký chứ không dựng hộp thoại —
+        khách không bấm gì cả, dựng hộp lên là chắn ngang việc của họ để báo
+        một chuyện họ không yêu cầu.
+        """
+        def bao(tieu_de: str, chu: str) -> None:
+            if im_lang:
+                self._ghi(chu)
+            else:
+                self._app.show_message(tieu_de, chu)
+
+        if self._dang_dich or not self._kenh_dang_mo:
+            if not self._kenh_dang_mo and not im_lang:
+                self._app.show_message("Chưa chọn kênh",
+                                       "Chọn hoặc gõ tên kênh trước đã.")
+            return
+        if so.COT_VIET not in self._cot or "Tiêu đề video" not in self._cot:
+            bao("Bảng thiếu cột",
+                "Sổ này không có cột “{0}”. Quét lại một lượt là tool tự thêm."
+                .format(so.COT_VIET))
+            return
+        client = getattr(self._app, "client", None)
+        if client is None:
+            bao("Chưa đăng nhập",
+                "Dịch tiêu đề là một lượt nhờ AI viết chữ, cần ví ShopAPI. "
+                "Vào tab Tài khoản đăng nhập rồi quay lại.")
+            return
+
+        c_td = self._cot.index("Tiêu đề video")
+        c_vi = self._cot.index(so.COT_VIET)
+        can: List[tuple] = []            # (dòng, tiêu đề gốc)
+        for i in range(self._bang.rowCount()):
+            o_td, o_vi = self._bang.item(i, c_td), self._bang.item(i, c_vi)
+            goc = o_td.text().strip() if o_td else ""
+            da_co = o_vi.text().strip() if o_vi else ""
+            if goc and not da_co:
+                can.append((i, goc))
+        # Làm từng ĐỢT rồi ghi xuống, chứ không gom cả 284 dòng vào một việc
+        # nền duy nhất. Một việc nền dài nửa tiếng mà khách đóng tool giữa
+        # chừng là mất sạch công đã dịch — và đã trả tiền.
+        con_lai = max(0, len(can) - _DICH_MOI_DOT)
+        can = can[:_DICH_MOI_DOT]
+        if not can:
+            bao("Không có gì để dịch",
+                "Mọi dòng có tiêu đề đều đã có bản tiếng Việt rồi.")
+            return
+
+        self._dang_dich = True
+        self._nut_dich.setEnabled(False)
+        self._ghi("Đang dịch {0} tiêu đề sang tiếng Việt{1}…".format(
+            len(can), " (còn {0} dòng nữa)".format(con_lai) if con_lai else ""))
+        goc_chu = [t for _i, t in can]
+
+        def viec() -> List[str]:
+            # LUỒNG NỀN — không chạm widget.
+            from core.loc_doi_thu import dich_tieu_de  # noqa: PLC0415
+
+            return dich_tieu_de(client, goc_chu)
+
+        self._app.run_bg(
+            viec,
+            on_ok=lambda ban_dich: self._dich_xong(can, ban_dich,
+                                                  con_lai=con_lai,
+                                                  im_lang=im_lang),
+            on_err=lambda loi: self._dich_hong(loi, im_lang=im_lang))
+
+    def _dich_xong(self, can: List[tuple], ban_dich: List[str],
+                   con_lai: int = 0, im_lang: bool = False) -> None:
+        self._dang_dich = False
+        self._nut_dich.setEnabled(True)
+        c_vi = self._cot.index(so.COT_VIET) if so.COT_VIET in self._cot else -1
+        if c_vi < 0:
+            return
+        xong = 0
+        self._dang_do = True
+        try:
+            for (i, _goc), chu in zip(can, ban_dich):
+                if not chu or i >= self._bang.rowCount():
+                    continue
+                self._dat_o(i, c_vi, chu)
+                xong += 1
+        finally:
+            self._dang_do = False
+        self._luu_tu_bang()
+        self._ghi("Đã dịch {0}/{1} tiêu đề.".format(xong, len(can)))
+        if con_lai and xong:
+            # Còn nợ và đợt vừa rồi có kết quả → làm tiếp đợt sau. Điều kiện
+            # `xong` chặn vòng lặp vô tận: máy chủ hỏng thì đợt nào cũng ghi
+            # 0 dòng, và lúc ấy phải DỪNG chứ không phải quay đầu thử lại mãi.
+            self._dich(im_lang=im_lang)
+        elif con_lai:
+            self._ghi("Còn {0} dòng chưa dịch — để lượt quét sau."
+                      .format(con_lai))
+
+    def _dich_hong(self, loi: BaseException, im_lang: bool = False) -> None:
+        self._dang_dich = False
+        self._nut_dich.setEnabled(True)
+        if im_lang:
+            # Tự chạy mà hỏng thì ghi nhật ký rồi thôi. Dòng chưa dịch vẫn
+            # để trống, và lượt quét sau tự thử lại đúng phần ấy.
+            self._ghi("Chưa dịch được lượt này ({0}) — để lượt sau."
+                      .format(str(loi)[:90]))
+            return
+        self._app.show_error(loi)
+
     def _bat_dau_quet(self, chu: str, *, la_quet: bool) -> None:
         self._dang_quet = True
         self._kenh_dang_quet = self._kenh_dang_mo
@@ -781,11 +1260,21 @@ class TrangDoiThu(QWidget):
         so_video = self._so_video.value()
         chi_tiet = self._chi_tiet.isChecked()
         huy = self._huy
+        # Ngôn ngữ của kênh MÌNH quyết định tiêu đề đối thủ lấy về bằng tiếng
+        # gì. Không truyền thì YouTube trả bản đã dịch máy sang tiếng của máy
+        # đang chạy — xem `core/youtube._args_ngon_ngu`.
+        try:
+            ngon_ngu = doc_kenh(self._app.base_dir, self._kenh_dang_mo).ngon_ngu
+        except Exception:  # noqa: BLE001 — kênh chưa có kenh.yaml cũng quét được
+            ngon_ngu = ""
+        if not ngon_ngu:
+            self._ghi("Kênh chưa khai `ngon_ngu` trong kenh.yaml — tiêu đề lấy "
+                      "về có thể là bản YouTube tự dịch, không phải bản gốc.")
 
         def viec() -> KetQua:
             # LUỒNG NỀN — không chạm widget.
             return lay_du_lieu(chu, so_video=so_video, mo_rong=False,
-                               chi_tiet=chi_tiet, cancel=huy)
+                               chi_tiet=chi_tiet, cancel=huy, lang=ngon_ngu)
 
         self._app.run_bg(viec,
                          on_ok=lambda ket: self._xong(ket, la_quet=la_quet),
@@ -818,6 +1307,11 @@ class TrangDoiThu(QWidget):
             except (TypeError, ValueError):
                 pass
         gop = so.gop_bang(cot, cu, moi, ngay_cach_nhau=ngay_cach)
+        # Lượt quét nào cũng nuôi luôn DANH BẠ. Nếu không, danh bạ chỉ có tên
+        # tạm (`@handle`) cho tới khi khách nhớ chạy riêng bộ lọc — mà số subs
+        # nằm ở đó chính là thứ khâu chấm điểm cần để tính "vượt quy mô".
+        # Một lượt gọi mạng, hai cái sổ được cập nhật.
+        self._nuoi_danh_ba(goc, kenh, ket)
         try:
             so.luu_bang(goc, kenh, cot, gop)
             if la_quet:
@@ -829,6 +1323,51 @@ class TrangDoiThu(QWidget):
             self._do_bang(cot, gop)
         self._ghi("Đã gộp {0} video vào sổ “{1}” ({2} dòng tổng).".format(
             len(moi), kenh, len(gop)))
+        if kenh == self._kenh_dang_mo:
+            # ═══ DỊCH NGAY, KHÔNG NÚT, KHÔNG Ô TÍCH ═══
+            #
+            # Chủ dự án 03/09/2026, hai lượt: *"sao lại phải ấn dịch — tao
+            # nghĩ nó là mặc định, và bản chất các content đã có về sau cập
+            # nhật chỉ là view chứ content link đã có thì đâu phải làm lại"*,
+            # rồi *"tao nghĩ không phải nút bật mà là mặc định"*.
+            #
+            # Đúng, và lý do nằm ở chỗ tiêu đề gắn với LINK: link đã vào sổ
+            # thì tiêu đề không đổi nữa, lượt quét sau chỉ cập nhật view. Nên
+            # dịch là việc MỘT LẦN cho mỗi dòng — sau lượt đầu, mỗi ngày chỉ
+            # còn dăm dòng mới. Một việc rẻ như thế mà bắt khách nhớ bấm, hay
+            # bắt họ đi tìm một ô tích, là bắt họ gánh hộ mình.
+            #
+            # Không đăng nhập thì `_dich` tự lặng lẽ bỏ qua (`im_lang`), nên
+            # người chưa nạp tiền cũng không thấy gì phiền.
+            self._dich(im_lang=True)
+
+    def _nuoi_danh_ba(self, goc: str, kenh: str, ket: KetQua) -> None:
+        """Đổ số liệu kênh của lượt quét vào danh bạ đối thủ.
+
+        Không đụng cột của khách (Tuyến, Trạng thái, Ghi chú) — `gop_cham` lo
+        việc đó. Hỏng thì bỏ qua: sổ content đã lấy được là thứ chính, danh bạ
+        chỉ là bảng quản trị đi kèm, không đáng để một lỗi ghi làm mất cả lượt.
+        """
+        try:
+            ban_ghi = []
+            for insight in ket.insights:
+                k = insight.channel
+                ban_ghi.append(db.BanGhi(
+                    ten=k.display_name,
+                    link=k.channel_url,
+                    subs=k.subscribers,
+                    so_video=len(k.videos),
+                    dai_tv=_dai_trung_vi(k),
+                    view_tv=_view_trung_vi(k),
+                    vuot_quy_mo=insight.best_ratio,
+                ))
+            if not ban_ghi:
+                return
+            cot, hang = db.doc(goc, kenh)
+            hang = db.gop_cham(cot, hang, ban_ghi)
+            db.luu(goc, kenh, cot, hang)
+        except Exception as loi:  # noqa: BLE001 — danh bạ hỏng không giết lượt quét
+            self._ghi("Không cập nhật được danh bạ đối thủ: {0}".format(loi))
 
     def _hong(self, loi: BaseException) -> None:
         self._dang_quet = False
@@ -849,6 +1388,24 @@ class TrangDoiThu(QWidget):
 
     def _ghi(self, chu: str) -> None:
         self._log.appendPlainText(chu)
+
+
+def _dai_trung_vi(kenh) -> str:
+    """Thời lượng trung vị của một kênh, dạng `mm:ss`. Rỗng nếu không đo được."""
+    import statistics  # noqa: PLC0415
+
+    dai = [int(v.duration_s) for v in kenh.videos if int(v.duration_s or 0) > 0]
+    if not dai:
+        return ""
+    phut, le = divmod(int(statistics.median(dai)), 60)
+    return "{0}:{1:02d}".format(phut, le)
+
+
+def _view_trung_vi(kenh) -> int:
+    import statistics  # noqa: PLC0415
+
+    view = [int(v.views) for v in kenh.videos if int(v.views or -1) > 0]
+    return int(statistics.median(view)) if view else 0
 
 
 class TrangQuyetDinh(QWidget):
@@ -1597,16 +2154,36 @@ class TrangPhanTich(QWidget):
         doc.setSpacing(0)
 
         self.tabs = QTabWidget()
+        # Thứ tự là dòng chảy công việc, không phải thứ tự viết mã: chọn ĐỐI
+        # THỦ → xem CONTENT họ làm → chốt TUYẾN và làm gì hôm nay. Rồi mới tới
+        # số liệu kênh mình và bản đề xuất tổng.
+        self.danh_ba = TrangDanhBa(app)
         self.doi_thu = TrangDoiThu(app)
+        self.tuyen = TrangTuyen(app)
         self.chi_so = TrangChiSoYTB(app, phan=("doc",))
         self.quyet_dinh = TrangQuyetDinh(app)
-        self.tabs.addTab(self.doi_thu, TAB_CON[0])
-        self.tabs.addTab(self.chi_so, TAB_CON[1])
-        self.tabs.addTab(self.quyet_dinh, TAB_CON[2])
+        for muc, ten in ((self.danh_ba, TAB_CON[0]), (self.doi_thu, TAB_CON[1]),
+                         (self.tuyen, TAB_CON[2]), (self.chi_so, TAB_CON[3]),
+                         (self.quyet_dinh, TAB_CON[4])):
+            self.tabs.addTab(muc, ten)
+        # Ba mục đầu cùng nói về MỘT kênh: đổi kênh ở mục này thì hai mục kia
+        # đi theo. Không đồng bộ thì khách xem danh bạ kênh A trong khi bảng
+        # content vẫn là kênh B, và không có gì trên màn hình nói ra điều đó.
+        self.tabs.currentChanged.connect(self._dong_bo_kenh)
         doc.addWidget(self.tabs, 1)
 
+    def _dong_bo_kenh(self, _i: int) -> None:
+        """Mục vừa mở đi theo kênh mà mục Content đang mở."""
+        ten = getattr(self.doi_thu, "_kenh_dang_mo", "")
+        for muc in (self.danh_ba, self.tuyen):
+            if self.tabs.currentWidget() is muc and ten:
+                try:
+                    muc.dat_kenh(ten)
+                except Exception:  # noqa: BLE001 — lệch kênh không được chặn tab
+                    pass
+
     def doi_du_an(self, ten: str) -> None:
-        for con in (self.doi_thu, self.chi_so):
+        for con in (self.danh_ba, self.doi_thu, self.tuyen, self.chi_so):
             tiep = getattr(con, "doi_du_an", None)
             if tiep is not None:
                 try:

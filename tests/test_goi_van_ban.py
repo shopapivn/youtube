@@ -214,3 +214,72 @@ def test_khong_con_cho_nao_goi_thang_chat_completions():
                 sot.append("{0}/{1}".format(thu_muc, ten))
     assert not sot, ("phải gọi qua core.goi_van_ban để có kiên nhẫn và đổi "
                      "khoá đúng chỗ: {0}".format(", ".join(sot)))
+
+
+class TestHanChoVietChu:
+    """Lượt viết chữ phải được đợi LÂU HƠN hẳn 60 giây của client gốc.
+
+    ═══ VÌ SAO CÓ BÀI KIỂM NÀY ═══
+
+    Đo trên máy chủ thật 03/09/2026, một lượt `/v1/chat/completions`:
+
+        chào hỏi, trần 100 token       7 giây
+        45 tiêu đề, trần 700 token    81 giây
+        25 tiêu đề, trần 1.100 token 187 giây
+
+    `core/api._TIMEOUT` là 60 giây, kèm chú thích *"dư cho mọi endpoint (job
+    chạy nền, không chờ trong request)"* — đúng với đường TẠO JOB, sai với
+    đường viết chữ vì đường ấy ĐỒNG BỘ: nó viết xong cả bài rồi mới trả lời.
+
+    Hậu quả khi để 60 giây: phía gọi bỏ cuộc ở giây 60, hỏi lại bằng khoá cũ
+    thì nhận `409 đang được xử lý`, rồi lặp mãi với nhịp giãn dần và KHÔNG BAO
+    GIỜ XONG. Một lượt gọi ngốn 25 phút mà không ra chữ nào.
+
+    Bài kiểm này canh để không ai vô tình đưa hạn chờ về lại 60 giây.
+    """
+
+    def _client_gia(self):
+        class _Http:
+            timeout = 60.0
+
+        class _Client:
+            api_key = "sk-test"
+            base_url = "https://x"
+            _http = _Http()
+
+        return _Client()
+
+    def test_doi_lau_hon_han_cua_client_goc(self, monkeypatch):
+        import core.goi_van_ban as gv
+
+        goc = self._client_gia()
+        gv._KHO_CLIENT.clear()
+        em = gv._client_khong_tu_thu_lai(goc)
+        if em is goc:
+            pytest.skip("máy chạy test không dựng được client SDK")
+        cho = em._http.timeout
+        assert float(cho.read) >= 300, \
+            "viết chữ là đường đồng bộ — 60 giây là quá ngắn, xem docstring"
+        assert float(cho.read) > 60.0
+
+    def test_bat_tay_van_phai_nhanh(self, monkeypatch):
+        """Nới lượt ĐỌC, không nới lượt BẮT TAY: máy chủ sập thì biết ngay."""
+        import core.goi_van_ban as gv
+
+        goc = self._client_gia()
+        gv._KHO_CLIENT.clear()
+        em = gv._client_khong_tu_thu_lai(goc)
+        if em is goc:
+            pytest.skip("máy chạy test không dựng được client SDK")
+        assert float(em._http.timeout.connect) <= 30.0
+
+    def test_khong_tu_thu_lai(self):
+        """Đường viết chữ tự lo việc thử lại — SDK không được thử hộ."""
+        import core.goi_van_ban as gv
+
+        goc = self._client_gia()
+        gv._KHO_CLIENT.clear()
+        em = gv._client_khong_tu_thu_lai(goc)
+        if em is goc:
+            pytest.skip("máy chạy test không dựng được client SDK")
+        assert em.max_retries == 0

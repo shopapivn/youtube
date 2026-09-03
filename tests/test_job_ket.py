@@ -208,3 +208,65 @@ class TestJobHongNhungKhongTruTien:
         bc = BoiCanhGia(may, gia)
         with pytest.raises(LoiKetJob):
             _cho_job(bc, {"id": "job_x", "status": "queued"})
+
+
+class TestJobHongMacDinhDatLaiDuoc:
+    """Đo 03/09/2026, kênh openstory lượt 0015, đoạn giọng đọc số 3.
+
+    Cổng đổi câu báo hỏng thành *"Yêu cầu này không thể hoàn thành dù thử lại.
+    Toàn bộ tiền tạm giữ đã được hoàn về ví"* — không có chữ "không bị trừ
+    tiền" nên bản cũ ném lỗi thường → không đổi khoá → khâu ngoài thử lại ba
+    lần bằng đúng khoá cũ → cổng phát lại đúng xác job cũ → ba lần "hỏng" y hệt
+    trong tích tắc. Một lỗi thoáng qua hoá vĩnh viễn vì một câu chữ đổi.
+
+    Luật mới không đọc câu chữ: hợp đồng là job hỏng được hoàn 100% tiền, nên
+    `failed` mặc định là đặt lại được; chỉ hỏng vì NỘI DUNG mới dừng.
+    """
+
+    CAU_MOI = {"code": "api_error",
+               "message": "Yêu cầu này không thể hoàn thành dù thử lại. "
+                          "Toàn bộ tiền tạm giữ đã được hoàn về ví bạn."}
+
+    def test_cau_chu_moi_cua_cong_van_dat_lai_duoc(self, gia):
+        may = MayChuGia([])
+        may.retrieve = lambda _ma: {"id": "job_x", "status": "failed",
+                                    "error": self.CAU_MOI}
+        bc = BoiCanhGia(may, gia)
+        with pytest.raises(LoiKetJob):
+            _cho_job(bc, {"id": "job_x", "status": "queued"})
+
+    def test_ma_loi_la_khong_dat_lai_duoc(self, gia):
+        """Câu chữ có thể đổi nữa; mã lạ + không chữ tiền nong vẫn phải đặt lại."""
+        may = MayChuGia([])
+        may.retrieve = lambda _ma: {"id": "job_x", "status": "failed",
+                                    "error": {"code": "ma_moi_toanh",
+                                              "message": "Có trục trặc."}}
+        bc = BoiCanhGia(may, gia)
+        with pytest.raises(LoiKetJob):
+            _cho_job(bc, {"id": "job_x", "status": "queued"})
+
+    def test_goi_da_failed_NGAY_LUC_DUA_VAO_cung_phan_xu_nhu_hong(self, gia):
+        """Khoá trùng → cổng phát lại gói của job đã `failed`.
+
+        Bản cũ TRẢ gói ấy về như xong → nơi gọi đem đi tải kết quả → 400 →
+        dừng với câu "tải kết quả hỏng (400)" che mất sự thật.
+        """
+        bc = BoiCanhGia(MayChuGia([]), gia)
+        with pytest.raises(LoiKetJob):
+            _cho_job(bc, {"id": "job_x", "status": "failed",
+                          "error": self.CAU_MOI})
+        assert bc.client.so_lan_hoi == 0, "đã chấm hết thì không hỏi lại"
+
+    def test_hong_vi_noi_dung_van_dung_khong_quay_vong(self, gia):
+        bc = BoiCanhGia(MayChuGia([]), gia)
+        with pytest.raises(RuntimeError) as e:
+            _cho_job(bc, {"id": "job_x", "status": "failed",
+                          "error": {"code": "content_rejected",
+                                    "message": "Nội dung vi phạm quy định."}})
+        assert not isinstance(e.value, LoiKetJob)
+
+    def test_rejected_la_hong_vi_noi_dung(self, gia):
+        bc = BoiCanhGia(MayChuGia([]), gia)
+        with pytest.raises(RuntimeError) as e:
+            _cho_job(bc, {"id": "job_x", "status": "rejected"})
+        assert not isinstance(e.value, LoiKetJob)

@@ -95,17 +95,92 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     },
     "phan-tich": {
         "tieu_de": "Phân tích & Nghiên cứu",
-        "tom_tat": "Trả lời câu “kênh này nên làm content gì tiếp theo”: sổ "
-                   "theo dõi đối thủ của từng kênh, và mục Quyết định content "
-                   "đọc toàn bộ số liệu giúp bạn. Chạy trên máy bạn, miễn phí. "
-                   "(Chỉ số kênh và Máy VM đã dọn sang tab “VPS & Máy VM”.)",
+        "tom_tat": "Trả lời câu “hôm nay nên làm content nào”: danh bạ đối "
+                   "thủ, bảng content họ đang làm, và bảng tuyến xếp hạng "
+                   "content đáng làm. Phần lấy dữ liệu chạy trên máy bạn, "
+                   "miễn phí; chỉ khâu chấm và dịch bằng AI mới đi qua ví.",
         "buoc": [
-            "─── MỤC ĐỐI THỦ ───",
+            "Tab này có ba mục đi liền nhau theo đúng thứ tự bạn làm việc: "
+            "“Đối thủ” là ai — “Content” họ làm gì — “Tuyến” thì hôm nay bạn "
+            "nên làm cái nào. Cả ba dùng chung một kênh: đổi kênh ở mục này "
+            "thì hai mục kia đi theo.",
+            "─── MỤC ĐỐI THỦ (danh bạ) ───",
+            "Đây là danh bạ, không phải một danh sách link. Mỗi đối thủ là một "
+            "dòng có tuyến, trạng thái, số subs, view trung vị, ngày đăng gần "
+            "nhất. Ba trạng thái: “theo dõi” (được quét mỗi lượt), “tạm ngưng” "
+            "(giữ mọi thứ đã lấy nhưng thôi quét — cho kênh đang nghỉ), “bỏ” "
+            "(đã xem, không phải đối thủ). Chọn “bỏ” thay vì xoá thì kênh ấy "
+            "không bao giờ bị máy ảo đẩy vào lại.",
+            "Cột “Im lặng” đếm số ngày kênh đó chưa đăng gì, tô đỏ khi quá lâu "
+            "— bấm tiêu đề cột để xếp là ra ngay danh sách kênh đã chết. Nút "
+            "“Xoá kênh đã chọn” xoá hẳn, và hỏi bạn có xoá luôn các dòng "
+            "content của kênh đó không (mặc định là GIỮ).",
+            "“Thư chưa mở” là các kênh lạ chưa ai quyết định: bạn dán vào, hoặc "
+            "máy ảo nhặt về từ trang chủ YouTube. Bấm “Lọc và chấm” để tôi xem "
+            "thử từng kênh rồi khuyên giữ hay bỏ.",
+            "Bấm đúp một dòng (hoặc nút “Mở kênh”) là mở thẳng kênh đó trên "
+            "YouTube. Cột “Link kênh” vẫn còn ở cuối bảng nếu bạn cần chép đi "
+            "chỗ khác.",
+            "Nút “Chọn cột…” để tích chọn chỉ số nào muốn nhìn. Danh bạ giữ ĐỦ "
+            "mọi chỉ số đo được — subs, tuổi kênh, view/tháng, vượt quy mô, im "
+            "lặng, số video, dài trung vị, view trung vị — bỏ tích chỉ là ẩn "
+            "đi cho đỡ rối, số liệu vẫn được giữ và vẫn cập nhật. Tool nhớ "
+            "theo từng kênh.",
+            "Bốn cột “Subs · Tuổi · View/tháng · Vượt quy mô” cố ý nằm liền "
+            "nhau: đọc ngang bốn ô đó là ra kênh nào mới, ít sub mà video ăn "
+            "to — tức kênh đáng học nhất.",
+            "─── MỤC TUYẾN ───",
+            "Một tuyến KHÔNG phải một chủ đề. Một tuyến là MỘT TỆP KHÁN GIẢ "
+            "cùng chung một insight — cùng một câu họ đang thầm nghĩ về chính "
+            "mình, và cái câu ấy là lý do họ bấm vào video. Ví dụ ba tệp của "
+            "ngách tâm lý Nhật: “người sống lệch nhịp số đông” (đang tự nghi "
+            "ngờ, cần được gỡ tội) · “người bị đánh giá thấp hơn năng lực "
+            "thật” (đang ấm ức, cần được đo lại) · “người tò mò xem mình là "
+            "kiểu người nào” (đang thoải mái, cần được tặng một điều thú vị).",
+            "Vì thế bảng tuyến có ba cột “Insight · Lúc bấm họ đang · Họ cần”. "
+            "Đó không phải chỗ ghi chú cho đẹp — chính ba ô ấy là thứ giúp máy "
+            "tách hai tệp nhìn bề ngoài giống hệt nhau. Cùng nói về “người "
+            "thích ở một mình” mà một bên xin được YÊN, một bên xin được KHEN: "
+            "hai tệp khác nhau, và trộn vào nhau là mất view.",
+            "Dấu hiệu bạn đã chia sai: có hai tuyến mà nhiều video hợp cả hai. "
+            "Khi ấy đó là MỘT tuyến bị cắt đôi — gộp lại. Một ngách thường chỉ "
+            "có ba tới năm tuyến; ra chín tuyến gần như chắc chắn là đã cắt "
+            "nhầm theo đề tài (“tiền bạc”, “trí nhớ”, “tuổi 50” là đề tài, "
+            "chúng chạy ngang qua nhiều tệp).",
+            "Điền ô “Kênh của tôi” là tuyến đó thành tuyến bạn đang đánh. "
+            "Tuyến mà đối thủ đông, view cao, còn bạn chưa có kênh nào — đó là "
+            "khoảng trống, tức dung lượng thị trường chưa ai lấy.",
+            "Chọn một tuyến ở bảng trên thì bảng dưới xếp hạng content của "
+            "tuyến ấy theo cột “Điểm”. Điểm ghép ba thước: đang lên bao nhiêu "
+            "view mỗi ngày · có đang chạy nhanh hơn mức thường của chính nó "
+            "không (đây là thước bắt “đột biến”) · có ăn vượt số subs của kênh "
+            "đăng không. Điểm là thứ hạng TRONG SỔ CỦA BẠN, không phải điểm "
+            "tuyệt đối: 90 nghĩa là “nhóm nóng nhất sổ này”.",
+            "─── MỤC CONTENT ───",
             "Chọn kênh của bạn ở ô Kênh — mỗi kênh một sổ riêng, nằm trong thư "
             "mục CHANNEL/<kênh>/nghien-cuu. Dán link các kênh đối thủ vào ô "
             "danh sách (mỗi dòng một kênh, tự lưu khi gõ), rồi bấm “Quét đối "
-            "thủ” — content của cả danh sách đổ về bảng: tiêu đề, link, ngày "
-            "đăng, thời lượng, view, like, comment, hashtag, mô tả.",
+            "thủ” — content của cả danh sách đổ về bảng: ảnh, tiêu đề, link, "
+            "ngày đăng, thời lượng, view, like, comment, hashtag, mô tả.",
+            "TRƯỚC KHI QUÉT, bấm “Lọc đối thủ…”. Không phải kênh nào bạn dán "
+            "vào cũng là đối thủ thật, mà quét nhầm thì vừa mất thời gian vừa "
+            "làm bẩn sổ. Cửa sổ này xem thử mỗi kênh một lượt rồi chấm bốn "
+            "thước: có đúng tiếng của kênh bạn không, video có cùng khổ dài "
+            "ngắn không, quy mô có so được không, và AI đọc 25 tiêu đề mới "
+            "nhất xem có đúng chủ đề của bạn không. Ba thước đầu miễn phí; "
+            "chỉ kênh qua được ba thước đó mới tốn một lượt hỏi AI. Bạn tick "
+            "kênh muốn giữ rồi bấm “Giữ các kênh đã tick”.",
+            "Gõ được cả TỪ KHOÁ vào ô của cửa sổ lọc (từ khoá bằng tiếng của "
+            "kênh, ví dụ 心理学): tôi đi tìm kênh đang ăn view theo từ khoá đó "
+            "rồi chấm luôn — cách tìm thêm đối thủ mới mà bạn chưa biết.",
+            "Cột “Tiêu đề (Việt)” tự có, không phải bấm gì: quét xong là tôi "
+            "dịch luôn những tiêu đề chưa có bản tiếng Việt. Mỗi dòng chỉ dịch "
+            "MỘT LẦN — link đã vào sổ thì tiêu đề không đổi nữa, lượt quét sau "
+            "chỉ cập nhật view. Nên sau lần đầu, mỗi ngày chỉ còn dăm dòng mới "
+            "phải dịch.",
+            "Tôi chỉ điền ô còn TRỐNG — câu nào bạn sửa tay thì không ai đè "
+            "lên. Gặp câu dịch cụt hoặc sai thì chuột phải lên dòng đó rồi "
+            "chọn “Dịch lại tiêu đề dòng đã chọn”.",
             "Gặp một video ngon lẻ? Dán link vào ô “dán link video ngon” rồi "
             "Enter — video đó vào thẳng sổ, không phải quét cả kênh của nó.",
             "Bật “Tự quét mỗi ngày” là tool tự quét lại khi đang mở, và cột "
@@ -121,6 +196,15 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "đối thủ đã ẩn vẫn còn vết trong sổ.",
             "Ô lọc góc phải bảng: gõ tên tuyến hay chữ trong tiêu đề là bảng "
             "chỉ còn các dòng đó — như lọc trên trang tính.",
+            "Ô “Xem” bên cạnh trả lời bốn câu hỏi thường gặp mà không phải tự "
+            "lọc: “Mới với sổ” là content lần đầu vào sổ trong tuần (đúng câu "
+            "“đối thủ có gì mới”); “Đang nổ” là content điểm cao; “Tuyến của "
+            "tôi” chỉ giữ tuyến kênh bạn đang đánh; “Chưa làm” bỏ những cái "
+            "bạn đã remake rồi. Hai ô dùng chung được: chọn “Mới với sổ” rồi "
+            "gõ chữ vào ô lọc là lọc chồng lên nhau.",
+            "Cột “Đã làm” ghi mã lượt sản xuất nếu bạn đã remake content đó — "
+            "tool nhận ra bằng mã video lưu trong PROJECTS/AUTO, nên không "
+            "phụ thuộc vào việc bạn đặt tiêu đề khác hay không.",
         ],
         "luu_y": [
             "Khác gì “Lấy dữ liệu đối thủ” bên tab Công cụ YTB? Bên đó là lượt "
@@ -130,6 +214,15 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Mốc 24 giờ đầu chưa nói lên nhiều: YouTube thường mất vài ngày mới tìm "
             "ra tệp khán giả cho một video. Đọc theo cả đường đi qua nhiều mốc thì "
             "mới thấy video đang lên hay đã dừng.",
+            "Tiêu đề lấy về theo đúng tiếng của kênh bạn (ô `ngon_ngu` trong "
+            "kenh.yaml). YouTube tự dịch tiêu đề sang tiếng của máy đang xem, "
+            "nên kênh nào chưa khai ngôn ngữ thì tiêu đề trong sổ có thể là "
+            "bản máy dịch chứ không phải bản gốc — và học hook của đối thủ qua "
+            "bản dịch thì học sai. Sổ quét trước ngày 02/09/2026 nên quét lại "
+            "một lượt; tuyến và ghi chú của bạn không mất.",
+            "Ảnh thumbnail tải một lần rồi để lại trong CHANNEL/<kênh>/"
+            "nghien-cuu/anh, và chỉ tải ảnh của những dòng bạn đang nhìn thấy. "
+            "Cuộn tới đâu hiện tới đó — sổ nghìn dòng cũng không phải chờ.",
         ],
     },
     "quan-ly-kenh": {

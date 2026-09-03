@@ -89,6 +89,52 @@ _RETRIES = 2
 _RETRY_SLEEP = 1.5
 
 
+def _args_ngon_ngu(lang: str = "") -> Dict[str, Dict[str, List[str]]]:
+    """`extractor_args` xin YouTube trả **tiêu đề GỐC** thay vì bản dịch máy.
+
+    ═══ VÌ SAO PHẢI CÓ ═══
+
+    YouTube tự dịch tiêu đề sang ngôn ngữ của máy đang xem. Máy khách ở Việt
+    Nam nên mặc định nó trả bản tiếng Anh, và tool lặng lẽ cất bản dịch ấy vào
+    sổ đối thủ. Đo ngày 02/09/2026 trên kênh `@kappumen-zatsugaku`:
+
+        không khai lang   →  "Things Adults Who Enjoy Life Don't Do"
+        lang=ja           →  "【雑学】人生を楽しんでいる大人がやらないこと"
+
+    Cùng một video. Sổ đối thủ của kênh TL4-T7 vì thế có ~40% dòng là tiếng
+    Anh máy dịch — và ba thứ hỏng theo:
+
+    1. **Lọc "kênh này có nói tiếng Nhật không" sẽ giết oan đối thủ xịn.**
+       Kênh `カップ麺を待つ間に見たい雑学` là kênh Nhật 100%, nhưng trong sổ chỉ
+       9% dòng còn chữ Nhật — máy nhìn vào sẽ kết luận ngược.
+    2. Học hook của đối thủ hoá ra học bản dịch máy, mất sạch cái tinh của
+       tiêu đề gốc — mà tiêu đề chính là thứ quyết định người ta có bấm không.
+    3. Khâu dịch sang tiếng Việt và khâu phân tuyến bằng AI đều đọc bản dịch
+       ấy, tức dịch của dịch.
+
+    `lang` lấy từ `ngon_ngu` trong `kenh.yaml` (TL4-T7: `ja`). Bỏ trống thì
+    giữ nguyên nết cũ — có kênh chủ không khai ngôn ngữ, và đoán bừa còn tệ
+    hơn để YouTube tự chọn.
+
+    Khai cho cả `youtube` (một video) lẫn `youtubetab` (danh sách kênh) vì
+    hai extractor khác nhau đọc hai khoá khác nhau; thiếu một cái là tiêu đề
+    trong bảng và tiêu đề lúc mở chi tiết lệch nhau.
+
+    >>> _args_ngon_ngu("")["youtubetab"]["approximate_date"]
+    ['timestamp']
+    >>> _args_ngon_ngu("ja")["youtube"]["lang"]
+    ['ja']
+    """
+    args: Dict[str, Dict[str, List[str]]] = {
+        "youtubetab": {"approximate_date": ["timestamp"]},
+    }
+    ma = str(lang or "").strip()
+    if ma:
+        args["youtube"] = {"lang": [ma]}
+        args["youtubetab"]["lang"] = [ma]
+    return args
+
+
 class Cancelled(Exception):
     """Người dùng bấm Dừng. Không phải lỗi — đừng hiện hộp thoại đỏ."""
 
@@ -446,12 +492,43 @@ def _days_since(date_text: str) -> Optional[int]:
     return max(0, (_dt.date.today() - day).days)
 
 
+def _dap_tieu_de_goc(url: str, chung: Dict, lang: str, payload: Dict,
+                     cancel: Optional[threading.Event]) -> Dict:
+    """Lấy tiêu đề gốc bằng lượt gọi thứ hai rồi **đắp lên** kết quả lượt một.
+
+    Chỉ đắp `title`, không đụng gì khác: lượt hai không có subs/view (đó là
+    lý do phải có lượt một), nên lấy thêm bất cứ trường nào của nó là tự tay
+    xoá số của mình.
+
+    Lượt hai hỏng thì trả nguyên kết quả lượt một — tiêu đề dịch máy vẫn hơn
+    là không có kênh nào. Nơi gọi không cần biết, vì bảng vẫn đủ cột.
+    """
+    try:
+        goc = _extract(url, {**chung, "extractor_args": _args_ngon_ngu(lang)},
+                       cancel=cancel)
+    except Cancelled:
+        raise
+    except Exception:  # noqa: BLE001 — mất tiêu đề gốc không đáng mất cả kênh
+        return payload
+    theo_ma = {}
+    for muc in (goc.get("entries") or []):
+        if muc and muc.get("id") and muc.get("title"):
+            theo_ma[str(muc["id"])] = str(muc["title"])
+    if not theo_ma:
+        return payload
+    for muc in (payload.get("entries") or []):
+        if muc and str(muc.get("id") or "") in theo_ma:
+            muc["title"] = theo_ma[str(muc["id"])]
+    return payload
+
+
 def fetch_channel(
     channel_url: str,
     *,
     max_videos: int = 0,
     cancel: Optional[threading.Event] = None,
     source: str = "dán tay",
+    lang: str = "",
 ) -> Channel:
     """Lấy ảnh chụp một kênh: số subs + danh sách video.
 
@@ -470,17 +547,40 @@ def fetch_channel(
     """
     gioi_han = max(0, int(max_videos or 0))
     url = channel_videos_url(channel_url)
+    chung = {
+        "extract_flat": "in_playlist",
+        # Không khai `playlistend` = không chặn, tức lấy hết kênh.
+        **({"playlistend": gioi_han} if gioi_han else {}),
+    }
+    # ═══ LƯỢT MỘT: SỐ. Cố ý KHÔNG khai ngôn ngữ. ═══
+    #
+    # Đo ngày 03/09/2026 trên `@shinrizatsugakuTV`, cùng một kênh, chỉ khác
+    # một tham số:
+    #
+    #     không khai lang   subs=5.830   view=395   title="62 That Someday…"
+    #     youtube.lang=ja   subs=None    view=None  title="その「いつか」は…"
+    #
+    # Khai `lang` là đổi ngôn ngữ của chính máy chủ YouTube, và trong tiếng
+    # Nhật nó trả số theo lối Nhật ("1.2万回視聴" = 12.000 lượt xem). yt-dlp
+    # không đọc được lối viết ấy nên trả `None` — mất sạch subs và view.
+    #
+    # Mất subs là mất thước "video này ăn gấp mấy lần quy mô kênh", tức mất
+    # ý sáng lập của cả tool (xem đầu `core/doi_thu.py`). Nên số phải lấy ở
+    # lượt không khai ngôn ngữ.
     payload = _extract(
         url,
-        {
-            "extract_flat": "in_playlist",
-            # Không khai `playlistend` = không chặn, tức lấy hết kênh.
-            **({"playlistend": gioi_han} if gioi_han else {}),
-            # Xin luôn ngày đăng xấp xỉ — mẹo giúp một lần gọi là đủ.
-            "extractor_args": {"youtubetab": {"approximate_date": ["timestamp"]}},
-        },
+        {**chung,
+         # Xin ngày đăng xấp xỉ — mẹo giúp một lần gọi là đủ.
+         "extractor_args": {"youtubetab": {"approximate_date": ["timestamp"]}}},
         cancel=cancel,
     )
+    # ═══ LƯỢT HAI: TIÊU ĐỀ GỐC. Chỉ chạy khi kênh có khai ngôn ngữ. ═══
+    #
+    # Một lời gọi nữa (~1 giây/kênh) đổi lấy tiêu đề đúng tiếng của kênh —
+    # xem `_args_ngon_ngu` để biết vì sao tiêu đề gốc là thứ không thể thiếu.
+    # Gộp theo mã video nên hai lượt lệch nhau vài video cũng không sao.
+    if str(lang or "").strip():
+        payload = _dap_tieu_de_goc(url, chung, lang, payload, cancel)
 
     entries = [entry for entry in (payload.get("entries") or []) if entry]
     channel = Channel(
@@ -524,6 +624,7 @@ def search_videos(
     *,
     limit: int = 12,
     cancel: Optional[threading.Event] = None,
+    lang: str = "",
 ) -> List[SearchHit]:
     """Tìm video theo từ khoá / tiêu đề — dùng để **đo độ bão hoà của ngách**.
 
@@ -537,6 +638,16 @@ def search_videos(
     text = (query or "").strip()
     if not text:
         return []
+    # KHÔNG khai ngôn ngữ ở đây, dù có nhận tham số `lang` cho hợp mạch gọi.
+    #
+    # Tìm kiếm sinh ra để **đếm view** (`min_hit_views` lọc kênh clone chết —
+    # xem `collect`), mà khai `lang` là mất sạch view: máy chủ trả số kiểu
+    # Nhật, yt-dlp đọc không ra, thành `None`. Xem `fetch_channel`.
+    #
+    # Đổi lại tiêu đề trong kết quả tìm kiếm là bản dịch máy. Chấp nhận được:
+    # tiêu đề ở đây chỉ để nhìn cho biết ngách đông hay vắng, còn tiêu đề
+    # THẬT của kênh nào được nhận vào thì lượt `fetch_channel` sau đó lấy
+    # đúng bản gốc.
     payload = _extract(
         "ytsearch{0}:{1}".format(max(1, int(limit)), text),
         {"extract_flat": "in_playlist"},
@@ -596,6 +707,7 @@ def collect(
     on_log: Optional[Callable[[str], None]] = None,
     on_channel: Optional[Callable[[Channel], None]] = None,
     on_progress: Optional[Callable[[float, str], None]] = None,
+    lang: str = "",
 ) -> Tuple[List[Channel], List[SearchHit]]:
     """Chạy trọn một lượt thu thập. Gọi từ **luồng nền**, không phải luồng giao diện.
 
@@ -665,7 +777,8 @@ def collect(
                 seen_urls.add(value.lower())
                 progress(base_fraction, "Đang lấy dữ liệu kênh ({0}/{1})".format(index, len(inputs)))
                 log("[{0}/{1}] Đang lấy: {2}".format(index, len(inputs), value))
-                channel = fetch_channel(value, max_videos=max_videos, cancel=cancel)
+                channel = fetch_channel(value, max_videos=max_videos, cancel=cancel,
+                                        lang=lang)
                 if not channel.videos:
                     log("  Kênh này không có video công khai nào — bỏ qua.")
                     continue
@@ -683,7 +796,8 @@ def collect(
                 log('[{0}/{1}] Từ khoá "{2}" — đang tìm kênh đang ăn view…'.format(
                     index, len(inputs), value
                 ))
-                found = search_videos(value, limit=search_size, cancel=cancel)
+                found = search_videos(value, limit=search_size, cancel=cancel,
+                                      lang=lang)
                 hits.extend(found)
                 picked = 0
                 for hit in found:
@@ -701,6 +815,7 @@ def collect(
                             max_videos=max_videos,
                             cancel=cancel,
                             source='từ khoá "{0}"'.format(value),
+                            lang=lang,
                         )
                     except Cancelled:
                         raise
@@ -730,7 +845,8 @@ def collect(
             )
             log('Dò ngách bằng tiêu đề: "{0}"'.format(query[:70]))
             try:
-                found = search_videos(query, limit=search_size, cancel=cancel)
+                found = search_videos(query, limit=search_size, cancel=cancel,
+                                      lang=lang)
             except Cancelled:
                 raise
             except Exception as exc:  # noqa: BLE001
@@ -753,6 +869,7 @@ def collect(
                         max_videos=max_videos,
                         cancel=cancel,
                         source="tool tự tìm",
+                        lang=lang,
                     )
                 except Cancelled:
                     raise

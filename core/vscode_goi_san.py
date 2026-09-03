@@ -92,13 +92,11 @@ def tim_code() -> str:
 
 
 def _tai_https(dia_chi: str) -> bytes:
-    import urllib.request
+    # Xem `core/mang_an_toan`: kho chứng chỉ của hệ điều hành không đáng tin
+    # trên máy khách, mà thứ tải về đây là mã sắp chạy.
+    from .mang_an_toan import mo_url  # noqa: PLC0415 — cùng gói
 
-    if not dia_chi.startswith("https://"):
-        raise ValueError("Chỉ tải qua HTTPS")
-    yeu_cau = urllib.request.Request(dia_chi,
-                                     headers={"User-Agent": "ShopAPI-Studio"})
-    with urllib.request.urlopen(yeu_cau, timeout=600) as tra_loi:  # noqa: S310
+    with mo_url(dia_chi, cho=600) as tra_loi:
         return tra_loi.read()
 
 

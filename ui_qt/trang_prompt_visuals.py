@@ -49,7 +49,7 @@ from core.pricing import KIND_IMAGE, KIND_VIDEO, hold_for_image, hold_for_video
 from core.chia_canh import KHUON_MAC_DINH, nhip_tu_khuon
 from core.prompt_visuals import (
     CHE_DO_CAN_ANH_NV, CHE_DO_KE, CHO_TRONG_KHUON_CHIA, DUOI_CHAN_DUNG,
-    LOI_NHAC_XAY_PHONG_CACH, PhongCach, bia_de_xem, boi_canh_de_xem,
+    LOI_NHAC_XAY_PHONG_CACH, NODE_NGHE, PhongCach, bia_de_xem, boi_canh_de_xem,
     canh_de_xem, cau_thieu_gi, chi_dan_tu_bo, chi_dan_tu_tra_loi_ai, dan_de_xem,
     doi_thiet_ke_nhan_vat, dung_boi_canh, dung_workflow, goc_cua_id,
     ke_hoach_de_xem, khuon_chia_dung_duoc, liet_ke_phong_cach,
@@ -1920,6 +1920,19 @@ class TrangPromptVisuals(QWidget):
                                           "secret.shopapi"),
                     cancellation=huy_token, on_event=bao)
                 duong_xlsx = self._tim_workbook(dv, trang_thai)
+                # Phụ đề chép ra TRƯỚC file Excel: bước nghe xong sớm hơn bước
+                # viết prompt, nên nếu bước prompt hỏng thì khách vẫn còn cái
+                # `.srt` — thứ đã tốn công nghe cả file giọng đọc để có.
+                duong_srt = self._tim_phu_de(dv, trang_thai)
+                if duong_srt:
+                    try:
+                        srt_ra = self._chep_ra(duong_srt, ten, duoi=".srt",
+                                               nhan="phụ đề")
+                        self._ghi_nen("  xong: đã tạo {0}".format(
+                            os.path.basename(srt_ra)))
+                        ra.append(srt_ra)
+                    except OSError as loi:
+                        self._ghi_nen("  không chép được phụ đề: {0}".format(loi))
                 if duong_xlsx:
                     dich = self._chep_ra(duong_xlsx, ten)
                     if anh_nv:
@@ -1956,8 +1969,41 @@ class TrangPromptVisuals(QWidget):
         except Exception:  # noqa: BLE001
             return ""
 
-    def _chep_ra(self, nguon: str, ten_tieng: str) -> str:
-        """Chép file Excel ra thư mục người dùng chọn, tên theo file giọng đọc.
+    @staticmethod
+    def _tim_phu_de(dv, trang_thai) -> str:
+        """Đường dẫn tệp `.srt` mà bước NGHE vừa dựng ra.
+
+        ═══ VÌ SAO PHẢI CHÉP TỆP NÀY RA ═══
+
+        Chủ dự án, 03/09/2026: *"nó sẽ có đầu vào là mp3 và txt để chạy ra srt
+        sau đó dùng srt đó để tạo ra các prompt ảnh và video"*.
+
+        Đúng dây chuyền tab này vẫn chạy — chỉ có điều cái `.srt` ở giữa trước
+        nay **chết trong kho artifact**: nó đi thẳng từ bước nghe sang bước
+        viết prompt rồi biến mất, khách không bao giờ cầm được tệp.
+
+        Mà nó là tệp đắt nhất trong cả lượt chạy: máy phải nghe hết file giọng
+        đọc mới có, và khi khách đưa kèm kịch bản `.txt` thì nó còn là bản phụ
+        đề **đúng từng chữ** (`config.script` ép khớp — xem
+        `core/prompt_visuals.dung_workflow`), tức đúng thứ đem đốt lên hình
+        được. Bỏ nó đi rồi bắt khách chạy lại từ đầu ở tab Phụ đề là bắt máy
+        nghe lại một lần nữa cùng một file, cho ra cùng một kết quả.
+        """
+        nut = getattr(trang_thai, "nodes", {}) or {}
+        buoc = nut.get(NODE_NGHE)
+        if buoc is None or getattr(buoc, "status", "") != "succeeded":
+            return ""
+        ma = (getattr(buoc, "outputs", {}) or {}).get("subtitles")
+        if not ma:
+            return ""
+        try:
+            return str(dv.artifacts.path(ma if isinstance(ma, str) else ma[0]))
+        except Exception:  # noqa: BLE001 — thiếu phụ đề không được giết cả lượt
+            return ""
+
+    def _chep_ra(self, nguon: str, ten_tieng: str, *, duoi: str = ".xlsx",
+                 nhan: str = "prompts") -> str:
+        """Chép một tệp kết quả ra thư mục người dùng chọn, tên theo file giọng đọc.
 
         Để nguyên trong kho artifact thì tên là một chuỗi băm — mở ra không biết
         của file nào.
@@ -1967,7 +2013,7 @@ class TrangPromptVisuals(QWidget):
         thu_muc = self._thu_muc.value
         os.makedirs(thu_muc, exist_ok=True)
         goc = os.path.splitext(os.path.basename(ten_tieng))[0]
-        dich = os.path.join(thu_muc, "{0} - prompts.xlsx".format(goc))
+        dich = os.path.join(thu_muc, "{0} - {1}{2}".format(goc, nhan, duoi))
         shutil.copyfile(nguon, dich)
         self._thu_muc_da_xuat = thu_muc
         return dich

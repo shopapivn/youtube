@@ -164,9 +164,24 @@ class TestKhoTrenDia:
 
 
 class TestQuetDinhKy:
-    def test_den_han_khi_bat_va_qua_mot_ngay(self, tmp_path):
+    def test_mac_dinh_la_BAT(self, tmp_path):
+        """Kênh chưa có cài đặt gì thì vẫn tự quét — chủ dự án 03/09/2026:
+        *"1 ngày 1 lần sẽ chạy quét đối thủ, cái đó có thể bật tắt, để mặc
+        định bật"*.
+
+        Bật sẵn là đúng vì cột `Tăng/ngày` chỉ có số khi có hai lượt quét
+        cách nhau. Ai quên bật thì sổ của họ vĩnh viễn không có cột ấy, tức
+        mất luôn thước "content nào đang nổ" mà không có gì báo.
+        """
+        assert so.den_han_quet(str(tmp_path), "K1")
+
+    def test_tat_tay_thi_thoi_quet(self, tmp_path):
         goc = str(tmp_path)
-        assert not so.den_han_quet(goc, "K1"), "chưa bật thì không quét"
+        so.luu_cai(goc, "K1", tu_quet=False)
+        assert not so.den_han_quet(goc, "K1")
+
+    def test_dung_nhip_mot_ngay(self, tmp_path):
+        goc = str(tmp_path)
         so.luu_cai(goc, "K1", tu_quet=True)
         assert so.den_han_quet(goc, "K1"), "bật mà chưa quét lần nào là quét"
         gio = 1_000_000.0
@@ -239,9 +254,29 @@ class TestTrangDoiThu:
                for i in range(trang._bang.columnCount())]
         assert cot == so.cot_mac_dinh()
 
-    def test_go_danh_sach_la_tu_luu(self, trang):
-        trang._o_doi_thu.setPlainText("@doithu1")
-        assert so.doc_doi_thu(trang._app.base_dir, "K1").strip() == "@doithu1"
+    def test_muc_content_khong_con_sua_duoc_danh_sach_doi_thu(self, trang):
+        """Ô nhập danh sách đối thủ đã rời khỏi mục Content — CỐ Ý.
+
+        03/09/2026: `doi-thu.txt` thành HỘP THƯ ĐẾN, có máy ảo đổ kênh vào
+        (`chi_so_ytb.tram.nhan_doi_thu`). Ô nhập cũ ghi đè cả tệp sau mỗi phím
+        gõ, nên để lại là để một đường xoá mất những kênh máy ảo vừa nhặt về.
+        Việc thêm/bỏ đối thủ nay nằm ở mục "Đối thủ" (`TrangDanhBa`).
+
+        Bài kiểm này canh đúng chiều ấy: có ô nhập trở lại là có người vô tình
+        dựng lại đường mất dữ liệu.
+        """
+        assert not hasattr(trang, "_o_doi_thu")
+        assert hasattr(trang, "_nhan_doi_thu"), "phải còn dòng nhắc chỉ-đọc"
+
+    def test_nhan_doi_thu_dem_kenh_dang_theo_doi(self, trang):
+        from core import danh_ba_doi_thu as db
+
+        goc = trang._app.base_dir
+        so.luu_doi_thu(goc, "K1", "https://www.youtube.com/@a\n"
+                                  "https://www.youtube.com/@b")
+        db.nhap_hop_thu(goc, "K1")
+        trang._doi_kenh()
+        assert "2 kênh" in trang._nhan_doi_thu.text()
 
     def test_sua_o_bat_ky_la_luu_xuong_dia(self, trang):
         goc = trang._app.base_dir
@@ -279,7 +314,12 @@ class TestTrangDoiThu:
         _c, hang = so.doc_bang(goc, "K1")
         assert hang == []
 
-    def test_bat_tu_quet_la_ghi_xuong_cai_dat(self, trang):
+    def test_o_tick_tu_quet_bat_san(self, trang):
+        assert trang._tu_quet.isChecked(), "mặc định BẬT — xem TestQuetDinhKy"
+
+    def test_tat_tu_quet_la_ghi_xuong_cai_dat(self, trang):
+        trang._tu_quet.setChecked(False)
+        assert so.doc_cai(trang._app.base_dir, "K1").get("tu_quet") is False
         trang._tu_quet.setChecked(True)
         assert so.doc_cai(trang._app.base_dir, "K1").get("tu_quet") is True
 
@@ -384,3 +424,41 @@ class TestTrangDoiThu:
         trang._doi_kenh()
         assert trang._bang.columnWidth(0) == 199, \
             "mở lại sổ phải thấy đúng độ rộng đã kéo"
+
+
+class TestTuDichTieuDe:
+    """Dịch tiêu đề là việc MẶC ĐỊNH, không phải nút phải nhớ bấm.
+
+    Chủ dự án 03/09/2026: *"sao lại phải ấn dịch — tao nghĩ nó là mặc định,
+    và bản chất các content đã có về sau cập nhật chỉ là view chứ content link
+    đã có thì đâu phải làm lại nên cũng gọn"*.
+
+    Đúng: tiêu đề gắn với LINK, mà link đã vào sổ thì không đổi nữa. Dịch là
+    việc một lần cho mỗi dòng; sau lượt đầu mỗi ngày chỉ còn dăm dòng mới.
+    """
+
+    def test_KHONG_co_o_tich_nao_ca(self, trang):
+        """Chủ dự án 03/09/2026: *"tao nghĩ không phải nút bật mà là mặc định"*.
+
+        Một ô tích cho việc này là bắt khách đi tìm chỗ bật một thứ đáng lẽ
+        phải tự chạy. Bài kiểm canh để không ai thêm lại nó "cho chắc".
+        """
+        assert not hasattr(trang, "_tu_dich")
+
+    def test_dich_theo_dot_de_khong_mat_cong(self):
+        """Một việc nền dài nửa tiếng mà đóng tool giữa chừng là mất sạch."""
+        from ui_qt import trang_phan_tich as tp
+
+        assert tp._DICH_MOI_DOT <= 60, \
+            "đợt quá dài thì đóng tool giữa chừng mất cả công đã trả tiền"
+
+    def test_tu_chay_thi_khong_dung_hop_thoai(self, trang, monkeypatch):
+        """Tool tự gọi mà dựng hộp lên là chắn ngang việc khách không yêu cầu."""
+        hop = []
+        monkeypatch.setattr(trang._app, "show_message",
+                            lambda a, b: hop.append(a))
+        # Sổ trống, không có gì để dịch — đường rẽ hay bật hộp nhất.
+        trang._dich(im_lang=True)
+        assert hop == []
+        trang._dich(im_lang=False)
+        assert hop, "khách tự bấm thì vẫn phải trả lời họ"

@@ -163,6 +163,46 @@ _KHO_CLIENT: Dict[int, Any] = {}
 _KHOA_KHO = threading.Lock()
 
 
+#: Đợi tối đa ngần này giây cho MỘT lượt viết chữ.
+#:
+#: ═══ VÌ SAO KHÔNG DÙNG 60 GIÂY NHƯ MỌI ĐƯỜNG KHÁC ═══
+#:
+#: `core/api._TIMEOUT` để 60 giây kèm chú thích *"dư cho mọi endpoint (job
+#: chạy nền, không chờ trong request)"*. Đúng — với đường TẠO JOB. Gửi một
+#: job ảnh thì máy chủ nhận rồi trả mã ngay, việc chạy sau.
+#:
+#: Nhưng `/v1/chat/completions` là đường ĐỒNG BỘ: nó viết xong cả bài rồi mới
+#: trả lời. Bài dài thì lượt gọi ấy chạy vài phút, và 60 giây không phải là
+#: dư — nó là quá ngắn.
+#:
+#: Đo ngày 03/09/2026, lời nhắc 45 tiêu đề với trần 1.100 token:
+#:
+#:     giây 0    gửi đi
+#:     giây 60   phía gọi hết giờ chờ → "mạng chập chờn"
+#:     giây 60+  hỏi lại bằng khoá cũ → 409 "đang được xử lý"
+#:     …lặp với nhịp 6, 10, 15, 20, 30, 45, 60, 90 giây, KHÔNG BAO GIỜ XONG
+#:
+#: Máy chủ vẫn đang viết bài tử tế; chỉ có phía gọi bỏ đi quá sớm rồi tự dựng
+#: ra một vòng chờ vô tận. Cả đoạn "kiên nhẫn qua 409" ở đầu tệp này sinh ra
+#: để sống chung với triệu chứng đó — mà gốc của nó chỉ là một con số.
+#:
+#: Đặt riêng ở đây chứ không sửa `api._TIMEOUT`: client gốc còn dùng cho hàng
+#: chục đường tạo job, và ở đó 60 giây là đúng — nới rộng nghĩa là một job
+#: gửi hỏng sẽ treo giao diện lâu gấp mười.
+_GIAY_CHO_VIET_CHU = 600.0
+
+#: Bắt tay mạng thì vẫn phải nhanh: máy chủ sập hay sai địa chỉ là biết ngay,
+#: không việc gì phải đợi mười phút để nghe câu "không nối được".
+_GIAY_BAT_TAY = 15.0
+
+
+def _han_cho_viet_chu():
+    """`httpx.Timeout` rộng cho lượt ĐỌC, vẫn chặt cho lượt BẮT TAY."""
+    import httpx  # noqa: PLC0415
+
+    return httpx.Timeout(_GIAY_CHO_VIET_CHU, connect=_GIAY_BAT_TAY)
+
+
 def _client_khong_tu_thu_lai(goc: Any) -> Any:
     """Client anh em của `goc`, nhưng `max_retries = 0`.
 
@@ -194,7 +234,7 @@ def _client_khong_tu_thu_lai(goc: Any) -> Any:
             em = ShopAPI(api_key=goc.api_key, base_url=goc.base_url,
                          max_retries=0)
             try:
-                em._http.timeout = goc._http.timeout  # noqa: SLF001
+                em._http.timeout = _han_cho_viet_chu()  # noqa: SLF001
             except Exception:  # noqa: BLE001 — SDK đổi cấu trúc thì bỏ qua
                 pass
         except Exception:  # noqa: BLE001 — dựng không được thì dùng client gốc

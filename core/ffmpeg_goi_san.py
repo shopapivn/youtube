@@ -145,13 +145,13 @@ def du_dung(ffmpeg: str) -> bool:
 
 
 def _tai_https(dia_chi: str) -> bytes:
-    import urllib.request
-
     if not dia_chi.startswith("https://"):
         raise ValueError("Chỉ tải qua HTTPS")
-    yeu_cau = urllib.request.Request(
-        dia_chi, headers={"User-Agent": "ShopAPI-Studio"})
-    with urllib.request.urlopen(yeu_cau, timeout=600) as tra_loi:  # noqa: S310
+    from .mang_an_toan import mo_url  # noqa: PLC0415 — cùng gói
+
+    # `urlopen` trần dùng kho chứng chỉ của hệ điều hành, và trên Windows kho
+    # ấy hỏng theo đủ kiểu ngoài tầm tay khách — xem `core/mang_an_toan`.
+    with mo_url(dia_chi, cho=600) as tra_loi:
         return tra_loi.read()
 
 
