@@ -262,6 +262,46 @@ class TestHanChoVietChu:
             "viết chữ là đường đồng bộ — 60 giây là quá ngắn, xem docstring"
         assert float(cho.read) > 60.0
 
+    def test_han_cho_CO_GIAN_theo_luong_chu_dat_hang(self):
+        """Thời gian trả = số chữ sinh ra ÷ tốc độ nguồn (~3 token/giây).
+
+        Phía cổng cho biết 03/09/2026: nguồn LLM chạy 2-8 token/giây ban ngày.
+        Tool có lượt xin tới 32.000 token (viết kịch bản) — một hạn chờ chung
+        600 giây cắt ngang giữa chừng, rồi hỏi lại bằng khoá cũ và nhận
+        `409 đang xử lý`, lặp mãi.
+        """
+        from core.goi_van_ban import han_cho_theo_token as h
+
+        assert h(700) < h(8192) < h(32000), "phải co giãn theo lượng chữ"
+        assert h(700) > 216, "700 token đo thật mất 216 giây"
+        assert h(16384) >= 3000, "mặc định của tool ở 3 token/giây là ~91 phút"
+
+    def test_luot_nho_van_hong_NHANH(self):
+        """Sàn thấp để máy chủ sập thì giao diện không treo hàng giờ."""
+        from core.goi_van_ban import han_cho_theo_token as h
+
+        assert h(60) <= 300
+
+    def test_khong_doi_lau_hon_deadline_cua_cong(self):
+        """Cổng bỏ cuộc ở 3.600 giây — đợi lâu hơn là đợi thứ không tới."""
+        from core.goi_van_ban import han_cho_theo_token as h
+
+        assert h(1_000_000) <= 3600
+
+    def test_hai_luot_token_khac_nhau_khong_dung_chung_han_cho(self):
+        """Dùng chung client là lượt sau ăn hạn chờ của lượt trước — kiểu hỏng
+        chỉ lộ ra khi chạy song song."""
+        import core.goi_van_ban as gv
+
+        goc = self._client_gia()
+        gv._KHO_CLIENT.clear()
+        nho = gv._client_khong_tu_thu_lai(goc, 700)
+        lon = gv._client_khong_tu_thu_lai(goc, 32000)
+        if nho is goc or lon is goc:
+            pytest.skip("máy chạy test không dựng được client SDK")
+        assert float(nho._http.timeout.read) < float(lon._http.timeout.read)
+        assert gv._client_khong_tu_thu_lai(goc, 700) is nho, "vẫn dùng lại"
+
     def test_bat_tay_van_phai_nhanh(self, monkeypatch):
         """Nới lượt ĐỌC, không nới lượt BẮT TAY: máy chủ sập thì biết ngay."""
         import core.goi_van_ban as gv

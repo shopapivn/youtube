@@ -159,7 +159,7 @@ _DOI_GIU_KHOA: Sequence[str] = (CHO_TIEP, CHAM_LAI, HET_KHO, NHA_MAY_NGHI,
 
 
 #: Client riêng cho đường viết chữ, **không tự thử lại**. Khoá theo `id` client gốc.
-_KHO_CLIENT: Dict[int, Any] = {}
+_KHO_CLIENT: Dict[Any, Any] = {}
 _KHOA_KHO = threading.Lock()
 
 
@@ -191,19 +191,65 @@ _KHOA_KHO = threading.Lock()
 #: gửi hỏng sẽ treo giao diện lâu gấp mười.
 _GIAY_CHO_VIET_CHU = 600.0
 
+#: Tốc độ sinh chữ CHẬM NHẤT còn coi là bình thường, token/giây.
+#:
+#: Phía cổng cho biết 03/09/2026: nguồn LLM chạy 2-8 token/giây ban ngày,
+#: 20-60 ban đêm. Lấy mốc 3 — sát đầu chậm, khớp số đo phía khách (700 token
+#: mất 216 giây). Lấy 8 thì lượt ban ngày bị cắt oan.
+_TOKEN_MOI_GIAY = 3.0
+
+#: Cộng thêm ngần này giây cho phần xếp hàng và bắt tay, không phải sinh chữ.
+_GIAY_DU = 120.0
+
+#: Sàn: lượt nhỏ vẫn phải hỏng NHANH khi máy chủ sập, đừng treo giao diện.
+_GIAY_TOI_THIEU = 300.0
+
+#: Trần: deadline của chính cổng là 3.600 giây — đợi lâu hơn nó là đợi một
+#: câu trả lời không bao giờ tới.
+_GIAY_TOI_DA = 3600.0
+
 #: Bắt tay mạng thì vẫn phải nhanh: máy chủ sập hay sai địa chỉ là biết ngay,
 #: không việc gì phải đợi mười phút để nghe câu "không nối được".
 _GIAY_BAT_TAY = 15.0
 
 
-def _han_cho_viet_chu():
+def han_cho_theo_token(toi_da_token: int) -> float:
+    """Giây chờ cho một lượt viết `toi_da_token` chữ.
+
+    ═══ VÌ SAO KHÔNG DÙNG MỘT CON SỐ CHUNG ═══
+
+    Bản 2.114.0 nới hạn chờ từ 60 lên 600 giây cho mọi lượt viết chữ. Đúng
+    hướng, nhưng vẫn quá ngắn cho những lượt dài — và tôi chỉ biết sau khi
+    phía cổng nói ra con số thật (03/09/2026):
+
+        thời gian trả = SỐ CHỮ SINH RA ÷ TỐC ĐỘ NGUỒN
+        tốc độ nguồn ≈ 2-8 token/giây ban ngày, 20-60 ban đêm
+        cổng chỉ chuyển tiếp, deadline của nó là 3.600 giây
+
+    Khớp đúng số tôi đo phía khách: 700 token mất 216 giây (~3 token/giây).
+
+    Mà trong tool có những lượt xin tới **32.000 token** (viết kịch bản, dựng
+    bảng cảnh). Ở 3 token/giây thì đó là hơn ba tiếng — hạn 600 giây cắt ngang
+    giữa chừng, phía gọi hỏi lại bằng khoá cũ và nhận `409 đang xử lý`, lặp
+    mãi. Đúng cái vòng mà cả tệp này sinh ra để sống chung.
+
+    Nên hạn chờ phải **co giãn theo lượng chữ đặt hàng**: lượt nhỏ vẫn hỏng
+    nhanh khi máy chủ sập, lượt lớn được đợi tới sát deadline của cổng.
+    """
+    tho = int(toi_da_token or 0)
+    return max(_GIAY_TOI_THIEU,
+               min(_GIAY_TOI_DA, tho / _TOKEN_MOI_GIAY + _GIAY_DU))
+
+
+def _han_cho_viet_chu(toi_da_token: int = 0):
     """`httpx.Timeout` rộng cho lượt ĐỌC, vẫn chặt cho lượt BẮT TAY."""
     import httpx  # noqa: PLC0415
 
-    return httpx.Timeout(_GIAY_CHO_VIET_CHU, connect=_GIAY_BAT_TAY)
+    return httpx.Timeout(han_cho_theo_token(toi_da_token),
+                         connect=_GIAY_BAT_TAY)
 
 
-def _client_khong_tu_thu_lai(goc: Any) -> Any:
+def _client_khong_tu_thu_lai(goc: Any, toi_da_token: int = 0) -> Any:
     """Client anh em của `goc`, nhưng `max_retries = 0`.
 
     ═══ VÌ SAO PHẢI CÓ CÁI NÀY ═══
@@ -224,8 +270,13 @@ def _client_khong_tu_thu_lai(goc: Any) -> Any:
     cho cả sáu luồng tạo ảnh và clip chạy song song, sửa thuộc tính của nó là
     đụng vào việc của luồng khác giữa chừng.
     """
+    # Khoá theo (client gốc, hạn chờ): hai lượt xin 700 và 32.000 token cần
+    # hai hạn chờ khác hẳn nhau, dùng chung một client là cái sau bị hạn của
+    # cái trước — và đó đúng là kiểu hỏng chỉ xuất hiện khi chạy song song.
+    cho = han_cho_theo_token(toi_da_token)
+    khoa = (id(goc), cho)
     with _KHOA_KHO:
-        san = _KHO_CLIENT.get(id(goc))
+        san = _KHO_CLIENT.get(khoa)
         if san is not None:
             return san
         try:
@@ -234,12 +285,12 @@ def _client_khong_tu_thu_lai(goc: Any) -> Any:
             em = ShopAPI(api_key=goc.api_key, base_url=goc.base_url,
                          max_retries=0)
             try:
-                em._http.timeout = _han_cho_viet_chu()  # noqa: SLF001
+                em._http.timeout = _han_cho_viet_chu(toi_da_token)  # noqa: SLF001
             except Exception:  # noqa: BLE001 — SDK đổi cấu trúc thì bỏ qua
                 pass
         except Exception:  # noqa: BLE001 — dựng không được thì dùng client gốc
             em = goc
-        _KHO_CLIENT[id(goc)] = em
+        _KHO_CLIENT[khoa] = em
         return em
 
 
@@ -303,7 +354,7 @@ def goi_van_ban(
         # đúng việc cũ của mình sau khi đóng tool giữa chừng.
         khoa_luot = goc if luot == 0 else "{0}:k{1}".format(goc, luot)
 
-        goi_bang = _client_khong_tu_thu_lai(client)
+        goi_bang = _client_khong_tu_thu_lai(client, toi_da_token)
 
         def mot_lan(_khoa: str = khoa_luot) -> str:
             return _doc_chu(goi_bang.request(
