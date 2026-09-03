@@ -3421,7 +3421,14 @@ def _ke_hoach_hinh(bc: BoiCanh, luot: LuotChay,
         len(cue), tong_giay))
     for lan in range(2):
         try:
-            tra = _goi(bc, loi_nhac, khoa_viec(luot, "ke-hoach", 0, dong, lan),
+            # `loi_nhac` nằm trong khoá vì bản đồ này dựng từ bản gỡ băng VÀ
+            # từ khuôn kịch bản của kênh — khách sửa khuôn ở tab Nâng cao là
+            # lời nhắc khác hẳn, trong khi `dong`/`lan` không đổi. Thiếu nó
+            # thì cổng báo "khoá này đã dùng cho nội dung khác" và lượt chạy
+            # kẹt ở đây mãi. Xem `khoa_viec` và ca lượt 0016 ghi ở
+            # `core/goi_van_ban.py`.
+            tra = _goi(bc, loi_nhac,
+                       khoa_viec(luot, "ke-hoach", 0, dong, lan, loi_nhac),
                        toi_da_token=TOKEN_KE_HOACH)
             ke_hoach = sach_ke_hoach(loc_json(tra), cue)
         except Exception as loi:  # noqa: BLE001
@@ -3491,9 +3498,14 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
     def mot_lan(lan: int):
         # Bản đồ nằm trong khoá: đổi bản đồ (làm lại khâu) là lời nhắc khác,
         # phải là một lượt gọi khác — cùng luật với ảnh tham chiếu ở khâu ảnh.
+        #
+        # Trước đây chỗ này chỉ cho lời nhắc vào khoá KHI CÓ bản đồ, cho rằng
+        # không bản đồ thì lời nhắc đứng yên. Không đúng: lời nhắc còn mang
+        # khuôn chia cảnh của kênh, mà khuôn ấy khách sửa được. Bỏ điều kiện
+        # đi thì luật thành một câu: lời nhắc nào, khoá nấy. Chạy lại y nguyên
+        # vẫn ra đúng khoá cũ nên không trả tiền lần hai.
         tra = _goi(bc, loi_nhac,
-                   khoa_viec(luot, "canh", cue[0]["index"], dong, lan,
-                             loi_nhac if ke_hoach else ""),
+                   khoa_viec(luot, "canh", cue[0]["index"], dong, lan, loi_nhac),
                    toi_da_token=TOKEN_CANH)
         try:
             goi = loc_json(tra)

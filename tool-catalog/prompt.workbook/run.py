@@ -12,6 +12,7 @@ cat theo dong ho chu khong theo y.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -839,6 +840,8 @@ def _ke_hoach_dao_dien(goi, cues, phim, cast, *, engine, ke_hoach_fn=None,
     tran_engine = float(max_seconds_for(engine))
     san, tran = nhip if nhip else (float(MIN_GIAY_CANH), tran_engine)
 
+    hong: List[str] = []
+
     def mot_man(seg):
         dong = [theo_so[i] for i in range(int(seg["srt_from"]), int(seg["srt_to"]) + 1)
                 if i in theo_so]
@@ -857,6 +860,7 @@ def _ke_hoach_dao_dien(goi, cues, phim, cast, *, engine, ke_hoach_fn=None,
                 raw = loc_json(goi(loi_nhac, "man-{0}".format(seg["segment_id"])))
             return _sach_ke_hoach(raw, seg, dong, tran=tran_engine, san=float(san))
         except Exception as loi:  # noqa: BLE001 — mot man hong khong giet ca phim
+            hong.append("man {0}: {1}".format(seg["segment_id"], str(loi)[:100]))
             emit({"type": "event", "event": "progress", "progress": 0.0,
                   "message": "Man {0} chua co ke hoach dao dien ({1}).".format(
                       seg["segment_id"], str(loi)[:100])})
@@ -865,6 +869,29 @@ def _ke_hoach_dao_dien(goi, cues, phim, cast, *, engine, ke_hoach_fn=None,
     with ThreadPoolExecutor(max_workers=min(8, max(1, len(segs)))) as bo:
         ket = list(bo.map(mot_man, segs))
     ra = [b for man in ket for b in man]
+
+    # ═══ HONG HET THI PHAI DUNG, KHONG DUOC DI TIEP ═══
+    #
+    # Moi man hong deu chi bao bang mot dong TIEN DO — trong giao dien no troi
+    # qua nhu moi dong trang thai khac. Nen 11/11 man hong trong nhu 0/11:
+    # buoc sau van chay, cat canh khong co ke hoach dao dien nao, va khach
+    # nhan mot video yeu han hep ma van tra du tien.
+    #
+    # Do tren may khach 03/09/2026, luot 0016: moi man deu 409 "noi dung khac"
+    # nen ca 11 man cung tra rong, va nhat ky chi co mot dong
+    # "Ke hoach dao dien: 0 beat cho 11 man." — dung ky thuat, nhung khong ai
+    # doc no ra la "hong het roi".
+    #
+    # Hong MOT PHAN thi van di tiep: cac man con lai co ke hoach that, bo di
+    # la vut ca bai da tra tien. Chi hong HET moi la buoc nay khong chay.
+    if segs and hong and not ra:
+        raise RuntimeError(
+            "Khong lap duoc ke hoach dao dien cho man nao ({0}/{1} man hong). "
+            "Loi dau: {2}".format(len(hong), len(segs), hong[0]))
+    if hong:
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": "CHU Y: {0}/{1} man khong co ke hoach dao dien — "
+                         "phan do se cat canh theo dong.".format(len(hong), len(segs))})
     emit({"type": "event", "event": "progress", "progress": 0.0,
           "message": "Ke hoach dao dien: {0} beat cho {1} man.".format(len(ra), len(segs))})
     return ra
@@ -1287,13 +1314,29 @@ def _hop_goi(request: Mapping[str, Any], model: str):
               "message": str(dong)[:160]})
 
     def goi(loi_nhac: str, phan_khoa: str) -> str:
-        # Khoa co dinh theo (lan chay, nut, viec): mat phan hoi giua chung thi
-        # hoi lai dung khoa ay se nhan lai bai da tra tien, khong tra lan hai.
+        # Khoa gom (lan chay, nut, viec) VA bam cua chinh loi nhac. Mat phan
+        # hoi giua chung thi hoi lai dung khoa ay se nhan lai bai da tra tien,
+        # khong tra lan hai — chay lai y nguyen thi bam van the, khoa van trung.
+        #
+        # ═══ VI SAO LOI NHAC PHAI NAM TRONG KHOA ═══
+        #
+        # Buoc nay an ket qua cua buoc truoc ("doc phim"). Buoc truoc chay lai
+        # co the tra 11 man thay vi 7 — DAU VAO khong doi mot chu nao, nhung
+        # loi nhac o day thi doi. Khoa cu chi gom (lan chay, nut, viec) nen
+        # khong thay dieu do: cong bao "Idempotency-Key nay da duoc dung cho
+        # mot yeu cau co noi dung khac", va moi lan "Chay tiep" ve sau deu di
+        # vao dung ngo cut ay. Do tren may khach 03/09/2026, luot 0016
+        # (openstory), buoc "Cat canh va viet loi nhac": 5 lan trong 24 gio,
+        # chet y het nhau.
+        #
+        # Bam dat o CUOI khoa, khong thay phan_khoa: doc nhat ky van biet ngay
+        # la buoc nao. `core/auto_khau.khoa_viec` lam dung kieu nay tu dau.
+        bam = hashlib.sha256(loi_nhac.encode("utf-8")).hexdigest()[:10]
         return goi_van_ban(khach(), [{"role": "user", "content": loi_nhac}],
                            mo_hinh=model, toi_da_token=TOKEN_CANH, on_log=ghi,
-                           khoa="{0}:{1}:{2}".format(request.get("run_id", "run"),
-                                                     request.get("node_id", "workbook"),
-                                                     phan_khoa))
+                           khoa="{0}:{1}:{2}:{3}".format(request.get("run_id", "run"),
+                                                         request.get("node_id", "workbook"),
+                                                         phan_khoa, bam))
 
     def dong():
         if hop["client"] is not None:

@@ -174,7 +174,12 @@ class TestNoiDungTraVe:
             goi_van_ban(Lech(), [{"role": "user", "content": "x"}], **KHONG_NGU)
 
     def test_noi_dung_rong_thi_bao_ro(self):
-        may = MayChuGia(["   "])
+        # Kịch bản phải rỗng ở MỌI lượt: từ bản vá lượt 0016, gặp rỗng là đổi
+        # khoá hỏi lại chứ không ném ngay — cổng ghim câu rỗng vào khoá cũ nên
+        # hỏi lại cùng khoá là hỏi lại một ngăn tủ trống. Xem `TestTraLoiRong`.
+        # Điều bài này canh vẫn y nguyên: hết đường rồi thì phải NÓI THẬT là
+        # rỗng, không được lặng lẽ trả về chuỗi trắng cho khâu sau dùng.
+        may = MayChuGia(["   ", "", "  ", ""])
         with pytest.raises(ValueError, match="rỗng"):
             goi_van_ban(may, [{"role": "user", "content": "x"}], **KHONG_NGU)
 
@@ -323,3 +328,78 @@ class TestHanChoVietChu:
         if em is goc:
             pytest.skip("máy chạy test không dựng được client SDK")
         assert em.max_retries == 0
+
+
+#: Câu THẬT cổng trả khi khoá cũ gặp nội dung mới. Khác hẳn `KHOA_CU`: kia là
+#: "đang làm, đợi đi", đây là "thôi đừng đợi nữa, việc này khác việc cũ rồi".
+KHOA_LECH_THAT = LoiGia("Idempotency-Key này đã được dùng cho một yêu cầu có "
+                        "nội dung khác. Hãy dùng khoá mới cho yêu cầu mới.")
+
+
+class TestKhoaLechThiPhaiDoiKhoa:
+    """Ca lượt 0016: năm lần "Chạy tiếp" trong 24 giờ, cả năm chết y hệt.
+
+    Nguyên nhân không nằm ở khoá mà ở **danh sách loại được đổi khoá**:
+    `core/su_co.py` dựng riêng loại `KHOA_LECH` với nhịp đợi RỖNG kèm ghi chú
+    *"đợi không bao giờ giúp, phải đổi khoá"* — nhưng `goi_van_ban` chưa bao
+    giờ kể tên nó. Nhịp rỗng nên không ai đợi, danh sách thiếu nên không ai
+    đổi: loại duy nhất sinh ra để đổi khoá là loại duy nhất không được đổi.
+    """
+
+    def test_gap_khoa_lech_thi_doi_khoa_moi_chu_khong_chiu_thua(self):
+        may = MayChuGia([KHOA_LECH_THAT, "bản đồ hình đây"])
+        ra = goi_van_ban(may, [{"role": "user", "content": "cắt cảnh"}],
+                         khoa="luot16:canh", **KHONG_NGU)
+        assert ra == "bản đồ hình đây"
+        assert len(may.khoa_da_dung) == 2, "phải gọi lại lần nữa, không ném ngay"
+        assert may.khoa_da_dung[0] != may.khoa_da_dung[1], (
+            "khoá lần hai phải KHÁC — giữ khoá cũ là đi lại đúng ngõ cụt")
+        assert may.khoa_da_dung[0] == "luot16:canh"
+
+    def test_khoa_lech_khong_ngoi_doi_giay_nao(self):
+        # Nhịp của `KHOA_LECH` rỗng nên phải đổi khoá NGAY. Đợi ở đây là bắt
+        # khách nhìn màn hình đứng im để chờ một thứ không bao giờ tự khỏi.
+        da_ngu = []
+        may = MayChuGia([KHOA_LECH_THAT, "xong"])
+        goi_van_ban(may, [{"role": "user", "content": "x"}], khoa="k",
+                    ngu=da_ngu.append)
+        assert da_ngu == []
+
+
+class TestTraLoiRong:
+    """Trả lời rỗng thì cổng đã **ghim** cái rỗng ấy vào khoá.
+
+    Ngược hẳn với mọi lỗi nội dung khác: hỏi lại cùng khoá là hỏi lại một ngăn
+    tủ trống, mãi mãi. Chỉ khoá mới mới sinh được lượt viết mới.
+    """
+
+    def test_noi_dung_rong_thi_doi_khoa(self):
+        may = MayChuGia(["", "   ", "lần này có chữ"])
+        ra = goi_van_ban(may, [{"role": "user", "content": "x"}], khoa="k",
+                         **KHONG_NGU)
+        assert ra == "lần này có chữ"
+        assert len(set(may.khoa_da_dung)) == 3, "mỗi lượt một khoá mới"
+
+    def test_rong_mai_thi_chiu_thua_chu_khong_lap_vo_han(self):
+        may = MayChuGia(["", "", "", "", "", ""])
+        with pytest.raises(ValueError):
+            goi_van_ban(may, [{"role": "user", "content": "x"}], khoa="k",
+                        **KHONG_NGU)
+        assert len(may.khoa_da_dung) == 4, "đúng _SO_LUOT_KHOA lượt rồi dừng"
+
+    def test_sai_dang_thi_VAN_giu_khoa_cu(self):
+        # Ranh giới của bản vá trên. Câu trả lời có chữ nhưng sai dạng là máy
+        # viết dở thật — đổi khoá cũng ra đúng bài ấy, chỉ tốn thêm tiền.
+        class MayTraSaiDang:
+            def __init__(self):
+                self.so_lan = 0
+
+            def request(self, *_a, **_k):
+                self.so_lan += 1
+                return {"khong_co_choices": True}
+
+        may = MayTraSaiDang()
+        with pytest.raises(ValueError):
+            goi_van_ban(may, [{"role": "user", "content": "x"}], khoa="k",
+                        **KHONG_NGU)
+        assert may.so_lan == 1, "sai dạng thì ném ngay, không đổi khoá"

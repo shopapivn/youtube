@@ -73,8 +73,8 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from .su_co import (
-    CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, MAT_MANG, NHA_MAY_NGHI, TAM_NGHI,
-    dau_vet, goi_kien_nhan, nhip_cho, phan_loai,
+    CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, KHOA_LECH, MAT_MANG, NHA_MAY_NGHI,
+    TAM_NGHI, dau_vet, goi_kien_nhan, nhip_cho, phan_loai,
 )
 
 __all__ = ["goi_van_ban", "loc_json", "khoi_anh", "MO_HINH_MAC_DINH",
@@ -294,6 +294,22 @@ def _client_khong_tu_thu_lai(goc: Any, toi_da_token: int = 0) -> Any:
         return em
 
 
+class TraRong(ValueError):
+    """Máy chủ trả về một câu trả lời **rỗng**.
+
+    Tách khỏi `ValueError` chung vì cách chữa ngược nhau, và chỗ này đã cắn
+    một lần rồi (lượt 0016, xem ghi chú ở vòng đổi khoá bên dưới):
+
+    * Câu trả lời **sai dạng** — JSON hỏng, thiếu khoá — là lỗi NỘI DUNG thật.
+      Hỏi lại bằng khoá cũ sẽ nhận đúng bài rác ấy, mà đổi khoá cũng thế, vì
+      máy viết ra được chừng ấy. Đổi khoá chỉ tốn thêm tiền.
+    * Câu trả lời **rỗng** thì khác hẳn: cổng đã **ghim** cái rỗng ấy vào khoá.
+      Từ giây đó, mọi lần "Chạy tiếp" đều nhận lại đúng cái rỗng — không phải
+      vì máy viết dở, mà vì ta cứ hỏi lại một ngăn tủ trống. Chỉ khoá mới mới
+      sinh được một lượt viết mới.
+    """
+
+
 def _doc_chu(phan_hoi: Any) -> str:
     """Lấy đoạn chữ ra khỏi phản hồi, hoặc ném lỗi nói rõ hỏng ở đâu."""
     tho = phan_hoi.to_dict() if hasattr(phan_hoi, "to_dict") else phan_hoi
@@ -302,7 +318,7 @@ def _doc_chu(phan_hoi: Any) -> str:
     except (KeyError, IndexError, TypeError) as loi:
         raise ValueError("Máy chủ trả về nội dung không đúng dạng.") from loi
     if not isinstance(noi_dung, str) or not noi_dung.strip():
-        raise ValueError("Máy chủ trả về nội dung rỗng.")
+        raise TraRong("Máy chủ trả về nội dung rỗng.")
     return noi_dung.strip()
 
 
@@ -369,18 +385,41 @@ def goi_van_ban(
         except Exception as loi:  # noqa: BLE001 — phân loại rồi mới quyết
             loai = phan_loai(loi)
             con_luot = luot < _SO_LUOT_KHOA - 1
-            # Chỉ hai loại này đáng đổi khoá. Còn lại — hết tiền, hỏng thật,
-            # nội dung sai — thì đổi khoá cũng ra đúng kết quả ấy, ném lên
-            # để khách biết mà xử lý.
-            if not con_luot or loai not in (CHO_TIEP, TAM_NGHI, KHOA_DA_DUNG):
+            # ═══ BỐN LOẠI ĐÁNG ĐỔI KHOÁ, VÀ HAI LOẠI VỪA ĐƯỢC THÊM ═══
+            #
+            # Còn lại — hết tiền, hỏng thật, nội dung sai dạng — thì đổi khoá
+            # cũng ra đúng kết quả ấy, ném lên để khách biết mà xử lý.
+            #
+            # `KHOA_LECH` là ca cay nhất, vì nó bị bỏ sót đúng ở dòng này.
+            # `su_co.py` đã dựng riêng một loại cho câu *"Idempotency-Key này
+            # đã được dùng cho một yêu cầu có nội dung khác"*, với nhịp đợi
+            # RỖNG và ghi rõ *"đợi không bao giờ giúp, phải đổi khoá"*. Nhưng
+            # danh sách ở đây chưa bao giờ kể tên nó — nên loại duy nhất sinh
+            # ra để đổi khoá lại là loại duy nhất không bao giờ được đổi: nhịp
+            # rỗng nên `goi_kien_nhan` không đợi, danh sách không có nên vòng
+            # này ném thẳng. Kẹt vĩnh viễn, không một lối thoát nào.
+            #
+            # Đo trên máy khách 03/09/2026, lượt 0016 (openstory), bước "Cắt
+            # cảnh và viết lời nhắc": năm lần "Chạy tiếp" trong 24 giờ, cả năm
+            # chết y hệt nhau tại cùng một chỗ. Lý do khoá lệch thì vô tội —
+            # bước "đọc phim" chạy lại trả 11 màn thay vì 7, nên lời nhắc bước
+            # sau khác đi, trong khi khoá của nó chỉ gồm (lượt, bước).
+            #
+            # `TraRong` thì ngược lại với mọi lỗi nội dung khác: cổng đã ghim
+            # câu rỗng vào khoá cũ, nên giữ khoá là tự nhốt mình. Xem lớp ấy.
+            dang_lech = loai == KHOA_LECH or isinstance(loi, TraRong)
+            if not con_luot or not (dang_lech
+                                    or loai in (CHO_TIEP, TAM_NGHI, KHOA_DA_DUNG)):
                 raise
             loi_cuoi = loi
             # Câu hiện lên màn hình chỉ nói tool đang làm gì. Chuyện ví tiền có
             # tab Tài khoản lo — nhắc tiền ở mỗi dòng nhật ký chỉ làm người
             # đang chờ thấy sốt ruột về một thứ họ không cần quyết lúc này.
             ghi("  {0} — đặt lại từ đầu (lần {1}).{2}".format(
+                "máy chủ trả lời trống" if isinstance(loi, TraRong) else
                 {TAM_NGHI: "máy chủ chưa nhận được yêu cầu",
-                 KHOA_DA_DUNG: "máy chủ không nhận lại việc cũ"}.get(
+                 KHOA_DA_DUNG: "máy chủ không nhận lại việc cũ",
+                 KHOA_LECH: "phần này đã đổi so với lần trước"}.get(
                      loai, "đợi lâu vẫn chưa xong"),
                 luot + 1, dau_vet(loi)))
             # ═══ ĐỔI KHOÁ RỒI PHẢI ĐỢI, KHÔNG ĐƯỢC BẮN NGAY ═══
