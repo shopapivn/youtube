@@ -85,8 +85,26 @@ vm/phien-ban.txt
 # (kho nay khach cung tai ve): so lieu Studio, so doi thu, ke hoach dang,
 # thiet lap may ao. Khuon san xuat (prompt/) van di theo kho nhu cu.
 CHANNEL/*/chi-so/
-CHANNEL/*/nghien-cuu/
 CHANNEL/*/ke-hoach-dang/
+
+# `nghien-cuu/` giu nguyen luat cu — TRU `tuyen.csv`.
+#
+# Trong thu muc do co hai thu khac han nhau. `content.csv` la SO DOI THU: link,
+# view, ngay dang cua tung video doi thu — du lieu kinh doanh, khong len kho.
+# `tuyen.csv` la BAN DO TEP KHAN GIA: nam kieu nguoi xem cua nganh, kem insight
+# va cua vao. No la KHUON SAN XUAT, cung ho voi `prompt/` — thieu no thi tinh
+# nang tuyen cua tab Nghien cuu vo dung voi moi khach nhan ban kenh mau.
+#
+# Phai viet thanh `nghien-cuu/*` roi phu dinh tung tep: git khong cho re-include
+# mot tep khi THU MUC CHA da bi loai, nen `!.../tuyen.csv` dat duoi
+# `CHANNEL/*/nghien-cuu/` (co gach cheo cuoi) se im lang khong an.
+#
+# Chu du an quyet 04/09/2026, biet ro kho nay cong khai: doi lay viec khach
+# dung duoc ngay. Kenh mau bi DE khi cap nhat (`core/safe_update._chep_de`),
+# nen khach muon giu tuyen rieng thi bam "Nhan ban" — ban sao co kenh_rieng va
+# chi duoc them thu con thieu.
+CHANNEL/*/nghien-cuu/*
+!CHANNEL/*/nghien-cuu/tuyen.csv
 CHANNEL/*/may-ao.json
 CHANNEL/*/CLAUDE.md
 CHANNEL/*/NHAT-KY-KENH.md
