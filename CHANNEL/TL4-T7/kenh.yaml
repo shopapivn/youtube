@@ -21,21 +21,39 @@ ma: "TL4-T7"
 ten: "心理のとまり木 — tâm lý, người sống lệch nhịp"
 ngon_ngu: "ja"
 giong_van: "Japanese — natural, polite but conversational (ていねい体). Warm, intimate, curious."
-#  Đo lại 24/08/2026 trên SÁU lượt có giọng đọc thật của chính kênh này (0005–0013):
-#  275–341, trung bình 302 (đếm theo len() cả xuống dòng, đúng cách tool đếm).
-ky_tu_moi_phut: 302
+#  Đo lại 24/08/2026 trên SÁU lượt có giọng đọc thật của kênh: trung bình 302
+#  — nhưng ĐẾM BẰNG len(), tức tính cả 210–406 ký tự xuống dòng mà không ai
+#  đọc lên. Từ 04/09/2026 tool đo bằng chữ đọc lên (`_do_doc`), nên con số ấy
+#  thừa 10%.
+#
+#  Đo lại 04/09/2026, chữ đọc lên chia cho phút của chính tệp 2-giong-doc.mp3:
+#      0002 → 284    0004 → 258    0005 → 257    0006 → 275
+#  Đối chiếu ngoài: video đối thủ 978 giây, phụ đề 4.505 ký tự → 276.
+#  Lấy 270. Sai số còn lại là nhịp đọc của ElevenLabs dao động theo bài.
+ky_tu_moi_phut: 270
 chu_bia_hoa: false
 voice_id: "b34JylakFZPlGS0BnwyY"
-# ── Độ dài: LUÔN về 12–15 phút, bất kể video gốc dài hay ngắn ─────────────────
+# ── Độ dài: LUÔN về 10–15 phút, bất kể video gốc dài hay ngắn ─────────────────
 #  Chủ dự án, 24/08/2026: *"kịch bản đối thủ có thể ngắn hoặc dài hơn nhưng nó
-#  sẽ luôn để content của kênh về khoảng 12-15 phút"*. Mục tiêu đặt 13 phút
-#  (≈3.930 ký tự): AI có nết viết dôi 10–30%, dôi từ 13 vẫn nằm trong 12–15.
-#  Không có bước nắn riêng — chỉ một dòng độ dài trong prompt/2-viet.md.
-phut_muc_tieu: 13
+#  sẽ luôn để content của kênh về khoảng 12-15 phút"*; nhắc lại 04/09/2026:
+#  *"kênh tao là khoảng 10-15 phút — nguồn thì đôi khi nó sẽ ngắn sẽ dài nên
+#  không thể theo nguồn được"*. Nên KHÔNG bật `do_dai_theo_goc`.
+#
+#  ═══ VÌ SAO 13 → 15 (04/09/2026) ═══
+#
+#  Mốc cũ là 13, và 13 × 302 = 3.926 ký tự. Nhưng 302 đếm cả xuống dòng, nên
+#  3.926 ký tự thật ra là 14,5 phút chứ không phải 13 — con số trong tệp này
+#  không phải thứ nhận được. Đo bốn video thật: 11,9 / 14,9 / 14,8 / 15,1 phút.
+#
+#  Sửa nhịp về 270 mà giữ 13 thì mục tiêu tụt còn 3.510 ký tự, tức video ngắn
+#  đi hơn một phút so với thứ kênh đang chạy. Chủ dự án chọn giữ nguyên chỗ
+#  đang đứng và gọi đúng tên nó: 15 × 270 = 4.050 ký tự = 15,0 phút thật.
+phut_muc_tieu: 15
 #  Lệch bao nhiêu thì mới gọi bước nắn độ dài (prompt/4-do-dai.md).
 #  Chủ dự án, 04/09/2026: *"về độ dài tao không quá quan trọng trong khoảng
-#  từ 10-15 phút"*. 0,30 quanh 13 phút = 9,1–16,9 phút — rộng hơn ý đó, nên
-#  bước nắn chỉ còn là lưới cho ca hỏng thật (lượt 0001 ra +93%).
+#  từ 10-15 phút"*. 0,30 quanh 15 phút = 10,5–19,5 phút, nên bước nắn chỉ còn
+#  là lưới cho ca hỏng thật (lượt 0001 ra +93%). Trần thật nằm ở bộ chấm:
+#  prompt/2b-cham.md trừ nặng khi vượt 4.050 ký tự trên 20%.
 #  Đo bốn lượt thật: bước viết tự về đích, bước nắn chưa phải chạy lần nào.
 chenh_cho_phep: 0.30
 do_dai_theo_goc: false

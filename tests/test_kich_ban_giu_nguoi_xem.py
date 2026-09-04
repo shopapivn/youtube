@@ -49,12 +49,29 @@ class TestLoiNhacViet:
         assert _doc(thu_muc, "4-do-dai.md").strip(), (
             "{0}: thiếu 4-do-dai.md, bước nắn độ dài sẽ tự tắt".format(nhan))
 
-    def test_do_dai_noi_ca_san_lan_tran(self, nhan, thu_muc):
-        """Chỉ nói một con số đích thì AI viết theo độ dài BẢN GỐC (dôi 84%);
-        chỉ nói trần thì nó lộn sang đầu kia (hụt 63%). Phải có cả hai đầu."""
+    def test_do_dai_chi_noi_MOT_CON_SO(self, nhan, thu_muc):
+        """═══ ĐỘ DÀI CHỈ CÒN MỘT DÒNG, KHÔNG SÀN KHÔNG TRẦN (04/09/2026) ═══
+
+        Bài này vốn đòi lời nhắc viết phải nêu CẢ sàn lẫn trần
+        (`<<CHARS_MIN>>`–`<<CHARS_MAX>>`), rút từ lượt 0001 dôi 84%.
+
+        Chủ dự án, 04/09/2026: *"11 phút cũng được, 13, 15, 17 cũng được, tao
+        thấy chả sao — quan trọng là content hay, khán giả xem hết"*, và
+        *"đôi khi vụ độ dài chỉ cần yêu cầu đơn giản ví dụ là khoảng bao nhiêu
+        ký tự, model AI thông minh nó khắc tự biết; việc nhồi prompt các yếu
+        tố phụ làm nó tưởng cái đó quan trọng"*.
+
+        Đó là chỗ mấu chốt: mỗi câu thêm vào về độ dài là một lần nữa nói với
+        model rằng độ dài đáng quan tâm. Kênh chịu được 11–17 phút thì không
+        có gì để canh, và mọi chữ tiêu vào việc canh nó là chữ lấy khỏi việc
+        viết hay.
+        """
         v = _doc(thu_muc, "2-viet.md")
-        assert "<<CHARS_MIN>>" in v and "<<CHARS_MAX>>" in v, (
-            "{0}: lời nhắc viết phải nêu cả sàn lẫn trần độ dài".format(nhan))
+        assert "<<CHARS>>" in v, (
+            "{0}: lời nhắc viết vẫn phải nói một con số độ dài".format(nhan))
+        assert "<<CHARS_MIN>>" not in v and "<<CHARS_MAX>>" not in v, (
+            "{0}: bỏ sàn/trần đi — kênh chịu được 11–17 phút, nêu ba con số "
+            "chỉ làm model tưởng độ dài là tiêu chí".format(nhan))
 
     def test_loi_nhac_viet_phai_GON(self, nhan, thu_muc):
         """═══ TIÊU CHÍ Ở BỘ CHẤM, KHÔNG Ở PROMPT VIẾT (chốt lại 04/09/2026) ═══
@@ -146,19 +163,46 @@ class TestLoiNhacViet:
         assert "10% đầu bài" in v, (
             "{0}: ràng buộc ý thứ nhất phải đo bằng tỉ lệ bài".format(nhan))
 
-    def test_hoan_thien_duoc_phep_nen(self, nhan, thu_muc):
-        """Bản cũ ra lệnh 'giữ nguyên độ dài' nên bản cuối phình 7.093 → 7.589."""
+    def test_hoan_thien_khong_bi_khoa_tay_ve_do_dai(self, nhan, thu_muc):
+        """Bản cũ ra lệnh 'giữ nguyên độ dài' nên bản cuối phình 7.093 → 7.589.
+
+        Nay lời nhắc chỉ nói một con số, không ra lệnh nén cũng không cấm nén
+        — đủ để model tự xử.
+        """
         h = _doc(thu_muc, "2c-hoan-thien.md")
-        assert "NÉN" in h, (
-            "{0}: bước hoàn thiện phải được phép nén khi bản vượt trần".format(nhan))
+        assert "<<CHARS>>" in h, (
+            "{0}: bước hoàn thiện phải biết độ dài nhắm tới".format(nhan))
         assert "giữ nguyên cấu trúc, các ý, nghiên cứu, con số, ẩn dụ và độ dài" not in h, (
             "{0}: câu 'giữ nguyên … độ dài' khoá tay bước nén".format(nhan))
 
-    def test_cham_phat_nang_ban_vuot_tran(self, nhan, thu_muc):
-        """Bộ chấm phải trừ đủ nặng, nếu không cả 5 bản dôi thì chọn bản nào cũng thế."""
+    def test_do_dai_KHONG_phai_tieu_chi_cham(self, nhan, thu_muc):
+        """═══ ĐỘ DÀI RA KHỎI BỘ CHẤM (04/09/2026) ═══
+
+        Bộ chấm từng có: *"Vượt trần trên 20% thì TỐI ĐA 5 điểm"* và *"nếu MỌI
+        bản đều vượt trần thì vẫn chọn bản GẦN TRẦN NHẤT"*.
+
+        Câu thứ hai là chỗ hỏng nặng nhất: nó bảo chọn theo độ dài chứ không
+        theo chất lượng. Lượt 0007 cho thấy hậu quả — ba bản bị chấm 6/6/8 với
+        lý do xoay quanh độ dài, rồi bước hoàn thiện nén 27%, cắt mất đoạn
+        レジリエンス của ý 1, đoạn 「感情を観客の前で演じません」 của ý 2 và
+        ẩn dụ lái xe trong sương của ý 3 — toàn nội dung thật.
+
+        Chủ dự án, 04/09/2026: *"11 phút cũng được, 13, 15, 17 cũng được… quan
+        trọng là content hay, khán giả xem hết"* và *"việc mày cho nó điểm cao
+        cũng không phải giải pháp hay"*.
+
+        Số đo độ dài vẫn được đưa vào qua `<<SO_DO>>` — đó là DỮ LIỆU, model
+        tự nhìn. Cái bỏ đi là LỜI RA LỆNH chấm theo nó.
+        """
         c = _doc(thu_muc, "2b-cham.md")
-        assert "TỐI ĐA 5 điểm" in c, (
-            "{0}: bộ chấm phải chặn trần điểm cho bản vượt độ dài".format(nhan))
+        assert "TỐI ĐA 5 điểm" not in c, (
+            "{0}: bộ chấm còn chặn trần điểm theo độ dài — một bản hay mà dài "
+            "sẽ thua một bản vừa vặn mà nhạt".format(nhan))
+        assert "gần trần nhất" not in c, (
+            "{0}: bộ chấm còn bảo chọn bản GẦN TRẦN NHẤT — đó là chọn theo độ "
+            "dài, không phải theo chất lượng".format(nhan))
+        assert "<<SO_DO>>" in c, (
+            "{0}: vẫn phải đưa số đo cho model tự nhìn".format(nhan))
 
 
 class TestDoBangChuDocLen:

@@ -158,8 +158,12 @@ class TestPromptKenh:
             assert os.path.isfile(p), p
             with open(p, encoding="utf-8") as t:
                 chu = t.read()
+            # `<<PHUT>>` rời khỏi danh sách này 04/09/2026: nói độ dài bằng
+            # hai đơn vị (phút VÀ ký tự) là nói hai lần về một thứ chỉ đáng
+            # nói một lần — xem `test_do_dai_KHONG_phai_tieu_chi_cham` ở
+            # `tests/test_kich_ban_giu_nguoi_xem.py`.
             for o in ("<<DIEM_MANH>>", "<<DIEM_YEU>>", "<<DRAFT>>", "<<NGON_NGU>>",
-                      "<<PHUT>>"):
+                      "<<CHARS>>"):
                 assert o in chu, (kenh, o)
 
     def test_bo_cham_hoi_diem_manh_yeu(self):

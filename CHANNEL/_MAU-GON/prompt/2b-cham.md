@@ -13,9 +13,10 @@ Ba chỗ đáng nhìn nhất, theo thứ tự:
 
 3. ĐOẠN CUỐI — ý mạnh nhất có để dành cho cuối không; có câu hỏi cụ thể để bình luận, gắn với thứ vừa kể; có lời mời đăng ký.
 
+ĐỘ DÀI KHÔNG PHẢI TIÊU CHÍ CHẤM. Kênh nhắm <<PHUT>> phút (≈ <<CHARS>> ký tự), nhưng bước sau nén được — chọn bản HAY NHẤT, đừng chọn bản gần mốc nhất. Một bản hay mà dài vẫn hơn một bản vừa vặn mà nhạt.
+Chỉ làm một việc với độ dài: nếu bản được chọn dài hơn mốc, ghi trong "diem_yeu" cần cắt bao nhiêu ký tự và cắt ở đoạn nào (nêu tên đoạn) — bước sau nén theo đúng lời đó. Chọn chỗ cắt là chỗ NHẠT NHẤT, đừng cắt đều tay.
+
 Ràng buộc cứng, ngoài ra không có gì khác:
-- ĐỘ DÀI: trần <<PHUT>> phút đọc (≈ <<CHARS>> ký tự). Vượt trần trên 20% thì TỐI ĐA 5 điểm; ngắn hơn 20% cũng trừ nặng vì mất thời lượng xem.
-  Nếu MỌI bản đều vượt trần thì vẫn chọn bản gần trần nhất, và trong "diem_yeu" phải ghi CHÍNH XÁC cần cắt bao nhiêu ký tự và cắt ở đoạn nào (nêu tên đoạn), vì bước sau sẽ nén theo đúng lời đó.
 - GIỮ NGHIÊN CỨU, CON SỐ, TÊN RIÊNG của bản gốc — đó là nội dung, không phải văn phong. Bản nào lược mất chúng là trừ nặng.
 - KHÔNG CHÉP: trùng nguyên văn trên 45% là gần chép, trừ nặng.
 - Viết bằng <<NGON_NGU>> tự nhiên, không lệch tiếng, không sót lời dẫn.

@@ -165,10 +165,15 @@ class TestLoiNhacVietDaCapNhat:
 
     def test_2b_cham_giu_rang_buoc_KHACH_QUAN(self, nhan, thu_muc):
         """Gỡ luật cứng không có nghĩa là bỏ hết: những thứ ĐO ĐƯỢC và không
-        đổi theo đề tài thì vẫn phải giữ."""
+        đổi theo đề tài thì vẫn phải giữ.
+
+        `ĐỘ DÀI` từng nằm trong danh sách này, và bị bỏ ra ngày 04/09/2026.
+        Lý do: nó KHÔNG phải ràng buộc khách quan của kênh — chủ dự án chịu
+        được 11 tới 17 phút. Đưa nó vào bộ chấm thì một bản hay mà dài thua
+        một bản vừa vặn mà nhạt. Xem `test_do_dai_KHONG_phai_tieu_chi_cham`.
+        """
         c = _doc(thu_muc, "2b-cham.md")
         for manh, vi_sao in (
-                ("ĐỘ DÀI", "trần phút đọc là ràng buộc khách quan"),
                 ("CON SỐ", "cả 3 lượt đều mất sạch số liệu của bản gốc"),
                 ("KHÔNG CHÉP", "remake không phải chép")):
             assert manh in c, "{0}: 2b-cham.md thiếu '{1}' — {2}".format(

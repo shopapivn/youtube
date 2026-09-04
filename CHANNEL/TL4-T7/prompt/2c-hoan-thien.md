@@ -4,10 +4,7 @@ kịch bản dưới đây đã được chọn là bản tốt nhất trong <<S
 - làm mượt câu chữ để đọc thành tiếng nghe tự nhiên, câu ngắn, không trùng ý
 - nhất quán từ đầu tới cuối: một ẩn dụ, một hình ảnh đã dùng thì mọi chỗ nhắc lại phải cùng một hình ảnh đó, không lẫn cái cũ với cái mới
 
-ĐỘ DÀI — tối đa <<CHARS>> ký tự (≈ <<PHUT>> phút đọc). Tự đếm trước khi trả về.
-Bản đang có <<CHARS_DRAFT>> ký tự. Nếu nó dài hơn trần thì việc QUAN TRỌNG NHẤT của bước này là NÉN xuống — cắt phần giải thích lặp, cắt đoạn dẫn dắt, gộp câu; giữ đủ số ý, giữ nghiên cứu và con số. Đừng viết thêm chữ nào khi bản đã vượt trần.
-
-Nếu tiêu đề hứa một con số (6 đặc điểm, 5 điều…) thì ý thứ nhất nên nằm trong khoảng 10% đầu bài — đo bằng tỉ lệ ký tự, không phải một con số cố định. Dẫn nhập dài hơn thế thì cắt bớt: đây là chỗ người xem rời đi nhiều nhất.
+Độ dài khoảng <<CHARS>> ký tự (bản đang có <<CHARS_DRAFT>>).
 
 giữ nguyên cấu trúc, các ý, nghiên cứu, con số và ẩn dụ. không viết lại từ đầu, không thêm ý mới ngoài những gì cần để sửa điểm yếu. viết bằng <<NGON_NGU>>.
 trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét, không tiêu đề, không tạo file, không mô tả việc đã làm, không liệt kê chỗ đã sửa, không đếm ký tự — bản trả về đi thẳng vào máy đọc giọng nói.
