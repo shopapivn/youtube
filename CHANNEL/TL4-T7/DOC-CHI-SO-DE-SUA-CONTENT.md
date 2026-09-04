@@ -94,18 +94,44 @@ Xuyên suốt cũng vậy: ở phút 11, V2 vẫn đang tả cảnh, V3 vẫn đ
 
 ## Bước 4 · Đưa vào lời nhắc, rồi đo lại
 
-Bốn quy tắc trên nằm trong `prompt/2-viet.md` **và** `prompt/2b-cham.md` — lời nhắc đòi
-gì thì bộ chấm phải soi được đúng thứ đó, nếu không cả năm bản mở sai kiểu vẫn được
-chọn một bản.
+Bốn khác biệt trên là **quan sát**, không phải luật. Đã thử biến chúng thành luật trong
+`prompt/2-viet.md` và `prompt/2b-cham.md`, và đo lại thì hỏng — xem "Vì sao đã gỡ" ngay
+dưới. Nay lời nhắc chỉ nêu **mục đích** (giữ người qua mốc 0:30) và đưa **kịch bản gốc
+đã thắng** làm chuẩn đối chiếu, để model tự đọc ra cách giữ người của TỪNG đề tài.
 
-### Hai giả định đã bị chính số liệu bác bỏ
+### Vì sao đã gỡ bộ luật cứng (04/09/2026)
+
+Hai lần nhồi luật vào lời nhắc, hai lần cùng một lỗi: lấy một mẫu nhỏ rồi biến nó thành
+luật cho mọi đề tài.
+
+**Lần một** — "mở bằng vật thể nhìn được, câu 10–20 ký tự, có câu hỏi trước giây 60".
+Rút từ V2 vs V3 hồi 29/08, khi **cả hai** video đều có ảnh bìa yếu (bấm 2,8% và 2,1%),
+tức chỉ hút người đã sẵn tâm thế nên họ chịu ngồi nghe tả cảnh. Ảnh bìa chuẩn mobile
+(04/09: 8,86% và 13,43%) kéo thêm người tò mò, và luật ấy lập tức bị hiểu thành **11
+giây tả tĩnh vật**.
+
+**Lần hai** — bốn nhịp bắt buộc, rút từ ba kịch bản đối thủ đã thắng. Đo lại chính ba
+kịch bản ấy: **hai trong ba mở bằng tả cảnh** — đúng thứ luật lần một trừ nặng nhất; và
+đoạn mở của họ dài **~240 ký tự** trong khi luật ép 110–150, tức ép mình viết **ngắn hơn
+bản đã thắng**.
+
+Hậu quả đo trên chính kênh, cùng cỡ mẫu 16–20 người xem: V2 (lời nhắc còn gọn) giữ chân
+**59%**; V5 và V6 (lời nhắc đã nhồi) còn **32%** và **26%**. Cơ chế: viết nhiều bản rồi
+chọn chỉ có tác dụng khi các bản **khác nhau** — lời nhắc nhồi chặt thì cả ba bản ra
+cùng một khuôn, hết cái để chọn.
+
+### Ba giả định đã bị chính số liệu bác bỏ
 
 **"Ý thứ nhất càng sớm càng giữ chân tốt"** — sai. V2 (tốt nhất) để ý 1 ở **15% bài**,
 V3 (tệ nhất) ở **9%**. Vào sớm không cứu được nếu mở đầu trừu tượng.
 
-**"Câu dài 40–50 ký tự cho tự nhiên"** — sai, và đã ép ngược vào lời nhắc một lượt.
-Video thắng viết câu **29 ký tự**. Đủ độ dài bài bằng **nhiều câu hơn**, không phải câu
-dài hơn.
+**"Câu dài 40–50 ký tự cho tự nhiên"** — sai. Video thắng viết câu **29 ký tự**. Đủ độ
+dài bài bằng **nhiều câu hơn**, không phải câu dài hơn.
+
+**"Vậy thì ép câu 29 ký tự"** — cũng sai, và đây là cái bẫy ngược. Video **tệ nhất** viết
+câu **30 ký tự**: chênh đúng một ký tự. Con số ấy không phân biệt được hai bên, nó chỉ là
+đặc điểm giọng của kênh. Ép nó lên mọi đề tài thì bộ chấm hết là bộ lọc, nó thành cái
+khuôn.
 
 ### AI không bám được số ký tự tiếng Nhật
 

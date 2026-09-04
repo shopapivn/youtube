@@ -3,13 +3,13 @@
 Sửa các điểm yếu: <<DIEM_YEU>>
 Giữ và phát huy các điểm mạnh: <<DIEM_MANH>>
 
-Viết bằng <<NGON_NGU>>. Độ dài: 110–150 ký tự.
+Viết bằng <<NGON_NGU>>. Độ dài xấp xỉ đoạn mở của bản gốc.
 Câu cuối phải dẫn được vào đoạn thân bài bên dưới.
 Chỉ trả về lời đọc, không ghi chú.
 
-đoạn mở đầu của bản gốc đã viral (để lấy chất liệu nếu cần):
+kịch bản gốc đã viral (để đối chiếu và lấy chất liệu nếu cần):
 
-<<HOOK_GOC>>
+<<COMPETITOR_TRANSCRIPT>>
 
 đoạn thân bài nối ngay sau:
 

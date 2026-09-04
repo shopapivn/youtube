@@ -2523,7 +2523,7 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     so_hook = max(0, int(getattr(k, "so_ban_hook", 0) or 0))
     khuon_hook = k.prompt.get("2d-hook.md", "")
     if so_hook > 1 and khuon_hook.strip():
-        from .viet_nhieu_ban import thay_hook  # noqa: PLC0415
+        from .viet_nhieu_ban import tach_hook, thay_hook  # noqa: PLC0415
 
         # Mỗi bản một khoá riêng — chạy tiếp lượt đứt giữa chừng thì nhặt đúng
         # bản đã viết, không trả tiền hai lần. Đếm bằng biến đóng vì
@@ -2558,8 +2558,16 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         try:
             ban_moi, da_thay, ghi_hook = thay_hook(
                 goi_viet_hook, goi_cham_hook, ban_chon,
-                # Đoạn mở của bản gốc đã thắng — chuẩn đối chiếu nhịp.
-                (tu_lieu or "")[:600],
+                # ═══ ĐƯA NGUYÊN KỊCH BẢN GỐC, KHÔNG CẮT SẴN ═══
+                #
+                # Từng cắt lấy "đoạn mở của bản gốc" bằng bộ tách từ khoá rồi
+                # mới đưa cho AI. Cắt bằng từ khoá là cách thô: bản gốc có thể
+                # không dùng dấu nào trong danh sách, và cắt sai thì chuẩn đối
+                # chiếu sai theo — hook viết ra bắt chước một đoạn cụt.
+                #
+                # Model đủ thông minh để tự nhìn ra bản gốc mở đầu thế nào.
+                # Đưa nguyên bài, để nó tự đọc.
+                tu_lieu or "",
                 so_ban=so_hook, khuon_viet=khuon_hook,
                 khuon_cham=k.prompt.get("2e-cham-hook.md", ""),
                 # Vá hook chỉ chạy khi kênh bật `hoan_thien` — cùng cờ với

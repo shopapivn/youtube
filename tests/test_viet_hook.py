@@ -61,108 +61,145 @@ def _doc(thu_muc, ten):
     return io.open(p, encoding="utf-8").read() if os.path.exists(p) else ""
 
 
-# ── 1. Lời nhắc và bộ chấm phải đòi cùng bốn nhịp ───────────────────────────
+# ── 1. Lời nhắc phải NÊU MỤC TIÊU, không đóng khung cách làm ────────────────
+#
+# ═══ VÌ SAO GỠ BỘ LUẬT CỨNG (04/09/2026, cùng ngày viết ra nó) ═══
+#
+# Bộ chấm hook từng đóng khung rất chặt: "câu đầu phải hỏi thẳng người xem",
+# "mở bằng chuỗi tả cảnh (đèn, mưa, tách trà) là trừ nặng nhất", "nhát đâm
+# trước giây 25", "hook 110–150 ký tự".
+#
+# Đo lại đoạn mở của chính ba video đối thủ ĐÃ THẮNG thì luật ấy tự mâu thuẫn:
+#
+#   ĐT-A 一人で旅行  : mở bằng CẢNH sân ga sáng sớm, cầm một tấm vé
+#   ĐT-B 休日に出ない: mở bằng CẢNH sáng ngày nghỉ, không đặt chuông
+#   ĐT-C 子供時代    : mở bằng câu hỏi thẳng
+#
+# HAI TRONG BA video thắng mở bằng tả cảnh — đúng thứ luật ghi "trừ nặng
+# nhất". Và đoạn mở của chúng dài ~240 ký tự, trong khi luật ép 110–150: tức
+# ép hook của mình NGẮN HƠN bản đã thắng.
+#
+# Chủ dự án, 04/09/2026: *"những cái cứng, những thứ đóng khung không ổn…
+# chỉ cần cho AI nó biết mục tiêu, giữ chân người xem, khán giả thấy hay…
+# template sẽ làm nhiều kịch bản nên việc đóng khung sẽ làm mọi thứ sai"*.
+#
+# Nay: lời nhắc nêu MỤC TIÊU (giữ người qua giây 30) và đưa BẢN GỐC làm chuẩn
+# đối chiếu, để model tự đọc xem bản đã thắng làm gì. Ràng buộc cứng chỉ còn
+# thứ khách quan: độ dài, không chép, đúng tiếng.
 
 @pytest.mark.parametrize("nhan,thu_muc", KENH)
 class TestLoiNhacHook:
-    def test_co_du_hai_tep(self, nhan, thu_muc):
-        """Thiếu một trong hai thì bước hook tự tắt trong im lặng."""
-        assert _doc(thu_muc, "2d-hook.md").strip(), (
-            "{0}: thiếu 2d-hook.md — bước viết hook sẽ tự tắt".format(nhan))
-        assert _doc(thu_muc, "2e-cham-hook.md").strip(), (
-            "{0}: thiếu 2e-cham-hook.md — hook viết ra không ai chấm".format(nhan))
+    def test_co_du_ba_tep(self, nhan, thu_muc):
+        """Thiếu tệp nào thì bước đó tự tắt trong im lặng."""
+        for ten, vi_sao in (
+                ("2d-hook.md", "bước viết hook sẽ tự tắt"),
+                ("2e-cham-hook.md", "hook viết ra không ai chấm"),
+                ("2f-va-hook.md", "lời chê của bộ chấm rơi vào hư không")):
+            assert _doc(thu_muc, ten).strip(), "{0}: thiếu {1} — {2}".format(
+                nhan, ten, vi_sao)
 
     def test_loi_nhac_hook_phai_GON(self, nhan, thu_muc):
-        """Cùng nguyên tắc với `2-viet.md` (commit 319bee3 của chủ dự án):
-        *"Prompt càng phức tạp càng cứng và càng dễ fail"*.
+        """Bản gốc đã thắng CHÍNH LÀ đặc tả — cho model xem nó là đủ."""
+        for ten in ("2d-hook.md", "2f-va-hook.md"):
+            v = _doc(thu_muc, ten)
+            assert len(v) <= 900, "{0}: {1} phình lên {2} ký tự".format(
+                nhan, ten, len(v))
 
-        Bản gốc đã thắng CHÍNH LÀ đặc tả của hook — đưa đoạn mở của nó cho model
-        xem rồi bảo viết một bản tương tự, đúng tinh thần remake. Bốn nhịp là
-        thứ để BỘ CHẤM lọc, không phải thứ để ép lúc viết: viết bốn bản mà cả
-        bốn bị ép cùng khuôn thì không còn gì để chọn.
-        """
-        v = _doc(thu_muc, "2d-hook.md")
-        assert len(v) <= 900, (
-            "{0}: 2d-hook.md phình lên {1} ký tự — bốn nhịp phải nằm ở "
-            "2e-cham-hook.md".format(nhan, len(v)))
+    def test_dua_NGUYEN_ban_goc_cho_ai_tu_doc(self, nhan, thu_muc):
+        """Từng cắt sẵn "đoạn mở của bản gốc" bằng bộ tách từ khoá rồi mới đưa
+        cho AI. Cắt bằng từ khoá là cách thô: bản gốc có thể không dùng dấu nào
+        trong danh sách, cắt sai thì chuẩn đối chiếu sai theo."""
+        for ten in ("2d-hook.md", "2e-cham-hook.md", "2f-va-hook.md"):
+            v = _doc(thu_muc, ten)
+            assert "<<COMPETITOR_TRANSCRIPT>>" in v, (
+                "{0}: {1} phải nhận NGUYÊN kịch bản gốc, không phải đoạn cắt "
+                "sẵn".format(nhan, ten))
 
-    def test_hook_co_du_o_can_thiet(self, nhan, thu_muc):
-        """Ba ô này thiếu thì hook viết mù: không biết ảnh bìa hứa gì, không có
-        chuẩn nhịp của bản gốc, không biết phải dẫn vào đâu."""
+    def test_hook_biet_anh_bia_va_than_bai(self, nhan, thu_muc):
+        """Thiếu hai ô này thì hook viết mù: không biết ảnh bìa hứa gì với
+        người xem, và không biết phải dẫn vào đâu."""
         v = _doc(thu_muc, "2d-hook.md")
-        for o in ("<<THUMB>>", "<<HOOK_GOC>>", "<<THAN_BAI>>"):
+        for o in ("<<THUMB>>", "<<THAN_BAI>>"):
             assert o in v, "{0}: 2d-hook.md thiếu ô {1}".format(nhan, o)
-        assert "110–150" in v, (
-            "{0}: phải nêu khoảng độ dài hook (110–150 ký tự ≈ 30 giây)"
+
+    def test_cham_neu_MUC_TIEU_chu_khong_dong_khung(self, nhan, thu_muc):
+        """Bộ chấm phải nói mục tiêu và lấy bản gốc làm chuẩn, để model tự
+        nhận ra cách giữ người của TỪNG đề tài."""
+        c = _doc(thu_muc, "2e-cham-hook.md")
+        assert "giây thứ 30" in c or "0:30" in c, (
+            "{0}: bộ chấm hook phải nêu mục tiêu giữ người qua giây 30"
             .format(nhan))
+        assert "bản gốc" in c, (
+            "{0}: bộ chấm hook phải lấy bản gốc làm chuẩn đối chiếu".format(nhan))
+        assert "khuôn có sẵn" in c, (
+            "{0}: bộ chấm phải nói rõ ĐỪNG chấm theo khuôn có sẵn — mỗi đề tài "
+            "giữ người một kiểu".format(nhan))
 
-    def test_nhat_dam_bat_buoc_o_bo_cham(self, nhan, thu_muc):
-        """Nhịp quyết định: 3/3 đối thủ thắng có, video tệ nhất của kênh không.
-        Đòi ở BỘ CHẤM để nó lọc, chứ không ép lúc viết."""
-        c = _doc(thu_muc, "2e-cham-hook.md")
-        assert "NHÁT ĐÂM" in c, (
-            "{0}: bộ chấm hook phải chấm nhịp nhát đâm".format(nhan))
-        assert "胸に引っかかる" in c or "トゲが刺さる" in c, (
-            "{0}: phải nêu ví dụ cơn đau đặt trong cơ thể lấy từ đối thủ"
-            .format(nhan))
-
-    def test_cham_phat_mo_bang_ta_canh(self, nhan, thu_muc):
-        """Luật cũ 'mở bằng vật thể' bị hiểu thành 11 giây tả tĩnh vật —
-        bộ chấm phải phạt đúng lỗi đó."""
-        c = _doc(thu_muc, "2e-cham-hook.md")
-        assert "tả cảnh" in c, (
-            "{0}: bộ chấm phải phạt bản mở bằng chuỗi tả cảnh".format(nhan))
-
-    def test_cam_hua_hen_tu_ngoai(self, nhan, thu_muc):
-        """Bálint 2017: trì hoãn phi-truyện làm GIẢM mức đắm chìm; căng thẳng
-        phải nằm trong đời người xem."""
-        c = _doc(thu_muc, "2e-cham-hook.md")
-        assert "xem đến cuối" in c, (
-            "{0}: bộ chấm phải phạt lối hứa hẹn từ ngoài".format(nhan))
-
-    def test_cham_soi_dung_bon_nhip(self, nhan, thu_muc):
-        """Lời nhắc đòi bốn nhịp thì bộ chấm phải soi được đúng bốn nhịp đó,
-        nếu không mọi bản mở sai kiểu vẫn được chọn một bản."""
-        c = _doc(thu_muc, "2e-cham-hook.md")
-        for manh in ("HỎI THẲNG NGƯỜI XEM", "NGƯỜI KHÁC XUẤT HIỆN",
-                     "NHÁT ĐÂM", "TRẢ LỜI HỨA CỦA ẢNH BÌA"):
-            assert manh in c, (
-                "{0}: bộ chấm hook thiếu tiêu chí '{1}'".format(nhan, manh))
-
-    def test_cham_phat_ban_de_chiu(self, nhan, thu_muc):
-        """Không phạt thì bản êm ru vẫn thắng — đúng lỗi của lượt 0005."""
-        c = _doc(thu_muc, "2e-cham-hook.md")
-        assert "DỄ CHỊU" in c and "TỐI ĐA 4 điểm" in c, (
-            "{0}: bộ chấm phải phạt bản thay nhát đâm bằng cảm giác dễ chịu"
-            .format(nhan))
-
-    def test_cham_doi_khop_anh_bia(self, nhan, thu_muc):
-        """Người xem bấm vào vì dòng chữ trên ảnh bìa — hook phải chạm tới nó."""
-        c = _doc(thu_muc, "2e-cham-hook.md")
-        assert "<<THUMB>>" in c, (
-            "{0}: bộ chấm hook phải biết chữ trên ảnh bìa mới chấm được việc "
-            "khớp lời hứa".format(nhan))
+    def test_KHONG_con_luat_cung_bi_bac_bo(self, nhan, thu_muc):
+        """Ba luật này bị chính đoạn mở của đối thủ đã thắng bác bỏ."""
+        for ten in ("2d-hook.md", "2e-cham-hook.md", "2f-va-hook.md",
+                    "2b-cham.md"):
+            v = _doc(thu_muc, ten)
+            assert "tách trà" not in v, (
+                "{0}/{1}: còn cấm mở bằng tả cảnh — mà 2/3 video đối thủ THẮNG "
+                "mở bằng tả cảnh".format(nhan, ten))
+            assert "110–150" not in v, (
+                "{0}/{1}: còn ép hook 110–150 ký tự — đoạn mở của đối thủ đã "
+                "thắng dài ~240".format(nhan, ten))
+            assert "NHÁT ĐÂM" not in v, (
+                "{0}/{1}: còn đóng khung 'nhát đâm' rút từ một ca hỏng"
+                .format(nhan, ten))
 
 
-# ── 2. Lời nhắc viết cả bài phải bỏ luật cũ đã bị bác bỏ ─────────────────────
+# ── 2. Lời nhắc viết cả bài cũng phải gọn và nêu mục tiêu ────────────────────
 
 @pytest.mark.parametrize("nhan,thu_muc", KENH)
 class TestLoiNhacVietDaCapNhat:
-    def test_bo_luat_mo_bang_vat_the(self, nhan, thu_muc):
-        """Luật cũ 'MỞ BẰNG VẬT THỂ NHÌN ĐƯỢC' rút từ V2 vs V3 — cả hai đều có
-        ảnh bìa yếu (2,8% và 2,1%). Với ảnh bìa mới (8,9–13,4%) nó bị hiểu
-        thành 11 giây tả tĩnh vật trước khi chạm tới người xem."""
-        v = _doc(thu_muc, "2-viet.md")
-        assert "MỞ BẰNG VẬT THỂ NHÌN ĐƯỢC" not in v, (
-            "{0}: 2-viet.md còn dạy luật cũ 'mở bằng vật thể' — luật này đã bị "
-            "thay bằng bốn nhịp".format(nhan))
-
-    def test_2b_cham_theo_bon_nhip(self, nhan, thu_muc):
+    def test_2b_cham_lay_ban_goc_lam_chuan(self, nhan, thu_muc):
         c = _doc(thu_muc, "2b-cham.md")
-        assert "NHÁT ĐÂM" in c, (
-            "{0}: 2b-cham.md phải chấm nhịp nhát đâm".format(nhan))
-        assert "VẬT THỂ NHÌN ĐƯỢC" not in c, (
-            "{0}: 2b-cham.md còn chấm theo luật cũ".format(nhan))
+        assert "CHUẨN ĐỂ ĐỐI CHIẾU LÀ BẢN GỐC" in c, (
+            "{0}: 2b-cham.md phải lấy bản gốc làm chuẩn, không phải một khuôn "
+            "tự chế".format(nhan))
+        assert "khuôn có sẵn" in c, (
+            "{0}: 2b-cham.md phải nói rõ đừng chấm theo khuôn có sẵn".format(nhan))
+
+    def test_2b_cham_giu_rang_buoc_KHACH_QUAN(self, nhan, thu_muc):
+        """Gỡ luật cứng không có nghĩa là bỏ hết: những thứ ĐO ĐƯỢC và không
+        đổi theo đề tài thì vẫn phải giữ."""
+        c = _doc(thu_muc, "2b-cham.md")
+        for manh, vi_sao in (
+                ("ĐỘ DÀI", "trần phút đọc là ràng buộc khách quan"),
+                ("CON SỐ", "cả 3 lượt đều mất sạch số liệu của bản gốc"),
+                ("KHÔNG CHÉP", "remake không phải chép")):
+            assert manh in c, "{0}: 2b-cham.md thiếu '{1}' — {2}".format(
+                nhan, manh, vi_sao)
+
+
+def test_MAU_GON_cung_da_go_luat_cung():
+    """`_MAU-GON` là bản mẫu dùng để khai sinh kênh mới — sửa xong hai kênh kia
+    mà quên nó thì mọi kênh sinh sau lại mang nguyên luật cũ, và sẽ không ai
+    phát hiện cho tới lúc đo lại đường giữ chân.
+
+    ═══ VÌ SAO CHỈ QUÉT BA THƯ MỤC NÀY, KHÔNG QUÉT CẢ `CHANNEL/` ═══
+
+    Bài này thoạt đầu quét mọi thư mục `prompt/`, và bắt ngay
+    `CHANNEL/hoathinh-3d/prompt/2b-cham.md` — kênh hoạt hình cho trẻ em, cũng
+    có câu "mở đầu tả cảnh dài, vòng vo là trừ nặng nhất".
+
+    Nhưng bằng chứng gỡ luật là ba kịch bản đối thủ **ngách tâm lý**. Nó không
+    nói gì về chuyện kể cho trẻ con. Ép luật của ngách này sang ngách kia chính
+    là cái lỗi mà cả đợt sửa này đang gỡ — chỉ khác chiều. Kênh ngách khác tự
+    đo, tự chỉnh.
+    """
+    for ten_kenh in ("_MAU-GON",):
+        thu_muc = os.path.join(GOC, "CHANNEL", ten_kenh, "prompt")
+        v = _doc(thu_muc, "2b-cham.md")
+        assert v.strip(), "{0}: thiếu 2b-cham.md".format(ten_kenh)
+        assert "tả cảnh dài" not in v, (
+            "{0}/2b-cham.md còn trừ nặng bản mở bằng tả cảnh — mà 2/3 video "
+            "đối thủ THẮNG mở bằng tả cảnh".format(ten_kenh))
+        assert "CHUẨN ĐỂ ĐỐI CHIẾU LÀ BẢN GỐC" in v, (
+            "{0}/2b-cham.md phải lấy bản gốc đã thắng làm chuẩn".format(ten_kenh))
 
 
 # ── 3. Chỗ cắt hook ─────────────────────────────────────────────────────────

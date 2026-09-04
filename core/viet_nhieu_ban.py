@@ -1,4 +1,4 @@
-"""Viết nhiều bản rồi chấm chọn một — lõi dùng chung cho tab Tự động và tab Viết kịch bản.
+﻿"""Viết nhiều bản rồi chấm chọn một — lõi dùng chung cho tab Tự động và tab Viết kịch bản.
 
 Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các lần tức là
 chọn bản tốt nhất ok nhất khi viết ví dụ 3 lần chẳng hạn"* — rồi *"tiêu chí
@@ -361,9 +361,17 @@ TRAN_HOOK = 900
 #: 「窓の外では、静かな雨の音。」 khớp ở ký tự 16, kéo cả hàm rơi về đếm ký tự.
 DAU_Y_DAU = ("一つ目", "1つ目", "１つ目", "ひとつ目", "まず", "最初に", "さて、")
 
-#: Hook mới được nhận trong khoảng này. Lời nhắc đòi 110–150; nới hai đầu để
-#: không vứt một bản chỉ vì lệch vài ký tự, nhưng vẫn chặn bản cụt/bản tràn.
-HOOK_MIN, HOOK_MAX = 80, 260
+#: Rào chắn độ dài hook — CHẶN BẢN DỊ DẠNG, không phải ép một khuôn.
+#:
+#: ⚠ Từng đặt cứng 110–150 ký tự, và đó là sai: đo lại đoạn mở của ba video
+#: đối thủ ĐÃ THẮNG thì chúng dài ~240 ký tự. Con số cứng ấy bắt hook của mình
+#: phải NGẮN HƠN bản đã thắng. Nay đo tương đối: nhận 0,5–1,6 lần độ dài đoạn
+#: mở của chính bản gốc đang remake, mỗi video một mốc riêng.
+#:
+#: Hai số dưới chỉ còn là rào sàn/trần tuyệt đối để bắt bản cụt hoặc bản tràn
+#: khi không biết độ dài bản gốc.
+HOOK_MIN, HOOK_MAX = 60, 600
+HOOK_TI_LE_MIN, HOOK_TI_LE_MAX = 0.5, 1.6
 
 #: Cả bài sau khi thay hook không được lệch quá ngần này so với trước khi thay
 #: — cùng nết rào chắn với `hoan_thien_ban`: một bước sửa không bao giờ được
@@ -406,18 +414,28 @@ def tach_hook(ban: str, dai_hook: int = DAI_HOOK,
     return (ban or "")[:i].strip(), (ban or "")[i:].lstrip()
 
 
-def hook_dung_duoc(hook: str, than: str, ban_cu: str) -> Tuple[bool, str]:
+def hook_dung_duoc(hook: str, than: str, ban_cu: str,
+                   dai_goc: int = 0) -> Tuple[bool, str]:
     """Hook mới có dùng được không — trả `(được, lý do nếu không)`.
 
-    Bốn cửa, cùng nết với `hoan_thien_ban`: một bước sửa chỉ được phép làm bài
-    tốt lên, không bao giờ được phép làm vỡ bài.
+    `dai_goc` là độ dài đoạn mở của BẢN GỐC đang remake; có thì đo tương đối
+    theo nó, không có thì rơi về sàn/trần tuyệt đối. Mọi cửa ở đây chỉ để bắt
+    bản dị dạng — bản hay hay dở là việc của bộ chấm.
     """
     h = (hook or "").strip()
     if not h:
         return False, "hook rỗng"
-    if not (HOOK_MIN <= len(h) <= HOOK_MAX):
-        return False, "hook {0} ký tự, ngoài khoảng {1}–{2}".format(
-            len(h), HOOK_MIN, HOOK_MAX)
+    # Chỉ đo tương đối khi bản gốc đủ dài để coi là một đoạn mở thật. Gốc quá
+    # ngắn (cắt hỏng, hoặc nơi gọi truyền tạm) thì tỉ lệ ra một khoảng vô
+    # nghĩa — trần còn bé hơn sàn và MỌI hook đều bị loại.
+    if dai_goc >= HOOK_MIN:
+        san = max(HOOK_MIN, int(dai_goc * HOOK_TI_LE_MIN))
+        tran = max(san + 1, min(HOOK_MAX, int(dai_goc * HOOK_TI_LE_MAX)))
+    else:
+        san, tran = HOOK_MIN, HOOK_MAX
+    if not (san <= len(h) <= tran):
+        return False, "hook {0} ký tự, ngoài khoảng {1}–{2} (bản gốc {3})".format(
+            len(h), san, tran, dai_goc or "?")
     if h[-1] not in _HET_CAU and h[-1] not in "」』":
         return False, "hook không kết thúc bằng dấu hết câu"
     moi = len(h) + len(than or "")
@@ -459,9 +477,18 @@ def thay_hook(goi_viet: Callable[[str], str],
         return ban, False, "không tách được thân bài"
 
     o = dict(chung or {})
-    o.update({"HOOK_GOC": hook_goc or "", "HOOK_CU": hook_cu,
-              "THAN_BAI": than[:400]})
+    # `hook_goc` nay là NGUYÊN kịch bản gốc, không phải đoạn mở đã cắt sẵn —
+    # để model tự đọc xem bản đã thắng mở đầu thế nào. Giữ cả hai tên ô cho
+    # lời nhắc cũ khỏi vỡ.
+    o.update({"HOOK_GOC": hook_goc or "", "COMPETITOR_TRANSCRIPT": hook_goc or "",
+              "HOOK_CU": hook_cu, "THAN_BAI": than[:400]})
     loi_nhac = _thay(khuon_viet, o)
+    # Không đặt mốc độ dài: bản gốc đưa nguyên nên không biết đoạn mở của nó
+    # dài bao nhiêu, và cũng KHÔNG NÊN biết — mỗi đề tài mở một kiểu, để bộ
+    # chấm tự đối chiếu với bản gốc nó đang cầm. Rào chắn chỉ còn sàn/trần
+    # tuyệt đối, đủ để bắt bản rỗng hoặc bản tràn.
+    dai_goc = 0
+    muc_tieu = 0
 
     hook: List[str] = []
     for i in range(n):
@@ -484,7 +511,7 @@ def thay_hook(goi_viet: Callable[[str], str],
     # Bỏ trước các bản không qua cửa, để bộ chấm khỏi chọn phải bản hỏng.
     dung: List[str] = []
     for h in hook:
-        ok, vi_sao = hook_dung_duoc(h, than, ban)
+        ok, vi_sao = hook_dung_duoc(h, than, ban, dai_goc)
         if ok:
             dung.append(h)
         else:
@@ -498,7 +525,7 @@ def thay_hook(goi_viet: Callable[[str], str],
         chon, ly_do, diem, bang = cham_va_chon(
             goi_cham if (goi_cham and khuon_cham.strip()) else None,
             dung, hook_goc or "", khuon_cham=khuon_cham, chung=o,
-            muc_tieu=DAI_HOOK, ghi=ghi)
+            muc_tieu=muc_tieu, ghi=ghi)
     hook_chon = dung[chon]
 
     # ═══ VÁ HOOK ĐÃ CHỌN THEO ĐÚNG LỜI CHÊ (thêm 04/09/2026) ═══
@@ -525,14 +552,14 @@ def thay_hook(goi_viet: Callable[[str], str],
         except Exception as loi:  # noqa: BLE001 — vá hỏng thì giữ bản đã chọn
             va, ghi_va = "", " · vá hook hỏng: " + str(loi)[:70]
         if va:
-            ok, vi_sao = hook_dung_duoc(va, than, ban)
+            ok, vi_sao = hook_dung_duoc(va, than, ban, dai_goc)
             if not ok:
                 ghi_va = " · bỏ bản vá hook: " + vi_sao
             else:
                 i_hon, ly_do_so, _d, _b = cham_va_chon(
                     goi_cham if (goi_cham and khuon_cham.strip()) else None,
                     [hook_chon, va], hook_goc or "", khuon_cham=khuon_cham,
-                    chung=o, muc_tieu=DAI_HOOK, ghi=ghi,
+                    chung=o, muc_tieu=muc_tieu, ghi=ghi,
                     ten_ban=("hook chưa vá", "hook đã vá"))
                 if i_hon == 1:
                     hook_chon = va

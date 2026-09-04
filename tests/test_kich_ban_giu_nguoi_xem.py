@@ -85,52 +85,56 @@ class TestLoiNhacViet:
             "viết chỉ giữ ràng buộc CƠ HỌC: tiếng, độ dài sàn/trần, định dạng "
             "trả về.".format(nhan, len(v)))
 
-    def test_do_bang_so_cau(self, nhan, thu_muc):
-        """AI không bám được số ký tự tiếng Nhật — xem ghi chú đầu tệp.
+    def test_cham_khong_ep_KHUON_CAU_CHU(self, nhan, thu_muc):
+        """═══ BỎ NỐT CÁC CON SỐ VỀ CÂU CHỮ (04/09/2026) ═══
 
-        Từ 04/09/2026 tiêu chí này nằm ở BỘ CHẤM: prompt viết chỉ giữ ràng buộc
-        cơ học, mọi thứ thuộc về "viết hay" đều để bộ chấm lọc.
+        Bộ chấm từng ép "câu trung bình ~29 ký tự", rút từ đúng MỘT video giữ
+        chân tốt nhất của kênh. Đối chiếu lại: video tệ nhất viết câu 30 ký tự
+        — chênh một ký tự. Con số ấy không phân biệt được hai bên, nó chỉ là
+        đặc điểm của giọng kênh mà thôi.
+
+        Ép một con số như thế lên MỌI đề tài thì bộ chấm hết là bộ lọc, nó
+        thành cái khuôn. Chủ dự án, 04/09/2026: *"template sẽ làm nhiều kịch
+        bản nên việc đóng khung sẽ làm mọi thứ sai"*.
+
+        Nay bản gốc đã thắng làm chuẩn: nhịp câu của nó là nhịp đúng cho đề tài
+        của nó, và model tự đọc ra được.
         """
         v = _doc(thu_muc, "2b-cham.md")
-        # ═══ CÂU NGẮN, KHÔNG PHẢI CÂU DÀI (sửa 29/08/2026) ═══
-        #
-        # Bài này từng đòi lời nhắc ép câu 40–50 ký tự, để bài khỏi hụt độ dài.
-        # Đo lại trên chính kênh: video giữ chân TỐT NHẤT (28% tới cuối) viết câu
-        # trung bình **29 ký tự**; video tệ nhất (12%) viết 30. Câu dài không phải
-        # thứ phân biệt hai bên — ép 40–50 là ép ngược với video đang thắng.
-        # Đủ độ dài bài bằng NHIỀU CÂU hơn, không phải câu dài hơn.
-        assert "29 ký tự" in v, (
-            "{0}: BỘ CHẤM phải chấm độ dài câu đo trên video giữ chân tốt nhất "
-            "(~29 ký tự) — tiêu chí craft nằm ở bộ chấm".format(nhan))
+        assert "29 ký tự" not in v and "40–50" not in v, (
+            "{0}: 2b-cham.md còn ép độ dài câu bằng con số — mà video giữ chân "
+            "TỐT nhất (29) và TỆ nhất (30) của kênh chỉ chênh nhau 1 ký "
+            "tự".format(nhan))
 
-    def test_60_giay_dau_theo_bon_nhip_do_duoc(self, nhan, thu_muc):
-        """═══ BỘ LUẬT MỞ ĐẦU ĐỔI LẦN HAI (04/09/2026) ═══
+    def test_cham_neu_MUC_TIEU_30_giay_dau(self, nhan, thu_muc):
+        """═══ BỘ LUẬT MỞ ĐẦU ĐỔI LẦN BA — VÀ LẦN NÀY LÀ GỠ (04/09/2026) ═══
 
-        Bốn luật cũ ("mở bằng VẬT THỂ NHÌN ĐƯỢC", "câu 10–20 ký tự", "có CÂU
-        HỎI trước giây 60", "CHƯA GIẢI THÍCH CƠ CHẾ") rút từ V2 vs V3 hồi
-        29/08 — khi CẢ HAI video đều có ảnh bìa yếu (tỉ lệ bấm 2,8% và 2,1%).
-        Ảnh bìa yếu chỉ hút người đã sẵn tâm thế, nên họ chịu ngồi nghe tả cảnh.
+        Lần một: "mở bằng VẬT THỂ NHÌN ĐƯỢC, câu 10–20 ký tự, có CÂU HỎI trước
+        giây 60". Rút từ V2 vs V3 hồi 29/08, khi CẢ HAI video đều có ảnh bìa
+        yếu (2,8% và 2,1%) nên chỉ hút người đã sẵn tâm thế.
 
-        Ảnh bìa chuẩn mobile (04/09: 8,86% và 13,43%) kéo thêm người TÒ MÒ, và
-        luật "mở bằng vật thể" lập tức bị hiểu thành **11 giây tả tĩnh vật**:
-        lượt 0005 mở bằng bốn câu đèn/mưa/trà/điện thoại rồi mãi giây 46,3 mới
-        chạm tới thứ ảnh bìa hứa. Đối thủ cùng đề tài làm xong ở giây 23,4.
+        Lần hai: bốn nhịp bắt buộc (hỏi thẳng → người khác xuất hiện → nhát đâm
+        → trả lời hứa của ảnh bìa), rút từ ba kịch bản đối thủ đã thắng.
 
-        Đo ba kịch bản gốc của đối thủ đã thắng: cả ba cắm một NHÁT ĐÂM ở giây
-        17–40. Đối chiếu chính kênh: video giữ chân tốt nhất có nhát đâm ở giây
-        52 rồi đường giữ chân đứng yên (74% → 72%); video tệ nhất thay bằng câu
-        dễ chịu 「胸のあたりが静かに落ち着いている」 và rơi không phanh.
+        Cả hai lần đều cùng một lỗi: lấy một mẫu nhỏ rồi biến nó thành luật cho
+        mọi đề tài. Đo lại chính ba đối thủ ấy thì hai trong ba mở bằng TẢ CẢNH
+        — đúng thứ luật lần một cấm nặng nhất; và đoạn mở của họ dài ~240 ký tự
+        trong khi luật ép 110–150, tức ép mình viết NGẮN HƠN bản đã thắng.
 
-        Bốn nhịp mới thay bốn luật cũ — và đặt ở BỘ CHẤM, không ở prompt viết
-        (xem `test_loi_nhac_viet_phai_GON`). Chi tiết: `tests/test_viet_hook.py`.
+        Nay bộ chấm chỉ nêu MỤC ĐÍCH (giữ người qua mốc 0:30, ngưỡng chính thức
+        của YouTube là còn ≥50%) và đưa bản gốc làm chuẩn đối chiếu. Ràng buộc
+        cứng chỉ còn thứ đo được và không đổi theo đề tài — xem
+        `test_2b_cham_giu_rang_buoc_KHACH_QUAN` ở `tests/test_viet_hook.py`.
         """
         v = _doc(thu_muc, "2b-cham.md")
-        for manh, vi_sao in (
-                ("HỎI THẲNG NGƯỜI XEM", "nhịp 1 — đối thủ hỏi ngay câu đầu, giây 0"),
-                ("NGƯỜI KHÁC XUẤT HIỆN", "nhịp 2 — 3/3 đối thủ có, giây 11–19"),
-                ("NHÁT ĐÂM", "nhịp 3 — nhịp quyết định, 3/3 đối thủ có ở giây 17–40"),
-                ("TRẢ LỜI HỨA CỦA ẢNH BÌA", "nhịp 4 — lượt 0005 trễ tới giây 46,3")):
-            assert manh in v, "{0}: thiếu '{1}' — {2}".format(nhan, manh, vi_sao)
+        assert "CHUẨN ĐỂ ĐỐI CHIẾU LÀ BẢN GỐC" in v, (
+            "{0}: 2b-cham.md phải lấy bản gốc đã thắng làm chuẩn".format(nhan))
+        assert "0:30" in v or "30–60 GIÂY ĐẦU" in v, (
+            "{0}: 2b-cham.md phải nêu mục tiêu giữ người qua chỗ rớt nhiều "
+            "nhất".format(nhan))
+        assert "khuôn có sẵn" in v, (
+            "{0}: 2b-cham.md phải nói rõ ĐỪNG chấm theo khuôn có sẵn — mỗi đề "
+            "tài giữ người một kiểu".format(nhan))
 
     def test_y_thu_nhat_phai_vao_som(self, nhan, thu_muc):
         """Chỗ chết đo được của kênh là giây 15–60. Tiêu đề hứa N mục thì mục
