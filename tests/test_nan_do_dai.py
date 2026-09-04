@@ -127,7 +127,7 @@ class TestDungDungLuc:
         assert _nan_do_dai(_bc(ai), _Luot(), k, {}, GOC) == GOC
         assert ai.nhan == []
 
-    def test_nguong_dat_la_15_phan_tram(self):
+    def test_nguong_dat_MAC_DINH_la_15_phan_tram(self):
         """Ngưỡng coi là "đạt" — siết 0,25 → 0,15 ngày 29/08/2026.
 
         Bản 2.13.1 nới 0,08 → 0,25 để "thôi gọi API nhiều vô ích". Ý định đúng,
@@ -135,12 +135,36 @@ class TestDungDungLuc:
         viết ra 3.026 ký tự (10,0 phút trên đích 13,0), tool in "độ dài đạt
         (lệch 23%)" rồi bỏ qua vòng nắn — con số mục tiêu mất hết nghĩa.
 
-        0,15 vẫn rộng gần gấp đôi ý định gốc nên không kéo lại cảnh nắn ba
-        vòng, mà đủ chặt để bản hụt hơn một phần bảy bị nắn. Lời nhắc nay đo
-        bằng số câu nên bản viết đã sát đích hơn: phần lớn lượt tốn thêm đúng
-        một vòng.
+        Từ 04/09/2026 đây là MẶC ĐỊNH, kênh nới riêng bằng `chenh_cho_phep`
+        trong `kenh.yaml`. Mặc định phải giữ chặt: kênh nào muốn rộng thì tự
+        khai, chứ nới sẵn cho mọi kênh là lặp lại đúng lỗi của 2.13.1.
         """
         assert CHENH_CHO_PHEP == 0.15
+
+    def test_kenh_duoc_noi_rieng(self):
+        """Mỗi kênh chịu một mức lệch khác nhau — đó là quyết định của người
+        làm kênh, không phải một hằng số chung.
+
+        Chủ dự án về TL4-T7, 04/09/2026: *"về độ dài tao không quá quan trọng
+        trong khoảng từ 10-15 phút"* → kênh khai 0,30. Nhưng kênh hoạt hình
+        trẻ em hay kênh nhạc không vì thế mà bị nới theo.
+        """
+        from core.auto_khau import _chenh_cho_phep
+
+        k = _KenhGia()
+        assert _chenh_cho_phep(k) == CHENH_CHO_PHEP, (
+            "kênh không khai gì thì phải lấy mặc định")
+        k.chenh_cho_phep = 0.30
+        assert _chenh_cho_phep(k) == 0.30
+
+    def test_khai_rong_thi_ban_lech_20_phan_tram_khong_bi_nan(self):
+        """Ca thật: TL4-T7 khai 0,30, bản lệch 20% phải được để yên."""
+        k = _KenhGia()
+        k.chenh_cho_phep = 0.30
+        ai = _AiGia([9999])
+        ban = "あ" * int(k.ky_tu_muc_tieu * 1.20)
+        assert _nan_do_dai(_bc(ai), _Luot(), k, {}, ban) == ban
+        assert ai.nhan == [], "lệch 20% dưới ngưỡng 30% thì không được gọi AI"
 
 
 # ── Tiện ích ────────────────────────────────────────────────────────────────

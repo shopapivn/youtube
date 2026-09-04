@@ -118,6 +118,14 @@ class Kenh:
     #: Số ký tự đọc được trong một phút của tiếng này. Dùng để quy phút → ký tự
     #: cho bước nắn độ dài. Đo từ giọng thật, không đoán.
     ky_tu_moi_phut: int = 900
+    #: Lệch bao nhiêu thì mới gọi bước nắn độ dài. 0 = lấy `CHENH_CHO_PHEP`.
+    #:
+    #: Mỗi kênh chịu được một mức khác nhau, và đó là quyết định của người làm
+    #: kênh chứ không phải một hằng số chung. TL4-T7 khai 0,30 — chủ dự án,
+    #: 04/09/2026: *"về độ dài tao không quá quan trọng trong khoảng từ 10-15
+    #: phút"*; và đo bốn lượt thật thì bước viết đã tự về đích, bước nắn không
+    #: phải chạy lần nào.
+    chenh_cho_phep: float = 0.0
     #: Bám độ dài THEO VIDEO GỐC thay vì theo `phut_muc_tieu`.
     #:
     #: Kênh remake kiểu "gần như giống đối thủ nhất" muốn video dài đúng bằng
@@ -575,6 +583,9 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         giong_van=str(cai.get("giong_van") or ""),
         phut_muc_tieu=_so(cai.get("phut_muc_tieu"), 10.0),
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
+        # Trần 0,5: nới quá đó thì "13 phút" nghĩa là "6,5 tới 19,5" — con số
+        # mục tiêu hết nghĩa, và bước nắn không bao giờ chạy nữa.
+        chenh_cho_phep=min(0.5, max(0.0, _so(cai.get("chenh_cho_phep"), 0.0))),
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
         so_ban_hook=min(6, max(0, int(_so(cai.get("so_ban_hook"), 0)))),

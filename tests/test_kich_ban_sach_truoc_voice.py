@@ -171,6 +171,34 @@ class TestTepDemDiDocPhaiSach:
         for x in RAC:
             assert x not in ra, x
 
+    def test_ra_soat_chay_SAU_buoc_nan_do_dai(self):
+        """═══ THỨ TỰ: VIẾT → NẮN → RÀ SOÁT (đảo lại 04/09/2026) ═══
+
+        `3-sua.md` tách mỗi câu một dòng, chèn thẻ cảm xúc và đặt dấu `---`
+        ngăn phần. Cả ba đều gắn với BẢN CHỮ CỤ THỂ.
+
+        Thứ tự cũ là viết → rà soát → nắn, nên mỗi lần bước nắn chạy là nó
+        viết lại cả bài và thẻ vừa chèn không còn khớp — mã phải vứt bản có
+        thẻ đi (`_bo_tep(TEP_CO_THE)`) và bắt khâu giọng đọc chèn lại từ đầu.
+        Một lượt gọi AI đổ đi, mỗi lần nắn.
+
+        Bài này giữ thứ tự mới. Nó không đỏ khi có ai đảo lại — nó đỏ khi
+        `3-sua.md` chạy TRƯỚC `4-do-dai.md`.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            ai = _AIBan()
+            _chay(d, ai,
+                  # mục tiêu lệch hẳn để chắc chắn bước nắn có chạy
+                  kenh=_kenh(phut_muc_tieu=20))
+        buoc = [x for x in ai.lan if "do-dai" in x or "sua" in x]
+        assert buoc, ai.lan
+        nan = [i for i, x in enumerate(buoc) if "do-dai" in x]
+        sua = [i for i, x in enumerate(buoc) if "sua" in x]
+        assert nan and sua, (nan, sua, buoc)
+        assert max(nan) < min(sua), (
+            "bước rà soát phải chạy SAU mọi vòng nắn — nếu không, thẻ cảm xúc "
+            "và chỗ tách câu bị bước nắn viết đè lên: {0}".format(buoc))
+
     def test_do_dai_do_tren_bai_SACH(self):
         """Ghi chú cũng là ký tự. Đo cả ghi chú thì bước nắn tưởng bài đã đủ
         dài, rồi nó cắt bớt lời đọc thật để bù vào.

@@ -7,7 +7,7 @@ kịch bản dưới đây đã được chọn là bản tốt nhất trong <<S
 ĐỘ DÀI — tối đa <<CHARS>> ký tự (≈ <<PHUT>> phút đọc). Tự đếm trước khi trả về.
 Bản đang có <<CHARS_DRAFT>> ký tự. Nếu nó dài hơn trần thì việc QUAN TRỌNG NHẤT của bước này là NÉN xuống — cắt phần giải thích lặp, cắt đoạn dẫn dắt, gộp câu; giữ đủ số ý, giữ nghiên cứu và con số. Đừng viết thêm chữ nào khi bản đã vượt trần.
 
-Ý THỨ NHẤT phải bắt đầu trong khoảng 400 ký tự đầu tiên. Nếu bản hiện tại dẫn nhập dài hơn thế thì cắt bớt phần mở đầu cho tới khi đạt — đây là chỗ người xem rời đi nhiều nhất.
+Nếu tiêu đề hứa một con số (6 đặc điểm, 5 điều…) thì ý thứ nhất nên nằm trong khoảng 10% đầu bài — đo bằng tỉ lệ ký tự, không phải một con số cố định. Dẫn nhập dài hơn thế thì cắt bớt: đây là chỗ người xem rời đi nhiều nhất.
 
 giữ nguyên cấu trúc, các ý, nghiên cứu, con số và ẩn dụ. không viết lại từ đầu, không thêm ý mới ngoài những gì cần để sửa điểm yếu. viết bằng <<NGON_NGU>>.
 trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét, không tiêu đề, không tạo file, không mô tả việc đã làm, không liệt kê chỗ đã sửa, không đếm ký tự — bản trả về đi thẳng vào máy đọc giọng nói.

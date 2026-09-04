@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 #  KÊNH TL4-T7 — 心理のとまり木 — tâm lý, người sống lệch nhịp
 # ============================================================================
 #  Tool tạo tệp này từ khuôn: ngách “Tâm lý” × bộ vẽ “Trắng trơn, nền đào ấm” × khán giả “Nhật Bản”.
@@ -32,6 +32,12 @@ voice_id: "b34JylakFZPlGS0BnwyY"
 #  (≈3.930 ký tự): AI có nết viết dôi 10–30%, dôi từ 13 vẫn nằm trong 12–15.
 #  Không có bước nắn riêng — chỉ một dòng độ dài trong prompt/2-viet.md.
 phut_muc_tieu: 13
+#  Lệch bao nhiêu thì mới gọi bước nắn độ dài (prompt/4-do-dai.md).
+#  Chủ dự án, 04/09/2026: *"về độ dài tao không quá quan trọng trong khoảng
+#  từ 10-15 phút"*. 0,30 quanh 13 phút = 9,1–16,9 phút — rộng hơn ý đó, nên
+#  bước nắn chỉ còn là lưới cho ca hỏng thật (lượt 0001 ra +93%).
+#  Đo bốn lượt thật: bước viết tự về đích, bước nắn chưa phải chạy lần nào.
+chenh_cho_phep: 0.30
 do_dai_theo_goc: false
 # ── Viết 3 bản rồi chấm chọn một ──────────────────────────────────────────────
 #  Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các lần tức là
@@ -49,7 +55,7 @@ so_ban_nhap: 3
 #  Đo được: bộ chấm cả bài chấm 60 giây đầu chung với thân bài nên bản mở sai
 #  kiểu vẫn thắng nhờ thân bài tốt (đúng chuyện của lượt 0005). Tách riêng thì
 #  hook phải tự thắng. Chạy sau cùng, dùng prompt/2d-hook.md + 2e-cham-hook.md.
-so_ban_hook: 4
+so_ban_hook: 3
 #  Sau khi chọn bản: vá đúng "chỗ dễ rớt" bộ chấm chỉ ra (giữ ≥90% câu, rồi bộ
 #  chấm so lại hai bản — không hơn thì bỏ). Thuê bao nên bật; khách đi ví để false.
 hoan_thien: true

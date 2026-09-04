@@ -123,7 +123,23 @@ TOKEN_CANH = 16384
 #: cảnh nắn ba vòng, nhưng đủ chặt để một bản hụt 23% bị nắn. Và lời nhắc giờ
 #: đo bằng SỐ CÂU (xem prompt/2-viet.md) nên bản viết ra đã sát đích hơn hẳn
 #: — phần lớn lượt chỉ tốn thêm đúng một vòng.
+#:
+#: ═══ ĐÂY LÀ MẶC ĐỊNH, KÊNH ĐƯỢC NỚI RIÊNG (04/09/2026) ═══
+#:
+#: Mỗi kênh chịu được một mức lệch khác nhau, và đó là quyết định của người
+#: làm kênh chứ không phải một hằng số chung. TL4-T7 nới lên 0,30 — chủ dự án:
+#: *"về độ dài tao không quá quan trọng trong khoảng từ 10-15 phút"*, và đo
+#: bốn lượt thật thì bước viết đã tự về đích không cần ai nắn.
+#:
+#: Đặt `chenh_cho_phep` trong `kenh.yaml` để nới; bỏ trống thì lấy số này.
 CHENH_CHO_PHEP = 0.15
+
+
+def _chenh_cho_phep(k: Kenh) -> float:
+    """Mức lệch độ dài kênh này chịu được — của riêng kênh, hoặc mặc định."""
+    rieng = getattr(k, "chenh_cho_phep", 0.0) or 0.0
+    return float(rieng) if rieng > 0 else CHENH_CHO_PHEP
+
 
 #: Nắn nhiều nhất mấy vòng. Ba là đủ: đo thật thì vòng đầu đã kéo được phần
 #: lớn khoảng cách, vòng bốn trở đi chỉ đổi chỗ chữ chứ không đổi độ dài.
@@ -2215,9 +2231,17 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                          .format(so_ban, " và hoàn thiện bản đó"
                                  if getattr(k, "hoan_thien", False) else "")
                          if so_ban > 1 else "viết kịch bản")
-            for ten, nhan in (("2-viet.md", nhan_viet),
-                              ("3-sua.md", "rà soát bản cuối: lệch tiếng, tách "
-                                           "câu, chèn thẻ cảm xúc")):
+            # ═══ NẮN ĐỘ DÀI XEN GIỮA VIẾT VÀ RÀ SOÁT (đảo lại 04/09/2026) ═══
+            #
+            # Trước: viết → rà soát → nắn. Bước rà soát (`3-sua.md`) tách mỗi
+            # câu một dòng và chèn thẻ cảm xúc, rồi bước nắn viết lại cả bài —
+            # thẻ đặt trên bản chữ cũ không còn khớp, nên mã phải VỨT bản có
+            # thẻ đi và bắt khâu giọng đọc chèn lại từ đầu. Tức mỗi lần bước
+            # nắn chạy là công của bước rà soát đổ đi một nửa.
+            #
+            # Nay: viết → NẮN → rà soát. Bước nắn nhận bản chữ liền mạch (thứ
+            # nó dễ nén nhất), và thẻ chỉ được chèn một lần, lên bản cuối cùng.
+            for ten, nhan in (("2-viet.md", nhan_viet),):
                 khuon = k.prompt.get(ten, "")
                 if not khuon.strip():
                     continue
@@ -2247,19 +2271,6 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                     raise RuntimeError("bước “{0}” trả về rỗng".format(nhan))
                 _ghi_chu(nhap, ban_nhap + "\n")
 
-            # ═══ KỊCH BẢN CÓ SẴN THẺ CẢM XÚC THÌ TÁCH LÀM HAI ═══
-            #
-            # Chủ dự án, 24/08/2026: *"kết hợp cái review và cài chèn thẻ cảm
-            # xúc đi… đơn giản hiệu quả để kịch bản ok nhất, đưa vào voice
-            # được luôn"*. Nên bước sửa của kênh có thể trả về bài ĐÃ CÓ THẺ.
-            #
-            # Nhưng `1-kich-ban.txt` còn được khâu phụ đề (ép chữ lên giọng
-            # đọc), khâu ảnh bìa và phép đo độ dài dùng — thẻ lọt vào đó là
-            # `[sighs]` hiện lên màn hình. Nên tách ngay tại đây: bản có thẻ
-            # để riêng cho giọng đọc (`TEP_CO_THE`, khâu giọng đọc tự nhặt,
-            # không gọi AI chèn nữa), bản gỡ thẻ đi tiếp như mọi khi.
-            ban_nhap = _tach_the_cam_xuc(bc, d, ban_nhap)
-
             # ═══ NẮN ĐỘ DÀI: ĐO RỒI NẮN, KHÔNG NẮN MÙ ═══
             #
             # Lượt chạy thật đầu tiên ra 2.933/3.410 ký tự — hụt 14%, tức video
@@ -2272,14 +2283,6 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # Nên: đo, nói chênh lệch cụ thể, nắn, đo lại — tối đa ba vòng.
             truoc_nan = ban_nhap
             ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap, muc_tieu_kt)
-            if ban_nhap != truoc_nan:
-                # Bước sửa có thể đã để lại bản CÓ THẺ (`_tach_the_cam_xuc`),
-                # nhưng thẻ ấy đặt trên bản chữ vừa bị nắn lại — không còn khớp.
-                # Bỏ đi cho rõ; khâu giọng đọc sẽ chèn lại trên bản cuối (nếu
-                # khách bật thẻ), thay vì đọc nhầm một bản đã cũ.
-                from .the_cam_xuc import TEP_CO_THE  # noqa: PLC0415
-
-                _bo_tep(os.path.join(d, TEP_CO_THE))
 
             # ═══ ĐỌC LẠI CHỈ KHI ĐÃ NẮN ═══
             #
@@ -2303,12 +2306,57 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                                 luot.ma_luot)).strip()
                 cuoi = _don_ban(cuoi, k.ngon_ngu)
                 if cuoi and _lech(cuoi, muc_tieu_kt) <= max(
-                        _lech(ban_nhap, muc_tieu_kt), CHENH_CHO_PHEP):
+                        _lech(ban_nhap, muc_tieu_kt), _chenh_cho_phep(k)):
                     ban_nhap = cuoi
                 elif cuoi:
                     bc.ghi("  (bỏ bản đọc lại: nó làm lệch {0:.0%}, bản trước "
                            "lệch {1:.0%})".format(_lech(cuoi, muc_tieu_kt),
                                                   _lech(ban_nhap, muc_tieu_kt)))
+
+            # ═══ RÀ SOÁT CHO GIỌNG ĐỌC — BƯỚC CUỐI, SAU KHI ĐỘ DÀI ĐÃ CHỐT ═══
+            #
+            # `3-sua.md` tách mỗi câu một dòng, chèn thẻ cảm xúc và đặt dấu
+            # `---` ngăn phần. Cả ba thứ đều gắn với BẢN CHỮ CỤ THỂ, nên nó
+            # phải chạy sau khi không còn ai viết lại bài nữa.
+            #
+            # Trước 04/09/2026 nó chạy TRƯỚC bước nắn, và mỗi lần nắn phải vứt
+            # bản có thẻ đi vì thẻ không còn khớp — công của cả một lượt gọi AI
+            # đổ đi. Đặt sau thì thẻ chỉ chèn một lần, lên đúng bản cuối cùng.
+            khuon_sua = k.prompt.get("3-sua.md", "")
+            if khuon_sua.strip():
+                nhap3 = os.path.join(d, "1-nhap-3.txt")
+                da_co3 = _doc_chu(nhap3).strip()
+                if da_co3:
+                    bc.ghi("  rà soát bản cuối — đã có từ lần trước, dùng lại.")
+                    ban_nhap = da_co3
+                else:
+                    bc.kiem_dung()
+                    bc.ghi("  rà soát bản cuối: lệch tiếng, tách câu, chèn thẻ "
+                           "cảm xúc…")
+                    sua = _goi(
+                        bc, _thay(khuon_sua, dict(chung, DRAFT=ban_nhap)),
+                        _khoa_chat(luot, "3-sua.md"),
+                        toi_da_token=_token_viet(len(tu_lieu),
+                                                 muc_tieu_kt)).strip()
+                    sua = _don_ban(sua, k.ngon_ngu)
+                    if not sua:
+                        raise RuntimeError("bước “rà soát bản cuối” trả về rỗng")
+                    ban_nhap = sua
+                    _ghi_chu(nhap3, ban_nhap + "\n")
+
+            # ═══ KỊCH BẢN CÓ SẴN THẺ CẢM XÚC THÌ TÁCH LÀM HAI ═══
+            #
+            # Chủ dự án, 24/08/2026: *"kết hợp cái review và cài chèn thẻ cảm
+            # xúc đi… đơn giản hiệu quả để kịch bản ok nhất, đưa vào voice
+            # được luôn"*. Nên bước rà soát trả về bài ĐÃ CÓ THẺ.
+            #
+            # Nhưng `1-kich-ban.txt` còn được khâu phụ đề (ép chữ lên giọng
+            # đọc), khâu ảnh bìa và phép đo độ dài dùng — thẻ lọt vào đó là
+            # `[sighs]` hiện lên màn hình. Nên tách ngay tại đây: bản có thẻ
+            # để riêng cho giọng đọc (`TEP_CO_THE`, khâu giọng đọc tự nhặt,
+            # không gọi AI chèn nữa), bản gỡ thẻ đi tiếp như mọi khi.
+            ban_nhap = _tach_the_cam_xuc(bc, d, ban_nhap)
+
             # Gỡ dấu markdown TRƯỚC khi ghi: tệp này đi thẳng vào bộ đọc giọng
             # nói, và AI hay in đậm mấy chữ nó cho là quan trọng dù lời nhắc đã
             # dặn xuất dạng txt. Xem `go_dinh_dang`.
@@ -2795,7 +2843,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         #
         # Kiểm tra ngay nếu đọc dòng này khi đang đi tìm lỗi: bước nắn CHỈ chạy
         # khi kênh có tệp `prompt/4-do-dai.md`.
-        if abs(_do_doc(ban_nhap) - muc_tieu) > muc_tieu * CHENH_CHO_PHEP:
+        if abs(_do_doc(ban_nhap) - muc_tieu) > muc_tieu * _chenh_cho_phep(k):
             nhip = int(getattr(k, "ky_tu_moi_phut", 0) or 0)
             bc.ghi("  (bài {0} ký tự ≈ {2} phút, lệch nhắm {1} phút quá 20% — "
                    "kênh không có bước nắn độ dài prompt/4-do-dai.md, giữ "
@@ -2804,7 +2852,8 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         return ban_nhap
 
     dich = muc_tieu
-    duoi, tren = dich * (1 - CHENH_CHO_PHEP), dich * (1 + CHENH_CHO_PHEP)
+    cho_phep = _chenh_cho_phep(k)
+    duoi, tren = dich * (1 - cho_phep), dich * (1 + cho_phep)
     khai = dich                       # lượt đầu khai đúng mục tiêu
     tot_nhat, cach_nhat = ban_nhap, abs(_do_doc(ban_nhap) - dich)
 
