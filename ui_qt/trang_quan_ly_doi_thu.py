@@ -1038,12 +1038,18 @@ class TrangTuyen(QWidget):
                 if i < len(d) and str(d[i]).strip()]
 
     def _tuyen_hien_co(self) -> List:
-        """Danh sách tuyến trong sổ, dạng `TuyenDeXuat` cho khâu gán đọc."""
+        """Danh sách tuyến trong sổ, dạng `TuyenDeXuat` cho khâu gán đọc.
+
+        Tuyến đánh dấu **bỏ** thì không đưa cho khâu gán. Sổ có sẵn trạng thái
+        ấy và `tuyen_noi_dung.danh_sach` vẫn lọc nó, nhưng chỗ này thì không —
+        nên khách bỏ một tuyến rồi mà tool vẫn cứ gán content vào đó, và cách
+        duy nhất để thật sự bỏ là xoá hẳn dòng, tức mất luôn ghi chú vì sao bỏ.
+        """
         o = chi_so_cot(self._cot)
         ra = []
         for dong in self._hang:
             ma = _o(dong, o, "Mã").strip()
-            if not ma:
+            if not ma or _o(dong, o, "Trạng thái").strip() == tn.BO:
                 continue
             ra.append(pt.TuyenDeXuat(
                 ma=ma, ten=_o(dong, o, "Tên tuyến") or ma,

@@ -433,3 +433,52 @@ class TestChotGiuDuChatCuaTep:
         # thật trên máy chủ.
         for truong in ("insight", "trang_thai", "can_gi", "gom"):
             assert '"{0}"'.format(truong) in pt.DE_BAI_CHOT, truong
+
+
+class TestGanDayDocNghiaTruoc:
+    """Lời nhắc gán phải dạy đường đi từ ĐẶC ĐIỂM sang NGƯỜI.
+
+    Chủ dự án, 04/09/2026: *"phải hiểu là tiêu đề đó ý nghĩa là gì dành cho
+    tệp gì — ví dụ nội dung những người thích ở 1 mình là của tệp thích đi
+    ngược số đông, không thích mạng xã hội cũng là tệp ấy"*.
+
+    Phần lớn tiêu đề trong ngách này nêu một đặc điểm. Không dạy bước "ai
+    mang đặc điểm ấy" thì máy gán theo chữ, và ba tiêu đề của CÙNG MỘT người
+    rơi vào ba chỗ khác nhau.
+    """
+
+    def test_co_day_duong_di_tu_dac_diem_sang_nguoi(self):
+        assert "ai mang đặc điểm ấy" in pt.DE_BAI_GAN
+        # Chính ví dụ của chủ, để người sau sửa lời nhắc còn biết vì sao có nó.
+        assert "người thích ở một mình" in pt.DE_BAI_GAN
+        assert "người không dùng mạng xã hội" in pt.DE_BAI_GAN
+
+    def test_co_canh_hang_tu_giup_chung_khong_thuoc_tep_nao(self):
+        # Bốn "tệp" 5/6/7/9 dựng ngày 04/09 hoá ra là chỗ chứa hàng mẹo và
+        # tự-giúp chung. Bắt chúng chọn lại khi chỉ còn 5 tệp chắc: 100%, 80%,
+        # 100% trả về trống — tức chúng không phải một kiểu người nào cả.
+        assert "tự-giúp chung" in pt.DE_BAI_GAN
+
+
+def test_khau_gan_cua_giao_dien_khong_lay_tuyen_da_BO():
+    """Tuyến đánh dấu "bỏ" không được đưa cho khâu gán.
+
+    Sổ có sẵn trạng thái ấy và `tuyen_noi_dung.danh_sach` vẫn lọc nó, nhưng
+    `_tuyen_hien_co` của trang quản lý thì duyệt thẳng mọi dòng — nên khách bỏ
+    một tuyến rồi mà tool vẫn gán content vào đó, và cách duy nhất để thật sự
+    bỏ là xoá hẳn dòng, tức mất luôn ghi chú vì sao bỏ.
+
+    Quét mã nguồn thay vì dựng Qt: bài này chỉ canh đúng một dòng bảo vệ, mà
+    dựng cả trang lên thì tốn hơn nhiều so với thứ nó bảo vệ.
+    """
+    import os
+    import re
+
+    goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(goc, "ui_qt", "trang_quan_ly_doi_thu.py"),
+              encoding="utf-8") as f:
+        ma = f.read()
+    than = re.search(r"def _tuyen_hien_co.*?\n(?=    def )", ma, re.S)
+    assert than, "không tìm thấy _tuyen_hien_co — đổi tên thì sửa cả bài này"
+    assert "tn.BO" in than.group(0), (
+        "_tuyen_hien_co phải bỏ qua tuyến có Trạng thái == tn.BO")
