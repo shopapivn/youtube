@@ -20,7 +20,28 @@ thước dưới đây mỗi thước trả lời một câu khác nhau, và ph�
    thường** — đó đúng là "đột biến" mà chủ dự án hỏi, và nó bắt được video
    cũ vừa được thuật toán moi lên, thứ mà cột `View` không bao giờ chỉ ra.
 
-3. **VƯỢT** — *"video này có hơn hẳn những video khác CỦA CHÍNH KÊNH ĐÓ không?"*
+3. **LỚN** — *"đề tài này có cầu thật không?"*
+   `View` tuyệt đối.
+
+   ═══ VÌ SAO PHẢI CÓ THƯỚC NÀY (thêm 04/09/2026) ═══
+
+   Ba thước còn lại đều là thước **tương đối**: NHANH và BỨT so video với
+   chính nó, VƯỢT so video với kênh của nó. Không thước nào biết video ấy
+   **to hay bé**.
+
+   Hậu quả đo được trên sổ TL4-T7 (1.024 dòng): **41 dòng cùng đúng 49 điểm,
+   view chênh nhau 5.400 lần** — từ 783.000 view xuống 145 view. Vì 72% dòng
+   chưa có lượt quét thứ hai nên NHANH và BỨT (75% trọng số) cùng bằng 0 và
+   hoà nhau, chỉ còn VƯỢT — mà VƯỢT chia cho trung vị của chính kênh nên một
+   video 783.000 view trên kênh lớn và một video 145 view trên kênh tí hon
+   đều ra "gấp 2 lần mức thường của mình", tức bằng điểm nhau.
+
+   Với câu hỏi thật *"remake cái nào"* thì đó là sai hẳn: remake một video
+   783.000 view không phải cùng một canh bạc với remake một video 145 view.
+   Chủ dự án, 04/09/2026, xếp thứ tự tiêu chí: *"đúng tuyến, đúng tệp, insight
+   khán giả — sau đó đến view — sau đó đến thời gian gần"*.
+
+4. **VƯỢT** — *"video này có hơn hẳn những video khác CỦA CHÍNH KÊNH ĐÓ không?"*
    `View` ÷ view trung vị của kênh đăng nó.
 
    Chủ dự án, 03/09/2026: *"content win là content có sự đột biến với view
@@ -41,7 +62,12 @@ thước dưới đây mỗi thước trả lời một câu khác nhau, và ph�
    Chia cho trung vị của CHÍNH kênh ấy còn tự động khử quy mô kênh: kênh to
    hay nhỏ thì "gấp 10 lần mức thường của mình" vẫn là gấp 10 lần.
 
-    Điểm = 100 × (0,45·NHANH + 0,30·BỨT + 0,25·VƯỢT)
+    Điểm = 100 × (0,35·NHANH + 0,25·LỚN + 0,20·BỨT + 0,20·VƯỢT)
+
+LỚN và VƯỢT là hai nửa của cùng một câu hỏi và phải đi cùng nhau: LỚN nói
+"đề tài có cầu", VƯỢT nói "video này giỏi chứ không phải kênh to". Chỉ có
+LỚN thì mọi video của kênh triệu sub leo hết lên đầu; chỉ có VƯỢT thì video
+145 view bằng điểm video 783.000 view.
 
 ═══ VÌ SAO XẾP HẠNG PHẦN TRĂM, KHÔNG PHẢI CHIA CHO MỘT SỐ CỐ ĐỊNH ═══
 
@@ -109,7 +135,7 @@ __all__ = ["TRONG_SO", "Diem", "cham_bang", "hang_phan_tram", "tuoi_ngay"]
 
 #: Trọng số ba thước. Tổng = 1. Thước nào cả lô không có dữ liệu thì trọng số
 #: của nó **chia đều cho các thước còn lại** — xem `cham_bang`.
-TRONG_SO = {"nhanh": 0.45, "but": 0.30, "vuot": 0.25}
+TRONG_SO = {"nhanh": 0.35, "lon": 0.25, "but": 0.20, "vuot": 0.20}
 
 #: Video non hơn ngần này ngày thì KHÔNG tính điểm BỨT.
 #:
@@ -145,10 +171,12 @@ class Diem:
     diem: int = 0
     #: Giá trị thô — để hiện trong lời chú thích.
     nhanh_tho: float = 0.0
+    lon_tho: float = 0.0
     but_tho: float = 0.0
     vuot_tho: float = 0.0
     #: Sau khi quy thành thứ hạng phần trăm 0..1.
     nhanh: float = 0.0
+    lon: float = 0.0
     but: float = 0.0
     vuot: float = 0.0
 
@@ -157,6 +185,9 @@ class Diem:
         phan = []
         if self.nhanh_tho:
             phan.append("đang lên {0:,.0f} view/ngày".format(self.nhanh_tho)
+                        .replace(",", "."))
+        if self.lon_tho:
+            phan.append("tổng {0:,.0f} view".format(self.lon_tho)
                         .replace(",", "."))
         if self.but_tho:
             phan.append("chạy nhanh gấp {0:.1f} lần mức thường của chính nó"
@@ -271,6 +302,7 @@ def cham_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
 
     moc_kenh = _view_trung_vi_tung_kenh(cot, hang)
     nhanh_tho: List[float] = []
+    lon_tho: List[float] = []
     but_tho: List[float] = []
     vuot_tho: List[float] = []
 
@@ -305,10 +337,15 @@ def cham_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
         else:
             but_tho.append(0.0)
 
+        # LỚN — quy mô thật. Không cần trần: đã quy thứ hạng phần trăm nên một
+        # video 5 triệu view chỉ chiếm đúng một bậc trên cùng, không kéo thang.
+        lon_tho.append(float(view))
+
         moc = moc_kenh.get(o_chu(dong, "Kênh").strip(), 0.0)
         vuot_tho.append(min(_TRAN_VUOT, view / moc) if (moc > 0 and view > 0) else 0.0)
 
     p_nhanh = hang_phan_tram(nhanh_tho)
+    p_lon = hang_phan_tram(lon_tho)
     p_but = hang_phan_tram(but_tho)
     p_vuot = hang_phan_tram(vuot_tho)
 
@@ -316,7 +353,8 @@ def cham_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
     # bỏ thì nó đóng góp 0 cho mọi dòng, tức là lặng lẽ nén trần điểm xuống —
     # một sổ chưa quét lần hai sẽ không có dòng nào quá 70 điểm, mà nhìn vào
     # thì tưởng "content ngách này đều tầm thường".
-    co = {"nhanh": any(p_nhanh), "but": any(p_but), "vuot": any(p_vuot)}
+    co = {"nhanh": any(p_nhanh), "lon": any(p_lon),
+          "but": any(p_but), "vuot": any(p_vuot)}
     tong = sum(TRONG_SO[t] for t, v in co.items() if v)
     if tong <= 0:
         return [Diem() for _ in hang]
@@ -325,10 +363,12 @@ def cham_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
     ra: List[Diem] = []
     for i in range(len(hang)):
         diem = 100.0 * (ts["nhanh"] * p_nhanh[i]
+                        + ts["lon"] * p_lon[i]
                         + ts["but"] * p_but[i]
                         + ts["vuot"] * p_vuot[i])
         ra.append(Diem(
             diem=int(round(diem)),
-            nhanh_tho=nhanh_tho[i], but_tho=but_tho[i], vuot_tho=vuot_tho[i],
-            nhanh=p_nhanh[i], but=p_but[i], vuot=p_vuot[i]))
+            nhanh_tho=nhanh_tho[i], lon_tho=lon_tho[i],
+            but_tho=but_tho[i], vuot_tho=vuot_tho[i],
+            nhanh=p_nhanh[i], lon=p_lon[i], but=p_but[i], vuot=p_vuot[i]))
     return ra
