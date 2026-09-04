@@ -198,6 +198,14 @@ KHUON_HOAN_THIEN = (
 #: lại từ đầu, và độ dài không lệch quá 25% so với bản chọn.
 GIU_HOAN_THIEN = 0.6
 
+#: Cửa thứ hai của bước hoàn thiện, đo bằng CHỮ thay vì bằng câu: bao nhiêu
+#: phần chuỗi 10 ký tự của bản mới còn thấy trong bản được chọn.
+#:
+#: Qua MỘT trong hai cửa là đủ. Tách một câu dài thành hai câu ngắn giữ gần
+#: trọn chữ mà mất trọn nhận dạng câu — mà tách câu chính là việc bộ chấm hay
+#: ra lệnh nhất. Bản viết lại từ đầu thì trượt cả hai cửa.
+GIU_CHU_HOAN_THIEN = 0.5
+
 
 def hoan_thien_ban(goi: Callable[[str], str], ban: str, goc: str, *,
                    diem_manh: str = "", diem_yeu: str = "", ngon_ngu: str = "",
@@ -260,15 +268,37 @@ def hoan_thien_ban(goi: Callable[[str], str], ban: str, goc: str, *,
     if chars and len(ban) > chars * 1.2:
         san_duoi = min(san_duoi, chars / max(1, len(ban)) * 0.85)
         san_giu = min(san_giu, 0.35)
-    if giu < san_giu or ti_le > dai_toi_da or ti_le < san_duoi:
-        noi("  (bản hoàn thiện đi quá xa: giữ {0:.0%} câu (sàn {2:.0%}), dài x{1:.2f} "
-            "(sàn x{3:.2f}) — bỏ, dùng bản chọn)".format(giu, ti_le, san_giu, san_duoi))
-        return ban, False, "bỏ bản hoàn thiện: giữ {0:.0%} câu, dài x{1:.2f}".format(
-            giu, ti_le)
-    noi("  đã hoàn thiện: giữ {0:.0%} câu, {1} → {2} ký tự.".format(
-        giu, len(ban), len(moi)))
-    return moi, True, "đã hoàn thiện: giữ {0:.0%} câu, {1} → {2} ký tự".format(
-        giu, len(ban), len(moi))
+
+    # ═══ ĐO BẰNG CHỮ, KHÔNG CHỈ BẰNG CÂU (sửa 04/09/2026) ═══
+    #
+    # `ty_le_giu_cau` đếm câu còn NGUYÊN VĂN. Nhưng bộ chấm thường ra lệnh
+    # *"tách mọi câu dài thành hai ba câu"* — mà tách câu thì giữ gần như trọn
+    # chữ và mất TRỌN nhận dạng câu. Hai yêu cầu đá nhau, và bước hoàn thiện
+    # không bao giờ qua nổi.
+    #
+    # Lượt TL4-T7/0006: bộ chấm đòi cắt đúng 544 ký tự, tách câu dài về 29 ký
+    # tự, viết lại câu hỏi bình luận. Bản hoàn thiện làm đúng thế — nén còn
+    # x0,87 — nhưng chỉ giữ 46% câu nên bị bỏ. Toàn bộ phần sửa mất trắng:
+    # bài giữ nguyên 4.470 ký tự (dôi 14%), câu dài vẫn dài, ý thứ nhất vẫn
+    # nằm ở 23% bài thay vì 18%.
+    #
+    # Rào chắn này sinh ra để chặn "AI viết lại từ đầu" — và câu hỏi đó đo
+    # đúng hơn bằng CHỮ: bản viết lại từ đầu thì trùng chuỗi thấp, còn bản
+    # nén + tách câu vẫn trùng chuỗi rất cao. Nên: qua một trong hai cửa là đủ.
+    noi_dung = trung_nguyen_van(moi, ban)
+    du_cau = giu >= san_giu
+    du_chu = noi_dung >= GIU_CHU_HOAN_THIEN
+    if not (du_cau or du_chu) or ti_le > dai_toi_da or ti_le < san_duoi:
+        noi("  (bản hoàn thiện đi quá xa: giữ {0:.0%} câu (sàn {2:.0%}) · trùng "
+            "chữ {4:.0%} (sàn {5:.0%}) · dài x{1:.2f} (sàn x{3:.2f}) — bỏ, dùng "
+            "bản chọn)".format(giu, ti_le, san_giu, san_duoi, noi_dung,
+                               GIU_CHU_HOAN_THIEN))
+        return ban, False, ("bỏ bản hoàn thiện: giữ {0:.0%} câu, trùng chữ "
+                            "{2:.0%}, dài x{1:.2f}".format(giu, ti_le, noi_dung))
+    noi("  đã hoàn thiện: giữ {0:.0%} câu · trùng chữ {3:.0%}, {1} → {2} ký tự."
+        .format(giu, len(ban), len(moi), noi_dung))
+    return moi, True, ("đã hoàn thiện: giữ {0:.0%} câu, trùng chữ {3:.0%}, "
+                       "{1} → {2} ký tự".format(giu, len(ban), len(moi), noi_dung))
 
 
 def va_cho_de_rot(goi: Callable[[str], str], ban: str, cho_rot: str, goc: str,
@@ -320,7 +350,16 @@ TRAN_HOOK = 900
 
 #: Dấu hiệu vào ý thứ nhất. Cắt ngay TRƯỚC dấu này thì hook mới thay trọn đoạn
 #: mở cũ, không để sót nửa đoạn tả cảnh nối vào hook mới.
-DAU_Y_DAU = ("一つ目", "1つ目", "１つ目", "ひとつ目", "まず、", "最初に")
+#:
+#: ⚠ 「まず」 KHÔNG được kèm dấu phẩy. Lượt 0006 viết 「まず前提となる話から始め
+#: ましょう」 — không có phẩy nên dấu cũ 「まず、」 trượt, chỗ cắt rơi về đếm ký
+#: tự và để sót 24 giây lộ trình cũ dính vào sau hook mới. Chặn "まず" nằm quá
+#: sớm bằng ngưỡng trong `vi_tri_cat_hook` (tối thiểu 60 ký tự / nửa mốc hook),
+#: nên "まず" trong chính câu mở không bị nhận nhầm là ranh giới.
+#:
+#: ⚠ KHÔNG thêm dấu nào hay gặp GIỮA câu. Đã thử 「では、」 và trượt ngay: câu
+#: 「窓の外では、静かな雨の音。」 khớp ở ký tự 16, kéo cả hàm rơi về đếm ký tự.
+DAU_Y_DAU = ("一つ目", "1つ目", "１つ目", "ひとつ目", "まず", "最初に", "さて、")
 
 #: Hook mới được nhận trong khoảng này. Lời nhắc đòi 110–150; nới hai đầu để
 #: không vứt một bản chỉ vì lệch vài ký tự, nhưng vẫn chặn bản cụt/bản tràn.
@@ -345,11 +384,14 @@ def vi_tri_cat_hook(ban: str, dai_hook: int = DAI_HOOK,
     chu = ban or ""
     if not chu.strip():
         return 0
-    dau = min((i for i in (chu.find(d, 0, tran) for d in DAU_Y_DAU) if i > 0),
-              default=-1)
-    # Dấu nằm quá sớm (dưới nửa mốc hook) thì đó không phải ranh giới thật —
-    # thường là chữ "まず" trong chính câu mở. Bỏ, quay về cắt theo số ký tự.
-    if dau >= max(60, dai_hook // 2):
+    # Tìm dấu TỪ NGƯỠNG TRỞ ĐI, không tìm từ đầu rồi mới lọc: dấu nằm quá sớm
+    # là chữ nằm trong chính câu mở, không phải ranh giới. Lọc sau khi đã lấy
+    # `min` thì chỉ MỘT dấu sớm cũng kéo cả hàm rơi về đếm ký tự — lỗi thật đã
+    # xảy ra với 「窓の外では、」 khớp 「では、」 ở ký tự 16.
+    nguong = max(60, dai_hook // 2)
+    dau = min((i for i in (chu.find(d, nguong, tran) for d in DAU_Y_DAU)
+               if i > 0), default=-1)
+    if dau > 0:
         return dau
     for i in range(min(dai_hook, len(chu)), min(len(chu), tran)):
         if chu[i] in _HET_CAU:

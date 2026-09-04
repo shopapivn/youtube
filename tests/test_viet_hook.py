@@ -182,6 +182,16 @@ class TestTachHook:
         assert i >= DAI_HOOK
         assert b[i - 1] == "。", "phải cắt ở ranh giới câu, không cắt giữa câu"
 
+    def test_mau_khong_kem_dau_phay(self):
+        """Lượt 0006 viết 「まず前提となる話から始めましょう」 — không có phẩy.
+        Dấu cũ 「まず、」 trượt, chỗ cắt rơi về đếm ký tự và để SÓT 24 giây lộ
+        trình cũ (kèm câu "xem đến cuối") dính vào sau hook mới."""
+        b = ("友人との集まりより、誰もいない部屋の隅にいる方が呼吸が楽だと感じたとき。" * 3
+             + "まず前提となる話から始めましょう。" + "人の集まりの中にいると消耗します。" * 20)
+        hook, than = tach_hook(b)
+        assert than.startswith("まず前提"), (
+            "phải cắt trọn đoạn mở cũ, không để sót lộ trình dính vào hook mới")
+
     def test_dau_qua_som_thi_bo_qua(self):
         """「まず、」 nằm ngay câu đầu là chữ trong câu, không phải ranh giới."""
         b = "まず、" + "静かな夜です。" * 40
@@ -272,7 +282,41 @@ class TestThayHook:
         assert set(luu) == {0, 1}, "mọi bản phải được ghi ra đĩa để soi lại"
 
 
-# ── 5. Cấu hình kênh ────────────────────────────────────────────────────────
+# ── 5. Bước hoàn thiện: tách câu KHÔNG được tính là "viết lại từ đầu" ───────
+
+class TestRaoChanHoanThien:
+    """Lượt 0006: bộ chấm ra lệnh cắt 544 ký tự + tách mọi câu dài về 29 ký tự.
+    Bản hoàn thiện làm đúng thế (nén x0,87) nhưng chỉ giữ 46% câu nên bị bỏ —
+    mất trắng toàn bộ phần sửa: bài vẫn dôi 14%, câu dài vẫn dài, ý thứ nhất
+    vẫn ở 23% bài. Rào chắn đo bằng CÂU đá nhau với lệnh TÁCH CÂU.
+    """
+
+    def test_tach_cau_van_qua_duoc(self):
+        from core.viet_nhieu_ban import hoan_thien_ban
+
+        # Bản gốc: câu dài. Bản hoàn thiện: đúng chữ ấy, tách đôi mỗi câu.
+        ban = "".join("あなたはとても疲れやすく、そしてよく眠れない人です。" for _ in range(40))
+        moi = "".join("あなたはとても疲れやすい。そしてよく眠れない人です。" for _ in range(40))
+        ra, da, ghi = hoan_thien_ban(
+            lambda _p: moi, ban, "goc", diem_yeu="tách câu dài",
+            khuon="x <<DRAFT>> <<DIEM_YEU>>")
+        assert da is True, (
+            "tách câu giữ gần trọn CHỮ mà mất trọn nhận dạng CÂU — không được "
+            "tính là viết lại từ đầu. Ghi chú: " + ghi)
+        assert ra == moi
+
+    def test_viet_lai_tu_dau_van_bi_chan(self):
+        from core.viet_nhieu_ban import hoan_thien_ban
+
+        ban = "".join("あなたはとても疲れやすく、よく眠れない人です。" for _ in range(40))
+        moi = "".join("今日の天気は晴れで、風がとても心地よいですね。" for _ in range(40))
+        ra, da, _ = hoan_thien_ban(
+            lambda _p: moi, ban, "goc", diem_yeu="sửa",
+            khuon="x <<DRAFT>> <<DIEM_YEU>>")
+        assert da is False and ra == ban, "bản viết lại từ đầu phải bị chặn"
+
+
+# ── 6. Cấu hình kênh ────────────────────────────────────────────────────────
 
 def test_kenh_bat_buoc_hook_va_giam_so_ban():
     """TL4-T7 phải bật bước hook, và số bản cả bài hạ 5 → 3 để dồn chữ sang."""
