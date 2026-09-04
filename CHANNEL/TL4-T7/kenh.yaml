@@ -40,7 +40,16 @@ do_dai_theo_goc: false
 #  để 1. Từng bản và bản chấm nằm trong thư mục lượt: 1-ban-A…E.txt,
 #  1-cham-diem.txt. Tiêu chí chấm: prompt/2b-cham.md (hook, giữ chân, bám gốc,
 #  CTA kéo bình luận — theo mục đích YouTube đề xuất).
-so_ban_nhap: 5
+#  Hạ 5 → 3 ngày 04/09/2026: chữ tiết kiệm được dồn sang bước viết hook riêng.
+#  Ba bản vẫn đủ để chọn lọc; bản thứ tư, thứ năm gần như không đổi kết quả.
+so_ban_nhap: 3
+# ── Viết riêng ĐOẠN MỞ ĐẦU, chấm bằng tiêu chí riêng ─────────────────────────
+#  Chủ dự án, 04/09/2026: *"bước viết hook sẽ riêng và có tiêu chí chấm riêng
+#  cũng viết hook vài lần để chọn bản ok"*.
+#  Đo được: bộ chấm cả bài chấm 60 giây đầu chung với thân bài nên bản mở sai
+#  kiểu vẫn thắng nhờ thân bài tốt (đúng chuyện của lượt 0005). Tách riêng thì
+#  hook phải tự thắng. Chạy sau cùng, dùng prompt/2d-hook.md + 2e-cham-hook.md.
+so_ban_hook: 4
 #  Sau khi chọn bản: vá đúng "chỗ dễ rớt" bộ chấm chỉ ra (giữ ≥90% câu, rồi bộ
 #  chấm so lại hai bản — không hơn thì bỏ). Thuê bao nên bật; khách đi ví để false.
 hoan_thien: true

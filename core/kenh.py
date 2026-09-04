@@ -73,6 +73,11 @@ BUOC_PROMPT = (
     # Chỉ chạy khi kênh bật `hoan_thien`: sửa điểm yếu, phát huy điểm mạnh bộ
     # chấm chỉ ra, làm mượt — rồi bộ chấm so lại, không hơn thì giữ bản chọn.
     ("2c-hoan-thien.md", "Hoàn thiện bản đã chọn: sửa điểm yếu, phát huy điểm mạnh"),
+    # Chỉ chạy khi kênh khai `so_ban_hook` > 1: viết riêng vài đoạn mở, chấm
+    # theo tiêu chí riêng của hook, rồi thay vào bản đã chọn. Chủ dự án,
+    # 04/09/2026: *"bước viết hook sẽ riêng và có tiêu chí chấm riêng"*.
+    ("2d-hook.md", "Viết riêng đoạn mở đầu (hook)"),
+    ("2e-cham-hook.md", "Chấm các đoạn mở, chọn hook tốt nhất"),
     ("3-sua.md", "Rà soát: sửa lệch tiếng, tách câu, chèn thẻ"),
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
@@ -125,6 +130,17 @@ class Kenh:
     #: Cần thêm `prompt/2b-cham.md`; thiếu tệp ấy thì chọn theo số đo (độ dài,
     #: mức trùng nguyên văn).
     so_ban_nhap: int = 1
+    #: ═══ VIẾT RIÊNG ĐOẠN MỞ ĐẦU (HOOK), CHỌN LỌC RIÊNG ═══
+    #:
+    #: Chủ dự án, 04/09/2026: *"bước viết hook sẽ riêng và có tiêu chí chấm
+    #: riêng cũng viết hook vài lần để chọn bản ok"*. Lý do đo được: mở đầu là
+    #: chỗ rớt nhiều nhất, mà bộ chấm cả bài chấm 60 giây đầu chung với thân
+    #: bài nên một bản mở sai kiểu vẫn thắng nhờ thân bài tốt.
+    #:
+    #: Bước này chạy SAU khi đã chọn bản cả bài: viết `so_ban_hook` đoạn mở
+    #: bằng `prompt/2d-hook.md`, chấm bằng `prompt/2e-cham-hook.md`, rồi THAY
+    #: đoạn mở cũ. 0 hoặc 1 = tắt. Thiếu một trong hai tệp lời nhắc cũng tắt.
+    so_ban_hook: int = 0
     #: Cách kể bằng hình cho khâu bảng cảnh + ảnh (chủ dự án 25/08/2026, kênh
     #: truyện cổ tích): "" / "mot_nhan_vat" = đường cũ (một nhân vật cố định
     #: `nv1.png`, lời nhắc `7-canh.md`); "tu_xay" = AI đọc phim, tự dựng dàn
@@ -557,6 +573,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         ky_tu_moi_phut=int(_so(cai.get("ky_tu_moi_phut"), 900)),
         do_dai_theo_goc=bool(cai.get("do_dai_theo_goc", False)),
         so_ban_nhap=min(5, max(1, int(_so(cai.get("so_ban_nhap"), 1)))),
+        so_ban_hook=min(6, max(0, int(_so(cai.get("so_ban_hook"), 0)))),
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
         khung_dau=bool(cai.get("khung_dau", False)),

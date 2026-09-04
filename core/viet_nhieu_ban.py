@@ -25,7 +25,9 @@ __all__ = ["TIEU_CHI_MAC_DINH", "KHUON_CHAM_MAC_DINH", "KHUON_VA",
            "KHUON_HOAN_THIEN", "trung_nguyen_van", "bang_so_do", "cham_va_chon",
            "viet_va_chon", "nhan_ban", "ty_le_giu_cau", "va_cho_de_rot",
            "hoan_thien_ban", "tach_cho_rot", "tach_diem", "GIU_TOI_THIEU",
-           "GIU_HOAN_THIEN"]
+           "GIU_HOAN_THIEN", "thay_hook", "tach_hook", "vi_tri_cat_hook",
+           "hook_dung_duoc", "DAI_HOOK", "TRAN_HOOK", "DAU_Y_DAU",
+           "HOOK_MIN", "HOOK_MAX", "LECH_CHO_PHEP_HOOK"]
 
 #: Tiêu chí chấm mặc định — theo đúng mục đích của chủ dự án: video được
 #: YouTube đề xuất nhờ giữ chân và bình luận.
@@ -280,6 +282,186 @@ def va_cho_de_rot(goi: Callable[[str], str], ban: str, cho_rot: str, goc: str,
             "<<CHO_ROT>>", "<<DIEM_YEU>>"),
         ghi=ghi, giu_toi_thieu=giu_toi_thieu, dai_toi_da=1.35)
     return ban_moi, da, ghi_chu.replace("hoàn thiện", "vá")
+
+
+# ── VIẾT RIÊNG ĐOẠN MỞ ĐẦU (HOOK) ───────────────────────────────────────────
+#
+# ═══ VÌ SAO TÁCH RA MỘT BƯỚC RIÊNG ═══
+#
+# Chủ dự án, 04/09/2026: *"bước viết hook sẽ riêng và có tiêu chí chấm riêng
+# cũng viết hook vài lần để chọn bản ok"*.
+#
+# Lý do đo được: bộ chấm cả bài chấm 60 giây đầu CHUNG với thân bài, nên một
+# bản mở sai kiểu vẫn thắng nhờ thân bài tốt — đúng chuyện đã xảy ra với lượt
+# 0005. Tách riêng thì hook phải tự thắng bằng tiêu chí của hook.
+#
+# ═══ NHỊP ĐO ĐƯỢC TỪ BA VIDEO ĐỐI THỦ ĐÃ THẮNG (04/09/2026) ═══
+#
+# Đối thủ C (nguồn của lượt 0005) trả lời hứa ở giây 23,4; bản của kênh mất
+# 46,3 giây — đúng gấp đôi. Và cả ba đối thủ đều cắm một "nhát đâm" ở giây
+# 17–40 (「胸に引っかかる」「トゲが刺さる」/ lật danh tính), trong khi bản của
+# kênh không có một cảm giác tiêu cực nào trong 38 giây đầu.
+#
+# Đối chiếu chính kênh: video giữ chân TỐT nhất (34,5%) có nhát đâm ở giây 52
+# 「あなたの心は縮こまっていますか」 và đường giữ chân đứng yên ngay sau đó
+# (74% → 72%); video TỆ nhất (19,5%) thay bằng câu dễ chịu 「胸のあたりが静か
+# に落ち着いている」 và rơi không phanh.
+
+#: Mốc cắt giữa đoạn mở và thân bài, tính bằng ký tự.
+#:
+#: Đo trên SRT thật của kênh (lượt 0005): 203 ký tự đầu đọc hết 49,4 giây —
+#: tức đoạn mở chạy ~247 ký tự/phút, chậm hơn mức trung bình cả bài (302) vì
+#: câu ngắn có nhiều khoảng nghỉ. Nhắm trả lời hứa ở giây 30 ⇒ ~125 ký tự;
+#: lấy 150 làm mốc cắt cho có dư.
+DAI_HOOK = 150
+
+#: Trần đi tìm chỗ cắt. Đoạn mở dài hơn thế là bệnh — cắt cứng theo số ký tự.
+TRAN_HOOK = 900
+
+#: Dấu hiệu vào ý thứ nhất. Cắt ngay TRƯỚC dấu này thì hook mới thay trọn đoạn
+#: mở cũ, không để sót nửa đoạn tả cảnh nối vào hook mới.
+DAU_Y_DAU = ("一つ目", "1つ目", "１つ目", "ひとつ目", "まず、", "最初に")
+
+#: Hook mới được nhận trong khoảng này. Lời nhắc đòi 110–150; nới hai đầu để
+#: không vứt một bản chỉ vì lệch vài ký tự, nhưng vẫn chặn bản cụt/bản tràn.
+HOOK_MIN, HOOK_MAX = 80, 260
+
+#: Cả bài sau khi thay hook không được lệch quá ngần này so với trước khi thay
+#: — cùng nết rào chắn với `hoan_thien_ban`: một bước sửa không bao giờ được
+#: phép biến bài thành bài khác.
+LECH_CHO_PHEP_HOOK = 0.25
+
+_HET_CAU = "。！？!?"
+
+
+def vi_tri_cat_hook(ban: str, dai_hook: int = DAI_HOOK,
+                    tran: int = TRAN_HOOK) -> int:
+    """Chỗ cắt giữa đoạn mở và thân bài của `ban`, tính bằng chỉ số ký tự.
+
+    Ưu tiên cắt ngay TRƯỚC dấu vào ý thứ nhất (`DAU_Y_DAU`) — như thế hook mới
+    thay trọn đoạn mở cũ. Không thấy dấu thì cắt ở ranh giới câu đầu tiên từ
+    `dai_hook` trở đi. Cả hai đường đều bị chặn bởi `tran`.
+    """
+    chu = ban or ""
+    if not chu.strip():
+        return 0
+    dau = min((i for i in (chu.find(d, 0, tran) for d in DAU_Y_DAU) if i > 0),
+              default=-1)
+    # Dấu nằm quá sớm (dưới nửa mốc hook) thì đó không phải ranh giới thật —
+    # thường là chữ "まず" trong chính câu mở. Bỏ, quay về cắt theo số ký tự.
+    if dau >= max(60, dai_hook // 2):
+        return dau
+    for i in range(min(dai_hook, len(chu)), min(len(chu), tran)):
+        if chu[i] in _HET_CAU:
+            return i + 1
+    return min(len(chu), tran)
+
+
+def tach_hook(ban: str, dai_hook: int = DAI_HOOK,
+              tran: int = TRAN_HOOK) -> Tuple[str, str]:
+    """Tách `ban` thành `(đoạn mở, thân bài)`."""
+    i = vi_tri_cat_hook(ban, dai_hook, tran)
+    return (ban or "")[:i].strip(), (ban or "")[i:].lstrip()
+
+
+def hook_dung_duoc(hook: str, than: str, ban_cu: str) -> Tuple[bool, str]:
+    """Hook mới có dùng được không — trả `(được, lý do nếu không)`.
+
+    Bốn cửa, cùng nết với `hoan_thien_ban`: một bước sửa chỉ được phép làm bài
+    tốt lên, không bao giờ được phép làm vỡ bài.
+    """
+    h = (hook or "").strip()
+    if not h:
+        return False, "hook rỗng"
+    if not (HOOK_MIN <= len(h) <= HOOK_MAX):
+        return False, "hook {0} ký tự, ngoài khoảng {1}–{2}".format(
+            len(h), HOOK_MIN, HOOK_MAX)
+    if h[-1] not in _HET_CAU and h[-1] not in "」』":
+        return False, "hook không kết thúc bằng dấu hết câu"
+    moi = len(h) + len(than or "")
+    cu = len(ban_cu or "")
+    if cu and abs(moi - cu) / cu > LECH_CHO_PHEP_HOOK:
+        return False, "cả bài lệch {0:+.0%} sau khi thay hook".format(
+            (moi - cu) / cu)
+    return True, ""
+
+
+def thay_hook(goi_viet: Callable[[str], str],
+              goi_cham: Optional[Callable[[str], str]],
+              ban: str, hook_goc: str, *,
+              so_ban: int = 3,
+              khuon_viet: str = "", khuon_cham: str = "",
+              chung: Optional[Dict[str, Any]] = None,
+              ghi: Optional[Callable[[str], None]] = None,
+              luu_ban: Optional[Callable[[int, str], None]] = None,
+              da_co: Optional[Callable[[int], str]] = None,
+              ) -> Tuple[str, bool, str]:
+    """Viết `so_ban` đoạn mở, chấm, thay đoạn mở tốt nhất vào `ban`.
+
+    Trả `(bản sau khi thay, có thay hay không, biên bản)`. Hỏng ở bất kỳ khâu
+    nào cũng trả về `ban` nguyên vẹn — bước này không bao giờ được làm vỡ bài.
+
+    `luu_ban(i, chu)` / `da_co(i)` để nơi gọi ghi từng bản ra đĩa và nhặt lại
+    khi chạy tiếp một lượt đứt giữa chừng.
+    """
+    def noi(dong: str) -> None:
+        if ghi is not None:
+            ghi(dong)
+
+    if not khuon_viet.strip():
+        return ban, False, "không có lời nhắc viết hook"
+    n = max(1, int(so_ban or 1))
+    hook_cu, than = tach_hook(ban)
+    if not than.strip():
+        return ban, False, "không tách được thân bài"
+
+    o = dict(chung or {})
+    o.update({"HOOK_GOC": hook_goc or "", "HOOK_CU": hook_cu,
+              "THAN_BAI": than[:400]})
+    loi_nhac = _thay(khuon_viet, o)
+
+    hook: List[str] = []
+    for i in range(n):
+        cu = (da_co(i) or "").strip() if da_co is not None else ""
+        if cu:
+            noi("  hook {0} — đã có từ lần trước, dùng lại.".format(nhan_ban(i)))
+            hook.append(cu)
+            continue
+        chu = (goi_viet(loi_nhac) or "").strip()
+        if not chu:
+            noi("  (hook {0} trả về rỗng — bỏ)".format(nhan_ban(i)))
+            continue
+        noi("  hook {0}: {1} ký tự.".format(nhan_ban(i), len(chu)))
+        if luu_ban is not None:
+            luu_ban(i, chu)
+        hook.append(chu)
+    if not hook:
+        return ban, False, "không hook nào viết được"
+
+    # Bỏ trước các bản không qua cửa, để bộ chấm khỏi chọn phải bản hỏng.
+    dung: List[str] = []
+    for h in hook:
+        ok, vi_sao = hook_dung_duoc(h, than, ban)
+        if ok:
+            dung.append(h)
+        else:
+            noi("  (bỏ một hook: {0})".format(vi_sao))
+    if not dung:
+        return ban, False, "mọi hook đều không qua rào chắn"
+
+    if len(dung) == 1:
+        chon, ly_do, diem, bang = 0, "chỉ còn một hook qua rào chắn", {}, ""
+    else:
+        chon, ly_do, diem, bang = cham_va_chon(
+            goi_cham if (goi_cham and khuon_cham.strip()) else None,
+            dung, hook_goc or "", khuon_cham=khuon_cham, chung=o,
+            muc_tieu=DAI_HOOK, ghi=ghi)
+    moi = dung[chon] + "\n\n" + than
+    bien_ban = "{0}\n\nChọn hook: bản {1}\nĐiểm: {2}\nLý do: {3}\n".format(
+        bang, nhan_ban(chon), json.dumps(diem, ensure_ascii=False), ly_do)
+    noi("  → thay đoạn mở: {0} ký tự → {1} ký tự.".format(
+        len(hook_cu), len(dung[chon])))
+    return moi, True, bien_ban
 
 
 def cham_va_chon(goi: Optional[Callable[[str], str]], ban: Sequence[str],

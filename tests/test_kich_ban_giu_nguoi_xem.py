@@ -56,11 +56,42 @@ class TestLoiNhacViet:
         assert "<<CHARS_MIN>>" in v and "<<CHARS_MAX>>" in v, (
             "{0}: lời nhắc viết phải nêu cả sàn lẫn trần độ dài".format(nhan))
 
-    def test_do_bang_so_cau(self, nhan, thu_muc):
-        """AI không bám được số ký tự tiếng Nhật — xem ghi chú đầu tệp."""
+    def test_loi_nhac_viet_phai_GON(self, nhan, thu_muc):
+        """═══ TIÊU CHÍ Ở BỘ CHẤM, KHÔNG Ở PROMPT VIẾT (chốt lại 04/09/2026) ═══
+
+        Chủ dự án đã chốt nguyên tắc này một lần rồi, commit `319bee3`:
+        *"Prompt càng phức tạp càng cứng và càng dễ fail"* — tiêu chí hay/hook/
+        CTA/không chép đặt ở bộ chấm, không ở prompt viết. Bản gọn khi ấy: **232
+        ký tự**.
+
+        Rồi nó bị nhồi lại hai lần (`ca83565` đo bằng số câu, `babb159` bốn quy
+        tắc 60 giây) và một lần nữa ngày 04/09 — lên **7.156 ký tự, gấp 30 lần**.
+
+        Đo hậu quả trên chính kênh, ở CÙNG cỡ mẫu 16–20 người xem:
+            V2 (viết bằng prompt gần bản gọn) : giữ chân **59%**
+            V5 (viết bằng prompt đã nhồi)     : 32%
+            V6 (viết bằng prompt đã nhồi)     : 26%
+
+        Cơ chế: viết nhiều bản rồi chọn chỉ có tác dụng khi các bản KHÁC NHAU.
+        Prompt nhồi chặt thì cả ba bản ra cùng một khuôn — hết cái để chọn.
+        Chỗ đúng của mọi tiêu chí là BỘ CHẤM, nơi nó lọc chứ không ép.
+
+        Bài này canh không cho phình lần thứ tư.
+        """
         v = _doc(thu_muc, "2-viet.md")
-        assert "câu**" in v or "câu," in v, (
-            "{0}: lời nhắc viết phải đo thân bài bằng SỐ CÂU".format(nhan))
+        assert len(v) <= 900, (
+            "{0}: 2-viet.md phình lên {1} ký tự. Tiêu chí craft (hook, nhịp, "
+            "độ dài câu, cảnh vs giải thích) phải nằm ở 2b-cham.md — prompt "
+            "viết chỉ giữ ràng buộc CƠ HỌC: tiếng, độ dài sàn/trần, định dạng "
+            "trả về.".format(nhan, len(v)))
+
+    def test_do_bang_so_cau(self, nhan, thu_muc):
+        """AI không bám được số ký tự tiếng Nhật — xem ghi chú đầu tệp.
+
+        Từ 04/09/2026 tiêu chí này nằm ở BỘ CHẤM: prompt viết chỉ giữ ràng buộc
+        cơ học, mọi thứ thuộc về "viết hay" đều để bộ chấm lọc.
+        """
+        v = _doc(thu_muc, "2b-cham.md")
         # ═══ CÂU NGẮN, KHÔNG PHẢI CÂU DÀI (sửa 29/08/2026) ═══
         #
         # Bài này từng đòi lời nhắc ép câu 40–50 ký tự, để bài khỏi hụt độ dài.
@@ -69,32 +100,42 @@ class TestLoiNhacViet:
         # thứ phân biệt hai bên — ép 40–50 là ép ngược với video đang thắng.
         # Đủ độ dài bài bằng NHIỀU CÂU hơn, không phải câu dài hơn.
         assert "29 ký tự" in v, (
-            "{0}: phải nêu độ dài câu đo trên video giữ chân tốt nhất "
-            "(~29 ký tự), và đạt độ dài bài bằng nhiều câu hơn".format(nhan))
+            "{0}: BỘ CHẤM phải chấm độ dài câu đo trên video giữ chân tốt nhất "
+            "(~29 ký tự) — tiêu chí craft nằm ở bộ chấm".format(nhan))
 
-    def test_60_giay_dau_theo_bon_tieu_chi_do_duoc(self, nhan, thu_muc):
-        """Ghép đường giữ chân với câu chữ tại đúng thời điểm đó (29/08/2026):
-        trong 52 giây đầu, video tốt rớt 25 điểm, video tệ rớt 52 — gấp đôi.
-        Bốn thứ khác nhau, mỗi thứ một dòng trong lời nhắc."""
-        v = _doc(thu_muc, "2-viet.md")
+    def test_60_giay_dau_theo_bon_nhip_do_duoc(self, nhan, thu_muc):
+        """═══ BỘ LUẬT MỞ ĐẦU ĐỔI LẦN HAI (04/09/2026) ═══
+
+        Bốn luật cũ ("mở bằng VẬT THỂ NHÌN ĐƯỢC", "câu 10–20 ký tự", "có CÂU
+        HỎI trước giây 60", "CHƯA GIẢI THÍCH CƠ CHẾ") rút từ V2 vs V3 hồi
+        29/08 — khi CẢ HAI video đều có ảnh bìa yếu (tỉ lệ bấm 2,8% và 2,1%).
+        Ảnh bìa yếu chỉ hút người đã sẵn tâm thế, nên họ chịu ngồi nghe tả cảnh.
+
+        Ảnh bìa chuẩn mobile (04/09: 8,86% và 13,43%) kéo thêm người TÒ MÒ, và
+        luật "mở bằng vật thể" lập tức bị hiểu thành **11 giây tả tĩnh vật**:
+        lượt 0005 mở bằng bốn câu đèn/mưa/trà/điện thoại rồi mãi giây 46,3 mới
+        chạm tới thứ ảnh bìa hứa. Đối thủ cùng đề tài làm xong ở giây 23,4.
+
+        Đo ba kịch bản gốc của đối thủ đã thắng: cả ba cắm một NHÁT ĐÂM ở giây
+        17–40. Đối chiếu chính kênh: video giữ chân tốt nhất có nhát đâm ở giây
+        52 rồi đường giữ chân đứng yên (74% → 72%); video tệ nhất thay bằng câu
+        dễ chịu 「胸のあたりが静かに落ち着いている」 và rơi không phanh.
+
+        Bốn nhịp mới thay bốn luật cũ — và đặt ở BỘ CHẤM, không ở prompt viết
+        (xem `test_loi_nhac_viet_phai_GON`). Chi tiết: `tests/test_viet_hook.py`.
+        """
+        v = _doc(thu_muc, "2b-cham.md")
         for manh, vi_sao in (
-                ("VẬT THỂ NHÌN ĐƯỢC", "mở bằng cảm giác trừu tượng là chỗ rớt nặng nhất"),
-                ("10–20 ký tự", "câu 35 ký tự ở giây 26 làm bản tệ mất 35 điểm"),
-                ("CÂU HỎI", "bản tốt hỏi ở giây 52 rồi gần như không rớt thêm"),
-                ("CHƯA GIẢI THÍCH CƠ CHẾ", "bản tệ giải thích ở giây 54 và tụt còn 49%")):
+                ("HỎI THẲNG NGƯỜI XEM", "nhịp 1 — đối thủ hỏi ngay câu đầu, giây 0"),
+                ("NGƯỜI KHÁC XUẤT HIỆN", "nhịp 2 — 3/3 đối thủ có, giây 11–19"),
+                ("NHÁT ĐÂM", "nhịp 3 — nhịp quyết định, 3/3 đối thủ có ở giây 17–40"),
+                ("TRẢ LỜI HỨA CỦA ẢNH BÌA", "nhịp 4 — lượt 0005 trễ tới giây 46,3")):
             assert manh in v, "{0}: thiếu '{1}' — {2}".format(nhan, manh, vi_sao)
-
-    def test_cham_cung_soi_60_giay_dau(self, nhan, thu_muc):
-        """Lời nhắc viết đòi bốn thứ thì bộ chấm phải soi được đúng bốn thứ đó,
-        nếu không cả năm bản mở sai kiểu vẫn được chọn một bản."""
-        c = _doc(thu_muc, "2b-cham.md")
-        assert "VẬT THỂ NHÌN ĐƯỢC" in c and "CÂU HỎI" in c, (
-            "{0}: bộ chấm phải chấm 60 giây đầu theo cùng tiêu chí".format(nhan))
 
     def test_y_thu_nhat_phai_vao_som(self, nhan, thu_muc):
         """Chỗ chết đo được của kênh là giây 15–60. Tiêu đề hứa N mục thì mục
-        đầu phải nằm trong vùng người xem còn ở lại."""
-        v = _doc(thu_muc, "2-viet.md")
+        đầu phải nằm trong vùng người xem còn ở lại. Chấm ở BỘ CHẤM."""
+        v = _doc(thu_muc, "2b-cham.md")
         # Đo bằng TỈ LỆ BÀI, không đếm câu: hai tiêu chí "câu ngắn" và "ý 1 trong
         # 8 câu" đá nhau — lượt 0002 viết câu 23 ký tự nên 12 câu mở đầu chỉ tốn
         # 250 ký tự (6,5% bài, sớm gấp đôi V2) mà vẫn bị đếm là "quá 8 câu".

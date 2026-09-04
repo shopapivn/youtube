@@ -2384,6 +2384,7 @@ def _trung_nguyen_van(moi: str, goc: str, n: int = 10) -> float:
 #: kênh soi, không dọn như tệp nháp.
 TEP_BAN_VIET = "1-ban-{0}.txt"
 TEP_CHAM_DIEM = "1-cham-diem.txt"
+TEP_HOOK = "1-hook-{0}.txt"
 
 
 def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
@@ -2510,10 +2511,66 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                                + ly_do_so[:200])
                     bc.ghi("  (bản hoàn thiện không hơn — dùng {0})".format(
                         ten_goc))
+    # ═══ THAY ĐOẠN MỞ ĐẦU BẰNG HOOK VIẾT RIÊNG ═══
+    #
+    # Chạy CUỐI CÙNG, sau cả bước hoàn thiện — vì hoàn thiện viết lại cả bài
+    # (chỉ buộc giữ ≥60% câu), mà hook chỉ chiếm ~4% bài nên nó thừa sức viết
+    # đè lên hook vừa chọn. Đặt sau thì hook thắng cuộc là hook cuối cùng.
+    #
+    # Hook mới được nhận `<<THAN_BAI>>` — đoạn thân nối ngay sau — nên câu cuối
+    # hook dẫn được vào thân, không cần bước làm mượt nào nữa.
+    ghi_hook = ""
+    so_hook = max(0, int(getattr(k, "so_ban_hook", 0) or 0))
+    khuon_hook = k.prompt.get("2d-hook.md", "")
+    if so_hook > 1 and khuon_hook.strip():
+        from .viet_nhieu_ban import thay_hook  # noqa: PLC0415
+
+        # Mỗi bản một khoá riêng — chạy tiếp lượt đứt giữa chừng thì nhặt đúng
+        # bản đã viết, không trả tiền hai lần. Đếm bằng biến đóng vì
+        # `thay_hook` gọi hàm viết mà không truyền chỉ số.
+        dem_hook = [0]
+
+        def goi_viet_hook(loi_nhac: str) -> str:
+            bc.kiem_dung()
+            dem_hook[0] += 1
+            return _don_ban(_goi(bc, loi_nhac,
+                                 _khoa_chat(luot, "2d-hook.md:ban{0}".format(
+                                     dem_hook[0])),
+                                 toi_da_token=2048), k.ngon_ngu)
+
+        def goi_cham_hook(loi_nhac: str) -> str:
+            bc.kiem_dung()
+            return _goi(bc, loi_nhac, _khoa_chat(luot, "2e-cham-hook.md"))
+
+        def luu_hook(i: int, chu: str) -> None:
+            _ghi_chu(os.path.join(d, TEP_HOOK.format(chr(65 + i))), chu + "\n")
+
+        def hook_da_co(i: int) -> str:
+            return _doc_chu(os.path.join(d, TEP_HOOK.format(chr(65 + i))))
+
+        bc.ghi("  viết riêng {0} đoạn mở đầu…".format(so_hook))
+        try:
+            ban_moi, da_thay, ghi_hook = thay_hook(
+                goi_viet_hook, goi_cham_hook, ban_chon,
+                # Đoạn mở của bản gốc đã thắng — chuẩn đối chiếu nhịp.
+                (tu_lieu or "")[:600],
+                so_ban=so_hook, khuon_viet=khuon_hook,
+                khuon_cham=k.prompt.get("2e-cham-hook.md", ""),
+                chung=chung, ghi=bc.ghi,
+                luu_ban=luu_hook, da_co=hook_da_co)
+            if da_thay:
+                ban_chon = ban_moi
+                _ghi_chu(os.path.join(d, "1-ban-hook-moi.txt"), ban_chon + "\n")
+            else:
+                bc.ghi("  (giữ đoạn mở cũ: {0})".format(ghi_hook))
+        except Exception as loi:  # noqa: BLE001 — hook hỏng không được vỡ bài
+            bc.ghi("  (bỏ qua bước hook: {0})".format(str(loi)[:120]))
+            ghi_hook = "lỗi: " + str(loi)[:120]
     _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
-             "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}".format(
+             "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}{5}".format(
                  bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),
-                 ly_do, ("Hoàn thiện: " + ghi_ht + "\n") if ghi_ht else ""))
+                 ly_do, ("Hoàn thiện: " + ghi_ht + "\n") if ghi_ht else "",
+                 ("\n── HOOK ──\n" + ghi_hook + "\n") if ghi_hook else ""))
     bc.ghi("  → dùng bản {0}{1}; các bản và bản chấm nằm trong thư mục lượt "
            "(1-ban-*.txt, 1-cham-diem.txt).".format(
                chr(65 + chon),
