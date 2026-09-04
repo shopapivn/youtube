@@ -78,6 +78,10 @@ BUOC_PROMPT = (
     # 04/09/2026: *"bước viết hook sẽ riêng và có tiêu chí chấm riêng"*.
     ("2d-hook.md", "Viết riêng đoạn mở đầu (hook)"),
     ("2e-cham-hook.md", "Chấm các đoạn mở, chọn hook tốt nhất"),
+    # Vá hook đã chọn theo đúng lời chê của bộ chấm — chỗ DUY NHẤT hook có thể
+    # vượt bản gốc, vì các bản viết ra đều bắt chước hook đối thủ nên thừa
+    # hưởng cả điểm yếu của nó.
+    ("2f-va-hook.md", "Vá đoạn mở đã chọn theo lời chê"),
     ("3-sua.md", "Rà soát: sửa lệch tiếng, tách câu, chèn thẻ"),
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),

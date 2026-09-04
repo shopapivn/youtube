@@ -432,7 +432,8 @@ def thay_hook(goi_viet: Callable[[str], str],
               goi_cham: Optional[Callable[[str], str]],
               ban: str, hook_goc: str, *,
               so_ban: int = 3,
-              khuon_viet: str = "", khuon_cham: str = "",
+              khuon_viet: str = "", khuon_cham: str = "", khuon_va: str = "",
+              goi_va: Optional[Callable[[str], str]] = None,
               chung: Optional[Dict[str, Any]] = None,
               ghi: Optional[Callable[[str], None]] = None,
               luu_ban: Optional[Callable[[int, str], None]] = None,
@@ -498,11 +499,54 @@ def thay_hook(goi_viet: Callable[[str], str],
             goi_cham if (goi_cham and khuon_cham.strip()) else None,
             dung, hook_goc or "", khuon_cham=khuon_cham, chung=o,
             muc_tieu=DAI_HOOK, ghi=ghi)
-    moi = dung[chon] + "\n\n" + than
-    bien_ban = "{0}\n\nChọn hook: bản {1}\nĐiểm: {2}\nLý do: {3}\n".format(
-        bang, nhan_ban(chon), json.dumps(diem, ensure_ascii=False), ly_do)
+    hook_chon = dung[chon]
+
+    # ═══ VÁ HOOK ĐÃ CHỌN THEO ĐÚNG LỜI CHÊ (thêm 04/09/2026) ═══
+    #
+    # Thân bài có bước hoàn thiện, hook thì không — nên lời chê của bộ chấm
+    # hook rơi vào hư không. Lượt 0006 là ví dụ đắt: bộ chấm chọn bản tốt nhất
+    # nhưng chỉ cho 6/10 và viết sẵn cách sửa — *"Không có nhát đâm… cần thay
+    # bằng một nhát đâm lật danh tính, đặt trước giây 25"* — mà không ai dùng.
+    #
+    # Đây cũng là chỗ DUY NHẤT hook có thể vượt bản gốc: bốn bản viết ra đều
+    # bắt chước hook đối thủ nên thừa hưởng cả điểm yếu của nó. Chỉ khi sửa
+    # theo tiêu chí riêng mới đi xa hơn được bản gốc.
+    #
+    # Ba cửa, cùng nết với bước hoàn thiện thân bài: (a) bản vá phải qua
+    # `hook_dung_duoc`, (b) chính bộ chấm so hai bản và chọn, (c) hỏng ở đâu
+    # cũng giữ bản đã chọn. Không có đường nào làm hook xấu đi.
+    ghi_va = ""
+    manh, yeu = tach_diem(ly_do)
+    if khuon_va.strip() and (manh or yeu):
+        try:
+            va = ((goi_va or goi_viet)(_thay(khuon_va, dict(
+                o, DIEM_MANH=manh or "(không ghi)",
+                DIEM_YEU=yeu or "(không ghi)", DRAFT=hook_chon))) or "").strip()
+        except Exception as loi:  # noqa: BLE001 — vá hỏng thì giữ bản đã chọn
+            va, ghi_va = "", " · vá hook hỏng: " + str(loi)[:70]
+        if va:
+            ok, vi_sao = hook_dung_duoc(va, than, ban)
+            if not ok:
+                ghi_va = " · bỏ bản vá hook: " + vi_sao
+            else:
+                i_hon, ly_do_so, _d, _b = cham_va_chon(
+                    goi_cham if (goi_cham and khuon_cham.strip()) else None,
+                    [hook_chon, va], hook_goc or "", khuon_cham=khuon_cham,
+                    chung=o, muc_tieu=DAI_HOOK, ghi=ghi,
+                    ten_ban=("hook chưa vá", "hook đã vá"))
+                if i_hon == 1:
+                    hook_chon = va
+                    ghi_va = " · bộ chấm chọn hook ĐÃ VÁ: " + ly_do_so[:160]
+                else:
+                    ghi_va = " · bộ chấm vẫn thích hook chưa vá: " + ly_do_so[:160]
+                noi("  vá hook:{0}".format(ghi_va))
+
+    moi = hook_chon + "\n\n" + than
+    bien_ban = "{0}\n\nChọn hook: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}".format(
+        bang, nhan_ban(chon), json.dumps(diem, ensure_ascii=False), ly_do,
+        ("Vá hook:" + ghi_va + "\n") if ghi_va else "")
     noi("  → thay đoạn mở: {0} ký tự → {1} ký tự.".format(
-        len(hook_cu), len(dung[chon])))
+        len(hook_cu), len(hook_chon)))
     return moi, True, bien_ban
 
 

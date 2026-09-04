@@ -2542,6 +2542,12 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             bc.kiem_dung()
             return _goi(bc, loi_nhac, _khoa_chat(luot, "2e-cham-hook.md"))
 
+        def goi_va_hook(loi_nhac: str) -> str:
+            bc.kiem_dung()
+            return _don_ban(_goi(bc, loi_nhac,
+                                 _khoa_chat(luot, "2f-va-hook.md"),
+                                 toi_da_token=2048), k.ngon_ngu)
+
         def luu_hook(i: int, chu: str) -> None:
             _ghi_chu(os.path.join(d, TEP_HOOK.format(chr(65 + i))), chu + "\n")
 
@@ -2556,6 +2562,12 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                 (tu_lieu or "")[:600],
                 so_ban=so_hook, khuon_viet=khuon_hook,
                 khuon_cham=k.prompt.get("2e-cham-hook.md", ""),
+                # Vá hook chỉ chạy khi kênh bật `hoan_thien` — cùng cờ với
+                # bước hoàn thiện thân bài, vì cùng một quyết định: có trả
+                # thêm một lượt chữ để sửa theo lời chê hay không.
+                khuon_va=(k.prompt.get("2f-va-hook.md", "")
+                          if getattr(k, "hoan_thien", False) else ""),
+                goi_va=goi_va_hook,
                 chung=chung, ghi=bc.ghi,
                 luu_ban=luu_hook, da_co=hook_da_co)
             if da_thay:

@@ -282,6 +282,84 @@ class TestThayHook:
         assert set(luu) == {0, 1}, "mọi bản phải được ghi ra đĩa để soi lại"
 
 
+# ── 4b. Vá hook theo lời chê ────────────────────────────────────────────────
+
+class TestVaHook:
+    """Thân bài có bước hoàn thiện, hook thì không — nên lời chê của bộ chấm
+    hook rơi vào hư không. Lượt 0006: bộ chấm chọn bản tốt nhất, chỉ cho 6/10,
+    và viết sẵn cách sửa ("Không có nhát đâm… cần thay bằng một nhát đâm lật
+    danh tính, đặt trước giây 25") — mà không ai dùng.
+
+    Đây cũng là chỗ DUY NHẤT hook vượt được bản gốc: bốn bản viết ra đều bắt
+    chước hook đối thủ nên thừa hưởng cả điểm yếu của nó.
+    """
+
+    HOOK = "あなたもそうではありませんか。" * 8
+    VA = "一人が楽なのは、あなたが選んだからではありません。" * 4
+
+    #: Bản thứ hai — phải có ≥2 hook qua rào chắn thì bộ chấm mới chạy và mới
+    #: có lời chê để vá. Chỉ một bản sống sót thì không có lời chê: đó là giới
+    #: hạn chấp nhận được (kênh viết 4 hook, rào chắn chỉ loại bản dị dạng).
+    HOOK2 = "誰にも会わない夜が落ち着きますよね。" * 6
+
+    def _chay(self, cham, khuon_va="vá <<DRAFT>> <<DIEM_YEU>>"):
+        ban = [self.HOOK, self.HOOK2]
+
+        def viet(_p):
+            return ban.pop(0)
+
+        return thay_hook(viet, cham, BAN_DAI, "goc", so_ban=2,
+                         khuon_viet="viết hook", khuon_cham="chấm <<CAC_BAN>>",
+                         khuon_va=khuon_va, goi_va=lambda _p: self.VA)
+
+    def test_bo_cham_thich_ban_va_thi_lay_ban_va(self):
+        # Bộ chấm: vòng 1 chọn A (chỉ 1 bản), vòng so sánh chọn B = bản vá.
+        tra = ['{"chon":"A","ly_do":"x","diem_yeu":"thiếu nhát đâm"}',
+               '{"chon":"B","ly_do":"bản vá có nhát đâm"}']
+        ban, da, ghi = self._chay(lambda _p: tra.pop(0))
+        assert da is True
+        assert ban.startswith(self.VA[:12]), "phải dùng hook ĐÃ VÁ"
+        assert "ĐÃ VÁ" in ghi
+
+    def test_bo_cham_khong_thich_thi_giu_ban_cu(self):
+        tra = ['{"chon":"A","ly_do":"x","diem_yeu":"thiếu nhát đâm"}',
+               '{"chon":"A","ly_do":"bản cũ vẫn hơn"}']
+        ban, da, ghi = self._chay(lambda _p: tra.pop(0))
+        assert ban.startswith(self.HOOK[:12]), "không hơn thì giữ hook đã chọn"
+        assert "chưa vá" in ghi
+
+    def test_khong_co_loi_nhac_va_thi_bo_qua(self):
+        ban, da, ghi = self._chay(
+            lambda _p: '{"chon":"A","ly_do":"x","diem_yeu":"thiếu"}',
+            khuon_va="")
+        assert ban.startswith(self.HOOK[:12])
+        assert "Vá hook" not in ghi
+
+    def test_ban_va_hong_thi_giu_ban_cu(self):
+        """Vá ra bản cụt → rào chắn `hook_dung_duoc` chặn, không vỡ bài."""
+        ban = [self.HOOK, self.HOOK2]
+        ket, _da, ghi = thay_hook(
+            lambda _p: ban.pop(0),
+            lambda _p: '{"chon":"A","ly_do":"x","diem_yeu":"thiếu"}',
+            BAN_DAI, "goc", so_ban=2, khuon_viet="viết",
+            khuon_cham="chấm <<CAC_BAN>>",
+            khuon_va="vá <<DRAFT>>", goi_va=lambda _p: "短い。")
+        assert ket.startswith(self.HOOK[:12]) and "bỏ bản vá" in ghi
+
+    def test_goi_va_nem_loi_thi_giu_ban_cu(self):
+        def no(_p):
+            raise RuntimeError("mạng đứt")
+
+        ban = [self.HOOK, self.HOOK2]
+        ket, _da, ghi = thay_hook(
+            lambda _p: ban.pop(0),
+            lambda _p: '{"chon":"A","ly_do":"x","diem_yeu":"thiếu"}',
+            BAN_DAI, "goc", so_ban=2, khuon_viet="viết",
+            khuon_cham="chấm <<CAC_BAN>>",
+            khuon_va="vá <<DRAFT>>", goi_va=no)
+        assert ket.startswith(self.HOOK[:12]) and "hỏng" in ghi
+
+
 # ── 5. Bước hoàn thiện: tách câu KHÔNG được tính là "viết lại từ đầu" ───────
 
 class TestRaoChanHoanThien:
