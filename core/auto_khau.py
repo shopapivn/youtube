@@ -2105,6 +2105,25 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # Bài sau khi sửa dài 4.460 trong khi bản gốc 4.463 — lệch ba ký
             # tự. Bước sửa không sửa; nó lấp chỗ hụt bằng bản gốc.
             "CHARS_GOC": len(tu_lieu),
+            # ═══ ĐỘ DÀI HOOK: MỘT CON SỐ, KHÔNG PHẢI MỘT CÂU MÔ TẢ ═══
+            #
+            # `2d-hook.md` từng nói *"độ dài xấp xỉ đoạn mở của bản gốc"*. Nghe
+            # thì rõ, nhưng "đoạn mở của bản gốc" không có ranh giới: lượt 0007
+            # model đọc là vài câu đầu (viết ra 128–243 ký tự), lượt 0008 đọc là
+            # toàn bộ phần trước 一つ目 (viết ra 1.012–1.074). Cả hai đều là
+            # cách đọc hợp lý — và rào chắn 60–600 ký tự đánh rớt CẢ BA hook của
+            # 0008, nên lượt ấy chạy không có hook viết riêng.
+            #
+            # Một phút đọc là mốc có nghĩa: chỗ rớt nặng nhất nằm trong 60 giây
+            # đầu, và đoạn mở của ba video đối thủ đã thắng đo được ~240 ký tự,
+            # sát đúng một phút giọng kênh này.
+            #
+            # KẸP VÀO TRONG RÀO CHẮN, nếu không thì tự tay dựng lại ca 0008:
+            # tiếng châu Âu đọc ~900 ký tự/phút, khai 900 là vượt trần 600 của
+            # `hook_dung_duoc` và mọi hook bị bỏ. Trần 480 chừa chỗ cho nết
+            # viết dôi của model.
+            "CHARS_HOOK": min(480, max(120, int(
+                getattr(k, "ky_tu_moi_phut", 0) or 270))),
             "COMPETITOR_TRANSCRIPT": tu_lieu,
             "TRANSCRIPT_SAMPLE": tu_lieu[:1500],
             # Bám bản gốc hay đặt lại theo chất kênh — do kênh chọn qua

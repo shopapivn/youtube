@@ -12,7 +12,6 @@ Hai câu hỏi khi chấm:
 - Bản nào giữ được đúng thứ làm nên sức mạnh của đoạn mở bản gốc, mà nói bằng lời của mình?
 
 Ràng buộc cứng, ngoài ra không có gì khác:
-- Độ dài xấp xỉ đoạn mở của bản gốc.
 - Câu cuối phải dẫn được vào thân bài.
 - Viết bằng <<NGON_NGU>> tự nhiên, không lệch tiếng, không sót lời dẫn.
 

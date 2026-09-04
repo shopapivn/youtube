@@ -50,12 +50,21 @@ voice_id: "b34JylakFZPlGS0BnwyY"
 #  đang đứng và gọi đúng tên nó: 15 × 270 = 4.050 ký tự = 15,0 phút thật.
 phut_muc_tieu: 15
 #  Lệch bao nhiêu thì mới gọi bước nắn độ dài (prompt/4-do-dai.md).
-#  Chủ dự án, 04/09/2026: *"về độ dài tao không quá quan trọng trong khoảng
-#  từ 10-15 phút"*. 0,30 quanh 15 phút = 10,5–19,5 phút, nên bước nắn chỉ còn
-#  là lưới cho ca hỏng thật (lượt 0001 ra +93%). Trần thật nằm ở bộ chấm:
-#  prompt/2b-cham.md trừ nặng khi vượt 4.050 ký tự trên 20%.
-#  Đo bốn lượt thật: bước viết tự về đích, bước nắn chưa phải chạy lần nào.
-chenh_cho_phep: 0.30
+#
+#  ═══ ĐÂY GIỜ LÀ CHỖ DUY NHẤT CANH ĐỘ DÀI (04/09/2026) ═══
+#
+#  Bộ chấm đã bỏ tiêu chí độ dài, lời nhắc viết và lời nhắc hoàn thiện chỉ
+#  còn nói một con số. Đó là đúng — nhưng khi bỏ hết cùng lúc thì không còn
+#  ai canh: lượt 0008 ra 5.076 ký tự = 18,8 phút, vượt cả khoảng 11–17 của
+#  chủ dự án, và lọt qua vì 0,30 cho trần tới 5.265.
+#
+#  0,15 quanh 4.050 = 3.443–4.658 ký tự = 12,8–17,3 phút, gần đúng khoảng
+#  chủ dự án chịu được. Đối chiếu hai lượt thật: 0007 (3.864) vẫn lọt, không
+#  tốn lượt gọi nào; 0008 (5.076) bị bắt, đúng ca cần bắt.
+#
+#  Để mọi ràng buộc độ dài ở ĐÚNG MỘT CHỖ, và là chỗ cơ học — lời nhắc viết
+#  không phải gánh nó, nên nó không cướp chỗ của việc viết hay.
+chenh_cho_phep: 0.15
 do_dai_theo_goc: false
 # ── Viết 3 bản rồi chấm chọn một ──────────────────────────────────────────────
 #  Chủ dự án, 25/08/2026: *"cho nó viết nhiều lần, và chấm điểm các lần tức là

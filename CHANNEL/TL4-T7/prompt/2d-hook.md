@@ -6,7 +6,7 @@ Viết bằng <<NGON_NGU>>.
 Tiêu đề video: <<TITLE>>
 Chữ trên ảnh bìa, người xem đọc dòng này rồi mới bấm vào: <<THUMB>>
 
-Độ dài xấp xỉ đoạn mở của bản gốc. Câu cuối phải dẫn được vào đoạn thân bài bên dưới.
+Độ dài khoảng <<CHARS_HOOK>> ký tự. Câu cuối phải dẫn được vào đoạn thân bài bên dưới.
 Chỉ trả về lời đọc, không ghi chú.
 
 kịch bản đã viral:

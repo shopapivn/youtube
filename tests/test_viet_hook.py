@@ -115,6 +115,46 @@ class TestLoiNhacHook:
                 "{0}: {1} phải nhận NGUYÊN kịch bản gốc, không phải đoạn cắt "
                 "sẵn".format(nhan, ten))
 
+    def test_do_dai_hook_la_MOT_CON_SO(self, nhan, thu_muc):
+        """═══ "XẤP XỈ ĐOẠN MỞ CỦA BẢN GỐC" LÀ CÂU MODEL KHÔNG ĐOÁN ĐƯỢC ═══
+
+        Lời nhắc từng nói *"độ dài xấp xỉ đoạn mở của bản gốc"*. Nghe thì rõ,
+        nhưng "đoạn mở của bản gốc" không có ranh giới, và model lắc rất mạnh
+        giữa hai cách đọc — cả hai đều hợp lý:
+
+            lượt 0007  đọc là vài câu đầu          → viết ra 128–243 ký tự
+            lượt 0008  đọc là toàn bộ trước 一つ目  → viết ra 1.012–1.074 ký tự
+
+        Rào chắn là 60–600, nên lượt 0008 đánh rớt **cả ba** hook và chạy
+        không có hook viết riêng. Tệp chấm chỉ ghi đúng một dòng —
+        "mọi hook đều không qua rào chắn" — nên lỗi này gần như trôi qua.
+
+        Chữa giống hệt cách chữa độ dài bài: đổi câu mô tả thành một con số.
+        """
+        for ten in ("2d-hook.md", "2f-va-hook.md"):
+            v = _doc(thu_muc, ten)
+            assert "<<CHARS_HOOK>>" in v, (
+                "{0}/{1}: độ dài hook phải là một con số".format(nhan, ten))
+        for ten in ("2d-hook.md", "2e-cham-hook.md", "2f-va-hook.md"):
+            assert "xấp xỉ đoạn mở của bản gốc" not in _doc(thu_muc, ten), (
+                "{0}/{1}: còn câu mô tả mơ hồ — model đọc ra 128 hay 1.074 ký "
+                "tự đều được".format(nhan, ten))
+
+    def test_con_so_hook_phai_LOT_QUA_rao_chan(self, nhan, thu_muc):
+        """Con số khai với model mà nằm ngoài rào chắn thì mọi hook bị bỏ —
+        đúng ca lượt 0008. Hai chỗ này phải khớp nhau ở MỌI nhịp đọc.
+
+        Bài này bắt ngay một ca chưa xảy ra: tiếng châu Âu đọc ~900 ký tự/phút
+        (mặc định của `Kenh`), khai thẳng nhịp là 900 > trần 600 — kênh tiếng
+        Tây Ban Nha nào bật bước hook cũng sẽ mất sạch hook mà không ai biết.
+        """
+        for nhip in (270, 302, 900, 0):
+            chars_hook = min(480, max(120, int(nhip or 270)))
+            assert HOOK_MIN <= chars_hook <= HOOK_MAX, (
+                "nhịp {0} ký tự/phút → khai {1} ký tự cho hook, nhưng rào chắn "
+                "chỉ nhận {2}–{3}: mọi hook sẽ bị bỏ".format(
+                    nhip, chars_hook, HOOK_MIN, HOOK_MAX))
+
     def test_hook_biet_anh_bia_va_than_bai(self, nhan, thu_muc):
         """Thiếu hai ô này thì hook viết mù: không biết ảnh bìa hứa gì với
         người xem, và không biết phải dẫn vào đâu."""

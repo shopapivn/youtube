@@ -3,7 +3,7 @@
 Sửa các điểm yếu: <<DIEM_YEU>>
 Giữ và phát huy các điểm mạnh: <<DIEM_MANH>>
 
-Viết bằng <<NGON_NGU>>. Độ dài xấp xỉ đoạn mở của bản gốc.
+Viết bằng <<NGON_NGU>>, khoảng <<CHARS_HOOK>> ký tự.
 Câu cuối phải dẫn được vào đoạn thân bài bên dưới.
 Chỉ trả về lời đọc, không ghi chú.
 
