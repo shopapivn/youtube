@@ -235,6 +235,13 @@ class TuyenDeXuat:
     dau_hieu: str = ""
     #: Vài tiêu đề gốc làm ví dụ. Có ví dụ thì định nghĩa mới kiểm chứng được.
     vi_du: List[str] = field(default_factory=list)
+    #: Tên các đề xuất thô đã được gộp vào tệp này, do khâu chốt tự khai.
+    #:
+    #: Cần vì khâu chốt ĐẶT TÊN MỚI cho tệp đã gộp, nên mã của nó không còn
+    #: khớp mã nào trong danh sách thô — đếm theo mã thì tệp nào cũng ra "0 lô
+    #: nhắc tới", và mất luôn thứ duy nhất phân biệt tệp thật với tệp một lô
+    #: bịa ra. Xem `_dem_lai`.
+    gom: List[str] = field(default_factory=list)
     so_video: int = 0
 
 
@@ -426,9 +433,12 @@ def _doc_tuyen(tho: str) -> List[TuyenDeXuat]:
         if not ten:
             continue
         vi_du = m.get("vi_du")
+        gom = m.get("gom")
         ra.append(TuyenDeXuat(
             ma=ma_tu_ten(ten) or ten,
             ten=ten,
+            gom=[" ".join(str(g).split()) for g in gom]
+            if isinstance(gom, list) else [],
             insight=" ".join(str(m.get("insight") or "").split()),
             trang_thai=" ".join(str(m.get("trang_thai") or "").split()),
             can_gi=" ".join(str(m.get("can_gi") or "").split()),
@@ -453,10 +463,17 @@ DE_BAI_CHOT = (
     "3. Bỏ tuyến nào rộng đến mức gần như tiêu đề nào cũng hợp — đó là chủ "
     "đề, không phải tuyến.\n"
     "4. Giữ nguyên tinh thần \"tuyến là một kiểu người\", không đổi thành "
-    "phân loại theo đề tài.\n\n"
+    "phân loại theo đề tài.\n"
+    "5. Mỗi tệp PHẢI có đủ `insight`, `trang_thai`, `can_gi`. Gộp mấy tệp "
+    "làm một thì viết lại ba trường ấy cho tệp đã gộp, đừng bỏ trống — thiếu "
+    "chúng thì khâu gán chỉ còn cái tên để đoán.\n"
+    "6. `gom` là tên NGUYÊN VĂN các tệp trong danh sách trên mà bạn đã nhập "
+    "vào tệp này. Chép đúng chữ, kể cả khi chỉ có một cái.\n\n"
     "Trả về DUY NHẤT một khối JSON, không lời dẫn, không rào ```:\n"
-    '{{"tuyen": [{{"ten": "...", "nguoi_xem": "...", "dau_hieu": "...", '
-    '"vi_du": ["..."]}}]}}'
+    '{{"tuyen": [{{"ten": "...", "insight": "MỘT CÂU giọng người xem, trong '
+    'ngoặc kép", "trang_thai": "lúc bấm họ đang, 2-5 chữ", "can_gi": "thứ họ '
+    'cần nhận được, 2-6 chữ", "nguoi_xem": "...", "dau_hieu": "...", '
+    '"gom": ["tên tệp nguồn 1", "tên tệp nguồn 2"]}}]}}'
 )
 
 
@@ -491,12 +508,20 @@ def chot_danh_sach(client: Any, de_xuat: Sequence[TuyenDeXuat], *,
 
 def _dem_lai(chot: List[TuyenDeXuat],
              de_xuat: Sequence[TuyenDeXuat]) -> List[TuyenDeXuat]:
-    """Ghi lại số lô từng nhắc tới mỗi tuyến — dấu hiệu tuyến ấy có thật."""
+    """Ghi lại số lô từng nhắc tới mỗi tuyến — dấu hiệu tuyến ấy có thật.
+
+    Đếm theo `gom` (khâu chốt tự khai đã nhập những tệp nào), KHÔNG theo mã.
+    Đếm theo mã từng làm mọi tệp ra "0 lô": khâu chốt đặt tên mới cho tệp đã
+    gộp nên mã của nó không khớp mã thô nào. Mà con số ấy chính là thứ duy
+    nhất phân biệt tệp nhiều lô cùng thấy với tệp một lô tình cờ bịa ra.
+    """
     dem: Dict[str, int] = {}
     for t in de_xuat:
         dem[t.ma] = dem.get(t.ma, 0) + 1
     for t in chot:
-        t.so_video = dem.get(t.ma, 0)
+        # Mã của chính nó vẫn tính, phòng khi khâu chốt giữ nguyên tên cũ.
+        nguon = {t.ma} | {ma_tu_ten(g) or g for g in t.gom}
+        t.so_video = sum(dem.get(m, 0) for m in nguon)
     return chot
 
 

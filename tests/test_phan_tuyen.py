@@ -388,3 +388,48 @@ class TestGanLoHongKhongGietCaLuot:
         assert all(k.ma == "a" for k in ra[:n]), "lô một giữ nguyên"
         assert all(k.ma == "" for k in ra[n:n * 2]), "lô hỏng để TRỐNG"
         assert all(k.ma == "a" for k in ra[n * 2:]), "lô ba vẫn chạy"
+
+
+class TestChotGiuDuChatCuaTep:
+    """Khâu chốt không được làm rơi thứ định nghĩa một tệp.
+
+    Hai lỗi thật, cùng lộ ra ngày 04/09/2026 khi chạy khám phá trên 598 tiêu
+    đề chưa có tuyến: cả 8 tệp chốt về đều RỖNG `insight`/`trang_thai`/
+    `can_gi`, và cả 8 đều ghi "0 lô nhắc tới".
+
+    Bài cũ `test_gop_va_dem_so_lo_nhac_toi` không bắt được vì AI giả của nó
+    trả về ĐÚNG TÊN CŨ ("a" gộp thành "a"). Ngoài đời khâu chốt luôn đặt tên
+    mới cho tệp đã gộp — và tên mới thì mã mới, nên phép đếm theo mã trượt
+    sạch. Bài dưới đây đặt tên mới, đúng như thật.
+    """
+
+    def test_dat_ten_moi_van_dem_dung_so_lo(self):
+        de_xuat = _tuyen("so-tri-oc-cun", "so-tri-oc-cun", "dem-phan-doi-con-lai")
+        goi = _goi_gia(json.dumps({"tuyen": [{
+            "ten": "Người trung niên thu gọn đời sống",
+            "gom": ["so tri oc cun", "dem phan doi con lai"]}]}))
+        chot = pt.chot_danh_sach(None, de_xuat, goi=goi)
+        assert len(chot) == 1
+        assert chot[0].so_video == 3, (
+            "ba lô thô đã nhập vào tệp này; đếm theo mã thì ra 0 và mất luôn "
+            "dấu hiệu duy nhất phân biệt tệp thật với tệp một lô bịa ra")
+
+    def test_giu_lai_insight_trang_thai_can_gi(self):
+        goi = _goi_gia(json.dumps({"tuyen": [{
+            "ten": "Người trung niên thu gọn đời sống",
+            "insight": "\"Đời đang trôi khỏi tay tôi.\"",
+            "trang_thai": "thấy đời nhạt dần",
+            "can_gi": "một việc làm được ngay"}]}))
+        chot = pt.chot_danh_sach(None, _tuyen("a"), goi=goi)
+        assert chot[0].insight.startswith("\"Đời đang trôi")
+        assert chot[0].trang_thai == "thấy đời nhạt dần"
+        assert chot[0].can_gi == "một việc làm được ngay"
+
+    def test_loi_nhac_chot_co_XIN_ba_truong_ay(self):
+        # Gốc của lỗi: `DE_BAI_KHAM_PHA` được viết lại theo insight còn
+        # `DE_BAI_CHOT` thì không, nên khuôn JSON của bước gộp không hề xin ba
+        # trường ấy — khám phá tìm ra rồi bước gộp đổ đi. Bài này canh đúng
+        # chỗ đó, vì nó rẻ hơn nhiều so với phát hiện lại bằng một lượt chạy
+        # thật trên máy chủ.
+        for truong in ("insight", "trang_thai", "can_gi", "gom"):
+            assert '"{0}"'.format(truong) in pt.DE_BAI_CHOT, truong
