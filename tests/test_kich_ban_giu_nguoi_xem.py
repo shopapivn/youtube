@@ -161,6 +161,68 @@ class TestLoiNhacViet:
             "{0}: bộ chấm phải chặn trần điểm cho bản vượt độ dài".format(nhan))
 
 
+class TestDoBangChuDocLen:
+    """═══ THƯỚC ĐO ĐỘ DÀI PHẢI LÀ CHỮ ĐỌC LÊN (04/09/2026) ═══
+
+    Chủ dự án: *"về độ dài tao không quá quan trọng trong khoảng từ 10-15
+    phút… ở phần viết đã có target độ dài rồi thì có lệch cũng chẳng nhiều"*.
+
+    Đúng — nhưng chỉ đúng nếu cái thước đo đúng. Đo bốn lượt TL4-T7 bằng chính
+    giọng đọc `2-giong-doc.mp3` (không phải ước lượng):
+
+        lượt   len()   đọc lên   xuống dòng   dấu ---   giọng đọc thật
+        0002   3.834    3.404       406          8       11,97 phút
+        0004   4.076    3.848       210          6       14,90 phút
+        0005   4.051    3.820       213          6       14,84 phút
+        0006   4.529    4.143       356         10       15,05 phút
+
+    Bước `3-sua.md` tách mỗi câu một dòng, và dấu `---` được tool đổi thành
+    quãng lặng thật. Cả hai đều KHÔNG được đọc lên, mà `len()` vẫn đếm chúng —
+    5–10% con số đem đi so.
+
+    Hậu quả đo được: lượt 0006 vượt trần dải ±15% đúng **14 ký tự** trong khi
+    nó mang 356 ký tự xuống dòng. Bước nắn bị gọi dậy bởi thứ không có trong
+    video, rồi chạy lời nhắc `4-do-dai.md` lên một bài đã xong.
+    """
+
+    DICH = 3926          # 13 phút × 302 ký tự/phút, đích của TL4-T7
+
+    def test_bo_xuong_dong_dau_ngan_va_the(self):
+        from core.auto_khau import _do_doc
+
+        assert _do_doc("あい\nうえ\n") == 4, "xuống dòng không được đọc lên"
+        assert _do_doc("あい\n---\nうえ") == 4, (
+            "dấu --- là quãng lặng, tool chèn im lặng chứ không đọc")
+        assert _do_doc("[sighs] あい") == 2, (
+            "thẻ cảm xúc là chỉ đạo cho giọng, không phải lời đọc")
+
+    def test_luot_0006_khong_con_bi_da_ra_khoi_dai(self):
+        """Chính con số thật của lượt 0006 — bài kiểm này là ca đã xảy ra."""
+        from core.auto_khau import CHENH_CHO_PHEP
+
+        tren = self.DICH * (1 + CHENH_CHO_PHEP)
+        assert 4529 > tren, (
+            "số liệu nền sai: lượt 0006 đo bằng len() phải là VƯỢT trần")
+        assert 4143 <= tren, (
+            "đo bằng chữ đọc lên thì lượt 0006 phải nằm trong dải — nếu không, "
+            "bước nắn vẫn nổ vì 356 ký tự xuống dòng")
+
+    def test_bon_luot_that_deu_nam_trong_dai(self):
+        """Chủ dự án nói đúng: bước viết đã tự về đích, không cần bước nắn.
+
+        Nhưng chỉ khi đo bằng chữ đọc lên — đo bằng `len()` thì 0006 rơi ra.
+        """
+        from core.auto_khau import CHENH_CHO_PHEP
+
+        duoi = self.DICH * (1 - CHENH_CHO_PHEP)
+        tren = self.DICH * (1 + CHENH_CHO_PHEP)
+        for luot, doc_len in (("0002", 3404), ("0004", 3848),
+                              ("0005", 3820), ("0006", 4143)):
+            assert duoi <= doc_len <= tren, (
+                "lượt {0}: {1} ký tự đọc lên nằm ngoài dải {2:.0f}–{3:.0f} — "
+                "bước nắn sẽ chạy".format(luot, doc_len, duoi, tren))
+
+
 class TestRaoChanTrongMa:
     def test_nguong_dat_khong_duoc_long_qua(self):
         """0,25 biến mục tiêu 13 phút thành 'từ 10 tới 16' — mất nghĩa."""

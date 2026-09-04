@@ -13,22 +13,21 @@ short means a 9-minute video where a 10-minute one was planned.
 ## How to change the length without hurting the script
 
 **Count in SENTENCES, not characters — you cannot count characters reliably.**
-Each numbered point in the body should run **18-22 short sentences**: one naming the
-trait, two or three explaining it through psychology, **eight to ten telling one
-concrete everyday scene** (a place, an action, a felt sensation), one or two
-closing it. A point shorter than that is the reason the script comes up short.
+Adjusting sentence counts is something you can actually do; hitting a character
+count is not. This is the one mechanical rule here.
 
-**Do NOT lengthen by making sentences longer.** Measured on this channel's
-best-retaining video: 29 characters per sentence — short sentences, easy to
-follow when read aloud. Reach the target by writing MORE sentences: another beat
-of the scene, another concrete detail, another short line that lets a point land.
+**Do NOT lengthen by making sentences longer.** Long sentences are harder to
+follow read aloud, and stretching them buys length at the cost of the thing that
+keeps people watching. Reach the target by writing MORE sentences.
 
-- **To lengthen:** find the points that are missing the everyday scene and write
-  it in — eight to ten sentences each, with a place, an action, and a feeling in
-  the body. Deepen what is already there; never pad with filler, never repeat a
-  point already made.
+- **To lengthen:** find the points that are thinnest and deepen them — another
+  beat of a scene, another concrete detail, another short line that lets a point
+  land. Never pad with filler, never repeat a point already made.
 - **To shorten:** cut hedging, cut restatements, tighten sentences. Never cut
   an idea or the CTA.
+
+Which points are thin, and what a point needs to feel complete, depends on the
+subject — judge it by reading, not by a fixed sentence count.
 
 Keep the structure, the order of ideas, the emotion, and the ending.
 Work in **<<LANGUAGE>>**.

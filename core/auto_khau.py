@@ -2326,17 +2326,20 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 except OSError:
                     pass
 
+        # Đo bằng chữ ĐỌC LÊN, không phải `len()`: bản này đã qua `3-sua.md`
+        # nên nó mang 210–406 ký tự xuống dòng — xem `_do_doc`.
+        doc_duoc = _do_doc(ban_nhap)
         lech = _lech(ban_nhap, muc_tieu_kt)
         if muc_tieu_kt > 0:
             bc.ghi("  kịch bản: {3} ký tự ≈ {4} phút đọc (nhắm {5} phút ≈ {1} ký "
                    "tự, lệch {2:.0%}).".format(
-                       len(ban_nhap), muc_tieu_kt, lech, len(ban_nhap),
-                       _phut(len(ban_nhap), k.ky_tu_moi_phut),
+                       doc_duoc, muc_tieu_kt, lech, doc_duoc,
+                       _phut(doc_duoc, k.ky_tu_moi_phut),
                        _phut(muc_tieu_kt, k.ky_tu_moi_phut)))
         else:
             bc.ghi("  kịch bản: {0} ký tự ≈ {1} phút đọc (độ dài tự do, không nhắm mốc).".format(
-                len(ban_nhap), _phut(len(ban_nhap), k.ky_tu_moi_phut)))
-        _kiem_kich_ban_dung_duoc(len(ban_nhap), muc_tieu_kt, duong_kb,
+                doc_duoc, _phut(doc_duoc, k.ky_tu_moi_phut)))
+        _kiem_kich_ban_dung_duoc(doc_duoc, muc_tieu_kt, duong_kb,
                                  tu_do=bool(getattr(k, "do_dai_tu_do", False)))
         _kiem_ban_sach(bc, ban_nhap, duong_kb)
 
@@ -2365,7 +2368,7 @@ def _khau_kich_ban(bc_goc: BoiCanh):
         # nội dung. Xem `_chen_the_cam_xuc`, gọi từ khâu giọng đọc.
         _lam_sach_ket_qua(bc, duong_kb, duong_seo,
                           os.path.join(d, "1-tieu-de.txt"))
-        return {"so_ky_tu": len(ban_nhap), "lech": round(lech, 3),
+        return {"so_ky_tu": doc_duoc, "lech": round(lech, 3),
                 "tieu_de": tieu_de, "chu_bia": chu_bia}
 
     # Nhãn cho nhật ký của `core/auto.chay`: khâu này có đi ví hay không.
@@ -2698,15 +2701,51 @@ def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:
     return sach
 
 
+#: Dấu ngăn phần trong `prompt/3-sua.md` — tool đổi nó thành một quãng lặng
+#: thật, nên nó KHÔNG được đọc lên.
+_DAU_NGAN = re.compile(r"(?m)^\s*-{3,}\s*$")
+
+
+def _do_doc(chu: str) -> int:
+    """Số ký tự THẬT SỰ được đọc lên — thước duy nhất đúng cho độ dài video.
+
+    ═══ VÌ SAO KHÔNG DÙNG `len()` (đo 04/09/2026) ═══
+
+    Bước `3-sua.md` tách mỗi câu một dòng cho giọng đọc. Bản cuối vì thế mang
+    **210–406 ký tự xuống dòng**, cộng 6–10 dấu `---`. Trên đích 3.926 của
+    TL4-T7 thì đó là **5–10%** con số đem đi so — mà không ai đọc chúng.
+
+    Đo bốn lượt thật (`1-kich-ban.txt` so với chính `2-giong-doc.mp3`):
+
+        lượt   thô    sạch   xuống dòng   giọng đọc thật
+        0002  3.834   3.404       406       11,97 phút
+        0004  4.076   3.848       210       14,90 phút
+        0005  4.051   3.820       213       14,84 phút
+        0006  4.529   4.143       356       15,05 phút
+
+    Lượt 0006 vượt trần dải ±15% đúng **14 ký tự** trong khi nó mang 356 ký tự
+    xuống dòng: bước nắn bị gọi dậy bởi thứ không có trong video. Đo bằng chữ
+    sạch thì nó nằm giữa dải, và bước nắn nằm im như nó phải thế.
+    """
+    return len(re.sub(r"\s+", "", _DAU_NGAN.sub("", _bo_the_cam_xuc(chu))))
+
+
+def _bo_the_cam_xuc(chu: str) -> str:
+    """Gỡ thẻ `[sighs]`, `[long pause]`… — chúng điều khiển giọng, không đọc lên."""
+    return re.sub(r"\[[a-z][a-z \-]*\]", "", chu)
+
+
 def _lech(chu: str, muc_tieu: int) -> float:
     """Kịch bản này lệch bao nhiêu phần trăm so với độ dài nhắm tới.
 
     `muc_tieu` là số ký tự nhắm tới — hoặc `ky_tu_muc_tieu` của kênh (theo
     phút), hoặc độ dài bản gốc khi kênh bật `do_dai_theo_goc`.
+
+    Đo bằng `_do_doc`, không phải `len()` — xem ghi chú ở đó.
     """
     if muc_tieu <= 0:
         return 0.0  # độ dài tự do: không có gì để lệch
-    return abs(len(chu) - muc_tieu) / max(1, muc_tieu)
+    return abs(_do_doc(chu) - muc_tieu) / max(1, muc_tieu)
 
 
 def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
@@ -2756,23 +2795,23 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         #
         # Kiểm tra ngay nếu đọc dòng này khi đang đi tìm lỗi: bước nắn CHỈ chạy
         # khi kênh có tệp `prompt/4-do-dai.md`.
-        if abs(len(ban_nhap) - muc_tieu) > muc_tieu * CHENH_CHO_PHEP:
+        if abs(_do_doc(ban_nhap) - muc_tieu) > muc_tieu * CHENH_CHO_PHEP:
             nhip = int(getattr(k, "ky_tu_moi_phut", 0) or 0)
             bc.ghi("  (bài {0} ký tự ≈ {2} phút, lệch nhắm {1} phút quá 20% — "
                    "kênh không có bước nắn độ dài prompt/4-do-dai.md, giữ "
-                   "nguyên)".format(len(ban_nhap), _phut(muc_tieu, nhip),
-                                    _phut(len(ban_nhap), nhip)))
+                   "nguyên)".format(_do_doc(ban_nhap), _phut(muc_tieu, nhip),
+                                    _phut(_do_doc(ban_nhap), nhip)))
         return ban_nhap
 
     dich = muc_tieu
     duoi, tren = dich * (1 - CHENH_CHO_PHEP), dich * (1 + CHENH_CHO_PHEP)
     khai = dich                       # lượt đầu khai đúng mục tiêu
-    tot_nhat, cach_nhat = ban_nhap, abs(len(ban_nhap) - dich)
+    tot_nhat, cach_nhat = ban_nhap, abs(_do_doc(ban_nhap) - dich)
 
     for vong in range(1, VONG_NAN_TOI_DA + 1):
-        if duoi <= len(tot_nhat) <= tren:
+        if duoi <= _do_doc(tot_nhat) <= tren:
             bc.ghi("  độ dài đạt: {0} ký tự (lệch {1:.0%}).".format(
-                len(tot_nhat), _lech(tot_nhat, muc_tieu)))
+                _do_doc(tot_nhat), _lech(tot_nhat, muc_tieu)))
             return tot_nhat
 
         # ═══ LUÔN NẮN TỪ BẢN GỐC ═══
@@ -2781,7 +2820,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         nguon = ban_nhap
         ghi_chu = ""
         if vong >= VONG_NAN_TOI_DA and tot_nhat is not ban_nhap \
-                and len(tot_nhat) > tren:
+                and _do_doc(tot_nhat) > tren:
             # Vòng cuối, và bản tốt nhất đang DÀI hơn trần: rút gọn từ chính
             # nó. Cắt 5.000 xuống 3.400 dễ hơn nhiều so với nén 18.000 xuống
             # 3.400, và tới đây thì đã hết lượt để thử lại từ đầu.
@@ -2789,7 +2828,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             khai = dich
             ghi_chu = " (rút từ bản gần nhất)"
 
-        thieu = dich - len(nguon)
+        thieu = dich - _do_doc(nguon)
         viec = ("THÊM khoảng {0} ký tự nữa".format(thieu) if thieu > 0
                 else "CẮT bớt khoảng {0} ký tự".format(-thieu))
         bc.ghi("  nắn độ dài vòng {0}: khai {1} ký tự{2}…".format(
@@ -2797,7 +2836,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         try:
             moi = _goi(bc, _thay(khuon, dict(
                 chung, DRAFT=nguon, CHARS=khai,
-                CHARS_NOW=len(nguon), CHARS_DELTA=thieu,
+                CHARS_NOW=_do_doc(nguon), CHARS_DELTA=thieu,
                 LENGTH_TASK=viec)),
                 _khoa_chat(luot, "4-do-dai.md:v{0}".format(vong))).strip()
             # Dọn TRƯỚC khi đo: ghi chú kỹ thuật cũng là ký tự, và bước này
@@ -2810,7 +2849,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         if not moi:
             return tot_nhat
 
-        n = len(moi)
+        n = _do_doc(moi)
         bc.ghi("    → {0} ký tự (nhắm {1}).".format(n, dich))
         if abs(n - dich) < cach_nhat:
             tot_nhat, cach_nhat = moi, abs(n - dich)
@@ -2830,7 +2869,7 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         khai = int(max(dich * 0.3, min(dich * 1.5, khai * he_so)))
 
     bc.ghi("  độ dài cuối: {0} ký tự (lệch {1:.0%}).".format(
-        len(tot_nhat), _lech(tot_nhat, muc_tieu)))
+        _do_doc(tot_nhat), _lech(tot_nhat, muc_tieu)))
     return tot_nhat
 
 

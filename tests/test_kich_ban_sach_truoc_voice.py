@@ -29,7 +29,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.auto import LuotChay, TrangThaiKhau  # noqa: E402
-from core.auto_khau import BoiCanh, _khau_kich_ban  # noqa: E402
+from core.auto_khau import BoiCanh, _do_doc, _khau_kich_ban  # noqa: E402
 from core.kenh import Kenh  # noqa: E402
 from core.su_co import LoiNoiDung  # noqa: E402
 
@@ -173,7 +173,27 @@ class TestTepDemDiDocPhaiSach:
 
     def test_do_dai_do_tren_bai_SACH(self):
         """Ghi chú cũng là ký tự. Đo cả ghi chú thì bước nắn tưởng bài đã đủ
-        dài, rồi nó cắt bớt lời đọc thật để bù vào."""
+        dài, rồi nó cắt bớt lời đọc thật để bù vào.
+
+        ═══ MỞ RỘNG 04/09/2026: XUỐNG DÒNG CŨNG KHÔNG ĐỌC LÊN ═══
+
+        Bài này vốn đòi con số báo ra bằng ĐÚNG `len()` của tệp. Nhưng bước
+        `3-sua.md` tách mỗi câu một dòng cho giọng đọc, nên tệp mang 210–406
+        ký tự xuống dòng, cộng 6–10 dấu `---` (tool đổi thành quãng lặng thật).
+
+        Đo bốn lượt TL4-T7 — tệp `1-kich-ban.txt` so với chính giọng đọc
+        `2-giong-doc.mp3` — thì phần thừa ấy là **5–10%** con số đem đi so:
+
+            lượt   len()   đọc lên   xuống dòng   giọng đọc thật
+            0002   3.834    3.404       406        11,97 phút
+            0004   4.076    3.848       210        14,90 phút
+            0005   4.051    3.820       213        14,84 phút
+            0006   4.529    4.143       356        15,05 phút
+
+        Lượt 0006 bị đá ra khỏi dải ±15% đúng **14 ký tự** trong khi nó mang
+        356 ký tự xuống dòng — bước nắn bị gọi dậy bởi thứ không có trong
+        video. Nên con số báo ra (và con số bước nắn so) phải là chữ ĐỌC LÊN.
+        """
         dong = []
 
         class _Ghi(_AIBan):
@@ -186,10 +206,18 @@ class TestTepDemDiDocPhaiSach:
                             dau_vao={"kich_ban": LOI_DOC})
             _khau_kich_ban(bc)(luot, TrangThaiKhau(ma="kich-ban"))
             with open(os.path.join(d, "1-kich-ban.txt"), encoding="utf-8") as t:
-                that = len(t.read().rstrip("\n"))
+                tep = t.read().rstrip("\n")
+        that = _do_doc(tep)
         bao = [x for x in dong if "kịch bản:" in x]
         assert bao, dong
         assert str(that) in bao[-1], (bao[-1], that)
+        # Nửa còn lại: phải là chữ ĐỌC LÊN, không phải `len()` của tệp — nếu
+        # không thì bài trên vẫn xanh khi ai đó lặng lẽ đo lại bằng `len()`.
+        assert that < len(tep), (
+            "bản mẫu phải CÓ xuống dòng thì bài kiểm mới phân biệt được hai "
+            "cách đo")
+        assert str(len(tep)) not in bao[-1], (
+            "đang báo len() của tệp — xuống dòng và dấu --- không được đọc lên")
 
 
 class TestChanKhiKhongDonDuoc:
