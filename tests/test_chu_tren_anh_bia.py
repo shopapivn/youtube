@@ -67,15 +67,28 @@ class _BC:
 
 
 class TestTenKieuKhopLoiNhac:
-    def test_ten_tam_thu_ba_dung_ten_loi_nhac_xin(self):
-        # Đây chính là chỗ hụt: lời nhắc xin `youtube_ctr`, mã phải gọi đúng thế.
-        assert [t for t, _ in KIEU_THUMB] == ["portrait_main", "dramatic_scene",
-                                              "youtube_ctr"]
+    def test_ba_kieu_dau_giu_nguyen_ten_va_thu_tu(self):
+        """Đây chính là chỗ hụt cũ: lời nhắc xin `youtube_ctr`, mã phải gọi
+        đúng thế.
 
-    def test_ten_trong_ma_khop_moi_tep_loi_nhac_tren_dia(self):
+        Ba kiểu này còn là ba kiểu MẶC ĐỊNH (`so_thumbnail: 3`), và `_chuan_bi
+        _bia` cắt `KIEU_THUMB[:so_thumbnail]` — nên thứ tự đổi là mọi kênh
+        đang để 1..3 đổi theo mà không ai biết.
+        """
+        assert [t for t, _ in KIEU_THUMB][:3] == [
+            "portrait_main", "dramatic_scene", "youtube_ctr"]
+
+    def test_ten_BA_KIEU_DAU_khop_moi_tep_loi_nhac_tren_dia(self):
+        """Chỉ soi ba kiểu đầu.
+
+        Từ 05/09/2026 tên của MỌI kiểu được `_LUAT_SO_BIA` nhét thẳng vào lời
+        nhắc lúc chạy, nên tệp trên đĩa không cần liệt kê nữa — xem
+        `test_loi_nhac_noi_ro_SO_BAN_va_ten_tung_ban`. Nhưng ba kiểu đầu vẫn
+        được các tệp ấy viết cứng, và kênh nào cũng chạy chúng, nên vẫn canh.
+        """
         goc = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         thu = os.path.join(goc, "CHANNEL")
-        ten_ma = {t for t, _ in KIEU_THUMB}
+        ten_ma = [t for t, _ in KIEU_THUMB][:3]
         da_soi = 0
         for goc_thu, _dirs, tep in os.walk(thu):
             if "8-thumbnail.md" not in tep:
@@ -199,12 +212,48 @@ class TestChotChuBiaKhongCho_AI_TuBia:
             _loi_nhac_bia(bc, _luot(thu), bc.kenh.prompt["8-thumbnail.md"],
                           "スポーツに興味がない人の脳", "読める文字",
                           list(KIEU_THUMB))
-        gui = bc.loi_nhac_da_gui[0]
+        gui = " ".join(bc.loi_nhac_da_gui[0].split())
         assert "COMPETITOR THUMBNAIL LAYOUT" in gui
         assert "text across the top in two lines" in gui
-        assert "portrait_main" in gui, "phải nói rõ chỉ tấm 1 bám bố cục ấy"
-        assert "Concepts 2 \nand 3" in gui or "Concepts 2 and 3" in gui.replace(
-            "\n", " "), "hai tấm kia phải giữ nguyên kiểu cũ để còn so được"
+        assert "`goc_`" in gui, "phải nói rõ chỉ các tấm goc_* bám bố cục ấy"
+        assert "Every other concept keeps the `TEXT STYLE` block" in gui, (
+            "ba tấm kia phải giữ nguyên kiểu cũ để còn so được")
+        # Bìa loạt trước bạc màu vì thiếu đúng câu này — xem LOI-NHAC v2.
+        assert "no muddy mid-tone" in gui
+
+    def test_sau_kieu_bia_ba_cua_minh_ba_bam_goc(self):
+        """═══ SÁU TẤM: BA KIỂU MÌNH, BA KIỂU BÁM ĐỐI THỦ (05/09/2026) ═══
+
+        Chủ dự án: *"cần thêm prompt tạo ảnh để bám đối thủ và giữ cả prompt
+        cũ… cho tao 6 prompt và 6 ảnh để tao lựa chọn nhiều hơn"*.
+
+        Ba kiểu `goc_*` dùng bố cục đọc từ ảnh bìa đối thủ; ba kiểu cũ giữ
+        khuôn `TEXT STYLE` của kênh. Đặt cạnh nhau trong cùng một lượt thì so
+        được ngay, không phải cược cả một video vào một kiểu.
+        """
+        from core.auto_khau import KIEU_BAM_GOC
+
+        ten = [t for t, _ in KIEU_THUMB]
+        assert len(ten) == 6, ten
+        assert ten[:3] == ["portrait_main", "dramatic_scene", "youtube_ctr"], (
+            "ba kiểu cũ phải giữ NGUYÊN tên và NGUYÊN thứ tự — kênh khác đang "
+            "để so_thumbnail 1..3 và cắt theo thứ tự này")
+        assert list(KIEU_BAM_GOC) == ten[3:]
+        assert all(t.startswith("goc_") for t in KIEU_BAM_GOC), (
+            "luật bố cục nhận diện bằng tiền tố `goc_` — đổi tên là hỏng")
+
+    def test_loi_nhac_noi_ro_SO_BAN_va_ten_tung_ban(self):
+        """`8-thumbnail.md` viết cứng "ba concept". Nâng `so_thumbnail` lên 6
+        mà không nói gì thì AI vẫn trả về ba, và ba tấm sau rơi về bản ghép
+        cứng — bản ghép cứng vốn ra ảnh khác hẳn."""
+        with tempfile.TemporaryDirectory() as thu:
+            bc = _BC(_kenh(), _JSON_BIA)
+            _loi_nhac_bia(bc, _luot(thu), bc.kenh.prompt["8-thumbnail.md"],
+                          "Tiêu đề", "読める文字", list(KIEU_THUMB))
+        gui = bc.loi_nhac_da_gui[0]
+        assert "Return EXACTLY 6 entries" in gui, gui[-400:]
+        for t, _ in KIEU_THUMB:
+            assert "`{0}`".format(t) in gui, t
 
     def test_khong_doc_duoc_bo_cuc_thi_khong_them_gi(self):
         """Thiếu tệp bố cục là chuyện thường (ảnh không tải được, mô hình trả

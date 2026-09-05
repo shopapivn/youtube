@@ -5703,6 +5703,18 @@ def _khau_clip(bc: BoiCanh):
 #:
 #: Nên tên tấm thứ ba đổi về `youtube_ctr` cho khớp lời nhắc, và việc tra thì đi
 #: qua `_lay_ta_bia` — có tên khác thì nhận, AI đặt tên lạ thì lấy theo thứ tự.
+#: ═══ BA KIỂU ĐẦU LÀ KIỂU MÌNH, BA KIỂU SAU BÁM ĐỐI THỦ (05/09/2026) ═══
+#:
+#: Chủ dự án: *"cần thêm prompt tạo ảnh để bám đối thủ và giữ cả prompt cũ…
+#: cho tao 6 prompt và 6 ảnh để tao lựa chọn nhiều hơn"*.
+#:
+#: Ba kiểu `goc_*` dùng BỐ CỤC đọc được từ ảnh bìa đối thủ (`TEP_BIA_DOI_THU`),
+#: ba kiểu cũ giữ nguyên khuôn `TEXT STYLE` của kênh. Đặt cạnh nhau trong cùng
+#: một lượt thì so được ngay, mà không phải cược cả một video vào một kiểu.
+#:
+#: Kênh không đọc được bố cục đối thủ (không phải `nguyen_goc`, hoặc ảnh không
+#: tải được) thì ba kiểu `goc_*` tự rơi về khuôn thường — vẫn ra ảnh, chỉ là
+#: hết phần "bám".
 KIEU_THUMB = (
     ("portrait_main", "close-up portrait of the reference character, direct "
                       "emotional gaze, single clear feeling"),
@@ -5710,7 +5722,16 @@ KIEU_THUMB = (
                        "character small in a meaningful environment"),
     ("youtube_ctr", "one strong symbolic object in the foreground with the "
                     "character reacting behind it"),
+    ("goc_portrait", "competitor layout, character closer and centred, one "
+                     "clear feeling, strong single light source"),
+    ("goc_scene", "competitor layout, character small in the room, the place "
+                  "around them carrying the tension"),
+    ("goc_object", "competitor layout, one symbolic object lit in the "
+                   "foreground, character behind it in the dark"),
 )
+
+#: Kiểu nào bám bố cục đối thủ — xem `_LUAT_BO_CUC_DOI_THU`.
+KIEU_BAM_GOC = ("goc_portrait", "goc_scene", "goc_object")
 
 #: Tên cũ / tên khác cho cùng một kiểu bìa. Lời nhắc là tệp người dùng sửa được,
 #: nên tên trong đó sẽ lệch — nhận cả họ tên thay vì bắt gõ đúng một chữ.
@@ -5718,6 +5739,9 @@ _TEN_BIA_KHAC: Dict[str, Tuple[str, ...]] = {
     "youtube_ctr": ("symbolic_object", "high_ctr", "symbolic"),
     "portrait_main": ("portrait", "main_portrait"),
     "dramatic_scene": ("dramatic", "scene"),
+    "goc_portrait": ("competitor_portrait", "goc_chan_dung"),
+    "goc_scene": ("competitor_scene", "goc_canh"),
+    "goc_object": ("competitor_object", "goc_vat_the"),
 }
 
 
@@ -5790,16 +5814,29 @@ _LUAT_CHU_BIA_NGUYEN = (
 #: Chỉ đưa bố cục cho MỘT trong ba tấm. Ba tấm bám cùng một khuôn thì mất chỗ
 #: so sánh, mà cả kênh cược vào một phỏng đoán chưa ai đo.
 _LUAT_BO_CUC_DOI_THU = (
-    "\n\n## COMPETITOR THUMBNAIL LAYOUT — COPY IT FOR CONCEPT 1 ONLY\n"
+    "\n\n## COMPETITOR THUMBNAIL LAYOUT — FOR THE `goc_*` CONCEPTS ONLY\n"
     "This is the layout of the thumbnail that actually earned the views we are "
     "remaking:\n\n    {0}\n\n"
-    "For the FIRST concept (`portrait_main`) rebuild that layout: same text "
-    "placement and line count, same relative text size, same character size and "
-    "position, same lighting and mood. Keep the channel's art style and the "
-    "exact hook text above — copy the ARRANGEMENT, not the drawing.\n"
-    "This overrides the `TEXT STYLE` block for that concept only. Concepts 2 "
-    "and 3 keep the `TEXT STYLE` block as written, so the two approaches can be "
-    "compared on real numbers.\n"
+    "Every concept whose name starts with `goc_` must rebuild that layout: same "
+    "text placement and line count, same relative text size, same character "
+    "size and position, same lighting and mood. Keep the channel's art style "
+    "and the exact hook text above — copy the ARRANGEMENT, not the drawing.\n"
+    "For those concepts this REPLACES the `TEXT STYLE` block. Every other "
+    "concept keeps the `TEXT STYLE` block exactly as written, so the two "
+    "approaches can be compared on real numbers.\n"
+    "Push the contrast hard in the `goc_*` concepts: the room must be near-"
+    "black and the light source saturated and warm, with no muddy mid-tone "
+    "filling the frame, and the white character must stay the brightest, "
+    "crispest shape — never washed into its own pool of light.\n"
+)
+
+#: Bao nhiêu bản, tên gì. Lời nhắc `8-thumbnail.md` viết cứng "ba concept", nên
+#: nâng `so_thumbnail` lên 6 mà không nói gì thì AI vẫn chỉ trả về ba.
+_LUAT_SO_BIA = (
+    "\n\n## HOW MANY CONCEPTS\n"
+    "Return EXACTLY {0} entries in `thumbnails`, in this order, and use these "
+    "exact strings as `version_desc`:\n{1}\n"
+    "Each must be a different reason to click, not a restyle of the same idea.\n"
 )
 
 
@@ -5825,6 +5862,12 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
         "THUMB_TEXT_FONT": st.get("thumb_text_font", ""),
         "THUMB_TEXT_SHADOW": st.get("thumb_text_shadow", ""),
     })
+    # Lời nhắc của kênh viết cứng "ba concept" — nâng `so_thumbnail` lên 6 mà
+    # không nói gì thì AI vẫn chỉ trả về ba, và ba tấm sau rơi về bản ghép cứng.
+    if kieu:
+        loi_nhac += _LUAT_SO_BIA.format(
+            len(kieu), "\n".join("  {0}. `{1}` — {2}".format(i, t, m)
+                                 for i, (t, m) in enumerate(kieu, start=1)))
     # Kênh lấy nguyên chữ bìa đối thủ thì chữ ấy là **cố định** — chốt lại, kẻo
     # `8-thumbnail.md` mời AI tự nghĩ một câu hook mới (xem `_LUAT_CHU_BIA_NGUYEN`).
     if bc.kenh.che_do_tieu_de == "nguyen_goc" and chu_bia.strip():

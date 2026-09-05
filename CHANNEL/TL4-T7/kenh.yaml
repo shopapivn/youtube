@@ -97,7 +97,13 @@ che_do_tieu_de: "nguyen_goc"
 #  người dựng nhìn sóng âm là thấy ngay chỗ cắt. Để 0 là tắt.
 giay_nghi_phan: 1.2
 engine: "veo3"
-so_thumbnail: 3
+#  6 tấm: ba tấm theo kiểu của kênh (chữ khối to nửa trái), ba tấm `goc_*`
+#  bám BỐ CỤC đọc được từ chính ảnh bìa đối thủ. Chủ dự án, 05/09/2026:
+#  *"cần thêm prompt tạo ảnh để bám đối thủ và giữ cả prompt cũ - cho tao
+#  6 prompt và 6 ảnh để tao lựa chọn nhiều hơn"*.
+#  Đặt cạnh nhau trong cùng một lượt thì so được ngay, không phải cược cả
+#  một video vào một kiểu. Xem KIEU_THUMB trong core/auto_khau.py.
+so_thumbnail: 6
 mo_hinh: "claude-sonnet-5"
 dot_phu_de: false
 am_luong_nhac: 0.12
