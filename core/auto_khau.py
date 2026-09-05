@@ -807,11 +807,34 @@ def _anh_thanh_data_url(byte: bytes, kieu: str = "image/jpeg") -> str:
         kieu, base64.b64encode(byte).decode("ascii"))
 
 
-#: Lời nhắc đọc chữ trên ảnh bìa — ngắn, chỉ xin đúng chữ nhìn thấy.
+#: Lời nhắc đọc ảnh bìa đối thủ — xin CHỮ và xin cả BỐ CỤC.
+#:
+#: ═══ VÌ SAO XIN THÊM BỐ CỤC (05/09/2026) ═══
+#:
+#: Kênh remake lấy nguyên tiêu đề và nguyên chữ bìa của đối thủ, vì hai thứ ấy
+#: đã chứng minh có người bấm. Rồi tới bố cục thì tool vứt hết và áp một kiểu
+#: tự nghĩ: chữ chiếm 45–55% khung, khối đỏ, nhân vật dồn phải.
+#:
+#: Đối chiếu bìa thật của đối thủ (video -bf2EAeXxOw) thì nó ngược hẳn: chữ
+#: nằm TRÊN CÙNG kín chiều ngang, hai dòng, nền tối; nhân vật NHỎ, đứng giữa
+#: khung trong quầng đèn; cả ảnh tối và ấm.
+#:
+#: Và số của kênh không đỡ được kiểu tự nghĩ: hai CTR cao nhất (12,04% và
+#: 8,2%) chỉ là **13 và 15 lượt bấm** trên 108 và 183 lượt hiển thị — cỡ mẫu
+#: không nói được gì. Con số duy nhất đo ở cỡ thật là 2,1% trên 22.289.
+#:
+#: Lượt gọi này vốn đã tải ảnh về và đã trả tiền rồi. Hỏi thêm bố cục trong
+#: cùng lượt ấy không tốn thêm gì.
 _LOI_NHAC_DOC_BIA = (
-    "Đây là ảnh bìa (thumbnail) một video. Hãy đọc và trả về ĐÚNG dòng chữ lớn "
-    "in trên ảnh, y nguyên từng chữ, không thêm giải thích, không dịch, không "
-    "thêm dấu ngoặc. Nếu ảnh không có chữ thì trả về một dòng trống."
+    "Đây là ảnh bìa (thumbnail) một video YouTube. Trả về DUY NHẤT một JSON:\n"
+    '{"chu": "...", "bo_cuc": "..."}\n\n'
+    '"chu": đúng dòng chữ lớn in trên ảnh, y nguyên từng chữ, không dịch, '
+    "không thêm dấu ngoặc. Ảnh không có chữ thì để chuỗi rỗng.\n"
+    '"bo_cuc": tả bố cục bằng TIẾNG ANH, một đoạn ngắn, đủ để một hoạ sĩ dựng '
+    "lại khung ấy mà không nhìn thấy ảnh: chữ nằm đâu (trên/dưới/trái/phải), "
+    "mấy dòng, chiếm khoảng bao nhiêu phần trăm khung, nền chữ thế nào, nhân "
+    "vật to nhỏ và đứng đâu, ánh sáng và tông màu chung. Tả cái NHÌN THẤY, "
+    "đừng khen và đừng đoán ý đồ."
 )
 
 #: Chữ bìa dài hơn ngần này thì gần như chắc là AI đã tả ảnh / giải thích thay
@@ -838,16 +861,23 @@ def _giong_tu_choi(chu: str) -> bool:
     return any(dau in thap for dau in _DAU_TU_CHOI_BIA)
 
 
-def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay, video_id: str) -> str:
-    """Đọc chữ trên ảnh bìa đối thủ. Hỏng thì trả "" để nơi gọi lấy đường lui.
+#: Bố cục ảnh bìa đối thủ, để riêng một tệp — chạy tiếp lượt đứt giữa chừng
+#: thì bước đọc ảnh bị bỏ qua, mà khâu ảnh bìa vẫn cần nó.
+TEP_BIA_DOI_THU = "0-bia-doi-thu.txt"
 
-    Không bao giờ ném lỗi ra ngoài: cổng có thể không nhận ảnh, ảnh có thể không
-    tải được — chuyện ấy không đáng làm vỡ cả lượt chạy. Nơi gọi thấy "" thì
-    lấy tiêu đề đối thủ làm chữ bìa.
+
+def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay,
+                         video_id: str) -> Tuple[str, str]:
+    """Đọc ảnh bìa đối thủ, trả `(chữ trên bìa, tả bố cục)`.
+
+    Hỏng thì trả `("", "")` để nơi gọi lấy đường lui — không bao giờ ném lỗi ra
+    ngoài: cổng có thể không nhận ảnh, ảnh có thể không tải được, chuyện ấy
+    không đáng làm vỡ cả lượt chạy. Nơi gọi thấy rỗng thì lấy tiêu đề đối thủ
+    làm chữ bìa, và khâu ảnh bìa dùng bố cục mặc định của kênh.
     """
     vid = str(video_id or "").strip()
     if not vid:
-        return ""
+        return "", ""
     tai = bc.tai_anh or _tai_anh_thumb
     byte = b""
     for ten in ("maxresdefault.jpg", "hqdefault.jpg"):
@@ -860,25 +890,36 @@ def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay, video_id: str) -> str:
         if byte:
             break
     if not byte:
-        return ""
+        return "", ""
     try:
         tra = _goi(bc, _LOI_NHAC_DOC_BIA, _khoa_chat(luot, "thumb-ocr"),
                    anh=_anh_thanh_data_url(byte))
     except Exception as loi:  # noqa: BLE001
         bc.ghi("  (không đọc được chữ trên ảnh bìa đối thủ: {0})".format(loi))
-        return ""
-    chu = " ".join((tra or "").split())
+        return "", ""
+    # Trả JSON thì tách hai phần; trả chữ trơn (bản cũ, hoặc mô hình bỏ qua
+    # định dạng) thì coi cả câu là chữ bìa và chịu mất phần bố cục.
+    bo_cuc = ""
+    try:
+        goi = loc_json(tra or "")
+    except Exception:  # noqa: BLE001
+        goi = None
+    if isinstance(goi, dict):
+        chu = " ".join(str(goi.get("chu") or "").split())
+        bo_cuc = " ".join(str(goi.get("bo_cuc") or "").split())
+    else:
+        chu = " ".join((tra or "").split())
     # Cổng nhận ảnh nhưng mô hình "kể" thay vì "đọc" thì trả về cả đoạn — dài
     # bất thường so với một dòng chữ bìa. Không tin, để nơi gọi lấy tiêu đề.
     if len(chu) > _TOI_DA_CHU_BIA:
         bc.ghi("  (chữ đọc từ ảnh bìa dài bất thường — bỏ, dùng tiêu đề đối thủ)")
-        return ""
+        return "", bo_cuc
     # Câu từ chối "không thấy ảnh" ngắn hơn rào dài ở trên nên lọt qua — bắt
     # riêng, kẻo ghi nguyên câu tiếng Anh ấy vào chữ bìa.
     if _giong_tu_choi(chu):
         bc.ghi("  (mô hình báo không thấy ảnh bìa — bỏ, dùng tiêu đề đối thủ)")
-        return ""
-    return chu
+        return "", ""
+    return chu, bo_cuc
 
 
 def _giay_srt(moc: Any) -> float:
@@ -2162,10 +2203,17 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             if not chu_bia:
                 bc.kiem_dung()
                 bc.ghi("  đang đọc chữ trên ảnh bìa đối thủ…")
-                doc = _doc_chu_bia_doi_thu(bc, luot, doi_thu.get("video_id", ""))
+                doc, bo_cuc = _doc_chu_bia_doi_thu(
+                    bc, luot, doi_thu.get("video_id", ""))
                 chu_bia = doc or tieu_de
                 if not doc:
                     bc.ghi("  (không lấy được chữ bìa — tạm dùng tiêu đề đối thủ)")
+                # Bố cục để riêng: khâu ảnh bìa chạy sau, và chạy tiếp một lượt
+                # đứt giữa chừng thì bước đọc ảnh này bị bỏ qua.
+                if bo_cuc:
+                    _ghi_chu(os.path.join(d, TEP_BIA_DOI_THU), bo_cuc + "\n")
+                    bc.ghi("  đọc được cả bố cục bìa đối thủ ({0} ký tự) — khâu "
+                           "ảnh bìa sẽ bám theo.".format(len(bo_cuc)))
         elif not khuon_tieu_de.strip():
             # ═══ THIẾU LỜI NHẮC THÌ BỎ QUA, ĐỪNG GỬI LỜI NHẮC RỖNG ═══
             #
@@ -5731,6 +5779,30 @@ _LUAT_CHU_BIA_NGUYEN = (
 )
 
 
+#: ═══ BÁM NỐT BỐ CỤC BÌA ĐỐI THỦ (05/09/2026) ═══
+#:
+#: Kênh remake lấy nguyên tiêu đề và nguyên chữ bìa vì hai thứ ấy đã chứng
+#: minh có người bấm. Bố cục thì tool vứt và áp kiểu tự nghĩ — mà không có số
+#: nào đỡ cho kiểu tự nghĩ ấy: hai CTR cao nhất của kênh là 13 và 15 lượt bấm.
+#:
+#: Chủ dự án, 05/09/2026: *"remake thì làm sao để bám đối thủ nhất"*.
+#:
+#: Chỉ đưa bố cục cho MỘT trong ba tấm. Ba tấm bám cùng một khuôn thì mất chỗ
+#: so sánh, mà cả kênh cược vào một phỏng đoán chưa ai đo.
+_LUAT_BO_CUC_DOI_THU = (
+    "\n\n## COMPETITOR THUMBNAIL LAYOUT — COPY IT FOR CONCEPT 1 ONLY\n"
+    "This is the layout of the thumbnail that actually earned the views we are "
+    "remaking:\n\n    {0}\n\n"
+    "For the FIRST concept (`portrait_main`) rebuild that layout: same text "
+    "placement and line count, same relative text size, same character size and "
+    "position, same lighting and mood. Keep the channel's art style and the "
+    "exact hook text above — copy the ARRANGEMENT, not the drawing.\n"
+    "This overrides the `TEXT STYLE` block for that concept only. Concepts 2 "
+    "and 3 keep the `TEXT STYLE` block as written, so the two approaches can be "
+    "compared on real numbers.\n"
+)
+
+
 def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
                   chu_bia: str, kieu) -> Dict[str, str]:
     """Nhờ AI viết lời nhắc cho ba ảnh bìa. Hỏng thì trả rỗng, không giết khâu.
@@ -5758,6 +5830,10 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
     if bc.kenh.che_do_tieu_de == "nguyen_goc" and chu_bia.strip():
         loi_nhac += _LUAT_CHU_BIA_NGUYEN.format(chu_bia.strip(),
                                                 len(chu_bia.strip()))
+        # Bám nốt BỐ CỤC của đối thủ, nếu đọc được — xem `_LUAT_BO_CUC_DOI_THU`.
+        bo_cuc = _doc_chu(os.path.join(luot.thu_muc, TEP_BIA_DOI_THU)).strip()
+        if bo_cuc:
+            loi_nhac += _LUAT_BO_CUC_DOI_THU.format(bo_cuc)
     try:
         goi = loc_json(_goi(bc, loi_nhac,
                             khoa_viec(luot, "chat", "thumb", tieu_de, chu_bia)))

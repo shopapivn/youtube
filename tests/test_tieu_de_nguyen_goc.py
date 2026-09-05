@@ -113,6 +113,57 @@ class TestLayNguyenTieuDeVaDocBia:
         assert len(goi.co_anh) == 1
         assert goi.co_anh[0]["anh"].startswith("data:image/jpeg;base64,")
 
+    def test_doc_luon_BO_CUC_bia_doi_thu(self):
+        """═══ REMAKE THÌ BÁM NỐT BỐ CỤC (05/09/2026) ═══
+
+        Kênh này lấy nguyên tiêu đề và nguyên chữ bìa của đối thủ, vì hai thứ
+        ấy đã chứng minh có người bấm. Nhưng bố cục thì tool vứt và áp một kiểu
+        tự nghĩ: chữ chiếm 45–55% khung, khối đỏ, nhân vật dồn phải.
+
+        Đối chiếu bìa thật của đối thủ (video -bf2EAeXxOw): chữ nằm TRÊN CÙNG
+        kín chiều ngang, hai dòng, nền tối; nhân vật NHỎ, giữa khung. Ngược hẳn.
+
+        Và không có số nào đỡ cho kiểu tự nghĩ: hai CTR cao nhất của kênh
+        (12,04% và 8,2%) chỉ là **13 và 15 lượt bấm** trên 108 và 183 lượt
+        hiển thị. Con số duy nhất đo ở cỡ thật là 2,1% trên 22.289.
+
+        Lượt gọi đọc ảnh vốn đã tải ảnh về và đã trả tiền — hỏi thêm bố cục
+        trong cùng lượt ấy không tốn thêm gì.
+        """
+        from core.auto_khau import TEP_BIA_DOI_THU
+
+        goi = _GoiChat(bia='{"chu": "読める文字", "bo_cuc": "text across the '
+                           'top in two lines on a dark band, character small '
+                           'and centred under a warm lamp"}')
+        lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=lambda u: b"\xff\xd8jpeg")
+            _chay(bc, _kenh(), d, {"link": "http://x"})
+            noi_dung = _tieu_de_da_ghi(d)
+            with open(os.path.join(d, TEP_BIA_DOI_THU), encoding="utf-8") as f:
+                bo_cuc = f.read()
+        # Chữ bìa tách ra sạch, không dính JSON.
+        assert "THUMB: 読める文字" in noi_dung, noi_dung
+        assert "{" not in noi_dung
+        # Bố cục để riêng một tệp: khâu ảnh bìa chạy sau, và chạy tiếp một lượt
+        # đứt giữa chừng thì bước đọc ảnh này bị bỏ qua.
+        assert "two lines on a dark band" in bo_cuc
+        # Vẫn đúng MỘT lượt gọi có ảnh — không đẻ thêm lượt nào để xin bố cục.
+        assert len(goi.co_anh) == 1
+
+    def test_tra_chu_TRON_thi_van_chay(self):
+        """Đường lui: mô hình bỏ qua định dạng JSON và trả chữ trơn thì vẫn
+        lấy được chữ bìa, chỉ mất phần bố cục. Không được vỡ lượt chạy."""
+        from core.auto_khau import TEP_BIA_DOI_THU
+
+        goi = _GoiChat(bia="読める文字")
+        lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=lambda u: b"\xff\xd8jpeg")
+            _chay(bc, _kenh(), d, {"link": "http://x"})
+            assert "THUMB: 読める文字" in _tieu_de_da_ghi(d)
+            assert not os.path.exists(os.path.join(d, TEP_BIA_DOI_THU))
+
     def test_khong_doc_bia_khi_nguoi_dung_dua_du(self):
         goi = _GoiChat()
         lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")

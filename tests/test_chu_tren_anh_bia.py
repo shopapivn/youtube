@@ -183,6 +183,38 @@ class TestChotChuBiaKhongCho_AI_TuBia:
         assert "({0} characters)".format(len(chu)) in gui, gui[-600:]
         assert len(chu) > 14, "bản mẫu phải DÀI hơn ngân sách thì bài mới có nghĩa"
 
+    def test_bo_cuc_doi_thu_di_vao_LOI_NHAC_VE(self):
+        """Đọc được bố cục mà không đưa vào lời nhắc vẽ thì đọc để làm gì.
+
+        Chỉ áp cho tấm 1. Ba tấm bám cùng một khuôn thì mất chỗ so sánh, mà cả
+        kênh cược vào một phỏng đoán chưa ai đo — xem `_LUAT_BO_CUC_DOI_THU`.
+        """
+        from core.auto_khau import TEP_BIA_DOI_THU
+
+        with tempfile.TemporaryDirectory() as thu:
+            with open(os.path.join(thu, TEP_BIA_DOI_THU), "w",
+                      encoding="utf-8") as f:
+                f.write("text across the top in two lines, character small\n")
+            bc = _BC(_kenh(), _JSON_BIA)
+            _loi_nhac_bia(bc, _luot(thu), bc.kenh.prompt["8-thumbnail.md"],
+                          "スポーツに興味がない人の脳", "読める文字",
+                          list(KIEU_THUMB))
+        gui = bc.loi_nhac_da_gui[0]
+        assert "COMPETITOR THUMBNAIL LAYOUT" in gui
+        assert "text across the top in two lines" in gui
+        assert "portrait_main" in gui, "phải nói rõ chỉ tấm 1 bám bố cục ấy"
+        assert "Concepts 2 \nand 3" in gui or "Concepts 2 and 3" in gui.replace(
+            "\n", " "), "hai tấm kia phải giữ nguyên kiểu cũ để còn so được"
+
+    def test_khong_doc_duoc_bo_cuc_thi_khong_them_gi(self):
+        """Thiếu tệp bố cục là chuyện thường (ảnh không tải được, mô hình trả
+        chữ trơn). Không được vì thế mà chèn một khối rỗng vào lời nhắc."""
+        with tempfile.TemporaryDirectory() as thu:
+            bc = _BC(_kenh(), _JSON_BIA)
+            _loi_nhac_bia(bc, _luot(thu), bc.kenh.prompt["8-thumbnail.md"],
+                          "Tiêu đề", "読める文字", list(KIEU_THUMB))
+        assert "COMPETITOR THUMBNAIL LAYOUT" not in bc.loi_nhac_da_gui[0]
+
     def test_kenh_thuong_khong_bi_chot(self):
         # Kênh viết lại tiêu đề thì chữ bìa là do AI nghĩ — đừng ghì nó.
         with tempfile.TemporaryDirectory() as thu:
