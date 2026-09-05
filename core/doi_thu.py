@@ -446,6 +446,7 @@ def lay_du_lieu(
     thu_thap: Callable[..., Tuple[List[Channel], List[SearchHit]]] = collect,
     lay_chi_tiet: Callable[..., ChiTiet] = chi_tiet_video,
     lang: str = "",
+    on_log: Optional[Callable[[str], None]] = None,
 ) -> KetQua:
     """Chạy trọn một lượt: đọc ô nhập → lấy kênh → (tuỳ chọn) lấy chi tiết → chấm.
 
@@ -471,27 +472,51 @@ def lay_du_lieu(
     if not inputs:
         return ket
 
+    def ghi(dong: str) -> None:
+        """Vào sổ, VÀ ra màn hình ngay nếu nơi gọi có chỗ nhận.
+
+        ═══ VÌ SAO PHẢI CHẢY RA NGAY ═══
+
+        Trước đây nhật ký chỉ `ket.nhat_ky.append` rồi giao diện đổ ra một lần
+        lúc xong. Mà lượt mặc định của Skill này là **"Tất cả" video + "Lấy
+        chi tiết đầy đủ"**, tức mỗi video một lượt gọi mạng: một kênh 300 video
+        là 300 lượt. Suốt chừng ấy thời gian màn hình đứng im hoàn toàn.
+
+        Chủ dự án, 05/09/2026: *"tao ấn lấy nhưng mãi không xong mà ấn dừng thì
+        lại có dữ liệu"*. Không phải nó treo — nó đang chạy, chỉ là không có
+        cách nào biết. Bấm Dừng thì vòng lặp thoát sớm và trả về phần đã lấy,
+        nên dữ liệu hiện ra và trông như thể chính nút Dừng làm ra dữ liệu.
+
+        Số liệu tiến độ vốn đã có sẵn (vòng chi tiết ghi "…đã lấy chi tiết
+        25/312 video" mỗi 25 video) — chỉ thiếu đúng sợi dây nối nó ra màn hình.
+        """
+        ket.nhat_ky.append(dong)
+        if on_log is not None:
+            on_log(dong)
+
     kenh, hits = thu_thap(
         inputs,
         # 0 = lấy hết kênh. Xem `youtube.fetch_channel`.
         max_videos=max(0, int(so_video or 0)),
         expand=bool(mo_rong),
         cancel=cancel,
-        on_log=ket.nhat_ky.append,
+        on_log=ghi,
         lang=lang,
     )
     ket.insights = [analyze_channel(k) for k in kenh]
     ket.hits = list(hits)
 
     if chi_tiet and ket.insights:
-        ket.nhat_ky.append(
-            "Đang lấy chi tiết từng video (like, comment, hashtag, mô tả)…")
+        ghi("Đang lấy chi tiết từng video (like, comment, hashtag, mô tả)…")
+        ghi("  {0} video — mỗi video một lượt hỏi, nên khâu này lâu nhất. "
+            "Bấm Dừng lúc nào cũng được, phần đã lấy vẫn giữ."
+            .format(sum(len(i.channel.videos) for i in ket.insights)))
         ket.chi_tiet = bo_sung_chi_tiet(
-            ket.insights, cancel=cancel, on_log=ket.nhat_ky.append,
+            ket.insights, cancel=cancel, on_log=ghi,
             lay=lay_chi_tiet, lang=lang)
 
     # `scanned` chỉ đúng khi thật sự có dò ngách; báo bừa là chấm điểm độ bão
     # hoà trên dữ liệu không tồn tại.
     ket.verdict = judge(ket.insights, ket.hits, scanned=bool(mo_rong and ket.hits))
-    ket.nhat_ky.append("Xong: {0} kênh · {1} video.".format(ket.so_kenh, ket.so_video))
+    ghi("Xong: {0} kênh · {1} video.".format(ket.so_kenh, ket.so_video))
     return ket

@@ -362,6 +362,27 @@ def xoa_dau(im: Any, tra_alpha: bool = False):
 #: là vẽ lại một mảng tranh — việc phép vá màu không làm nổi cho tử tế.
 CANH_VUNG_TOI_DA = 600
 
+#: Khi KHÁCH ĐÃ KHOANH: trừ sao phải sạch tới mức này thì mới được chọn thay
+#: cho vá màu.
+#:
+#: ═══ VÌ SAO CAO HƠN CẢ VAN ĐƯỜNG TỰ DÒ, KHÔNG PHẢI THẤP HƠN ═══
+#:
+#: Trước đây chỗ này để **0,06** — nới xuống dưới `NGUONG_TIM` (0,12) với lập
+#: luận "người đã chỉ tay rồi, máy chỉ còn việc căn khớp". Lập luận ấy nhầm
+#: vai của con số: `ct` KHÔNG đo *có dấu hay không* — nó đo *trừ có sạch
+#: không*. Nới xuống 0,06 nghĩa là chấp nhận một lượt trừ chỉ xoá được 6% gờ
+#: viền rồi báo "xong, đã trừ sao", trong khi 94% vệt còn nguyên trên ảnh.
+#:
+#: Chủ dự án, 05/09/2026: *"chỗ xoá logo cho ảnh nó xoá dù có khoanh nhưng vẫn
+#: không sạch, vẫn có dấu ấn nhỏ"*. Đúng cái vệt ấy.
+#:
+#: Ghi chú của `NGUONG_TIM` ngay trên đây đã có sẵn số cần: một lượt trừ ĐÚNG
+#: dấu thật đo được cải thiện **61%**. Nên 0,35 vẫn ôm trọn ca thật mà loại
+#: hẳn nhóm trừ thiếu. Trượt van thì rơi xuống nước 2 — vá màu, thứ luôn phủ
+#: kín. Khách khoanh là muốn nó BIẾN MẤT; một vệt mờ "đẹp về lý thuyết" vẫn là
+#: một vệt còn đó.
+NGUONG_SACH_KHI_KHOANH = 0.35
+
 
 def _va_vung(np, A, x0: int, y0: int, x1: int, y1: int) -> None:
     """Vá `A[y0:y1, x0:x1]` bằng màu lan từ mép vào — sửa TẠI CHỖ.
@@ -439,9 +460,11 @@ def xoa_trong_vung(im: Any, vung: Tuple[int, int, int, int],
             return (im, "") if tra_cach else im
         if x1 - x0 > CANH_VUNG_TOI_DA or y1 - y0 > CANH_VUNG_TOI_DA:
             return (im, "") if tra_cach else im
-        # Nước 1: ngôi sao quen trong vùng — van nới vì khách đã chỉ tay.
+        # Nước 1: ngôi sao quen trong vùng. Van ĐỘ MỜ nới (khách đã chỉ tay nên
+        # không sợ vớ nhầm hoạ tiết), nhưng van ĐỘ SẠCH siết — xem
+        # `NGUONG_SACH_KHI_KHOANH`. Trừ không sạch thì thà vá.
         ket = _tim_va_xoa(d, A, cua_so=(x0, y0, x1, y1),
-                          nguong=0.06, muc=(0.10, 0.70))
+                          nguong=NGUONG_SACH_KHI_KHOANH, muc=(0.10, 0.70))
         if ket is not None:
             A, _am = ket
             ra = Image.fromarray(A.astype(np.uint8))

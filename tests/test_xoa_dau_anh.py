@@ -376,3 +376,81 @@ def test_doi_khung_hien_ve_toa_do_goc():
     # Kẹp trong mép ảnh.
     assert vung_goc_tu_hien((0, 0, 9999, 9999), 3.0, (1376, 768)) == \
         (0, 0, 1376, 768)
+
+
+class TestKhachTuKhoanhThiPhaiSACH:
+    """Khách khoanh là muốn dấu BIẾN MẤT, không phải "mờ đi một chút".
+
+    Chủ dự án, 05/09/2026: *"chỗ xoá logo cho ảnh nó xoá dù có khoanh nhưng vẫn
+    không sạch, vẫn có dấu ấn nhỏ"*.
+
+    Gốc: đường khoanh tay từng nới van xuống `nguong=0.06` — bằng NỬA van đường
+    tự dò (0,12) — với lập luận "người đã chỉ tay rồi, máy chỉ còn việc căn
+    khớp". Lập luận ấy nhầm vai con số: `ct` không đo *có dấu hay không*, nó đo
+    *trừ có sạch không*. Nới xuống 0,06 là chấp nhận một lượt trừ xoá được 6%
+    gờ viền rồi báo "xong", còn 94% vệt nằm nguyên trên ảnh.
+
+    Ghi chú của `NGUONG_TIM` có sẵn số đối chứng: trừ đúng dấu thật đo được cải
+    thiện **61%**.
+    """
+
+    #: Dấu THẬT nhưng cỡ 104 trong khi khuôn là 80 — watermark ngoài đời hiếm
+    #: khi đúng bằng khuôn ta có. Đây là ca "còn vệt mờ" của khách: van cũ 0,06
+    #: NHẬN lượt trừ này (đo được), van mới 0,35 từ chối và rơi xuống vá.
+    CO_LECH = 104
+    DO_MO = 0.32
+
+    def _dau_lech_co(self, im, x0, y0):
+        from core.xoa_dau_anh import TEP_DAU
+
+        hinh = np.load(TEP_DAU)["hinh"].astype(np.float64)
+        co = self.CO_LECH
+        h = np.asarray(
+            Image.fromarray((hinh * 255).astype(np.uint8)).resize(
+                (co, co), Image.BILINEAR), dtype=np.float64) / 255.0
+        A = np.asarray(im.convert("RGB"), dtype=np.float64)
+        a = np.clip(h * self.DO_MO, 0.0, 0.93)[:, :, None]
+        A[y0:y0 + co, x0:x0 + co, :] = (a * 255.0
+                                        + (1 - a) * A[y0:y0 + co, x0:x0 + co, :])
+        return Image.fromarray(A.astype(np.uint8)), h
+
+    def test_tru_KHONG_SACH_thi_va_chu_dung_de_lai_vet(self):
+        from core.xoa_dau_anh import xoa_trong_vung
+
+        x0, y0, co = 900, 480, self.CO_LECH
+        im, khuon = self._dau_lech_co(_nhieu(), x0, y0)
+        vung = (x0 - 8, y0 - 8, x0 + co + 8, y0 + co + 8)
+        ra, cach = xoa_trong_vung(im, vung, tra_cach=True)
+        assert cach == "va", (
+            "van cũ 0,06 nhận lượt trừ này và báo 'sao' — đúng vệt mờ khách "
+            "thấy; trừ không sạch thì phải vá")
+
+        # Và vệt phải thật sự hết: đo tương quan phần dư với chính khuôn dấu.
+        sach = np.asarray(_nhieu().convert("RGB"), dtype=np.float64).mean(axis=2)
+        def con_vet(anh):
+            v = np.asarray(anh.convert("RGB"), dtype=np.float64).mean(axis=2)
+            du = (v - sach)[y0:y0 + co, x0:x0 + co]
+            k = khuon - khuon.mean()
+            return float((du * k).sum() / (np.sqrt((k * k).sum()) * co))
+        assert con_vet(im) > 1.0, "ảnh vào phải có vệt, không thì bài kiểm vô nghĩa"
+        assert con_vet(ra) < con_vet(im) * 0.25, (
+            "sau khi xoá vẫn còn hình ngôi sao trong phần dư: {0:.2f} so với "
+            "{1:.2f} lúc vào".format(con_vet(ra), con_vet(im)))
+
+    def test_dau_THAT_thi_van_tru_sao_nhu_cu(self):
+        # Đừng vì siết van mà đánh mất đường trừ — nó phục hồi được phần ảnh
+        # NẰM DƯỚI dấu, còn vá thì chỉ loang màu che đi.
+        from core.xoa_dau_anh import xoa_trong_vung
+
+        im, (x0, y0, s) = _dan_dau(_nhieu(), 0.32)
+        ra, cach = xoa_trong_vung(
+            im, (x0 - 8, y0 - 8, x0 + s + 8, y0 + s + 8), tra_cach=True)
+        assert cach == "sao", "dấu thật đúng khuôn thì phải trừ, không phải vá"
+        assert ra is not im
+
+    def test_van_khoanh_tay_cao_hon_van_tu_do(self):
+        # Canh đúng chỗ đã lật ngược: van này phải CAO hơn `NGUONG_TIM`, vì nó
+        # hỏi "trừ có sạch không", không hỏi "có dấu không".
+        from core.xoa_dau_anh import NGUONG_SACH_KHI_KHOANH, NGUONG_TIM
+
+        assert NGUONG_SACH_KHI_KHOANH > NGUONG_TIM

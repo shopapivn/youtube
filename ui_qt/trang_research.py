@@ -354,10 +354,11 @@ class TrangNghienCuu(QWidget):
         huy = self._huy
 
         def viec() -> KetQua:
-            # Chạy ở LUỒNG NỀN — không chạm widget nào ở đây. Nhật ký gom vào
-            # `ket.nhat_ky`, giao diện đổ ra khi xong.
+            # Chạy ở LUỒNG NỀN — không chạm widget nào ở đây. Nhật ký đi qua
+            # `_ghi_tu_luong_nen`, thứ duy nhất được phép nói chuyện với Qt.
             return lay_du_lieu(chu, so_video=so_video, mo_rong=False,
-                               chi_tiet=chi_tiet, cancel=huy)
+                               chi_tiet=chi_tiet, cancel=huy,
+                               on_log=self._ghi_tu_luong_nen)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
@@ -390,8 +391,9 @@ class TrangNghienCuu(QWidget):
         co_du_lieu = bool(ket.insights)
         self._nut_xuat.setEnabled(co_du_lieu)
         self._nut_copy.setEnabled(co_du_lieu)
-        for dong in ket.nhat_ky[-TRAN_NHAT_KY:]:
-            self._log.appendPlainText(str(dong))
+        # KHÔNG đổ lại `ket.nhat_ky` ở đây: từ 2.120.3 mọi dòng đã chảy ra màn
+        # hình ngay lúc nó sinh ra (`on_log=self._ghi_tu_luong_nen`). Đổ lại là
+        # mỗi dòng hiện hai lần.
 
         self._do_bang(self._bang_video, ket.bang_video())
 
@@ -446,6 +448,20 @@ class TrangNghienCuu(QWidget):
 
     def _ghi_log(self, dong: str) -> None:
         self._log.appendPlainText(dong)
+        # Từ khi nhật ký chảy trực tiếp, một lượt "Tất cả video + chi tiết" có
+        # thể đẻ ra hàng nghìn dòng. Cắt như `trang_script._ghi`.
+        if self._log.blockCount() > TRAN_NHAT_KY:
+            self._log.clear()
+            self._log.appendPlainText("… (đã cắt bớt nhật ký cũ)")
+
+    def _ghi_tu_luong_nen(self, dong: str) -> None:
+        """Nhật ký bắn từ LUỒNG NỀN — phải đi vòng qua luồng vẽ.
+
+        Gọi thẳng `appendPlainText` từ luồng nền là chạm widget ngoài luồng vẽ:
+        Qt cho chạy một lúc rồi sập, không đoán trước được lúc nào. Cùng cách
+        với `trang_script._ghi_tu_luong_nen`.
+        """
+        self._app.goi_tren_luong_ve(lambda: self._ghi_log(dong))
 
     # ── Xuất ─────────────────────────────────────────────────────────────────
 
