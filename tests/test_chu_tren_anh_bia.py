@@ -152,6 +152,37 @@ class TestChotChuBiaKhongCho_AI_TuBia:
         assert "スポーツに興味がない理由" in gui
         assert "Do not translate it" in gui
 
+    def test_chu_bia_dai_thi_GO_ngan_sach_14_ky_tu(self):
+        """═══ HAI LUẬT ĐÁ NHAU, VÀ CHỮ BỊ ĐẢO (05/09/2026) ═══
+
+        `8-thumbnail.md` ép *"maximum 2 text blocks and 14 characters TOTAL"*,
+        và gọi con số ấy là NON-NEGOTIABLE. Đúng cho kênh tự nghĩ hook ngắn.
+
+        Kênh `nguyen_goc` lấy NGUYÊN chữ bìa đối thủ, dài bao nhiêu là chuyện
+        của đối thủ. Lượt TL4-T7/0009: 『これ』を一人でしているなら あなたのIQは
+        非常に高いかも — **27 ký tự**, không cách nào vào ngân sách 14.
+
+        Model xử mâu thuẫn bằng cách đẻ ra bốn khối rồi rải chữ, và 「かも」 —
+        một trợ từ KẾT CÂU — rơi vào giữa. Cả ba tấm đọc ra 「あなたのIQは /
+        かも / 非常に高い」: câu vỡ, người Nhật liếc qua là thấy.
+
+        Nên luật chốt chữ phải nói thẳng hai điều mà trước đây nó không nói.
+        """
+        chu = "『これ』を一人でしているなら あなたのIQは非常に高いかも"
+        with tempfile.TemporaryDirectory() as thu:
+            bc = _BC(_kenh(), _JSON_BIA)
+            _loi_nhac_bia(bc, _luot(thu), bc.kenh.prompt["8-thumbnail.md"],
+                          "スポーツに興味がない人の脳", chu, list(KIEU_THUMB))
+        gui = bc.loi_nhac_da_gui[0]
+        assert "14 characters TOTAL" in gui and "overrides the character budget" in gui, (
+            "phải nói rõ ngân sách 14 ký tự KHÔNG áp dụng khi chữ đã bị chốt")
+        assert "READING ORDER IS FIXED" in gui, (
+            "phải cấm đảo thứ tự đọc — đó là chỗ 「かも」 rơi ra giữa câu")
+        assert "never lift a word, particle or suffix out of the middle" in gui
+        # Số ký tự thật phải có mặt, để model biết nó vượt ngân sách bao nhiêu.
+        assert "({0} characters)".format(len(chu)) in gui, gui[-600:]
+        assert len(chu) > 14, "bản mẫu phải DÀI hơn ngân sách thì bài mới có nghĩa"
+
     def test_kenh_thuong_khong_bi_chot(self):
         # Kênh viết lại tiêu đề thì chữ bìa là do AI nghĩ — đừng ghì nó.
         with tempfile.TemporaryDirectory() as thu:

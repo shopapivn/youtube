@@ -5699,14 +5699,35 @@ def _lay_ta_bia(ta_bia: Dict[str, str], ten_kieu: str, so_bia: int) -> str:
 #: `8-thumbnail.md` lại bảo AI *"text: <hook in the channel's language>"*, tức
 #: mời nó tự nghĩ một câu hook mới. Đo lượt 0009: tấm thứ hai đội chữ
 #: 「温度が違う理由」 — câu AI tự bịa, không có trên bìa đối thủ.
+#: ═══ CHỮ BÌA NGUYÊN VĂN THÌ NGÂN SÁCH 14 KÝ TỰ KHÔNG ÁP DỤNG ═══
+#:
+#: `8-thumbnail.md` ép *"tối đa 2 khối chữ và 14 ký tự TỔNG"*, và gọi con số
+#: ấy là NON-NEGOTIABLE. Luật đó đúng cho kênh tự nghĩ câu hook ngắn.
+#:
+#: Nhưng kênh `nguyen_goc` lấy NGUYÊN chữ bìa đối thủ, và chữ ấy dài bao nhiêu
+#: là chuyện của đối thủ. Lượt 0009: 『これ』を一人でしているなら あなたのIQは
+#: 非常に高いかも — **27 ký tự**, nhét vào ngân sách 14 là bất khả.
+#:
+#: Model xử mâu thuẫn bằng cách đẻ ra bốn khối rồi rải chữ, và 「かも」 —
+#: một trợ từ KẾT CÂU — rơi vào giữa: người Nhật đọc ra 「あなたのIQは / かも /
+#: 非常に高い」, câu vỡ. Cả ba tấm của lượt 0009 đều hỏng kiểu này.
+#:
+#: Nên phải nói thẳng hai điều: ngân sách ký tự KHÔNG áp dụng, và thứ tự đọc
+#: là bất khả xâm phạm.
 _LUAT_CHU_BIA_NGUYEN = (
     "\n\n## MANDATORY — EXACT THUMBNAIL TEXT\n"
-    "The hook text is FIXED. It must appear on the image EXACTLY as written "
-    "below, character for character:\n\n    {0}\n\n"
-    "Do not translate it, rewrite it, shorten it, extend it or replace it with "
-    "your own wording. In the `TEXT STYLE` block, `text:` must be exactly this "
-    "string. You may only decide which part of it is the small trigger word and "
-    "which part is the huge MAIN word. Add no other text to the image.\n"
+    "The hook text is FIXED ({1} characters). It must appear on the image "
+    "EXACTLY as written below, character for character:\n\n    {0}\n\n"
+    "This overrides the character budget in the `TEXT STYLE` block: ignore the "
+    "\"maximum 2 text blocks and 14 characters TOTAL\" limit and use as many "
+    "blocks as this text needs. Shrink the type instead — the whole string "
+    "must fit.\n"
+    "READING ORDER IS FIXED. Reading the blocks top to bottom, left to right "
+    "must give back exactly the sentence above, word for word. Break it only "
+    "between clauses; never lift a word, particle or suffix out of the middle "
+    "of a phrase to use as a separate block.\n"
+    "Do not translate it, rewrite it, shorten it or extend it. Add no other "
+    "text to the image.\n"
 )
 
 
@@ -5735,7 +5756,8 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
     # Kênh lấy nguyên chữ bìa đối thủ thì chữ ấy là **cố định** — chốt lại, kẻo
     # `8-thumbnail.md` mời AI tự nghĩ một câu hook mới (xem `_LUAT_CHU_BIA_NGUYEN`).
     if bc.kenh.che_do_tieu_de == "nguyen_goc" and chu_bia.strip():
-        loi_nhac += _LUAT_CHU_BIA_NGUYEN.format(chu_bia.strip())
+        loi_nhac += _LUAT_CHU_BIA_NGUYEN.format(chu_bia.strip(),
+                                                len(chu_bia.strip()))
     try:
         goi = loc_json(_goi(bc, loi_nhac,
                             khoa_viec(luot, "chat", "thumb", tieu_de, chu_bia)))
