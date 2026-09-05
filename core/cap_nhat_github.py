@@ -81,6 +81,27 @@ _SO = re.compile(r"\d+")
 _DANG_SO_HIEU = re.compile(r"\A\d+(\.\d+){0,3}([.-][0-9A-Za-z]{1,12})?\Z")
 
 
+def don(chuoi: str) -> str:
+    """Dọn chuỗi phiên bản trước khi soi: bỏ khoảng trắng **và dấu BOM**.
+
+    ═══ MỘT KÝ TỰ VÔ HÌNH LÀM TẮT CẢ ĐƯỜNG CẬP NHẬT (đo 05/09/2026) ═══
+
+    `str.strip()` KHÔNG bỏ `\\ufeff` — Python không coi nó là khoảng trắng. Mà
+    `_DANG_SO_HIEU` neo ở đầu chuỗi (`\\A`), nên một tệp `VERSION` lưu bằng
+    UTF-8-BOM là `hop_le` trả False, `moi_hon` trả False, và tool **im lặng**
+    kết luận không có bản mới.
+
+    Chuyện đã xảy ra thật: từ bản 2.115.0 tới 2.119.2 — **mười lăm bản** — tệp
+    `VERSION` mang BOM (PowerShell `Set-Content -Encoding utf8` trên Windows
+    thêm vào), và không một máy khách nào được mời cập nhật. Không có lỗi, không
+    có dòng nhật ký; nhìn từ ngoài thì y hệt "đang dùng bản mới nhất".
+
+    Nên dọn ở đây, chỗ duy nhất mọi đường đều đi qua — đừng trông vào việc ai
+    cũng nhớ lưu tệp không BOM.
+    """
+    return (chuoi or "").lstrip("﻿").strip()
+
+
 def hop_le(chuoi: str) -> bool:
     """Chuỗi này trông có phải một số hiệu phiên bản không?
 
@@ -92,8 +113,10 @@ def hop_le(chuoi: str) -> bool:
     False
     >>> hop_le("404: Not Found")
     False
+    >>> hop_le("\\ufeff2.119.2")
+    True
     """
-    return bool(_DANG_SO_HIEU.match((chuoi or "").strip()))
+    return bool(_DANG_SO_HIEU.match(don(chuoi)))
 
 
 def url_version() -> str:
@@ -153,7 +176,9 @@ def kiem_ban_moi(dang_dung: str, tai: Callable[[str], bytes]) -> Optional[str]:
     đúng ở khâu này.
     """
     try:
-        chu = tai(_url_version_khong_dem()).decode("utf-8", "replace").strip()
+        # `don` chứ không phải `.strip()`: tệp VERSION lưu bằng UTF-8-BOM từng
+        # tắt cả đường cập nhật trong mười lăm bản — xem `don`.
+        chu = don(tai(_url_version_khong_dem()).decode("utf-8", "replace"))
     except Exception:  # noqa: BLE001 — mất mạng là chuyện thường, không phải lỗi
         return None
     return chu if chu and moi_hon(chu, dang_dung) else None
