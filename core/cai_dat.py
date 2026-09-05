@@ -93,6 +93,15 @@ MAC_DINH: Dict[str, Any] = {
     # để cập nhật. Dành cho máy không nối mạng ra ngoài.
     "hoi_ban_moi": True,
 
+    # Mở tool lên là tự bật cổng nhận (trạm 8765) cho máy ảo gọi về.
+    #
+    # Chủ dự án, 05/09/2026: *"ấn 1 nút là bên vm sẽ quét studio, quét trang chủ
+    # - rồi đưa về tool…"* — và lượt quét theo lịch 07:30 của máy ảo cũng phải
+    # tự về được. Cổng mà tắt thì máy ảo gọi vào khoảng không, và cả chuỗi "một
+    # nút" im lặng chết. Bật sẵn; tắt cổng bằng nút "Tắt cổng nhận" thì tool nhớ
+    # là bạn cố ý tắt, lần mở sau không tự bật nữa (xem trang_chi_so_ytb).
+    "cong_nhan_tu_bat": True,
+
     # Hiện hộp thoại khi tool gặp lỗi trong lúc chạy.
     #
     # Tắt thì lỗi vẫn được ghi vào `workspace/su-co.log`, chỉ là không hiện lên

@@ -70,6 +70,11 @@ MUC = (
     ("bao_su_co", "Hiện thông báo khi tool gặp lỗi",
      "Tắt thì lỗi vẫn được ghi lại đầy đủ vào workspace/su-co.log, chỉ là "
      "không hiện lên màn hình. Hợp khi bạn để tool chạy qua đêm."),
+    ("cong_nhan_tu_bat", "Tự bật cổng nhận khi mở tool",
+     "Mở tool lên là cổng nhận (trạm cho máy ảo gọi về) tự mở, để lượt quét "
+     "theo lịch của máy ảo và chuỗi “một nút” tự chạy mà không ai phải bấm. "
+     "Tắt thì mỗi lần mở tool bạn phải sang mục Chỉ số kênh bấm “Bật cổng "
+     "nhận”; bấm “Tắt cổng nhận” trong lúc dùng cũng tự tắt ô này."),
     # Nhãn phải ngắn: chữ trong ô đánh dấu không tự xuống dòng, nên một nhãn
     # dài kéo cả trang rộng quá mép cửa sổ. Đã đo: thêm hai chữ "(tắt sẵn)" là
     # tab này cần 793px, quá mức 760px, và `test_bo_cuc` đỏ ngay.

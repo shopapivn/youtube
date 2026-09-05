@@ -198,6 +198,24 @@ class TrangChiSoYTB(QWidget):
         self._dong_log.connect(self._them_log)
         if hasattr(self, "_tt"):
             self._ai_tien.connect(self._tt.setText)
+        # Tự bật cổng nhận lúc mở tool (tuỳ chọn `cong_nhan_tu_bat`, bật sẵn) — để
+        # lượt quét theo lịch của máy ảo và chuỗi "một nút" tự về được mà không ai
+        # phải nhớ bấm. Đợi một nhịp cho cửa sổ dựng xong rồi mới mở cổng.
+        if self._tram is not None:
+            QTimer.singleShot(1200, self._tu_bat_luc_mo)
+
+    def _tu_bat_luc_mo(self) -> None:
+        from core import cai_dat  # noqa: PLC0415
+
+        try:
+            if not cai_dat.doc(self._app.base_dir).get("cong_nhan_tu_bat", True):
+                return
+        except Exception:  # noqa: BLE001 — tệp cài đặt hỏng thì coi như bật sẵn
+            pass
+        loi = self.bao_dam_bat()
+        # Không bật hộp thoại: lúc mở tool mà cổng bận (bản tool khác đang mở) thì
+        # ghi vào nhật ký trạm là đủ, người dùng vào mục này sẽ thấy.
+        self._dong_log.emit("tự bật cổng nhận lúc mở tool: " + ("đang nhận" if not loi else loi.replace("\n", " ")))
         # Máy đã từng dùng máy ảo thì mở tool là cổng nhận TỰ BẬT — người
         # dùng không phải nhớ ghé đây bấm (02/09: "đừng nhiều tab nhiều mục
         # khó hiểu"). Máy chưa từng dùng thì không tự mở cổng làm gì.
@@ -337,14 +355,20 @@ class TrangChiSoYTB(QWidget):
         return ""
 
     def _bat_tat_tram(self) -> None:
+        from core import cai_dat  # noqa: PLC0415
+
         if self._tram.dang_chay:
             self._tram.tat()
             self._nut_tram.setText("Bật cổng nhận")
             self._nhan_tram.setText("Đang tắt.")
+            # Tắt bằng tay là cố ý — lần mở tool sau không tự bật nữa (đổi lại ở Cài đặt).
+            cai_dat.dat(self._app.base_dir, "cong_nhan_tu_bat", False)
             return
         loi = self.bao_dam_bat()
         if loi:
             QMessageBox.warning(self, "Không mở được cổng", loi)
+            return
+        cai_dat.dat(self._app.base_dir, "cong_nhan_tu_bat", True)
 
     def _chep_dia_chi(self) -> None:
         ds = tr.dia_chi_may(self._tram.cong)
