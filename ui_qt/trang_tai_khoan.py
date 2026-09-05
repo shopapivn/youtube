@@ -64,6 +64,13 @@ _SO_NHIP_TOI_DA = 100
 #: Cạnh ảnh QR trên màn hình. 220px quét được từ điện thoại cách nửa mét.
 _CANH_QR = 220
 
+#: Chờ ảnh QR của img.vietqr.io bao lâu rồi thôi, chuyển sang tự vẽ.
+#:
+#: Cố ý ngắn. Máy vào được host đó thì ảnh về trong dưới một giây; máy bị chặn
+#: (DNS nhà mạng, phần mềm diệt virus, proxy công ty) thì chờ 30 giây cũng vậy —
+#: mà mã đã có thể vẽ tại chỗ ngay từ giây đầu. Xem `_loi_qr`.
+_CHO_ANH_QR_S = 8.0
+
 #: Mở lại tab thì làm mới số dư, nhưng không dày hơn ngần này giây.
 _GIAN_LAM_MOI_S = 30
 
@@ -87,6 +94,8 @@ class TrangTaiKhoan(QWidget):
         super().__init__()
         self._app = app
         self._phieu: Optional[Dict[str, Any]] = None
+        #: Chuỗi VietQR gốc của phiếu đang hiện — để vẽ mã tại chỗ khi ảnh hỏng.
+        self._qr_payload = ""
         self._so_nhip = 0
         self._lan_lam_moi = 0.0
         #: Phiên đăng nhập web đang dựng (chỉ sống trong lúc đăng nhập/tạo khoá).
@@ -697,13 +706,20 @@ class TrangTaiKhoan(QWidget):
         self._khung_phieu.show()
         self._dong_ho.start(_NHIP_DO_MS)
 
+        # Chuỗi VietQR gốc — cất lại để vẽ mã tại chỗ khi ảnh không về (`core/qr.py`).
+        self._qr_payload = str(phieu.get("qr_payload") or "")
+
         url = str(phieu.get("qr_image_url") or phieu.get("qr_url") or "")
         if not url:
-            self._anh_qr.setText("Không có ảnh QR.\nChuyển khoản tay\ntheo thông tin bên phải.")
+            self._loi_qr(ValueError("phiếu không kèm ảnh QR"))
             return
         from core.download import download_bytes  # noqa: PLC0415
 
-        self._app.run_bg(lambda: download_bytes(url), on_ok=self._ve_qr, on_err=self._loi_qr)
+        # 8 giây chứ không phải 30: đã có đường lui (vẽ tại chỗ) thì bắt khách
+        # nhìn ô trống nửa phút là vô nghĩa. Máy vào được img.vietqr.io thì ảnh
+        # về trong dưới một giây; máy bị chặn thì chờ bao lâu cũng vậy.
+        self._app.run_bg(lambda: download_bytes(url, timeout=_CHO_ANH_QR_S),
+                         on_ok=self._ve_qr, on_err=self._loi_qr)
 
     def _ve_qr(self, du_lieu: bytes) -> None:
         anh = QPixmap()
@@ -715,6 +731,33 @@ class TrangTaiKhoan(QWidget):
                                           Qt.SmoothTransformation))
 
     def _loi_qr(self, _loi: BaseException) -> None:
+        """Ảnh QR không về — **vẽ lấy một cái**, đừng bỏ khách với ô trống.
+
+        Ảnh QR lấy từ `img.vietqr.io`, host của BÊN THỨ BA. Máy nào không ra
+        được host đó thì mọi thứ khác vẫn chạy — API `api.shopapi.vn` bình
+        thường, số tài khoản và nội dung chuyển khoản hiện đủ — mà riêng ô này
+        trống. Đó đúng là hình dạng "lỗi ở một vài máy" mà không ai tái hiện
+        được, vì máy người đi tìm lỗi thì vào img.vietqr.io được.
+
+        Máy chủ trả kèm `qr_payload` (chuỗi VietQR gốc, **cùng nội dung** với
+        tấm ảnh kia), nên chỗ này vẽ lại được mà không phải hỏi ai.
+
+        ⚠ Vẽ tại chỗ là đường LUI, không phải đường chính — xem `core/qr.py`.
+        """
+        from core.qr import ve_qr_png  # noqa: PLC0415
+
+        png = ve_qr_png(self._qr_payload, canh=_CANH_QR) if self._qr_payload else None
+        if png:
+            anh = QPixmap()
+            if anh.loadFromData(png):
+                self._anh_qr.setText("")
+                self._anh_qr.setPixmap(anh.scaled(_CANH_QR, _CANH_QR, Qt.KeepAspectRatio,
+                                                  Qt.SmoothTransformation))
+                self._trang_thai_nap.setText(
+                    "Mã QR do tool tự vẽ (máy bạn không tải được ảnh từ mạng) — "
+                    "quét bình thường. Đang chờ tiền vào…")
+                return
+
         self._anh_qr.setPixmap(QPixmap())
         self._anh_qr.setText("Không tải được ảnh QR.\nChuyển khoản tay\ntheo thông tin bên phải.")
 

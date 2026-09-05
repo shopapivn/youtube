@@ -26,11 +26,20 @@
 #   pillow        : hien thi anh QR nap tien, icon, va anh nhan vat o tab Auto
 #   httpx         : SDK shopapi goi HTTP qua thu vien nay
 #   cryptography  : cat giu khoa API tren may khach
+#   segno         : VE MA QR NAP TIEN NGAY TREN MAY KHACH. Anh QR lay tu
+#                   img.vietqr.io - host cua ben thu ba. May nao khong ra duoc
+#                   host do (DNS nha mang, diet virus, proxy cong ty) thi moi
+#                   thu khac van chay ma rieng o QR trong: khach khong nap duoc
+#                   tien, con minh thi khong tai hien duoc loi. Goi nay thuan
+#                   Python, khong co phan bien dich, khong keo theo gi.
+#                   Thieu no thi tool lui ve chi dan chuyen khoan tay nhu cu -
+#                   khong bao gio te hon hom nay. Xem core/qr.py.
 
 PyQt5>=5.15
 pillow>=10.0
 httpx>=0.27
 cryptography>=42.0
+segno>=1.6
 
 # --- Lay du lieu YouTube ----------------------------------------------------
 #

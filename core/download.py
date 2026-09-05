@@ -114,7 +114,8 @@ def download_to(
     return dest_path
 
 
-def download_bytes(url: str, *, max_bytes: int = 4 * 1024 * 1024) -> bytes:
+def download_bytes(url: str, *, max_bytes: int = 4 * 1024 * 1024,
+                   timeout: float = 30.0) -> bytes:
     """Tải một file nhỏ thẳng vào RAM — dùng cho ảnh mã QR nạp tiền.
 
     Không ghi ra đĩa: mã QR chỉ sống trong lúc khách đang nhìn màn hình, để lại
@@ -122,9 +123,14 @@ def download_bytes(url: str, *, max_bytes: int = 4 * 1024 * 1024) -> bytes:
 
     `max_bytes` là lưới chặn: nếu link bị đổi hướng sang một file khổng lồ thì tool
     dừng lại chứ không ngốn hết RAM của máy khách.
+
+    `timeout` để nơi gọi rút ngắn khi **có đường lui**: ảnh QR lấy từ host bên
+    thứ ba (img.vietqr.io), máy nào bị chặn thì chờ 30 giây rồi mới vẽ mã tại
+    chỗ là bắt khách nhìn ô trống nửa phút — mà mã đã sẵn sàng vẽ ngay từ giây
+    đầu. Xem `ui_qt/trang_tai_khoan._ve_phieu`.
     """
     try:
-        with httpx.Client(timeout=30.0, follow_redirects=True) as http:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as http:
             with http.stream("GET", url) as response:
                 if response.status_code >= 400:
                     raise DownloadError(

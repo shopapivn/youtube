@@ -206,6 +206,61 @@ def test_phieu_co_anh_qr_thi_hien_anh(_tab, monkeypatch):
     tab._dong_ho.stop()
 
 
+def test_anh_qr_hong_thi_tool_tu_ve_lay_mot_cai(_tab, monkeypatch):
+    """Máy khách không ra được `img.vietqr.io` thì VẪN phải có mã QR.
+
+    ═══ SỰ CỐ BÀI NÀY CANH ═══
+
+    Ảnh QR lấy từ host của bên thứ ba. Máy nào bị chặn (DNS nhà mạng, phần mềm
+    diệt virus, proxy công ty) thì mọi thứ khác vẫn chạy — API bình thường, số
+    tài khoản và nội dung chuyển khoản hiện đủ — mà **riêng ô QR trống**, nên
+    khách không nạp được tiền. Không ai tái hiện được, vì máy người đi tìm lỗi
+    thì vào host đó được.
+
+    Máy chủ trả kèm `qr_payload` (chuỗi VietQR gốc, cùng nội dung với tấm ảnh),
+    nên tool vẽ lại được.
+    """
+    pytest.importorskip("segno", reason="máy chạy test chưa cài segno")
+
+    import core.download as dl
+
+    def chan(url, **_k):
+        raise dl.DownloadError("máy này không ra được img.vietqr.io")
+
+    monkeypatch.setattr(dl, "download_bytes", chan)
+
+    tab = _tab(_App(khoa="sk_live_abcdef0123456789"))
+    tab._ve_phieu(dict(PHIEU,
+                       qr_image_url="https://img.vietqr.io/x.png",
+                       qr_payload="00020101021238570010A00000072701270006970422"))
+
+    anh = tab._anh_qr.pixmap()
+    assert anh is not None and not anh.isNull(), "ảnh hỏng mà không tự vẽ → khách hết đường quét"
+    assert tab._anh_qr.text() == ""
+    assert "tự vẽ" in tab._trang_thai_nap.text(), "phải nói rõ mã này do tool vẽ"
+    tab._dong_ho.stop()
+
+
+def test_khong_co_qr_payload_thi_lui_ve_chuyen_khoan_tay(_tab, monkeypatch):
+    """Máy chủ chưa trả `qr_payload` thì hành vi phải ĐÚNG BẰNG hôm nay.
+
+    Lưới dự phòng không được phép làm mọi thứ tệ hơn hiện trạng: thiếu chuỗi để
+    vẽ thì vẫn là dòng chỉ dẫn chuyển khoản tay như cũ, không phải ô câm.
+    """
+    import core.download as dl
+
+    def chan(url, **_k):
+        raise dl.DownloadError("mất mạng")
+
+    monkeypatch.setattr(dl, "download_bytes", chan)
+
+    tab = _tab(_App(khoa="sk_live_abcdef0123456789"))
+    tab._ve_phieu(dict(PHIEU, qr_image_url="https://img.vietqr.io/x.png"))
+
+    assert "Chuyển khoản tay" in tab._anh_qr.text()
+    tab._dong_ho.stop()
+
+
 def test_tien_vao_thi_bao_xanh_va_an_qr(_tab):
     from ui_qt import theme
 
