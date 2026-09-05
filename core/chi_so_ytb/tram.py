@@ -44,6 +44,7 @@ import os
 import re
 import socket
 import struct
+import sys
 import threading
 import time
 import zipfile
@@ -459,7 +460,33 @@ class Tram:
             return
         tram = self
 
-        class May(ThreadingHTTPServer):
+        class _ImKhiKhachNgat:
+            """Khách ngắt giữa chừng thì im, đừng đổ vết Python ra màn hình.
+
+            `socketserver.BaseServer.handle_error` mặc định in **cả vết đổ**
+            ra stderr. Mà cửa sổ đen của tool chính là stderr, nên chủ dự án
+            đọc được nguyên một khối `Traceback … ConnectionResetError:
+            [WinError 10054] An existing connection was forcibly closed by the
+            remote host` và tưởng tool hỏng (05/09/2026).
+
+            Nó không hỏng. Ngắt nửa chừng là chuyện thường của một trạm HTTP:
+            tab Chrome đóng, máy ảo ngủ, mạng chớp. Việc đã nhận xong vẫn nằm
+            nguyên trên đĩa; lượt đẩy dở thì extension tự gửi lại.
+
+            Cùng lẽ với chỗ nuốt 10054 ở tai dò phía trên. Chỉ nuốt ĐÚNG nhóm
+            lỗi đường truyền — lỗi khác vẫn để nguyên, vì im lặng nuốt hết là
+            tự bịt mắt mình.
+            """
+
+            def handle_error(self, request, client_address):
+                loai = sys.exc_info()[0]
+                if loai is not None and issubclass(
+                        loai, (ConnectionResetError, ConnectionAbortedError,
+                               BrokenPipeError, TimeoutError)):
+                    return
+                super().handle_error(request, client_address)
+
+        class May(_ImKhiKhachNgat, ThreadingHTTPServer):
             # Hai tầng: một ổ cắm IPv6 tắt V6ONLY nhận luôn cả khách IPv4.
             address_family = socket.AF_INET6
             daemon_threads = True
@@ -476,7 +503,7 @@ class Tram:
             self._may = May(("::", self.cong), _lam_xu_ly(tram))
         except OSError:
             # Máy tắt hẳn IPv6 thì lùi về IPv4 thuần, vẫn chạy được.
-            class May4(ThreadingHTTPServer):
+            class May4(_ImKhiKhachNgat, ThreadingHTTPServer):
                 daemon_threads = True
                 allow_reuse_address = True
 
