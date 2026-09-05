@@ -6006,6 +6006,17 @@ def _chuan_bi_bia(bc: BoiCanh, luot: LuotChay):
     thu_muc = os.path.join(luot.thu_muc, "7-thumbnail")
     os.makedirs(thu_muc, exist_ok=True)
     kieu = list(KIEU_THUMB[:max(1, bc.kenh.so_thumbnail)])
+    # ═══ KHÔNG CÓ BỐ CỤC ĐỐI THỦ THÌ ĐỪNG NÓI "COMPETITOR LAYOUT" ═══
+    #
+    # Ba kiểu `goc_*` tả mình là "competitor layout, …". Nhưng bố cục thật chỉ
+    # tới được lời nhắc khi kênh là `nguyen_goc` VÀ đọc được ảnh bìa đối thủ.
+    # Kênh khác mà khai `so_thumbnail: 6` thì ba tấm cuối nhận một câu nhắc tới
+    # thứ không ai đưa cho — AI đoán mò, và không có dòng nhật ký nào nói vì sao.
+    #
+    # Số tấm giữ nguyên (tên tệp đánh theo chỉ số, đổi số là hỏng đường chạy
+    # tiếp), chỉ bỏ hai chữ "competitor layout" khỏi phần tả.
+    if not _doc_chu(os.path.join(luot.thu_muc, TEP_BIA_DOI_THU)).strip():
+        kieu = [(t, m.replace("competitor layout, ", "")) for t, m in kieu]
     muc = list(enumerate(kieu, start=1))
     thieu = [m for m in muc if not os.path.exists(_tep_bia(thu_muc, m[0]))]
     tieu_de, chu_bia = _doc_tieu_de(

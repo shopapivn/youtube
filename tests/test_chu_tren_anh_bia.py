@@ -242,6 +242,29 @@ class TestChotChuBiaKhongCho_AI_TuBia:
         assert all(t.startswith("goc_") for t in KIEU_BAM_GOC), (
             "luật bố cục nhận diện bằng tiền tố `goc_` — đổi tên là hỏng")
 
+    def test_khong_co_bo_cuc_thi_bo_chu_competitor_layout(self):
+        """Ba kiểu `goc_*` tự tả là "competitor layout, …". Nhưng bố cục thật
+        chỉ tới được lời nhắc khi kênh là `nguyen_goc` VÀ đọc được ảnh bìa.
+
+        Kênh khác khai `so_thumbnail: 6` thì ba tấm cuối nhận một câu nhắc tới
+        thứ không ai đưa cho — AI đoán mò, và không có dòng nhật ký nào nói vì
+        sao. Bịt trước khi bản này tới máy khách.
+        """
+        from core.auto_khau import _chuan_bi_bia
+
+        with tempfile.TemporaryDirectory() as thu:
+            with open(os.path.join(thu, "1-tieu-de.txt"), "w",
+                      encoding="utf-8") as f:
+                f.write("TITLE: t\nTHUMB: 読める文字\n")
+            bc = _BC(_kenh(so_thumbnail=6), _JSON_BIA)
+            _thu_muc, muc, _thieu, _ta, _td, _cb = _chuan_bi_bia(bc, _luot(thu))
+        assert len(muc) == 6, "số tấm phải giữ nguyên — tên tệp đánh theo chỉ số"
+        ta = " ".join(m for _i, (_t, m) in muc)
+        assert "competitor layout" not in ta, ta
+        # Tên kiểu KHÔNG đổi: `_lay_ta_bia` và luật bố cục đều tra theo tên.
+        assert [t for _i, (t, _m) in muc][3:] == [
+            "goc_portrait", "goc_scene", "goc_object"]
+
     def test_loi_nhac_noi_ro_SO_BAN_va_ten_tung_ban(self):
         """`8-thumbnail.md` viết cứng "ba concept". Nâng `so_thumbnail` lên 6
         mà không nói gì thì AI vẫn trả về ba, và ba tấm sau rơi về bản ghép
