@@ -29,9 +29,15 @@ view không", họ hỏi "kênh cỡ mình có cửa không" — và video 300K 
 ═══ LUẬT LUỒNG ═══
 
 Phần lấy dữ liệu nằm ở `core/doi_thu.py` (test được, không cần Qt) và chạy ở
-LUỒNG NỀN qua `app.run_bg`. Luồng nền **không chạm widget**: nhật ký được gom
-vào `KetQua.nhat_ky` rồi đổ ra màn hình một lần khi xong — y như trang cũ làm.
-Nút Dừng vẫn là `threading.Event` truyền xuống lõi.
+LUỒNG NỀN qua `app.run_bg`. Luồng nền **không chạm widget**: nhật ký và số
+tiến độ đi qua `_ghi_tu_luong_nen` / `_bao_tien_do`, hai hàm duy nhất được phép
+nói chuyện với Qt (chúng đẩy qua `goi_tren_luong_ve`). Nút Dừng vẫn là
+`threading.Event` truyền xuống lõi.
+
+Bản trước gom hết nhật ký vào `KetQua.nhat_ky` rồi đổ ra MỘT LẦN lúc xong. Sai:
+một lượt "Tất cả video + chi tiết đầy đủ" chạy vài phút, và suốt chừng ấy màn
+hình đứng im — khách tưởng tool treo, bấm Dừng, rồi thấy dữ liệu hiện ra và
+tưởng chính nút Dừng làm ra nó (chủ dự án, 05/09/2026).
 """
 
 from __future__ import annotations
@@ -51,8 +57,8 @@ from core.youtube import parse_inputs
 
 from . import theme
 from .widgets import (
-    ChonThuMuc, HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu, the,
-    tieu_de_trang,
+    ChonThuMuc, HangXuongDong, ThanhTienDo, mo_thu_muc, nhan, nut_chinh,
+    nut_phu, the, tieu_de_trang,
 )
 
 __all__ = ["TrangNghienCuu"]
@@ -234,6 +240,8 @@ class TrangNghienCuu(QWidget):
         #
         # Ai định gỡ nó lần nữa: gỡ luôn cả bốn chỗ gọi, và chạy
         # `test_bam_chay_khong_lam_chet_tool`.
+        self._thanh = ThanhTienDo()
+        v.addWidget(self._thanh)
         self._ly_do = nhan("", "phu")
         self._ly_do.setWordWrap(True)
         self._ly_do.setMinimumWidth(1)
@@ -348,6 +356,9 @@ class TrangNghienCuu(QWidget):
         self._tom_tat.setStyleSheet("font-size:19px;font-weight:700;")
         self._ly_do.setText("Cửa sổ vẫn dùng được; bấm Dừng là ngắt giữa chừng, "
                             "phần đã lấy vẫn giữ nguyên.")
+        # Chưa biết có bao nhiêu video (còn phải mở kênh đã) nên để dạng chạy
+        # qua lại; `_bao_tien_do` đổi sang phần trăm thật khi biết tổng.
+        self._thanh.bat_dau("Đang mở kênh…")
 
         so_video = self._so_video.value()   # 0 = lấy hết kênh
         chi_tiet = self._chi_tiet.isChecked()
@@ -358,7 +369,8 @@ class TrangNghienCuu(QWidget):
             # `_ghi_tu_luong_nen`, thứ duy nhất được phép nói chuyện với Qt.
             return lay_du_lieu(chu, so_video=so_video, mo_rong=False,
                                chi_tiet=chi_tiet, cancel=huy,
-                               on_log=self._ghi_tu_luong_nen)
+                               on_log=self._ghi_tu_luong_nen,
+                               on_tien_do=self._bao_tien_do)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
@@ -368,6 +380,7 @@ class TrangNghienCuu(QWidget):
         self._ghi_log("Đã yêu cầu dừng…")
 
     def _hong(self, loi: BaseException) -> None:
+        self._thanh.xong()
         self._nut_chay.setEnabled(True)
         self._nut_dung.setEnabled(False)
         self._tom_tat.setText("Không lấy được dữ liệu")
@@ -376,6 +389,7 @@ class TrangNghienCuu(QWidget):
         self._app.show_error(loi)
 
     def _xong(self, ket: KetQua) -> None:
+        self._thanh.xong()
         self._ket = ket
         self._nut_chay.setEnabled(True)
         self._nut_dung.setEnabled(False)
@@ -462,6 +476,12 @@ class TrangNghienCuu(QWidget):
         với `trang_script._ghi_tu_luong_nen`.
         """
         self._app.goi_tren_luong_ve(lambda: self._ghi_log(dong))
+
+    def _bao_tien_do(self, xong: int, tong: int) -> None:
+        """Số cho thanh tiến độ — cũng bắn từ LUỒNG NỀN, cũng phải đi vòng."""
+        self._app.goi_tren_luong_ve(
+            lambda: self._thanh.dat(xong, tong,
+                                    "Đang lấy chi tiết {0}/{1} video".format(xong, tong)))
 
     # ── Xuất ─────────────────────────────────────────────────────────────────
 

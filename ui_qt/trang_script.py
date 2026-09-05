@@ -34,8 +34,8 @@ from core.youtube import INPUT_CHANNEL, INPUT_KEYWORD, INPUT_VIDEO, parse_inputs
 
 from . import theme
 from .widgets import (
-    ChonThuMuc, HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu, the,
-    tieu_de_trang,
+    ChonThuMuc, HangXuongDong, ThanhTienDo, mo_thu_muc, nhan, nut_chinh,
+    nut_phu, the, tieu_de_trang,
 )
 
 __all__ = ["TrangLayScript"]
@@ -148,6 +148,8 @@ class TrangLayScript(QWidget):
         self._tom_tat.setWordWrap(True)
         self._tom_tat.setMinimumWidth(1)
         v.addWidget(self._tom_tat)
+        self._thanh = ThanhTienDo()
+        v.addWidget(self._thanh)
         self._bang = self._bang_moi(COT_SCRIPT)
         v.addWidget(self._bang, 1)
         return khung
@@ -277,6 +279,9 @@ class TrangLayScript(QWidget):
         self._bang.setRowCount(0)
         self._ket = []
         self._tom_tat.setText("Đang lấy...")
+        # Chưa biết bao nhiêu video: dán link kênh thì còn phải mở kênh ra đếm.
+        # `_bao_tien_do` đổi sang phần trăm thật ngay khi video đầu tiên xong.
+        self._thanh.bat_dau("Đang mở danh sách…")
         self._tom_tat.setStyleSheet("font-size:17px;font-weight:700;")
         cho_phep_nghe = self._o_nghe.isChecked()
         # ═══ LUÔN LẤY NGÔN NGỮ GỐC — ĐỪNG ĐỌC LẠI MỘT Ô ĐÃ BỊ XOÁ ═══
@@ -301,10 +306,22 @@ class TrangLayScript(QWidget):
             urls = self._gom_link(dau_vao, huy)
             if not urls:
                 return []
+            # `on_xong_mot` bắn sau MỖI video — vừa là số cho thanh tiến độ,
+            # vừa là dòng nhật ký nói rõ video vừa xong lấy được bao nhiêu chữ
+            # và bằng đường nào. Chủ dự án, 05/09/2026: *"khi chạy nó cũng thể
+            # hiện tiến độ mà cũng log rõ ràng để khách không tưởng tool lỗi"*.
+            tong = len(urls)
+            dem = {"n": 0}
+
+            def mot_xong(ket) -> None:
+                dem["n"] += 1
+                self._bao_tien_do(dem["n"], tong, ket)
+
             return lay_nhieu_script(urls, cancel=huy,
                                     cho_phep_nghe=cho_phep_nghe,
                                     uu_tien_ngon_ngu_goc=uu_tien_ngon_ngu_goc,
-                                    on_log=self._ghi_tu_luong_nen)
+                                    on_log=self._ghi_tu_luong_nen,
+                                    on_xong_mot=mot_xong)
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
@@ -353,6 +370,7 @@ class TrangLayScript(QWidget):
         self._ghi("Đã yêu cầu dừng...")
 
     def _hong(self, loi: BaseException) -> None:
+        self._thanh.xong()
         self._nut_chay.setEnabled(True)
         self._nut_dung.setEnabled(False)
         self._tom_tat.setText("Hỏng giữa chừng")
@@ -361,6 +379,7 @@ class TrangLayScript(QWidget):
         self._app.show_error(loi)
 
     def _xong(self, ds: List[KetScript]) -> None:
+        self._thanh.xong()
         self._ket = list(ds)
         self._nut_chay.setEnabled(True)
         self._nut_dung.setEnabled(False)
@@ -416,6 +435,19 @@ class TrangLayScript(QWidget):
         Qt cho chạy một lúc rồi sập, không đoán trước được lúc nào.
         """
         self._app.goi_tren_luong_ve(lambda: self._ghi(dong))
+
+    def _bao_tien_do(self, xong: int, tong: int, ket) -> None:
+        """Sau mỗi video: đẩy thanh, và kể một dòng có thật vào nhật ký."""
+        if getattr(ket, "duoc", False):
+            dong = "  [{0}/{1}] {2} chữ · {3}".format(
+                xong, tong, ket.so_chu, ket.nguon_dep)
+        else:
+            dong = "  [{0}/{1}] không lấy được: {2}".format(
+                xong, tong, (getattr(ket, "loi", "") or "chưa rõ")[:70])
+        self._app.goi_tren_luong_ve(
+            lambda: (self._thanh.dat(xong, tong,
+                                     "Đã xong {0}/{1} video".format(xong, tong)),
+                     self._ghi(dong)))
 
     # ── Xuất ─────────────────────────────────────────────────────────────────
 

@@ -327,6 +327,7 @@ def bo_sung_chi_tiet(
     *,
     cancel: Optional[threading.Event] = None,
     on_log: Optional[Callable[[str], None]] = None,
+    on_tien_do: Optional[Callable[[int, int], None]] = None,
     lay: Callable[..., ChiTiet] = chi_tiet_video,
     lang: str = "",
 ) -> Dict[str, ChiTiet]:
@@ -340,6 +341,12 @@ def bo_sung_chi_tiet(
     def ghi(dong: str) -> None:
         if on_log is not None:
             on_log(dong)
+
+    def bao(xong_: int, tong_: int) -> None:
+        # Con số cho THANH tiến độ. Tách khỏi `ghi` vì thanh cần số, còn nhật
+        # ký cần chữ — bắt giao diện moi số ra từ chuỗi là chỗ vỡ sau này.
+        if on_tien_do is not None:
+            on_tien_do(xong_, tong_)
 
     from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait  # noqa: PLC0415
 
@@ -387,6 +394,7 @@ def bo_sung_chi_tiet(
                 # nghĩa là dấu hiệu sống đầu tiên mãi gần một phút mới tới, và
                 # cả lượt chạy chỉ có ba dòng. Nhìn vào thì y như treo.
                 ghi("  chi tiết {0}/{1}".format(xong, len(can)))
+                bao(xong, len(can))
     return ket
 
 
@@ -494,6 +502,7 @@ def lay_du_lieu(
     lay_chi_tiet: Callable[..., ChiTiet] = chi_tiet_video,
     lang: str = "",
     on_log: Optional[Callable[[str], None]] = None,
+    on_tien_do: Optional[Callable[[int, int], None]] = None,
 ) -> KetQua:
     """Chạy trọn một lượt: đọc ô nhập → lấy kênh → (tuỳ chọn) lấy chi tiết → chấm.
 
@@ -559,7 +568,7 @@ def lay_du_lieu(
             "Bấm Dừng lúc nào cũng được, phần đã lấy vẫn giữ."
             .format(sum(len(i.channel.videos) for i in ket.insights)))
         ket.chi_tiet = bo_sung_chi_tiet(
-            ket.insights, cancel=cancel, on_log=ghi,
+            ket.insights, cancel=cancel, on_log=ghi, on_tien_do=on_tien_do,
             lay=lay_chi_tiet, lang=lang)
 
     # `scanned` chỉ đúng khi thật sự có dò ngách; báo bừa là chấm điểm độ bão

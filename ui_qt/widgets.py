@@ -14,8 +14,8 @@ from typing import Any, Callable, List, Optional, Sequence
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QFileDialog, QFrame, QLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QFileDialog, QFrame, QLayout, QHBoxLayout, QLabel, QLineEdit,
+    QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from . import theme
@@ -23,7 +23,7 @@ from . import theme
 __all__ = [
     "the", "nhan", "tieu_de_trang", "nut_chinh", "nut_phu", "nut_nguy_hiem",
     "DaiUocTinh", "ChonThuMuc", "AnhThamChieu", "NhomChon", "mo_thu_muc",
-    "HangXuongDong",
+    "HangXuongDong", "ThanhTienDo",
 ]
 
 
@@ -303,6 +303,59 @@ class DaiUocTinh(QFrame):
     def show_text(self, chinh: str, ghi_chu: str = "") -> None:
         self._chinh.setText(chinh)
         self._ghi_chu.setText(ghi_chu)
+
+
+class ThanhTienDo(QWidget):
+    """Thanh tiến độ + một dòng chữ. Ẩn khi không chạy.
+
+    Chủ dự án, 05/09/2026: *"có thể có 1 thanh tiến độ để thể hiện cho đẹp,
+    không cần nhìn log vẫn biết thì ok hơn"*.
+
+    Nhật ký nói ĐỦ nhưng bắt người đọc chữ. Thanh này trả lời đúng hai câu họ
+    hỏi khi ngồi đợi — *còn sống không* và *còn bao lâu* — mà không phải đọc gì.
+
+    Chưa biết tổng bao nhiêu (đang mở kênh, đang đếm video) thì để dạng CHẠY
+    QUA LẠI: vẫn là dấu hiệu sống, chỉ chưa hứa được thời gian. Hứa một con số
+    mình chưa biết còn tệ hơn không hứa.
+    """
+
+    def __init__(self):
+        super().__init__()
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(0, 0, 0, 0)
+        doc.setSpacing(4)
+        self._thanh = QProgressBar()
+        self._thanh.setTextVisible(False)
+        self._thanh.setFixedHeight(8)
+        self._chu = nhan("", "muted")
+        self._chu.setWordWrap(True)
+        self._chu.setMinimumWidth(1)
+        doc.addWidget(self._thanh)
+        doc.addWidget(self._chu)
+        self.setVisible(False)
+
+    def bat_dau(self, chu: str = "Đang chạy…") -> None:
+        """Bật thanh ở dạng chạy qua lại — chưa biết tổng."""
+        self._thanh.setRange(0, 0)
+        self._chu.setText(chu)
+        self.setVisible(True)
+
+    def dat(self, xong: int, tong: int, chu: str = "") -> None:
+        """Biết tổng rồi thì chạy theo phần trăm thật."""
+        if tong <= 0:
+            return self.bat_dau(chu or "Đang chạy…")
+        self._thanh.setRange(0, int(tong))
+        self._thanh.setValue(max(0, min(int(xong), int(tong))))
+        self._chu.setText(chu or "{0}/{1}".format(xong, tong))
+        self.setVisible(True)
+
+    def xong(self, chu: str = "") -> None:
+        """Chạy xong thì cất đi — thanh đứng im 100% chỉ làm rối màn hình."""
+        self._chu.setText(chu)
+        self.setVisible(bool(chu))
+        if chu:
+            self._thanh.setRange(0, 1)
+            self._thanh.setValue(1)
 
 
 class ChonThuMuc(QWidget):

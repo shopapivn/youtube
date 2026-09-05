@@ -387,3 +387,63 @@ class TestNutLayLoiThoai:
         trang._chay()
         gia.viec_nen()         # chạy việc nền, mạng đã bị thay bằng hàm giả
         assert bat["uu_tien_ngon_ngu_goc"] is True
+
+
+class TestThanhTienDoLoiThoai:
+    """Tab lời thoại cũng phải hiện tiến độ, không bắt khách đọc log.
+
+    Chủ dự án, 05/09/2026: *"cũng nên áp dụng vậy với lấy lời thoại video, khi
+    chạy nó cũng thể hiện tiến độ mà cũng log rõ ràng để khách không tưởng tool
+    lỗi"*.
+
+    `lay_nhieu_script` vốn ĐÃ bắn `on_xong_mot` sau mỗi video — trang chỉ chưa
+    bao giờ nghe.
+    """
+
+    class _Ket:
+        duoc = True
+        so_chu = 5565
+        nguon_dep = "máy YouTube nghe"
+        loi = ""
+
+    def test_bam_chay_la_thanh_hien_ngay(self, monkeypatch):
+        trang, _gia, _app = TestNutLayLoiThoai._trang(monkeypatch)
+        assert trang._thanh.isHidden()
+        trang._chay()
+        assert not trang._thanh.isHidden(), (
+            "chưa biết bao nhiêu video thì vẫn phải cho thấy nó đang sống")
+
+    def test_moi_video_xong_thi_thanh_nhuc_nhich_va_log_ke_that(self, monkeypatch):
+        trang, gia, _app = TestNutLayLoiThoai._trang(monkeypatch)
+        trang._chay()
+        trang._bao_tien_do(3, 10, self._Ket())
+        assert trang._thanh._thanh.value() == 3
+        assert trang._thanh._thanh.maximum() == 10
+        chu = trang._log.toPlainText()
+        assert "[3/10]" in chu and "5565 chữ" in chu, (
+            "log phải kể video vừa xong được bao nhiêu chữ, bằng đường nào")
+
+    def test_video_hong_thi_log_noi_that_chu_khong_im(self, monkeypatch):
+        trang, _gia, _app = TestNutLayLoiThoai._trang(monkeypatch)
+        trang._chay()
+
+        class Hong:
+            duoc = False
+            loi = "YouTube chặn tải phụ đề (lỗi 429)"
+
+        trang._bao_tien_do(1, 4, Hong())
+        assert "không lấy được" in trang._log.toPlainText()
+        assert "429" in trang._log.toPlainText()
+
+    def test_truyen_on_xong_mot_xuong_loi(self, monkeypatch):
+        import ui_qt.trang_script as ts
+
+        trang, gia, _app = TestNutLayLoiThoai._trang(monkeypatch)
+        bat = {}
+        monkeypatch.setattr(trang, "_gom_link", lambda *_a, **_k: ["u1", "u2"])
+        monkeypatch.setattr(ts, "lay_nhieu_script",
+                            lambda *a, **k: bat.update(k) or [])
+        trang._chay()
+        gia.viec_nen()
+        assert bat.get("on_xong_mot") is not None, (
+            "không nghe `on_xong_mot` thì thanh không bao giờ nhúc nhích")

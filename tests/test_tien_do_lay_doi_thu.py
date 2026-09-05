@@ -241,3 +241,68 @@ class TestVongChiTietChayNhanhVaKeuTungBuoc:
                                lay=lambda *_a, **_k: {}, on_log=thay.append)
         assert any("Dừng giữa vòng chi tiết" in d for d in thay)
         assert len(ket) < 30, "đã bấm dừng thì không được chạy nốt cả mẻ"
+
+
+class TestThanhTienDo:
+    """Thanh tiến độ: hai câu người ngồi đợi hỏi — *còn sống không*, *còn bao lâu*.
+
+    Chủ dự án, 05/09/2026: *"có thể có 1 thanh tiến độ để thể hiện cho đẹp,
+    không cần nhìn log vẫn biết thì ok hơn"*.
+    """
+
+    @staticmethod
+    def _thanh():
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt5.QtWidgets import QApplication
+
+        from ui_qt.widgets import ThanhTienDo
+
+        app = QApplication.instance() or QApplication([])
+        return ThanhTienDo(), app
+
+    def test_luc_dau_an_di(self):
+        # Dùng `isHidden`, KHÔNG dùng `isVisible`: widget con của một cửa sổ
+        # chưa mở thì `isVisible()` luôn False, nên bài kiểm sẽ xanh kể cả khi
+        # thanh không bao giờ được bật. `isHidden` mới là trạng thái ta đặt.
+        t, _app = self._thanh()
+        assert t.isHidden(), "chưa chạy thì đừng chiếm chỗ trên màn hình"
+
+    def test_chua_biet_tong_thi_chay_qua_lai(self):
+        # Hứa một con số mình chưa biết còn tệ hơn không hứa.
+        t, _app = self._thanh()
+        t.bat_dau("đang mở kênh…")
+        assert (t._thanh.minimum(), t._thanh.maximum()) == (0, 0)
+
+    def test_biet_tong_thi_chay_theo_phan_tram_that(self):
+        t, _app = self._thanh()
+        t.dat(12, 78)
+        assert not t.isHidden()
+        assert t._thanh.maximum() == 78 and t._thanh.value() == 12
+        assert "12/78" in t._chu.text()
+
+    def test_tong_bang_0_thi_khong_chia_cho_0(self):
+        t, _app = self._thanh()
+        t.dat(0, 0)
+        assert (t._thanh.minimum(), t._thanh.maximum()) == (0, 0)
+
+    def test_xong_thi_cat_di(self):
+        t, _app = self._thanh()
+        t.dat(78, 78)
+        t.xong()
+        assert t.isHidden(), "thanh đứng im 100% chỉ làm rối màn hình"
+
+
+class TestTrangDoiThuDayThanh:
+    def test_truyen_on_tien_do_va_thanh_nhuc_nhich(self, monkeypatch):
+        trang, gia, tr, _app = TestTrangNoiDayRaManHinh._trang(monkeypatch)
+        bat = {}
+        monkeypatch.setattr(tr, "lay_du_lieu",
+                            lambda *a, **k: bat.update(k) or _KetRong())
+        trang._chay()
+        assert not trang._thanh.isHidden(), (
+            "bấm chạy là phải thấy dấu hiệu sống ngay")
+        gia.viec_nen()
+        assert bat.get("on_tien_do") is not None
+        bat["on_tien_do"](12, 78)
+        assert trang._thanh._thanh.value() == 12
+        assert "12/78" in trang._thanh._chu.text()
