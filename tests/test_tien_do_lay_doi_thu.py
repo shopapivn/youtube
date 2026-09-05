@@ -168,3 +168,76 @@ class _AppGia:
     def goi_tren_luong_ve(self, ham):
         self.da_ve = True
         ham()
+
+
+class TestVongChiTietChayNhanhVaKeuTungBuoc:
+    """Khâu chi tiết: hỏi song song, và đếm TỪNG video.
+
+    Đo 05/09/2026 trên video thật: tuần tự 1,70 giây/video, 6 luồng 0,41 —
+    một kênh 78 video từ 2,6 phút xuống ~35 giây. Nhưng nhanh thôi chưa đủ:
+    nhịp báo cũ là mỗi 25 video, nên trên kênh 78 video khách chỉ thấy ba dòng
+    trong cả lượt chạy, dấu hiệu sống đầu tiên mãi gần một phút mới tới.
+    """
+
+    @staticmethod
+    def _insights(n):
+        from core.research import analyze_channel
+
+        return [analyze_channel(_kenh_gia(n))]
+
+    def test_dem_tung_video_chu_khong_moi_25(self):
+        from core.doi_thu import bo_sung_chi_tiet
+
+        thay = []
+        bo_sung_chi_tiet(self._insights(7), lay=lambda *_a, **_k: {"x": 1},
+                         on_log=thay.append)
+        dem = [d for d in thay if d.strip().startswith("chi tiết ")]
+        assert len(dem) == 7, (
+            "phải kêu từng video; nhịp 25 thì kênh 78 video chỉ có ba dòng "
+            "trong suốt lượt chạy và nhìn y như treo")
+
+    def test_lay_du_moi_video_du_chay_song_song(self):
+        from core.doi_thu import bo_sung_chi_tiet
+
+        ket = bo_sung_chi_tiet(self._insights(20),
+                               lay=lambda url, **_k: {"url": url})
+        assert len(ket) == 20
+        # Khoá phải là video_id, và khớp đúng url của chính nó — chạy song song
+        # mà ghép nhầm kết quả sang video khác là cái sai không nhìn ra được.
+        for ma, ct in ket.items():
+            assert ct["url"].endswith("/" + ma)
+
+    def test_video_trung_chi_hoi_MOT_lan(self):
+        from core.doi_thu import bo_sung_chi_tiet
+        from core.research import analyze_channel
+
+        hai = [analyze_channel(_kenh_gia(4)), analyze_channel(_kenh_gia(4))]
+        dem = []
+        bo_sung_chi_tiet(hai, lay=lambda url, **_k: dem.append(url) or {})
+        assert len(dem) == 4, "cùng một video ở hai kênh thì hỏi một lần thôi"
+
+    def test_mot_video_hong_khong_giet_ca_luot(self):
+        from core.doi_thu import bo_sung_chi_tiet
+
+        def lay(url, **_k):
+            if url.endswith("v2"):
+                raise RuntimeError("video này hỏng")
+            return {"url": url}
+
+        thay = []
+        ket = bo_sung_chi_tiet(self._insights(5), lay=lay, on_log=thay.append)
+        assert len(ket) == 4
+        assert any("LỖI video" in d for d in thay)
+
+    def test_bam_dung_thi_tra_ve_phan_da_lay(self):
+        import threading
+
+        from core.doi_thu import bo_sung_chi_tiet
+
+        huy = threading.Event()
+        huy.set()          # dừng ngay từ đầu
+        thay = []
+        ket = bo_sung_chi_tiet(self._insights(30), cancel=huy,
+                               lay=lambda *_a, **_k: {}, on_log=thay.append)
+        assert any("Dừng giữa vòng chi tiết" in d for d in thay)
+        assert len(ket) < 30, "đã bấm dừng thì không được chạy nốt cả mẻ"

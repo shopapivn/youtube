@@ -302,6 +302,26 @@ def _int(gia_tri, mac_dinh: int = -1) -> int:
         return mac_dinh
 
 
+#: Bao nhiêu video hỏi cùng lúc ở vòng chi tiết.
+#:
+#: ═══ ĐO NGÀY 05/09/2026, VIDEO THẬT, KHÔNG PHẢI ĐOÁN ═══
+#:
+#:   tuần tự  1,70 giây/video
+#:   4 luồng  0,52 giây/video  (8 video, 0 hỏng)
+#:   6 luồng  0,41 giây/video  (24 video, 0 hỏng)
+#:   8 luồng  0,30 giây/video  (24 video, 0 hỏng — nhưng chạy sau nên có thể
+#:                              đang ăn theo bộ nhớ đệm của lượt trước)
+#:
+#: Chọn 6: nhanh gấp ~4 lần mà vẫn chừa khoảng an toàn. Một kênh 78 video từ
+#: 2,6 phút xuống ~35 giây.
+#:
+#: ⚠ ĐỪNG NÂNG LÊN CHO NHANH HƠN. Đây là hỏi thẳng YouTube, không phải máy chủ
+#: nhà — bị chặn thì không có ai để xin mở, và triệu chứng là "tự nhiên hôm nay
+#: lấy dữ liệu toàn lỗi". Con số 8 ở trên đo được nhưng chưa đủ bằng chứng nó
+#: an toàn trên mẻ lớn; muốn nâng thì đo lại trên vài trăm video trước.
+SO_LUONG_CHI_TIET = 6
+
+
 def bo_sung_chi_tiet(
     insights: Sequence[ChannelInsight],
     *,
@@ -321,25 +341,52 @@ def bo_sung_chi_tiet(
         if on_log is not None:
             on_log(dong)
 
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait  # noqa: PLC0415
+
     ket: Dict[str, ChiTiet] = {}
     tat_ca = [v for i in insights for v in i.channel.videos if v.video_id and v.url]
-    for thu_tu, video in enumerate(tat_ca, start=1):
-        if cancel is not None and cancel.is_set():
-            ghi("  Dừng giữa vòng chi tiết — giữ {0}/{1} video đã lấy.".format(
-                len(ket), len(tat_ca)))
-            break
-        if video.video_id in ket:
-            continue
+    # Trùng `video_id` (một video nằm ở hai kênh) chỉ hỏi một lần.
+    can = list({v.video_id: v for v in tat_ca}.values())
+    if not can:
+        return ket
+
+    def mot(video):
         try:
-            ket[video.video_id] = lay(video.url, cancel=cancel, lang=lang)
+            return video, lay(video.url, cancel=cancel, lang=lang), None
         except Exception as loi:  # noqa: BLE001 — yt-dlp ném đủ loại
-            ly_do = _ly_do_bo_qua(loi)
-            if ly_do:
-                ghi("  Bỏ qua ({0}): {1}".format(ly_do, _mot_dong(video.title)[:70]))
-            else:
-                ghi("  LỖI video {0}: {1}".format(video.url, loi))
-        if thu_tu % 25 == 0:
-            ghi("  …đã lấy chi tiết {0}/{1} video.".format(thu_tu, len(tat_ca)))
+            return video, None, loi
+
+    xong = 0
+    with ThreadPoolExecutor(max_workers=SO_LUONG_CHI_TIET) as bo:
+        cho = {bo.submit(mot, v) for v in can}
+        while cho:
+            if cancel is not None and cancel.is_set():
+                for t in cho:
+                    t.cancel()
+                ghi("  Dừng giữa vòng chi tiết — giữ {0}/{1} video đã lấy.".format(
+                    len(ket), len(can)))
+                break
+            # Đợi có giới hạn: nút Dừng phải nhạy, không đợi hết cả mẻ.
+            roi, cho = wait(cho, timeout=0.5, return_when=FIRST_COMPLETED)
+            for t in roi:
+                video, ct, loi = t.result()
+                xong += 1
+                if loi is not None:
+                    ly_do = _ly_do_bo_qua(loi)
+                    if ly_do:
+                        ghi("  Bỏ qua ({0}): {1}".format(
+                            ly_do, _mot_dong(video.title)[:70]))
+                    else:
+                        ghi("  LỖI video {0}: {1}".format(video.url, loi))
+                else:
+                    ket[video.video_id] = ct
+                # Đếm TỪNG video, không phải mỗi 25.
+                #
+                # Chủ dự án, 05/09/2026: *"mãi không trả kết quả trong khi ấn
+                # dừng thì lại có luôn đa số"* — trên kênh 78 video, nhịp 25
+                # nghĩa là dấu hiệu sống đầu tiên mãi gần một phút mới tới, và
+                # cả lượt chạy chỉ có ba dòng. Nhìn vào thì y như treo.
+                ghi("  chi tiết {0}/{1}".format(xong, len(can)))
     return ket
 
 
