@@ -85,8 +85,14 @@ def describe(exc: BaseException) -> ErrorAdvice:
             title="Ví đã hết tiền",
             message="Ví của bạn không còn đủ tiền cho lượt tạo này." + shortfall +
                     " Chúng tôi chưa trừ đồng nào.",
-            action="Bạn nạp thêm tiền rồi bấm “Chạy lại dòng lỗi” — lượt này chưa được tạo "
-                   "nên bạn không mất gì.",
+            # Chỉ ĐÚNG chỗ nạp được, ngay trong tool. Câu cũ chỉ nói "nạp thêm
+            # tiền" rồi để khách tự đi tìm — mà chỗ họ đoán ra là trang web, thứ
+            # đòi đăng nhập mà người chỉ dán khoá API không có. Tab Tài khoản
+            # dựng mã QR bằng chính khoá ấy, không cần phiên web nào.
+            action="Sang tab “Tài khoản & Cài đặt”, mục Nạp tiền, bấm “Tạo mã QR” — "
+                   "quét bằng app ngân hàng là tiền vào ví trong khoảng 10 giây. "
+                   "Xong bấm “Chạy lại dòng lỗi”; lượt này chưa được tạo nên bạn "
+                   "không mất gì.",
             link=DASHBOARD_BILLING_URL,
             link_label="Mở trang nạp tiền",
             # KHÔNG thử lại: ví trống thì chờ 2s, 4s, 8s rồi gửi lại vẫn trống y nguyên.
