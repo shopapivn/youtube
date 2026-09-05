@@ -279,7 +279,20 @@ class TrangLayScript(QWidget):
         self._tom_tat.setText("Đang lấy...")
         self._tom_tat.setStyleSheet("font-size:17px;font-weight:700;")
         cho_phep_nghe = self._o_nghe.isChecked()
-        uu_tien_ngon_ngu_goc = self._o_ngon_ngu_goc.isChecked()
+        # ═══ LUÔN LẤY NGÔN NGỮ GỐC — ĐỪNG ĐỌC LẠI MỘT Ô ĐÃ BỊ XOÁ ═══
+        #
+        # Dòng này từng là `self._o_ngon_ngu_goc.isChecked()`. Ngày 21/08/2026,
+        # commit 52dc1df *"luôn lấy ngôn ngữ gốc, xoá checkbox"* bỏ ô ấy đi
+        # (nó vốn `setChecked(True)`) nhưng **để sót đúng dòng đọc nó**. Từ
+        # hôm đó, bấm "Lấy lời thoại" là ném `AttributeError` ngay tại đây —
+        # trước cả lượt gọi mạng đầu tiên — và khách chỉ thấy hộp "Một phần
+        # của tool vừa gặp lỗi". Hỏng suốt hai tuần, mọi máy.
+        #
+        # Vì sao không bài kiểm nào bắt: khâu nghĩ (`core/script_video`) được
+        # phủ kín và vẫn chạy đúng, nên chạy thử bằng Python thì ra chữ bình
+        # thường; chỗ gãy nằm ở tay bấm nút mà **chưa bài nào bấm**. Nay
+        # `TestNutLayLoiThoai` bấm thật.
+        uu_tien_ngon_ngu_goc = True
         huy = self._huy
 
         def viec() -> List[KetScript]:

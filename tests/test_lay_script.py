@@ -301,8 +301,9 @@ class _AppGia:
     def show_error(self, *_a, **_k):
         pass
 
-    def run_bg(self, *_a, **_k):
-        pass
+    def run_bg(self, viec, on_ok=None, on_err=None):
+        # Giữ lại việc nền chứ KHÔNG chạy: chạy là gọi mạng thật.
+        self.viec_nen = viec
 
     def goi_tren_luong_ve(self, ham):
         ham()
@@ -330,3 +331,59 @@ def test_thieu_yt_dlp_thi_noi_cach_sua_chu_khong_bat_chup_man_hinh():
     assert "yt_dlp" not in a.message, "đừng ném tên mô-đun vào mặt người dùng"
     assert "chụp màn hình" not in a.action
     assert "Cài những thứ còn thiếu" in a.action, "phải chỉ đúng nút bấm được"
+
+
+class TestNutLayLoiThoai:
+    """Bấm đúng cái nút khách bấm.
+
+    Ca thật, ảnh chụp của khách 05/09/2026 lúc 12:37, bản 2.120.1: bấm "Lấy
+    lời thoại" thì hiện hộp *"Tool gặp trục trặc — Một phần của tool vừa gặp
+    lỗi"*. `workspace/su-co.log` ghi:
+
+        AttributeError: 'TrangLayScript' object has no attribute '_o_ngon_ngu_goc'
+        trang_script.py, trong _chay
+
+    Ngày 21/08/2026 commit 52dc1df *"luôn lấy ngôn ngữ gốc, xoá checkbox"* bỏ ô
+    ấy nhưng để sót dòng đọc nó. Nút hỏng suốt hai tuần, trên mọi máy — và
+    KHÔNG bài kiểm nào bắt được, vì khâu nghĩ (`core/script_video`) phủ kín và
+    vẫn chạy đúng: gọi thẳng bằng Python thì ra chữ bình thường. Chỗ gãy nằm ở
+    tay bấm nút mà chưa bài nào bấm.
+    """
+
+    @staticmethod
+    def _trang(monkeypatch):
+        import os
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt5.QtWidgets import QApplication
+
+        import ui_qt.trang_script as ts
+
+        app = QApplication.instance() or QApplication([])
+        monkeypatch.setattr(ts, "co_the_nghe", lambda: True)
+        gia = _AppGia()
+        trang = ts.TrangLayScript(gia)
+        trang._o_nhap.setPlainText("https://www.youtube.com/watch?v=NQ-iPBdaKrM")
+        return trang, gia, app
+
+    def test_bam_nut_khong_nem_loi(self, monkeypatch):
+        trang, gia, _app = self._trang(monkeypatch)
+        trang._chay()          # đúng thứ khách bấm
+        assert getattr(gia, "viec_nen", None) is not None, (
+            "phải giao được việc cho luồng nền; ném lỗi trước đó là hộp "
+            "“Một phần của tool vừa gặp lỗi”")
+
+    def test_luon_lay_ngon_ngu_goc(self, monkeypatch):
+        # 52dc1df chốt "luôn lấy ngôn ngữ gốc". Ô đã xoá thì cờ phải là True
+        # cứng, không phải đọc lại một widget không còn tồn tại.
+        import ui_qt.trang_script as ts
+
+        trang, gia, _app = self._trang(monkeypatch)
+        bat = {}
+
+        monkeypatch.setattr(trang, "_gom_link", lambda *_a, **_k: ["u"])
+        monkeypatch.setattr(ts, "lay_nhieu_script",
+                            lambda *a, **k: bat.update(k) or [])
+        trang._chay()
+        gia.viec_nen()         # chạy việc nền, mạng đã bị thay bằng hàm giả
+        assert bat["uu_tien_ngon_ngu_goc"] is True
