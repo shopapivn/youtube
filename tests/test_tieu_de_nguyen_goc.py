@@ -151,6 +151,43 @@ class TestLayNguyenTieuDeVaDocBia:
         # Vẫn đúng MỘT lượt gọi có ảnh — không đẻ thêm lượt nào để xin bố cục.
         assert len(goi.co_anh) == 1
 
+    def test_bo_cuc_giu_du_SAU_TRUONG_ke_ca_mau(self):
+        """═══ ĐỌC ĐỦ ĐỂ DỰNG LẠI, KHÔNG PHẢI ĐỌC CHO CÓ (05/09/2026) ═══
+
+        Bản đầu chỉ xin *một đoạn tả chung*. Nó ra được "chữ nằm trên, hai
+        dòng" — nhưng thiếu **màu chữ, màu khối nền, độ dày nét**, đúng những
+        thứ quyết định giống hay không giống.
+
+        Chủ dự án: *"tao muốn API sẽ có thể đọc được thumb đối thủ từ màu chữ
+        đến bố cục để các prompt tạo ra thumb cho mình sát với đối thủ nhất"*.
+
+        Đây là chỗ ĐƯỢC PHÉP chi tiết: nó là lệnh ĐỌC DỮ LIỆU, không phải lệnh
+        sáng tác. Sáu trường, và mã hex phải sống sót qua đường ghép.
+        """
+        from core.auto_khau import TEP_BIA_DOI_THU
+
+        goi = _GoiChat(bia="""{"chu": "読める文字", "bo_cuc": {
+            "chu_o_dau": "top of frame, two lines, full width, 30% of height",
+            "mau_chu": "warm white #F5EFE6 on one solid near-black band #241A1C",
+            "kieu_chu": "very heavy rounded gothic, tight spacing, line 2 twice line 1",
+            "nhan_vat": "small white figure, 15% of height, centred, standing",
+            "canh": "dark room, floor lamp right, doorway with people left",
+            "anh_sang": "single warm lamp #E9A45C, deep shadow #1C1416"}}""")
+        lay = lambda *a, **k: _KetGia("G" * 800, "対抗のタイトル", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=lambda u: b"\xff\xd8jpeg")
+            _chay(bc, _kenh(), d, {"link": "http://x"})
+            assert "THUMB: 読める文字" in _tieu_de_da_ghi(d)
+            with open(os.path.join(d, TEP_BIA_DOI_THU), encoding="utf-8") as f:
+                bo_cuc = f.read()
+        # Sáu trường đều phải có mặt, mỗi trường một dòng có nhãn.
+        for nhan in ("TEXT PLACEMENT", "TEXT COLOURS AND BACKING", "LETTERFORMS",
+                     "CHARACTER", "SCENE", "LIGHT AND PALETTE"):
+            assert nhan in bo_cuc, (nhan, bo_cuc)
+        # Mã màu là thứ dễ rơi nhất khi ghép — và là thứ quyết định độ giống.
+        for hex_ma in ("#F5EFE6", "#241A1C", "#E9A45C", "#1C1416"):
+            assert hex_ma in bo_cuc, hex_ma
+
     def test_tra_chu_TRON_thi_van_chay(self):
         """Đường lui: mô hình bỏ qua định dạng JSON và trả chữ trơn thì vẫn
         lấy được chữ bìa, chỉ mất phần bố cục. Không được vỡ lượt chạy."""

@@ -826,15 +826,31 @@ def _anh_thanh_data_url(byte: bytes, kieu: str = "image/jpeg") -> str:
 #: Lượt gọi này vốn đã tải ảnh về và đã trả tiền rồi. Hỏi thêm bố cục trong
 #: cùng lượt ấy không tốn thêm gì.
 _LOI_NHAC_DOC_BIA = (
-    "Đây là ảnh bìa (thumbnail) một video YouTube. Trả về DUY NHẤT một JSON:\n"
-    '{"chu": "...", "bo_cuc": "..."}\n\n'
+    "Đây là ảnh bìa (thumbnail) một video YouTube. Đọc nó thật kỹ rồi trả về "
+    "DUY NHẤT một JSON, các trường tả bằng TIẾNG ANH:\n"
+    '{"chu": "...", "bo_cuc": {"chu_o_dau": "...", "mau_chu": "...", '
+    '"kieu_chu": "...", "nhan_vat": "...", "canh": "...", "anh_sang": "..."}}\n\n'
     '"chu": đúng dòng chữ lớn in trên ảnh, y nguyên từng chữ, không dịch, '
-    "không thêm dấu ngoặc. Ảnh không có chữ thì để chuỗi rỗng.\n"
-    '"bo_cuc": tả bố cục bằng TIẾNG ANH, một đoạn ngắn, đủ để một hoạ sĩ dựng '
-    "lại khung ấy mà không nhìn thấy ảnh: chữ nằm đâu (trên/dưới/trái/phải), "
-    "mấy dòng, chiếm khoảng bao nhiêu phần trăm khung, nền chữ thế nào, nhân "
-    "vật to nhỏ và đứng đâu, ánh sáng và tông màu chung. Tả cái NHÌN THẤY, "
-    "đừng khen và đừng đoán ý đồ."
+    "không thêm dấu ngoặc. Ảnh không có chữ thì để chuỗi rỗng.\n\n"
+    "Sáu trường trong \"bo_cuc\" phải đủ để một hoạ sĩ dựng lại đúng khung ấy "
+    "mà KHÔNG nhìn thấy ảnh. Tả cái NHÌN THẤY, bằng số và bằng tên màu cụ thể; "
+    "đừng khen, đừng đoán ý đồ, đừng nói chung chung:\n"
+    '- "chu_o_dau": chữ nằm ở đâu trong khung (trên/giữa/dưới, trái/giữa/phải), '
+    "mấy dòng, chỗ ngắt dòng rơi vào đâu, mỗi dòng cao khoảng bao nhiêu phần "
+    "trăm chiều cao ảnh, chiếm ngang bao nhiêu phần trăm bề rộng, căn lề thế "
+    "nào, cả khối chữ chiếm khoảng bao nhiêu phần trăm diện tích khung.\n"
+    '- "mau_chu": màu ruột chữ, màu viền chữ nếu có, và NỀN SAU CHỮ — là một '
+    "dải liền hay từng khối rời, màu gì, đặc hay trong, bo góc hay vuông, có "
+    "đổ bóng không. Nêu mã hex gần đúng cho từng màu.\n"
+    '- "kieu_chu": nét dày hay mảnh, chữ tròn hay vuông, khoảng cách chữ chặt '
+    "hay thưa, có nghiêng không, dòng nào to hơn dòng nào và hơn bao nhiêu.\n"
+    '- "nhan_vat": có nhân vật không, cao khoảng bao nhiêu phần trăm chiều cao '
+    "ảnh, đứng/ngồi ở đâu trong khung, tư thế, hướng mặt, biểu cảm.\n"
+    '- "canh": bối cảnh là chỗ nào, có những đồ vật gì, thứ gì còn nhìn ra '
+    "được khi ảnh thu nhỏ bằng con tem, thứ gì thì không.\n"
+    '- "anh_sang": nguồn sáng ở đâu, chỗ sáng nhất và chỗ tối nhất là chỗ nào, '
+    "khoảng cách giữa hai chỗ ấy lớn hay nhỏ, tông màu chung của cả ảnh kèm mã "
+    "hex gần đúng cho ba màu chính."
 )
 
 #: Chữ bìa dài hơn ngần này thì gần như chắc là AI đã tả ảnh / giải thích thay
@@ -864,6 +880,41 @@ def _giong_tu_choi(chu: str) -> bool:
 #: Bố cục ảnh bìa đối thủ, để riêng một tệp — chạy tiếp lượt đứt giữa chừng
 #: thì bước đọc ảnh bị bỏ qua, mà khâu ảnh bìa vẫn cần nó.
 TEP_BIA_DOI_THU = "0-bia-doi-thu.txt"
+
+#: Thứ tự và nhãn của sáu trường bố cục, dùng khi ghép ra tệp.
+_NHAN_BO_CUC = (
+    ("chu_o_dau", "TEXT PLACEMENT"),
+    ("mau_chu", "TEXT COLOURS AND BACKING"),
+    ("kieu_chu", "LETTERFORMS"),
+    ("nhan_vat", "CHARACTER"),
+    ("canh", "SCENE"),
+    ("anh_sang", "LIGHT AND PALETTE"),
+)
+
+
+def _gop_bo_cuc(bo_cuc: Any) -> str:
+    """Ghép sáu trường bố cục thành một khối chữ cho lời nhắc vẽ.
+
+    Nhận cả chuỗi trơn: bản trước xin một đoạn tả duy nhất, và mô hình vẫn có
+    thể trả về kiểu ấy. Thiếu trường nào thì bỏ trường đó, không chèn nhãn rỗng.
+    """
+    if isinstance(bo_cuc, str):
+        return " ".join(bo_cuc.split())
+    if not isinstance(bo_cuc, dict):
+        return ""
+    dong = []
+    for khoa, nhan in _NHAN_BO_CUC:
+        gia = " ".join(str(bo_cuc.get(khoa) or "").split())
+        if gia:
+            dong.append("{0}: {1}".format(nhan, gia))
+    # Trường lạ mô hình tự thêm cũng giữ — mất một chi tiết còn tệ hơn thừa.
+    da_co = {k for k, _ in _NHAN_BO_CUC}
+    for khoa, gia in sorted(bo_cuc.items()):
+        if khoa not in da_co:
+            gia = " ".join(str(gia or "").split())
+            if gia:
+                dong.append("{0}: {1}".format(str(khoa).upper(), gia))
+    return "\n".join(dong)
 
 
 def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay,
@@ -906,7 +957,7 @@ def _doc_chu_bia_doi_thu(bc: "BoiCanh", luot: LuotChay,
         goi = None
     if isinstance(goi, dict):
         chu = " ".join(str(goi.get("chu") or "").split())
-        bo_cuc = " ".join(str(goi.get("bo_cuc") or "").split())
+        bo_cuc = _gop_bo_cuc(goi.get("bo_cuc"))
     else:
         chu = " ".join((tra or "").split())
     # Cổng nhận ảnh nhưng mô hình "kể" thay vì "đọc" thì trả về cả đoạn — dài
@@ -5815,12 +5866,19 @@ _LUAT_CHU_BIA_NGUYEN = (
 #: so sánh, mà cả kênh cược vào một phỏng đoán chưa ai đo.
 _LUAT_BO_CUC_DOI_THU = (
     "\n\n## COMPETITOR THUMBNAIL LAYOUT — FOR THE `goc_*` CONCEPTS ONLY\n"
-    "This is the layout of the thumbnail that actually earned the views we are "
-    "remaking:\n\n    {0}\n\n"
-    "Every concept whose name starts with `goc_` must rebuild that layout: same "
-    "text placement and line count, same relative text size, same character "
-    "size and position, same lighting and mood. Keep the channel's art style "
-    "and the exact hook text above — copy the ARRANGEMENT, not the drawing.\n"
+    "Read below. This is the actual thumbnail that earned the views we are "
+    "remaking, measured field by field:\n\n{0}\n\n"
+    "Every concept whose name starts with `goc_` must REBUILD that thumbnail as "
+    "closely as the channel's art style allows. Match it field by field — text "
+    "placement, line count and where the line breaks fall, the size of each "
+    "line as a share of frame height, the text colour and the colour, shape and "
+    "opacity of whatever sits behind the text, the stroke weight and letter "
+    "spacing, the character's size and position and pose, the light sources and "
+    "which areas are brightest and darkest, and the overall palette. Where the "
+    "description gives a hex value, use that colour.\n"
+    "Two things stay ours: the drawing language (flat vector, the reference "
+    "character) and the exact hook text above. Everything else about the "
+    "arrangement copies the competitor.\n"
     "For those concepts this REPLACES the `TEXT STYLE` block. Every other "
     "concept keeps the `TEXT STYLE` block exactly as written, so the two "
     "approaches can be compared on real numbers.\n"
