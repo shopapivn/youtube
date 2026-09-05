@@ -153,6 +153,9 @@ class BanGhi:
     #: theo lượt thật, view công khai đếm cả khung hình đầu (~54% ảo).
     views_that: Optional[float] = None
     unique_viewers: Optional[float] = None
+    #: Lượt xem của đúng cửa sổ mà `unique_viewers` thuộc về (thẻ giữ chân). Dùng cặp này
+    #: để chấm luật 5; lấy `views` realtime chia `unique_viewers` là so lệch cửa sổ.
+    views_chot: Optional[float] = None
     watch_hours: Optional[float] = None
     avd_giay: Optional[float] = None
     avd_pct: Optional[float] = None
@@ -294,7 +297,7 @@ def doc_kenh(kenh: str, goc: Optional[str] = None) -> List[BanGhi]:
             impressions=b.get("impressions"), impressions_24h=b.get("impressions_24h"),
             ctr=b.get("ctr"), views=b.get("views"),
             views_that=b.get("views_that"),
-            unique_viewers=b.get("unique_viewers"),
+            unique_viewers=b.get("unique_viewers"), views_chot=b.get("views_chot"),
             watch_hours=b.get("watch_hours"), avd_giay=b.get("avd_giay"), avd_pct=b.get("avd_pct"),
             subs=b.get("subs"), traffic=b.get("traffic") or {}, thiet_bi=b.get("thiet_bi") or {},
             vung=b.get("vung") or {}, vung_tong_views=b.get("vung_tong_views") or 0,
@@ -346,7 +349,61 @@ def doc_kenh_tong(kenh: str, goc: Optional[str] = None) -> List[Dict]:
         ra.append({k: b.get(k) for k in (
             "luc_chup", "views", "watch_hours", "subs", "impressions",
             "ctr", "unique_viewers", "thu_muc")})
-    return sorted(ra, key=lambda x: x.get("luc_chup") or "")
+    # Một ngày thường có HAI gói kênh: gói `kenh-<ngày>` (đủ thẻ, có phễu ⇒ có impressions và
+    # CTR toàn kênh) và gói `tay-<ngày>` gom rời (chỉ có view/giờ/sub). Gói tay hay chụp muộn hơn
+    # nên nó thắng, và cột Lượt hiển thị + Tỷ lệ bấm của cả bảng bỏ trống — đúng hai cột cho biết
+    # cổng 1 và cổng 2 của kênh đang ở đâu. Gộp theo NGÀY: giữ số mới nhất, và lấp ô trống bằng
+    # gói cùng ngày có số.
+    theo_ngay: Dict[str, Dict] = {}
+    for b in sorted(ra, key=lambda x: x.get("luc_chup") or ""):
+        ngay = (b.get("luc_chup") or "")[:10]
+        cu = theo_ngay.get(ngay)
+        if cu is None:
+            theo_ngay[ngay] = dict(b)
+            continue
+        for k, v in b.items():
+            if v not in (None, "", 0) or cu.get(k) in (None, "", 0):
+                cu[k] = v
+    return sorted(theo_ngay.values(), key=lambda x: x.get("luc_chup") or "")
+
+
+def _khoi_uu_the(ban_ghi: List["BanGhi"]) -> str:
+    """Cảnh báo khi MỘT video chiếm phần lớn hiển thị của kênh.
+
+    Tỷ lệ bấm toàn kênh là số GỘP. Gộp chỉ có nghĩa khi không mục nào áp đảo — mà kênh mới
+    thì luôn có một video áp đảo. Đo trên TL4-T7 ngày 05/09/2026:
+
+        cả kênh          34.389 hiển thị · CTR 2,90%   ← dưới ngưỡng "thấp" 3,5% của sổ tay
+        bỏ riêng dR8f    11.946 hiển thị · CTR 4,41%   ← trên ngưỡng
+        ba video mới      3.961 hiển thị · CTR 5,79%   ← trên xa
+
+    Một video đăng 27/08 chiếm 65,3% hiển thị ở CTR 2,1%, và nó khoác tên cả kênh. Đọc 2,90%
+    rồi kết luận "ảnh bìa của kênh hỏng" là kết tội năm video kia bằng bản án của một video.
+    Nên dòng nào in CTR gộp thì phải in kèm câu này.
+    """
+    moi_nhat: Dict[str, "BanGhi"] = {}
+    for b in ban_ghi:
+        cu = moi_nhat.get(b.video_id)
+        if cu is None or (b.moc_gio or 0) >= (cu.moc_gio or 0):
+            moi_nhat[b.video_id] = b
+    co = [b for b in moi_nhat.values() if b.impressions and b.ctr is not None]
+    tong = sum(b.impressions for b in co)
+    if not tong:
+        return ""
+    trum = max(co, key=lambda b: b.impressions)
+    ti = 100.0 * trum.impressions / tong
+    if ti < 40:
+        return ""
+    con_i = tong - trum.impressions
+    con_c = sum(b.impressions * b.ctr / 100.0 for b in co if b is not trum)
+    ten = (trum.tieu_de or trum.video_id)[:38]
+    d = [f"⚠ CTR toàn kênh là số GỘP, và một video đang chiếm {ti:.0f}% hiển thị:",
+         f"   {ten} — {_s(trum.impressions)} hiển thị @ {_s(trum.ctr, '%', 2)}"]
+    if con_i:
+        d.append(f"   Bỏ riêng video đó ra, phần còn lại: {_s(con_i)} hiển thị @ "
+                 f"{_s(100.0 * con_c / con_i, '%', 2)}")
+    d.append("   Đừng chấm ảnh bìa của cả kênh bằng con số gộp khi nó đang đo đúng một video.")
+    return "\n".join(d) + "\n\n"
 
 
 def _khoi_kenh_tong(kenh_tong: List[Dict]) -> str:
@@ -416,9 +473,15 @@ def xuat_tom_tat(kenh: str, goc: Optional[str] = None) -> str:
         return '"' + chu.replace('"', '""') + '"'
     for b in sorted(moi_nhat.values(),
                     key=lambda x: x.ngay_dang or "", reverse=True):
+        # Luật 5 (sổ tay kênh): >2 lượt/người trong tuần đầu = số bẩn. Chia phải CÙNG CỬA SỔ —
+        # `views_chot` đi cùng `unique_viewers`; chỉ khi thiếu mới đành dùng `views` realtime,
+        # và khi đó cột mang dấu ~ để không ai chấm luật 5 trên một con số lệch cửa sổ.
         vn = ""
-        if b.views and b.unique_viewers:
-            vn = round(b.views / b.unique_viewers, 1)
+        if b.unique_viewers:
+            if b.views_chot:
+                vn = round(b.views_chot / b.unique_viewers, 1)
+            elif b.views:
+                vn = "~" + str(round(b.views / b.unique_viewers, 1))
         jp = ""
         if b.vung and b.vung_tong_views:
             jp_views = (b.vung.get("JP") or {}).get("views") or 0
@@ -483,6 +546,10 @@ def bao_cao_cho_ai(ban_ghi: List[BanGhi], ten_kenh: str = "",
     L.append("")
     if kenh_tong:
         L.append(_khoi_kenh_tong(kenh_tong).rstrip())
+        L.append("")
+    uu = _khoi_uu_the(ban_ghi)
+    if uu:
+        L.append(uu.rstrip())
         L.append("")
     L.append("Ý NGHĨA CÁC CỘT")
     L.append("- Mốc: số giờ tính từ lúc video được đăng.")

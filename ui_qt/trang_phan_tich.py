@@ -1616,15 +1616,10 @@ class TrangMayVM(QWidget):
             "thư mục vm/ — chép cả thư mục đó sang máy ảo, nhấp đúp "
             "CAI-DAT-VM.bat là nối luôn, không phải gõ gì.")
         d0b.addWidget(nut_goi)
-        d0b.addWidget(nut_phu("Quét Studio ngay", self._quet_studio, rong=170))
-        nut_tc = nut_phu("Quét trang chủ lấy đối thủ", self._quet_trang_chu,
-                         rong=220)
-        nut_tc.setToolTip(
-            "Giai đoạn 3 của kế hoạch: agent mở trang chủ YouTube của kênh, "
-            "gom các kênh được đề xuất rồi nối vào sổ Đối thủ. Bản agent hiện "
-            "tại sẽ trả lời 'chưa làm được' — lệnh vẫn xếp được để thử đường "
-            "dây.")
-        d0b.addWidget(nut_tc)
+        # Hai nút "Quét Studio ngay" và "Quét trang chủ" đã DỜI sang tab Nghiên cứu ›
+        # Đối thủ và GỘP thành một (chủ dự án 05/09/2026: "bỏ cái quét studio ở vps mà
+        # để ở tab phân tích nghiên cứu rồi làm đồng bộ 1 nút đủ chức năng"). Tab này
+        # chỉ còn thiết lập máy ảo; máy ảo vẫn là tay quét, nút bấm nằm cạnh hộp thư.
         d0b.addStretch(1)
         v.addLayout(d0b)
         # Hàng kế hoạch đăng — giai đoạn 4 (nửa đầu): kế hoạch nằm ở
@@ -1743,16 +1738,6 @@ class TrangMayVM(QWidget):
         d0b.addStretch(1)
         v.addLayout(d0b)
 
-        d1 = QHBoxLayout()
-        self._o_quet_tc = QCheckBox("Quét trang chủ lấy đối thủ mỗi ngày")
-        self._o_quet_tc.setToolTip(
-            "Kèm lượt quét hằng ngày: mở trang chủ YouTube của kênh để tiện "
-            "ích gom các kênh được đề xuất vào sổ Đối thủ.")
-        self._o_quet_tc.toggled.connect(lambda _b: self._luu_thiet_lap())
-        d1.addWidget(self._o_quet_tc)
-        d1.addStretch(1)
-        v.addLayout(d1)
-
         d1a = QHBoxLayout()
         self._o_giu_chrome = QCheckBox("Giữ Chrome của kênh luôn mở")
         self._o_giu_chrome.setToolTip(
@@ -1800,7 +1785,6 @@ class TrangMayVM(QWidget):
             self._o_gio_quet.setText(str(cai.get("gio_quet") or ""))
             self._o_cho_quet.setValue(
                 max(1, min(60, int(cai.get("cho_quet_giay") or 480) // 60)))
-            self._o_quet_tc.setChecked(bool(cai.get("quet_trang_chu_hang_ngay")))
             self._o_giu_chrome.setChecked(bool(cai.get("giu_chrome_mo", True)))
             self._o_dong_chrome.setChecked(bool(cai.get("dong_chrome_sau_quet")))
             self._o_tu_cmt.setChecked(bool(cai.get("tu_tra_loi_cmt", True)))
@@ -1816,7 +1800,6 @@ class TrangMayVM(QWidget):
             self._app.base_dir, self._kenh_hien(),
             gio_quet=self._o_gio_quet.text().strip(),
             cho_quet_giay=int(self._o_cho_quet.value()) * 60,
-            quet_trang_chu_hang_ngay=self._o_quet_tc.isChecked(),
             giu_chrome_mo=self._o_giu_chrome.isChecked(),
             dong_chrome_sau_quet=self._o_dong_chrome.isChecked(),
             tu_tra_loi_cmt=self._o_tu_cmt.isChecked())
@@ -2063,12 +2046,6 @@ class TrangMayVM(QWidget):
             "Agent của kênh {0} sẽ nhận trong vòng ~30 giây (nếu đang chạy). "
             "Theo dõi ở ô nhật ký của mục Chỉ số kênh.".format(kenh))
         self._ve()
-
-    def _quet_studio(self) -> None:
-        self._giao("quet-studio")
-
-    def _quet_trang_chu(self) -> None:
-        self._giao("quet-trang-chu")
 
     def _gui_ke_hoach(self) -> None:
         self._giao("dang-video")

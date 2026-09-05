@@ -28,7 +28,8 @@ from typing import Dict, List, Optional, Tuple
 from . import ke_hoach_dang
 
 __all__ = ["ma_goi", "doc_gioi_thieu", "kiem_du_bo", "xuat_goi", "ban_giao",
-           "ghi_nhan_dang_tay", "TRANG_THAI_DANG_TAY", "TEP_VIDEO", "TEP_SRT"]
+           "ghi_nhan_dang_tay", "TRANG_THAI_DANG_TAY", "TEP_VIDEO", "TEP_SRT",
+           "TEP_BINH_LUAN"]
 
 #: Trạng thái ghi khi chủ kênh đăng TAY. Khác chuỗi "ĐÃ ĐĂNG" của máy một
 #: chút là cố ý: nhìn sổ biết ngay video nào máy đăng, video nào người đăng —
@@ -38,6 +39,9 @@ TRANG_THAI_DANG_TAY = "ĐÃ ĐĂNG (tay)"
 
 TEP_VIDEO = "8-video.mp4"
 TEP_SRT = "3-phu-de.srt"
+#: Bình luận để ghim ngay sau khi đăng. Đi kèm gói nhưng KHÔNG nằm trong bộ
+#: bắt buộc: thiếu nó thì video vẫn đăng được như trước.
+TEP_BINH_LUAN = "1-binh-luan.txt"
 _THU_MUC_THUMB = "7-thumbnail"
 
 
@@ -61,7 +65,8 @@ def doc_gioi_thieu(thu_muc_luot: str) -> Dict[str, str]:
     mô tả là cả khối dưới DESCRIPTION tới mục kế; thẻ là dòng sau KEYWORDS
     (đã phân cách bằng dấu phẩy, đúng dạng ô thẻ của Studio).
     """
-    ra = {"tieu_de": "", "mo_ta": "", "the": ""}
+    ra = {"tieu_de": "", "mo_ta": "", "the": "", "binh_luan": ""}
+    ra["binh_luan"] = _doc(os.path.join(thu_muc_luot, TEP_BINH_LUAN)).strip()
     for dong in _doc(os.path.join(thu_muc_luot, "1-tieu-de.txt")).splitlines():
         if dong.startswith("TITLE:"):
             ra["tieu_de"] = dong[len("TITLE:"):].strip()
@@ -124,6 +129,14 @@ def xuat_goi(thu_muc_luot: str, thu_muc_done: str, ma: str) -> str:
     nguon = [os.path.join(thu_muc_luot, TEP_VIDEO),
              os.path.join(thu_muc_luot, TEP_SRT),
              _tim_thumb(thu_muc_luot)]
+    # Bình luận để GHIM sau khi đăng — đi CÙNG gói, không đi qua bảng kế hoạch.
+    # Bảng ấy có sẵn cột cố định mà cả tool đăng bên máy ảo lẫn giao diện đều
+    # đọc; thêm cột là sửa lược đồ đang chạy ở hai nơi. Đặt tệp cạnh mp4 thì ai
+    # đăng cũng thấy, và đăng tay cũng dùng được. Thiếu tệp KHÔNG chặn bàn giao:
+    # video vẫn đăng được, chỉ là không có sẵn câu để ghim.
+    bl = os.path.join(thu_muc_luot, TEP_BINH_LUAN)
+    if os.path.isfile(bl):
+        nguon.append(bl)
     for duong in nguon:
         ra = os.path.join(dich, os.path.basename(duong))
         tam = ra + ".tam"

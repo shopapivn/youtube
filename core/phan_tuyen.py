@@ -121,7 +121,9 @@ from .goi_van_ban import goi_van_ban, loc_json
 from .tuyen_noi_dung import ma_tu_ten
 
 __all__ = [
-    "MA_KHAC", "SAN_TIN", "SO_TIEU_DE_MOI_LO_KHAM", "SO_TIEU_DE_MOI_LO_GAN",
+    "MA_KHAC", "MA_LECH_NHIP", "MA_TRUNG_NIEN", "TU_LOAI_TRU", "DAU_MOC_TUOI",
+    "ap_luat_cung", "sua_so_theo_luat_cung",
+    "SAN_TIN", "SO_TIEU_DE_MOI_LO_KHAM", "SO_TIEU_DE_MOI_LO_GAN",
     "TuyenDeXuat", "KetGan", "DoOnDinh",
     "DE_BAI_KHAM_PHA", "DE_BAI_CHOT", "DE_BAI_GAN",
     "kham_pha", "chot_danh_sach", "gan_tuyen", "do_on_dinh",
@@ -130,6 +132,137 @@ __all__ = [
 
 #: Mã dành cho "không tuyến nào hợp". Có mặt trong MỌI lời nhắc gán.
 MA_KHAC = "khac"
+
+# ═══ LỚP LUẬT CỨNG — chạy bằng mã, đứng SAU model, không tốn một lượt gọi ═══
+#
+# Đo trên sổ TL4-T7 ngày 05/09/2026, 218 dòng mang nhãn "sống lệch nhịp số
+# đông": 41 dòng có 雑学 trong tiêu đề hoặc tên kênh (sổ tay kênh: "dính là
+# loại"), 17 dòng lấy TUỔI TÁC làm nhân vật chính (`tuyen.csv` phân xử: đó là
+# tệp trung niên). Cả hai luật ĐÃ nằm trong lời nhắc — cột "Từ khoá nhận biết"
+# đi thẳng vào `dau_hieu`. Model có luật trong tay mà vẫn vi phạm, nên thứ cần
+# thêm không phải chữ, mà là một lớp kiểm bằng mã. Hai lần chọn nhầm ứng viên
+# V8 trong một buổi đều vì tin nhãn máy gán.
+#
+# Lớp này chỉ bắt lỗi CÓ DẤU HIỆU TRONG CHỮ. Lỗi nghĩa (một triệu chứng lo âu
+# gán nhầm thành một lối sống) không có dấu hiệu để bắt — phần đó vẫn là việc
+# của model, và lời nhắc `DE_BAI_GAN` có đoạn riêng nói về nó.
+
+#: Mã hai tệp mà luật mốc-tuổi chuyển qua lại. Mã là thứ ổn định (nằm trong
+#: sổ tay kênh); tên hiển thị có thể đổi, mã thì không.
+MA_LECH_NHIP = "nguoi-song-lech-nhip-so-dong"
+MA_TRUNG_NIEN = "nguoi-trung-nien-thu-gon-doi-song"
+
+#: Từ loại trừ của ngách — chép từ `CHANNEL/TL4-T7/CLAUDE.md`. Dính một từ ở
+#: tiêu đề HOẶC tên kênh nguồn là loại, bất kể model nói gì.
+TU_LOAI_TRU = (
+    "漫画", "アニメ", "速報", "野球", "サッカー", "ゲーム", "反応集", "スカッと",
+    "2ch", "ゆっくり", "ドラマ", "BGM", "音楽", "料理", "ホラー", "ニュース",
+    "政治", "海外の反応", "恋愛", "雑学",
+)
+
+#: Dấu hiệu tuổi tác là NHÂN VẬT CHÍNH — từ cột "Từ khoá nhận biết" của tệp
+#: trung niên trong `tuyen.csv`, cộng mấy dạng gặp thật trong sổ. Cố ý KHÔNG
+#: có "歳" trần và không có "子供時代": tuổi thơ của người xem không phải tuổi
+#: của người xem.
+DAU_MOC_TUOI = (
+    "年齢を重ね", "歳を重ね", "年を取", "歳を取", "この歳", "中年", "熟年",
+    "40代", "50代", "60代", "70代", "人生後半", "人生の後半", "老後", "定年",
+    "シニア", "高齢", "還暦",
+)
+
+
+#: Sau một từ loại trừ mà đi liền mấy đuôi này thì tiêu đề đang nói về người
+#: KHÔNG màng tới thứ đó — đúng insight của tệp lệch nhịp ("không hứng thú thể
+#: thao" nằm ngay trong từ khoá nhận biết của `tuyen.csv`), không phải video
+#: về thứ đó. Lượt áp luật đầu tiên (05/09/2026) đã ném nhầm
+#: 「ニュースや政治に全く興味がない人」 và 「恋愛をしていなくても、一人で充実
+#: して過ごせる人」 ra "khác" vì thiếu bộ chắn này.
+_DUOI_PHU_DINH = ("に興味がない", "に全く興味がない", "に興味が持てない", "をしない",
+                  "をやらない", "をしていなくても", "をしなくても", "が苦手", "に熱狂できない",
+                  "に興味のない", "に夢中になれない", "に全く興味のない")
+
+
+def _dinh_tu_loai_tru(tieu_de: str) -> bool:
+    """Tiêu đề có dính từ loại trừ KHÔNG được phủ định ngay sau đó không."""
+    for t in TU_LOAI_TRU:
+        i = tieu_de.find(t)
+        while i >= 0:
+            duoi = tieu_de[i + len(t):]
+            # 「ニュースや政治に興味がない」: từ đầu nối bằng や/と/も tới từ sau
+            # rồi mới phủ định — nhìn qua cụm nối để không bắt oan.
+            duoi = duoi.lstrip("やと・,、 ")
+            for t2 in TU_LOAI_TRU:
+                if duoi.startswith(t2):
+                    duoi = duoi[len(t2):].lstrip("やと・,、 ")
+            if t == "雑学" or not any(duoi.startswith(d) for d in _DUOI_PHU_DINH):
+                return True
+            i = tieu_de.find(t, i + 1)
+    return False
+
+
+def ap_luat_cung(tieu_de: str, kenh_nguon: str, ma: str,
+                 ma_co: "Sequence[str] | set") -> str:
+    """Nhãn sau khi qua luật cứng. Ô trống giữ trống — trống là việc của AI.
+
+    1. Từ loại trừ ở tiêu đề hay tên kênh nguồn → `MA_KHAC`, bất kể nhãn nào.
+    2. Nhãn "lệch nhịp" mà tiêu đề lấy tuổi tác làm nhân vật chính → tệp trung
+       niên nếu sổ có tệp ấy; sổ không có thì `MA_KHAC` — KHÔNG bịa mã.
+    """
+    ma = str(ma or "").strip()
+    if not ma:
+        return ma
+    if _dinh_tu_loai_tru(tieu_de or "") or any(t in (kenh_nguon or "") for t in TU_LOAI_TRU):
+        return MA_KHAC
+    if ma == MA_LECH_NHIP and any(t in (tieu_de or "") for t in DAU_MOC_TUOI):
+        return MA_TRUNG_NIEN if MA_TRUNG_NIEN in set(ma_co) else MA_KHAC
+    return ma
+
+
+def sua_so_theo_luat_cung(goc: str, kenh: str,
+                          ma_co: "Optional[Sequence[str]]" = None) -> Dict[str, int]:
+    """Áp luật cứng lên MỌI nhãn đang có trong `content.csv`. Không gọi AI.
+
+    Trả `{"loai_tru": n, "sang_trung_nien": n, "tong_da_xem": n}` để báo cho
+    khách. Ghi sổ CHỈ khi có gì đổi (`luu_bang` đã ghi nguyên tử + sao lưu ngày).
+    Ô trống không đụng; ghi chú và mọi cột khác giữ nguyên từng ký tự.
+    """
+    from . import doi_thu_kenh as so  # noqa: PLC0415 — tránh vòng nhập
+    from .so_csv import chi_so_cot  # noqa: PLC0415
+
+    cot, hang = so.doc_bang(goc, kenh)
+    o = chi_so_cot(list(cot))
+    j_t, j_td, j_k = o.get(so.COT_TUYEN), o.get("Tiêu đề video"), o.get("Kênh")
+    dem = {"loai_tru": 0, "sang_trung_nien": 0, "tong_da_xem": 0}
+    if j_t is None or j_td is None:
+        return dem
+    if ma_co is None:
+        try:
+            from . import tuyen_noi_dung as tn  # noqa: PLC0415
+            ma_co = tn.danh_sach(goc, kenh, bo_ca_tuyen_bo=False)
+        except Exception:  # noqa: BLE001 — sổ tuyến thiếu thì đọc mã từ chính bảng
+            ma_co = []
+    ma_co = set(ma_co) | {str(d[j_t]).strip() for d in hang if j_t < len(d)}
+    ma_co.discard("")
+    doi = False
+    for d in hang:
+        if j_t >= len(d) or not str(d[j_t]).strip():
+            continue
+        dem["tong_da_xem"] += 1
+        cu = str(d[j_t]).strip()
+        moi = ap_luat_cung(str(d[j_td]) if j_td < len(d) else "",
+                           str(d[j_k]) if j_k is not None and j_k < len(d) else "",
+                           cu, ma_co)
+        if moi == cu:
+            continue
+        d[j_t] = moi
+        doi = True
+        if moi == MA_KHAC:
+            dem["loai_tru"] += 1
+        elif moi == MA_TRUNG_NIEN:
+            dem["sang_trung_nien"] += 1
+    if doi:
+        so.luu_bang(goc, kenh, cot, hang)
+    return dem
 
 #: Dưới mức tin này thì để ô Tuyến TRỐNG thay vì ghi một mã.
 #:
@@ -566,6 +699,15 @@ DE_BAI_GAN = (
     "\"kỹ thuật 3 giây\" — mà không nói về một kiểu người nào, thì thường "
     "KHÔNG thuộc tệp nào. Trừ khi tệp trong danh sách nói rõ họ cần một "
     "việc làm được ngay, còn lại hãy trả về mã \"không tệp nào\".\n\n"
+    "⚠ Hai bẫy đã gán sai thật, đọc kỹ:\n"
+    "  · Tiêu đề nêu một TRIỆU CHỨNG lo âu (\"緊張する\", \"不安になる\", "
+    "\"眠れない\", \"疲れる\" khi làm một việc bình thường) mà KHÔNG nêu một "
+    "lối sống khác số đông → đó là người đang khổ vì một phản ứng, không "
+    "phải người sống lệch nhịp. Không có tệp cho họ thì trả \"không tệp "
+    "nào\".\n"
+    "  · Tiêu đề lấy TUỔI TÁC làm nhân vật chính (\"年齢を重ねると\", "
+    "\"中年以降\", \"60代\", \"人生後半\") → tệp trung niên, kể cả khi phần "
+    "còn lại nói về \"ở một mình\" hay \"ít bạn\".\n\n"
     "Với mỗi tiêu đề, hỏi đúng ba câu, theo thứ tự này:\n"
     "  1. Ai bấm vào cái này?\n"
     "  2. Lúc bấm, họ đang ở trạng thái nào — đang CHẬT (tự nghi ngờ, ấm "
@@ -652,8 +794,12 @@ def gan_tuyen(client: Any, tieu_de: Sequence[str],
               on_log: Optional[Callable[[str], None]] = None,
               kiem_dung: Optional[Callable[[], None]] = None,
               so_moi_lo: int = SO_TIEU_DE_MOI_LO_GAN,
-              tron: Optional[random.Random] = None) -> List[KetGan]:
+              tron: Optional[random.Random] = None,
+              kenh_nguon: Sequence[str] = ()) -> List[KetGan]:
     """Gán tuyến cho từng tiêu đề → danh sách **cùng thứ tự, cùng độ dài**.
+
+    `kenh_nguon` (cùng thứ tự với `tieu_de`, được để trống) cho lớp luật cứng
+    soi tên kênh nguồn — 雑学 hay nằm ở tên kênh chứ không ở tiêu đề.
 
     `tron` khác `None` thì thứ tự trong mỗi lô được đảo trước khi gửi (kết
     quả vẫn trả về đúng thứ tự gốc). Dùng cho `do_on_dinh` — xem đầu file.
@@ -710,6 +856,16 @@ def gan_tuyen(client: Any, tieu_de: Sequence[str],
             continue
         for v, ket in _doc_gan(tho, len(chi_so), that).items():
             ra[chi_so[v]] = ket
+    # Lớp luật cứng đứng SAU model — xem chú thích ở `ap_luat_cung`. Ra `khac`
+    # thì `dung_duoc` giả nên ô ở trống: trống nói thật là "không tệp nào".
+    ma_co = {t.ma for t in tuyen}
+    for i, ket in enumerate(ra):
+        if not ket.ma:
+            continue
+        kn = kenh_nguon[i] if i < len(kenh_nguon) else ""
+        moi = ap_luat_cung(goc[i], kn, ket.ma, ma_co)
+        if moi != ket.ma:
+            ra[i] = KetGan(ma=moi, do_tin=100 if moi == MA_KHAC else ket.do_tin)
     return ra
 
 

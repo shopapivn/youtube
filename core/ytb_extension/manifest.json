@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Chỉ số kênh YouTube",
-  "version": "2.4.1",
-  "description": "Tự lấy số liệu kênh và từng video từ YouTube Studio, lưu vào máy bạn để đưa cho AI phân tích.",
+  "version": "2.6.1",
+  "description": "Tự lấy số liệu kênh và từng video từ YouTube Studio (kèm ảnh chụp màn hình để đối chiếu), lưu vào máy bạn để đưa cho AI phân tích.",
   "permissions": [
+    "activeTab",
     "storage",
     "downloads",
     "alarms",
@@ -19,7 +20,8 @@
     "https://*.googleusercontent.com/*",
     "http://192.168.88.254:8765/*",
     "http://localhost:8765/*",
-    "http://127.0.0.1:8765/*"
+    "http://127.0.0.1:8765/*",
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"

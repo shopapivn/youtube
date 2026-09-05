@@ -37,11 +37,13 @@ thì không phải sửa gì.
 from __future__ import annotations
 
 import base64
+import csv
 import io
 import ipaddress
 import json
 import os
 import re
+import shutil
 import socket
 import struct
 import sys
@@ -50,7 +52,7 @@ import time
 import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 __all__ = ["Tram", "CONG_MAC_DINH", "dia_chi_may", "thu_muc_kenh", "GOC"]
 
@@ -134,6 +136,23 @@ def dia_chi_may(cong: int = CONG_MAC_DINH) -> List[str]:
 #: Đồ RIÊNG của từng máy — không bao giờ nằm trong gói phát đi.
 _GOI_VM_BO_TEP = {"config.json", "cai-dat-tool.json", "agent.pid",
                   "agent.log", "trang-thai.json"}
+#: ═══ MÓC "GÓI TRANG CHỦ ĐÃ VỀ" ═══
+#: Chủ dự án, 05/09/2026: *"ấn 1 nút là bên vm sẽ quét studio, quét trang chủ - rồi đưa về tool,
+#: tool … cập nhật đối thủ vào danh bạ - rồi lấy content"*. Nửa sau phải TỰ chạy khi nửa đầu về,
+#: không ai bấm nút thứ hai. Trạm là chỗ duy nhất biết gói đã về, nên trạm gọi. Extension 2.6.1 gửi
+#: ba gói cách nhau 1–2 phút (ba lượt tải), nên không gọi ngay: mỗi gói đặt lại đồng hồ, im đủ
+#: `TRE_HOOK_TRANG_CHU` giây mới gọi — một lần cho cả đợt. Hàm đăng ký nhận `ma_kenh`, chạy ở luồng
+#: của trạm: giao diện phải tự chuyển về luồng Qt (signal), không chạm widget trong hàm này.
+HOOK_TRANG_CHU: "List[Callable[[str], None]]" = []
+TRE_HOOK_TRANG_CHU = 150.0
+
+
+def dat_hook_trang_chu(ham: "Callable[[str], None]") -> None:
+    """Đăng ký một hàm chạy sau mỗi ĐỢT trang chủ. Đăng ký trùng thì thôi."""
+    if ham not in HOOK_TRANG_CHU:
+        HOOK_TRANG_CHU.append(ham)
+
+
 _GOI_VM_BO_THU = {"__pycache__", "logs", "tien-ich", "tokens",
                   "clients", "replied", "transcripts"}
 
@@ -293,6 +312,9 @@ class Tram:
         self._viec: List[dict] = []          # [{id, kenh, loai, tham_so, luc}]
         self._so_viec = 0
         self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
+        self._luc_trang_chu: dict = {}       # kenh -> [mốc time.time() từng gói trang chủ]
+        self._hen_trang_chu: dict = {}       # kenh -> threading.Timer đang chờ gọi hook
+        self.tre_hook_trang_chu: float = TRE_HOOK_TRANG_CHU
         self._ket_qua_viec: List[dict] = []  # 20 kết quả việc gần nhất
         self._goi_moc: dict = {}             # id việc -> (loại, so_goi lúc giao)
         # Lệnh cho TIỆN ÍCH (kênh -> lệnh, một lần lấy là hết): chủ dự án
@@ -599,6 +621,88 @@ class Tram:
         self._lam_moi_tom_tat(an_toan(b.get("kenh") or "kenh"))
         return "ok"
 
+    #: Giữ ảnh của bao nhiêu mốc gần nhất mỗi video. Ảnh là để ĐỐI CHIẾU khi nghi số sai, không
+    #: phải kho lưu trữ: mốc cũ đã chốt sổ thì gói JSON là đủ. 10 mốc ≈ hai ngày đầu của một
+    #: video, đúng quãng mọi quyết định xảy ra.
+    GIU_ANH_MAY_MOC = 10
+
+    def nhan_anh(self, b: dict) -> str:
+        """Ghi bằng chứng nhìn được của một tab số liệu: ảnh, CHỮ trên trang, và lỗi (nếu có).
+
+        Chủ dự án, 05/09/2026: *"mày có thể yêu cầu extension chụp ảnh ở các tab dữ liệu để nếu
+        nó lỗi mày cũng biết"*. Gói JSON về đủ KHÔNG chứng minh số đúng — hôm ấy tìm ra bốn lỗi
+        giải mã mà mọi gói vẫn về đều đặn.
+
+        Ba thứ, ba việc khác nhau:
+        * `anh`  — để MẮT NGƯỜI soi; bắt được đăng xuất, trang trắng, hộp thoại chắn ngang.
+        * `chu`  — chữ Studio đang hiển thị. Đây mới là lưới an toàn thật: MÁY so được số trong
+          tệp với số trên trang, và nó vẫn về khi màn hình không vẽ (RDP ngắt, cửa sổ thu nhỏ).
+        * `loi`  — vì sao không chụp được ảnh. Không ghi lại thì lần sau vẫn mù đúng như hôm nay:
+          bản 2.5.0 lấy đủ mọi bảng mà không một tấm ảnh nào, và không có gì nói tại sao.
+
+        Thiếu ảnh KHÔNG phải lý do vứt chữ — đúng cảnh đang gặp.
+        """
+        kd = thu_muc_kenh(b.get("kenh") or "kenh", self.goc)
+        vid = an_toan(b.get("id"))
+        tm = os.path.join(kd, vid, an_toan(b.get("label")), "anh")
+        goc_ten = an_toan(b.get("ten") or f"{datetime.now():%Y%m%d-%H%M%S}")
+        for duoi in (".jpg", ".txt"):
+            if goc_ten.endswith(duoi):
+                goc_ten = goc_ten[: -len(duoi)]
+        da_ghi = []
+
+        raw = b""
+        try:
+            raw = base64.b64decode(str(b.get("anh") or ""), validate=True)
+        except Exception:
+            raw = b""
+        if raw and raw.startswith(b"\xff\xd8"):      # chỉ nhận JPEG thật
+            os.makedirs(tm, exist_ok=True)
+            io.open(os.path.join(tm, goc_ten + ".jpg"), "wb").write(raw)
+            da_ghi.append(f"ảnh {len(raw) // 1024} KB")
+
+        chu = str(b.get("chu") or "")
+        loi = str(b.get("loi") or "")
+        if chu or loi:
+            os.makedirs(tm, exist_ok=True)
+            than = chu
+            if loi:
+                than = f"[KHÔNG CHỤP ĐƯỢC ẢNH] {loi}\n\n{chu}"
+            io.open(os.path.join(tm, goc_ten + ".txt"), "w", encoding="utf-8").write(than)
+            da_ghi.append(f"chữ {len(chu)} ký tự" + (f" · LỖI ẢNH: {loi[:80]}" if loi else ""))
+
+        if not da_ghi:
+            return "anh la"
+        self.ghi(f"bằng chứng {vid}/{b.get('label')}/{goc_ten}: " + " · ".join(da_ghi))
+        self._don_anh_cu(os.path.join(kd, vid))
+        return "ok"
+
+    def _don_anh_cu(self, thu_muc_video: str) -> int:
+        """Xoá ảnh của các mốc cũ, giữ `GIU_ANH_MAY_MOC` mốc mới nhất. Trả về số thư mục đã dọn.
+
+        Không có vòng dọn thì 4 lượt/ngày × 6 video × 4 tab ≈ 10 MB mỗi ngày, và không ai để ý
+        cho tới lúc đĩa đầy — kênh này đã có tiền lệ với thư mục rác của nhà máy ảnh.
+        Chỉ xoá thư mục `anh/`; gói JSON và CSV KHÔNG bao giờ bị đụng tới.
+        """
+        try:
+            co = [d for d in os.listdir(thu_muc_video)
+                  if os.path.isdir(os.path.join(thu_muc_video, d, "anh"))]
+        except OSError:
+            return 0
+        if len(co) <= self.GIU_ANH_MAY_MOC:
+            return 0
+        co.sort(key=lambda d: os.path.getmtime(os.path.join(thu_muc_video, d, "anh")))
+        n = 0
+        for d in co[:-self.GIU_ANH_MAY_MOC]:
+            try:
+                shutil.rmtree(os.path.join(thu_muc_video, d, "anh"))
+                n += 1
+            except OSError:
+                pass
+        if n:
+            self.ghi(f"dọn ảnh cũ: {n} mốc (giữ {self.GIU_ANH_MAY_MOC} mốc mới nhất)")
+        return n
+
     def _lam_moi_tom_tat(self, kenh: str) -> None:
         """Làm mới `bang-tom-tat.csv` — bảng cho NGƯỜI ở cửa thư mục chi-so.
 
@@ -635,6 +739,16 @@ class Tram:
                 self._lenh_tien_ich[viec["kenh"]] = {"chup": "het"}
         self.ghi(f"xếp việc #{viec['id']} [{loai}] cho kênh {viec['kenh']}")
         return viec["id"]
+
+    def giao_quet_day_du(self, kenh: str) -> Tuple[int, int]:
+        """MỘT nút = quét Studio rồi quét trang chủ, đúng thứ tự.
+
+        Chủ dự án, 05/09/2026: *"sao không để cái quét trang chủ làm cùng với cái quét studio
+        luôn… đồng bộ 1 nút đủ chức năng"*. Xếp hai việc liền nhau ở trạm — agent (kể cả bản
+        cũ trên máy ảo) làm tuần tự: Studio ~8 phút cho extension chụp, rồi trang chủ ~5 phút
+        cho 3 lượt tải. Không cần sửa gì bên máy ảo. Trả (số việc Studio, số việc trang chủ).
+        """
+        return self.giao_viec(kenh, "quet-studio"), self.giao_viec(kenh, "quet-trang-chu")
 
     def lay_viec(self, kenh: str, may: str, ip: str = "") -> Optional[dict]:
         """Agent hỏi việc: trả việc CŨ NHẤT của kênh đó (rồi rút khỏi hộp).
@@ -732,6 +846,131 @@ class Tram:
             self.ghi(f"kênh {an_toan(kenh)}: +{len(moi)} đối thủ mới từ trang chủ")
         return len(moi)
 
+    #: Cột của `nghien-cuu/trang-chu.csv` — mỗi video trên trang chủ một dòng, GHI NỐI
+    #: theo lượt quét để còn so hai ngày với nhau ("máy đang chiếu gì cho tệp này").
+    #: "Lượt tải": extension ≥ 2.6.1 tải lại trang chủ 2–3 lượt trong một đợt quét — cột này
+    #: đo thẳng giả thuyết của chủ dự án (*"mỗi lần load trang chủ có thể ra dữ liệu mới"*):
+    #: lượt 2, 3 ra thêm bao nhiêu video mới so với lượt 1. Phải trùng `core.trang_chu.COT`.
+    COT_TRANG_CHU = ("Lúc quét", "Vị trí", "Kệ", "Mã video", "Tiêu đề", "Kênh",
+                     "Link kênh", "Lượt xem", "Đăng", "Dài", "Short", "Bị loại", "Lượt tải")
+
+    def nhan_trang_chu(self, kenh: str, video: List[dict],
+                       danh_sach: Optional[List[str]] = None) -> Dict[str, int]:
+        """Máy ảo mở trang chủ YouTube của phiên kênh → extension gom TỪNG VIDEO được đề xuất.
+
+        Chủ dự án, 05/09/2026: *"ở VM tài khoản kênh trang chủ có các video đang xu hướng…
+        để tool cào trang chủ lấy thêm đối thủ, từ đó cào content đối thủ về"*. Bản trước chỉ
+        gom LINK KÊNH rồi nối thẳng vào hộp thư, không tên, không lọc — đúng đường mà hai kênh
+        雑学 (カップ麺を待つ間に見たい雑学 · 大人の心理雑学, 150 dòng) đã lọt vào sổ, và đúng
+        thứ khiến bảng phân tuyến sai (xem `phan_tuyen.ap_luat_cung`).
+
+        Ba việc, theo thứ tự:
+        1. Ghi cả danh sách video vào `trang-chu.csv` — kể cả video bị loại, đánh dấu cột
+           "Bị loại". Không mất gì; người xem sổ thấy máy đang chiếu gì cho tệp của kênh.
+        2. Lọc kênh nguồn bằng từ loại trừ (tên kênh, handle, tiêu đề video) và bỏ kênh chỉ
+           thấy qua Shorts — hai loại này chưa bao giờ là nguồn remake được.
+        3. Kênh còn lại → `nhan_doi_thu` (hộp thư, tự khử trùng) như cũ.
+
+        Trả `{"video": n, "kenh_moi": n, "bi_loai": n}` để extension ghi nhật ký cho đúng.
+        """
+        from core import doi_thu_kenh as so  # noqa: PLC0415 — tránh vòng nhập
+        from core.phan_tuyen import TU_LOAI_TRU  # noqa: PLC0415
+        from core.trang_chu import dung_tieng, kenh_bi_loai, ngon_ngu_kenh  # noqa: PLC0415
+
+        kenh = an_toan(kenh or "kenh")
+        lang = ngon_ngu_kenh(self.goc, kenh)
+        luc = datetime.now().strftime("%Y-%m-%d %H:%M")
+        tm = so.thu_muc_nghien_cuu(self.goc, kenh)
+        os.makedirs(tm, exist_ok=True)
+        duong = os.path.join(tm, "trang-chu.csv")
+        moi_tao = not os.path.exists(duong)
+
+        kenh_sach: List[str] = []
+        kenh_loai = set()
+        dong_ghi = []
+        for i, v in enumerate(video or []):
+            if not isinstance(v, dict):
+                continue
+            tieu_de = str(v.get("tieu_de") or "").strip()
+            ten_kenh = str(v.get("ten_kenh") or "").strip()
+            link_kenh = str(v.get("link_kenh") or "").strip()
+            short = bool(v.get("short"))
+            ly_do = ""
+            if any(t in tieu_de for t in TU_LOAI_TRU) or kenh_bi_loai(ten_kenh, link_kenh):
+                ly_do = "từ loại trừ"
+            elif short:
+                ly_do = "short"
+            elif (tieu_de or ten_kenh) and not dung_tieng(tieu_de + " " + ten_kenh, lang):
+                # Kênh tiếng Nhật mà cả tiêu đề lẫn tên kênh không có chữ Nhật — lượt cào thật đầu
+                # tiên đã đổ 267 kênh Việt/Anh/Tây Ban Nha vào hộp thư vì thiếu đúng dòng này.
+                ly_do = "không đúng tiếng"
+            dong_ghi.append([luc, str(v.get("vi_tri", i + 1)), str(v.get("ke") or ""),
+                             str(v.get("ma") or ""), tieu_de, ten_kenh, link_kenh,
+                             str(v.get("luot_xem") or ""), str(v.get("dang") or ""),
+                             str(v.get("dai") or ""), "x" if short else "", ly_do,
+                             str(v.get("luot") or "")])
+            if link_kenh:
+                if ly_do:
+                    kenh_loai.add(link_kenh)
+                elif ten_kenh or tieu_de:
+                    kenh_sach.append(link_kenh)
+                # link mà không có tên/tiêu đề: chưa biết là ai → để `hoan_thien` tra bằng
+                # yt-dlp rồi mới quyết, không nối mù vào hộp thư
+        # Link kênh rời (bản extension cũ, hoặc kênh không kèm video) — không có tên để lọc
+        # theo tên, nhưng handle vẫn lọc được (雑学 hay nằm ngay trong handle).
+        for d in danh_sach or []:
+            d = str(d).strip()
+            if not d or d in kenh_sach or d in kenh_loai:
+                continue
+            if kenh_bi_loai("", d):
+                kenh_loai.add(d)
+            # link rời không tên (extension cũ, thanh bên): KHÔNG nối mù — chờ `hoan_thien` tra.
+            # Bản 2.4 nối thẳng chính là đường 雑学 và 267 kênh lạ đã đi vào sổ.
+        # kênh vừa sạch ở video này vừa bị loại ở video khác → loại (một dòng 雑学 là đủ)
+        kenh_sach = [k for k in dict.fromkeys(kenh_sach) if k not in kenh_loai]
+
+        if dong_ghi:
+            with open(duong, "a", encoding="utf-8-sig", newline="") as tep:
+                w = csv.writer(tep)
+                if moi_tao:
+                    w.writerow(list(self.COT_TRANG_CHU))
+                w.writerows(dong_ghi)
+        them = self.nhan_doi_thu(kenh, kenh_sach) if kenh_sach else 0
+        self.ghi(f"kênh {kenh}: trang chủ {len(dong_ghi)} video · +{them} đối thủ mới · "
+                 f"loại {len(kenh_loai)} kênh (雑学/loại trừ/Shorts)")
+        self._hen_hook_trang_chu(kenh)
+        return {"video": len(dong_ghi), "kenh_moi": them, "bi_loai": len(kenh_loai)}
+
+    def _hen_hook_trang_chu(self, kenh: str) -> None:
+        """Ghi mốc gói vừa về; đặt lại đồng hồ — im đủ `tre_hook_trang_chu` giây mới gọi hook."""
+        import threading  # noqa: PLC0415
+
+        with self._khoa_viec:
+            self._luc_trang_chu.setdefault(kenh, []).append(time.time())
+            cu = self._hen_trang_chu.pop(kenh, None)
+            if cu is not None:
+                cu.cancel()
+            if not HOOK_TRANG_CHU:
+                return
+            hen = threading.Timer(max(0.0, float(self.tre_hook_trang_chu)), self._goi_hook_trang_chu, args=(kenh,))
+            hen.daemon = True
+            self._hen_trang_chu[kenh] = hen
+            hen.start()
+
+    def _goi_hook_trang_chu(self, kenh: str) -> None:
+        with self._khoa_viec:
+            self._hen_trang_chu.pop(kenh, None)
+        for ham in list(HOOK_TRANG_CHU):
+            try:
+                ham(kenh)
+            except Exception as loi:  # noqa: BLE001 — hook của giao diện hỏng không giết trạm
+                self.ghi("hook trang chủ hỏng ({0}): {1}".format(kenh, str(loi)[:120]))
+
+    def goi_trang_chu_sau(self, kenh: str, luc: float) -> int:
+        """Bao nhiêu gói trang chủ của `kenh` đã về SAU mốc `luc` — để giao diện biết máy ảo có trả lời không."""
+        with self._khoa_viec:
+            return sum(1 for t in self._luc_trang_chu.get(an_toan(kenh), []) if t > luc)
+
     def _bung_zip(self, goi: dict, snap: str) -> None:
         """Studio trả bảng dưới dạng ZIP nén base64 — bung ra thành .csv đọc được.
 
@@ -752,7 +991,14 @@ class Tram:
             except Exception:
                 continue
             head = data.split("\n", 1)[0]
+            # Hai bảng nguồn khác nhau, dòng tiêu đề CHỈ khác nhau ở cột thứ hai:
+            #   "Traffic source,Source type,…"  → từng video nguồn (pool đề xuất)
+            #   "Traffic source,Impressions,…"  → theo LOẠI bề mặt (Trang chủ · Tiếp theo · …)
+            # Nhận nhầm là bảng này ghi đè bảng kia, và cả hai đều mất một nửa ý nghĩa. Bảng theo
+            # loại là chỗ DUY NHẤT có hiển thị + CTR tách theo bề mặt — thứ cần để biết cổng 1
+            # đang đói ở bề mặt nào.
             ten = ("traffic-related.csv" if head.startswith("Traffic source,Source type")
+                   else "traffic-type.csv" if head.startswith("Traffic source,")
                    else "geo.csv" if head.startswith(("Geography,", "Country,"))
                    else "daily.csv" if head.startswith("Date,Views") else None)
             if ten:
@@ -899,6 +1145,8 @@ def _lam_xu_ly(tram: "Tram"):
             try:
                 if self.path == "/capture":
                     return self._tra(tram.nhan_capture(b).encode("utf-8"))
+                if self.path == "/anh":
+                    return self._tra(tram.nhan_anh(b).encode("utf-8"))
                 if self.path == "/viec-xong":
                     tram.viec_xong(b.get("kenh") or "", int(b.get("id") or 0),
                                    str(b.get("ket_qua") or ""),
@@ -923,6 +1171,13 @@ def _lam_xu_ly(tram: "Tram"):
                     them = tram.nhan_doi_thu(b.get("kenh") or "",
                                              list(b.get("danh_sach") or []))
                     return self._tra(json.dumps({"them": them}).encode("utf-8"),
+                                     "application/json; charset=utf-8")
+                if self.path == "/trang-chu":
+                    # Bản extension ≥ 2.6: từng video trên trang chủ, có tên kênh để lọc.
+                    kq = tram.nhan_trang_chu(b.get("kenh") or "",
+                                             list(b.get("video") or []),
+                                             list(b.get("danh_sach") or []))
+                    return self._tra(json.dumps(kq).encode("utf-8"),
                                      "application/json; charset=utf-8")
                 if self.path == "/giao-viec":
                     # Xếp việc vào hộp QUA MẠNG — trước giờ chỉ nút bấm trong

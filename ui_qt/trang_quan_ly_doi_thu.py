@@ -17,9 +17,12 @@ hình — mọi thứ tính toán được đều nằm dưới core để test 
 
 from __future__ import annotations
 
+import io
+import os
+import time
 from typing import Dict, List
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
@@ -28,6 +31,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core import cham_diem_content as cham
+from core.chi_so_ytb import tram as tram_mod
 from core import danh_ba_doi_thu as db
 from core import doi_thu_kenh as so
 from core import phan_tuyen as pt
@@ -86,10 +90,23 @@ class _Bang(QTableWidget):
 class TrangDanhBa(QWidget):
     """**Đối thủ** — danh bạ: ai đang theo dõi, ai die, ai thuộc tuyến nào."""
 
+    #: Trạm (luồng HTTP) báo "một đợt trang chủ đã về" → về luồng Qt qua signal này.
+    _tin_trang_chu = pyqtSignal(str)
+
     def __init__(self, app):
         super().__init__()
         self._app = app
         self._kenh = ""
+        # ═══ MỘT NÚT THẬT (chủ dự án 05/09/2026) ═══
+        # "ấn 1 nút là bên vm sẽ quét studio, quét trang chủ - rồi đưa về tool, tool … cập nhật
+        # đối thủ vào danh bạ - rồi lấy content … phân tuyến … chấm điểm". Nửa sau tự chạy khi
+        # trạm nhận đủ một đợt trang chủ: trạm gọi hook (luồng của trạm) → emit → slot chạy
+        # core.mot_nut.chay ở luồng nền. Lượt quét THEO LỊCH 07:30 của máy ảo cũng đi đúng
+        # đường này — không ai phải bấm gì.
+        self._mot_nut_dang_chay = False
+        self._cho_may_ao = None            # (kênh, mốc giao việc) — để báo khi máy ảo im
+        self._tin_trang_chu.connect(self._tu_chay_mot_nut)
+        tram_mod.dat_hook_trang_chu(self._tin_trang_chu.emit)
         self._cot: List[str] = list(db.COT)
         self._hang: List[List[str]] = []
         self._dang_do = False
@@ -147,7 +164,167 @@ class TrangDanhBa(QWidget):
         hang.addWidget(nut_phu("Nhận hết vào danh bạ", self._nhan_het, rong=180))
         hang.addWidget(nut_phu("Dán thêm kênh…", self._dan_them, rong=150))
         v.addLayout(hang)
+
+        # ── Trang chủ máy ảo → đối thủ mới ─────────────────────────────────────
+        # Chủ dự án 05/09/2026: việc TÌM đối thủ thuộc khâu nghiên cứu, không thuộc
+        # khâu máy ảo — nút dời từ tab Máy VM sang đây, cạnh chính hộp thư nó đổ vào.
+        # Máy ảo vẫn là tay quét: mở trang chủ YouTube của phiên kênh, extension thu
+        # nhỏ + lướt tới đáy + gom hết link, trạm ghi `nghien-cuu/trang-chu.csv`.
+        # "Xử lý kết quả": tra kênh bằng yt-dlp (miễn phí) → lọc tâm lý bằng từ khoá →
+        # HỎI trước khi tốn AI cho phần lưỡng lự → kênh sạch vào hộp thư này.
+        d2 = QHBoxLayout()
+        d2.addWidget(nhan("Trang chủ máy ảo", "phu"))
+        self._nhan_trang_chu = nhan("", "muted")
+        self._nhan_trang_chu.setMinimumWidth(1)
+        d2.addWidget(self._nhan_trang_chu, 1)
+        v.addLayout(d2)
+        hang2 = HangXuongDong()
+        nut_quet = nut_chinh("MỘT NÚT: máy ảo quét → đối thủ → content", self._quet_may_ao, rong=290)
+        nut_quet.setToolTip(
+            "Bấm một lần là xong cả chuỗi: máy ảo mở Studio cho tiện ích chụp số liệu (~8 phút), "
+            "rồi mở trang chủ YouTube gom video/kênh được đề xuất (3 lượt tải). Khi gói trang chủ "
+            "về, tool TỰ chạy tiếp: tra video (yt-dlp) → lọc tâm lý → AI kiểm từng kênh qua cửa "
+            "máy → ghi danh bạ → quét content mọi kênh theo dõi (cập nhật view) → AI gán tuyến dòng "
+            "mới → luật cứng → Đã làm → chấm → mở nghien-cuu/bao-cao-mot-nut.md. Không phải bấm gì thêm.")
+        hang2.addWidget(nut_quet)
+        self._o_quet_tc = QCheckBox("mỗi ngày")
+        self._o_quet_tc.setToolTip(
+            "Kèm lượt quét hằng ngày của máy ảo: mở trang chủ YouTube của kênh để "
+            "tiện ích gom video/kênh được đề xuất. Lưu vào may-ao.json của kênh.")
+        self._o_quet_tc.toggled.connect(self._luu_quet_tc)
+        hang2.addWidget(self._o_quet_tc)
+        nut_mot = nut_phu("Xếp hạng lại (không quét máy ảo)", self._xu_ly_trang_chu, rong=220)
+        nut_mot.setToolTip(
+            "Chạy lại nửa sau trên dữ liệu đã có (khi máy ảo tắt hoặc muốn cập nhật view ngay): tra "
+            "trang chủ → AI kiểm kênh → danh bạ → quét content → AI gán tuyến → luật cứng → Đã làm → "
+            "chấm → bao-cao-mot-nut.md. Có ví thì AI chạy ở ba chỗ, không có ví vẫn chạy bằng luật cứng.")
+        hang2.addWidget(nut_mot)
+        hang2.addWidget(nut_phu("Mở bảng trang chủ", self._mo_trang_chu, rong=150))
+        v.addLayout(hang2)
         return khung
+
+    # ── trang chủ máy ảo ──────────────────────────────────────────────────────
+
+    def _tram(self):
+        """Trạm nhận sống trong trang Chỉ số kênh (con của trang Phân tích)."""
+        pt_page = self._app.trang("phan-tich") if hasattr(self._app, "trang") else None
+        return getattr(getattr(pt_page, "_chi_so", None), "_tram", None)
+
+    def _quet_may_ao(self) -> None:
+        """Một nút = quét Studio + quét trang chủ (chủ dự án 05/09: "đồng bộ 1 nút đủ chức năng")."""
+        if not self._kenh:
+            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
+            return
+        tram = self._tram()
+        if tram is None or not getattr(tram, "dang_chay", False):
+            self._app.show_message(
+                "Cổng nhận đang tắt",
+                "Sang mục “Chỉ số kênh” bấm “Bật cổng nhận” trước — agent trong máy "
+                "ảo gọi về qua cổng đó.")
+            return
+        so_studio, so_tc = tram.giao_quet_day_du(self._kenh)
+        self._cho_may_ao = (self._kenh, time.time())
+        self._nhan_trang_chu.setText(
+            "MỘT NÚT: đã giao việc #{0} (Studio) và #{1} (trang chủ) — chờ máy ảo ~10–15 phút; gói "
+            "trang chủ về là tool tự chạy tiếp, không cần bấm gì.".format(so_studio, so_tc))
+        QTimer.singleShot(45 * 60 * 1000, self._kiem_may_ao_im)
+        self._app.show_message(
+            "Đã giao việc #{0} và #{1} — phần còn lại tự chạy".format(so_studio, so_tc),
+            "Agent của kênh {0} nhận trong ~30 giây (nếu đang chạy): mở Studio cho tiện ích chụp "
+            "số liệu (~8 phút), rồi mở trang chủ YouTube gom video/kênh được đề xuất (~5 phút). "
+            "Khi gói trang chủ về, tool TỰ chạy: AI kiểm kênh → danh bạ → quét content → AI gán "
+            "tuyến → chấm, rồi mở báo cáo. Bạn có thể đóng tab này; đừng tắt tool và cổng nhận."
+            .format(self._kenh))
+
+    def _kiem_may_ao_im(self) -> None:
+        """45 phút sau khi giao việc mà không gói trang chủ nào về — nói thật, đừng để khách chờ suông."""
+        if not self._cho_may_ao:
+            return
+        kenh, luc = self._cho_may_ao
+        tram = self._tram()
+        if tram is None or tram.goi_trang_chu_sau(kenh, luc) > 0:
+            return
+        self._cho_may_ao = None
+        self._nhan_trang_chu.setText("máy ảo chưa gửi gói trang chủ nào sau 45 phút.")
+        self._app.show_message(
+            "Máy ảo chưa trả lời",
+            "45 phút rồi mà chưa có gói trang chủ nào của kênh {0} về trạm. Kiểm tra: agent trên máy "
+            "ảo có đang chạy không (tab Máy VM › nhịp tim), Chrome có mở không, extension có bản "
+            "≥ 2.6.1 không. Dữ liệu đã có thì vẫn xếp hạng lại được bằng nút “Xếp hạng lại”.".format(kenh))
+
+    def _tu_chay_mot_nut(self, kenh: str) -> None:
+        """Slot ở luồng Qt: trạm vừa nhận đủ một đợt trang chủ của `kenh` → chạy chuỗi."""
+        if self._cho_may_ao and self._cho_may_ao[0] == kenh:
+            self._cho_may_ao = None
+        self._chay_mot_nut(kenh, "Một nút — xong (máy ảo → đối thủ → content)")
+
+    def _chay_mot_nut(self, kenh: str, tieu_de: str) -> None:
+        """Chạy `core.mot_nut.chay` ở luồng nền, có ví thì có AI; xong thì nạp lại và mở báo cáo."""
+        if not kenh or self._mot_nut_dang_chay:
+            return
+        from core import mot_nut  # noqa: PLC0415
+
+        goc, client = self._app.base_dir, getattr(self._app, "client", None)
+        self._mot_nut_dang_chay = True
+        self._nhan_trang_chu.setText("một nút: đang chạy 7 bước cho {0}{1}…".format(
+            kenh, " (có AI)" if client is not None else " (không có ví — chỉ luật cứng)"))
+
+        def viec():
+            return mot_nut.chay(goc, kenh, client=client)
+
+        def xong(bc):
+            self._mot_nut_dang_chay = False
+            self._nap()
+            self._nhan_trang_chu.setText("một nút xong: " + bc.tom_tat())
+            self._app.show_message(tieu_de, bc.tom_tat() + "\n\nBáo cáo: " + bc.tep_bao_cao)
+            try:
+                os.startfile(bc.tep_bao_cao)  # noqa: S606 - Windows, mở bằng trình soạn mặc định
+            except OSError:
+                pass
+
+        def hong(loi):
+            self._mot_nut_dang_chay = False
+            self._nhan_trang_chu.setText("một nút hỏng: {0}".format(str(loi)[:120]))
+            self._app.show_error(loi)
+
+        self._app.run_bg(viec, on_ok=xong, on_err=hong)
+
+    def _luu_quet_tc(self, bat: bool) -> None:
+        if getattr(self, "_dang_do_tc", False) or not self._kenh:
+            return
+        from core import vm_cai_dat  # noqa: PLC0415
+
+        vm_cai_dat.luu(self._app.base_dir, self._kenh, quet_trang_chu_hang_ngay=bool(bat))
+
+    def _ngon_ngu_kenh(self) -> str:
+        """`ngon_ngu` trong kenh.yaml — để yt-dlp trả tiêu đề TIẾNG GỐC, không phải bản dịch."""
+        try:
+            import yaml  # noqa: PLC0415
+            from core.kenh import duong_kenh  # noqa: PLC0415
+
+            p = os.path.join(duong_kenh(self._app.base_dir), self._kenh, "kenh.yaml")
+            return str((yaml.safe_load(io.open(p, encoding="utf-8")) or {}).get("ngon_ngu") or "")
+        except Exception:  # noqa: BLE001 — thiếu yaml/kenh.yaml thì để trống, vẫn tra được
+            return ""
+
+    def _mo_trang_chu(self) -> None:
+        if not self._kenh:
+            return
+        from core import trang_chu as tcm  # noqa: PLC0415
+
+        p = os.path.join(so.thu_muc_nghien_cuu(self._app.base_dir, self._kenh), tcm.TEP)
+        if not os.path.isfile(p):
+            self._app.show_message("Chưa có bảng trang chủ",
+                                   "Máy ảo chưa gửi lượt quét trang chủ nào về cho kênh này.")
+            return
+        os.startfile(p)  # noqa: S606 - Windows, mở bằng Excel
+
+    def _xu_ly_trang_chu(self) -> None:
+        """Nút phụ: chạy lại nửa sau trên dữ liệu đã có (máy ảo tắt, hoặc muốn cập nhật view ngay)."""
+        if not self._kenh:
+            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
+            return
+        self._chay_mot_nut(self._kenh, "Xếp hạng lại — xong")
 
     def _dan_them(self) -> None:
         """Thêm link vào hộp thư — cùng chỗ máy ảo đổ vào, để một đường duy nhất."""
@@ -330,6 +507,18 @@ class TrangDanhBa(QWidget):
         self._o_hop_thu.setPlainText("\n".join(thu))
         self._nhan_hop_thu.setText(
             "{0} kênh chờ bạn quyết".format(len(thu)) if thu else "không có thư mới")
+        try:
+            from core import trang_chu as tcm, vm_cai_dat  # noqa: PLC0415
+
+            self._nhan_trang_chu.setText(tcm.tom_tat(goc, self._kenh))
+            self._dang_do_tc = True
+            try:
+                self._o_quet_tc.setChecked(
+                    bool(vm_cai_dat.doc(goc, self._kenh).get("quet_trang_chu_hang_ngay")))
+            finally:
+                self._dang_do_tc = False
+        except Exception:  # noqa: BLE001 - thiếu tệp thiết lập cũng không làm hỏng bảng
+            pass
         self._ve()
 
     def _ve(self) -> None:
@@ -1170,10 +1359,15 @@ class TrangTuyen(QWidget):
         client = self._app.client
         goc, kenh = self._app.base_dir, self._kenh
         tieu_de = [str(self._hang_ct[i][i_td]) for i in can]
+        # Tên kênh nguồn đi kèm cho lớp luật cứng của khâu gán — 雑学 thường
+        # nằm ở tên kênh, không ở tiêu đề (41/218 nhãn sai kiểu này, 05/09/2026).
+        i_k = o.get("Kênh")
+        kenh_nguon = [str(self._hang_ct[i][i_k]) if i_k is not None and i_k < len(self._hang_ct[i]) else ""
+                      for i in can]
         self._bat_dau_ai("Đang phân tuyến {0} content…".format(len(can)))
 
         def viec():
-            return pt.gan_tuyen(client, tieu_de, tuyen_co)
+            return pt.gan_tuyen(client, tieu_de, tuyen_co, kenh_nguon=kenh_nguon)
 
         def xong(ket):
             self._xong_ai()

@@ -12,7 +12,16 @@
 const HOST_MAC_DINH = '';
 // Mốc chụp (giờ sau đăng). 72–120h là giai đoạn YouTube quyết định có mở rộng phân phối
 // hay không (video 1 bùng impressions đúng ở 72–117h) — thiếu mốc ở đó là mù đúng chỗ cần nhìn.
-const MOC = [24, 48, 72, 96, 120, 168, 336, 672];
+// ═══ MỐC CHỤP — DÀY Ở HAI NGÀY ĐẦU, VÌ MỌI QUYẾT ĐỊNH NẰM Ở ĐÓ ═══
+//
+// Bản cũ là [24, 48, 72, …]: KHÔNG có mốc 13h. Mà 13h chính là mốc sổ tay kênh dùng để phán
+// một video sống hay chết ("so cùng mốc 13h: V1 427 · V2 469 · V3 577 ‖ V4 41 · V5 43 · V6 67").
+// Mấy con số 13h đang có trong kho đều là ăn may — do lượt "chụp ngay" lúc phát hiện video mới
+// rơi trúng, hoặc do chụp tay. Đo 05/09/2026: cả 6 video, không video nào có mốc 13h do lịch đặt.
+//
+// Thêm 6h (thấy đường khởi động), 13h (cửa thử đầu tiên), 18h, 30h (luật 30 giờ của sổ tay),
+// 36h. Hai ngày đầu thành 8 mốc thay vì 2. Mỗi lượt chụp ~1 phút và không tốn tiền API.
+const MOC = [6, 13, 18, 24, 30, 36, 48, 72, 96, 120, 168, 336, 672];
 const captures = {};          // tabId -> {count, last}
 const lanTay = {};            // "videoId|endpoint" -> lần ghi cuối từ tab người dùng (chống rác)
 let nhanHienTai = null;       // {videoId, label} của lượt đang chạy
@@ -287,18 +296,111 @@ const kho = (id, chieu, them = '') =>
 // mà chỉ phủ 5,7% tổng impressions. Sắp theo impressions thì dù chỉ lấy được phần đầu, đó cũng
 // là phần chiếm nhiều impressions nhất — độ phủ cao nhất có thể với cùng số dòng.
 
-// [url, có xuất CSV không]
-// [url, có xuất CSV không]
-// [link, có xuất CSV, gói bắt buộc phải về]
+// [link, có xuất CSV, gói bắt buộc phải về, tên ảnh chụp màn hình]
 const LINK_VIDEO = (id) => [
-  [`https://studio.youtube.com/video/${id}/analytics/tab-overview/period-since_publish`, false, 'card'],
-  [kho(id, 'TRAFFIC_SOURCE_DETAIL', '&ddr_dimension=TRAFFIC_SOURCE_TYPE&ddr_value=YT_RELATED'), true, 'so'],  // pool đề xuất
-  [kho(id, 'COUNTRY'), true, 'so'],                                                                           // vùng đầy đủ
+  [`https://studio.youtube.com/video/${id}/analytics/tab-overview/period-since_publish`, false, 'card', 'tong-quan'],
+  [kho(id, 'TRAFFIC_SOURCE_DETAIL', '&ddr_dimension=TRAFFIC_SOURCE_TYPE&ddr_value=YT_RELATED'), true, 'so', 'pool-de-xuat'],
+  // Hiển thị + CTR theo TỪNG LOẠI bề mặt (Trang chủ · Tiếp theo · Tìm kiếm…). Trước đây chỉ có
+  // hai thứ rời nhau: TỔNG hiển thị của video, và SỐ LƯỢT theo bề mặt — không có hiển thị theo
+  // bề mặt, nên không trả lời được câu quan trọng nhất của cổng 1: "bề mặt nào đang đói suất, và
+  // ở bề mặt nào thì ảnh bìa thắng?". Đo 05/09/2026: V3 có 519 lượt "Tiếp theo" / 361 lượt
+  // "Trang chủ", V4 ngược hẳn (11 / 824) — hai kiểu sóng khác nhau mà không cách nào so CTR.
+  [kho(id, 'TRAFFIC_SOURCE_TYPE'), true, 'so', 'nguon-theo-loai'],
+  [kho(id, 'COUNTRY'), true, 'so', 'vung'],
 ];
 
 async function nghi(tabId) {
   nhanHienTai = null;
   try { await chrome.tabs.update(tabId, { url: TRANG_NGHI, active: false }); } catch (e) {}
+}
+
+// ═══ ẢNH CHỤP MÀN HÌNH TỪNG TAB SỐ LIỆU ═══
+//
+// Chủ dự án, 05/09/2026: *"mày có thể yêu cầu extension chụp ảnh ở các tab dữ liệu để nếu nó
+// lỗi mày cũng biết"*. Đúng chỗ đau: gói JSON về đủ KHÔNG có nghĩa là số đúng. Ngày 05/09 tìm
+// ra bốn lỗi mà mọi gói vẫn về đều đặn — lấy nhầm thẻ, dán nhãn thẻ này lên số thẻ kia. Không
+// có gì đối chiếu được với thứ MẮT NGƯỜI nhìn thấy trên trang.
+//
+// Ảnh còn bắt được cả loại hỏng mà gói JSON không bao giờ kể: phiên đăng xuất, Studio đổi giao
+// diện, hộp thoại chắn ngang, trang trắng. Lúc đó gói vẫn về (rỗng hoặc thiếu) và nhật ký chỉ
+// ghi "THIẾU gói" — không nói vì sao.
+//
+// JPEG chất lượng 55: mỗi ảnh ~60–120 KB. Bốn lượt/ngày × 6 video × 4 tab ≈ 10 MB/ngày, và
+// trạm nhận dọn bớt (giữ 10 mốc mới nhất mỗi video).
+// Đọc CHỮ đang hiện trên trang. Đây là lưới an toàn thật, ảnh chỉ là thứ dễ nhìn:
+//   · chạy được cả khi màn hình không vẽ (phiên RDP ngắt, cửa sổ thu nhỏ) — lúc ấy ảnh chụp
+//     hỏng hoặc ra khung đen, còn chữ vẫn đọc được;
+//   · MÁY so được. Lỗi ngày 05/09 là giải mã nhầm thẻ: số trong tệp khác số trên trang. Muốn
+//     bắt kiểu lỗi ấy thì phải có con số Studio HIỂN THỊ, không phải bức ảnh để người soi.
+// Studio dựng bằng web component nên `document.body.innerText` bỏ sót phần trong shadow DOM —
+// phải tự đi xuống từng shadowRoot, đúng cách `xuatCSV` đang làm.
+async function docChu(tabId) {
+  try {
+    const r = await chrome.scripting.executeScript({ target: { tabId }, func: () => {
+      // Chỉ lấy chữ ĐANG HIỆN. Bản đầu lấy cả nút ẩn, và hậu quả không phải là rác thừa:
+      // Studio giữ sẵn khuôn "Rất tiếc, đã xảy ra lỗi. / Thử lại" ẩn trong DOM ở MỌI trang,
+      // nên bản chụp nào cũng có câu ấy. Một lưới an toàn kêu oan mỗi lượt còn tệ hơn không có
+      // lưới — phiên sau sẽ học cách bỏ qua nó, đúng lúc nó kêu thật.
+      // (Đối chiếu ảnh chụp cùng lượt 05/09/2026: không trang nào có banner lỗi.)
+      const BO = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE']);
+      const hien = (e) => {
+        if (e.hasAttribute && e.hasAttribute('hidden')) return false;
+        if (e.offsetParent === null && e.getClientRects && e.getClientRects().length === 0) return false;
+        return true;
+      };
+      const ra = [];
+      const sau = (root) => {
+        for (const e of root.querySelectorAll('*')) {
+          if (BO.has(e.tagName)) continue;
+          if (!hien(e)) continue;
+          if (e.shadowRoot) { sau(e.shadowRoot); continue; }
+          if (e.querySelector && e.querySelector('*')) continue;   // chỉ lấy lá
+          const t = (e.innerText || e.textContent || '').trim();
+          if (t && t.length <= 120) ra.push(t);
+        }
+      };
+      sau(document);
+      const goc = [];
+      const da = new Set();
+      for (const t of ra) { if (!da.has(t)) { da.add(t); goc.push(t); } }
+      return (document.title + '\n' + location.href + '\n\n' + goc.join('\n')).slice(0, 20000);
+    } });
+    return (r && r[0] && r[0].result) || '';
+  } catch (e) { return 'LỖI đọc chữ: ' + (e.message || e); }
+}
+
+async function chupAnh(tabId, kenh, vid, nhan, ten) {
+  if (!ten) return false;
+  const tenTep = `${stamp()}_${ten}`;
+  const chu = await docChu(tabId);
+  let anh = '', loi = '';
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const url = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 55 });
+    anh = (url || '').split(',')[1] || '';
+    if (!anh) loi = 'chụp về rỗng';
+  } catch (e) {
+    loi = e.message || String(e);
+    log(`ảnh hỏng (${ten}): ${loi}`);
+  }
+  const host = await st('host', '');
+  if (host) {
+    try {
+      const r = await fetch(host + '/anh', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kenh, id: vid, label: nhan, ten: tenTep, anh, chu, loi }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return true;
+    } catch (e) { log(`gửi ảnh hỏng (${ten}): ${e.message}`); return false; }
+  }
+  const thu_muc = await st('thu_muc', 'chi-so-youtube');
+  const duong = `${thu_muc}/${kenh}/${vid}/${nhan}/anh/`;
+  try {
+    if (anh) await chrome.downloads.download({ url: 'data:image/jpeg;base64,' + anh,
+      filename: duong + tenTep + '.jpg', conflictAction: 'uniquify', saveAs: false });
+    await chrome.downloads.download({ url: 'data:text/plain;base64,' + b64(chu || loi || '(rỗng)'),
+      filename: duong + tenTep + '.txt', conflictAction: 'uniquify', saveAs: false });
+    return true;
+  } catch (e) { log(`LỖI lưu ảnh: ${e.message}`); return false; }
 }
 
 async function chupVideo(videoId, label, ep = false) {
@@ -321,12 +423,15 @@ async function chupVideo(videoId, label, ep = false) {
   try {
     const tabId = await layTab();
     log(`chụp ${videoId} [${label}]`);
+    const maKenh = (await st('ma_kenh', '')) || kenh || 'kenh';
     let tong = 0, coCard = false;
-    for (const [url, canCSV, can] of LINK_VIDEO(videoId)) {
+    for (const [url, canCSV, can, tenAnh] of LINK_VIDEO(videoId)) {
       const r = await moLink(tabId, url, { videoId, label }, can);
       tong += r.tong;
       if (can === 'card' && r.card > 0) coCard = true;
       if (canCSV) { log(`xuất csv: ${await xuatCSV(tabId)}`); await cho(4000); }
+      // Chụp SAU khi số liệu đã về và bảng đã vẽ xong — chụp sớm chỉ ra khung xám.
+      await chupAnh(tabId, maKenh, videoId, label, tenAnh);
     }
     await nghi(tabId);
     const gio = v.ngay_dang_ms ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : null;
@@ -372,9 +477,11 @@ async function chupKenh() {
   try {
     const tabId = await layTab();
     const label = `kenh-${stamp().slice(0, 8)}`;
+    const maKenh = (await st('ma_kenh', '')) || ch || 'kenh';
     log(`chụp kênh ${ch}`);
     for (const tab of ['tab-overview', 'tab-content', 'tab-build_audience']) {
       await moLink(tabId, `https://studio.youtube.com/channel/${ch}/analytics/${tab}/period-default`, { videoId: 'kenh', label }, 'so');
+      await chupAnh(tabId, maKenh, 'kenh', label, tab.replace('tab-', ''));
     }
     await nghi(tabId);
   } finally { dangChay = false; tatGiuThuc(); }
@@ -475,7 +582,14 @@ async function datLich() {
   // từng video đầy số. Xoá lịch tuần đời cũ còn nằm trong Chrome.
   if (!co.has('hoi-lenh')) await chrome.alarms.create('hoi-lenh', { periodInMinutes: 1 });
   if (co.has('kenh')) await chrome.alarms.clear('kenh');
-  if (!co.has('kenh-ngay')) await chrome.alarms.create('kenh-ngay', { when: Date.now() + 15 * 60e3, periodInMinutes: 24 * 60 });
+  // 05/09: 1 lượt/ngày → 4 lượt/ngày (chủ dự án: *"cho mày quét thoải mái"*). Một lượt/ngày thì
+  // giữa hai lần chụp là 24 tiếng, mà chuyện quyết định của kênh xảy ra trong vài giờ: đợt thử
+  // giờ 12–13, pha ngắt sóng "một nhát" của V3, cửa bù của V4 vào tối hôm sau. Đo trên kho:
+  // 30/08 cả ngày chỉ chụp được đúng MỘT video. Lịch cũ đặt 1.440 phút; xoá để nhịp mới ăn.
+  if (!co.has('kenh-ngay') || (await chrome.alarms.get('kenh-ngay') || {}).periodInMinutes !== 360) {
+    await chrome.alarms.clear('kenh-ngay');
+    await chrome.alarms.create('kenh-ngay', { when: Date.now() + 5 * 60e3, periodInMinutes: 360 });
+  }
   if (n) log(`đặt thêm ${n} lịch`);
 }
 
@@ -578,6 +692,45 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           log(`trang chủ: thấy ${ds.length} kênh, trạm nhận thêm ${j.them ?? '?'} đối thủ mới`);
         } catch (e) { log(`trang chủ: không gửi được về trạm (${e})`); }
       } else if (!host) { log('trang chủ: chưa có địa chỉ trạm — bỏ qua'); }
+      reply({ ok: true });
+    }
+    else if (msg.type === 'zoom') {
+      // trang-chu.js xin thu nhỏ trang chủ để mỗi lần nạp được nhiều thẻ hơn, rồi xin
+      // trả về 100% khi xong. Chỉ đụng đúng tab đang gửi.
+      try { if (sender.tab && sender.tab.id) await chrome.tabs.setZoom(sender.tab.id, Number(msg.muc) || 1); } catch (e) {}
+      reply({ ok: true });
+    }
+    else if (msg.type === 'trang_chu') {
+      // ═══ TRANG CHỦ v2 (05/09/2026): gửi TỪNG VIDEO, không chỉ link kênh ═══
+      // Chủ dự án: "mở trang chủ, thu nhỏ, lấy hết link về, chuyển cho tool — tool làm
+      // việc phía sau". Trình duyệt không lọc gì; trạm ghi `trang-chu.csv`, tra kênh
+      // bằng yt-dlp, lọc 雑学/loại trừ rồi mới nối vào hộp thư. Trạm CŨ chưa có cửa
+      // /trang-chu thì rớt về /doi-thu như bản 2.4 — không mất lượt quét.
+      const host = await st('host', HOST_MAC_DINH);
+      const kenh = (await st('ma_kenh', '')) || (await st('kenh', '')) || 'kenh';
+      const video = (msg.video || []).slice(0, 2000);
+      const ds = (msg.danh_sach || []).slice(0, 600);
+      if (!host) { log('trang chủ: chưa có địa chỉ trạm — bỏ qua'); reply({ ok: false }); return; }
+      let xong = false;
+      try {
+        const r = await fetch(host + '/trang-chu', { method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kenh, video, danh_sach: ds, href: msg.href, so_lan_cuon: msg.so_lan_cuon }) });
+        if (r.ok) {
+          const j = await r.json().catch(() => ({}));
+          log(`trang chủ: ${video.length} video sau ${msg.so_lan_cuon || '?'} lần cuộn → trạm nhận, +${j.kenh_moi ?? '?'} đối thủ mới, loại ${j.bi_loai ?? '?'} kênh`);
+          xong = true;
+        }
+      } catch (e) { log(`trang chủ: /trang-chu lỗi (${e}) — thử đường cũ`); }
+      if (!xong && ds.length) {
+        try {
+          const r = await fetch(host + '/doi-thu', { method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ kenh, danh_sach: ds }) });
+          const j = await r.json().catch(() => ({}));
+          log(`trang chủ (đường cũ): ${ds.length} kênh, trạm nhận thêm ${j.them ?? '?'}`);
+        } catch (e) { log(`trang chủ: không gửi được về trạm (${e})`); }
+      }
       reply({ ok: true });
     }
     else if (msg.type === 'kham_pha') { khamPha(); reply({ ok: true }); }

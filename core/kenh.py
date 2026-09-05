@@ -86,6 +86,13 @@ BUOC_PROMPT = (
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
     ("6-seo.md", "Mô tả, hashtag, từ khoá"),
+    # Bình luận để GHIM ngay sau khi đăng. Không phải trang trí: đo trên TL4-T7
+    # ngày 05/09/2026, kênh có **3 người xem cũ trong 28 ngày** (99% là người
+    # mới, không ai quay lại) và video mới nhất không một bình luận nào. Bình
+    # luận ghim là chỗ rẻ nhất để mở lời — nhưng chỉ ăn khi nó nhắc lại đúng câu
+    # hỏi kịch bản ĐÃ hỏi ở cuối video và tự trả lời trước một câu; câu hỏi ghim
+    # mà không ai trả lời thì đọc như một lời nhờ vả.
+    ("6b-binh-luan.md", "Bình luận để ghim sau khi đăng"),
     # Bản đồ hình cho CẢ video trước khi chia khúc: chương, bối cảnh, mạch cảm
     # xúc, câu bản lề. Thiếu tệp thì khâu chia cảnh chạy như trước, không có
     # bản đồ (xem `core/auto_khau._ke_hoach_hinh`). Thêm 25/08/2026 sau khi soi

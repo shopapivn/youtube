@@ -2528,6 +2528,30 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             except Exception as loi:  # noqa: BLE001
                 bc.ghi("  (bỏ qua SEO: {0})".format(str(loi)[:100]))
 
+        # Bình luận để GHIM ngay sau khi đăng — cùng luật với SEO: thiếu cũng vẫn
+        # ra được video, nên hỏng thì chỉ ghi nhật ký.
+        #
+        # ═══ VÌ SAO ĐÁNG MỘT LƯỢT GỌI ═══
+        #
+        # Đo trên TL4-T7 ngày 05/09/2026: cả kênh có **3 người xem cũ trong 28
+        # ngày** — 99% là người mới và gần như không ai quay lại. Video mới nhất
+        # không một bình luận nào. Bình luận ghim là chỗ rẻ nhất để mở lời.
+        #
+        # Đưa ĐOẠN CUỐI kịch bản vào, không phải đoạn đầu: câu hỏi mời bình luận
+        # nằm ở đó, và bình luận ghim phải nhắc lại ĐÚNG câu ấy. Hỏi một câu khác
+        # với câu vừa nghe là bắt người xem nghĩ lại từ đầu — ma sát ngay chỗ
+        # đang cần ít ma sát nhất.
+        duong_bl = os.path.join(d, "1-binh-luan.txt")
+        if k.prompt.get("6b-binh-luan.md") and not os.path.exists(duong_bl):
+            try:
+                bc.kiem_dung()
+                binh_luan = _goi(bc, _thay(k.prompt["6b-binh-luan.md"], dict(
+                    chung, SCRIPT_ENDING=ban_nhap[-1500:])),
+                    _khoa_chat(luot, "binh-luan"))
+                _ghi_chu(duong_bl, binh_luan)
+            except Exception as loi:  # noqa: BLE001
+                bc.ghi("  (bỏ qua bình luận ghim: {0})".format(str(loi)[:100]))
+
         # Thẻ cảm xúc **không** làm ở đây. Chủ dự án, 16/08/2026: *"sẽ tách ra
         # khỏi khâu content mà thay vào đó ở khâu voice thì sẽ hợp lý hơn"* —
         # và đúng vậy: thẻ là chỉ đạo cho người đọc, không phải một phần của

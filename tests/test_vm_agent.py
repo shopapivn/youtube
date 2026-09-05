@@ -219,7 +219,7 @@ class TestKeHoachDang:
 
 
 def test_extension_co_mat_doc_trang_chu():
-    """Extension v2.3.0: trang-chu.js gom đối thủ, background gửi /doi-thu."""
+    """Extension ≥2.3: trang-chu.js là mắt đọc trang chủ; nền gửi /trang-chu (v2.6), rớt về /doi-thu."""
     import json as json_mod
 
     tm = GOC / "core" / "ytb_extension"
@@ -229,7 +229,9 @@ def test_extension_co_mat_doc_trang_chu():
             if "trang-chu.js" in c.get("js", [])]
     assert khop and "https://www.youtube.com/*" in khop[0]["matches"]
     chu = (tm / "trang-chu.js").read_text(encoding="utf-8")
-    assert "doi_thu" in chu and "/@" in chu
+    # v2.6 (05/09/2026): tin nhắn đổi tên `doi_thu` → `trang_chu` vì gói giờ mang TỪNG VIDEO,
+    # không chỉ link kênh; nền vẫn nhận cả hai và rớt về /doi-thu khi trạm cũ chưa có cửa mới.
+    assert "type: 'trang_chu'" in chu and "/@" in chu
     assert "location.pathname !== '/'" in chu, \
         "chỉ chạy ở trang chủ — không bám theo mọi trang xem"
     nen = (tm / "background.js").read_text(encoding="utf-8")

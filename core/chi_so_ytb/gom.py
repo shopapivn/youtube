@@ -108,9 +108,14 @@ def gom(kenh_dir, nganh):
     ban_ghi = []
     for tq_p in glob.glob(os.path.join(kenh_dir, "*", "*", "tong-quan.json")):
         tm = os.path.dirname(tq_p)
-        moc = os.path.basename(tm)
-        if moc.startswith("kenh"):
-            continue
+        # ĐỪNG bỏ theo TÊN THƯ MỤC. Lịch hằng ngày của tiện ích ghi gói kênh vào
+        # `chi-so/kenh/kenh-<ngày>/`, và chính gói đó mới có thẻ phễu — nơi duy nhất có
+        # TỔNG IMPRESSIONS và CTR TOÀN KÊNH. Bộ lọc `startswith("kenh")` cũ ném hết chúng
+        # đi, chỉ còn các gói `tay-*` gom rời (không có phễu) ⇒ hai cột "Lượt hiển thị" và
+        # "Tỷ lệ bấm" của `kenh-theo-ngay.csv` trống suốt từ 28/08 tới 05/09/2026, đúng hai
+        # cột cho biết cổng 1 và cổng 2 của kênh đang ở đâu.
+        # Bản ghi cấp kênh vẫn được loại khỏi bảng VIDEO — nhưng loại ở `doc_kenh()` theo
+        # `video_id == "kenh"`, tức theo NỘI DUNG gói, không theo cách đặt tên thư mục.
         try:
             q = json.load(io.open(tq_p, encoding="utf-8"))
         except Exception:
@@ -185,6 +190,11 @@ def gom(kenh_dir, nganh):
             "views_that": q.get("views_that") or q.get("views_that_uoc"),
             "views_that_uoc_tinh": q.get("views_that") is None,
             "unique_viewers": q.get("unique_viewers"),
+            # Lượt xem của CHÍNH cửa sổ đã chốt sổ (thẻ giữ chân). `views` là số realtime,
+            # `unique_viewers` lại thuộc cửa sổ chốt — chia hai số của hai cửa sổ là ra tỷ lệ
+            # xem-lặp ảo. V6 ngày 05/09/2026: 46 ÷ 13 = 3,5 (như thể số bẩn) trong khi cùng cửa
+            # sổ là 26 ÷ 13 = 2,0. Luật 5 của sổ tay kênh chấm trên tỷ lệ này nên phải khớp cửa sổ.
+            "views_chot": q.get("avd_tren_so_luot"),
             "watch_hours": q.get("watch_hours"),
             "avd_giay": q.get("avd_giay"),
             "avd_pct": q.get("avd_pct") or (round(100 * q["avd_giay"] / q["thoi_luong_giay"], 1)
