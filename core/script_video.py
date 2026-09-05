@@ -527,8 +527,25 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
                             "được: {0}. Chạy SETUP.bat rồi mở lại tool.".format(loi_cai))
         loi_nap = _nap_duoc_faster_whisper()
         if loi_nap:
-            return "", "", ("đã cài faster-whisper nhưng chưa nạp được ({0}) — tắt tool "
-                            "mở lại là dùng được.".format(loi_nap))
+            # ═══ ĐỪNG HỨA "MỞ LẠI LÀ ĐƯỢC" — CÓ CA MỞ LẠI VẪN HỎNG ═══
+            #
+            # Rơi tới đây nghĩa là pip báo XONG mà nạp vẫn không được. Hai ca
+            # khác hẳn nhau lại cùng ra đúng chỗ này:
+            #
+            #   · Vừa cài xong thật -> mở lại tool là chạy (phần biên dịch của
+            #     `ctranslate2` cần một tiến trình mới).
+            #   · Máy đã CÓ sẵn faster-whisper nhưng hỏng -> pip nói "already
+            #     satisfied" và trả mã 0, tức nó **không cài gì cả**. Mở lại
+            #     tool bao nhiêu lần cũng hỏng y nguyên; thường là thiếu bộ
+            #     thư viện chạy của Visual C++ mà `ctranslate2` cần.
+            #
+            # Không phân biệt được hai ca bằng mã trả về của pip, nên nói cả
+            # hai bước theo thứ tự — thà dài một câu còn hơn hứa một thứ tool
+            # không giữ được rồi khách mở lại mấy lần vẫn thế.
+            return "", "", ("có faster-whisper trên máy nhưng chưa nạp được ({0}). "
+                            "Tắt tool mở lại một lần; vẫn vậy thì chạy SETUP.bat "
+                            "(thường là máy thiếu bộ thư viện chạy Visual C++)."
+                            .format(loi_nap))
         ghi("    đã cài xong faster-whisper.")
 
     thu_muc = tempfile.mkdtemp(prefix="shopapi-script-")

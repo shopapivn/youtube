@@ -117,22 +117,12 @@ class TrangLayScript(QWidget):
         hang = QHBoxLayout()
         self._o_nghe = QCheckBox("Tự nghe khi không có phụ đề")
         self._o_nghe.setChecked(False)
-        co_may = co_the_nghe()
-        self._o_nghe.setEnabled(co_may)
-        self._o_nghe.setToolTip(
-            "Video không có phụ đề thì tải tiếng về, máy bạn tự nghe rồi gõ ra "
-            "chữ. Miễn phí - không tiêu ví ShopAPI.\n\nChậm: một video 10 phút "
-            "mất vài phút. Lần đầu còn phải tải bộ nghe (~0,5 GB)."
-            if co_may else
-            "Máy chưa có thư viện nghe (faster-whisper). Mở tab Agent, bấm "
-            "'Cài những thứ còn thiếu' rồi quay lại.")
         hang.addWidget(self._o_nghe)
-        ghi_chu = nhan(
-            "- chậm, chỉ bật khi cần" if co_may else "- máy chưa cài phần nghe",
-            "phu")
-        ghi_chu.setWordWrap(True)
-        ghi_chu.setMinimumWidth(1)
-        hang.addWidget(ghi_chu, 1)
+        self._ghi_chu_nghe = nhan("", "phu")
+        self._ghi_chu_nghe.setWordWrap(True)
+        self._ghi_chu_nghe.setMinimumWidth(1)
+        hang.addWidget(self._ghi_chu_nghe, 1)
+        self._ta_o_nghe()
         v.addLayout(hang)
 
         nut = QHBoxLayout()
@@ -220,6 +210,55 @@ class TrangLayScript(QWidget):
         self._o_nhap.setPlainText((cu + "\n" if cu else "") + noi_dung.strip())
         self._ghi("Đã nạp {0} dòng từ {1}".format(
             len(parse_inputs(noi_dung)), os.path.basename(duong)))
+
+    # ── Ô "tự nghe" ──────────────────────────────────────────────────────────
+
+    def _ta_o_nghe(self) -> None:
+        """Viết lại nhãn và lời mách của ô "tự nghe" theo tình trạng máy LÚC NÀY.
+
+        ═══ VÌ SAO KHÔNG KHOÁ Ô NÀY NỮA ═══
+
+        Trước đây ô bị `setEnabled(co_the_nghe())` một lần lúc dựng trang, kèm
+        lời mách *"Mở tab Agent, bấm 'Cài những thứ còn thiếu' rồi quay lại"*.
+        Cả hai vế đều hỏng, và khách gặp đúng nó:
+
+        * **"Quay lại" không ăn.** Trang Skill dựng một lần rồi giữ trong
+          `_tam`, nên câu trả lời cũ đứng nguyên tới lúc tắt tool. Khách làm
+          đúng lời mách, cài xong, quay lại — ô vẫn xám và vẫn nói máy chưa có.
+        * **Khoá ô là bịt luôn đường tự cứu.** `script_video._tu_nghe` biết tự
+          `pip install` phần nghe rồi nạp lại, nhưng đường ấy chỉ chạy khi ô
+          được tích — mà ô thì đang xám vì thiếu đúng thứ nó định cài.
+
+        Nay ô **luôn bấm được**, chỗ nói thật chuyển về đúng nơi biết sự thật.
+        An toàn vì `_tu_nghe` hỏi thư viện TRƯỚC khi tải tiếng: máy không chạy
+        được thì hỏng trong một giây, không phải sau một lượt tải.
+
+        Vẫn hỏi bằng `co_the_nghe()` (`find_spec`, 0,04 giây) chứ không import
+        thật (đo 05/09/2026: **3,8 giây**) — nhãn sai một lần thì khách vẫn bấm
+        được, còn mở trang chậm bốn giây thì lần nào cũng chịu.
+        """
+        co_may = co_the_nghe()
+        self._ghi_chu_nghe.setText(
+            "- chậm, chỉ bật khi cần" if co_may
+            else "- máy chưa có phần nghe, tôi tự cài lần đầu")
+        self._o_nghe.setToolTip(
+            "Video không có phụ đề thì tải tiếng về, máy bạn tự nghe rồi gõ ra "
+            "chữ. Miễn phí - không tiêu ví ShopAPI.\n\nChậm: một video 10 phút "
+            "mất vài phút. Lần đầu còn phải tải bộ nghe (~0,5 GB)."
+            if co_may else
+            "Máy chưa có thư viện nghe (faster-whisper). Cứ tích rồi bấm chạy: "
+            "lần đầu tôi tự cài (cần mạng, chỉ một lần), xong mới nghe.\n\n"
+            "Cài không được thì tôi nói rõ vì sao.")
+
+    def showEvent(self, e) -> None:  # noqa: N802 — tên của Qt
+        # Hỏi lại mỗi lần mở trang: khách vừa cài phần nghe ở tab Agent xong
+        # quay sang đây thì phải thấy nhãn mới, không phải đợi tắt tool.
+        super().showEvent(e)
+        # Qt có thể bắn `showEvent` trước khi `__init__` dựng xong ô. Ném lỗi
+        # trong một tay xử lý sự kiện thì nổi thẳng lên thành hộp "tool gặp
+        # lỗi" — đúng loại hỏng mà cả bản vá này sinh ra để dẹp.
+        if getattr(self, "_ghi_chu_nghe", None) is not None:
+            self._ta_o_nghe()
 
     # ── Chạy ─────────────────────────────────────────────────────────────────
 

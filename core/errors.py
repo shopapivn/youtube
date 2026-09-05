@@ -292,6 +292,34 @@ def describe(exc: BaseException) -> ErrorAdvice:
             needs_new_key=True,
         )
 
+    # ── Thiếu yt-dlp: phần đọc YouTube của tool ──────────────────────────────
+    #
+    # `core/youtube._ydl_class` nạp `yt_dlp` MUỘN để tool còn mở lên được trên
+    # máy chưa cài, rồi ném `YtDlpMissing`. Nhưng không nơi nào bắt nó, nên nó
+    # rơi thẳng xuống nhánh cuối và khách bấm "Lấy lời thoại" thì nhận:
+    #
+    #     Lỗi ngoài dự kiến
+    #     YtDlpMissing: No module named 'yt_dlp'
+    #     Bạn chụp màn hình gửi hỗ trợ giúp mình.
+    #
+    # Khách không biết lập trình đọc câu ấy chỉ hiểu là "một phần của tool
+    # hỏng" — đúng nguyên văn lời họ báo về. Mà đây là thứ họ TỰ SỬA ĐƯỢC bằng
+    # một nút có sẵn, nên bảo họ chụp màn hình là đúng thứ CLAUDE.md cấm.
+    #
+    # Bắt theo TÊN LỚP chứ không import `core.youtube`: `core.errors` là tệp
+    # gốc, kéo `youtube` vào là dựng một vòng nhập thừa. Cùng lý lẽ với nhánh
+    # lỗi mạng ở dưới.
+    if type(exc).__name__ == "YtDlpMissing":
+        return ErrorAdvice(
+            title="Tool chưa có phần đọc YouTube",
+            message="Phần đọc dữ liệu từ YouTube (yt-dlp) chưa cài trên máy "
+                    "này, nên tôi chưa lấy được lời thoại. Bạn không mất đồng "
+                    "nào — việc này chạy trên máy bạn, không tiêu ví.",
+            action="Sang tab “Agent xây tool”, bấm “Cài những thứ còn thiếu”, "
+                   "đợi chạy xong rồi quay lại bấm lại. Nếu vẫn vậy thì chạy "
+                   "SETUP.bat trong thư mục tool một lần.",
+        )
+
     # ── Không phải lỗi của SDK (ghi file, thư mục không tồn tại…) ─────────────
     return ErrorAdvice(
         title="Lỗi ngoài dự kiến",

@@ -200,3 +200,133 @@ def test_lay_duoc_thi_khong_co_loi_nao(monkeypatch):
     assert ket.text == "xin chao"
     assert ket.loi == ""
     assert ket.nguon == "phu-de-may"
+
+
+# ── Phần "tự nghe": ô phải luôn bấm được, và câu báo phải giữ được lời ───────
+
+
+class TestPhanTuNghe:
+    """Khách báo *"dùng tính năng lấy lời thoại thì nó báo 1 phần của tool lỗi"*.
+
+    Phần ấy là **phần tự nghe** (`faster-whisper`), đường dự phòng khi video
+    không có phụ đề. Rà ra hai chỗ hỏng, cả hai đều dắt khách vào ngõ cụt:
+
+    1. Ô "Tự nghe" bị khoá theo `co_the_nghe()` hỏi MỘT LẦN lúc dựng trang,
+       kèm lời mách "cài rồi quay lại". Trang Skill giữ trong `_tam` nên câu
+       trả lời cũ đứng nguyên tới lúc tắt tool — làm đúng lời mách vẫn thấy ô
+       xám. Và khoá ô là bịt luôn đường `_tu_nghe` tự `pip install`.
+    2. Nạp hỏng sau khi pip báo xong thì tool hứa "tắt tool mở lại là dùng
+       được" — sai với ca máy ĐÃ CÓ faster-whisper hỏng sẵn: pip trả "already
+       satisfied" mã 0 mà không cài gì, mở lại bao nhiêu lần cũng thế.
+    """
+
+    def test_nap_hong_thi_khong_hua_suong_la_mo_lai_se_chay(self, monkeypatch):
+        import core.script_video as sv
+
+        monkeypatch.setattr(sv, "_nap_duoc_faster_whisper",
+                            lambda: "DLL load failed: ctranslate2")
+        monkeypatch.setattr(sv, "_tu_cai_faster_whisper",
+                            lambda *_a, **_k: "")   # pip bảo XONG
+        chu, ma, loi = sv._tu_nghe("https://x/y", lambda _s: None)
+        assert chu == "" and ma == ""
+        assert "SETUP.bat" in loi, (
+            "pip trả 'already satisfied' cũng là mã 0, nên tới đây có thể là "
+            "máy hỏng sẵn — mở lại tool không cứu được, phải mách bước kế tiếp")
+        assert "ctranslate2" in loi, "phải kèm lý do thật để còn lần ra được"
+
+    def test_khong_tai_tieng_khi_phan_nghe_chua_chay_duoc(self, monkeypatch):
+        # Hỏi thư viện TRƯỚC khi tải tiếng. Đây là thứ khiến việc bỏ khoá ô
+        # là an toàn: máy không chạy được thì hỏng trong một giây, không phải
+        # sau khi bắt khách đợi tải xong cả đoạn tiếng.
+        import core.script_video as sv
+
+        da_tai = []
+        monkeypatch.setattr(sv, "_nap_duoc_faster_whisper", lambda: "thiếu gói")
+        monkeypatch.setattr(sv, "_tu_cai_faster_whisper", lambda *_a, **_k: "pip hỏng")
+        monkeypatch.setattr(sv, "_tai_tieng",
+                            lambda *_a, **_k: da_tai.append(1) or "")
+        sv._tu_nghe("https://x/y", lambda _s: None)
+        assert da_tai == [], "chưa nghe được thì đừng tải tiếng cho tốn thời gian"
+
+
+class TestOTuNgheLuonBamDuoc:
+    """Ô "Tự nghe" không được khoá, và nhãn phải hỏi lại mỗi lần mở trang."""
+
+    @staticmethod
+    def _trang(monkeypatch, co_may):
+        import os
+
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt5.QtWidgets import QApplication
+
+        import ui_qt.trang_script as ts
+
+        # Giữ tham chiếu: QApplication bị thu gom là Qt sập giữa bài kiểm.
+        app = QApplication.instance() or QApplication([])
+        monkeypatch.setattr(ts, "co_the_nghe", lambda: co_may)
+        return ts.TrangLayScript(_AppGia()), app
+
+    def test_may_chua_co_phan_nghe_thi_o_van_bam_duoc(self, monkeypatch):
+        trang, _app = self._trang(monkeypatch, co_may=False)
+        assert trang._o_nghe.isEnabled(), (
+            "khoá ô là bịt luôn đường tự cài của `_tu_nghe` — mà thứ nó định "
+            "cài chính là thứ đang thiếu")
+        assert "tự cài" in trang._o_nghe.toolTip()
+
+    def test_cai_xong_roi_quay_lai_thi_nhan_doi_theo(self, monkeypatch):
+        import ui_qt.trang_script as ts
+
+        trang, _app = self._trang(monkeypatch, co_may=False)
+        assert "chưa có phần nghe" in trang._ghi_chu_nghe.text()
+        # Khách sang tab Agent cài xong rồi quay lại đúng trang này.
+        monkeypatch.setattr(ts, "co_the_nghe", lambda: True)
+        trang._ta_o_nghe()
+        assert "chưa có phần nghe" not in trang._ghi_chu_nghe.text(), (
+            "trang Skill giữ trong _tam nên không dựng lại; không hỏi lại thì "
+            "khách cài xong vẫn thấy câu cũ tới lúc tắt tool")
+
+
+class _AppGia:
+    """Đủ dùng cho `TrangLayScript.__init__` — không mạng, không cửa sổ thật."""
+
+    base_dir = "."
+
+    def default_output_dir(self, _ten=""):
+        import tempfile
+        return tempfile.gettempdir()
+
+    def show_message(self, *_a, **_k):
+        pass
+
+    def show_error(self, *_a, **_k):
+        pass
+
+    def run_bg(self, *_a, **_k):
+        pass
+
+    def goi_tren_luong_ve(self, ham):
+        ham()
+
+
+def test_thieu_yt_dlp_thi_noi_cach_sua_chu_khong_bat_chup_man_hinh():
+    """Khách bấm "Lấy lời thoại" trên máy chưa có yt-dlp.
+
+    Trước bản vá, `YtDlpMissing` không nơi nào bắt nên rơi xuống nhánh cuối và
+    hiện nguyên văn:
+
+        Lỗi ngoài dự kiến
+        YtDlpMissing: No module named 'yt_dlp'
+        Bạn chụp màn hình gửi hỗ trợ giúp mình.
+
+    Người không biết lập trình đọc câu ấy chỉ hiểu là "một phần của tool hỏng"
+    — đúng lời khách báo về. Mà họ tự sửa được bằng một nút có sẵn, nên câu
+    "chụp màn hình gửi hỗ trợ" là thứ CLAUDE.md cấm.
+    """
+    from core.errors import describe
+    from core.youtube import YtDlpMissing
+
+    a = describe(YtDlpMissing("No module named 'yt_dlp'"))
+    assert a.title != "Lỗi ngoài dự kiến"
+    assert "yt_dlp" not in a.message, "đừng ném tên mô-đun vào mặt người dùng"
+    assert "chụp màn hình" not in a.action
+    assert "Cài những thứ còn thiếu" in a.action, "phải chỉ đúng nút bấm được"
