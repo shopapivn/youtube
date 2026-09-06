@@ -62,6 +62,9 @@ TEP_BAO_CAO = "bao-cao-mot-nut.md"
 #: (chủ dự án 06/09: "đơn giản, hiệu quả, tự động" — người dùng cần cái để CHỌN, không cần đọc .md).
 TEP_DANH_SACH = "danh-sach-chon.json"
 NGAY_MOI = 7
+#: AI gán tuyến chỉ cho video đăng trong ngần này ngày, và tối đa ngần này dòng một lượt (12 lô × 20).
+NGAY_AI = 30
+TOI_DA_AI = 240
 NGUONG_BUT = 1.5
 SO_DONG_MOI_DANH_SACH = 15
 
@@ -159,6 +162,24 @@ def gan_tuyen_ai(goc: str, kenh: str, client, *, gan: Optional[Callable[..., lis
         return dem
     can = [d for d in hang if i_td < len(d) and str(d[i_td]).strip() and not (i_t < len(d) and str(d[i_t]).strip())]
     dem["can"] = len(can)
+    # 02:35 07/09/2026: lượt tự chạy kéo 55 phút vì gửi AI TẤT CẢ 1.377 dòng trống — cả video tháng 6.
+    # Nhãn tuyến chỉ cần cho video MỚI (bảng Kết quả nhóm MỚI ≤ 7 ngày); dòng cũ luật cứng đã gắn
+    # được thì gắn rồi. Chỉ AI cho ≤ NGAY_AI ngày, mới nhất trước, tối đa TOI_DA_AI dòng một lượt —
+    # lượt sau gánh tiếp. Mỗi lô 20 tiêu đề là một lần trừ ví.
+    i_ngay = o.get("Ngày đăng")
+    if i_ngay is not None:
+        moc = (_dt.datetime.now() - _dt.timedelta(days=NGAY_AI)).strftime("%Y-%m-%d")
+        # Trống ngày = chưa biết (dòng dán tay) → vẫn hỏi.
+        can = [d for d in can if not (i_ngay < len(d) and str(d[i_ngay]).strip()) or str(d[i_ngay])[:10] >= moc]
+        can.sort(key=lambda d: (str(d[i_ngay])[:10] if i_ngay < len(d) else ""), reverse=True)
+    if dem["can"] - len(can):
+        dem["cu_bo_qua"] = dem["can"] - len(can)
+    if len(can) > TOI_DA_AI:
+        dem["de_luot_sau"] = len(can) - TOI_DA_AI
+        can = can[:TOI_DA_AI]
+    if on_log is not None and can:
+        on_log("  AI gán tuyến: {0} dòng ≤{1} ngày (bỏ {2} dòng cũ, để lượt sau {3})".format(
+            len(can), NGAY_AI, dem.get("cu_bo_qua", 0), dem.get("de_luot_sau", 0)))
     if not can:
         return dem
     tieu_de = [str(d[i_td]) for d in can]

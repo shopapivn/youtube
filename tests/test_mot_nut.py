@@ -202,4 +202,46 @@ def test_ai_gan_tuyen_chi_thay_dong_tu_khoa_khong_nhan_ra(tmp_path):
         gan_roi.extend(tieu_de)
         return [pt.KetGan(ma=MA_LECH_NHIP, do_tin=95) for _ in tieu_de]
     dem = mot_nut.gan_tuyen_ai(goc, KENH, object(), gan=gan_tuyen)
-    assert gan_roi == ["考えすぎて眠れない夜に効く話"] and dem == {"can": 1, "ghi": 1}
+    assert gan_roi == ["考えすぎて眠れない夜に効く話"] and (dem["can"], dem["ghi"]) == (1, 1)
+
+
+def test_ai_gan_tuyen_chi_video_moi_va_co_tran(tmp_path):
+    """02:35 07/09: lượt tự chạy kéo 55 phút vì AI gửi cả 1.377 dòng cũ. Chỉ ≤30 ngày, mới nhất
+    trước, tối đa TOI_DA_AI dòng một lượt."""
+    import datetime as dt
+    from core import phan_tuyen as pt
+    from core import tuyen_noi_dung as tn
+
+    goc = _goc(tmp_path)
+    cot_t, _ = tn.doc(goc, KENH)
+    ot = {c: i for i, c in enumerate(cot_t)}
+    d1 = [""] * len(cot_t)
+    d1[ot["Mã"]], d1[ot["Tên tuyến"]], d1[ot["Trạng thái"]] = MA_LECH_NHIP, "Lệch nhịp", "đang đánh"
+    tn.luu(goc, KENH, cot_t, [d1])
+    cot, _ = so.doc_bang(goc, KENH)
+    oc = {c: i for i, c in enumerate(cot)}
+    hom_nay = dt.date.today()
+    hang = []
+    for i in range(mot_nut.TOI_DA_AI + 5):           # đều mới, quá trần
+        d = [""] * len(cot)
+        d[oc["Tiêu đề video"]] = "mới %d" % i
+        d[oc["Link video"]] = "https://www.youtube.com/watch?v=moi%08d" % i
+        d[oc["Ngày đăng"]] = (hom_nay - dt.timedelta(days=i % 20)).isoformat()
+        hang.append(d)
+    for i in range(3):                                  # cũ hơn 30 ngày → không hỏi
+        d = [""] * len(cot)
+        d[oc["Tiêu đề video"]] = "cũ %d" % i
+        d[oc["Link video"]] = "https://www.youtube.com/watch?v=cu%09d" % i
+        d[oc["Ngày đăng"]] = (hom_nay - dt.timedelta(days=60 + i)).isoformat()
+        hang.append(d)
+    so.luu_bang(goc, KENH, cot, hang)
+    gui = []
+
+    def gan_tuyen(client, tieu_de, tuyen_co, **kw):
+        gui.extend(tieu_de)
+        return [pt.KetGan(ma=MA_LECH_NHIP, do_tin=95) for _ in tieu_de]
+    dem = mot_nut.gan_tuyen_ai(goc, KENH, object(), gan=gan_tuyen)
+    assert dem["can"] == mot_nut.TOI_DA_AI + 8
+    assert dem["cu_bo_qua"] == 3 and dem["de_luot_sau"] == 5
+    assert len(gui) == mot_nut.TOI_DA_AI and not any(t.startswith("cũ") for t in gui)
+    assert gui[0] == "mới 0", "mới nhất đi trước"
