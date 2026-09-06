@@ -159,9 +159,8 @@ class TrangDanhBa(QWidget):
         self._nhan_trang_chu.setMinimumWidth(1)
         d.addWidget(self._nhan_trang_chu, 1)
         v.addLayout(d)
-        chu = nhan(
-            "Bấm một lần: máy ảo quét → tool tự tìm đối thủ, lấy content, chấm điểm → bảng "
-            "“Kết quả” bên dưới có video để chọn làm. Lịch hằng ngày của máy ảo cũng tự chạy y vậy.", "muted")
+        chu = nhan("Bấm một lần, chờ ~15 phút: bảng Kết quả bên dưới có video để chọn làm. "
+                   "Máy ảo tự chạy lại mỗi sáng.", "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
         hang = HangXuongDong()
@@ -192,7 +191,9 @@ class TrangDanhBa(QWidget):
         v.setContentsMargins(16, 12, 16, 12)
         v.setSpacing(8)
         d = QHBoxLayout()
-        d.addWidget(nhan("Kết quả — video để chọn làm", "h2"))
+        tieu_de = nhan("Kết quả — video để chọn làm", "h2")
+        tieu_de.setWordWrap(False)
+        d.addWidget(tieu_de)
         self._nhan_ket_qua = nhan("", "muted")
         self._nhan_ket_qua.setMinimumWidth(1)
         d.addWidget(self._nhan_ket_qua, 1)
@@ -496,7 +497,9 @@ class TrangDanhBa(QWidget):
         v.setContentsMargins(16, 12, 16, 12)
         v.setSpacing(8)
         d = QHBoxLayout()
-        d.addWidget(nhan("Thị trường kênh tâm lý", "h2"))
+        tieu_de = nhan("Thị trường kênh tâm lý", "h2")
+        tieu_de.setWordWrap(False)
+        d.addWidget(tieu_de)
         self._nhan_thi_truong = nhan("", "muted")
         self._nhan_thi_truong.setMinimumWidth(1)
         d.addWidget(self._nhan_thi_truong, 1)
@@ -509,9 +512,8 @@ class TrangDanhBa(QWidget):
         self._hien_da_loai.toggled.connect(lambda _b: self._ve())
         d.addWidget(self._hien_da_loai)
         v.addLayout(d)
-        chu = nhan("Mọi kênh tâm lý máy tìm được, dù tuyến nào, đều được quét content hằng ngày; cột Ghi chú "
-                   "nói kênh ở góc nào của thị trường. “Mới 7 ngày” là đà, “Im lặng” đỏ là đang chết, “Lần đầu "
-                   "thấy” là kênh mới. Muốn máy thôi quét một kênh: “Đổi trạng thái…” → tạm ngưng. Bấm đúp mở kênh.", "muted")
+        chu = nhan("Kênh bạn đưa + kênh trang chủ tìm về, đều được quét content hằng ngày. "
+                   "“Im lặng” đỏ là kênh đang chết. Bấm đúp mở kênh.", "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
 
@@ -1037,7 +1039,11 @@ class TrangTuyen(QWidget):
         doc.addLayout(d0)
 
         doc.addWidget(self._the_tuyen(), 1)
-        doc.addWidget(self._the_nen_lam(), 2)
+        the_nen_lam = self._the_nen_lam()
+        doc.addWidget(the_nen_lam, 2)
+        # 07/09/2026: danh sách video để chọn làm CHỈ CÒN MỘT — bảng "Kết quả" ở mục Đối thủ.
+        # Bảng "Nên làm" ở đây là cùng một câu trả lời bày lần hai; giấu (mã vẫn còn cho bài kiểm).
+        the_nen_lam.setVisible(False)
         self._nap_kenh()
 
     def _the_tuyen(self) -> QWidget:
@@ -1046,12 +1052,8 @@ class TrangTuyen(QWidget):
         v.setContentsMargins(16, 12, 16, 12)
         v.setSpacing(8)
         v.addWidget(nhan("Tuyến trong ngách này", "h2"))
-        chu = nhan(
-            "Một ngách chia thành mấy tuyến; mỗi kênh của bạn đánh một tuyến. "
-            "Điền ô “Kênh của tôi” là tuyến đó thành tuyến bạn đang đánh (mã "
-            "tuyến chuyển xanh). Tuyến mà đối thủ đông, view cao, còn bạn chưa "
-            "có kênh nào — đó là khoảng trống, tức dung lượng thị trường.",
-            "muted")
+        chu = nhan("Mỗi tuyến là một tệp khán giả. Điền “Kênh của tôi” vào tuyến bạn đang đánh; "
+                   "máy tự gán tuyến cho content ở mỗi lượt Một nút.", "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
 
@@ -1081,9 +1083,15 @@ class TrangTuyen(QWidget):
             "phân tuyến hàng loạt vội.")
         hang.addWidget(nut_dt)
         hang.addWidget(nut_phu("Thêm tuyến…", self._them, rong=130))
-        hang.addWidget(nut_phu("Dựng từ bảng content", self._dung_tu_bang, rong=190))
-        hang.addWidget(nut_phu("Tính lại", self._nap, rong=100))
+        nut_db = nut_phu("Dựng từ bảng content", self._dung_tu_bang, rong=190)
+        hang.addWidget(nut_db)
+        nut_tl = nut_phu("Tính lại", self._nap, rong=100)
+        hang.addWidget(nut_tl)
         v.addLayout(hang)
+        # 07/09/2026 ("đơn giản đi"): phân tuyến / đo độ tin / dựng từ bảng là việc MỘT NÚT đã làm
+        # mỗi lượt — giấu, chỉ để lại hai việc người thật sự làm tay: khám phá tuyến mới, thêm tuyến.
+        for w in (nut_pt, nut_dt, nut_db, nut_tl):
+            w.setVisible(False)
         return khung
 
     def _the_nen_lam(self) -> QWidget:

@@ -265,7 +265,8 @@ class TrangDoiThu(QWidget):
         v.addWidget(self._nhan_doi_thu)
 
         d1 = QHBoxLayout()
-        d1.addWidget(nhan("Số video mỗi kênh"))
+        self._nhan_so_video = nhan("Số video mỗi kênh")
+        d1.addWidget(self._nhan_so_video)
         self._so_video = QSpinBox()
         self._so_video.setRange(0, 5000)
         self._so_video.setSpecialValueText("Tất cả")
@@ -328,6 +329,14 @@ class TrangDoiThu(QWidget):
             .format(so.COT_VIET))
         d3.addWidget(self._nut_dich)
         v.addLayout(d3)
+        # 07/09/2026, chủ dự án: *"mọi thứ phức tạp mà hiệu quả chả đâu vào đâu — đơn giản đi"*.
+        # Quét / lọc đối thủ là việc của MỘT NÚT (mục Đối thủ) — bày lại ở đây là cùng một việc
+        # hiện ở hai chỗ. Ô chỉnh quét giấu đi, giữ giá trị mặc định (quét hết, chi tiết đầy đủ,
+        # tự quét mỗi ngày) để lượt tự chạy vẫn đọc được; bảng content và "Thêm video",
+        # "Dịch tiêu đề" là thứ còn dùng tay.
+        for w in (self._nhan_so_video, self._so_video, self._chi_tiet, self._tu_quet,
+                  self._nut_chay, self._nut_dung, nut_loc):
+            w.setVisible(False)
         return khung
 
     def _the_bang(self) -> QWidget:
@@ -368,14 +377,8 @@ class TrangDoiThu(QWidget):
         # `setMinimumWidth(1)`: nhãn dài có bật xuống dòng vẫn ĐÒI đủ bề ngang
         # một dòng khi tính minimumSizeHint — thiếu là trang không co được 760px.
         chu_thich = nhan(
-            "Dùng như trang tính: sửa ô nào cũng được (tự lưu ngay), Ctrl+C / "
-            "Ctrl+V cả vùng, phím Delete xoá ô, chuột phải lên bảng để mở "
-            "video hay điền “{0}” hàng loạt, chuột phải lên tiêu đề cột để đổi "
-            "tên / xoá cột của bạn, kéo mép cột để chỉnh rộng — tool nhớ. Các "
-            "cột số liệu (Kênh → Mô tả) bị lượt quét sau ghi đè; “{0}”, “{1}” "
-            "và cột bạn thêm thì không ai đụng. Xếp giảm dần theo “{2}” là "
-            "thấy video đang nổ.".format(so.COT_TUYEN, so.COT_GHI_CHU,
-                                         so.COT_TANG),
+            "Sửa như trang tính, tự lưu. Chuột phải để mở video. Xếp giảm dần theo “{0}” là "
+            "thấy video đang nổ.".format(so.COT_TANG),
             "muted")
         chu_thich.setMinimumWidth(1)
         v.addWidget(chu_thich)
@@ -462,8 +465,8 @@ class TrangDoiThu(QWidget):
         cau = ("Đang theo dõi {0} kênh đối thủ.".format(n) if n
                else "Chưa có đối thủ nào đang theo dõi.")
         if cho:
-            cau += "  Còn {0} kênh chờ bạn duyệt.".format(cho)
-        cau += "  Thêm / bỏ / phân tuyến ở mục “{0}”.".format(TAB_CON[0])
+            cau += "  {0} kênh mới máy chưa đo — lượt Một nút sau sẽ đo.".format(cho)
+        cau += "  Thêm / bỏ kênh ở mục “{0}”.".format(TAB_CON[0])
         self._nhan_doi_thu.setText(cau)
 
     def _doi_tu_quet(self, bat: bool) -> None:
