@@ -106,7 +106,7 @@ def daily_burn_micro(buckets: Optional[Sequence[Mapping[str, Any]]]) -> int:
 
 
 def warning_threshold_micro(
-    floor_vnd: int, burn_micro: int, *, min_topup_vnd: int = 10_000
+    floor_vnd: int, burn_micro: int, *, min_topup_vnd: int = 200_000
 ) -> int:
     """Ngưỡng cảnh báo cuối cùng, µVND.
 
@@ -118,9 +118,9 @@ def warning_threshold_micro(
     lên µVND ở đây bằng số học số nguyên — không dùng float.
 
     >>> warning_threshold_micro(50_000, 0)                    # khách mới
-    50000000000
+    200000000000
     >>> warning_threshold_micro(50_000, 259_000_000)          # khách dùng ít
-    10000000000
+    200000000000
     >>> warning_threshold_micro(50_000, 300_000_000_000)      # khách render cả ngày
     300000000000
     """
@@ -155,7 +155,7 @@ def assess_balance(
     *,
     floor_vnd: int = 50_000,
     burn_micro: int = 0,
-    min_topup_vnd: int = 10_000,
+    min_topup_vnd: int = 200_000,
 ) -> BalanceAlert:
     """Xem số dư hiện tại thuộc mức nào và viết sẵn câu nhắc.
 

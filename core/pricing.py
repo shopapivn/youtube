@@ -91,7 +91,11 @@ class PriceTable:
     music_price_per_minute: int = 500_000_000
     #: Mức nạp tối thiểu, µVND. Máy chủ trả ở `min_topup` của `GET /v1/pricing`.
     #: 50.000₫ — PRICING.md §5, không có tín dụng tặng lúc đăng ký.
-    min_topup_micro: int = 50_000_000_000
+    #: ⚠ PHẢI BẰNG MỨC THẬT CỦA MÁY CHỦ (200.000đ từ 06/09/2026).
+    #: Số này chỉ dùng khi CHƯA gọi được `GET /v1/pricing`, nhưng `topup_presets`
+    #: dựng hàng nút TỪ nó — để thấp là lúc mất mạng tool mời khách nạp một mức
+    #: máy chủ TỪ CHỐI, và khách chỉ biết sau khi đã chuyển tiền.
+    min_topup_micro: int = 200_000_000_000
     #: Phần trăm thưởng khi nạp. **Hiện tại là 0** và tool KHÔNG được hứa hẹn gì
     #: khác. Máy chủ trả bậc thưởng ở `topup_bonus`; giữ trường này để nếu ngày nào
     #: bật khuyến mại thật thì tool hiện đúng con số máy chủ nói, không phải sửa code.
