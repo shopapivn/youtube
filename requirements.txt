@@ -98,7 +98,12 @@ youtube-transcript-api>=0.6
 
 numpy>=1.24
 openpyxl>=3.1
-faster-whisper>=1.0
+# Tran tren <1.2 CO CHU Y (07/09/2026): ban 1.2.x keo theo `torch` (~2 GB).
+# Torch nap SAU PyQt5 tren Windows thi vo DLL: [WinError 1114] tai
+# torch\lib\c10.dll. Do duoc tren may khach: tien trinh moi nap DUOC,
+# nap PyQt5 truoc roi nap thi HONG. Duong tu nghe chi can CTranslate2,
+# khong can torch — nen ghim tran de khoi tai ve mot thu vua nang vua vo.
+faster-whisper>=1.0,<1.2
 huggingface-hub>=0.20
 pyyaml>=6.0
 imageio-ffmpeg>=0.4

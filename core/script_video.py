@@ -450,21 +450,55 @@ def _nghe_o_tien_trinh_rieng(tep: str, ten_model: str, chi_may: bool,
 
 
 #: Gói cần cho đường tự nghe. Khớp `requirements.txt`.
-GOI_TU_NGHE = ("faster-whisper>=1.0", "huggingface_hub")
+GOI_TU_NGHE = ("faster-whisper>=1.0,<1.2", "huggingface_hub")
 #: Mỗi tiến trình chỉ tự cài MỘT lần: ba lượt thử của khâu không được pip ba lần.
 _DA_THU_CAI: Dict[str, str] = {}
 
 
-def _nap_duoc_faster_whisper() -> str:
-    """Rỗng nếu nạp được `faster_whisper`; không thì là lý do thật (ngắn)."""
-    try:
-        import importlib  # noqa: PLC0415
+#: Mã hỏi thử ở TIẾN TRÌNH CON: chỉ nạp, không chạy gì.
+_MA_THU_NAP = "from faster_whisper import WhisperModel"
 
-        importlib.invalidate_caches()
-        from faster_whisper import WhisperModel  # noqa: PLC0415,F401
+
+def _nap_duoc_faster_whisper(chay=None) -> str:
+    """Rỗng nếu nạp được `faster_whisper`; không thì là lý do thật (ngắn).
+
+    ═══ HỎI Ở TIẾN TRÌNH CON, KHÔNG TỰ NẠP — SỬA 07/09/2026 ═══
+
+    Bản cũ `import faster_whisper` NGAY TRONG tiến trình tool. Đó đúng cái việc
+    mà cả `core/nghe_ngoai.py` lẫn `_nghe_o_tien_trinh_rieng` được dựng ra để
+    CẤM — và bước "thử cho chắc" này chết trước khi kịp tới tiến trình riêng.
+
+    Khách báo 07/09/2026: `faster-whisper` bản mới kéo theo `torch`. Nạp torch
+    SAU khi PyQt5 đã nạp thì Windows ném::
+
+        [WinError 1114] A dynamic link library (DLL) initialization routine
+        failed — tại torch/lib/c10.dll
+
+    Đo được trên máy khách: tiến trình mới tinh nạp ĐƯỢC; nạp PyQt5 trước rồi
+    mới nạp thì HỎNG. Tức lỗi không thuộc về máy khách, mà thuộc về chỗ ta chọn
+    để nạp.
+
+    ⚠ VÀ `WinError 1114` LÀ `OSError`, KHÔNG PHẢI `ImportError`. Bản cũ chỉ bắt
+    `ImportError` nên nó lọt thẳng ra ngoài, không ai đỡ, và giết cả khâu "Viết
+    kịch bản" — ba lần thử lại đều hỏng y hệt vì không có gì đổi giữa các lần.
+
+    Nay hỏi bằng một tiến trình con sạch: nó nạp được nghĩa là đường tự nghe
+    chạy được (vì đường đó cũng chạy ở tiến trình con), và nó sập thì chỉ là một
+    mã thoát khác 0 chứ không kéo tool theo.
+
+    `chay` để bài kiểm bơm hàm giả thay `subprocess.run`.
+    """
+    lam = chay or subprocess.run
+    try:
+        ket = lam([sys.executable, "-c", _MA_THU_NAP],
+                  capture_output=True, timeout=180)
+    except Exception as loi:  # noqa: BLE001 — hỏi không được cũng là một câu trả lời
+        return "không hỏi được tiến trình con ({0})".format(str(loi)[:120])
+    if ket.returncode == 0:
         return ""
-    except ImportError as loi:
-        return str(loi)[:200] or "ImportError"
+    cuoi = (ket.stderr or b"").decode("utf-8", "replace").strip()
+    cuoi = cuoi.splitlines()[-1][:200] if cuoi else ""
+    return cuoi or "nạp hỏng (mã thoát {0})".format(ket.returncode)
 
 
 def _tu_cai_faster_whisper(ghi: Callable[[str], None],

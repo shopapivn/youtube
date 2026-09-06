@@ -37,8 +37,32 @@ from core import script_video as sv
 
 
 def _mat_faster_whisper(monkeypatch):
-    monkeypatch.setitem(sys.modules, "faster_whisper", None)   # import → ImportError
+    """Giả lập "máy này KHÔNG nạp được bộ nghe".
+
+    ═══ CHỌC ĐÚNG CHỖ — SỬA 07/09/2026 ═══
+
+    Bản cũ chỉ đặt `sys.modules["faster_whisper"] = None`, đúng khi phép kiểm
+    nạp ngay trong tiến trình test. Nay `_nap_duoc_faster_whisper` hỏi một
+    TIẾN TRÌNH CON (vì nạp torch sau PyQt5 làm vỡ DLL trên máy khách), nên
+    chọc `sys.modules` không còn tác dụng: tiến trình con nạp thật và thành
+    công, bài kiểm đi sang nhánh khác rồi đỏ vì lý do sai.
+
+    Giữ nguyên `sys.modules` (cho nhánh nào còn nạp thật) VÀ bắt tiến trình
+    con báo hỏng — chỉ riêng lệnh thử nạp, không đụng các lệnh con khác
+    (`pip install`, chạy bộ nghe) vốn cũng đi qua `subprocess.run`.
+    """
+    monkeypatch.setitem(sys.modules, "faster_whisper", None)
     monkeypatch.setattr(sv, "_DA_THU_CAI", {})
+    that = sv.subprocess.run
+
+    def gia(lenh, **kw):
+        if isinstance(lenh, (list, tuple)) and sv._MA_THU_NAP in list(lenh):
+            return SimpleNamespace(
+                returncode=1,
+                stderr=b"ImportError: No module named 'faster_whisper'")
+        return that(lenh, **kw)
+
+    monkeypatch.setattr(sv.subprocess, "run", gia)
 
 
 def test_thieu_thi_tu_cai_bang_dung_python(monkeypatch):
