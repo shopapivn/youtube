@@ -659,17 +659,50 @@ def dang_video(cau_hinh: dict) -> str:
             "tool_dang vào config.json".format(so_dong, duong))
 
 
+def _duong_dang_lam(duong: str = "") -> str:
+    return duong or os.path.join(GOC, "dang-lam.json")
+
+
+def viec_dang_lam(duong: str = "", han_giay: float = 15 * 60) -> dict:
+    """Việc agent NÀY (hay bản trước) đang làm dở — {} nếu không có hoặc dấu đã quá `han_giay`.
+
+    01:39 07/09/2026: chủ dự án mở thêm một cửa sổ agent trên máy ảo để XEM; bản mới "dọn agent
+    cũ rồi thay chỗ" đúng lúc bản cũ đang quét trang chủ (việc #2) → việc chết không ai báo,
+    tool bên nhà ngồi chờ. Dấu này để bản mới biết mà đứng ngoài.
+    """
+    try:
+        with open(_duong_dang_lam(duong), "r", encoding="utf-8") as tep:
+            d = json.load(tep)
+        if time.time() - float(d.get("tu") or 0) > han_giay:
+            return {}
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def lam_viec(cau_hinh: dict, viec: dict) -> str:
     loai = str(viec.get("loai") or "")
-    if loai == "quet-studio":
-        return quet_studio(cau_hinh)
-    if loai == "quet-trang-chu":
-        return quet_trang_chu(cau_hinh)
-    if loai == "dang-video":
-        return dang_video(cau_hinh)
-    # Các việc chưa tới giai đoạn — NÓI THẬT thay vì im lặng nuốt lệnh.
-    raise RuntimeError("bản agent này chưa làm được việc '{0}' — xem lộ trình "
-                       "trong vm/KE-HOACH.md".format(loai))
+    duong = _duong_dang_lam()
+    try:
+        with open(duong, "w", encoding="utf-8") as tep:
+            json.dump({"id": viec.get("id"), "loai": loai, "tu": time.time(), "pid": os.getpid()}, tep)
+    except OSError:
+        pass
+    try:
+        if loai == "quet-studio":
+            return quet_studio(cau_hinh)
+        if loai == "quet-trang-chu":
+            return quet_trang_chu(cau_hinh)
+        if loai == "dang-video":
+            return dang_video(cau_hinh)
+        # Các việc chưa tới giai đoạn — NÓI THẬT thay vì im lặng nuốt lệnh.
+        raise RuntimeError("bản agent này chưa làm được việc '{0}' — xem lộ trình "
+                           "trong vm/KE-HOACH.md".format(loai))
+    finally:
+        try:
+            os.remove(duong)
+        except OSError:
+            pass
 
 
 # ── Lịch cố định hằng ngày (giai đoạn 2) ─────────────────────────────────────
@@ -768,8 +801,11 @@ def viec_theo_lich(cau_hinh: dict) -> None:
 _O_MOT_MINH = None      # giữ tham chiếu — ổ khoá sống theo tiến trình
 
 
-def mot_minh(cong: int = 8767, duong_pid: str = "") -> bool:
+def mot_minh(cong: int = 8767, duong_pid: str = "", thay: bool = False, duong_dang_lam: str = "") -> bool:
     """Chỉ MỘT agent mỗi máy — bản mới tự DỌN bản cũ rồi thay chỗ.
+
+    TRỪ khi bản cũ đang làm dở một việc (`dang-lam.json` còn tươi, xem `viec_dang_lam`): mở
+    thêm cửa sổ để XEM không được giết việc đang chạy. Muốn thay thật thì `python agent.py --thay`.
 
     Chủ dự án, 02/09/2026: *"thiết kế để... không có bug khi dùng dài hạn"*.
     Bug dài hạn số một của loại chương trình này là XÁC SỐNG: nhấp đúp hai
@@ -805,6 +841,14 @@ def mot_minh(cong: int = 8767, duong_pid: str = "") -> bool:
             except (OSError, ValueError):
                 return False
             if pid and pid != os.getpid():
+                do = viec_dang_lam(duong_dang_lam)
+                if do and not thay:
+                    ghi("agent PID {0} ĐANG LÀM việc #{1} [{2}] từ {3} — bản này KHÔNG thay chỗ để "
+                        "khỏi giết việc đang chạy. Cửa sổ này chỉ để xem: đọc agent.log. Muốn thay "
+                        "thật: python agent.py --thay".format(
+                            pid, do.get("id"), do.get("loai"),
+                            time.strftime("%H:%M", time.localtime(float(do.get("tu") or 0)))))
+                    return False
                 subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
                                capture_output=True)
                 ghi("đã dọn agent cũ (PID {0}) — bản này thay chỗ".format(pid))
@@ -813,9 +857,10 @@ def mot_minh(cong: int = 8767, duong_pid: str = "") -> bool:
 
 
 def chay(cau_hinh: dict, mot_vong: bool = False) -> None:
-    if not mot_vong and not mot_minh():
-        ghi("một agent khác đang chạy mà không dọn được — thoát, không chạy "
-            "đôi (chạy đôi là hỏi việc đôi, đăng video đôi).")
+    if not mot_vong and not mot_minh(thay="--thay" in sys.argv):
+        ghi("một agent khác đang chạy — thoát, không chạy đôi (chạy đôi là hỏi việc đôi, "
+            "đăng video đôi). Cửa sổ này tự đóng sau 20 giây.")
+        time.sleep(20)
         return
     if not cau_hinh.get("ten_may"):
         # Config đóng gói sẵn từ tool để trống tên máy — lấy tên máy THẬT

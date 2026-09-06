@@ -1453,3 +1453,60 @@ def test_lenh_ep_khong_ai_lay_thi_tram_noi_toac(tmp_path):
     tram.so_goi += 3
     tram.viec_xong("TL4-T7", so2, ket_qua="đã mở Studio")
     assert tram._ket_qua_viec[-1]["canh_bao"] == ""
+
+
+class TestKhongGietViecDangChay:
+    """01:39 07/09/2026: chủ dự án mở thêm cửa sổ agent để XEM, bản mới dọn bản cũ đang quét trang
+    chủ (việc #2) → việc chết không ai báo. Bản cũ đang làm dở thì bản mới đứng ngoài."""
+
+    def _agent_cu(self, tmp_path):
+        import socket
+        import subprocess
+        import sys
+
+        o = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        o.bind(("127.0.0.1", 0))
+        cong = o.getsockname()[1]
+        o.close()
+        duong_pid = str(tmp_path / "agent.pid")
+        con = subprocess.Popen(
+            [sys.executable, "-c",
+             "import socket,os,time;"
+             "o=socket.socket();o.bind(('127.0.0.1',{0}));o.listen(1);"
+             "open(r'{1}','w').write(str(os.getpid()));"
+             "print('san sang',flush=True);time.sleep(60)".format(cong, duong_pid)],
+            stdout=subprocess.PIPE, text=True)
+        con.stdout.readline()
+        return con, cong, duong_pid
+
+    def test_ban_cu_dang_lam_thi_ban_moi_khong_thay_cho(self, tmp_path):
+        import json
+        import time
+
+        agent = _nap_agent()
+        con, cong, duong_pid = self._agent_cu(tmp_path)
+        dang = str(tmp_path / "dang-lam.json")
+        json.dump({"id": 2, "loai": "quet-trang-chu", "tu": time.time(), "pid": con.pid},
+                  open(dang, "w", encoding="utf-8"))
+        try:
+            assert agent.viec_dang_lam(dang)["id"] == 2
+            assert agent.mot_minh(cong=cong, duong_pid=duong_pid, duong_dang_lam=dang) is False
+            time.sleep(0.5)
+            assert con.poll() is None, "bản cũ đang làm việc thì KHÔNG được giết"
+            # --thay: ép thay chỗ.
+            assert agent.mot_minh(cong=cong, duong_pid=duong_pid, duong_dang_lam=dang, thay=True) is True
+            con.wait(10)
+            assert con.poll() is not None
+        finally:
+            if con.poll() is None:
+                con.kill()
+
+    def test_dau_dang_lam_cu_qua_han_thi_khong_tinh(self, tmp_path):
+        import json
+        import time
+
+        agent = _nap_agent()
+        dang = str(tmp_path / "dang-lam.json")
+        json.dump({"id": 2, "loai": "quet-trang-chu", "tu": time.time() - 3600}, open(dang, "w", encoding="utf-8"))
+        assert agent.viec_dang_lam(dang) == {}
+        assert agent.viec_dang_lam(str(tmp_path / "khong-co.json")) == {}

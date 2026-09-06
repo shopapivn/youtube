@@ -477,3 +477,28 @@ def test_cong_chi_mot_tram_duoc_nghe(tmp_path):
             t2.bat()
     finally:
         t.tat()
+
+
+def test_viec_dang_lam_qua_han_thi_khai_tu_khi_agent_hoi_lai(tmp_path):
+    """01:39 07/09: agent trên máy ảo bị mở lại giữa việc #2 → không ai báo xong; trạm phải tự khai
+    tử sau hạn thay vì để tab Đối thủ nói "đang làm" mãi."""
+    from datetime import datetime, timedelta
+    t = T.Tram(cong=0, goc=str(tmp_path))
+    t.bat()
+    try:
+        so = t.giao_viec("TL4-T7", "quet-trang-chu")
+        assert t.lay_viec("TL4-T7", "PC4")["id"] == so
+        # Lùi mốc nhận việc về 16 phút trước (hạn quet-trang-chu là 15).
+        with t._khoa_viec:
+            t._viec_dang["TL4-T7"]["luc"] = (datetime.now() - timedelta(minutes=16)).isoformat(timespec="seconds")
+        assert t.lay_viec("TL4-T7", "PC4") is None      # agent mới hỏi việc → trạm dọn
+        tt = t.tinh_trang("TL4-T7")
+        assert tt["viec_dang"] == {}
+        assert tt["vua_xong"][-1]["id"] == so and "không báo xong" in tt["vua_xong"][-1]["loi"]
+        # Việc còn trong hạn thì giữ nguyên.
+        so2 = t.giao_viec("TL4-T7", "quet-studio")
+        t.lay_viec("TL4-T7", "PC4")
+        t.lay_viec("TL4-T7", "PC4")
+        assert t.tinh_trang("TL4-T7")["viec_dang"]["id"] == so2
+    finally:
+        t.tat()

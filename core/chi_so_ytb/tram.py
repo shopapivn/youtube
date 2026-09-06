@@ -774,6 +774,7 @@ class Tram:
         with self._khoa_viec:
             self._nhip_tim[(kenh, an_toan(may))] = {
                 "ip": str(ip), "luc": datetime.now().isoformat(timespec="seconds")}
+            self._khai_tu_viec_qua_han(kenh)
             for i, viec in enumerate(self._viec):
                 if viec["kenh"] == kenh:
                     # Ghi mốc số gói lúc GIAO — lúc báo xong mà số gói vẫn
@@ -786,6 +787,33 @@ class Tram:
                     self.ghi(f"máy ảo {an_toan(may)} nhận việc #{viec['id']} [{viec['loai']}] kênh {kenh}")
                     return viec
         return None
+
+    #: Việc "đang làm" quá ngần này phút mà không báo xong = coi như mất (agent bị mở lại giữa chừng).
+    HAN_VIEC_PHUT = {"quet-studio": 20, "quet-trang-chu": 15}
+
+    def _khai_tu_viec_qua_han(self, kenh: str) -> None:
+        """Gọi trong `_khoa_viec`. 01:39 07/09/2026: chủ dự án mở cửa sổ agent trên máy ảo để xem,
+        bản mới "dọn agent cũ" đang làm việc #2 → việc chết không ai báo, tool ngồi chờ mãi."""
+        dang = self._viec_dang.get(kenh)
+        if not dang:
+            return
+        try:
+            phut = (datetime.now() - datetime.fromisoformat(str(dang.get("luc")))).total_seconds() / 60
+        except (TypeError, ValueError):
+            phut = 0
+        han = self.HAN_VIEC_PHUT.get(str(dang.get("loai")), 30)
+        if phut <= han:
+            return
+        self._viec_dang.pop(kenh, None)
+        self._goi_moc.pop(dang.get("id"), None)
+        loi = ("máy ảo không báo xong sau {0} phút — agent trên máy ảo bị mở lại giữa chừng? "
+               "Bấm MỘT NÚT lại nếu cần.".format(int(phut)))
+        self._ket_qua_viec.append({"id": dang.get("id"), "kenh": kenh, "loai": dang.get("loai"),
+                                   "ket_qua": "", "loi": loi, "canh_bao": "",
+                                   "luc": datetime.now().isoformat(timespec="seconds")})
+        del self._ket_qua_viec[:-20]
+        self._luu_hop_viec()
+        self.ghi("máy ảo kênh {0}: việc #{1} MẤT — {2}".format(kenh, dang.get("id"), loi))
 
     # ── Hộp việc trên đĩa ────────────────────────────────────────────────────
     #
