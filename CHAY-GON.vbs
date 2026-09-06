@@ -41,7 +41,9 @@ thuMuc = fso.GetParentFolderName(WScript.ScriptFullName)
 ' Máy ở Việt Nam -> UTC+7, tiếng Việt. TZ/LANG là giá trị chung cho tiến trình
 ' con; hai biến còn lại là tên riêng mà engine đã đọc sẵn từ trước — đặt luôn
 ' cho khỏi phải vá chỗ đọc. ĐỪNG đổi tên: engine vẫn tra đúng chữ cũ.
-shell.Environment("PROCESS")("TZ") = "Asia/Ho_Chi_Minh"
+' KHÔNG đặt TZ (gỡ 07/09/2026): Python trên Windows đọc TZ theo kiểu POSIX, không hiểu
+' "Asia/Ho_Chi_Minh" nên mọi giờ tool ghi lệch 6 tiếng (nhịp tim máy ảo 19:03 khi máy 01:03).
+' Windows tự biết múi giờ của máy — để trống là đúng.
 shell.Environment("PROCESS")("LANG") = "vi_VN.UTF-8"
 shell.Environment("PROCESS")("LANGUAGE") = "vi_VN:vi"
 shell.Environment("PROCESS")("VEO3TOP_TZ") = "Asia/Ho_Chi_Minh"

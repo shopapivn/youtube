@@ -259,7 +259,31 @@ def main() -> int:
 
     app.setStyleSheet(QSS)
     logo.gan_cho(app)
+
+    # ═══ CHỈ MỘT BẢN TOOL ĐƯỢC MỞ ═══
+    #
+    # Đêm 07/09/2026: hai bản tool mở cùng lúc (00:41 và 00:53), cả hai cùng chiếm cổng
+    # nhận 8765. Máy ảo gọi về trúng bản nào là ngẫu nhiên — chủ dự án bấm MỘT NÚT ở bản
+    # này, máy ảo hỏi việc ở bản kia và nhận tay không: *"tao ấn 1 nút… vào vm xem cũng
+    # chả có con khỉ gì"*. Khoá tệp trong thư mục tool: bản thứ hai nói thật rồi thoát.
+    khoa = None
+    if not os.environ.get("SHOPAPI_STUDIO_CHAY_THU"):
+        try:
+            from PyQt5.QtCore import QLockFile
+            from PyQt5.QtWidgets import QMessageBox
+
+            khoa = QLockFile(os.path.join(BASE_DIR, ".dang-mo.lock"))
+            khoa.setStaleLockTime(0)          # tiến trình giữ khoá chết là khoá tự mở
+            if not khoa.tryLock(200):
+                QMessageBox.information(
+                    None, "My Tool đang mở rồi",
+                    "Tool đã mở ở một cửa sổ khác — dùng cửa sổ đó (tìm trên thanh tác vụ).\n\n"
+                    "Mở hai bản cùng lúc là máy ảo gọi về nhầm bản, việc giao đi không tới.")
+                return 0
+        except Exception:  # noqa: BLE001 — không khoá được thì vẫn mở, đừng chặn tool
+            khoa = None
     cua_so = CuaSoChinh(BASE_DIR)
+    cua_so._khoa_mot_ban = khoa  # giữ tham chiếu: khoá sống cùng cửa sổ
     cua_so.show()
     if os.environ.get("SHOPAPI_STUDIO_CHAY_THU"):
         # Cửa thoát để test chạy thật file này rồi dừng.

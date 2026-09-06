@@ -427,3 +427,53 @@ def test_bang_tinh_trang_cham_theo_so_tay():
     kq2 = _tinh_trang(bg(impressions=22000,
                          vung={"JP": {"views": 60}}, vung_tong_views=100))
     assert "JP" not in kq2[0]
+
+
+# ── 07/09/2026: hộp việc sống qua khởi động lại, trạng thái sống, cổng một chủ ──────────────
+
+
+def test_hop_viec_song_qua_khoi_dong_lai_va_tinh_trang(tmp_path):
+    """Chủ dự án bấm MỘT NÚT đúng lúc tool bị mở lại: lệnh phải còn; và tab phải nói được
+    máy ảo đã nhận việc chưa ("ấn 1 nút và chả hiểu chuyện gì sẽ xảy ra")."""
+    t = T.Tram(cong=0, goc=str(tmp_path))
+    t.bat()
+    try:
+        so_studio, so_tc = t.giao_quet_day_du("TL4-T7")
+        tt = t.tinh_trang("TL4-T7")
+        assert tt["nhip_tim_giay"] is None and tt["may"] == ""
+        assert [v["id"] for v in tt["viec_cho"]] == [so_studio, so_tc]
+        assert tt["viec_dang"] == {}
+    finally:
+        t.tat()
+    # Mở lại tool: hộp nạp từ đĩa, số hiệu không quay về 1.
+    t2 = T.Tram(cong=0, goc=str(tmp_path))
+    t2.bat()
+    try:
+        assert [v["id"] for v in t2.viec_cho()] == [so_studio, so_tc]
+        v = t2.lay_viec("TL4-T7", "PC4", "2001:db8::4")
+        assert v["id"] == so_studio
+        tt = t2.tinh_trang("TL4-T7")
+        assert tt["may"] == "PC4" and tt["nhip_tim_giay"] is not None and tt["nhip_tim_giay"] < 5
+        assert tt["viec_dang"]["id"] == so_studio and tt["viec_dang"]["loai"] == "quet-studio"
+        assert [x["id"] for x in tt["viec_cho"]] == [so_tc]
+        t2.viec_xong("TL4-T7", so_studio, ket_qua="ok")
+        tt = t2.tinh_trang("TL4-T7")
+        assert tt["viec_dang"] == {} and tt["vua_xong"][-1]["id"] == so_studio
+        so_moi = t2.giao_viec("TL4-T7", "quet-trang-chu")
+        assert so_moi > so_tc, "số hiệu tiếp tục tăng sau khi mở lại"
+    finally:
+        t2.tat()
+    d = json.load(io.open(os.path.join(str(tmp_path), "CHANNEL", "hop-viec-may-ao.json"), encoding="utf-8"))
+    assert d["so_viec"] == so_moi and [v["id"] for v in d["viec"]] == [so_tc, so_moi]
+
+
+def test_cong_chi_mot_tram_duoc_nghe(tmp_path):
+    """Đêm 07/09: hai bản tool cùng nghe 8765, máy ảo gọi về trúng bản nào là ngẫu nhiên."""
+    t = T.Tram(cong=0, goc=str(tmp_path))
+    t.bat()
+    try:
+        t2 = T.Tram(cong=t.cong, goc=str(tmp_path))
+        with pytest.raises(OSError):
+            t2.bat()
+    finally:
+        t.tat()

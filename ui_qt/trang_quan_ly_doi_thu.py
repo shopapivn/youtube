@@ -182,6 +182,17 @@ class TrangDanhBa(QWidget):
         hang.addWidget(nut_mot)
         hang.addWidget(nut_phu("Mở báo cáo", self._mo_bao_cao, rong=120))
         v.addLayout(hang)
+        # Dòng trạng thái SỐNG: máy ảo có đang nối không, việc giao đi tới đâu. Chủ dự án 07/09/2026:
+        # *"tao ấn 1 nút — và tao chả hiểu chuyện gì sẽ xảy ra — tao vào vm xem cũng chả có con khỉ gì"*.
+        # Đọc thẳng trạm trong tiến trình (không HTTP), 15 giây một lần — rẻ, và nói thật ngay khi
+        # máy ảo im: không bắt ai chờ 45 phút mới biết.
+        self._nhan_may_ao = nhan("", "phu")
+        self._nhan_may_ao.setMinimumWidth(1)
+        self._nhan_may_ao.setWordWrap(True)
+        v.addWidget(self._nhan_may_ao)
+        self._dong_ho_may_ao = QTimer(self)
+        self._dong_ho_may_ao.setInterval(15_000)
+        self._dong_ho_may_ao.timeout.connect(self._ve_tinh_trang_may_ao)
         return khung
 
     def _the_ket_qua(self) -> QWidget:
@@ -354,19 +365,31 @@ class TrangDanhBa(QWidget):
                 "Cổng nhận tự bật khi mở tool; nếu vẫn tắt, sang tab VPS › “Trạm & tiện ích” bấm "
                 "“Bật cổng nhận” — agent trong máy ảo gọi về qua cổng đó.")
             return
+        # Nói thật TRƯỚC khi giao: máy ảo có đang gọi về không. Không thì việc nằm chờ vô hạn.
+        tt = tram.tinh_trang(self._kenh) if hasattr(tram, "tinh_trang") else {}
+        giay = tt.get("nhip_tim_giay")
         so_studio, so_tc = tram.giao_quet_day_du(self._kenh)
         self._cho_may_ao = (self._kenh, time.time())
-        self._nhan_trang_chu.setText(
-            "MỘT NÚT: đã giao việc #{0} (Studio) và #{1} (trang chủ) — chờ máy ảo ~10–15 phút; gói "
-            "trang chủ về là tool tự chạy tiếp, không cần bấm gì.".format(so_studio, so_tc))
+        self._ve_tinh_trang_may_ao()
         QTimer.singleShot(45 * 60 * 1000, self._kiem_may_ao_im)
+        if giay is None or giay > 120:
+            self._app.show_message(
+                "Đã giao việc — nhưng máy ảo đang KHÔNG gọi về",
+                "Việc #{0} và #{1} đã xếp vào hộp, máy ảo của kênh {2} sẽ nhận ngay khi gọi về. "
+                "Nhưng {3} — agent trên máy ảo có đang chạy không? Trên máy ảo: nhấp đúp CHAY-NGAM.vbs "
+                "trong thư mục vm (hoặc khởi động lại máy ảo). Dòng trạng thái dưới nút sẽ tự đổi khi "
+                "máy ảo nhận việc.".format(so_studio, so_tc, self._kenh,
+                                           "máy ảo chưa gọi về lần nào từ lúc mở tool" if giay is None
+                                           else "lần gọi về gần nhất đã {0} phút trước".format(giay // 60)))
+            return
         self._app.show_message(
             "Đã giao việc #{0} và #{1} — phần còn lại tự chạy".format(so_studio, so_tc),
-            "Agent của kênh {0} nhận trong ~30 giây (nếu đang chạy): mở Studio cho tiện ích chụp "
-            "số liệu (~8 phút), rồi mở trang chủ YouTube gom video/kênh được đề xuất (~5 phút). "
-            "Khi gói trang chủ về, tool TỰ chạy: AI kiểm kênh → danh bạ → quét content → AI gán "
-            "tuyến → chấm, rồi mở báo cáo. Bạn có thể đóng tab này; đừng tắt tool và cổng nhận."
-            .format(self._kenh))
+            "Sẽ diễn ra như sau, và dòng trạng thái dưới nút tự đổi theo từng bước:\n"
+            "1. Máy ảo nhận việc (~30 giây).\n"
+            "2. Máy ảo mở Studio, tiện ích chụp số liệu (~8 phút).\n"
+            "3. Máy ảo mở trang chủ YouTube, gom video và kênh được đề xuất (~5 phút).\n"
+            "4. Gói về tới tool → tool tự chạy 7 bước (~5 phút) → bảng Kết quả có video mới.\n\n"
+            "Đừng tắt tool. Không cần bấm gì thêm.")
 
     def _kiem_may_ao_im(self) -> None:
         """45 phút sau khi giao việc mà không gói trang chủ nào về — nói thật, đừng để khách chờ suông."""
@@ -383,6 +406,55 @@ class TrangDanhBa(QWidget):
             "45 phút rồi mà chưa có gói trang chủ nào của kênh {0} về trạm. Kiểm tra: agent trên máy "
             "ảo có đang chạy không (tab Máy VM › nhịp tim), Chrome có mở không, extension có bản "
             "≥ 2.6.1 không. Dữ liệu đã có thì vẫn xếp hạng lại được bằng nút “Xếp hạng lại”.".format(kenh))
+
+    _TEN_LOAI_VIEC = {"quet-studio": "quét Studio (~8 phút)", "quet-trang-chu": "quét trang chủ (~5 phút)"}
+
+    def _ve_tinh_trang_may_ao(self) -> None:
+        """Dòng dưới nút MỘT NÚT: máy ảo đang nối? việc giao đi tới đâu? — đọc trạm, không đoán."""
+        nhan_ = getattr(self, "_nhan_may_ao", None)
+        if nhan_ is None:
+            return
+        if not self._kenh:
+            nhan_.setText("")
+            return
+        tram = self._tram()
+        if tram is None or not getattr(tram, "dang_chay", False):
+            nhan_.setText("⚠ Cổng nhận đang tắt — máy ảo không gọi về được. Tab VPS › Trạm › Bật cổng nhận.")
+            return
+        if not hasattr(tram, "tinh_trang"):
+            nhan_.setText("")
+            return
+        tt = tram.tinh_trang(self._kenh)
+        giay, may = tt.get("nhip_tim_giay"), tt.get("may") or "máy ảo"
+        phan = []
+        if giay is None:
+            phan.append("Máy ảo chưa gọi về lần nào từ lúc mở tool.")
+        elif giay > 120:
+            phan.append("⚠ Máy ảo {0} không gọi về đã {1} phút — agent trên máy ảo không chạy.".format(may, giay // 60))
+        else:
+            phan.append("Máy ảo {0} đang nối (gọi về {1} giây trước).".format(may, giay))
+        dang = tt.get("viec_dang") or {}
+        cho = tt.get("viec_cho") or []
+        if dang:
+            phan.append("Đang làm việc #{0}: {1}, nhận lúc {2}.".format(
+                dang.get("id"), self._TEN_LOAI_VIEC.get(str(dang.get("loai")), dang.get("loai")),
+                str(dang.get("luc", ""))[11:16]))
+        if cho:
+            phan.append("Chờ máy ảo lấy: " + ", ".join(
+                "#{0} {1}".format(v.get("id"), self._TEN_LOAI_VIEC.get(str(v.get("loai")), v.get("loai")).split(" (")[0])
+                for v in cho) + ".")
+        if self._mot_nut_dang_chay:
+            phan.append("Tool đang chạy 7 bước — xong sẽ mở báo cáo và bảng Kết quả tự đổi.")
+        elif self._cho_may_ao and not dang and not cho:
+            phan.append("Máy ảo đã quét xong, chờ gói trang chủ về (tool tự chạy tiếp).")
+        xong = tt.get("vua_xong") or []
+        if xong and not dang and not cho and not self._mot_nut_dang_chay:
+            v = xong[-1]
+            phan.append("Việc #{0} {1} {2} lúc {3}.{4}".format(
+                v.get("id"), self._TEN_LOAI_VIEC.get(str(v.get("loai")), v.get("loai") or "").split(" (")[0],
+                "HỎNG" if v.get("loi") else "xong", str(v.get("luc", ""))[11:16],
+                " ⚠ " + str(v.get("canh_bao")) if v.get("canh_bao") else ""))
+        nhan_.setText(" ".join(phan))
 
     def _tu_chay_mot_nut(self, kenh: str) -> None:
         """Slot ở luồng Qt: trạm vừa nhận đủ một đợt trang chủ của `kenh` → chạy chuỗi."""
@@ -664,6 +736,12 @@ class TrangDanhBa(QWidget):
             finally:
                 self._dang_do_tc = False
         except Exception:  # noqa: BLE001 - thiếu tệp thiết lập cũng không làm hỏng bảng
+            pass
+        try:
+            self._ve_tinh_trang_may_ao()
+            if not self._dong_ho_may_ao.isActive():
+                self._dong_ho_may_ao.start()
+        except Exception:  # noqa: BLE001 — dòng trạng thái hỏng không được chặn bảng
             pass
         self._ve()
 

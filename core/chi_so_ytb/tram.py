@@ -312,6 +312,10 @@ class Tram:
         self._viec: List[dict] = []          # [{id, kenh, loai, tham_so, luc}]
         self._so_viec = 0
         self._nhip_tim: dict = {}            # (kenh, may) -> {ip, luc, viec_dang}
+        # Việc máy ảo ĐANG cầm: kênh -> {id, loai, may, luc}. Đặt lúc agent lấy, xoá lúc báo xong —
+        # để tab Đối thủ nói được "máy ảo đã nhận việc #3 lúc 01:05, đang quét Studio" thay vì
+        # bắt người bấm ngồi đoán (chủ dự án 07/09/2026: "ấn 1 nút và chả hiểu chuyện gì sẽ xảy ra").
+        self._viec_dang: dict = {}
         self._luc_trang_chu: dict = {}       # kenh -> [mốc time.time() từng gói trang chủ]
         self._hen_trang_chu: dict = {}       # kenh -> threading.Timer đang chờ gọi hook
         self.tre_hook_trang_chu: float = TRE_HOOK_TRANG_CHU
@@ -481,6 +485,7 @@ class Tram:
         if self._may:
             return
         tram = self
+        self._nap_hop_viec()
 
         class _ImKhiKhachNgat:
             """Khách ngắt giữa chừng thì im, đừng đổ vết Python ra màn hình.
@@ -512,13 +517,21 @@ class Tram:
             # Hai tầng: một ổ cắm IPv6 tắt V6ONLY nhận luôn cả khách IPv4.
             address_family = socket.AF_INET6
             daemon_threads = True
-            allow_reuse_address = True
+            # Windows: SO_REUSEADDR cho phép HAI tiến trình cùng nghe một cổng — đêm 07/09/2026
+            # hai bản tool cùng chiếm 8765, máy ảo gọi về trúng bản nào là ngẫu nhiên. Cổng
+            # phải là của MỘT trạm: bản thứ hai bind hỏng → OSError → nói "cổng nhận đang tắt".
+            allow_reuse_address = sys.platform != "win32"
 
             def server_bind(self):
                 try:
                     self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
                 except OSError:
                     pass
+                if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                    try:
+                        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                    except OSError:
+                        pass
                 super().server_bind()
 
         try:
@@ -737,6 +750,7 @@ class Tram:
             if str(loai) == "quet-studio":
                 # Ra lệnh là LÀM: dặn tiện ích chụp lại TẤT CẢ khi nó hỏi.
                 self._lenh_tien_ich[viec["kenh"]] = {"chup": "het"}
+            self._luu_hop_viec()
         self.ghi(f"xếp việc #{viec['id']} [{loai}] cho kênh {viec['kenh']}")
         return viec["id"]
 
@@ -765,8 +779,69 @@ class Tram:
                     # Ghi mốc số gói lúc GIAO — lúc báo xong mà số gói vẫn
                     # y nguyên thì lượt quét đó không cào được gì.
                     self._goi_moc[viec["id"]] = (viec["loai"], self.so_goi)
-                    return self._viec.pop(i)
+                    viec = self._viec.pop(i)
+                    self._viec_dang[kenh] = {"id": viec["id"], "loai": viec["loai"], "may": an_toan(may),
+                                             "luc": datetime.now().isoformat(timespec="seconds")}
+                    self._luu_hop_viec()
+                    self.ghi(f"máy ảo {an_toan(may)} nhận việc #{viec['id']} [{viec['loai']}] kênh {kenh}")
+                    return viec
         return None
+
+    # ── Hộp việc trên đĩa ────────────────────────────────────────────────────
+    #
+    # Trước 07/09/2026 hộp nằm trong RAM ("tắt tool thì lệnh chưa giao coi như bỏ"). Đêm ấy tool
+    # bị khởi động lại đúng lúc chủ dự án vừa bấm MỘT NÚT: lệnh mất không dấu vết, máy ảo không
+    # nhận gì, người bấm không hiểu chuyện gì xảy ra. Lệnh là thứ người ta chờ 15 phút — phải
+    # sống qua một lần mở lại tool.
+    def _tep_hop_viec(self) -> str:
+        return os.path.join(self.goc, "CHANNEL", "hop-viec-may-ao.json")
+
+    def _luu_hop_viec(self) -> None:
+        """Gọi trong `_khoa_viec`. Ghi hỏng thì thôi — hộp RAM vẫn đúng."""
+        try:
+            p = self._tep_hop_viec()
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with io.open(p, "w", encoding="utf-8") as tep:
+                json.dump({"so_viec": self._so_viec, "viec": self._viec, "viec_dang": self._viec_dang},
+                          tep, ensure_ascii=False, indent=1)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _nap_hop_viec(self) -> None:
+        try:
+            with io.open(self._tep_hop_viec(), "r", encoding="utf-8") as tep:
+                d = json.load(tep)
+        except Exception:  # noqa: BLE001 — chưa có tệp là bình thường
+            return
+        with self._khoa_viec:
+            self._so_viec = max(self._so_viec, int(d.get("so_viec") or 0))
+            self._viec = [v for v in (d.get("viec") or []) if isinstance(v, dict) and "id" in v]
+            self._viec_dang = {k: v for k, v in (d.get("viec_dang") or {}).items() if isinstance(v, dict)}
+        if self._viec or self._viec_dang:
+            self.ghi("hộp việc nạp lại từ đĩa: {0} việc chờ, {1} kênh có việc đang làm"
+                     .format(len(self._viec), len(self._viec_dang)))
+
+    def tinh_trang(self, kenh: str) -> dict:
+        """Một kênh: máy ảo nào, gọi về bao lâu rồi, việc nào chờ / đang làm / vừa xong.
+
+        Cho tab Đối thủ vẽ dòng trạng thái sống sau khi bấm MỘT NÚT. `nhip_tim_giay` = số giây
+        từ lần máy ảo gọi về gần nhất (None = chưa từng gọi từ lúc mở tool).
+        """
+        kenh = an_toan(kenh)
+        with self._khoa_viec:
+            may = [{"may": m, **v} for (k, m), v in self._nhip_tim.items() if k == kenh]
+            cho = [dict(v) for v in self._viec if v.get("kenh") == kenh]
+            dang = dict(self._viec_dang.get(kenh) or {})
+            xong = [dict(v) for v in self._ket_qua_viec if v.get("kenh") == kenh][-4:]
+        may.sort(key=lambda x: x.get("luc", ""), reverse=True)
+        giay = None
+        if may:
+            try:
+                giay = max(0, int((datetime.now() - datetime.fromisoformat(may[0]["luc"])).total_seconds()))
+            except (ValueError, TypeError):
+                giay = None
+        return {"may": may[0]["may"] if may else "", "nhip_tim_luc": may[0]["luc"] if may else "",
+                "nhip_tim_giay": giay, "viec_cho": cho, "viec_dang": dang, "vua_xong": xong}
 
     def viec_xong(self, kenh: str, so: int, ket_qua: str = "", loi: str = "") -> None:
         """Agent báo xong (hay hỏng) một việc — kể cho người, và GIỮ LẠI.
@@ -811,6 +886,10 @@ class Tram:
                 "canh_bao": canh_bao,
                 "luc": datetime.now().isoformat(timespec="seconds")})
             del self._ket_qua_viec[:-20]
+            dang = self._viec_dang.get(an_toan(kenh))
+            if dang and int(dang.get("id") or -1) == int(so):
+                self._viec_dang.pop(an_toan(kenh), None)
+            self._luu_hop_viec()
 
     def may_dang_noi(self) -> List[dict]:
         """Các máy ảo từng lên tiếng, mới nhất trước — cho tab Máy VM vẽ bảng."""
