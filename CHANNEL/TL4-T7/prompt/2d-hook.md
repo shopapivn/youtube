@@ -5,6 +5,7 @@ Tự đọc xem bản gốc mở đầu thế nào và vì sao cách đó giữ 
 Viết bằng <<NGON_NGU>>.
 Tiêu đề video: <<TITLE>>
 Chữ trên ảnh bìa, người xem đọc dòng này rồi mới bấm vào: <<THUMB>>
+Người xem là CHÍNH người có đặc điểm trong tiêu đề, không phải người quan sát bạn bè hay đồng nghiệp — nói với họ về tình huống của họ, đừng gọi họ là đáng sợ.
 
 Độ dài khoảng <<CHARS_HOOK>> ký tự. Câu cuối phải dẫn được vào đoạn thân bài bên dưới.
 Chỉ trả về lời đọc, không ghi chú.
