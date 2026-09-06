@@ -56,7 +56,7 @@ def _goc(tmp_path):
     ("Golden Life Handbook", "https://www.youtube.com/@golden", 5660, GIA * 5, 7650, 1200, db.BO, "lệch già"),
     ("PIVOT 公式", "https://www.youtube.com/@pivot", 4_060_000, ["最新脳科学 読書"] * 25, 121500, 900, db.BO, "quá lớn"),
     ("Barry Nobles", "https://www.youtube.com/@barry", 188000, ["今日の話"] * 25, 13000, 900, db.BO, "không thấy dấu hiệu"),
-    ("pure life diary", "https://www.youtube.com/@pure", 46300, CHUNG * 4 + ["一人時間の使い方"], 4350, 880, None, "bạn quyết"),
+    ("pure life diary", "https://www.youtube.com/@pure", 46300, CHUNG * 4 + ["一人時間の使い方"], 4350, 880, None, "gần"),
 ])
 def test_quyet_bon_cua(ten, link, subs, tieu_de, view, dai, tt, ly_do_co):
     uv = cdt.do_ung_vien(link, lang="ja", phut_muc_tieu=15, lay_kenh=_lay({link: _kenh(ten, link, subs, tieu_de, view, dai)}))
@@ -89,11 +89,37 @@ def test_chot_ghi_bo_va_de_lai_hop_thu_dung_cho(tmp_path):
            links[2]: _kenh("Golden Life Handbook", links[2], 5660, GIA * 5, 7650, 1200)}
     nhat_ky = []
     dem = cdt.chot(goc, KENH, lang="ja", phut_muc_tieu=15, lay_kenh=_lay(kho), on_log=nhat_ky.append)
-    assert (dem["theo_doi"], dem["bo"], dem["o_lai"]) == (0, 2, 1)
-    assert set(dem["bo_links"]) == {links[0], links[2]}
-    assert db.hop_thu(goc, KENH) == [links[1]], "kênh 'gần' phải Ở LẠI hộp thư cho người quyết"
+    # 06/09: "đơn giản, tự động" — kênh 'gần' máy tự bỏ (ghi lý do, đổi lại ở danh bạ), hộp thư tự rỗng
+    assert (dem["theo_doi"], dem["bo"], dem["o_lai"]) == (0, 3, 0)
+    assert set(dem["bo_links"]) == set(links)
+    assert db.hop_thu(goc, KENH) == [], "hộp thư phải tự rỗng — không để kênh 'chờ bạn quyết'"
+    cot, hang = db.doc(goc, KENH)
+    o = db.chi_so_cot(list(cot))
+    ghi = {h[o["Link kênh"]]: h[o["Ghi chú"]] for h in hang}
+    assert "máy tự bỏ" in ghi[links[1]] and "đổi trạng thái ở danh bạ" in ghi[links[1]]
     assert db.dang_theo_doi(goc, KENH) == []
     assert any("chốt danh bạ" in m for m in nhat_ky)
+
+
+def test_kenh_da_chet_thi_bo_luon_loi_tam_thi_thu_lai(tmp_path):
+    goc = _goc(tmp_path)
+    chet, tam = "https://www.youtube.com/@chet", "https://www.youtube.com/@tam"
+    so.luu_doi_thu(goc, KENH, chet + "\n" + tam + "\n")
+
+    def lay_kenh(link, **kw):
+        raise RuntimeError("This channel does not exist." if link == chet else "HTTP Error 503: Service Unavailable temporarily")
+    dem = cdt.chot(goc, KENH, lang="ja", lay_kenh=lay_kenh)
+    cot, hang = db.doc(goc, KENH)
+    o = db.chi_so_cot(list(cot))
+    tt = {h[o["Link kênh"]]: h[o["Trạng thái"]] for h in hang}
+    assert tt.get(chet) == db.BO, "kênh không tồn tại → bỏ luôn, không giữ trong hộp thư thử lại mãi"
+    assert "không còn" in ghi_chu(hang, o, chet)
+    assert tam not in tt and db.hop_thu(goc, KENH) == [tam], "lỗi TẠM (503) thì ở lại hộp thư, lượt sau thử lại"
+    assert dem["o_lai"] == 0 and dem["loi"] == 1
+
+
+def ghi_chu(hang, o, link):
+    return next(h[o["Ghi chú"]] for h in hang if h[o["Link kênh"]] == link)
 
 
 def test_khong_doi_trang_thai_khach_dat_tay(tmp_path):

@@ -61,6 +61,11 @@ TU_GO_TOI = re.compile("実は|本当は|本当の|強い|賢い|才能|隠さ�
 #: Tên kênh tự khai là kênh tâm lý — đủ để theo dõi dù 25 tiêu đề mới nhất chưa dính từ khoá tuyến.
 TEN_KENH_TAM_LY = ("心理", "脳科学", "こころ", "心の", "ココロ", "メンタル", "才能")
 
+#: Chuỗi trong lỗi yt-dlp nói kênh đã chết/ẩn — bỏ luôn, không giữ trong hộp thư thử lại mãi.
+#: Chỉ những câu yt-dlp nói về CHÍNH kênh — "503 Service Unavailable" là lỗi tạm của máy chủ, không tính.
+_DAU_HIEU_KENH_CHET = ("does not exist", "terminated", "has been removed", "this channel", "no longer available",
+                       "is private", "404", "không tồn tại")
+
 SO_TIEU_DE_DO = 40          # lấy ngần này video mới nhất để đo (một lời gọi yt-dlp)
 NGUONG_GIA = 30             # % tiêu đề gắn thẻ tuổi → bỏ
 NGUONG_KHOP = 8             # % tiêu đề khớp tuyến → theo dõi
@@ -123,8 +128,16 @@ def do_ung_vien(link: str, *, lang: str = "", phut_muc_tieu: float = 0.0,
 
 def quyet(uv: UngVien, *, nguong_gia: int = NGUONG_GIA, nguong_khop: int = NGUONG_KHOP,
           subs_toi_da: int = SUBS_TOI_DA) -> Tuple[Optional[str], str]:
-    """(trạng thái danh bạ hoặc `None` = để lại hộp thư, lý do một câu)."""
+    """(trạng thái danh bạ hoặc `None` = để lại hộp thư thử lại lượt sau, lý do một câu).
+
+    Chủ dự án 06/09/2026, nhìn hộp thư còn 8 kênh "chờ bạn quyết": *"tao muốn đơn giản hiệu quả
+    và tự động mà"*. Máy quyết hết — kể cả kênh "gần" (bỏ, ghi lý do, đổi lại ở danh bạ nếu
+    muốn) và kênh đã chết (bỏ). Chỉ lỗi TẠM (mạng, máy chủ) mới ở lại để lượt sau thử lại.
+    """
     if uv.loi or not uv.ten:
+        loi = (uv.loi or "").lower()
+        if any(t in loi for t in _DAU_HIEU_KENH_CHET):
+            return db.BO, "kênh không còn hoặc không xem được: " + (uv.loi or "")[:100]
         return None, "không đo được" + (": " + uv.loi if uv.loi else "")
     if uv.the_loai_loai:
         return db.BO, "thể loại 雑学/要約/tóm sách"
@@ -140,7 +153,8 @@ def quyet(uv: UngVien, *, nguong_gia: int = NGUONG_GIA, nguong_khop: int = NGUON
         return db.THEO_DOI, "máy chấm: khớp tuyến {0}% · già {1}%".format(uv.pct_khop, uv.pct_gia)
     if uv.pct_khop == 0:
         return db.BO, "không thấy dấu hiệu tâm lý (tên kênh không nói, 0 tiêu đề khớp tuyến)"
-    return None, "gần (self-help chung, khớp {0}%) — bạn quyết".format(uv.pct_khop)
+    # "gần": máy không chắc → có ví thì hỏi AI (cửa thứ năm); không có ví thì `chot` tự bỏ, ghi lý do.
+    return None, "gần (self-help chung, khớp {0}%)".format(uv.pct_khop)
 
 
 def hoi_ai(client, uv: UngVien, *, mo_ta_kenh: str = "", lang: str = "", phut_muc_tieu: float = 0.0,
@@ -216,8 +230,17 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
         dem["cham"] += 1
         tt, ly_do = quyet(uv)
         if uv.loi or not uv.ten:
+            if tt == db.BO:
+                # Kênh đã chết/ẩn: ghi vào danh bạ là "bỏ" (tên lấy từ link) để hộp thư thôi giữ nó.
+                ban_ghi.append(db.BanGhi(ten=uv.ten or db._ten_tu_link(link), link=link))  # noqa: SLF001
+                trang_thai[link] = tt
+                ghi_chu[link] = ly_do
+                dem["bo"] += 1
+                dem["bo_links"].append(link)
+                log("  [{0}/{1}] {2} → bỏ: {3}".format(i, len(links), link[:40], ly_do))
+                continue
             dem["loi"] += 1
-            log("  [{0}/{1}] {2} → không đo được: {3}".format(i, len(links), link[:40], ly_do))
+            log("  [{0}/{1}] {2} → không đo được, để lại thử lượt sau: {3}".format(i, len(links), link[:40], ly_do))
             continue
         tuyen: List[str] = []
         if client is not None and tt != db.BO:
@@ -233,10 +256,12 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
                 tt, ly_do, tuyen = _ghep_ai(tt, ly_do, ai)
                 if tt == db.BO and tt_cu != db.BO:
                     dem["ai_loai"] += 1
-        log("  [{0}/{1}] {2} → {3}: {4}".format(i, len(links), (uv.ten or link)[:30], tt or "hộp thư", ly_do))
         if tt is None:
-            dem["o_lai"] += 1
-            continue
+            # Máy đo được mà vẫn không chắc ("gần") và AI không nâng lên → TỰ BỎ, ghi lý do, đổi lại
+            # được ở danh bạ. Chủ dự án 06/09: "đơn giản, hiệu quả và tự động" — hộp thư không giữ ai.
+            tt = db.BO
+            ly_do = ly_do + " — máy tự bỏ; muốn theo dõi thì đổi trạng thái ở danh bạ"
+        log("  [{0}/{1}] {2} → {3}: {4}".format(i, len(links), (uv.ten or link)[:30], tt, ly_do))
         ban_ghi.append(db.BanGhi(ten=uv.ten, link=link, subs=uv.subs, so_video=uv.so_video,
                                  dai_tv=uv.dai_tv, view_tv=uv.view_tv, vuot_quy_mo=uv.dinh_tren_subs))
         trang_thai[link] = tt

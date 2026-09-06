@@ -35,8 +35,14 @@ def test_tab_nghien_cuu_co_du_bo_dieu_khien_trang_chu():
     assert "mot_nut.chay(goc, kenh, client=client)" in than, "chuỗi phải nhận ví để AI chạy ở ba chỗ"
     assert "os.startfile(bc.tep_bao_cao)" in than, "xong phải mở báo cáo cho khách"
     assert "_kiem_may_ao_im" in s and "45 * 60 * 1000" in s, "máy ảo im 45 phút phải nói thật"
-    assert 'nut_chinh("MỘT NÚT: máy ảo quét → đối thủ → content"' in s
-    assert 'nut_phu("Xếp hạng lại (không quét máy ảo)"' in s
+    # 06/09 (ảnh chụp của chủ dự án): nhãn dài bị cắt, thẻ MỘT NÚT phải lên đầu, trạm phải tìm đúng tab
+    assert 'nut_chinh("MỘT NÚT", self._quet_may_ao, rong=130)' in s, "nhãn phải ngắn để không bị cắt"
+    assert 'nut_phu("Xếp hạng lại", self._xu_ly_trang_chu, rong=130)' in s
+    assert "def _the_mot_nut" in s and "def _mo_bao_cao" in s
+    assert s.index("doc.addWidget(self._the_mot_nut())") < s.index("doc.addWidget(self._the_danh_ba(), 1)") < s.index("doc.addWidget(self._the_hop_thu())"), \
+        "thứ tự thẻ: Một nút → Danh bạ → Thủ công"
+    assert "return tim_tram(self._app)" in s, "tìm trạm qua tram_chung, không đoán trang"
+    assert 'self._app.trang("phan-tich")' not in s, "trạm không nằm ở trang Phân tích"
     than2 = s.split("def _xu_ly_trang_chu")[1].split("def ")[0]
     assert "_chay_mot_nut(self._kenh" in than2 and "QMessageBox.question" not in than2, "nút phụ dùng chung chuỗi, không hỏi lằng nhằng"
 

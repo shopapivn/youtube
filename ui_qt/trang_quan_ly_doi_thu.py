@@ -41,6 +41,7 @@ from core.so_csv import chi_so_cot, so_nguyen, so_thuc
 
 from . import theme
 from .cua_so_loc_doi_thu import HopLocDoiThu
+from .tram_chung import tim_tram
 from .widgets import HangXuongDong, nhan, nut_chinh, nut_nguy_hiem, nut_phu, the
 
 __all__ = ["TrangDanhBa", "TrangTuyen"]
@@ -128,12 +129,52 @@ class TrangDanhBa(QWidget):
         d0.addWidget(self._tom_tat, 1)
         doc.addLayout(d0)
 
-        doc.addWidget(self._the_hop_thu())
+        doc.addWidget(self._the_mot_nut())
         doc.addWidget(self._the_danh_ba(), 1)
+        doc.addWidget(self._the_hop_thu())
 
         self._nap_kenh()
 
     # ── Hộp thư đến ──────────────────────────────────────────────────────────
+
+    def _the_mot_nut(self) -> QWidget:
+        """Thẻ đầu tiên của tab: MỘT NÚT (chủ dự án 06/09: "đơn giản, hiệu quả và tự động")."""
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(16, 12, 16, 12)
+        v.setSpacing(8)
+        d = QHBoxLayout()
+        d.addWidget(nhan("Một nút", "h2"))
+        self._nhan_trang_chu = nhan("", "muted")
+        self._nhan_trang_chu.setMinimumWidth(1)
+        d.addWidget(self._nhan_trang_chu, 1)
+        v.addLayout(d)
+        chu = nhan(
+            "Máy ảo quét Studio + trang chủ → gói về là tool tự chạy: tra video, lọc tâm lý, chấm "
+            "từng kênh (bốn cửa máy + AI), ghi danh bạ, quét content mọi kênh theo dõi, gán tuyến, "
+            "chấm điểm → mở báo cáo. Lượt theo lịch của máy ảo cũng tự chạy y vậy.", "muted")
+        chu.setMinimumWidth(1)
+        v.addWidget(chu)
+        hang = HangXuongDong()
+        nut_quet = nut_chinh("MỘT NÚT", self._quet_may_ao, rong=130)
+        nut_quet.setToolTip(
+            "Giao máy ảo hai việc (Studio ~8 phút, trang chủ ~5 phút). Khi gói trang chủ về, tool TỰ "
+            "chạy 7 bước và mở nghien-cuu/bao-cao-mot-nut.md. Không phải bấm gì thêm.")
+        hang.addWidget(nut_quet)
+        self._o_quet_tc = QCheckBox("mỗi ngày")
+        self._o_quet_tc.setToolTip(
+            "Kèm lượt quét hằng ngày của máy ảo: mở trang chủ YouTube của kênh để "
+            "tiện ích gom video/kênh được đề xuất. Lưu vào may-ao.json của kênh.")
+        self._o_quet_tc.toggled.connect(self._luu_quet_tc)
+        hang.addWidget(self._o_quet_tc)
+        nut_mot = nut_phu("Xếp hạng lại", self._xu_ly_trang_chu, rong=130)
+        nut_mot.setToolTip(
+            "Chạy lại 7 bước trên dữ liệu đã có (máy ảo tắt, hoặc muốn cập nhật view ngay). "
+            "Có ví thì AI chạy ở ba chỗ; không có ví vẫn chạy bằng luật cứng.")
+        hang.addWidget(nut_mot)
+        hang.addWidget(nut_phu("Mở báo cáo", self._mo_bao_cao, rong=120))
+        v.addLayout(hang)
+        return khung
 
     def _the_hop_thu(self) -> QWidget:
         khung = the()
@@ -142,15 +183,15 @@ class TrangDanhBa(QWidget):
         v.setSpacing(8)
 
         d = QHBoxLayout()
-        d.addWidget(nhan("Thư chưa mở", "h2"))
+        d.addWidget(nhan("Thủ công — thư chưa mở", "h2"))
         self._nhan_hop_thu = nhan("", "phu")
         d.addWidget(self._nhan_hop_thu, 1)
         v.addLayout(d)
 
         chu = nhan(
-            "Kênh lạ do bạn dán vào hoặc do máy ảo nhặt về từ trang chủ YouTube, "
-            "chưa ai quyết định giữ hay bỏ. Bấm “Lọc và chấm” để tôi xem thử từng "
-            "kênh rồi khuyên; hoặc “Nhận hết” nếu bạn đã biết cả rồi.", "muted")
+            "Máy tự chấm mọi kênh mới ở mỗi lượt Một nút; ở đây chỉ còn kênh máy chưa đo được "
+            "(kênh chết, mạng lỗi) — lượt sau máy thử lại. Muốn tự tay: dán kênh, lọc, hoặc nhận hết.",
+            "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
 
@@ -160,55 +201,29 @@ class TrangDanhBa(QWidget):
         v.addWidget(self._o_hop_thu)
 
         hang = HangXuongDong()
-        hang.addWidget(nut_chinh("Lọc và chấm…", self._mo_loc, rong=150))
+        hang.addWidget(nut_phu("Lọc và chấm…", self._mo_loc, rong=150))
         hang.addWidget(nut_phu("Nhận hết vào danh bạ", self._nhan_het, rong=180))
         hang.addWidget(nut_phu("Dán thêm kênh…", self._dan_them, rong=150))
+        hang.addWidget(nut_phu("Mở bảng trang chủ", self._mo_trang_chu, rong=150))
         v.addLayout(hang)
-
-        # ── Trang chủ máy ảo → đối thủ mới ─────────────────────────────────────
-        # Chủ dự án 05/09/2026: việc TÌM đối thủ thuộc khâu nghiên cứu, không thuộc
-        # khâu máy ảo — nút dời từ tab Máy VM sang đây, cạnh chính hộp thư nó đổ vào.
-        # Máy ảo vẫn là tay quét: mở trang chủ YouTube của phiên kênh, extension thu
-        # nhỏ + lướt tới đáy + gom hết link, trạm ghi `nghien-cuu/trang-chu.csv`.
-        # "Xử lý kết quả": tra kênh bằng yt-dlp (miễn phí) → lọc tâm lý bằng từ khoá →
-        # HỎI trước khi tốn AI cho phần lưỡng lự → kênh sạch vào hộp thư này.
-        d2 = QHBoxLayout()
-        d2.addWidget(nhan("Trang chủ máy ảo", "phu"))
-        self._nhan_trang_chu = nhan("", "muted")
-        self._nhan_trang_chu.setMinimumWidth(1)
-        d2.addWidget(self._nhan_trang_chu, 1)
-        v.addLayout(d2)
-        hang2 = HangXuongDong()
-        nut_quet = nut_chinh("MỘT NÚT: máy ảo quét → đối thủ → content", self._quet_may_ao, rong=290)
-        nut_quet.setToolTip(
-            "Bấm một lần là xong cả chuỗi: máy ảo mở Studio cho tiện ích chụp số liệu (~8 phút), "
-            "rồi mở trang chủ YouTube gom video/kênh được đề xuất (3 lượt tải). Khi gói trang chủ "
-            "về, tool TỰ chạy tiếp: tra video (yt-dlp) → lọc tâm lý → AI kiểm từng kênh qua cửa "
-            "máy → ghi danh bạ → quét content mọi kênh theo dõi (cập nhật view) → AI gán tuyến dòng "
-            "mới → luật cứng → Đã làm → chấm → mở nghien-cuu/bao-cao-mot-nut.md. Không phải bấm gì thêm.")
-        hang2.addWidget(nut_quet)
-        self._o_quet_tc = QCheckBox("mỗi ngày")
-        self._o_quet_tc.setToolTip(
-            "Kèm lượt quét hằng ngày của máy ảo: mở trang chủ YouTube của kênh để "
-            "tiện ích gom video/kênh được đề xuất. Lưu vào may-ao.json của kênh.")
-        self._o_quet_tc.toggled.connect(self._luu_quet_tc)
-        hang2.addWidget(self._o_quet_tc)
-        nut_mot = nut_phu("Xếp hạng lại (không quét máy ảo)", self._xu_ly_trang_chu, rong=220)
-        nut_mot.setToolTip(
-            "Chạy lại nửa sau trên dữ liệu đã có (khi máy ảo tắt hoặc muốn cập nhật view ngay): tra "
-            "trang chủ → AI kiểm kênh → danh bạ → quét content → AI gán tuyến → luật cứng → Đã làm → "
-            "chấm → bao-cao-mot-nut.md. Có ví thì AI chạy ở ba chỗ, không có ví vẫn chạy bằng luật cứng.")
-        hang2.addWidget(nut_mot)
-        hang2.addWidget(nut_phu("Mở bảng trang chủ", self._mo_trang_chu, rong=150))
-        v.addLayout(hang2)
         return khung
 
     # ── trang chủ máy ảo ──────────────────────────────────────────────────────
 
     def _tram(self):
-        """Trạm nhận sống trong trang Chỉ số kênh (con của trang Phân tích)."""
-        pt_page = self._app.trang("phan-tich") if hasattr(self._app, "trang") else None
-        return getattr(getattr(pt_page, "_chi_so", None), "_tram", None)
+        """Trạm nhận sống ở tab VPS & Máy VM (bản Chỉ số kênh ở tab này chỉ đọc số) — xem tram_chung."""
+        return tim_tram(self._app)
+
+    def _mo_bao_cao(self) -> None:
+        if not self._kenh:
+            return
+        from core import mot_nut  # noqa: PLC0415
+
+        p = os.path.join(so.thu_muc_nghien_cuu(self._app.base_dir, self._kenh), mot_nut.TEP_BAO_CAO)
+        if not os.path.isfile(p):
+            self._app.show_message("Chưa có báo cáo", "Chưa lượt Một nút nào chạy xong cho kênh này.")
+            return
+        os.startfile(p)  # noqa: S606 - Windows
 
     def _quet_may_ao(self) -> None:
         """Một nút = quét Studio + quét trang chủ (chủ dự án 05/09: "đồng bộ 1 nút đủ chức năng")."""
@@ -219,8 +234,8 @@ class TrangDanhBa(QWidget):
         if tram is None or not getattr(tram, "dang_chay", False):
             self._app.show_message(
                 "Cổng nhận đang tắt",
-                "Sang mục “Chỉ số kênh” bấm “Bật cổng nhận” trước — agent trong máy "
-                "ảo gọi về qua cổng đó.")
+                "Cổng nhận tự bật khi mở tool; nếu vẫn tắt, sang tab VPS › “Trạm & tiện ích” bấm "
+                "“Bật cổng nhận” — agent trong máy ảo gọi về qua cổng đó.")
             return
         so_studio, so_tc = tram.giao_quet_day_du(self._kenh)
         self._cho_may_ao = (self._kenh, time.time())
