@@ -152,6 +152,24 @@ def test_cua_ai_chi_hoi_kenh_qua_cua_may_va_quyet_theo_ai(tmp_path):
     assert db.hop_thu(goc, KENH) == []
 
 
+def test_ai_khong_doc_duoc_thi_giu_quyet_dinh_may_va_ghi_dau_cau_tra_loi(tmp_path):
+    """06/09: 記憶博士 bị 'bỏ' chỉ vì AI trả về thứ không phải JSON. Không đọc được = không có ý kiến."""
+    goc = _goc(tmp_path)
+    link = "https://www.youtube.com/@zure"
+    so.luu_doi_thu(goc, KENH, link + "\n")
+
+    def hoi(client, so_do, **kw):
+        return loc.DanhGia(ket="gan", ly_do="AI trả lời không đọc được — xem lại tay", khac="Xin lỗi, tôi không thể")
+    nhat_ky = []
+    dem = cdt.chot(goc, KENH, lang="ja", phut_muc_tieu=15, client=object(), mo_ta_kenh="x", hoi=hoi,
+                   lay_kenh=_lay({link: _kenh("ズレは才能", link, 7700, LECH * 5, 10000, 570)}), on_log=nhat_ky.append)
+    assert dem["theo_doi"] == 1 and dem["bo"] == 0 and dem["ai_hoi"] == 0 and dem["ai_khong_doc"] == 1
+    cot, hang = db.doc(goc, KENH)
+    o = db.chi_so_cot(list(cot))
+    assert hang[0][o["Trạng thái"]] == db.THEO_DOI and hang[0][o["Ghi chú"]].startswith("máy chấm")
+    assert any("Xin lỗi, tôi không thể" in m for m in nhat_ky), "đầu câu trả lời phải vào nhật ký để lần sau biết AI nói gì"
+
+
 def test_khong_co_vi_thi_khong_hoi_ai(tmp_path):
     goc = _goc(tmp_path)
     link = "https://www.youtube.com/@zure"

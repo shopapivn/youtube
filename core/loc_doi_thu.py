@@ -384,12 +384,16 @@ def hoi_ai_kenh(client: Any, so_do: SoDo, *, mo_ta_kenh: str = "",
             _khuc_kenh_toi(mo_ta_kenh, ngon_ngu, phut_muc_tieu),
             _khuc_ung_vien(so_do))},
     ], toi_da_token=700, on_log=on_log)
+    # Không đọc được thì giữ lại 200 ký tự đầu của câu trả lời trong `khac` — 06/09/2026 chuỗi
+    # "một nút" gặp đúng ca này mà không có gì để xem AI đã nói gì.
     try:
         du = loc_json(tho)
     except (ValueError, TypeError):
-        return DanhGia(ket="gan", ly_do="AI trả lời không đọc được — xem lại tay")
+        return DanhGia(ket="gan", ly_do="AI trả lời không đọc được — xem lại tay",
+                       khac=" ".join(str(tho or "")[:200].split()))
     if not isinstance(du, dict):
-        return DanhGia(ket="gan", ly_do="AI trả lời không đọc được — xem lại tay")
+        return DanhGia(ket="gan", ly_do="AI trả lời không đọc được — xem lại tay",
+                       khac=" ".join(str(tho or "")[:200].split()))
     tuyen = du.get("tuyen")
     return DanhGia(
         ket=str(du.get("ket") or "gan").strip().lower(),

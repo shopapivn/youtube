@@ -482,3 +482,12 @@ def test_khau_gan_cua_giao_dien_khong_lay_tuyen_da_BO():
     assert than, "không tìm thấy _tuyen_hien_co — đổi tên thì sửa cả bài này"
     assert "tn.BO" in than.group(0), (
         "_tuyen_hien_co phải bỏ qua tuyến có Trạng thái == tn.BO")
+
+
+def test_gan_tuyen_ai_tra_prose_thi_ghi_dau_cau_tra_loi_vao_nhat_ky():
+    """06/09/2026: lượt tự động gán 0/20 dòng mà không để lại dấu vết. Không đọc được thì phải thấy AI nói gì."""
+    nhat_ky = []
+    ra = pt.gan_tuyen(None, ["x", "y"], _tuyen("a", "b"), goi=_goi_gia("Xin lỗi, tôi không thể phân loại"),
+                      on_log=nhat_ky.append)
+    assert all(not k.ma for k in ra), "prose thì mọi ô để trống, không bịa"
+    assert any("không đọc được" in m and "Xin lỗi, tôi không thể" in m for m in nhat_ky), nhat_ky

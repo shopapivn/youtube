@@ -80,6 +80,7 @@ def test_tron_chuoi_tu_goi_trang_chu_toi_bao_cao(tmp_path):
     assert os.path.isfile(bc.tep_bao_cao)
     chu = io.open(bc.tep_bao_cao, encoding="utf-8").read()
     assert "MỚI" in chu and TD[4] in chu and "ズレは才能" in chu
+    assert "Nhật ký lượt chạy" in chu and "7/7" in chu, "báo cáo phải mang theo nhật ký — lượt tự động không ai xem log"
     assert "MỚI đúng tuyến 0 (+1 chưa gán tuyến)" in bc.tom_tat()
     assert any("7/7" in m for m in nhat_ky) and any("xong:" in m for m in nhat_ky)
     assert not bc.co_ai and "AI:" not in bc.tom_tat(), "không có ví thì không được nói có AI"

@@ -282,6 +282,10 @@ def _viet_bao_cao(goc: str, kenh: str, bc: BaoCao, luc: _dt.datetime) -> str:
         bang("MỚI ≤ {0} ngày, CHƯA gán tuyến — bấm “Gán tuyến” rồi chạy lại".format(NGAY_MOI), bc.moi_chua_tuyen),
         bang("BỨT — chạy nhanh hơn mức thường của chính nó (≥ ×{0})".format(NGUONG_BUT), bc.but, cot_dau="bứt"),
         bang("VƯỢT — ăn gấp mức thường của kênh (≥ ×2), bể remake lâu dài", bc.vuot),
+        # Nhật ký lượt chạy nằm ngay trong báo cáo: lượt tự động (hook trạm, lịch 07:30) không có ai
+        # ngồi xem log; 06/09/2026 AI gán 0/20 dòng mà không để lại dấu vết nào trên đĩa.
+        "## Nhật ký lượt chạy (60 dòng cuối)\n\n```\n" + "\n".join(
+            d.replace("`", "'") for d in bc.nhat_ky[-60:]) + "\n```\n",
     ]
     duong = os.path.join(so.thu_muc_nghien_cuu(goc, kenh), TEP_BAO_CAO)
     os.makedirs(os.path.dirname(duong), exist_ok=True)

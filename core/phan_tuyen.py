@@ -854,7 +854,14 @@ def gan_tuyen(client: Any, tieu_de: Sequence[str],
                 on_log("  lô này không gán được, để trống và đi tiếp: {0}"
                        .format(str(loi)[:90]))
             continue
-        for v, ket in _doc_gan(tho, len(chi_so), that).items():
+        doc_duoc = _doc_gan(tho, len(chi_so), that)
+        if not doc_duoc and on_log is not None:
+            # 06/09/2026: lượt tự động gán 0/20 dòng mà không để lại dấu vết. Không đọc được
+            # thì ít nhất phải thấy AI đã nói gì — 160 ký tự đầu là đủ để biết nó trả prose,
+            # trả mã lạ, hay trả rỗng.
+            on_log("  lô {0} tiêu đề: AI trả lời không đọc được, để trống. Đầu câu trả lời: {1}"
+                   .format(len(chi_so), " ".join(str(tho or "(rỗng)")[:160].split())))
+        for v, ket in doc_duoc.items():
             ra[chi_so[v]] = ket
     # Lớp luật cứng đứng SAU model — xem chú thích ở `ap_luat_cung`. Ra `khac`
     # thì `dung_duoc` giả nên ô ở trống: trống nói thật là "không tệp nào".

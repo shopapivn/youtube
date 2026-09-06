@@ -161,6 +161,10 @@ def _ghep_ai(tt: Optional[str], ly_do: str, ai: Optional[loc.DanhGia]) -> Tuple[
         return tt, ly_do, []
     ket = (ai.ket or "").strip().lower()
     ai_ly_do = (ai.ly_do or "").strip()
+    if ai_ly_do.startswith("AI trả lời không đọc được"):
+        # 06/09/2026: 記憶博士 bị "bỏ" chỉ vì AI trả về thứ không phải JSON. Không đọc được là
+        # KHÔNG CÓ ý kiến — giữ quyết định máy, không lật.
+        return tt, ly_do, []
     if ket == "doi_thu":
         return db.THEO_DOI, "AI: đối thủ ({0}đ) — {1} · {2}".format(ai.diem, ai_ly_do[:90], ly_do)[:220], list(ai.tuyen)
     if ket == "gan":
@@ -219,7 +223,12 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
         if client is not None and tt != db.BO:
             ai = hoi_ai(client, uv, mo_ta_kenh=mo_ta_kenh or "", lang=lang, phut_muc_tieu=phut_muc_tieu, hoi=hoi)
             if ai is not None:
-                dem["ai_hoi"] += 1
+                if (ai.ly_do or "").startswith("AI trả lời không đọc được"):
+                    dem["ai_khong_doc"] = dem.get("ai_khong_doc", 0) + 1
+                    log("    AI trả lời không đọc được cho {0} — giữ quyết định máy. Đầu câu trả lời: {1}"
+                        .format(uv.ten[:30], (ai.khac or "(rỗng)")[:160]))
+                else:
+                    dem["ai_hoi"] += 1
                 tt_cu = tt
                 tt, ly_do, tuyen = _ghep_ai(tt, ly_do, ai)
                 if tt == db.BO and tt_cu != db.BO:
