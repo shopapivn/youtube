@@ -59,7 +59,9 @@ def _goc(tmp_path):
     ("心のオアシス", "https://www.youtube.com/@oasis", 370, LECH * 5, 626, 900, db.THEO_DOI, "còn nhỏ"),
     ("ココロゴー", "https://www.youtube.com/@gogo", 1980, LECH * 5, 1400, 2700, db.THEO_DOI, "khác khổ"),
     ("Golden Life Handbook", "https://www.youtube.com/@golden", 5660, GIA * 5, 7650, 1200, db.THEO_DOI, "tệp 55+"),
-    ("PIVOT 公式", "https://www.youtube.com/@pivot", 4_060_000, ["最新脳科学 読書"] * 25, 121500, 900, db.THEO_DOI, "quá lớn"),
+    # 07/09: kênh lớn mà không có dấu hiệu tâm lý → bỏ (PIVOT 4 triệu subs từng lọt vào vì "quá lớn" xét trước)
+    ("PIVOT 公式", "https://www.youtube.com/@pivot", 4_060_000, ["最新脳科学 読書"] * 25, 121500, 900, db.BO, "kênh lớn"),
+    ("心理カウンセラー・ラッキー", "https://www.youtube.com/@lucky", 652_000, CHUNG * 5, 30000, 900, db.THEO_DOI, "quá lớn"),
     ("pure life diary", "https://www.youtube.com/@pure", 46300, CHUNG * 4 + ["一人時間の使い方"], 4350, 880, None, "gần ngách"),
 ])
 def test_quyet_bon_cua(ten, link, subs, tieu_de, view, dai, tt, ly_do_co):

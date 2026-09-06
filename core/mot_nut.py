@@ -190,7 +190,11 @@ def gan_tuyen_ai(goc: str, kenh: str, client, *, gan: Optional[Callable[..., lis
     theo_link = {}
     for d, k in zip(can, ket):
         link = str(d[i_link]).strip() if i_link < len(d) else ""
-        if link and getattr(k, "dung_duoc", False):
+        # AI đủ chắc là "khác" (không thuộc tệp nào) thì GHI "khac" như luật cứng vẫn ghi — 03:16
+        # 07/09: 240 dòng gửi đi, 59 ghi được, phần "khác" để trống nên NGÀY MAI lại gửi đúng
+        # 181 dòng ấy đi hỏi lần nữa, trả tiền lần nữa.
+        du_chac = bool(getattr(k, "ma", "")) and getattr(k, "do_tin", 0) >= pt.SAN_TIN
+        if link and du_chac:
             theo_link[link] = k.ma
     for d in hang:
         link = str(d[i_link]).strip() if i_link < len(d) else ""

@@ -169,9 +169,14 @@ def quyet(uv: UngVien, *, nguong_gia: int = NGUONG_GIA, nguong_khop: int = NGUON
         return db.THEO_DOI, "thị trường (còn nhỏ / khác khổ): " + uv.ly_do_may[:90]
     if uv.pct_gia >= nguong_gia:
         return db.THEO_DOI, "thị trường (tệp 55+): {0}% tiêu đề gắn 50代/60代/老後".format(uv.pct_gia)
-    if uv.subs > subs_toi_da:
-        return db.THEO_DOI, "thị trường (quá lớn, {0} subs — tham khảo)".format("{0:,}".format(uv.subs).replace(",", "."))
     tam_ly = any(t in uv.ten for t in TEN_KENH_TAM_LY)
+    if uv.subs > subs_toi_da:
+        # 03:16 07/09: PIVOT (kinh tế, 4 triệu subs) vào "theo dõi" chỉ vì "quá lớn" đứng trước cửa
+        # tâm lý → video chứng khoán 560k view nằm đầu bảng Kết quả. Lớn hay nhỏ, KHÔNG tâm lý là bỏ.
+        if not (uv.pct_khop >= nguong_khop or tam_ly):
+            return db.BO, "không phải kênh tâm lý: kênh lớn ({0} subs) mà tên không nói, khớp tuyến {1}%".format(
+                "{0:,}".format(uv.subs).replace(",", "."), uv.pct_khop)
+        return db.THEO_DOI, "thị trường (quá lớn, {0} subs — tham khảo)".format("{0:,}".format(uv.subs).replace(",", "."))
     if uv.pct_khop >= nguong_khop or tam_ly:
         return db.THEO_DOI, "máy chấm: khớp tuyến {0}% · già {1}%".format(uv.pct_khop, uv.pct_gia)
     if uv.pct_khop == 0:
@@ -205,7 +210,9 @@ def _ghep_ai(tt: Optional[str], ly_do: str, ai: Optional[loc.DanhGia]) -> Tuple[
     if ket == "doi_thu":
         return db.THEO_DOI, "AI: đối thủ ({0}đ) — {1} · {2}".format(ai.diem, ai_ly_do[:90], ly_do)[:220], list(ai.tuyen)
     if ket == "gan":
-        return db.THEO_DOI, "thị trường (gần ngách — AI: {0}) · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], list(ai.tuyen)
+        # Chủ dự án 07/09: danh bạ là kênh TÂM LÝ lấy được content. AI bảo "gần" (self-help, tâm linh,
+        # kinh doanh…) tức không phải — bỏ, ghi lý do; muốn giữ thì đổi trạng thái tay.
+        return db.BO, "không phải kênh tâm lý — gần ngách, AI: {0} · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], []
     if ket == "khong":
         return db.BO, "không phải kênh tâm lý — AI: {0} · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], []
     return tt, ly_do, []   # AI trả chữ lạ → giữ máy

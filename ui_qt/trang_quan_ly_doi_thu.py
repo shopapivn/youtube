@@ -472,12 +472,29 @@ class TrangDanhBa(QWidget):
         self._mot_nut_dang_chay = True
         self._nhan_trang_chu.setText("một nút: đang chạy 7 bước cho {0}{1}…".format(
             kenh, " (có AI)" if client is not None else " (không có ví — chỉ luật cứng)"))
+        # Ghi nhật ký ra đĩa: đêm 07/09 lượt 01:41 không thấy chạy mà không có dấu vết nào để tra.
+        try:
+            from core import nhat_ky  # noqa: PLC0415
+
+            nhat_ky.ghi(goc, "một nút bắt đầu: {0} ({1}) — {2}".format(
+                kenh, "có AI" if client is not None else "không AI", tieu_de))
+        except Exception:  # noqa: BLE001
+            pass
+
+        def _ky(dong, muc="TIN"):
+            try:
+                from core import nhat_ky  # noqa: PLC0415
+
+                nhat_ky.ghi(goc, dong, muc=muc)
+            except Exception:  # noqa: BLE001
+                pass
 
         def viec():
             return mot_nut.chay(goc, kenh, client=client)
 
         def xong(bc):
             self._mot_nut_dang_chay = False
+            _ky("một nút xong: " + bc.tom_tat())
             self._nap()
             self._nhan_trang_chu.setText("một nút xong: " + bc.tom_tat())
             self._app.show_message(tieu_de, bc.tom_tat() + "\n\nBáo cáo: " + bc.tep_bao_cao)
@@ -488,6 +505,7 @@ class TrangDanhBa(QWidget):
 
         def hong(loi):
             self._mot_nut_dang_chay = False
+            _ky("một nút HỎNG: {0}".format(str(loi)[:300]), "LỖI")
             self._nhan_trang_chu.setText("một nút hỏng: {0}".format(str(loi)[:120]))
             self._app.show_error(loi)
 
