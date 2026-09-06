@@ -323,7 +323,9 @@ def gop_cham(cot: Sequence[str], hang: Sequence[Sequence[str]],
                 dong[o["Lần đầu thấy"]] = dau[:10]
             hang.append(dong)
             cho[k] = len(hang) - 1
-        _dat(dong, o, "Kênh", bg.ten)
+        # strip: yt-dlp có lúc trả tên kênh dính khoảng trắng đầu (" そっと心理学", 07/09/2026) —
+        # danh bạ và sổ content nối nhau bằng TÊN, lệch một dấu cách là kênh "không có content".
+        _dat(dong, o, "Kênh", str(bg.ten or "").strip())
         _dat(dong, o, "Subs", "" if bg.subs < 0 else str(bg.subs))
         _dat(dong, o, "Số video", str(bg.so_video or ""))
         _dat(dong, o, "Dài TV", bg.dai_tv)
