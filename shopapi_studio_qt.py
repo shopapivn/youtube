@@ -273,13 +273,32 @@ def main() -> int:
             from PyQt5.QtWidgets import QMessageBox
 
             khoa = QLockFile(os.path.join(BASE_DIR, ".dang-mo.lock"))
-            khoa.setStaleLockTime(0)          # tiến trình giữ khoá chết là khoá tự mở
             if not khoa.tryLock(200):
-                QMessageBox.information(
-                    None, "My Tool đang mở rồi",
-                    "Tool đã mở ở một cửa sổ khác — dùng cửa sổ đó (tìm trên thanh tác vụ).\n\n"
-                    "Mở hai bản cùng lúc là máy ảo gọi về nhầm bản, việc giao đi không tới.")
-                return 0
+                # 01:26 cùng đêm: bản cũ là bản tôi mở từ dòng lệnh, cửa sổ chủ dự án không thấy,
+                # mà khoá thì chặn họ mở — *"tao có mở được tool đâu"*. Không được chặn suông:
+                # cho họ nút tắt bản cũ ngay tại đây. Bản cũ chết → khoá tự mở → mở tiếp.
+                _ok, pid, _host, _app = khoa.getLockInfo()
+                hop = QMessageBox(QMessageBox.Question, "My Tool đang mở rồi",
+                                  "Tool đã mở ở một cửa sổ khác (tiến trình {0}). Nếu không thấy cửa sổ đó, "
+                                  "bấm “Tắt bản cũ, mở bản này”.\n\nKhông mở hai bản cùng lúc: máy ảo sẽ gọi "
+                                  "về nhầm bản, việc giao đi không tới.".format(pid))
+                nut_tat = hop.addButton("Tắt bản cũ, mở bản này", QMessageBox.AcceptRole)
+                hop.addButton("Thôi", QMessageBox.RejectRole)
+                hop.setDefaultButton(nut_tat)
+                hop.exec_()
+                if hop.clickedButton() is not nut_tat:
+                    return 0
+                try:
+                    import subprocess
+
+                    subprocess.run(["taskkill", "/PID", str(int(pid)), "/T", "/F"], capture_output=True,
+                                   timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                except Exception:  # noqa: BLE001 — không giết được thì vẫn thử cầm khoá
+                    pass
+                khoa.removeStaleLockFile()
+                if not khoa.tryLock(3000):
+                    QMessageBox.warning(None, "My Tool", "Chưa tắt được bản cũ. Khởi động lại máy rồi mở lại tool.")
+                    return 0
         except Exception:  # noqa: BLE001 — không khoá được thì vẫn mở, đừng chặn tool
             khoa = None
     cua_so = CuaSoChinh(BASE_DIR)
