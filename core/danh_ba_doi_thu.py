@@ -92,6 +92,9 @@ COT = (
     #: Số ngày kênh chưa đăng gì. Giao diện tô đỏ khi quá lâu — đó là danh
     #: sách ứng viên để xoá (*"đôi khi đối thủ die thì xoá"*).
     "Im lặng",
+    #: Video đăng trong 7 ngày gần nhất — ĐÀ của kênh. Chủ dự án 06/09/2026: *"ở một thị trường sẽ
+    #: luôn có một lượng đối thủ mới và die"* — cột này + "Im lặng" là hai đầu của câu ấy.
+    "Mới 7 ngày",
     "Số video",
     "Dài TV",
     "View TV",
@@ -102,6 +105,8 @@ COT = (
     #: không tốn một lời gọi mạng nào, và luôn khớp với thứ khách đang nhìn.
     "Đăng gần nhất",
     "Quét lúc",
+    #: Ngày kênh này lần đầu vào sổ — kênh MỚI trong thị trường (máy ảo nhặt về từ trang chủ).
+    "Lần đầu thấy",
     "Ghi chú",
     "Link kênh",
 )
@@ -314,6 +319,8 @@ def gop_cham(cot: Sequence[str], hang: Sequence[Sequence[str]],
             dong = [""] * len(cot)
             dong[i_link] = bg.link
             dong[o["Trạng thái"]] = THEO_DOI
+            if "Lần đầu thấy" in o:
+                dong[o["Lần đầu thấy"]] = dau[:10]
             hang.append(dong)
             cho[k] = len(hang) - 1
         _dat(dong, o, "Kênh", bg.ten)
@@ -450,7 +457,9 @@ def thong_ke_tu_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
             ngay = _dt.date.fromisoformat(chu_ngay)
         except ValueError:
             continue
-        muc = ra.setdefault(ten, {"moi": "", "cu": "", "view_moi": 0})
+        muc = ra.setdefault(ten, {"moi": "", "cu": "", "view_moi": 0, "moi_7": 0})
+        if (nay - ngay).days <= 7:
+            muc["moi_7"] += 1
         if chu_ngay > muc["moi"]:
             muc["moi"] = chu_ngay
         if not muc["cu"] or chu_ngay < muc["cu"]:
@@ -468,6 +477,7 @@ def thong_ke_tu_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
             "im_lang": max(0, im) if im is not None else None,
             "view_thang": int(muc["view_moi"] / (_NGAY_CUA_SO_VIEW / 30.44)),
             "tuoi_thang": round(tuoi / 30.44, 1) if tuoi else None,
+            "moi_7": muc["moi_7"],
         }
     return ket
 
@@ -491,7 +501,7 @@ def cap_nhat_tu_bang(cot: Sequence[str], hang: Sequence[Sequence[str]],
     if i_ten is None:
         return hang
     dat = (("Đăng gần nhất", "dang_gan_nhat"), ("Im lặng", "im_lang"),
-           ("View/tháng", "view_thang"), ("Tuổi (tháng)", "tuoi_thang"))
+           ("View/tháng", "view_thang"), ("Tuổi (tháng)", "tuoi_thang"), ("Mới 7 ngày", "moi_7"))
     for dong in hang:
         if i_ten >= len(dong):
             continue

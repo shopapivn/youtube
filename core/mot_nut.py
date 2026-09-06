@@ -54,9 +54,13 @@ from . import tuyen_noi_dung as tn
 from .da_lam import danh_dau_da_lam, doc_ma_da_lam
 from .phan_tuyen import DAU_MOC_TUOI, MA_LECH_NHIP, _dinh_tu_loai_tru, sua_so_theo_luat_cung
 
-__all__ = ["BaoCao", "TEP_BAO_CAO", "chay", "tuyen_dang_danh", "tuyen_de_xuat", "gan_tuyen_ai"]
+__all__ = ["BaoCao", "TEP_BAO_CAO", "TEP_DANH_SACH", "chay", "doc_danh_sach", "dien_tuyen_kenh",
+           "tuyen_dang_danh", "tuyen_de_xuat", "gan_tuyen_ai"]
 
 TEP_BAO_CAO = "bao-cao-mot-nut.md"
+#: Cùng ba danh sách ấy dạng máy đọc — tab Đối thủ bày ra thành bảng "Kết quả lượt gần nhất"
+#: (chủ dự án 06/09: "đơn giản, hiệu quả, tự động" — người dùng cần cái để CHỌN, không cần đọc .md).
+TEP_DANH_SACH = "danh-sach-chon.json"
 NGAY_MOI = 7
 NGUONG_BUT = 1.5
 SO_DONG_MOI_DANH_SACH = 15
@@ -70,6 +74,7 @@ class DongDeXuat:
     view: int = 0
     ngay: str = ""
     tuyen: str = ""
+    chu_de: str = ""
     vuot: float = 0.0
     but: float = 0.0
     tang: float = 0.0
@@ -86,6 +91,8 @@ class BaoCao:
     gan_tuyen: Dict[str, int] = field(default_factory=dict)
     luat_cung: Dict[str, int] = field(default_factory=dict)
     da_lam: int = 0
+    tuyen_kenh: int = 0
+    chu_de: Dict[str, int] = field(default_factory=dict)
     co_ai: bool = False
     tuyen: List[str] = field(default_factory=list)
     moi: List[DongDeXuat] = field(default_factory=list)
@@ -234,8 +241,8 @@ def _xep_hang(goc: str, kenh: str, tuyen: List[str], hom_nay: _dt.date):
             continue
         nhan = o_(d, so.COT_TUYEN).strip()
         dong = DongDeXuat(tieu_de=td, kenh=ten_kenh, link=o_(d, so.COT_LINK), view=int(_so(o_(d, "View"))),
-                          ngay=o_(d, "Ngày đăng")[:10], tuyen=nhan, vuot=dm.vuot_tho, but=dm.but_tho,
-                          tang=dm.nhanh_tho, diem=dm.diem)
+                          ngay=o_(d, "Ngày đăng")[:10], tuyen=nhan, chu_de=o_(d, so.COT_CHU_DE).strip(),
+                          vuot=dm.vuot_tho, but=dm.but_tho, tang=dm.nhanh_tho, diem=dm.diem)
         tuoi = cham.tuoi_ngay(dong.ngay, hom_nay)
         dung_tuyen = nhan in tuyen
         if tuoi is not None and tuoi <= NGAY_MOI:
@@ -253,6 +260,45 @@ def _xep_hang(goc: str, kenh: str, tuyen: List[str], hom_nay: _dt.date):
     vuot.sort(key=lambda r: (-min(r.vuot, 25.0), -r.view))
     n = SO_DONG_MOI_DANH_SACH
     return moi[:n], moi_chua[:n], but[:n], vuot[:n]
+
+
+def dien_tuyen_kenh(goc: str, kenh: str, *, san: float = 0.4) -> int:
+    """Điền cột "Tuyến" của danh bạ cho kênh còn trống: tuyến chiếm ≥ `san` số nhãn content của kênh ấy.
+
+    Chủ dự án 06/09/2026: *"trong đó có các đối thủ làm các tuyến khác nhau nhưng nếu gom được đối
+    thủ sẽ nhìn được thị trường"* — cột Tuyến là cái nhìn ấy. Chỉ điền ô TRỐNG (cột của khách).
+    Trả số kênh vừa điền.
+    """
+    cot, hang = so.doc_bang(goc, kenh)
+    o = {c: i for i, c in enumerate(cot)}
+    i_k, i_t = o.get("Kênh"), o.get(so.COT_TUYEN)
+    if i_k is None or i_t is None:
+        return 0
+    dem: Dict[str, Dict[str, int]] = {}
+    for d in hang:
+        ten = str(d[i_k]).strip() if i_k < len(d) else ""
+        nhan = str(d[i_t]).strip() if i_t < len(d) else ""
+        if ten and nhan and nhan != "khac":
+            dem.setdefault(ten, {})
+            dem[ten][nhan] = dem[ten].get(nhan, 0) + 1
+    c2, h2 = db.doc(goc, kenh)
+    o2 = db.chi_so_cot(list(c2))
+    i_ten, i_tuyen = o2.get("Kênh"), o2.get("Tuyến")
+    if i_ten is None or i_tuyen is None:
+        return 0
+    n = 0
+    for d in h2:
+        ten = str(d[i_ten]).strip()
+        if str(d[i_tuyen]).strip() or ten not in dem:
+            continue
+        tong = sum(dem[ten].values())
+        ma, so_lan = max(dem[ten].items(), key=lambda x: x[1])
+        if tong >= 3 and so_lan / tong >= san:
+            d[i_tuyen] = ma
+            n += 1
+    if n:
+        db.luu(goc, kenh, c2, h2)
+    return n
 
 
 def _viet_bao_cao(goc: str, kenh: str, bc: BaoCao, luc: _dt.datetime) -> str:
@@ -293,7 +339,31 @@ def _viet_bao_cao(goc: str, kenh: str, bc: BaoCao, luc: _dt.datetime) -> str:
     with io.open(tam, "w", encoding="utf-8") as f:
         f.write("\n".join(chu))
     os.replace(tam, duong)
+    # Bản máy đọc cho giao diện — cùng thư mục, cùng lượt.
+    import json  # noqa: PLC0415
+    from dataclasses import asdict  # noqa: PLC0415
+
+    du = {"luc": luc.strftime("%Y-%m-%d %H:%M"), "tuyen": list(bc.tuyen), "tom_tat": bc.tom_tat(),
+          "moi": [asdict(r) for r in bc.moi], "moi_chua_tuyen": [asdict(r) for r in bc.moi_chua_tuyen],
+          "but": [asdict(r) for r in bc.but], "vuot": [asdict(r) for r in bc.vuot]}
+    p2 = os.path.join(os.path.dirname(duong), TEP_DANH_SACH)
+    with io.open(p2 + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(du, f, ensure_ascii=False, indent=1)
+    os.replace(p2 + ".tmp", p2)
     return duong
+
+
+def doc_danh_sach(goc: str, kenh: str) -> Optional[Dict]:
+    """`danh-sach-chon.json` của lượt gần nhất, hoặc `None` nếu chưa lượt nào chạy."""
+    import json  # noqa: PLC0415
+
+    p = os.path.join(so.thu_muc_nghien_cuu(goc, kenh), TEP_DANH_SACH)
+    try:
+        with io.open(p, encoding="utf-8") as f:
+            du = json.load(f)
+        return du if isinstance(du, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
 def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Optional[float] = None,
@@ -341,6 +411,17 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
     bc.quet = quet_doi_thu.quet(goc, kenh, links, so_video=so_video, lang=lang, lay=lay_du_lieu,
                                 cancel=cancel, on_log=log)
 
+    # 4a. Tệp → tuyến con bằng TỪ KHOÁ trước (miễn phí, lặp lại được): dòng nhận ra thì có cả tệp lẫn
+    # chủ đề; AI ở 4b chỉ còn phần máy không nhận ra. (06/09: phân theo tệp khán giả, có tuyến con.)
+    try:
+        from . import tuyen_con  # noqa: PLC0415
+
+        bc.chu_de = tuyen_con.dien_chu_de(goc, kenh)
+        log("4/7 tuyến con theo từ khoá: điền chủ đề {0} dòng, tệp cho {1} dòng trống".format(
+            bc.chu_de.get("chu_de", 0), bc.chu_de.get("tep_moi", 0)))
+    except Exception as loi:  # noqa: BLE001
+        log("  tuyến con theo từ khoá hỏng: {0}".format(str(loi)[:100]))
+        bc.chu_de = {"chu_de": 0, "tep_moi": 0, "xem": 0}
     log("4/7 gán tuyến bằng AI cho dòng chưa có nhãn…" if client is not None else "4/7 (không có ví — bỏ qua gán tuyến AI)")
     try:
         bc.gan_tuyen = gan_tuyen_ai(goc, kenh, client, gan=gan_tuyen, on_log=log, cancel=cancel)
@@ -358,6 +439,10 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
         so.luu_bang(goc, kenh, cot, hang)
 
     log("7/7 chấm và rút MỚI / BỨT / VƯỢT…")
+    try:
+        bc.tuyen_kenh = dien_tuyen_kenh(goc, kenh)
+    except Exception as loi:  # noqa: BLE001 — cột Tuyến chỉ là chú thích thị trường
+        log("  điền tuyến cho kênh hỏng: {0}".format(str(loi)[:80]))
     luc = _dt.datetime.now()
     bc.moi, bc.moi_chua_tuyen, bc.but, bc.vuot = _xep_hang(goc, kenh, bc.tuyen, hom_nay or luc.date())
     bc.tep_bao_cao = _viet_bao_cao(goc, kenh, bc, luc)

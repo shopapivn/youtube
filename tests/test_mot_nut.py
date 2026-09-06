@@ -74,14 +74,20 @@ def test_tron_chuoi_tu_goi_trang_chu_toi_bao_cao(tmp_path):
     assert db.dang_theo_doi(goc, KENH) == [LINK]
     # 3) quét: 5 video vào sổ
     assert bc.quet["kenh"] == 1 and bc.quet["video"] == 5 and bc.quet["dong_sau"] == 5
-    # 6) chưa có nhãn tuyến → video mới nằm ở "chưa gán tuyến", không bị bỏ sót
+    # 4a) tuyến con theo từ khoá: "SNSをやらない人…" nhận ra ngay → có tệp + chủ đề, không cần AI
     assert bc.tuyen == [MA_LECH_NHIP]
-    assert [r.tieu_de for r in bc.moi_chua_tuyen] == [TD[4]] and bc.moi == []
+    assert bc.chu_de["tep_moi"] == 5 and bc.chu_de["chu_de"] == 5
+    assert [r.tieu_de for r in bc.moi] == [TD[4]] and bc.moi[0].chu_de == "khong-sns" and bc.moi_chua_tuyen == []
     assert os.path.isfile(bc.tep_bao_cao)
     chu = io.open(bc.tep_bao_cao, encoding="utf-8").read()
     assert "MỚI" in chu and TD[4] in chu and "ズレは才能" in chu
     assert "Nhật ký lượt chạy" in chu and "7/7" in chu, "báo cáo phải mang theo nhật ký — lượt tự động không ai xem log"
-    assert "MỚI đúng tuyến 0 (+1 chưa gán tuyến)" in bc.tom_tat()
+    # bản máy đọc cho tab Đối thủ (06/09: người dùng cần bảng để CHỌN, không cần đọc .md)
+    ds = mot_nut.doc_danh_sach(goc, KENH)
+    assert ds and ds["tuyen"] == [MA_LECH_NHIP] and [r["tieu_de"] for r in ds["moi"]] == [TD[4]]
+    assert ds["moi"][0]["chu_de"] == "khong-sns" and ds["moi_chua_tuyen"] == [] and "luc" in ds and "tom_tat" in ds
+    assert mot_nut.doc_danh_sach(goc, "KENH-KHONG-CO") is None
+    assert "MỚI đúng tuyến 1 (+0 chưa gán tuyến)" in bc.tom_tat()
     assert any("7/7" in m for m in nhat_ky) and any("xong:" in m for m in nhat_ky)
     assert not bc.co_ai and "AI:" not in bc.tom_tat(), "không có ví thì không được nói có AI"
 
@@ -108,6 +114,10 @@ def test_co_nhan_tuyen_thi_ra_moi_va_vuot_va_bo_dong_da_lam(tmp_path):
     o = {c: i for i, c in enumerate(cot)}
     assert next(h for h in hang if h[o["Link video"]].endswith("zure0000001"))[o[so.COT_DA_LAM]] == "V2"
     assert bc.da_lam == 1
+    # bản đồ thị trường: kênh có ≥3 nhãn, tuyến trội ≥40% → cột Tuyến của danh bạ được điền (từ lượt đầu)
+    c2, h2 = db.doc(goc, KENH)
+    o2 = db.chi_so_cot(list(c2))
+    assert h2[0][o2["Tuyến"]] == MA_LECH_NHIP
 
 
 def test_co_vi_thi_ai_gan_tuyen_va_kiem_kenh_ngay_luot_dau(tmp_path):
@@ -140,9 +150,10 @@ def test_co_vi_thi_ai_gan_tuyen_va_kiem_kenh_ngay_luot_dau(tmp_path):
 
     bc = _chay(goc, client=object(), hoi_ai_kenh=hoi_ai_kenh, gan_tuyen=gan_tuyen)
     assert bc.co_ai and hoi_roi == ["ズレは才能【心の仕組み】"] and bc.chot["ai_hoi"] == 1
-    assert len(gan_roi) == 5 and bc.gan_tuyen == {"can": 5, "ghi": 5}
+    # tuyến con theo từ khoá đã gán cả 5 → AI KHÔNG phải xem dòng nào (tiết kiệm đúng chỗ)
+    assert gan_roi == [] and bc.gan_tuyen == {"can": 0, "ghi": 0}
     assert [r.tieu_de for r in bc.moi] == [TD[4]] and bc.moi_chua_tuyen == []
-    assert "AI: hỏi 1 kênh" in bc.tom_tat() and "gán tuyến 5/5" in bc.tom_tat()
+    assert "AI: hỏi 1 kênh" in bc.tom_tat() and "gán tuyến 0/0" in bc.tom_tat()
     # lượt hai: không còn dòng nào cần gán → không tốn lượt gọi
     gan_roi.clear()
     bc2 = _chay(goc, client=object(), hoi_ai_kenh=hoi_ai_kenh, gan_tuyen=gan_tuyen)
@@ -167,3 +178,28 @@ def test_tuyen_dang_danh_doc_tu_so_tuyen(tmp_path):
     d2[o["Mã"]], d2[o["Trạng thái"]] = "tuyen-b", "đang xem"
     tn.luu(goc, KENH, cot, [d1, d2])
     assert mot_nut.tuyen_dang_danh(goc, KENH) == ["tuyen-a"]
+
+
+def test_ai_gan_tuyen_chi_thay_dong_tu_khoa_khong_nhan_ra(tmp_path):
+    """Dòng từ khoá không nhận ra mới tới tay AI; AI trả đủ chắc thì ghi."""
+    from core import phan_tuyen as pt
+    from core import tuyen_noi_dung as tn
+
+    goc = _goc(tmp_path)
+    cot, hang = tn.doc(goc, KENH)
+    o = {c: i for i, c in enumerate(cot)}
+    d1 = [""] * len(cot)
+    d1[o["Mã"]], d1[o["Tên tuyến"]], d1[o["Trạng thái"]] = MA_LECH_NHIP, "Lệch nhịp", "đang đánh"
+    tn.luu(goc, KENH, cot, [d1])
+    cot, hang = so.doc_bang(goc, KENH)
+    oc = {c: i for i, c in enumerate(cot)}
+    d = [""] * len(cot)
+    d[oc["Tiêu đề video"]], d[oc["Link video"]], d[oc["Kênh"]] = "考えすぎて眠れない夜に効く話", "https://www.youtube.com/watch?v=zure0000009", "k"
+    so.luu_bang(goc, KENH, cot, [d])
+    gan_roi = []
+
+    def gan_tuyen(client, tieu_de, tuyen_co, **kw):
+        gan_roi.extend(tieu_de)
+        return [pt.KetGan(ma=MA_LECH_NHIP, do_tin=95) for _ in tieu_de]
+    dem = mot_nut.gan_tuyen_ai(goc, KENH, object(), gan=gan_tuyen)
+    assert gan_roi == ["考えすぎて眠れない夜に効く話"] and dem == {"can": 1, "ghi": 1}

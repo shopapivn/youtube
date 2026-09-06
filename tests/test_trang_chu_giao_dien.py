@@ -39,8 +39,18 @@ def test_tab_nghien_cuu_co_du_bo_dieu_khien_trang_chu():
     assert 'nut_chinh("MỘT NÚT", self._quet_may_ao, rong=130)' in s, "nhãn phải ngắn để không bị cắt"
     assert 'nut_phu("Xếp hạng lại", self._xu_ly_trang_chu, rong=130)' in s
     assert "def _the_mot_nut" in s and "def _mo_bao_cao" in s
-    assert s.index("doc.addWidget(self._the_mot_nut())") < s.index("doc.addWidget(self._the_danh_ba(), 1)") < s.index("doc.addWidget(self._the_hop_thu())"), \
-        "thứ tự thẻ: Một nút → Danh bạ → Thủ công"
+    assert s.index("doc.addWidget(self._the_mot_nut())") < s.index("doc.addWidget(self._the_ket_qua(), 1)") \
+        < s.index("doc.addWidget(self._the_danh_ba(), 1)") < s.index("doc.addWidget(self._the_hop_thu())"), \
+        "thứ tự thẻ: Một nút → Kết quả → Đối thủ đang theo dõi → Thủ công"
+    # 06/09 "quá khó dùng": bảng kết quả để CHỌN, danh bạ mặc định chỉ kênh theo dõi + 6 cột, thủ công thu gọn
+    assert "def _the_ket_qua" in s and "mot_nut.doc_danh_sach(" in s and 'nut_chinh("Chép link để làm video"' in s
+    assert 'QCheckBox("chỉ kênh đang quét")' not in s, "07/09: thị trường thì quét hết, không còn lọc 'chỉ kênh đang quét'"
+    assert 'QCheckBox("cả kênh đã loại")' in s and "_COT_AN_MAC_DINH" in s
+    assert 'nhan("Thị trường kênh tâm lý", "h2")' in s and "im lặng ≥" in s, "danh bạ là bản đồ thị trường: mới / đang chết"
+    assert "return ca_loai" in s, "kênh đã loại (không phải tâm lý) phải ẩn sẵn"
+    assert "_hang_hien" in s.split("def _o_doi")[1].split("def ")[0], "_o_doi phải ghi theo _hang_hien, không dựng lại sổ từ bảng đang lọc"
+    assert "self._khung_thu_cong.setVisible(False)" in s, "thẻ thủ công thu gọn sẵn"
+    assert 'nut_nguy_hiem("Xoá kênh đã chọn"' in s.split("def _the_hop_thu")[1].split("def _bat_tat_thu_cong")[0], "nút xoá nằm trong thẻ thủ công"
     assert "return tim_tram(self._app)" in s, "tìm trạm qua tram_chung, không đoán trang"
     assert 'self._app.trang("phan-tich")' not in s, "trạm không nằm ở trang Phân tích"
     than2 = s.split("def _xu_ly_trang_chu")[1].split("def ")[0]

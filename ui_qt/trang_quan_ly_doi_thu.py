@@ -42,6 +42,7 @@ from core.so_csv import chi_so_cot, so_nguyen, so_thuc
 from . import theme
 from .cua_so_loc_doi_thu import HopLocDoiThu
 from .tram_chung import tim_tram
+from PyQt5.QtWidgets import QApplication, QToolButton  # noqa: E402
 from .widgets import HangXuongDong, nhan, nut_chinh, nut_nguy_hiem, nut_phu, the
 
 __all__ = ["TrangDanhBa", "TrangTuyen"]
@@ -75,6 +76,14 @@ _COT_SO_DANH_BA = ("Subs", "Số video", "View TV", "Điểm", "Im lặng",
 #: Hai cột KHÔNG tắt được: một cái để biết đang nhìn ai, một cái là
 #: khoá của cả bảng (mọi phép gộp và gán đều tra theo nó).
 _COT_KHONG_AN = ("Kênh", "Link kênh")
+
+
+#: Cột ẩn sẵn trong danh bạ — chỉ còn Kênh · Trạng thái · Subs · Số video · View TV · Ghi chú.
+#: Số liệu các cột kia vẫn được giữ và cập nhật; "Chọn cột…" mở lại được.
+_COT_KQ = ("Nhóm", "Tiêu đề", "Chủ đề", "Kênh", "View", "Vượt", "Đăng", "Link")
+_RONG_KQ = (110, 380, 150, 140, 80, 60, 90, 220)
+_COT_AN_MAC_DINH = ("Tuổi (tháng)", "View/tháng", "Vượt quy mô", "Dài TV", "Số video",
+                    "Cửa", "Điểm", "Lý do", "Đăng gần nhất", "Quét lúc")
 
 
 class _Bang(QTableWidget):
@@ -130,6 +139,7 @@ class TrangDanhBa(QWidget):
         doc.addLayout(d0)
 
         doc.addWidget(self._the_mot_nut())
+        doc.addWidget(self._the_ket_qua(), 1)
         doc.addWidget(self._the_danh_ba(), 1)
         doc.addWidget(self._the_hop_thu())
 
@@ -150,9 +160,8 @@ class TrangDanhBa(QWidget):
         d.addWidget(self._nhan_trang_chu, 1)
         v.addLayout(d)
         chu = nhan(
-            "Máy ảo quét Studio + trang chủ → gói về là tool tự chạy: tra video, lọc tâm lý, chấm "
-            "từng kênh (bốn cửa máy + AI), ghi danh bạ, quét content mọi kênh theo dõi, gán tuyến, "
-            "chấm điểm → mở báo cáo. Lượt theo lịch của máy ảo cũng tự chạy y vậy.", "muted")
+            "Bấm một lần: máy ảo quét → tool tự tìm đối thủ, lấy content, chấm điểm → bảng "
+            "“Kết quả” bên dưới có video để chọn làm. Lịch hằng ngày của máy ảo cũng tự chạy y vậy.", "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
         hang = HangXuongDong()
@@ -176,37 +185,144 @@ class TrangDanhBa(QWidget):
         v.addLayout(hang)
         return khung
 
+    def _the_ket_qua(self) -> QWidget:
+        """Bảng để CHỌN video làm — đầu ra thật của "một nút" (06/09: người dùng không cần đọc .md)."""
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(16, 12, 16, 12)
+        v.setSpacing(8)
+        d = QHBoxLayout()
+        d.addWidget(nhan("Kết quả — video để chọn làm", "h2"))
+        self._nhan_ket_qua = nhan("", "muted")
+        self._nhan_ket_qua.setMinimumWidth(1)
+        d.addWidget(self._nhan_ket_qua, 1)
+        v.addLayout(d)
+        self._bang_kq = _Bang()
+        self._bang_kq.setColumnCount(len(_COT_KQ))
+        self._bang_kq.setHorizontalHeaderLabels(_COT_KQ)
+        self._bang_kq.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._bang_kq.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._bang_kq.doubleClicked.connect(lambda _x: self._mo_video_kq())
+        v.addWidget(self._bang_kq, 1)
+        hang = HangXuongDong()
+        nut = nut_chinh("Chép link để làm video", self._chep_link_kq, rong=200)
+        nut.setToolTip("Chép link video đang chọn — sang tab Tự động, dán vào ô link nguồn là chạy.")
+        hang.addWidget(nut)
+        hang.addWidget(nut_phu("Mở video", self._mo_video_kq, rong=110))
+        v.addLayout(hang)
+        return khung
+
+    def _nap_ket_qua(self) -> None:
+        from core import mot_nut  # noqa: PLC0415
+
+        self._bang_kq.setSortingEnabled(False)
+        self._bang_kq.setRowCount(0)
+        du = mot_nut.doc_danh_sach(self._app.base_dir, self._kenh) if self._kenh else None
+        if not du:
+            self._nhan_ket_qua.setText("chưa có lượt nào — bấm MỘT NÚT ở trên")
+            return
+        dong, da = [], set()
+        for nhom, ds, toi_da in (("MỚI", du.get("moi") or [], 15), ("BỨT", du.get("but") or [], 8),
+                                 ("VƯỢT", du.get("vuot") or [], 12), ("MỚI (chưa tuyến)", du.get("moi_chua_tuyen") or [], 8)):
+            for r in ds[:toi_da]:
+                link = str(r.get("link") or "")
+                if not link or link in da:
+                    continue
+                da.add(link)
+                dong.append((nhom, r))
+        self._bang_kq.setRowCount(len(dong))
+        for i, (nhom, r) in enumerate(dong):
+            from core.tuyen_con import ten_chu_de  # noqa: PLC0415
+            gia = [nhom, str(r.get("tieu_de") or ""), ten_chu_de(str(r.get("chu_de") or "")) if r.get("chu_de") else "",
+                   str(r.get("kenh") or ""), int(r.get("view") or 0),
+                   round(float(r.get("vuot") or 0), 1), str(r.get("ngay") or "")[:10], str(r.get("link") or "")]
+            for c, g in enumerate(gia):
+                muc = QTableWidgetItem()
+                if isinstance(g, (int, float)):
+                    muc.setData(Qt.EditRole, g)
+                else:
+                    muc.setText(g)
+                muc.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                self._bang_kq.setItem(i, c, muc)
+        for c, rong in enumerate(_RONG_KQ):
+            self._bang_kq.setColumnWidth(c, rong)
+        self._nhan_ket_qua.setText("lượt {0} · MỚI {1} · BỨT {2} · VƯỢT {3} — chọn một dòng rồi “Chép link”".format(
+            du.get("luc", "?"), len(du.get("moi") or []), len(du.get("but") or []), len(du.get("vuot") or [])))
+        self._bang_kq.setSortingEnabled(True)
+
+    def _link_kq_dang_chon(self) -> str:
+        hang = sorted({m.row() for m in self._bang_kq.selectedIndexes()})
+        if not hang:
+            return ""
+        muc = self._bang_kq.item(hang[0], len(_COT_KQ) - 1)
+        return muc.text().strip() if muc else ""
+
+    def _chep_link_kq(self) -> None:
+        link = self._link_kq_dang_chon()
+        if not link:
+            self._app.show_message("Chưa chọn video", "Bấm một dòng trong bảng Kết quả trước đã.")
+            return
+        QApplication.clipboard().setText(link)
+        self._nhan_ket_qua.setText("đã chép {0} — sang tab Tự động, dán vào ô link nguồn.".format(link))
+
+    def _mo_video_kq(self) -> None:
+        from PyQt5.QtCore import QUrl  # noqa: PLC0415
+        from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
+
+        link = self._link_kq_dang_chon()
+        if link.startswith("http"):
+            QDesktopServices.openUrl(QUrl(link))
+
     def _the_hop_thu(self) -> QWidget:
+        """Thẻ THỦ CÔNG, thu gọn sẵn — máy tự quyết mọi kênh mới; ở đây chỉ còn kênh máy chưa đo được."""
         khung = the()
         v = QVBoxLayout(khung)
         v.setContentsMargins(16, 12, 16, 12)
         v.setSpacing(8)
 
         d = QHBoxLayout()
-        d.addWidget(nhan("Thủ công — thư chưa mở", "h2"))
+        self._nut_mo_thu_cong = QToolButton()
+        self._nut_mo_thu_cong.setText("Thủ công")
+        self._nut_mo_thu_cong.setCheckable(True)
+        self._nut_mo_thu_cong.setChecked(False)
+        self._nut_mo_thu_cong.setArrowType(Qt.RightArrow)
+        self._nut_mo_thu_cong.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self._nut_mo_thu_cong.setAutoRaise(True)
+        self._nut_mo_thu_cong.toggled.connect(self._bat_tat_thu_cong)
+        d.addWidget(self._nut_mo_thu_cong)
         self._nhan_hop_thu = nhan("", "phu")
         d.addWidget(self._nhan_hop_thu, 1)
         v.addLayout(d)
 
+        self._khung_thu_cong = QWidget()
+        vt = QVBoxLayout(self._khung_thu_cong)
+        vt.setContentsMargins(0, 0, 0, 0)
+        vt.setSpacing(8)
         chu = nhan(
             "Máy tự chấm mọi kênh mới ở mỗi lượt Một nút; ở đây chỉ còn kênh máy chưa đo được "
             "(kênh chết, mạng lỗi) — lượt sau máy thử lại. Muốn tự tay: dán kênh, lọc, hoặc nhận hết.",
             "muted")
         chu.setMinimumWidth(1)
-        v.addWidget(chu)
-
+        vt.addWidget(chu)
         self._o_hop_thu = QPlainTextEdit()
         self._o_hop_thu.setReadOnly(True)
         self._o_hop_thu.setFixedHeight(58)
-        v.addWidget(self._o_hop_thu)
-
+        vt.addWidget(self._o_hop_thu)
         hang = HangXuongDong()
         hang.addWidget(nut_phu("Lọc và chấm…", self._mo_loc, rong=150))
         hang.addWidget(nut_phu("Nhận hết vào danh bạ", self._nhan_het, rong=180))
         hang.addWidget(nut_phu("Dán thêm kênh…", self._dan_them, rong=150))
         hang.addWidget(nut_phu("Mở bảng trang chủ", self._mo_trang_chu, rong=150))
-        v.addLayout(hang)
+        hang.addWidget(nut_phu("Gán tuyến cho kênh…", self._gan_tuyen, rong=170))
+        hang.addWidget(nut_nguy_hiem("Xoá kênh đã chọn", self._xoa, rong=170))
+        vt.addLayout(hang)
+        self._khung_thu_cong.setVisible(False)
+        v.addWidget(self._khung_thu_cong)
         return khung
+
+    def _bat_tat_thu_cong(self, mo: bool) -> None:
+        self._khung_thu_cong.setVisible(mo)
+        self._nut_mo_thu_cong.setArrowType(Qt.DownArrow if mo else Qt.RightArrow)
 
     # ── trang chủ máy ảo ──────────────────────────────────────────────────────
 
@@ -347,12 +463,11 @@ class TrangDanhBa(QWidget):
             return
         chu, ok = QInputDialog.getMultiLineText(
             self, "Dán thêm kênh đối thủ",
-            "Mỗi dòng một link kênh. Chúng vào “thư chưa mở”, chưa vào danh bạ:", "")
+            "Mỗi dòng một link kênh. Kênh bạn dán luôn vào danh bạ và luôn được quét — máy không loại:", "")
         if not ok or not chu.strip():
             return
-        cu = so.doc_doi_thu(self._app.base_dir, self._kenh).strip()
-        so.luu_doi_thu(self._app.base_dir, self._kenh,
-                       (cu + "\n" if cu else "") + chu.strip())
+        # Kênh bạn dán = danh bạ theo định nghĩa (07/09): ghi tệp riêng để máy không chấm-loại.
+        so.them_ban_dua(self._app.base_dir, self._kenh, chu.strip().splitlines())
         self._nap()
 
     def _nhan_het(self) -> None:
@@ -380,13 +495,23 @@ class TrangDanhBa(QWidget):
         v = QVBoxLayout(khung)
         v.setContentsMargins(16, 12, 16, 12)
         v.setSpacing(8)
-        v.addWidget(nhan("Danh bạ đối thủ", "h2"))
-        chu = nhan(
-            "Chỉ kênh “{0}” mới được quét. “{1}” là giữ lại mọi thứ đã lấy nhưng "
-            "thôi quét — dùng cho kênh đang nghỉ. “{2}” là đã xem và không phải "
-            "đối thủ; bản ghi nằm lại để máy ảo không đẩy kênh ấy vào lại. Cột "
-            "“Im lặng” tô đỏ khi kênh đã lâu không đăng — đó là danh sách ứng "
-            "viên để xoá.".format(db.THEO_DOI, db.TAM_NGUNG, db.BO), "muted")
+        d = QHBoxLayout()
+        d.addWidget(nhan("Thị trường kênh tâm lý", "h2"))
+        self._nhan_thi_truong = nhan("", "muted")
+        self._nhan_thi_truong.setMinimumWidth(1)
+        d.addWidget(self._nhan_thi_truong, 1)
+        v.addLayout(d)
+        d = HangXuongDong()
+        self._hien_da_loai = QCheckBox("cả kênh đã loại")
+        self._hien_da_loai.setChecked(False)
+        self._hien_da_loai.setToolTip("Kênh máy loại vì KHÔNG phải kênh tâm lý (雑学, tóm sách, sai tiếng, kênh chết). "
+                                      "Ẩn sẵn; bản ghi giữ lại để máy ảo không nhặt về lần nữa.")
+        self._hien_da_loai.toggled.connect(lambda _b: self._ve())
+        d.addWidget(self._hien_da_loai)
+        v.addLayout(d)
+        chu = nhan("Mọi kênh tâm lý máy tìm được, dù tuyến nào, đều được quét content hằng ngày; cột Ghi chú "
+                   "nói kênh ở góc nào của thị trường. “Mới 7 ngày” là đà, “Im lặng” đỏ là đang chết, “Lần đầu "
+                   "thấy” là kênh mới. Muốn máy thôi quét một kênh: “Đổi trạng thái…” → tạm ngưng. Bấm đúp mở kênh.", "muted")
         chu.setMinimumWidth(1)
         v.addWidget(chu)
 
@@ -400,10 +525,8 @@ class TrangDanhBa(QWidget):
 
         hang = HangXuongDong()
         hang.addWidget(nut_phu("Mở kênh", self._mo_kenh, rong=100))
-        hang.addWidget(nut_phu("Chọn cột…", self._chon_cot, rong=120))
         hang.addWidget(nut_phu("Đổi trạng thái…", self._doi_trang_thai, rong=150))
-        hang.addWidget(nut_phu("Gán tuyến…", self._gan_tuyen, rong=130))
-        hang.addWidget(nut_nguy_hiem("Xoá kênh đã chọn", self._xoa, rong=170))
+        hang.addWidget(nut_phu("Chọn cột…", self._chon_cot, rong=120))
         v.addLayout(hang)
         return khung
 
@@ -471,11 +594,13 @@ class TrangDanhBa(QWidget):
         self._ve()
 
     def _cot_an(self) -> List[str]:
+        """Cột đang ẩn. Chưa chọn bao giờ → bộ GỌN mặc định (06/09: bảng 12 cột là "quá khó dùng");
+        khách đã chọn bằng "Chọn cột…" thì theo khách."""
         try:
             an = so.doc_cai(self._app.base_dir, self._kenh).get("cot_an_danh_ba")
         except Exception:  # noqa: BLE001 — chưa có cài đặt cũng bình thường
-            return []
-        return [str(t) for t in an] if isinstance(an, list) else []
+            return list(_COT_AN_MAC_DINH)
+        return [str(t) for t in an] if isinstance(an, list) else list(_COT_AN_MAC_DINH)
 
     # ── Nạp / vẽ ─────────────────────────────────────────────────────────────
 
@@ -521,7 +646,11 @@ class TrangDanhBa(QWidget):
         thu = db.hop_thu(goc, self._kenh)
         self._o_hop_thu.setPlainText("\n".join(thu))
         self._nhan_hop_thu.setText(
-            "{0} kênh chờ bạn quyết".format(len(thu)) if thu else "không có thư mới")
+            "{0} kênh máy chưa đo được — lượt sau thử lại".format(len(thu)) if thu else "trống — máy đã quyết hết")
+        try:
+            self._nap_ket_qua()
+        except Exception:  # noqa: BLE001 — thiếu tệp kết quả cũng không làm hỏng bảng
+            pass
         try:
             from core import trang_chu as tcm, vm_cai_dat  # noqa: PLC0415
 
@@ -549,12 +678,25 @@ class TrangDanhBa(QWidget):
                 # Ẩn cột chứ KHÔNG xoá: số liệu vẫn được giữ và vẫn cập nhật
                 # theo mỗi lượt quét, chỉ là không bày ra. Xem `_chon_cot`.
                 self._bang.setColumnHidden(i, ten in an and ten not in _COT_KHONG_AN)
-            self._bang.setRowCount(len(self._hang))
             o = chi_so_cot(self._cot)
             i_im = o.get("Im lặng")
             i_tt = o.get("Trạng thái")
             i_tuoi = o.get("Tuổi (tháng)")
-            for r, dong in enumerate(self._hang):
+            # Mặc định chỉ bày kênh đang theo dõi (06/09: 65/90 dòng là kênh đã bỏ, chiếm cả màn hình).
+            # `_hang_hien[r]` = chỉ số trong `_hang` của dòng r trên bảng — `_o_doi` ghi theo đó,
+            # KHÔNG dựng lại `_hang` từ bảng, nếu không dòng bị lọc sẽ bị xoá khỏi sổ.
+            chi_td = False   # thị trường thì quét hết (07/09) — không còn lọc "chỉ kênh đang quét"
+            ca_loai = getattr(self, "_hien_da_loai", None) is not None and self._hien_da_loai.isChecked()
+
+            def _hien(dong):
+                tt = (str(dong[i_tt]).strip() or db.THEO_DOI) if i_tt is not None and i_tt < len(dong) else db.THEO_DOI
+                if tt == db.BO:
+                    return ca_loai            # đã loại = không phải kênh tâm lý → ẩn sẵn
+                return (tt == db.THEO_DOI) if chi_td else True
+            self._hang_hien = [k for k, dong in enumerate(self._hang) if _hien(dong)]
+            self._bang.setRowCount(len(self._hang_hien))
+            for r, k in enumerate(self._hang_hien):
+                dong = self._hang[k]
                 for c in range(len(self._cot)):
                     gia_tri = str(dong[c]) if c < len(dong) else ""
                     muc = QTableWidgetItem()
@@ -601,16 +743,42 @@ class TrangDanhBa(QWidget):
         self._tom_tat.setText("{0} đối thủ · {1}".format(
             len(self._hang),
             " · ".join("{0} {1}".format(v, k) for k, v in sorted(dem.items()))))
+        # Tóm tắt THỊ TRƯỜNG: bao nhiêu kênh tâm lý, mới tuần này, đang im lặng — hai đầu "mới và die".
+        try:
+            import datetime as _dt  # noqa: PLC0415
+
+            i_moi, i_im, i_dau = o.get("Mới 7 ngày"), o.get("Im lặng"), o.get("Lần đầu thấy")
+            nay = _dt.date.today()
+            tam_ly = [d for d in self._hang if i is None or i >= len(d) or str(d[i]).strip() != db.BO]
+            moi = sum(1 for d in tam_ly if i_dau is not None and i_dau < len(d) and str(d[i_dau])[:10]
+                      and (nay - _dt.date.fromisoformat(str(d[i_dau])[:10])).days <= 7)
+            im = sum(1 for d in tam_ly if i_im is not None and i_im < len(d) and (so_nguyen(d[i_im]) or 0) >= _NGAY_IM_LANG)
+            dang = sum(1 for d in tam_ly if i_moi is not None and i_moi < len(d) and (so_nguyen(d[i_moi]) or 0) > 0)
+            if hasattr(self, "_nhan_thi_truong"):
+                self._nhan_thi_truong.setText(
+                    "{0} kênh tâm lý · {1} đang quét · {2} có video mới 7 ngày · {3} mới vào sổ tuần này · {4} im lặng ≥ {5} ngày"
+                    .format(len(tam_ly), dem.get(db.THEO_DOI, 0), dang, moi, im, _NGAY_IM_LANG))
+        except Exception:  # noqa: BLE001 — tóm tắt hỏng không được làm hỏng bảng
+            pass
 
     # ── Sửa ──────────────────────────────────────────────────────────────────
 
     def _o_doi(self, _muc) -> None:
         if self._dang_do or not self._kenh:
             return
-        self._hang = [[(self._bang.item(r, c).text()
-                        if self._bang.item(r, c) else "")
-                       for c in range(len(self._cot))]
-                      for r in range(self._bang.rowCount())]
+        # Ghi theo `_hang_hien`: bảng đang lọc chỉ hiện một phần sổ, dựng lại `_hang` từ bảng là
+        # xoá mất phần bị lọc.
+        hien = getattr(self, "_hang_hien", None) or list(range(self._bang.rowCount()))
+        for r in range(self._bang.rowCount()):
+            if r >= len(hien) or hien[r] >= len(self._hang):
+                continue
+            dong = list(self._hang[hien[r]])
+            while len(dong) < len(self._cot):
+                dong.append("")
+            for c in range(len(self._cot)):
+                muc = self._bang.item(r, c)
+                dong[c] = muc.text() if muc else ""
+            self._hang[hien[r]] = dong
         db.luu(self._app.base_dir, self._kenh, self._cot, self._hang)
         self._cap_nhat_tom_tat()
 

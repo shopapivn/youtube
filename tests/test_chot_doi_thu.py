@@ -49,14 +49,18 @@ def _goc(tmp_path):
 @pytest.mark.parametrize("ten, link, subs, tieu_de, view, dai, tt, ly_do_co", [
     ("ズレは才能", "https://www.youtube.com/@zure", 7700, LECH * 5, 10000, 570, db.THEO_DOI, "khớp tuyến 100%"),
     ("ちょっと元気になれる心理学", "https://www.youtube.com/@genki", 1950, CHUNG * 5, 1350, 780, db.THEO_DOI, "máy chấm"),
+    # KHÔNG PHẢI kênh tâm lý → bỏ (ẩn): thể loại, sai tiếng, không dấu hiệu
     ("大人の心理雑学", "https://www.youtube.com/@zatsu", 5890, LECH * 5, 3800, 960, db.BO, "雑学"),
-    ("本要約チャンネル", "https://www.youtube.com/@youyaku", 1_800_000, CHUNG * 5, 58000, 2200, db.BO, "雑学/要約"),
-    ("心のオアシス", "https://www.youtube.com/@oasis", 370, LECH * 5, 626, 900, db.BO, "cửa máy"),
-    ("ココロゴー", "https://www.youtube.com/@gogo", 1980, LECH * 5, 1400, 2700, db.BO, "cửa máy"),
-    ("Golden Life Handbook", "https://www.youtube.com/@golden", 5660, GIA * 5, 7650, 1200, db.BO, "lệch già"),
-    ("PIVOT 公式", "https://www.youtube.com/@pivot", 4_060_000, ["最新脳科学 読書"] * 25, 121500, 900, db.BO, "quá lớn"),
-    ("Barry Nobles", "https://www.youtube.com/@barry", 188000, ["今日の話"] * 25, 13000, 900, db.BO, "không thấy dấu hiệu"),
-    ("pure life diary", "https://www.youtube.com/@pure", 46300, CHUNG * 4 + ["一人時間の使い方"], 4350, 880, None, "gần"),
+    ("本要約チャンネル", "https://www.youtube.com/@youyaku", 1_800_000, CHUNG * 5, 58000, 2200, db.BO, "要約"),
+    ("Carrom King", "https://www.youtube.com/@carrom", 3_820_000, ["Carrom trick shots"] * 25, 1400, 230, db.BO, "không phải tiếng"),
+    ("Barry Nobles", "https://www.youtube.com/@barry", 188000, ["今日の話"] * 25, 13000, 900, db.BO, "không phải kênh tâm lý"),
+    # Kênh tâm lý ở góc khác của thị trường → vẫn "theo dõi" (quét), ghi chú nói góc nào
+    # (07/09: "tạm ngưng mày cho vào danh sách làm gì" — thị trường thì quét hết)
+    ("心のオアシス", "https://www.youtube.com/@oasis", 370, LECH * 5, 626, 900, db.THEO_DOI, "còn nhỏ"),
+    ("ココロゴー", "https://www.youtube.com/@gogo", 1980, LECH * 5, 1400, 2700, db.THEO_DOI, "khác khổ"),
+    ("Golden Life Handbook", "https://www.youtube.com/@golden", 5660, GIA * 5, 7650, 1200, db.THEO_DOI, "tệp 55+"),
+    ("PIVOT 公式", "https://www.youtube.com/@pivot", 4_060_000, ["最新脳科学 読書"] * 25, 121500, 900, db.THEO_DOI, "quá lớn"),
+    ("pure life diary", "https://www.youtube.com/@pure", 46300, CHUNG * 4 + ["一人時間の使い方"], 4350, 880, None, "gần ngách"),
 ])
 def test_quyet_bon_cua(ten, link, subs, tieu_de, view, dai, tt, ly_do_co):
     uv = cdt.do_ung_vien(link, lang="ja", phut_muc_tieu=15, lay_kenh=_lay({link: _kenh(ten, link, subs, tieu_de, view, dai)}))
@@ -89,15 +93,17 @@ def test_chot_ghi_bo_va_de_lai_hop_thu_dung_cho(tmp_path):
            links[2]: _kenh("Golden Life Handbook", links[2], 5660, GIA * 5, 7650, 1200)}
     nhat_ky = []
     dem = cdt.chot(goc, KENH, lang="ja", phut_muc_tieu=15, lay_kenh=_lay(kho), on_log=nhat_ky.append)
-    # 06/09: "đơn giản, tự động" — kênh 'gần' máy tự bỏ (ghi lý do, đổi lại ở danh bạ), hộp thư tự rỗng
-    assert (dem["theo_doi"], dem["bo"], dem["o_lai"]) == (0, 3, 0)
-    assert set(dem["bo_links"]) == set(links)
+    # 07/09: thị trường quét hết — 雑学 bỏ (ẩn); 'gần ngách' và 'tệp 55+' vào theo dõi với ghi chú góc thị trường
+    assert (dem["theo_doi"], dem["bo"], dem.get("tam_ngung", 0), dem["o_lai"]) == (2, 1, 0, 0)
+    assert dem["bo_links"] == [links[0]]
     assert db.hop_thu(goc, KENH) == [], "hộp thư phải tự rỗng — không để kênh 'chờ bạn quyết'"
     cot, hang = db.doc(goc, KENH)
     o = db.chi_so_cot(list(cot))
-    ghi = {h[o["Link kênh"]]: h[o["Ghi chú"]] for h in hang}
-    assert "máy tự bỏ" in ghi[links[1]] and "đổi trạng thái ở danh bạ" in ghi[links[1]]
-    assert db.dang_theo_doi(goc, KENH) == []
+    tt = {h[o["Link kênh"]]: (h[o["Trạng thái"]], h[o["Ghi chú"]], h[o["Lần đầu thấy"]]) for h in hang}
+    assert tt[links[1]][0] == db.THEO_DOI and "gần ngách" in tt[links[1]][1]
+    assert tt[links[2]][0] == db.THEO_DOI and "tệp 55+" in tt[links[2]][1]
+    assert len(tt[links[0]][2]) == 10, "kênh mới vào sổ phải có 'Lần đầu thấy'"
+    assert set(db.dang_theo_doi(goc, KENH)) == {links[1], links[2]}
     assert any("chốt danh bạ" in m for m in nhat_ky)
 
 
@@ -172,7 +178,7 @@ def test_cua_ai_chi_hoi_kenh_qua_cua_may_va_quyet_theo_ai(tmp_path):
     tt = {h[o["Kênh"]]: (h[o["Trạng thái"]], h[o["Ghi chú"]], h[o["Tuyến"]]) for h in hang}
     assert tt["ズレは才能"][0] == db.THEO_DOI and tt["ズレは才能"][1].startswith("AI: đối thủ") and tt["ズレは才能"][2] == "lệch nhịp"
     assert tt["pure life diary"][0] == db.THEO_DOI, "máy định 'gần' nhưng AI nói đối thủ → vào"
-    assert tt["ちょっと元気になれる心理学"][0] == db.BO and "AI: không" in tt["ちょっと元気になれる心理学"][1]
+    assert tt["ちょっと元気になれる心理学"][0] == db.BO and "không phải kênh tâm lý — AI" in tt["ちょっと元気になれる心理学"][1]
     assert tt["大人の心理雑学"][0] == db.BO
     assert tt["心理サップ"][0] == db.THEO_DOI and tt["心理サップ"][1].startswith("máy chấm"), "AI sập → giữ quyết định máy"
     assert db.hop_thu(goc, KENH) == []
@@ -210,3 +216,27 @@ def test_do_ung_vien_dem_dung_phan_tram():
     td = LECH[:2] + GIA[:3] + CHUNG[:5]           # 10 tiêu đề: 2 khớp, 3 già
     uv = cdt.do_ung_vien(link, lang="ja", lay_kenh=_lay({link: _kenh("心理ラボ", link, 1500, td)}))
     assert (uv.pct_khop, uv.pct_gia) == (20, 30) and uv.the_loai_loai is False
+
+
+def test_kenh_ban_dua_tay_thi_may_khong_duoc_loai(tmp_path):
+    """07/09: 大人の心理雑学 do chủ dự án dán vào bị máy bỏ vì tên có 雑学. Kênh người đưa = danh bạ."""
+    goc = _goc(tmp_path)
+    tay = "https://www.youtube.com/@shinrizatsugakuTV"
+    may = "https://www.youtube.com/@kappumen"
+    so.luu_doi_thu(goc, KENH, may)                       # máy ảo nhặt về → hộp thư
+    assert so.them_ban_dua(goc, KENH, [tay, tay]) == 1   # khách dán → tệp riêng + hộp thư
+    assert so.doc_ban_dua(goc, KENH) == [tay]
+    assert sorted(db.hop_thu(goc, KENH)) == sorted([may, tay])
+    assert cdt.kenh_ban_dua(goc, KENH) == {db.khoa(tay)}
+    kho = {tay: _kenh("大人の心理雑学", tay, 5890, LECH * 5, 3800, 960),
+           may: _kenh("カップ麺を待つ間に見たい雑学", may, 5000, CHUNG * 5, 3000, 900)}
+    hoi_goi = []
+    dem = cdt.chot(goc, KENH, lang="ja", phut_muc_tieu=15, lay_kenh=_lay(kho), client=object(),
+                   mo_ta_kenh="kênh tâm lý", hoi=lambda *a, **k: hoi_goi.append(1) or loc.DanhGia(ket="khong", diem=0, ly_do="x"))
+    cot, hang = db.doc(goc, KENH)
+    o = db.chi_so_cot(list(cot))
+    tt = {db.khoa(h[o["Link kênh"]]): (h[o["Trạng thái"]], h[o["Ghi chú"]]) for h in hang}
+    assert tt[db.khoa(tay)] == (db.THEO_DOI, cdt.GHI_CHU_BAN_DUA)
+    assert tt[db.khoa(may)][0] == db.BO
+    assert dem["ban_dua"] == 1
+    assert len(hoi_goi) == 0, "kênh bạn đưa không tốn lượt AI; kênh máy ảo bị cửa máy loại cũng không hỏi"

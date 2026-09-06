@@ -46,12 +46,15 @@ __all__ = ["COT_TUYEN", "COT_GHI_CHU", "COT_TANG", "COT_VIEW_TRUOC",
            "TEP_DOI_THU", "TEP_BANG", "TEP_CAI", "THU_MUC_SAO_LUU",
            "SO_BAN_SAO",
            "thu_muc_nghien_cuu", "ten_kenh_an_toan",
-           "doc_doi_thu", "luu_doi_thu",
+           "doc_doi_thu", "luu_doi_thu", "doc_ban_dua", "them_ban_dua", "TEP_DOI_THU_BAN_DUA",
            "doc_bang", "luu_bang", "gop_bang", "khoi_tu_clipboard",
            "doc_cai", "luu_cai", "den_han_quet"]
 
 #: Cột của KHÁCH, có sẵn từ đầu. Tên đúng như cột họ dùng trên trang tính.
 COT_TUYEN = "Tuyến / Kênh"
+#: Tuyến con trong tệp (06/09/2026: "trong tệp lệch nhịp có các tuyến con — thích ở một mình, không
+#: dùng mạng xã hội, không thích thể thao…"). Máy nhận diện bằng từ khoá, xem `core/tuyen_con.py`.
+COT_CHU_DE = "Chủ đề"
 COT_GHI_CHU = "Ghi chú"
 
 #: Ảnh thumbnail. Ô chứa ĐỊA CHỈ ảnh, bảng vẽ ra cái ảnh.
@@ -117,6 +120,9 @@ COT_LINK = "Link video"
 COT_SO = ("View", "Like", "Comment", COT_TANG, COT_DIEM, COT_VIEW_TRUOC)
 
 TEP_DOI_THU = "doi-thu.txt"
+#: Kênh KHÁCH tự dán (07/09/2026) — danh bạ theo định nghĩa, máy không được loại. Tách khỏi hộp thư
+#: `doi-thu.txt` vì hộp thư là chỗ máy ảo cũng đổ link vào, không phân biệt được ai đưa.
+TEP_DOI_THU_BAN_DUA = "doi-thu-ban-dua.txt"
 TEP_BANG = "content.csv"
 TEP_CAI = "cai-dat.json"
 
@@ -159,7 +165,7 @@ def cot_mac_dinh() -> List[str]:
     cot.insert(cot.index(COT_TANG) + 1, COT_DIEM)
     cot.insert(cot.index("Ngày đăng") + 1, COT_LAN_DAU)
     cot.insert(cot.index(COT_DIEM) + 1, COT_DA_LAM)
-    return cot + [COT_TUYEN, COT_GHI_CHU, COT_VIEW_TRUOC]
+    return cot + [COT_TUYEN, COT_CHU_DE, COT_GHI_CHU, COT_VIEW_TRUOC]
 
 
 def cot_cua_khach(ten: str) -> bool:
@@ -207,6 +213,38 @@ def luu_doi_thu(goc: str, kenh: str, chu: str) -> None:
     os.makedirs(thu_muc, exist_ok=True)
     with open(os.path.join(thu_muc, TEP_DOI_THU), "w", encoding="utf-8") as tep:
         tep.write(str(chu or "").strip() + "\n")
+
+
+def doc_ban_dua(goc: str, kenh: str) -> List[str]:
+    """Link kênh khách tự dán (`doi-thu-ban-dua.txt`), mỗi dòng một link; chưa có → []."""
+    try:
+        with open(os.path.join(thu_muc_nghien_cuu(goc, kenh), TEP_DOI_THU_BAN_DUA), "r", encoding="utf-8") as tep:
+            return [d.strip() for d in tep if d.strip()]
+    except OSError:
+        return []
+
+
+def them_ban_dua(goc: str, kenh: str, links) -> int:
+    """Nối link khách dán vào `doi-thu-ban-dua.txt` (khử trùng) VÀ vào hộp thư để máy chấm số đo."""
+    cu = doc_ban_dua(goc, kenh)
+    da_co = set(cu)
+    moi: List[str] = []
+    for l in links:
+        l = str(l).strip()
+        if l and l not in da_co:
+            moi.append(l)
+            da_co.add(l)
+    if moi:
+        thu_muc = thu_muc_nghien_cuu(goc, kenh)
+        os.makedirs(thu_muc, exist_ok=True)
+        with open(os.path.join(thu_muc, TEP_DOI_THU_BAN_DUA), "w", encoding="utf-8") as tep:
+            tep.write("\n".join(cu + moi) + "\n")
+    hop = doc_doi_thu(goc, kenh).strip()
+    trong_hop = {d.strip() for d in hop.splitlines() if d.strip()}
+    them_hop = [l for l in (str(x).strip() for x in links) if l and l not in trong_hop]
+    if them_hop:
+        luu_doi_thu(goc, kenh, (hop + "\n" if hop else "") + "\n".join(them_hop))
+    return len(moi)
 
 
 # ── Bảng ─────────────────────────────────────────────────────────────────────

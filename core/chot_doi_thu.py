@@ -43,12 +43,13 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import danh_ba_doi_thu as db
+from . import doi_thu_kenh as so
 from . import loc_doi_thu as loc
 from .phan_tuyen import DAU_MOC_TUOI
 from .trang_chu import kenh_bi_loai
 
-__all__ = ["UngVien", "TU_KHOP_LECH_NHIP", "TU_GO_TOI", "TEN_KENH_TAM_LY", "do_ung_vien", "quyet",
-           "chot"]
+__all__ = ["UngVien", "TU_KHOP_LECH_NHIP", "TU_GO_TOI", "TEN_KENH_TAM_LY", "GHI_CHU_BAN_DUA", "kenh_ban_dua",
+           "do_ung_vien", "quyet", "chot"]
 
 #: Từ khoá tuyến "lệch nhịp số đông" (từ cột "Từ khoá nhận biết" của tuyen.csv, chuyển sang
 #: chữ Nhật thường gặp trên tiêu đề). Kênh khác tuyến truyền `tu_khop` riêng vào `chot`.
@@ -65,6 +66,9 @@ TEN_KENH_TAM_LY = ("心理", "脳科学", "こころ", "心の", "ココロ", "�
 #: Chỉ những câu yt-dlp nói về CHÍNH kênh — "503 Service Unavailable" là lỗi tạm của máy chủ, không tính.
 _DAU_HIEU_KENH_CHET = ("does not exist", "terminated", "has been removed", "this channel", "no longer available",
                        "is private", "404", "không tồn tại")
+
+#: Ghi chú của kênh khách đưa tay — máy không chấm, không hỏi AI, luôn quét.
+GHI_CHU_BAN_DUA = "bạn đưa — luôn quét"
 
 SO_TIEU_DE_DO = 40          # lấy ngần này video mới nhất để đo (một lời gọi yt-dlp)
 NGUONG_GIA = 30             # % tiêu đề gắn thẻ tuổi → bỏ
@@ -126,6 +130,16 @@ def do_ung_vien(link: str, *, lang: str = "", phut_muc_tieu: float = 0.0,
     )
 
 
+def kenh_ban_dua(goc: str, kenh: str) -> set:
+    """Khoá của những link khách TỰ DÁN (`doi-thu-ban-dua.txt`) — danh bạ theo định nghĩa.
+
+    Chủ dự án 07/09/2026, thấy 大人の心理雑学 bị máy "bỏ" vì tên có 雑学: *"danh bạ đối thủ… là các
+    đối thủ tao cung cấp ban đầu và trang chủ lọc về"*. Cửa máy chỉ dành cho kênh máy ảo nhặt về;
+    kênh người đưa thì máy chỉ đo số (subs, view…) rồi luôn "theo dõi", không hỏi AI.
+    """
+    return {k for k in (db.khoa(l) for l in so.doc_ban_dua(goc, kenh)) if k}
+
+
 def quyet(uv: UngVien, *, nguong_gia: int = NGUONG_GIA, nguong_khop: int = NGUONG_KHOP,
           subs_toi_da: int = SUBS_TOI_DA) -> Tuple[Optional[str], str]:
     """(trạng thái danh bạ hoặc `None` = để lại hộp thư thử lại lượt sau, lý do một câu).
@@ -139,22 +153,31 @@ def quyet(uv: UngVien, *, nguong_gia: int = NGUONG_GIA, nguong_khop: int = NGUON
         if any(t in loi for t in _DAU_HIEU_KENH_CHET):
             return db.BO, "kênh không còn hoặc không xem được: " + (uv.loi or "")[:100]
         return None, "không đo được" + (": " + uv.loi if uv.loi else "")
+    # ═══ DANH BẠ LÀ BẢN ĐỒ THỊ TRƯỜNG (chủ dự án 06/09/2026) ═══
+    # *"đối thủ này là tài nguyên quan trọng — nó là những bên làm chủ đề tâm lý… gom được đối
+    # thủ sẽ nhìn được thị trường — ở một thị trường sẽ luôn có một lượng đối thủ mới và die."*
+    # Nên chỉ thứ KHÔNG PHẢI kênh tâm lý mới "bỏ" (ẩn). Kênh tâm lý nào cũng ở lại trong sổ và
+    # ĐỀU được quét content ("theo dõi") — content của họ là dữ liệu thị trường, bảng "Nên làm" tự lọc
+    # theo tệp. 07/09, chủ dự án: *"tạm ngưng mày cho vào danh sách làm gì"* — máy không đặt "tạm
+    # ngưng" nữa; trạng thái ấy chỉ còn cho người dùng tự dừng tay một kênh đang nghỉ. Ghi chú vẫn nói
+    # kênh thuộc góc nào của thị trường (tệp 55+, quá to, còn nhỏ, gần ngách) để nhìn là biết.
     if uv.the_loai_loai:
-        return db.BO, "thể loại 雑学/要約/tóm sách"
+        return db.BO, "không phải kênh tâm lý: thể loại 雑学/要約/tóm sách"
+    if not uv.cua_may_dat and "tiêu đề viết bằng chữ" in uv.ly_do_may:
+        return db.BO, "không phải tiếng của kênh: " + uv.ly_do_may[:80]
     if not uv.cua_may_dat:
-        return db.BO, "cửa máy: " + uv.ly_do_may[:90]
+        return db.THEO_DOI, "thị trường (còn nhỏ / khác khổ): " + uv.ly_do_may[:90]
     if uv.pct_gia >= nguong_gia:
-        return db.BO, "lệch già: {0}% tiêu đề gắn 50代/60代/老後".format(uv.pct_gia)
+        return db.THEO_DOI, "thị trường (tệp 55+): {0}% tiêu đề gắn 50代/60代/老後".format(uv.pct_gia)
     if uv.subs > subs_toi_da:
-        return db.BO, "quá lớn ({0} subs) — tham khảo, không phải đối thủ".format(
-            "{0:,}".format(uv.subs).replace(",", "."))
+        return db.THEO_DOI, "thị trường (quá lớn, {0} subs — tham khảo)".format("{0:,}".format(uv.subs).replace(",", "."))
     tam_ly = any(t in uv.ten for t in TEN_KENH_TAM_LY)
     if uv.pct_khop >= nguong_khop or tam_ly:
         return db.THEO_DOI, "máy chấm: khớp tuyến {0}% · già {1}%".format(uv.pct_khop, uv.pct_gia)
     if uv.pct_khop == 0:
-        return db.BO, "không thấy dấu hiệu tâm lý (tên kênh không nói, 0 tiêu đề khớp tuyến)"
-    # "gần": máy không chắc → có ví thì hỏi AI (cửa thứ năm); không có ví thì `chot` tự bỏ, ghi lý do.
-    return None, "gần (self-help chung, khớp {0}%)".format(uv.pct_khop)
+        return db.BO, "không phải kênh tâm lý: tên không nói, 0 tiêu đề khớp tuyến"
+    # "gần ngách": máy không chắc → có ví thì hỏi AI (cửa thứ năm); không thì vẫn vào thị trường.
+    return None, "thị trường (gần ngách, self-help chung, khớp {0}%)".format(uv.pct_khop)
 
 
 def hoi_ai(client, uv: UngVien, *, mo_ta_kenh: str = "", lang: str = "", phut_muc_tieu: float = 0.0,
@@ -182,9 +205,9 @@ def _ghep_ai(tt: Optional[str], ly_do: str, ai: Optional[loc.DanhGia]) -> Tuple[
     if ket == "doi_thu":
         return db.THEO_DOI, "AI: đối thủ ({0}đ) — {1} · {2}".format(ai.diem, ai_ly_do[:90], ly_do)[:220], list(ai.tuyen)
     if ket == "gan":
-        return db.BO, "AI: gần, không cùng thể loại — {0} · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], list(ai.tuyen)
+        return db.THEO_DOI, "thị trường (gần ngách — AI: {0}) · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], list(ai.tuyen)
     if ket == "khong":
-        return db.BO, "AI: không phải đối thủ — {0} · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], []
+        return db.BO, "không phải kênh tâm lý — AI: {0} · máy: {1}".format(ai_ly_do[:90], ly_do)[:220], []
     return tt, ly_do, []   # AI trả chữ lạ → giữ máy
 
 
@@ -218,6 +241,7 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
             mo_ta_kenh = loc.doc_so_tay(goc, kenh)
         except Exception:  # noqa: BLE001
             mo_ta_kenh = ""
+    ban_dua = kenh_ban_dua(goc, kenh)
     ban_ghi: List[db.BanGhi] = []
     trang_thai: Dict[str, str] = {}
     ghi_chu: Dict[str, str] = {}
@@ -229,6 +253,10 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
                          tu_khop=tu_khop, cancel=cancel)
         dem["cham"] += 1
         tt, ly_do = quyet(uv)
+        la_ban_dua = db.khoa(link) in ban_dua and not (uv.loi or not uv.ten)
+        if la_ban_dua:
+            tt, ly_do = db.THEO_DOI, GHI_CHU_BAN_DUA
+            dem["ban_dua"] = dem.get("ban_dua", 0) + 1
         if uv.loi or not uv.ten:
             if tt == db.BO:
                 # Kênh đã chết/ẩn: ghi vào danh bạ là "bỏ" (tên lấy từ link) để hộp thư thôi giữ nó.
@@ -243,7 +271,7 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
             log("  [{0}/{1}] {2} → không đo được, để lại thử lượt sau: {3}".format(i, len(links), link[:40], ly_do))
             continue
         tuyen: List[str] = []
-        if client is not None and tt != db.BO:
+        if client is not None and tt != db.BO and not la_ban_dua:
             ai = hoi_ai(client, uv, mo_ta_kenh=mo_ta_kenh or "", lang=lang, phut_muc_tieu=phut_muc_tieu, hoi=hoi)
             if ai is not None:
                 if (ai.ly_do or "").startswith("AI trả lời không đọc được"):
@@ -257,10 +285,9 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
                 if tt == db.BO and tt_cu != db.BO:
                     dem["ai_loai"] += 1
         if tt is None:
-            # Máy đo được mà vẫn không chắc ("gần") và AI không nâng lên → TỰ BỎ, ghi lý do, đổi lại
-            # được ở danh bạ. Chủ dự án 06/09: "đơn giản, hiệu quả và tự động" — hộp thư không giữ ai.
-            tt = db.BO
-            ly_do = ly_do + " — máy tự bỏ; muốn theo dõi thì đổi trạng thái ở danh bạ"
+            # Máy đo được mà không chắc ("gần ngách") và AI không nói gì → vẫn vào thị trường, vẫn quét.
+            # Hộp thư không giữ ai; muốn dừng thì đổi trạng thái ở danh bạ.
+            tt = db.THEO_DOI
         log("  [{0}/{1}] {2} → {3}: {4}".format(i, len(links), (uv.ten or link)[:30], tt, ly_do))
         ban_ghi.append(db.BanGhi(ten=uv.ten, link=link, subs=uv.subs, so_video=uv.so_video,
                                  dai_tv=uv.dai_tv, view_tv=uv.view_tv, vuot_quy_mo=uv.dinh_tren_subs))
@@ -271,6 +298,8 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
         if tt == db.THEO_DOI:
             dem["theo_doi"] += 1
             dem["theo_doi_links"].append(link)
+        elif tt == db.TAM_NGUNG:
+            dem["tam_ngung"] = dem.get("tam_ngung", 0) + 1
         else:
             dem["bo"] += 1
             dem["bo_links"].append(link)
@@ -278,7 +307,7 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
         return dem
     cot, hang = db.doc(goc, kenh)
     hang = db.gop_cham(cot, hang, ban_ghi)
-    for tt in (db.THEO_DOI, db.BO):
+    for tt in (db.THEO_DOI, db.TAM_NGUNG, db.BO):
         nhom = [l for l, t in trang_thai.items() if t == tt]
         if nhom:
             hang = db.dat_trang_thai(cot, hang, nhom, tt)
