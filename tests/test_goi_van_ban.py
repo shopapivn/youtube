@@ -403,3 +403,41 @@ class TestTraLoiRong:
             goi_van_ban(may, [{"role": "user", "content": "x"}], khoa="k",
                         **KHONG_NGU)
         assert may.so_lan == 1, "sai dạng thì ném ngay, không đổi khoá"
+
+
+# ── 07/09/2026: đề bài hệ thống phải nằm cả trong tin người dùng ─────────────
+
+
+from core import goi_van_ban as gvb  # noqa: E402
+
+
+class _MayChuGhiTin(MayChuGia):
+    def __init__(self, kich_ban):
+        super().__init__(kich_ban)
+        self.tin_da_gui = []
+
+    def request(self, _method, _path, *, json=None, idempotency_key=None, **_k):
+        self.tin_da_gui.append(json["messages"])
+        return super().request(_method, _path, json=json, idempotency_key=idempotency_key)
+
+
+def test_de_bai_he_thong_duoc_chep_vao_tin_nguoi_dung():
+    """Đo thật 10:50 07/09: mô hình không thấy vai system, trả lời 'bạn cần giúp gì?' thay vì JSON."""
+    may = _MayChuGhiTin(["{}"])
+    gvb.goi_van_ban(may, [{"role": "system", "content": "GÁN TỆP, TRẢ JSON"},
+                          {"role": "user", "content": "1. tiêu đề A\n2. tiêu đề B"}], **KHONG_NGU)
+    tin = may.tin_da_gui[0]
+    assert tin[0] == {"role": "system", "content": "GÁN TỆP, TRẢ JSON"}, "tin hệ thống vẫn giữ"
+    assert tin[1]["role"] == "user"
+    assert tin[1]["content"].startswith("GÁN TỆP, TRẢ JSON") and tin[1]["content"].endswith("1. tiêu đề A\n2. tiêu đề B")
+
+
+def test_gop_he_thong_voi_tin_co_anh_va_khong_he_thong():
+    goi = gvb.gop_he_thong_vao_nguoi_dung
+    assert goi([{"role": "user", "content": "x"}]) == [{"role": "user", "content": "x"}]
+    ra = goi([{"role": "system", "content": "ĐỀ"},
+              {"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:..."}}]},
+              {"role": "user", "content": "sau"}])
+    assert ra[1]["content"][0] == {"type": "text", "text": "ĐỀ\n\n═══ YÊU CẦU ═══"}
+    assert ra[1]["content"][1]["type"] == "image_url"
+    assert ra[2] == {"role": "user", "content": "sau"}, "chỉ gộp vào tin người dùng ĐẦU TIÊN"

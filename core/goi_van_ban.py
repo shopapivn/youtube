@@ -322,6 +322,35 @@ def _doc_chu(phan_hoi: Any) -> str:
     return noi_dung.strip()
 
 
+def gop_he_thong_vao_nguoi_dung(tin_nhan: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Chép đề bài hệ thống vào ĐẦU tin nhắn người dùng đầu tiên (giữ nguyên tin hệ thống).
+
+    10:50 07/09/2026, đo thật: gửi đề bài "gán tệp, trả JSON" ở vai `system` + 20 tiêu đề ở vai
+    `user`, mô hình trả lời bằng tiếng Nhật *"đây là danh sách tiêu đề YouTube, bạn cần tôi giúp gì?"*
+    — nó không hề thấy đề bài. Nguồn LLM đi qua nhiều tuyến (xem llm-router), có tuyến rụng vai
+    system. Hậu quả cả ngày: AI gán tuyến 37/240 dòng, kiểm kênh "hỏi 0 kênh" — trả tiền 13 lượt
+    mà gần như không thu được gì. Đề bài nằm trong tin người dùng thì tuyến nào cũng thấy.
+    """
+    he_thong = [str(t.get("content") or "") for t in tin_nhan
+                if t.get("role") == "system" and isinstance(t.get("content"), str) and str(t.get("content")).strip()]
+    if not he_thong:
+        return list(tin_nhan)
+    de_bai = "\n\n".join(he_thong)
+    ra: List[Dict[str, Any]] = []
+    da_gop = False
+    for t in tin_nhan:
+        if not da_gop and t.get("role") == "user":
+            nd = t.get("content")
+            if isinstance(nd, str):
+                nd = de_bai + "\n\n═══ YÊU CẦU ═══\n" + nd
+            elif isinstance(nd, list):
+                nd = [{"type": "text", "text": de_bai + "\n\n═══ YÊU CẦU ═══"}] + list(nd)
+            t = dict(t, content=nd)
+            da_gop = True
+        ra.append(t)
+    return ra
+
+
 def goi_van_ban(
     client: Any,
     tin_nhan: List[Dict[str, str]],
@@ -355,6 +384,7 @@ def goi_van_ban(
             on_log(dong)
 
     goc = khoa or str(uuid.uuid4())
+    tin_nhan = gop_he_thong_vao_nguoi_dung(tin_nhan)
     # ═══ KHOÁ PHẢI THUẦN ASCII ═══
     #
     # Idempotency-Key đi trong header HTTP, mà header chỉ nhận ASCII. Nếu nơi

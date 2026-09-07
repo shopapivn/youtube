@@ -193,7 +193,11 @@ def gan_tuyen_ai(goc: str, kenh: str, client, *, gan: Optional[Callable[..., lis
         # AI đủ chắc là "khác" (không thuộc tệp nào) thì GHI "khac" như luật cứng vẫn ghi — 03:16
         # 07/09: 240 dòng gửi đi, 59 ghi được, phần "khác" để trống nên NGÀY MAI lại gửi đúng
         # 181 dòng ấy đi hỏi lần nữa, trả tiền lần nữa.
-        du_chac = bool(getattr(k, "ma", "")) and getattr(k, "do_tin", 0) >= pt.SAN_TIN
+        # Đo thật 10:55 07/09 (một lô 20): 8 dòng vào tệp với do_tin 72–88; 12 dòng AI trả "khac" nhưng
+        # do_tin 20–40 (nó không tìm được tệp nào, và tự chấm thấp vì đề bài dặn "phân vân thì hạ").
+        # "Không tìm được tệp" chính là nghĩa của "khac" — ghi luôn, khỏi hỏi lại mỗi ngày.
+        ma = str(getattr(k, "ma", "") or "")
+        du_chac = bool(ma) and (ma == pt.MA_KHAC or getattr(k, "do_tin", 0) >= pt.SAN_TIN)
         if link and du_chac:
             theo_link[link] = k.ma
     for d in hang:
