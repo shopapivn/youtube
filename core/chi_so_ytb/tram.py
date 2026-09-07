@@ -991,6 +991,9 @@ class Tram:
         os.makedirs(tm, exist_ok=True)
         duong = os.path.join(tm, "trang-chu.csv")
         moi_tao = not os.path.exists(duong)
+        # Gói trang chủ cũng là gói số liệu: 09:21 07/09 việc #6 quét trang chủ xong bị gắn cảnh báo
+        # "KHÔNG có gói số liệu nào về" dù 290 video vừa về — vì chỉ /capture mới đếm `so_goi`.
+        self.so_goi += 1
 
         kenh_sach: List[str] = []
         kenh_loai = set()
