@@ -92,6 +92,8 @@ class MucDoc:
     noi_dung: str
     voice_id: str = ""
     dinh_dang: str = "mp3"
+    #: Mã ngôn ngữ ISO 639-1 gửi kèm; rỗng = máy chủ tự nhận diện.
+    ngon_ngu: str = ""
 
 
 @dataclass
@@ -107,6 +109,7 @@ class _Lo:
     nguon: str
     dinh_dang: str
     muc: List[MucDoc] = field(default_factory=list)
+    ngon_ngu: str = ""
 
 
 def doc_file_chu(duong_dan: str) -> str:
@@ -289,13 +292,43 @@ class TrangGiongNoi(QWidget):
         d1.addWidget(self._nut_cai_dat)
         v.addLayout(d1)
 
+        # ═══ NGÔN NGỮ — GHI KÈM, KHÔNG HỨA GÌ ═══
+        #
+        # Ô này ghi tiếng của bài vào việc gửi đi. ĐO 08/09/2026 (xem
+        # `core.kenh.ma_ngon_ngu_tts`): máy chủ hiện BỎ QUA mã này — audio
+        # không đổi dù ghim đúng, ghim sai hay bỏ trống. Nên nhãn và tooltip ở
+        # đây phải trung tính: không hứa giọng hay hơn, không doạ chọn nhầm là
+        # hỏng. Giữ ô lại vì đường dây đã đúng: ngày máy chủ dùng đến trường
+        # này, khách bản cũ cũng được hưởng mà không phải cập nhật tool.
+        from core.kenh import DANH_SACH_TIENG  # noqa: PLC0415
+
+        d_ng = QHBoxLayout()
+        d_ng.setSpacing(8)
+        d_ng.addWidget(self._nhan_cot("Ngôn ngữ", 70))
+        self._ngon_ngu = QComboBox()
+        # Ô phải CO được: bề rộng tối thiểu của QComboBox mặc định bằng mục dài
+        # nhất, và một nhãn dài là cả trang không co xuống dưới 760px nữa
+        # (`tests/test_bo_cuc.py`). Cho nó co theo một độ dài tối thiểu, phần
+        # giải thích đưa vào tooltip và bài hướng dẫn.
+        self._ngon_ngu.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+        self._ngon_ngu.setMinimumContentsLength(14)
+        self._ngon_ngu.addItem("Tự động", "")
+        for ma, ten in DANH_SACH_TIENG:
+            self._ngon_ngu.addItem("{0} ({1})".format(ten, ma), ma)
+        self._ngon_ngu.setToolTip(
+            "Ghi kèm tiếng của bài. Chọn kênh thì ô này tự điền theo tiếng của "
+            "kênh. Không chắc thì cứ để “Tự động” — bộ đọc tự nhận ra tiếng của "
+            "bài, nên để trống cũng không sao.")
+        d_ng.addWidget(self._ngon_ngu, 1)
+        v.addLayout(d_ng)
+
         # Đồng bộ với kênh: giọng của kênh ↔ ô Voice ID. Khách thử giọng ở
         # đây ưng rồi "Lưu vào kênh" là tab Tự động đọc bằng giọng đó.
         from .kenh_chon import HangKenh  # noqa: PLC0415
 
         v.addWidget(HangKenh(
             self._app, nap=self._nap_giong_tu_kenh, luu=self._luu_giong_vao_kenh,
-            mach_nap="Lấy Voice ID của kênh vào ô trên.",
+            mach_nap="Lấy Voice ID và tiếng của kênh vào hai ô trên.",
             mach_luu="Ghi Voice ID ở ô trên thành giọng của kênh."))
 
         d2 = QHBoxLayout()
@@ -311,9 +344,23 @@ class TrangGiongNoi(QWidget):
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_TTS))
         return khung
 
-    def _nap_giong_tu_kenh(self, ma: str) -> None:
-        from core.dong_bo_kenh import doc_giong  # noqa: PLC0415
+    @property
+    def ma_ngon_ngu(self) -> str:
+        """Mã ngôn ngữ đang chọn; rỗng = Tự động."""
+        return str(self._ngon_ngu.currentData() or "")
 
+    def _dat_ngon_ngu(self, ma: str) -> None:
+        """Chọn tiếng theo mã (`ja`); mã lạ hoặc rỗng thì về Tự động."""
+        from core.kenh import ma_ngon_ngu_tts  # noqa: PLC0415
+
+        vi_tri = self._ngon_ngu.findData(ma_ngon_ngu_tts(ma))
+        self._ngon_ngu.setCurrentIndex(vi_tri if vi_tri >= 0 else 0)
+
+    def _nap_giong_tu_kenh(self, ma: str) -> None:
+        from core.dong_bo_kenh import doc_giong, doc_ngon_ngu  # noqa: PLC0415
+
+        # Tiếng của kênh đi cùng giọng: kênh Nhật thì ô Ngôn ngữ về tiếng Nhật.
+        self._dat_ngon_ngu(doc_ngon_ngu(self._app.base_dir, ma))
         giong = doc_giong(self._app.base_dir, ma)
         if not giong:
             self._app.show_message(
@@ -669,11 +716,13 @@ class TrangGiongNoi(QWidget):
                 "Nạp file hoặc đưa chữ vào danh sách trước, rồi mới xếp vào hàng đợi.")
             return
         dinh_dang = self._dinh_dang.get()
+        ngon_ngu = self.ma_ngon_ngu
         for m in self._muc:
             m.voice_id = ma_giong
             m.dinh_dang = dinh_dang
+            m.ngon_ngu = ngon_ngu
         self._cho.append(_Lo(ma_giong, self._nguon or "danh sách đang mở",
-                             dinh_dang, list(self._muc)))
+                             dinh_dang, list(self._muc), ngon_ngu))
         self._muc = []
         # KHÔNG trống ô Voice ID sau khi xếp: phần lớn lô chỉ có một giọng, và
         # xoá đi là bắt khách dán lại đúng cái mã họ vừa dán.
@@ -697,11 +746,13 @@ class TrangGiongNoi(QWidget):
         """Hàng đợi trước, rồi tới danh sách đang mở — đúng thứ tự khách xếp."""
         ma_giong = self.ma_giong
         dinh_dang = self._dinh_dang.get()
+        ngon_ngu = self.ma_ngon_ngu
         xong: List[MucDoc] = []
         for lo in self._cho:
-            xong.extend(MucDoc(m.ten, m.noi_dung, lo.voice_id, lo.dinh_dang)
+            xong.extend(MucDoc(m.ten, m.noi_dung, lo.voice_id, lo.dinh_dang, lo.ngon_ngu)
                         for m in lo.muc)
-        xong.extend(MucDoc(m.ten, m.noi_dung, ma_giong, dinh_dang) for m in self._muc)
+        xong.extend(MucDoc(m.ten, m.noi_dung, ma_giong, dinh_dang, ngon_ngu)
+                    for m in self._muc)
         return xong
 
     def _ve_lai(self) -> None:
@@ -746,6 +797,9 @@ class TrangGiongNoi(QWidget):
                     muc.setTextAlignment(Qt.AlignCenter)
                 if chu:
                     muc.setToolTip(chu)
+                if cot == 0:
+                    muc.setToolTip("{0} · ngôn ngữ: {1}".format(
+                        chu, lo.ngon_ngu or "tự động"))
                 self._bang_cho.setItem(dong, cot, muc)
             nut_bo = nut_nguy_hiem("Bỏ", lambda l=lo: self._bo_lo(l), rong=52)
             nut_bo.setToolTip("Bỏ cả lô này khỏi hàng đợi")
@@ -875,6 +929,8 @@ class TrangGiongNoi(QWidget):
             specs.append(JobSpec(
                 kind=KIND_TTS, content=sach, label=m.ten, index=so,
                 params={"voice_id": m.voice_id, "format": m.dinh_dang,
+                        # Rỗng = Tự động: `jobs._call_create` không gửi mã.
+                        "language_code": m.ngon_ngu,
                         "stability": self._on_dinh.value() / 100,
                         "similarity_boost": self._giong_nhau.value() / 100},
                 out_dir=thu_muc, estimate_micro=hold_for_tts(len(sach), gia)))

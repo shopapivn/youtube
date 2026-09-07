@@ -116,6 +116,12 @@ def doc_giong(goc: str, ma: str) -> str:
         "voice_id") or "").strip()
 
 
+def doc_ngon_ngu(goc: str, ma: str) -> str:
+    """`ngon_ngu` của kênh — để tab Voice tự chọn tiếng khi khách chọn kênh."""
+    return str(doc_yaml(os.path.join(duong_kenh(goc, ma), TEP_KENH)).get(
+        "ngon_ngu") or "").strip()
+
+
 def ghi_giong(goc: str, ma: str, voice_id: str) -> None:
     thu_muc = _kiem_kenh(goc, ma)
     duong = os.path.join(thu_muc, TEP_KENH)

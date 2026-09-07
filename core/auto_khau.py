@@ -50,7 +50,7 @@ from .chia_canh import (DUOI_CAM, MIN_GIAY_CANH, bang_phu_de, chia_theo_nghia,
 # phải bóc kiểu ấy, kể cả tool `prompt.workbook` ngoài `core/`. Vẫn nhập lại
 # vào đây vì `__all__` của tệp này đã hứa có nó.
 from .goi_van_ban import loc_json
-from .kenh import Kenh, ten_khung, ten_tieng
+from .kenh import Kenh, ma_ngon_ngu_tts, ten_khung, ten_tieng
 from .nang_anh import KHUNG
 from .ghi_dia import (duong_tam, ghi_chu as _ghi_chu_dia, ghi_json,
                       thay_the)
@@ -3134,9 +3134,15 @@ def _khau_giong_doc(bc: BoiCanh):
                 so, len(doan), len(chu)))
 
             def doc(hau_to=""):
+                # Ghi kèm tiếng kênh đã khai (`ngon_ngu`); mã lạ thì
+                # `ma_ngon_ngu_tts` trả rỗng và không gửi gì. Đo 08/09/2026 thì
+                # máy chủ CHƯA dùng đến trường này — audio không đổi — nên đừng
+                # trông vào đây để sửa cách đọc; xem `kenh.ma_ngon_ngu_tts`.
                 job = _tao_job(
                     bc, bc.client.tts.create,
                     text=chu, voice_id=bc.kenh.voice_id, format="mp3",
+                    language_code=ma_ngon_ngu_tts(
+                        getattr(bc.kenh, "ngon_ngu", "")) or None,
                     idempotency_key=khoa_viec(luot, "tts", so, chu,
                                               bc.kenh.voice_id) + hau_to)
                 # Đọc một đoạn lâu hơn hẳn tạo một tấm ảnh, nên trần chờ ở đây

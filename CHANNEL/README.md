@@ -20,6 +20,10 @@ Ngách **tâm lý**. Dùng thẳng được, hoặc chép ra rồi sửa thành 
    điền `voice_id`. Mã giọng lấy ở tab **Voice**.
 3. Dán link video tư liệu, bấm **Chạy**.
 
+`ngon_ngu` của kênh (`ja`, `vi`, `en`…) là **tiếng mà kịch bản được viết ra**,
+nên khai sai là cả kênh viết nhầm tiếng. Nó cũng được gửi kèm việc đọc, còn bộ
+đọc thì tự nhận ra tiếng của bài nên chưa khai cũng đọc đúng.
+
 ## Một kênh gồm những gì
 
 ```

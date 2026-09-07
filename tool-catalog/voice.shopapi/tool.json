@@ -12,7 +12,8 @@
   ],
   "config_schema": {"type":"object","additionalProperties":false,"properties":{
     "voice_id":{"type":"string","default":"vi_female_01"},
-    "format":{"type":"string","enum":["mp3","wav"],"default":"mp3"}
+    "format":{"type":"string","enum":["mp3","wav"],"default":"mp3"},
+    "language_code":{"type":"string","pattern":"^[a-z]{2}$","description":"Ma ngon ngu ISO 639-1 (vi, en, ja...). Ghi kem tieng cua bai; may chu hien chua dung den (do 08/09/2026), model tu nhan dien tu van ban."}
   }},
   "runtime": {"kind": "python", "entrypoint": "run.py", "timeout_seconds": 3600},
   "permissions": ["network.shopapi", "workspace.write", "secret.shopapi"]

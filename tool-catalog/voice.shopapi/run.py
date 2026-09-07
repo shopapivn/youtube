@@ -31,6 +31,9 @@ def handle(request: Mapping[str, Any], *, client_factory: Callable = ShopAPI,
     audio_format = str(config.get("format") or "mp3").lower()
     if audio_format not in ("mp3", "wav"):
         raise ValueError("format chi ho tro mp3 hoac wav")
+    # Rong -> khong gui. May chu hien bo qua truong nay (do 08/09/2026), model
+    # tu nhan dien ngon ngu tu van ban; gui chi de san cho ngay may chu dung toi.
+    language_code = str(config.get("language_code") or "").strip().lower() or None
     api_key = os.environ.get("SHOPAPI_API_KEY", "").strip()
     if not api_key:
         raise ValueError("Thieu SHOPAPI_API_KEY")
@@ -42,6 +45,7 @@ def handle(request: Mapping[str, Any], *, client_factory: Callable = ShopAPI,
     try:
         job = client.tts.create_and_wait(
             text=script, voice_id=voice_id, format=audio_format,
+            language_code=language_code,
             idempotency_key="{0}:{1}".format(request.get("run_id", "run"), request.get("node_id", "voice")),
             on_progress=lambda *args, **kwargs: emit({"type": "event", "event": "progress",
                 "message": "ShopAPI dang tao audio"}),

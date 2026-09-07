@@ -9,6 +9,7 @@ from .._models import Model
 from .._polling import DEFAULT_WAIT_TIMEOUT
 from .._validation import (
     validate_audio_format,
+    validate_language_code,
     validate_speed,
     validate_text,
     validate_voice_id,
@@ -30,6 +31,7 @@ def build_body(
     format: str,  # noqa: A002 — trùng tên trường của API
     webhook_url: Optional[str],
     extra_body: Optional[Mapping[str, Any]],
+    language_code: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Kiểm tra phía client rồi dựng thân request — SDK_SPEC §3.
 
@@ -37,6 +39,13 @@ def build_body(
     Xoá hẳn tham số thì code khách viết từ trước gãy bằng `TypeError` — một câu
     lỗi chẳng nói được vì sao. Giữ lại và ném lỗi có lời giải thích thì họ đọc
     một lần là biết phải bỏ gì.
+
+    `language_code` (tuỳ chọn, ISO 639-1 hai chữ): ghi kèm tiếng của văn bản.
+    Đo 08/09/2026 trên job thật — thời lượng, băm tệp và nghe lại bằng máy —
+    thì **máy chủ hiện chưa dùng đến trường này**: audio không đổi dù gửi đúng
+    mã, sai mã hay bỏ trống, vì model tự nhận diện ngôn ngữ từ văn bản. Gửi
+    không hại gì và sẵn sàng cho ngày máy chủ dùng tới; đừng dựa vào nó để sửa
+    cách đọc hôm nay.
     """
     if speed is not None:
         validate_speed(speed)  # luôn ném — có lời giải thích đầy đủ
@@ -45,6 +54,8 @@ def build_body(
         "voice_id": validate_voice_id(voice_id),
         "format": validate_audio_format(format),
     }
+    if language_code is not None:
+        body["language_code"] = validate_language_code(language_code)
     if webhook_url is not None:
         body["webhook_url"] = validate_webhook_url(webhook_url)
     if extra_body:
@@ -65,6 +76,7 @@ class Tts:
         voice_id: str = DEFAULT_VOICE_ID,
         speed: Optional[float] = None,
         format: str = "mp3",  # noqa: A002
+        language_code: Optional[str] = None,
         webhook_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         extra_body: Optional[Mapping[str, Any]] = None,
@@ -72,6 +84,8 @@ class Tts:
         """Tạo job đọc văn bản. Trả về ngay (`202`), job chạy nền.
 
         Giá 200₫ mỗi phút audio thật. Xem danh sách giọng ở `shopapi.VOICE_CATALOG`.
+        `language_code`: ghi kèm tiếng của bài; máy chủ hiện chưa dùng đến nó
+        (đo 08/09/2026), model tự nhận diện ngôn ngữ từ văn bản.
         """
         body = build_body(
             text=text,
@@ -80,6 +94,7 @@ class Tts:
             format=format,
             webhook_url=webhook_url,
             extra_body=extra_body,
+            language_code=language_code,
         )
         return self._client.request(
             "POST", "/v1/tts", json=body, idempotent=True, idempotency_key=idempotency_key
@@ -92,6 +107,7 @@ class Tts:
         voice_id: str = DEFAULT_VOICE_ID,
         speed: Optional[float] = None,
         format: str = "mp3",  # noqa: A002
+        language_code: Optional[str] = None,
         webhook_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         extra_body: Optional[Mapping[str, Any]] = None,
@@ -106,6 +122,7 @@ class Tts:
             voice_id=voice_id,
             speed=speed,
             format=format,
+            language_code=language_code,
             webhook_url=webhook_url,
             idempotency_key=idempotency_key,
             extra_body=extra_body,
@@ -133,6 +150,7 @@ class AsyncTts:
         voice_id: str = DEFAULT_VOICE_ID,
         speed: Optional[float] = None,
         format: str = "mp3",  # noqa: A002
+        language_code: Optional[str] = None,
         webhook_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         extra_body: Optional[Mapping[str, Any]] = None,
@@ -145,6 +163,7 @@ class AsyncTts:
             format=format,
             webhook_url=webhook_url,
             extra_body=extra_body,
+            language_code=language_code,
         )
         return await self._client.request(
             "POST", "/v1/tts", json=body, idempotent=True, idempotency_key=idempotency_key
@@ -157,6 +176,7 @@ class AsyncTts:
         voice_id: str = DEFAULT_VOICE_ID,
         speed: Optional[float] = None,
         format: str = "mp3",  # noqa: A002
+        language_code: Optional[str] = None,
         webhook_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         extra_body: Optional[Mapping[str, Any]] = None,
@@ -171,6 +191,7 @@ class AsyncTts:
             voice_id=voice_id,
             speed=speed,
             format=format,
+            language_code=language_code,
             webhook_url=webhook_url,
             idempotency_key=idempotency_key,
             extra_body=extra_body,

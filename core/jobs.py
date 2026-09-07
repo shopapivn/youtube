@@ -1144,6 +1144,11 @@ class JobManager:
                 text=spec.content,
                 voice_id=params.get("voice_id", "vi_female_01"),
                 format=params.get("format", "mp3"),
+                # Mã ngôn ngữ: rỗng/thiếu -> KHÔNG gửi. Có mã (kênh khai
+                # `ngon_ngu`, hoặc khách chọn ở tab Voice) thì gửi kèm. Đo
+                # 08/09/2026: máy chủ hiện bỏ qua trường này, model tự nhận diện
+                # ngôn ngữ từ văn bản — xem `kenh.ma_ngon_ngu_tts`.
+                language_code=params.get("language_code") or None,
                 idempotency_key=spec.khoa_gui or spec.idempotency_key,
             )
         if spec.kind == KIND_IMAGE:

@@ -393,6 +393,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Hàng “Kênh” dưới ô Voice ID: chọn kênh là giọng của kênh điền vào "
             "ngay; nghe thử ưng giọng nào thì “Lưu vào kênh” — tab Tự động đọc "
             "bằng giọng đó từ lần chạy tới.",
+            "Ô “Ngôn ngữ” chỉ ghi kèm tiếng của bài; chọn kênh thì nó tự điền "
+            "theo tiếng của kênh. Bộ đọc tự nhận ra tiếng của bài, nên để "
+            "“Tự động” cũng đọc đúng — không cần bận tâm ô này.",
         ],
     },
     "phu-de": {
@@ -587,6 +590,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "tự mỗi phút, Việt 832, Anh 920 — chênh gần ba lần, nên cùng một "
             "kịch bản mà đọc bằng tiếng khác thì độ dài video khác hẳn. Bước ② "
             "chỉ còn chọn giọng đọc; độ dài do content quyết, không đặt ở đây. "
+            "Bước Giọng đọc còn ô “Ngôn ngữ của kênh”: điền sẵn theo khán giả "
+            "bạn chọn ở Bước ①. Đây là tiếng KỊCH BẢN được viết ra, nên khai sai "
+            "là cả kênh viết nhầm tiếng — chỉ đổi khi kênh làm cho khán giả nước khác.",
             "Chưa có mã giọng (Voice ID)? Ngay bước này có liên kết mở Thư viện "
             "giọng của nhà cung cấp để nghe thử và lấy mã.",
             "Bước ③ “Hình ảnh & nhân vật” lên trước vì chọn phong cách hình và "

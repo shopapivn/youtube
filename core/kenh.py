@@ -653,6 +653,7 @@ def _so(gia_tri, mac_dinh: float) -> float:
 #: Mã tiếng → tên gọi tiếng Việt, để lời nhắc nói "viết bằng tiếng Nhật" thay
 #: vì "viết bằng ja". Chủ dự án, 25/08/2026: *"viết bằng ja thì phải rõ là viết
 #: bằng ngôn ngữ tiếng Nhật"*. Thiếu mã nào thì trả lại chính mã ấy.
+#: Đủ ~70 thứ tiếng bộ đọc đang chạy hỗ trợ. Bỏ Cebuano vì không có mã hai chữ.
 _TEN_TIENG = {
     "ja": "tiếng Nhật", "vi": "tiếng Việt", "en": "tiếng Anh", "zh": "tiếng Trung",
     "ko": "tiếng Hàn", "es": "tiếng Tây Ban Nha", "fr": "tiếng Pháp",
@@ -660,6 +661,24 @@ _TEN_TIENG = {
     "th": "tiếng Thái", "id": "tiếng Indonesia", "ms": "tiếng Mã Lai",
     "ar": "tiếng Ả Rập", "hi": "tiếng Hindi", "tr": "tiếng Thổ Nhĩ Kỳ",
     "nl": "tiếng Hà Lan", "pl": "tiếng Ba Lan", "tl": "tiếng Philippines",
+    # Châu Á còn lại
+    "jv": "tiếng Java", "bn": "tiếng Bengal", "ta": "tiếng Tamil", "te": "tiếng Telugu",
+    "mr": "tiếng Marathi", "gu": "tiếng Gujarat", "kn": "tiếng Kannada",
+    "ml": "tiếng Malayalam", "pa": "tiếng Punjab", "ur": "tiếng Urdu", "ne": "tiếng Nepal",
+    "as": "tiếng Assam", "sd": "tiếng Sindhi", "ps": "tiếng Pashto", "fa": "tiếng Ba Tư",
+    "he": "tiếng Do Thái", "az": "tiếng Azerbaijan", "kk": "tiếng Kazakh",
+    "ky": "tiếng Kyrgyz", "hy": "tiếng Armenia", "ka": "tiếng Gruzia",
+    # Châu Âu
+    "uk": "tiếng Ukraina", "be": "tiếng Belarus", "cs": "tiếng Séc", "sk": "tiếng Slovakia",
+    "sl": "tiếng Slovenia", "hu": "tiếng Hungary", "ro": "tiếng Romania",
+    "bg": "tiếng Bulgaria", "sr": "tiếng Serbia", "hr": "tiếng Croatia", "bs": "tiếng Bosnia",
+    "mk": "tiếng Macedonia", "el": "tiếng Hy Lạp", "ca": "tiếng Catalan", "gl": "tiếng Galicia",
+    "lb": "tiếng Luxembourg", "sv": "tiếng Thụy Điển", "da": "tiếng Đan Mạch",
+    "no": "tiếng Na Uy", "fi": "tiếng Phần Lan", "is": "tiếng Iceland", "et": "tiếng Estonia",
+    "lv": "tiếng Latvia", "lt": "tiếng Litva", "ga": "tiếng Ireland", "cy": "tiếng Wales",
+    # Châu Phi
+    "af": "tiếng Afrikaans", "sw": "tiếng Swahili", "ha": "tiếng Hausa", "so": "tiếng Somali",
+    "ny": "tiếng Chichewa", "ln": "tiếng Lingala",
 }
 
 
@@ -667,6 +686,45 @@ def ten_tieng(ma: str) -> str:
     """`"ja"` → `"tiếng Nhật"`; mã lạ thì trả nguyên mã (còn hơn trả rỗng)."""
     chu = str(ma or "").strip().lower()
     return _TEN_TIENG.get(chu[:2], chu) if chu else ""
+
+
+#: Thứ tự bày trong ô chọn ngôn ngữ giọng đọc: tiếng khách hay làm kênh lên đầu.
+_THU_TU_TIENG = ("vi", "en", "ja", "ko", "zh", "es", "pt", "fr", "de", "id", "th")
+
+#: `[(mã, tên)]` cho ô chọn ngôn ngữ ở những chỗ tạo giọng đọc.
+DANH_SACH_TIENG = [(ma, _TEN_TIENG[ma]) for ma in _THU_TU_TIENG] + sorted(
+    ((ma, ten) for ma, ten in _TEN_TIENG.items() if ma not in _THU_TU_TIENG),
+    key=lambda c: c[1])
+
+
+def ma_ngon_ngu_tts(ma: str) -> str:
+    """Mã ngôn ngữ (ISO 639-1, hai chữ) gửi kèm việc đọc — hoặc rỗng.
+
+    ═══ ĐO NGÀY 08/09/2026: MÁY CHỦ HIỆN ĐANG BỎ QUA MÃ NÀY ═══
+
+    Gửi thì máy chủ vẫn nhận (202) — nó bỏ qua mọi trường lạ chứ không báo lỗi
+    — nhưng audio **không đổi**. Ba thước đo độc lập, đều trên job thật:
+
+    * **Thời lượng.** Chín lượt đọc cùng một câu tiếng Việt, giọng `vi_female_01`:
+      không mã 7,88 s · ghim `vi` 7,93 s · ghim `en` (sai hẳn) 7,99 s. Chênh
+      giữa các nhóm 0,05–0,11 s, trong khi nhiễu của riêng một nhóm lên tới
+      0,65 s. Lặp lại với giọng đa ngữ + chữ Nhật: chênh 0,24–0,78 s, nhiễu 1,28 s.
+    * **Băm tệp.** Mọi tệp một băm khác nhau → audio sinh lại mỗi lượt, nên
+      trùng cỡ tệp chỉ là trùng độ dài, không phải cùng một bản.
+    * **Nghe lại bằng `faster-whisper`.** Tám tệp tiếng Nhật, kể cả những lượt
+      ghim SAI mã (`vi`), đều nghe ra tiếng Nhật đúng, tin cậy 0,99–1,00. Nếu
+      mã được nghe theo thì chữ Nhật đọc bằng âm Việt phải nát, không thể thế.
+
+    Vì vậy **đừng hứa với khách rằng chọn mã làm giọng hay hơn, cũng đừng doạ
+    rằng chọn nhầm là hỏng** — hôm nay không điều nào đúng. Đường dây phía
+    client giữ nguyên vì nó đúng và không tốn gì: ngày máy chủ dùng đến trường
+    này thì cả khách bản cũ cũng được hưởng, không cần cập nhật tool.
+
+    Kênh khai `ngon_ngu` tự do (`ja`, `ja-JP`, `Japanese`…): chỉ lấy khi hai
+    chữ đầu là chữ cái; còn lại trả rỗng — thà không mã còn hơn mã sai.
+    """
+    chu = str(ma or "").strip().lower()[:2]
+    return chu if len(chu) == 2 and chu.isalpha() and chu.isascii() else ""
 
 
 #: Tên độ phân giải giữ nguyên cỡ nhà cung cấp trả về.

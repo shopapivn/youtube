@@ -43,6 +43,7 @@ __all__ = [
     "validate_speed",
     "validate_audio_format",
     "validate_voice_id",
+    "validate_language_code",
     "validate_image_count",
     "validate_aspect_ratio",
     "validate_reference_images",
@@ -163,6 +164,29 @@ def validate_voice_id(voice_id: Any, *, param: str = "voice_id") -> str:
             "(ví dụ \"NOpBlnGInO9m6vDvFkFC\"). Lấy id tại "
             "elevenlabs.io/app/voice-library: mở giọng bạn thích, bấm nút ba "
             "chấm rồi chọn \"Copy voice ID\".".format(param),
+            param,
+        )
+    return ma
+
+
+_KHUON_MA_NGON_NGU = re.compile(r"^[a-z]{2}$")
+
+
+def validate_language_code(lang: Any, *, param: str = "language_code") -> str:
+    """Mã ISO 639-1 hai chữ (`vi`, `en`, `ja`…); chữ hoa hạ về thường.
+
+    Tuỳ chọn. Model tự nhận diện ngôn ngữ từ văn bản, và đo 08/09/2026 thì máy
+    chủ chưa dùng đến trường này — audio không đổi dù gửi đúng mã, sai mã hay bỏ
+    trống. Khuôn vẫn xét chặt để mã sai không âm thầm đi ra mạng.
+    """
+    if not isinstance(lang, str):
+        raise _fail("`{0}` phải là chuỗi hai chữ như \"vi\", \"en\", \"ja\".".format(param), param)
+    ma = lang.strip().lower()
+    if not _KHUON_MA_NGON_NGU.match(ma):
+        raise _fail(
+            "`{0}` phải là mã ngôn ngữ ISO 639-1 hai chữ, ví dụ \"vi\", \"en\", "
+            "\"ja\", \"ko\", \"zh\" — bạn gửi \"{1}\". Bỏ tham số này đi thì hệ "
+            "thống tự nhận diện ngôn ngữ của văn bản.".format(param, lang),
             param,
         )
     return ma

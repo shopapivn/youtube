@@ -38,9 +38,9 @@ from PyQt5.QtWidgets import (
     QSpinBox, QStackedWidget, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from core.kenh import (BUOC_PROMPT, GIU_NGUYEN, TEP_KENH, TEP_STYLE,
-                       THU_MUC_NV, THU_MUC_PROMPT, ten_khung, doc_kenh,
-                       duong_kenh, kiem_kenh)
+from core.kenh import (BUOC_PROMPT, DANH_SACH_TIENG, GIU_NGUYEN, TEP_KENH,
+                       TEP_STYLE, THU_MUC_NV, THU_MUC_PROMPT, ten_khung,
+                       doc_kenh, duong_kenh, kiem_kenh, ma_ngon_ngu_tts)
 from core.khuon import (Bo, KHOA_VE, LoiKhuon, dung_kenh, kiem_ma_kenh,
                         liet_ke_chien_luoc, liet_ke_nganh, liet_ke_van_hoa,
                         liet_ke_ve)
@@ -945,11 +945,13 @@ class HopKenh(QDialog):
         self._c_nganh.currentIndexChanged.connect(lambda _i: self._ve_prompt())
         self._c_cl.currentIndexChanged.connect(
             lambda _i: (self._ve_canh_cl(), self._ve_prompt()))
+        self._c_vh.currentIndexChanged.connect(lambda _i: self._ngon_ngu_theo_khan_gia())
 
         self._ve_anh()
         self._ve_hinh()
         self._ve_canh_cl()
         self._ve_prompt()
+        self._ngon_ngu_theo_khan_gia()
 
     def _trang_chua_co_khuon(self) -> QWidget:
         w, v = self._trang_moi()
@@ -1032,6 +1034,30 @@ class HopKenh(QDialog):
             self._o_giong.textChanged.connect(lambda _t: self._ve_tt_tao())
         v.addWidget(self._o_giong)
 
+        # ═══ NGÔN NGỮ CỦA KÊNH — CHỌN, KHÔNG GÕ MÃ ═══
+        #
+        # Chủ dự án 07/09/2026: "đừng để khách điền mà cho khách chọn". Ô này
+        # điền sẵn theo khán giả đã chọn ở Bước 1 (bộ văn hoá khai `ngon_ngu`),
+        # đổi được, và ghi vào `ngon_ngu` của kênh.
+        #
+        # Nhãn nói KỊCH BẢN chứ không nói giọng đọc, vì đó mới là việc khoá này
+        # thật sự làm: `auto_khau` dựng lời nhắc "viết bằng tiếng Nhật" từ nó,
+        # `doi_thu` cào sổ đối thủ theo nó, `go_cach_cjk` dọn chữ theo nó. Mã
+        # cũng được gửi kèm việc đọc, nhưng ĐO 08/09/2026 thì máy chủ đang bỏ
+        # qua (xem `core.kenh.ma_ngon_ngu_tts`) — nên đừng hứa gì về giọng ở đây.
+        # Không có mục "Tự động": kênh luôn phải biết mình viết bằng tiếng gì.
+        v.addWidget(nhan("Ngôn ngữ của kênh", "h2"))
+        v.addWidget(self._phu(
+            "Kịch bản sẽ được viết bằng tiếng này, và sổ đối thủ cũng cào theo nó. "
+            "Điền sẵn theo khán giả ở Bước 1 — chỉ đổi khi kênh làm cho khán giả "
+            "nước khác."))
+        self._o_ngon_ngu = QComboBox()
+        self._o_ngon_ngu.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+        self._o_ngon_ngu.setMinimumContentsLength(14)
+        for ma_tieng, ten_tieng_ in DANH_SACH_TIENG:
+            self._o_ngon_ngu.addItem("{0} ({1})".format(ten_tieng_, ma_tieng), ma_tieng)
+        v.addWidget(self._o_ngon_ngu)
+
         v.addWidget(self._phu(
             "Chưa có mã giọng? Mở Thư viện giọng của nhà cung cấp, nghe thử, "
             "chọn một giọng rồi bấm “Use” — mã hiện ra (Voice ID) dán vào ô trên."))
@@ -1047,6 +1073,27 @@ class HopKenh(QDialog):
         v.addStretch(1)
         return w
 
+    @property
+    def ma_ngon_ngu_kenh(self) -> str:
+        """Mã hai chữ đang chọn ở ô Ngôn ngữ của kênh (rỗng nếu ô chưa dựng)."""
+        o = getattr(self, "_o_ngon_ngu", None)
+        return str(o.currentData() or "") if o is not None else ""
+
+    def _dat_ngon_ngu_kenh(self, ma: str) -> None:
+        """Chọn tiếng theo mã (`ja`, `ja-JP`…). Mã lạ/rỗng thì GIỮ NGUYÊN lựa chọn
+        hiện tại — không tự nhảy về tiếng Việt, kẻo kênh Nhật thành kênh Việt."""
+        o = getattr(self, "_o_ngon_ngu", None)
+        if o is None:
+            return
+        vi_tri = o.findData(ma_ngon_ngu_tts(ma))
+        if vi_tri >= 0:
+            o.setCurrentIndex(vi_tri)
+
+    def _ngon_ngu_theo_khan_gia(self) -> None:
+        """Khán giả ở Bước 1 đổi thì tiếng giọng đọc đổi theo (chế độ tạo)."""
+        vh = self._bo_dang_chon(self._c_vh, self._van_hoa)
+        if vh is not None:
+            self._dat_ngon_ngu_kenh(str(vh.du_lieu.get("ngon_ngu") or ""))
 
     # ── Bước 4: Các prompt ───────────────────────────────────────────────────
 
@@ -1788,6 +1835,10 @@ class HopKenh(QDialog):
         if sua:
             chu = _dat_khoa_yaml(chu, "voice_id",
                                  self._o_giong.text().strip(), nhay=True)
+        # Tiếng giọng đọc do khách chọn ở Bước 2. Lúc tạo, `dung_kenh` đã ghi
+        # theo bộ văn hoá; ghi lại ở đây để lựa chọn của khách thắng nếu họ đổi.
+        if self.ma_ngon_ngu_kenh:
+            chu = _dat_khoa_yaml(chu, "ngon_ngu", self.ma_ngon_ngu_kenh, nhay=True)
         _ghi_tam(duong, chu)
 
     def _chep_nhac(self, thu_muc: str) -> str:
@@ -1826,6 +1877,7 @@ class HopKenh(QDialog):
         self._them_trang("Dựng video", self._trang_dung_video(cai, thu_muc))
 
         self._o_giong.setText(self._kenh.voice_id)
+        self._dat_ngon_ngu_kenh(self._kenh.ngon_ngu)
         duong_theo = {ten: os.path.join(thu_muc, THU_MUC_PROMPT, ten)
                       for ten, _m in BUOC_PROMPT}
         self._dat_prompt(self._kenh.prompt, duong_theo_khoa=duong_theo)
