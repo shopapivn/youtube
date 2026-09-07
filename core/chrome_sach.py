@@ -750,10 +750,32 @@ def ipv6_tren_may(chay: Optional[Callable[[List[str]], str]] = None) -> List[str
     if chay is None:
         def chay(lenh: List[str]) -> str:
             try:
+                # ⚠ BẮT BUỘC `encoding` + `errors` — sự cố 06/09/2026 ở máy khách.
+                #
+                # `netsh` xuất theo BẢNG MÃ HỆ THỐNG, không phải UTF-8. Trên
+                # Windows bản địa hoá, chữ trong bảng có byte như 0x93 (dấu nháy
+                # cong của cp1252), và `text=True` trần sẽ giải mã bằng UTF-8 rồi
+                # vỡ: `UnicodeDecodeError: can't decode byte 0x93`.
+                #
+                # Chỗ này hỏng theo kiểu tệ nhất: `capture_output=True` mở HAI
+                # ống nên `communicate()` đọc trong một LUỒNG NỀN, mà
+                # `except (OSError, SubprocessError)` bên dưới KHÔNG bắt
+                # `UnicodeDecodeError`. Nên nó không rơi vào nhánh `return ""` —
+                # nó chết trong luồng nền, và hàm này im lặng không trả IPv6 nào.
+                #
+                # Hậu quả: đây là hàm tìm đường ra cho "mỗi hồ sơ Chrome một IP".
+                # Nó chết thì MỌI hồ sơ dùng chung một IP — đúng hình dạng mà cả
+                # cơ chế này sinh ra để tránh, và không có một dòng lỗi nào ở
+                # tầng người dùng.
+                #
+                # `errors="replace"` là đủ và an toàn: ta chỉ bóc địa chỉ IPv6
+                # bằng regex, mà địa chỉ thì thuần ASCII — vài ký tự tiêu đề bị
+                # thay bằng dấu hỏi không ảnh hưởng gì.
                 r = subprocess.run(lenh, capture_output=True, text=True, timeout=10,
+                                   encoding="utf-8", errors="replace",
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                 return r.stdout or ""
-            except (OSError, subprocess.SubprocessError):
+            except (OSError, subprocess.SubprocessError, UnicodeError):
                 return ""
     if sys.platform == "win32":
         van_ban = chay(["netsh", "interface", "ipv6", "show", "address"])

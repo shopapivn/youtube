@@ -467,7 +467,10 @@ def _chrome_dang_chay(chrome: str) -> bool:
         try:
             ra = subprocess.run(
                 ["tasklist", "/FI", "IMAGENAME eq " + ung, "/NH"],
-                capture_output=True, text=True, timeout=15)
+                # `tasklist` xuất theo BẢNG MÃ HỆ THỐNG, không phải UTF-8 —
+                # xem sự cố 06/09/2026 ở `chrome_sach.ipv6_tren_may`.
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=15)
             if ung.lower() in (ra.stdout or "").lower():
                 return True
         except Exception:  # noqa: BLE001 — hỏi không được thì coi như đang chạy

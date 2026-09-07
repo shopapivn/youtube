@@ -125,7 +125,13 @@ def _thong_tin_video(video: str) -> tuple:
         raise LoiCapCut("Không đọc được độ dài của video: " + video)
     ket = subprocess.run(
         [ffmpeg, "-hide_banner", "-i", video],
-        capture_output=True, text=True, timeout=60,
+        # ffmpeg in siêu dữ liệu của file ra stderr — tên bài, tác giả, chú
+        # thích. Video của khách có tiêu đề tiếng Nhật/tiếng Trung là chuyện
+        # thường, và chỉ cần một byte lệch là `text=True` trần vỡ trong luồng
+        # đọc nền. Ta chỉ bóc kích thước bằng regex (thuần ASCII) nên
+        # `errors="replace"` không mất gì.
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=60,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     khop = re.search(r"Video:.*?(\d{2,5})x(\d{2,5})", ket.stderr or "")
     rong, cao = (int(khop.group(1)), int(khop.group(2))) if khop else (1920, 1080)
@@ -279,7 +285,10 @@ def _go_khoi_so_cai(goc: str, ten: str) -> None:
 def _capcut_dang_chay() -> bool:
     ket = subprocess.run(
         ["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV"],
-        capture_output=True, text=True,
+        # `tasklist` xuất theo BẢNG MÃ HỆ THỐNG, không phải UTF-8. Trên Windows
+        # bản địa hoá, `text=True` trần sẽ vỡ bằng UnicodeDecodeError trong luồng
+        # đọc nền — xem sự cố đã ghi ở `chrome_sach.ipv6_tren_may`.
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     return "CapCut.exe" in (ket.stdout or "")
 

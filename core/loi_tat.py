@@ -112,7 +112,10 @@ def _chay_ps(ma: str) -> str:
     ra = subprocess.run(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
          "-Command", ma],
-        capture_output=True, text=True, timeout=30, creationflags=co)
+        # PowerShell in ra theo BẢNG MÃ HỆ THỐNG, không phải UTF-8 — xem sự cố
+        # đã ghi ở `chrome_sach.ipv6_tren_may`.
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=30, creationflags=co)
     return (ra.stdout or "").strip()
 
 

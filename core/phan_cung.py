@@ -39,7 +39,8 @@ def khao_sat() -> PhanCung:
         r = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.total",
              "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=5, check=False)
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=5, check=False)
         if r.returncode == 0 and r.stdout.strip():
             # Có thể có nhiều GPU, lấy cái đầu
             vram_mb = int(float(r.stdout.strip().split("\n")[0]))
@@ -62,7 +63,8 @@ def khao_sat() -> PhanCung:
         if ffmpeg_bin:
             r = subprocess.run(
                 [ffmpeg_bin, "-hide_banner", "-encoders"],
-                capture_output=True, text=True, timeout=10, check=False)
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=10, check=False)
             if r.returncode == 0:
                 # Dạng: " V..... h264_nvenc ..."
                 for line in r.stdout.split("\n"):
