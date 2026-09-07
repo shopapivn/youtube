@@ -86,6 +86,19 @@ vm/phien-ban.txt
 # thiet lap may ao. Khuon san xuat (prompt/) van di theo kho nhu cu.
 CHANNEL/*/chi-so/
 CHANNEL/*/ke-hoach-dang/
+# Hop viec giao cho may ao (tram ghi ra, xem core/chi_so_ytb/tram.py): trang
+# thai luc chay cua RIENG may nay, khong phai thu de phat hanh.
+CHANNEL/hop-viec-may-ao.json
+
+# Trang thai luc chay o goc kho, sinh ra moi lan mo tool:
+# `.dang-mo.lock` la khoa mot-ban-mot-luc (shopapi_studio_qt.py).
+.dang-mo.lock
+
+# Ban sao luu truoc khi va mot tep (`<ten>.truoc-<viec>-<ngay>`). Chung la ban
+# CU cua tep da nam trong kho, nen day len la day rac va lam nhieu `git status`
+# den muc khong con doc noi - dung cach da lam mot phien mat commit vi khong
+# thay diff cua minh giua hang tram dong.
+*.truoc-*
 
 # `nghien-cuu/` giu nguyen luat cu — TRU `tuyen.csv`.
 #
