@@ -42,7 +42,7 @@ from typing import Callable, Dict, List, Optional
 
 __all__ = [
     "DIA_CHI_GOI", "thu_muc_runtime", "tim_ffmpeg_da_tai", "du_dung",
-    "thieu_gi", "tai_va_giai_nen", "cai_ffmpeg",
+    "thieu_gi", "tai_va_giai_nen", "cai_ffmpeg", "bao_dam_ffmpeg",
 ]
 
 #: Nơi tải FFmpeg bản gói sẵn cho Windows, theo thứ tự thử.
@@ -255,3 +255,34 @@ def cai_ffmpeg(goc: str, tai: Optional[Callable[[str], bytes]] = None,
         "Máy này chưa có FFmpeg và tool tải về cũng không được ({0}). Kiểm tra "
         "mạng rồi chạy lại khâu dựng — bảy khâu trước vẫn giữ nguyên, không "
         "phải làm lại.".format(str(loi_cuoi)[:120] if loi_cuoi else "không rõ"))
+
+
+def bao_dam_ffmpeg(goc: str, bao: Optional[Callable[[str], None]] = None) -> str:
+    """Một bản FFmpeg ĐỦ DÙNG cho máy này — chưa có thì tải về thư mục tool.
+
+    ═══ MỘT CỬA CHO MỌI CHỖ CẦN FFMPEG ═══
+
+    Khách báo 07/09/2026, tab Dựng video: *"bản FFmpeg trên máy này không chèn
+    được phụ đề vào hình"*. Trước đó chỉ có đường Tự động (`auto_khau`) biết tự
+    tải FFmpeg; tab Dựng video và SETUP.bat chỉ **tìm** rồi dùng bản đầu tiên
+    thấy — kể cả khi bản ấy thiếu bộ lọc. Chủ dự án: *"làm sao để cài mọi thứ
+    đủ, độc lập ở trong thư mục để không gặp các lỗi"*.
+
+    Thứ tự: bản nào `tim_ffmpeg` chọn mà đủ dùng thì lấy luôn, không tải; thiếu
+    thì tải bản đầy đủ về `runtime/` (40 MB, một lần cho cả đời máy). Tải hỏng
+    thì ném `RuntimeError` với câu người thường đọc được — người gọi quyết định
+    dùng tạm bản cụt hay dừng.
+    """
+    from .dung_video import tim_ffmpeg  # noqa: PLC0415 — cùng gói
+
+    dang_co = tim_ffmpeg(goc)
+    if dang_co:
+        thieu = thieu_gi(dang_co)
+        if not thieu:
+            return dang_co
+        if bao:
+            bao("  bản FFmpeg đang có thiếu {0} — tải bản đầy đủ về thư mục "
+                "tool.".format(", ".join(thieu)))
+    elif bao:
+        bao("  máy chưa có FFmpeg — tải một bản về thư mục tool.")
+    return cai_ffmpeg(goc, bao=bao)

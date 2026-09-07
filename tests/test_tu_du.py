@@ -285,10 +285,91 @@ class TestCamVaoKhoiDong:
         from ui_qt.cua_so_tu_du import bao_dam_du
 
         goc = _dung_goc(tmp_path, "pillow>=10.0\n")
-        tu_du.ghi_nhan(goc, tu_du.dau_van(goc))
+        tu_du.ghi_nhan(goc, tu_du.dau_van(goc), ffmpeg="ffmpeg-da-lo")
 
         def no(*_a, **_k):
             raise AssertionError("máy đã đủ mà vẫn đi gọi pip")
 
         monkeypatch.setattr(tu_du.subprocess, "Popen", no)
+        monkeypatch.setattr(tu_du, "_bao_dam_ffmpeg",
+                            lambda *_a, **_k: pytest.fail("đã lo FFmpeg rồi mà soi lại"))
         assert bao_dam_du(goc) is False
+
+
+# ── FFmpeg cũng là phần còn thiếu ────────────────────────────────────────────
+
+
+class TestFfmpegLucKhoiDong:
+    """Khách 07/09/2026: bản FFmpeg cụt trên máy → "không chèn được phụ đề".
+
+    Chủ dự án: *"tool có logic là khi cập nhật nếu thiếu gì sẽ tự cài tự fix —
+    để khách update là có thể fix lỗi kia"*.
+    """
+
+    def test_chua_lo_ffmpeg_thi_can_lam_du_thu_vien_da_du(self, tmp_path):
+        goc = _dung_goc(tmp_path, "pillow>=10.0\n")
+        tu_du.ghi_nhan(goc, tu_du.dau_van(goc))
+        assert tu_du.can_cai(goc) == ""
+        assert "FFmpeg" in tu_du.can_ffmpeg(goc)
+        assert "FFmpeg" in tu_du.ly_do_can(goc)
+
+    def test_lo_xong_ghi_dau_thi_lan_sau_khong_soi_lai(self, tmp_path, monkeypatch):
+        """Đường chạy của mọi lần mở tool: đọc một tệp, không chạy FFmpeg."""
+        goc = _dung_goc(tmp_path, "pillow>=10.0\n")
+        tu_du.ghi_nhan(goc, tu_du.dau_van(goc))
+        monkeypatch.setattr(tu_du, "_bao_dam_ffmpeg", lambda g, noi: "runtime/ffmpeg.exe")
+        duoc, _ = tu_du.cai_tat_ca(goc)
+        assert duoc
+        assert tu_du.can_ffmpeg(goc) == ""
+        assert tu_du.ly_do_can(goc) == ""
+
+    def test_ffmpeg_tai_hong_khong_keo_buoc_tu_cai_thanh_hong(self, tmp_path, monkeypatch):
+        """Thiếu FFmpeg chỉ hỏng một tab, và tab ấy tự tải lại được."""
+        goc = _dung_goc(tmp_path, "pillow>=10.0\n")
+        tu_du.ghi_nhan(goc, tu_du.dau_van(goc))
+
+        def hong(g, noi):
+            raise RuntimeError("không có mạng")
+
+        monkeypatch.setattr(tu_du, "_bao_dam_ffmpeg", hong)
+        duoc, loi_nhan = tu_du.cai_tat_ca(goc)
+        assert duoc, "thư viện đủ thì bước này vẫn là xong"
+        assert "FFmpeg" in loi_nhan and "không có mạng" in loi_nhan
+        assert tu_du.can_ffmpeg(goc), "chưa lo được thì lần sau phải thử lại"
+
+    def test_pip_roi_moi_toi_ffmpeg_va_ghi_dau_khong_xoa_nhau(self, tmp_path, monkeypatch):
+        goc = _dung_goc(tmp_path, "pillow>=10.0\n")
+        thu_tu = []
+        gia = _PipGia()
+        monkeypatch.setattr(tu_du.subprocess, "Popen",
+                            lambda *a, **k: thu_tu.append("pip") or gia(*a, **k))
+        monkeypatch.setattr(tu_du, "_bao_dam_ffmpeg",
+                            lambda g, noi: thu_tu.append("ffmpeg") or "ff.exe")
+        duoc, _ = tu_du.cai_tat_ca(goc)
+        assert duoc
+        assert thu_tu == ["pip", "ffmpeg"]
+        # Chỗ khởi động ghi dấu pip SAU khi cửa sổ đóng — không được xoá dấu FFmpeg.
+        tu_du.ghi_nhan(goc, tu_du.dau_van(goc))
+        assert tu_du.ly_do_can(goc) == ""
+
+    def test_cua_so_khoi_dong_lo_ca_ffmpeg(self, tmp_path, monkeypatch):
+        """`bao_dam_du` phải gọi `cai_tat_ca`, không phải `cai` (chỉ pip)."""
+        pytest.importorskip("PyQt5")
+        from ui_qt import cua_so_tu_du
+
+        goc = _dung_goc(tmp_path, "pillow>=10.0\n")
+        tu_du.ghi_nhan(goc, tu_du.dau_van(goc))       # pip đủ, FFmpeg chưa
+        da_goi = []
+
+        class _HopGia:
+            def __init__(self, goc_, ly_do, cai, cha=None):
+                da_goi.append((ly_do, cai))
+                self.duoc = True
+
+            def exec_(self):
+                pass
+
+        monkeypatch.setattr(cua_so_tu_du, "HopTuDu", _HopGia)
+        assert cua_so_tu_du.bao_dam_du(goc) is True
+        assert "FFmpeg" in da_goi[0][0]
+        assert da_goi[0][1] is tu_du.cai_tat_ca

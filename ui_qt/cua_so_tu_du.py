@@ -60,7 +60,7 @@ class HopTuDu(QDialog):
         doc.setContentsMargins(20, 18, 20, 18)
         doc.setSpacing(10)
 
-        dau = QLabel("Bản mới cần thêm vài thư viện, tôi cài luôn cho bạn.")
+        dau = QLabel("Bản mới cần chuẩn bị thêm vài thứ, tôi làm luôn cho bạn.")
         dau.setStyleSheet("font-size:15px; font-weight:600;")
         doc.addWidget(dau)
 
@@ -129,7 +129,9 @@ def bao_dam_du(goc: str) -> bool:
     except Exception:  # noqa: BLE001
         return False
     try:
-        ly_do = tu_du.can_cai(goc)
+        # Thư viện Python, rồi FFmpeg cho khâu dựng video — cả hai đều là
+        # "phần còn thiếu" sau một lần cập nhật (xem `tu_du.can_ffmpeg`).
+        ly_do = tu_du.ly_do_can(goc)
     except Exception:  # noqa: BLE001
         return False
     if not ly_do:
@@ -151,7 +153,7 @@ def bao_dam_du(goc: str) -> bool:
     dang_co = QApplication.instance()
     app = dang_co or QApplication([])
     try:
-        hop = HopTuDu(goc, ly_do, tu_du.cai)
+        hop = HopTuDu(goc, ly_do, tu_du.cai_tat_ca)
         hop.exec_()
         if hop.duoc:
             tu_du.ghi_nhan(goc, tu_du.dau_van(goc))

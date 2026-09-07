@@ -459,12 +459,12 @@ class TrangCaiDat(QWidget):
         try:
             from core import tu_du
 
-            ly_do = tu_du.can_cai(self._app.base_dir)
+            ly_do = tu_du.ly_do_can(self._app.base_dir)
         except Exception as loi:  # noqa: BLE001
             self._nhan_tv.setText("Không kiểm được: {0}".format(loi))
             return
         self._nhan_tv.setText(
-            "Máy đã đủ thư viện, không cần làm gì." if not ly_do else
+            "Máy đã đủ thư viện và FFmpeg, không cần làm gì." if not ly_do else
             "Cần cài thêm: {0}. Bấm nút dưới là tôi cài luôn.".format(ly_do))
         try:
             from core import nang_anh
@@ -480,8 +480,8 @@ class TrangCaiDat(QWidget):
 
         from .cua_so_tu_du import HopTuDu
 
-        ly_do = tu_du.can_cai(self._app.base_dir) or "bạn bấm kiểm tra lại"
-        hop = HopTuDu(self._app.base_dir, ly_do, tu_du.cai, self)
+        ly_do = tu_du.ly_do_can(self._app.base_dir) or "bạn bấm kiểm tra lại"
+        hop = HopTuDu(self._app.base_dir, ly_do, tu_du.cai_tat_ca, self)
         hop.exec_()
         if hop.duoc:
             tu_du.ghi_nhan(self._app.base_dir, tu_du.dau_van(self._app.base_dir))

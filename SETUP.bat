@@ -415,13 +415,15 @@ if exist "%~dp0models\faster-whisper-small\config.json" (
     echo.
   )
 )
-REM FFmpeg: can cho khau dung video va khau tach phu de. Uu tien ban cai san
-REM tren may; khong co thi lay ban di kem imageio-ffmpeg.
-%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.dung_video import tim_ffmpeg; p = tim_ffmpeg(); print('  - FFmpeg:', p or 'KHONG THAY'); sys.exit(0 if p else 1)"
+REM FFmpeg: can cho khau dung video va khau tach phu de. Ban tren may phai DU
+REM DUNG (co libx264, co bo loc subtitles...) - thieu thi tool TU TAI ban day
+REM du ve thu muc runtime\ (40 MB, mot lan), khong muon ban cut cua may. Khach
+REM 07/09/2026 dung video bang ban cut tren may -> "khong chen duoc phu de".
+%PYEXE% -c "import sys, os; sys.path.insert(0, os.getcwd()); from core.ffmpeg_goi_san import bao_dam_ffmpeg; p = bao_dam_ffmpeg(os.getcwd(), bao=print); print('  - FFmpeg:', p)"
 if errorlevel 1 (
   echo.
-  echo   !!! Khong tim thay FFmpeg. Khau dung video se khong chay duoc.
-  echo   -^> Chay lai SETUP.bat khi may co mang de cai imageio-ffmpeg.
+  echo   !!! Chua co FFmpeg du dung va tai ve cung khong duoc. Khau dung video
+  echo       se tu tai lai khi ban bam "Dung video" luc may co mang.
   echo.
 )
 REM Khao sat phan cung: GPU, VRAM, encoder FFmpeg co san. Chi chay 1 lan, ket qua
@@ -475,10 +477,8 @@ if errorlevel 1 (
   echo   !!! MAY NAY CHUA DUNG DUOC VIDEO.
   echo.
   echo   Cac tab khac van dung binh thuong, rieng tab Dung video se bao loi.
-  echo   Thuong la do ban FFmpeg tren may thieu bo ma hoa. Cach chua:
-  echo     1^) Go FFmpeg dang co tren may ra khoi PATH, roi chay lai SETUP.bat
-  echo        - tool se dung ban di kem ^(imageio-ffmpeg^).
-  echo     2^) Hoac tai FFmpeg ban day du tu https://ffmpeg.org roi cai lai.
+  echo   Tool da thu tai FFmpeg ban day du ve thu muc runtime\ o buoc tren.
+  echo   Neu tai khong duoc: chay lai SETUP.bat khi may co mang.
   echo   Trong tool: tab Dung video -^> Tuy chon -^> "Kiem tra may" de thu lai.
   echo.
 )

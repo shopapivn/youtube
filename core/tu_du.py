@@ -53,7 +53,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 __all__ = [
     "TEN_DAU_VET", "doc_goi", "dau_van", "thieu", "can_cai", "cai",
-    "ghi_nhan", "duong_yeu_cau",
+    "ghi_nhan", "duong_yeu_cau", "can_ffmpeg", "cai_tat_ca", "ly_do_can",
 ]
 
 TEN_DAU_VET = "da-cai.json"
@@ -141,15 +141,23 @@ def _da_ghi(goc: str) -> Dict[str, object]:
         return {}
 
 
-def ghi_nhan(goc: str, dau: str) -> bool:
-    """Ghi lại là đã cài xong cho đúng dấu vân này."""
+def ghi_nhan(goc: str, dau: Optional[str], ffmpeg: Optional[str] = None) -> bool:
+    """Ghi lại là đã cài xong cho đúng dấu vân này.
+
+    `dau` / `ffmpeg` để `None` là **giữ nguyên** giá trị đã ghi lần trước: pip
+    và FFmpeg xong ở hai lúc khác nhau, ghi cái này không được xoá cái kia.
+    """
     duong = _duong_dau_vet(goc)
+    cu = _da_ghi(goc)
     try:
         os.makedirs(os.path.dirname(duong), exist_ok=True)
         tam = duong + ".tam"
         with open(tam, "w", encoding="utf-8") as tep:
-            json.dump({"dau": dau, "luc": int(time.time()),
-                       "python": sys.version.split()[0]},
+            json.dump({"dau": cu.get("dau", "") if dau is None else dau,
+                       "luc": int(time.time()),
+                       "python": sys.version.split()[0],
+                       "ffmpeg": (cu.get("ffmpeg", "") if ffmpeg is None
+                                  else ffmpeg)},
                       tep, ensure_ascii=False, indent=2)
         os.replace(tam, duong)
         return True
@@ -177,6 +185,72 @@ def can_cai(goc: str) -> str:
     if da.get("python") and da.get("python") != sys.version.split()[0]:
         return "máy đã đổi sang Python {0}".format(sys.version.split()[0])
     return ""
+
+
+def can_ffmpeg(goc: str) -> str:
+    """Lý do cần lo FFmpeg, hoặc **chuỗi rỗng** khi máy này đã được lo rồi.
+
+    ═══ FFMPEG CŨNG LÀ "PHẦN CÒN THIẾU" ═══
+
+    Khách 07/09/2026 dựng video bằng bản FFmpeg cụt trên máy và nhận *"không
+    chèn được phụ đề"*. Chủ dự án: *"tool có logic là khi cập nhật nếu thiếu gì
+    sẽ tự cài tự fix — để khách update là có thể fix lỗi kia"*. Bước tự cài ở
+    đây trước nay chỉ lo `pip`; giờ lo cả FFmpeg: soi bản đang có, thiếu bộ
+    lọc thì tải bản đầy đủ về `runtime/` (`core/ffmpeg_goi_san.py`).
+
+    Chỉ làm **một lần cho mỗi máy**: xong thì ghi dấu vào `da-cai.json`, và
+    từ đó mỗi lần mở tool chỉ đọc lại một tệp đã có sẵn — không chạy FFmpeg,
+    không gọi mạng. Bản đã tải mà sau này bị xoá thì tab Dựng video tự tải lại
+    lúc bấm Dựng, nên ở đây không cần soi lại mỗi lần.
+    """
+    if _da_ghi(goc).get("ffmpeg"):
+        return ""
+    return "khâu dựng video cần một bản FFmpeg đầy đủ trong thư mục tool"
+
+
+def ly_do_can(goc: str) -> str:
+    """Một câu gộp: cần `pip` hay cần FFmpeg, hay không cần gì (rỗng)."""
+    return can_cai(goc) or can_ffmpeg(goc)
+
+
+def _bao_dam_ffmpeg(goc: str, noi: Callable[[str], None]) -> str:
+    """Đường dẫn FFmpeg đủ dùng (tải nếu cần), hoặc rỗng khi không lo được."""
+    from .ffmpeg_goi_san import bao_dam_ffmpeg  # noqa: PLC0415 — nhập muộn
+
+    return bao_dam_ffmpeg(goc, bao=lambda dong: noi(dong.strip()))
+
+
+def cai_tat_ca(goc: str, ghi: Optional[Callable[[str], None]] = None,
+               tran_giay: float = 1800.0) -> Tuple[bool, str]:
+    """Cài thư viện (nếu cần) rồi lo FFmpeg (nếu cần). Trả `(xong, lời)`.
+
+    `xong` là của phần **thư viện**: thiếu thư viện là tool không mở được,
+    còn thiếu FFmpeg chỉ hỏng một tab — và tab ấy tự tải lại được. Nên FFmpeg
+    tải hỏng không được kéo cả bước này thành "hỏng", chỉ nói ra là chưa xong.
+    """
+    def noi(dong: str) -> None:
+        if ghi is not None:
+            try:
+                ghi(dong)
+            except Exception:  # noqa: BLE001
+                pass
+
+    duoc, loi_nhan = True, "thư viện đã đủ"
+    if can_cai(goc):
+        duoc, loi_nhan = cai(goc, ghi, tran_giay)
+    if can_ffmpeg(goc):
+        noi("Kiểm tra FFmpeg cho khâu dựng video…")
+        try:
+            ffmpeg = _bao_dam_ffmpeg(goc, noi)
+        except Exception as loi:  # noqa: BLE001 — mạng, đĩa, nguồn tải
+            ffmpeg = ""
+            loi_nhan += ". FFmpeg: chưa tải được ({0}) — tab Dựng video sẽ tự " \
+                        "tải lại khi bạn bấm Dựng lúc máy có mạng".format(
+                            str(loi)[:120])
+        if ffmpeg:
+            ghi_nhan(goc, None, ffmpeg=ffmpeg)
+            noi("FFmpeg sẵn sàng: {0}".format(ffmpeg))
+    return duoc, loi_nhan
 
 
 def _dong_yeu_cau(goc: str) -> List[str]:

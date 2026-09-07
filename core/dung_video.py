@@ -60,6 +60,7 @@ __all__ = [
     "doc_bang_canh", "khop_canh_voi_hinh", "giay_tung_hinh",
     "du_an_chon_tay", "phu_de_tu_txt",
     "lenh_ffmpeg", "loc_srt_style", "thoi_luong_moi_anh", "la_clip", "doc_thoi_luong",
+    "gon_lenh", "loi_khong_chay_duoc", "GIOI_HAN_LENH",
 ]
 
 DUOI_ANH = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
@@ -855,6 +856,90 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
     lenh += ["-c:a", "aac", "-b:a", "192k",
              "-shortest", "-movflags", "+faststart", dich]
     return lenh
+
+
+#: Windows từ chối mở tiến trình khi cả dòng lệnh dài quá 32.767 ký tự
+#: (`[WinError 206] The filename or extension is too long`). Chừa một khoảng
+#: cho phần Windows tự thêm vào khi bọc nháy.
+GIOI_HAN_LENH = 32000
+
+
+def gon_lenh(lenh: List[str], tep_loc: str) -> Tuple[List[str], str]:
+    """Rút dòng lệnh FFmpeg cho vừa giới hạn của Windows. Trả `(lệnh, cwd)`.
+
+    ═══ [WinError 206] The filename or extension is too long ═══
+
+    Khách báo 07/09/2026: dựng dự án `video-dau-tien` ra đúng dòng ấy, và tool
+    kết luận nhầm là *"bản FFmpeg trên máy này không chèn được phụ đề"*. Thật ra
+    FFmpeg **chưa hề chạy**: Windows chặn ngay lúc mở tiến trình vì dòng lệnh
+    quá dài. :func:`lenh_ffmpeg` nhét cả chuỗi lọc lên dòng lệnh — mỗi ảnh
+    thêm một đường dẫn đầy đủ *và* một đoạn `scale…pad…fps` chừng 130 ký tự —
+    nên một video mười phút với 150 ảnh là vượt 32.767 ký tự. Lỗi này không bao
+    giờ hiện trên dự án thử hai ảnh.
+
+    Hai việc, cả hai đều không đổi kết quả dựng:
+
+    1. **Chuỗi lọc ghi ra tệp**, đưa cho FFmpeg bằng `-filter_complex_script`.
+       Đây là phần dài nhất và cũng là phần không có giới hạn khi nằm trong tệp.
+    2. **Đường dẫn đầu vào rút thành tương đối** so với thư mục chung của chúng
+       (`cwd` trả về, người gọi truyền vào `Popen`). Ảnh của một dự án nằm cùng
+       một thư mục, lặp lại `D:\\youtube-main\\youtube-main\\PROJECTS\\…` 150 lần
+       là phí chỗ. Khác ổ đĩa thì để nguyên — `relpath` không nối được hai ổ.
+
+    Vẫn còn dài hơn :data:`GIOI_HAN_LENH` (hàng nghìn ảnh) thì ném `ValueError`
+    với câu nói thật, thay vì để Windows ném WinError 206 mà không ai hiểu.
+    """
+    import subprocess  # noqa: PLC0415
+
+    lenh = list(lenh)
+    if "-filter_complex" in lenh:
+        vi_tri = lenh.index("-filter_complex")
+        with open(tep_loc, "w", encoding="utf-8") as tep:
+            tep.write(lenh[vi_tri + 1])
+        lenh[vi_tri:vi_tri + 2] = ["-filter_complex_script", tep_loc]
+
+    dau_vao = [i + 1 for i, t in enumerate(lenh[:-1])
+               if t == "-i" and os.path.isabs(lenh[i + 1])]
+    cwd = ""
+    if dau_vao:
+        try:
+            chung = os.path.commonpath([os.path.dirname(lenh[i]) for i in dau_vao])
+        except ValueError:  # khác ổ đĩa — không có thư mục chung
+            chung = ""
+        if chung and os.path.isdir(chung):
+            cwd = chung
+            for i in dau_vao:
+                lenh[i] = os.path.relpath(lenh[i], chung)
+
+    if len(subprocess.list2cmdline(lenh)) > GIOI_HAN_LENH:
+        # Đếm ảnh/clip: mọi `-i` trừ lời đọc và nhạc nền (mỗi thứ một đầu vào).
+        so_hinh = max(1, sum(1 for t in lenh if t == "-i")
+                      - 1 - (1 if "-stream_loop" in lenh else 0))
+        raise ValueError(
+            "dự án có quá nhiều ảnh/clip ({0}) để Windows chạy một lệnh dựng — "
+            "tách thành hai dự án nhỏ hơn rồi dựng riêng".format(so_hinh))
+    return lenh, cwd
+
+
+def loi_khong_chay_duoc(loi: OSError) -> str:
+    """Câu người thường đọc được khi Windows **không mở nổi** FFmpeg.
+
+    Đây là lỗi *trước* khi FFmpeg chạy, nên không phải chuyện FFmpeg thiếu bộ
+    lọc gì — đừng để nó lọt vào nấc lùi "bỏ phụ đề / bỏ nhạc" của
+    :func:`phuong_an_dung`: lùi nấc nào cũng hỏng y hệt, và câu báo cuối cùng
+    thành đổ oan cho phụ đề.
+    """
+    ma = getattr(loi, "winerror", None)
+    if ma == 206:
+        return ("dòng lệnh dựng quá dài cho Windows — dự án có quá nhiều "
+                "ảnh/clip; tách thành hai dự án nhỏ hơn")
+    if ma == 2 or getattr(loi, "errno", None) == 2:
+        return ("không tìm thấy file FFmpeg ({0}) — chạy lại SETUP.bat để tool "
+                "tải bản đầy đủ về thư mục tool".format(loi.filename or ""))
+    if ma == 5 or getattr(loi, "errno", None) == 13:
+        return ("Windows hoặc phần mềm diệt virus chặn không cho FFmpeg chạy — "
+                "mở phần mềm diệt virus, cho phép thư mục tool rồi dựng lại")
+    return "không mở được FFmpeg: {0}".format(loi)
 
 
 def _tham_so_video(cai: CaiDatDung) -> List[str]:

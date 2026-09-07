@@ -84,9 +84,12 @@ def ung_dung():
 
 
 @pytest.fixture
-def trang(tmp_path, ung_dung):
+def trang(tmp_path, ung_dung, monkeypatch):
     from ui_qt.trang_edit import TrangDungVideo
 
+    # Bài ở đây không dựng thật: FFmpeg giả phải được coi là ĐỦ DÙNG, không
+    # thì tab đi tải 40 MB về máy chạy test.
+    monkeypatch.setattr("ui_qt.trang_edit.thieu_gi", lambda *_a, **_k: [])
     goc = str(tmp_path)
     _du_an_tool(goc)
     app = _AppGia(goc)
@@ -98,7 +101,8 @@ class TestQuetSan:
         t, _app, _goc = trang
         assert [d.ten for d in t._du_an] == ["video-dau-tien"]
         assert t._du_an[0].chay_duoc
-        assert t._nut_chay.isEnabled() == bool(t._ffmpeg)
+        # Nút bấm được kể cả máy chưa có FFmpeg: bấm là tool tự tải về.
+        assert t._nut_chay.isEnabled()
 
     def test_o_nguon_tro_san_vao_du_an_dang_mo(self, trang):
         t, _app, goc = trang
@@ -197,7 +201,7 @@ class TestLuiNacKhiHong:
         t._gpu.setChecked(True)
         da_chay = []
 
-        def gia(lenh):
+        def gia(lenh, **_k):
             da_chay.append(lenh)
             if "h264_nvenc" in lenh:
                 return 1, "Cannot load nvcuda.dll"
@@ -220,8 +224,13 @@ class TestLuiNacKhiHong:
     def test_khong_dot_duoc_phu_de_thi_van_ra_video(self, trang, monkeypatch):
         t, _app, _goc = trang
 
-        def gia(lenh):
-            if "subtitles=" in " ".join(lenh):
+        def gia(lenh, **_k):
+            # Chuỗi lọc giờ nằm trong TỆP (`-filter_complex_script`), không
+            # còn trên dòng lệnh — xem `core.dung_video.gon_lenh`.
+            with open(lenh[lenh.index("-filter_complex_script") + 1],
+                      encoding="utf-8") as tep:
+                loc = tep.read()
+            if "subtitles=" in loc:
                 return 1, "No such filter: subtitles"
             with open(lenh[-1], "wb") as tep:
                 tep.write(b"video gia")

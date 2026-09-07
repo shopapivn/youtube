@@ -27,7 +27,7 @@ import time
 from dataclasses import replace
 from typing import List, Optional
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
     QHeaderView, QLineEdit, QPlainTextEdit, QProgressBar, QSpinBox,
@@ -37,9 +37,10 @@ from PyQt5.QtGui import QColor
 
 from core.dung_video import (
     DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_bang_canh,
-    doc_thoi_luong, giay_tung_hinh, lenh_ffmpeg, phu_de_tu_txt, phuong_an_dung,
-    quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
+    doc_thoi_luong, giay_tung_hinh, gon_lenh, lenh_ffmpeg, loi_khong_chay_duoc,
+    phu_de_tu_txt, phuong_an_dung, quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
 )
+from core.ffmpeg_goi_san import bao_dam_ffmpeg, thieu_gi
 from core.tron_tieng import co_ne_giong
 
 from . import theme
@@ -53,9 +54,15 @@ COT = ("Dự án", "Ảnh/clip", "Lời đọc", "Phụ đề", "Nhạc", "Trạ
 
 
 class TrangDungVideo(QWidget):
+    #: Dòng nhật ký gửi từ LUỒNG NỀN. Qt xếp hàng tín hiệu về luồng vẽ, nên
+    #: đây là cách duy nhất để khách thấy "đang tải FFmpeg…" ngay lúc nó xảy
+    #: ra thay vì một phút sau, khi cả mẻ đã xong.
+    _bao = pyqtSignal(str)
+
     def __init__(self, app):
         super().__init__()
         self._app = app
+        self._bao.connect(self._ghi)
         self._du_an: List[DuAn] = []
         #: Các dòng khách tự chỉ file vào — giữ nguyên qua mỗi lần quét lại.
         self._chon_tay: List[dict] = []
@@ -155,11 +162,13 @@ class TrangDungVideo(QWidget):
         d2.addWidget(self._nut_dung)
         doc.addLayout(d2)
 
+        # Chỉ TÌM ở đây, không tải: mở tab mà đứng một phút tải 40 MB là khách
+        # tưởng tool treo. Thiếu thì nói trước, và tải lúc bấm "Dựng video"
+        # (`_bao_dam_ffmpeg`) — nút vẫn bấm được, vì tải xong là dựng được.
         self._ffmpeg = tim_ffmpeg()
         if not self._ffmpeg:
-            self._ghi("Chưa tìm thấy FFmpeg. Cài FFmpeg, hoặc cài gói "
-                      "imageio-ffmpeg để dùng bản đi kèm.")
-            self._nut_chay.setEnabled(False)
+            self._ghi("Máy chưa có FFmpeg — khi bạn bấm Dựng video tôi sẽ tải "
+                      "một bản về thư mục tool (40 MB, chỉ một lần).")
         self._doi_phu_de()
         self._bao_may_yeu()
         # Quét sẵn dự án đang mở: chỉ là đọc danh sách file, không tốn tiền và
@@ -259,8 +268,8 @@ class TrangDungVideo(QWidget):
         self._tom_tat.setText("{0} dự án · {1} dựng được · {2} đã xong".format(
             len(self._du_an), len(san_sang),
             sum(1 for d in self._du_an if d.da_xong)))
-        self._nut_chay.setEnabled(bool(self._ffmpeg) and bool(san_sang)
-                                  and not self._dang_chay)
+        # Không khoá nút theo FFmpeg: chưa có thì lúc bấm tool tự tải về.
+        self._nut_chay.setEnabled(bool(san_sang) and not self._dang_chay)
 
     # ── Thêm dữ liệu tay ─────────────────────────────────────────────────────
 
@@ -589,7 +598,6 @@ class TrangDungVideo(QWidget):
             return
 
         cai = self._cai_dat()
-        ffmpeg = self._ffmpeg
         self._xin_dung.clear()
         self._khoa(True)
         self._thanh.setRange(0, len(can_lam))
@@ -601,6 +609,14 @@ class TrangDungVideo(QWidget):
             # `dong` gom lại rồi trả về một lần: đây là LUỒNG NỀN, chạm widget
             # từ đây là Qt sập không đoán trước.
             dong: List[str] = []
+            # ═══ FFMPEG PHẢI ĐỦ DÙNG TRƯỚC KHI DỰNG ═══
+            #
+            # Khách 07/09/2026 nhận "không chèn được phụ đề" rồi "LỖI" — bản
+            # FFmpeg tìm thấy trên máy là bản cụt. Tải bản đầy đủ về thư mục
+            # tool (một lần) rẻ hơn mọi câu hướng dẫn "bạn tự đi cài".
+            ffmpeg = self._bao_dam_ffmpeg(dong)
+            if not ffmpeg:
+                return 0, len(can_lam), dong
             # Hỏi một lần cho cả mẻ: `co_ne_giong` nhớ kết quả lại, nhưng lần
             # hỏi đầu vẫn mất cả trăm mili-giây.
             ne = co_ne_giong(ffmpeg)
@@ -661,19 +677,39 @@ class TrangDungVideo(QWidget):
                 # lọc trộn nhạc — cả ba đều làm FFmpeg chết ngay, và trước đây
                 # là mất cả lượt. Video thiếu nhạc nền vẫn đăng được; không có
                 # video thì không.
+                #
+                # Riêng lỗi Windows KHÔNG MỞ NỔI FFmpeg (mã âm từ `_chay_lenh`)
+                # thì dừng ngay: FFmpeg chưa chạy nên không phải chuyện thiếu
+                # bộ lọc — lùi nấc nào cũng hỏng y hệt, và câu báo cuối cùng
+                # thành đổ oan cho phụ đề (khách 07/09/2026, WinError 206).
                 ma, loi_chu = 1, ""
-                for vi_sao, cai_thu in phuong_an_dung(cai):
-                    if self._xin_dung.is_set():
-                        break
-                    if vi_sao:
-                        dong.append("{0}: {1}.".format(du_an.ten, vi_sao))
-                    ma, loi_chu = self._chay_lenh(lam(cai_thu))
-                    if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
-                        break
+                tep_loc = os.path.join(thu_muc_ra, "_loc-{0}.txt".format(du_an.ten))
+                try:
+                    for vi_sao, cai_thu in phuong_an_dung(cai):
+                        if self._xin_dung.is_set():
+                            break
+                        if vi_sao:
+                            dong.append("{0}: {1}.".format(du_an.ten, vi_sao))
+                        lenh, cwd = gon_lenh(lam(cai_thu), tep_loc)
+                        ma, loi_chu = self._chay_lenh(lenh, cwd=cwd)
+                        if ma < 0:
+                            break
+                        if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
+                            break
+                except ValueError as van_de:  # dự án quá nhiều ảnh
+                    ma, loi_chu = -1, str(van_de)
+                finally:
+                    try:
+                        os.remove(tep_loc)
+                    except OSError:
+                        pass
                 if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
                     xong += 1
                     dong.append("{0}: xong sau {1:.0f} giây → {2}".format(
                         du_an.ten, time.time() - bat_dau, os.path.basename(dich)))
+                elif ma < 0:
+                    loi += 1
+                    dong.append("{0}: LỖI — {1}.".format(du_an.ten, loi_chu))
                 else:
                     loi += 1
                     dong.append("{0}: LỖI — {1}".format(
@@ -684,17 +720,47 @@ class TrangDungVideo(QWidget):
 
         self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
 
-    def _chay_lenh(self, lenh: List[str]):
-        """Chạy FFmpeg. **Luồng nền.** Trả `(mã thoát, chữ lỗi)`."""
+    def _bao_dam_ffmpeg(self, dong: List[str]) -> str:
+        """FFmpeg đủ dùng, tải về thư mục tool nếu cần. **Luồng nền.**
+
+        Trả chuỗi rỗng khi không có và tải cũng không được — lý do đã ghi vào
+        `dong`. Tải được thì nhớ lại vào `self._ffmpeg` cho lần sau khỏi soi.
+        """
+        ffmpeg = self._ffmpeg
+        if ffmpeg and not thieu_gi(ffmpeg):
+            return ffmpeg
+        goc = getattr(self._app, "base_dir", ".")
+        try:
+            ffmpeg = bao_dam_ffmpeg(goc, bao=lambda c: self._bao.emit(c.strip()))
+        except Exception as loi:  # noqa: BLE001 — mạng, đĩa, nguồn tải chập
+            if ffmpeg:
+                # Có bản cụt thì vẫn thử dựng bằng nó: nấc lùi của
+                # `phuong_an_dung` sẽ bỏ đúng thứ nó thiếu.
+                dong.append("Không tải được FFmpeg bản đầy đủ ({0}) — dựng "
+                            "bằng bản đang có, có thể thiếu phụ đề hoặc "
+                            "nhạc.".format(str(loi)[:160]))
+                return ffmpeg
+            dong.append("LỖI — {0}".format(loi))
+            return ""
+        self._ffmpeg = ffmpeg
+        return ffmpeg
+
+    def _chay_lenh(self, lenh: List[str], cwd: str = ""):
+        """Chạy FFmpeg. **Luồng nền.** Trả `(mã thoát, chữ lỗi)`.
+
+        Mã **âm** = Windows không mở nổi FFmpeg (chưa chạy dòng nào); mã dương
+        = FFmpeg chạy rồi tự dừng. Hai chuyện khác nhau, người gọi xử lý khác.
+        """
         co = 0
         if os.name == "nt":
             co = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             self._tien_trinh = subprocess.Popen(
                 lenh, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace", creationflags=co)
+                text=True, encoding="utf-8", errors="replace", creationflags=co,
+                cwd=cwd or None)
         except OSError as loi:
-            return 1, str(loi)
+            return -1, loi_khong_chay_duoc(loi)
         try:
             ra, _ = self._tien_trinh.communicate()
         except Exception as loi:  # noqa: BLE001
