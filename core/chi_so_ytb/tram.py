@@ -71,6 +71,73 @@ _DAI_RIENG = [
 ]
 
 
+#: Bận thì lùi tối đa ngần này cổng (8765 -> 8775) rồi mới chịu thua.
+SO_CONG_LUI = 10
+
+#: Mã lỗi "cổng đang bận" trên Windows và POSIX.
+_CONG_BAN = {10048, 10013, 98, 13}
+
+
+def _la_cong_ban(loi: BaseException) -> bool:
+    """Câu chữ cũng tính — Windows trả 10013 cho cả 'bận' lẫn 'cấm quyền'."""
+    chu = str(loi).lower()
+    return any(m in chu for m in ("10048", "10013", "address already in use",
+                                 "forbidden by its access permissions",
+                                 "normally permitted"))
+
+
+def ai_giu_cong(cong: int) -> str:
+    """Tên tiến trình đang nghe `cong`, dạng người đọc được. Rỗng thì "không rõ".
+
+    Bản cũ chỉ đoán *"chương trình khác giữ"*. Đoán sai làm khách đi tìm nhầm
+    chỗ: ca thật 07/09/2026 là chính `pytest` của tool đang giữ, không phải
+    phần mềm lạ nào.
+    """
+    try:
+        import subprocess  # noqa: PLC0415
+
+        if sys.platform != "win32":
+            return "một tiến trình khác"
+        ra = subprocess.run(["netstat", "-ano", "-p", "TCP"],
+                            capture_output=True, timeout=8,
+                            creationflags=0x08000000)
+        pid = ""
+        for d in ra.stdout.decode("utf-8", "replace").splitlines():
+            phan = d.split()
+            if len(phan) >= 5 and phan[3].upper() == "LISTENING"                     and phan[1].rsplit(":", 1)[-1] == str(cong):
+                pid = phan[4]
+                break
+        if not pid:
+            return "một tiến trình khác"
+        ten = subprocess.run(["tasklist", "/FI", "PID eq " + pid, "/NH", "/FO", "CSV"],
+                             capture_output=True, timeout=8,
+                             creationflags=0x08000000)
+        dong = ten.stdout.decode("utf-8", "replace").strip().strip('"')
+        ten_tt = dong.split('","')[0] if '","' in dong else dong
+        return "{0} (PID {1})".format(ten_tt or "tiến trình", pid)
+    except Exception:  # noqa: BLE001 — hỏi không được thì nói không rõ
+        return "một tiến trình khác"
+
+
+def tram_khac_dang_giu(cong: int) -> bool:
+    """Thứ đang nghe `cong` có phải MỘT TRẠM của tool không.
+
+    Hỏi thẳng bằng đúng gói dò mà máy ảo dùng. Trả `True` chỉ khi có tiếng
+    đáp đúng dạng — im lặng nghĩa là thứ khác, và lúc ấy lùi cổng là an toàn.
+    """
+    try:
+        o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        o.settimeout(0.6)
+        try:
+            o.sendto(b"shopapi-tram?", ("127.0.0.1", cong))
+            goi, _ = o.recvfrom(256)
+        finally:
+            o.close()
+        return bool(json.loads(goi.decode("utf-8")).get("shopapi_tram"))
+    except Exception:  # noqa: BLE001 — không đáp = không phải trạm
+        return False
+
+
 def trong_mang_nha(ip: str) -> bool:
     """Địa chỉ này có thuộc mạng nội bộ không.
 
@@ -534,15 +601,58 @@ class Tram:
                         pass
                 super().server_bind()
 
-        try:
-            self._may = May(("::", self.cong), _lam_xu_ly(tram))
-        except OSError:
-            # Máy tắt hẳn IPv6 thì lùi về IPv4 thuần, vẫn chạy được.
-            class May4(_ImKhiKhachNgat, ThreadingHTTPServer):
-                daemon_threads = True
-                allow_reuse_address = True
+        class May4(_ImKhiKhachNgat, ThreadingHTTPServer):
+            daemon_threads = True
+            allow_reuse_address = True
 
-            self._may = May4(("0.0.0.0", self.cong), _lam_xu_ly(tram))
+        def _mo(cong: int):
+            try:
+                return May(("::", cong), _lam_xu_ly(tram))
+            except OSError as loi:
+                # Máy tắt hẳn IPv6 thì lùi về IPv4 thuần, vẫn chạy được. Nhưng
+                # cổng BẬN thì cả hai đường đều hỏng — đừng nuốt, để nơi gọi
+                # phân xử.
+                if getattr(loi, "errno", None) in _CONG_BAN or _la_cong_ban(loi):
+                    raise
+                return May4(("0.0.0.0", cong), _lam_xu_ly(tram))
+
+        # ═══ CỔNG BẬN: PHẢI HỎI AI GIỮ RỒI MỚI QUYẾT ═══
+        #
+        # Hai ca khác hẳn nhau, và xử giống nhau là hỏng một trong hai:
+        #
+        #   · MỘT BẢN TOOL KHÁC đang giữ  -> ĐỪNG lùi cổng. Lùi là có hai trạm
+        #     cùng sống, máy ảo gọi về trúng bản nào là ngẫu nhiên — đúng sự cố
+        #     đêm 07/09/2026 đã đẻ ra `SO_EXCLUSIVEADDRUSE` ở trên.
+        #   · MỘT THỨ KHÁC giữ (bộ test đang chạy, một tiến trình treo, phần
+        #     mềm lạ) -> lùi sang cổng kế là xong. Máy ảo TÌM trạm bằng dò UDP
+        #     (`shopapi-tram?`) chứ không đóng đinh số 8765, nên đổi cổng không
+        #     làm gãy gì cả.
+        #
+        # Chủ dự án, 07/09/2026: *"máy này rất nhiều phần mềm chạy, có cách nào
+        # fix triệt để không"*. Ca thật hôm ấy: cổng bị chính `pytest` của tool
+        # giữ, và bản cũ chỉ báo "chương trình khác giữ" rồi bỏ cuộc.
+        try:
+            self._may = _mo(self.cong)
+        except OSError as loi:
+            if tram_khac_dang_giu(self.cong):
+                raise OSError(
+                    "cổng {0} đang có MỘT TRẠM KHÁC của tool nghe. Chỉ được một "
+                    "trạm: tắt bản tool kia rồi bật lại.".format(self.cong)) from loi
+            ai = ai_giu_cong(self.cong)
+            cu = self.cong
+            for buoc in range(1, SO_CONG_LUI + 1):
+                try:
+                    self._may = _mo(cu + buoc)
+                    break
+                except OSError:
+                    continue
+            else:
+                raise OSError(
+                    "cổng {0} đang bị {1} giữ, và {2} cổng kế tiếp cũng bận."
+                    .format(cu, ai, SO_CONG_LUI)) from loi
+            self.ghi("cổng {0} đang bị {1} giữ — chuyển sang cổng {2}. "
+                     "Máy ảo tự dò ra cổng mới, không phải sửa gì."
+                     .format(cu, ai, self._may.server_address[1]))
 
         # cong=0 là "cổng ngẫu nhiên" (bộ test dùng) — chốt lại số thật trước
         # khi tai dò và loa gọi dùng tới nó.

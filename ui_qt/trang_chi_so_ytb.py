@@ -170,9 +170,20 @@ class TrangChiSoYTB(QWidget):
         self._khach_thue: List[str] = []
         self._tram = None
         if "tram" in self._phan:
+            # ═══ BỘ TEST KHÔNG ĐƯỢC CHIẾM CỔNG THẬT ═══
+            #
+            # 07/09/2026: chủ dự án mở tool và nhận "cổng 8765 đang bị chương
+            # trình khác giữ". Thứ giữ nó là chính `pytest` của tool — một lượt
+            # chạy bộ test dựng trang này, và trang tự bật trạm trên cổng thật.
+            #
+            # Tệ hơn cả việc chiếm cổng: cái trạm ấy ĐÁP gói dò `shopapi-tram?`,
+            # nên luật mới ở `tram.bat()` coi nó là "một bản tool khác" và TỪ
+            # CHỐI thay vì lùi cổng. Bịt ở đây mới hết đường.
+            cong = os.environ.get("SHOPAPI_TRAM_CONG", "").strip()
             self._tram = tr.Tram(ghi=lambda m: self._dong_log.emit(m),
                                  nguon_khach=self._dia_chi_vps,
-                                 goi_van_ban=self._viet_ho)
+                                 goi_van_ban=self._viet_ho,
+                                 **({"cong": int(cong)} if cong.isdigit() else {}))
 
         ngoai = QVBoxLayout(self)
         ngoai.setContentsMargins(0, 0, 0, 0)

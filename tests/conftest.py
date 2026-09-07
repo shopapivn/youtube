@@ -20,7 +20,17 @@ Cả hai đều là trạng thái tiến trình, không phải trạng thái c�
 
 from __future__ import annotations
 
+import os
 import pytest
+
+# ═══ BỘ TEST KHÔNG BAO GIỜ ĐƯỢC NGHE CỔNG NHẬN THẬT (8765) ═══
+#
+# 07/09/2026: chủ dự án mở tool, nhận "cổng 8765 đang bị chương trình khác giữ".
+# Thủ phạm là một lượt `pytest` của chính tool đang chạy — nó dựng trang giữ
+# trạm, trang tự bật trạm trên cổng mặc định, và giữ suốt lượt chạy (có lượt
+# treo hàng giờ). Ép 0 = cổng ngẫu nhiên: test vẫn chạy đủ, tool vẫn mở được.
+os.environ.setdefault("SHOPAPI_TRAM_CONG", "0")
+
 
 
 @pytest.fixture(autouse=True)

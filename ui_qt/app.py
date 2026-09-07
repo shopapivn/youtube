@@ -957,6 +957,25 @@ class CuaSoChinh(QWidget):
                 self.jobs.shutdown()
             except Exception:  # noqa: BLE001
                 pass
+        # ═══ TRẢ CỔNG NHẬN LẠI TRƯỚC KHI ĐI ═══
+        #
+        # Trước đây chỗ này không dừng trạm, chỉ trông chờ tiến trình thoát là
+        # hệ điều hành tự thu cổng. Đúng — NẾU tiến trình thật sự thoát. Đóng
+        # cửa sổ mà tiến trình còn sống (một luồng chưa chịu chết, một hộp
+        # thoại treo) thì cổng 8765 vẫn bị giữ, và lần mở sau tool tự báo
+        # "cổng đang bị chương trình khác giữ" — chương trình ấy là chính nó.
+        #
+        # Chủ dự án, 07/09/2026: *"thế thì mày phải có logic khi mở tool và tắt
+        # tool dọn dẹp chứ"*. Đây là vế TẮT; vế MỞ nằm ở `tram.bat()` — hỏi ai
+        # đang giữ rồi mới quyết lùi cổng hay từ chối.
+        try:
+            from .tram_chung import tim_tram  # noqa: PLC0415
+
+            tram = tim_tram(self)
+            if tram is not None and getattr(tram, "dang_chay", False):
+                tram.tat()
+        except Exception:  # noqa: BLE001 — đang đóng cửa sổ, đừng chặn lối ra
+            pass
         # Lớp lịch sự: giết tiến trình con đã ghi nhận. Lớp cứng (Job Object)
         # vẫn giết nốt phần còn lại khi tiến trình này biến mất.
         tien_trinh_con.dung_tat_ca()
