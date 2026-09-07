@@ -29,7 +29,14 @@ def test_tab_nghien_cuu_co_du_bo_dieu_khien_trang_chu():
     assert "giao_quet_day_du" in than_quet, "nút phải giao đủ hai việc qua trạm (Studio rồi trang chủ)"
     assert "quet_trang_chu_hang_ngay" in s, "ô 'mỗi ngày' phải ghi đúng khoá trong may-ao.json"
     # MỘT NÚT THẬT (05/09, lần hai): bấm → giao VM → trạm gọi hook khi gói về → tự chạy core.mot_nut có AI.
-    assert "tram_mod.dat_hook_trang_chu(self._tin_trang_chu.emit)" in s, "phải đăng ký hook trạm, qua signal Qt"
+    assert "self._hook_trang_chu = self._tin_trang_chu.emit" in s, (
+        "hook phải là signal Qt — trạm gọi ở luồng của nó, không chạm widget")
+    assert "tram_mod.dat_hook_trang_chu(self._hook_trang_chu)" in s, "phải đăng ký hook trạm"
+    # 08/09: và phải GỠ khi trang chết. Bỏ quên là để lại một mục trong danh sách
+    # TOÀN CỤC của trạm trỏ vào widget C++ đã xoá; luồng nền gọi trúng thì
+    # `access violation` giết cả tiến trình (xem tram.go_hook_trang_chu).
+    assert "self.destroyed.connect(" in s and "go_hook_trang_chu" in s, (
+        "đăng ký một chiều là rò rỉ theo thiết kế — phải nối destroyed → gỡ hook")
     assert "_tin_trang_chu = pyqtSignal(str)" in s and "self._tin_trang_chu.connect(self._tu_chay_mot_nut)" in s
     than = s.split("def _chay_mot_nut")[1].split("def _xu_ly_trang_chu")[0]
     assert "mot_nut.chay(goc, kenh, client=client)" in than, "chuỗi phải nhận ví để AI chạy ở ba chỗ"
