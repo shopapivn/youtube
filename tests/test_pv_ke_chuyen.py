@@ -455,8 +455,14 @@ def test_excel_moi_canh_co_khoi_khoa(wb, yeu_cau):
 
 def test_khoa_cho_phep_doi_trang_phuc_khi_canh_noi_ro(wb):
     from core.chia_canh import KHUON_MAC_DINH
-    # Cảnh KHÔNG tả lại nhân vật — chỉ id + tư thế; giai đoạn có id riêng.
-    assert "ONLY by id" in KHUON_MAC_DINH and "one id per stage" in KHUON_MAC_DINH
+    # Cảnh KHÔNG tả lại nhân vật — chỉ trỏ vào ảnh + tư thế; giai đoạn có id
+    # riêng. Ghim theo HÀNH VI, không ghim câu chữ: bản 07/09/2026 đổi cách gọi
+    # nhân vật trong lời nhắc (bỏ id trần, dùng "the character in Image 1") vì
+    # máy tạo ảnh chỉ nhận lời nhắc + mấy tấm ảnh, id không có nghĩa gì với nó
+    # — xem `tests/test_khong_goi_nhan_vat_bang_id.py`. Luật "đừng tả lại" và
+    # "mỗi giai đoạn một id" thì không đổi, và đó mới là thứ bài này canh.
+    assert "NEVER re-describe" in KHUON_MAC_DINH
+    assert "one id per stage" in KHUON_MAC_DINH
     # 27/08/2026: câu "được đổi trang phục nếu cảnh nói rõ" nằm trong đoạn văn
     # khoá cũ, đã bỏ cùng đoạn ấy (xem `_GUARD_NHAN_DANG`). Đổi trang phục giờ
     # đi bằng ĐÚNG một đường: mỗi giai đoạn một id, một ảnh tham chiếu riêng —

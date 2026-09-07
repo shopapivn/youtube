@@ -31,16 +31,19 @@ only thing they share.
 5. Each place gets an hour and a light: `Friday 9 pm, only the desk lamp on`,
    `grey rainy afternoon, window fogged`, `first light, kitchen`. Vary them —
    a video of evenly-lit rooms is one flat wash and the eye stops reporting.
-6. `people`: `nv1` alone, or `nv1 + <who>` (a colleague, a boss, a crowd of
-   commuters, a friend). Others are muted rounded figures; only `nv1` is
-   white. Use other people — this channel is about one person among others,
-   and loneliness is only visible next to a crowd.
+6. `people`: `the reference character` alone, or `the reference character +
+   <who>` (a colleague, a boss, a crowd of commuters, a friend). Others are
+   muted rounded figures; only the reference character is white.
+   Say it in those words, never as a bare id: what reaches the image model
+   is your text plus the attached picture, and `nv1` means nothing to it.
+   Use other people — this channel is about one person among others, and
+   loneliness is only visible next to a crowd.
 7. `motif`: ONE object taken from the narration's own images, and how it
    changes across the chapter: `glass of muddy water on the counter — churning
    → settling → clear`. Choose something that can fill a frame: grow, flood,
    crack, throw a shadow up the wall, turn the whole space. A cup or a phone
    held in two hands is a prop, not a motif. Never a reflection or a second
-   self of `nv1`. A motif may return later, changed.
+   self of the reference character. A motif may return later, changed.
 8. `key_line`: the SRT index where the chapter turns — the sentence that
    states the result or the reversal, not the one that introduces it.
 9. `emotion`: from → to, two words each: `guilty, tense → relieved, light`.
@@ -65,7 +68,7 @@ Established metaphors for this channel: <<CULTURAL_METAPHORS>>
    "title": "<three to six words>",
    "place": "<one concrete place, with the two or three things that make it recognisable>",
    "time_light": "<hour of day and the light>",
-   "people": "nv1 + colleagues at the station exit",
+   "people": "the reference character + colleagues at the station exit",
    "motif": "<the object and how it changes across the chapter>",
    "emotion": "<from> → <to>",
    "key_line": 9}
