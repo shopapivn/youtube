@@ -21,6 +21,7 @@ khách**: không gọi máy chủ, không trừ tiền.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -37,7 +38,7 @@ from PyQt5.QtGui import QColor
 
 from core.dung_video import (
     DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_bang_canh,
-    doc_thoi_luong, giay_tung_hinh, gon_lenh, lenh_ffmpeg, loi_khong_chay_duoc,
+    doc_thoi_luong, giay_tung_hinh, gon_lenh, ke_hoach_dung, loi_khong_chay_duoc,
     phu_de_tu_txt, phuong_an_dung, quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
 )
 from core.ffmpeg_goi_san import bao_dam_ffmpeg, thieu_gi
@@ -660,13 +661,22 @@ class TrangDungVideo(QWidget):
                         dong.append("{0}: bảng cảnh không khớp với số ảnh/clip "
                                     "đang có — chia đều thời lượng.".format(du_an.ten))
                     moi_anh = thoi_luong_moi_anh(giay, len(du_an.hinh))
-                    lam = lambda c: (  # noqa: E731 — cùng một lệnh, khác cài đặt
-                        lenh_ffmpeg(du_an, c, ffmpeg, dich, ne_giong=ne,
-                                    giay=tung_canh)
+                    # Thư mục khối nằm cạnh video ra, xoá khi dựng xong. Dựng
+                    # hỏng giữa chừng thì để lại: lần sau bấm Dựng, khối nào
+                    # đã xong thì dùng lại (`BuocDung.dung_lai`).
+                    tam = os.path.join(thu_muc_ra, "_khoi-{0}".format(du_an.ten))
+                    lam = lambda c: (  # noqa: E731 — cùng kế hoạch, khác cài đặt
+                        ke_hoach_dung(du_an, c, ffmpeg, dich, tam, ne_giong=ne,
+                                      giay=tung_canh, giay_tieng=giay)
                         if tung_canh else
-                        lenh_ffmpeg(du_an, c, ffmpeg, dich,
-                                    giay_moi_anh=moi_anh, ne_giong=ne))
-                    lam(cai)  # soi trước: thiếu file thì ném ngay, khỏi chạy
+                        ke_hoach_dung(du_an, c, ffmpeg, dich, tam,
+                                      giay_moi_anh=moi_anh, ne_giong=ne,
+                                      giay_tieng=giay))
+                    ke_hoach = lam(cai)  # soi trước: thiếu file thì ném ngay
+                    if len(ke_hoach) > 1:
+                        dong.append("{0}: {1} ảnh/clip — dựng theo {2} khối rồi "
+                                    "nối lại.".format(du_an.ten, len(du_an.hinh),
+                                                      len(ke_hoach) - 2))
                 except ValueError as van_de:
                     dong.append("{0}: {1}".format(du_an.ten, van_de))
                     loi += 1
@@ -690,8 +700,8 @@ class TrangDungVideo(QWidget):
                             break
                         if vi_sao:
                             dong.append("{0}: {1}.".format(du_an.ten, vi_sao))
-                        lenh, cwd = gon_lenh(lam(cai_thu), tep_loc)
-                        ma, loi_chu = self._chay_lenh(lenh, cwd=cwd)
+                        ma, loi_chu = self._chay_ke_hoach(lam(cai_thu), tep_loc,
+                                                          du_an.ten)
                         if ma < 0:
                             break
                         if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
@@ -705,6 +715,7 @@ class TrangDungVideo(QWidget):
                         pass
                 if ma == 0 and os.path.isfile(dich) and os.path.getsize(dich) > 0:
                     xong += 1
+                    shutil.rmtree(tam, ignore_errors=True)  # khối đã vào video
                     dong.append("{0}: xong sau {1:.0f} giây → {2}".format(
                         du_an.ten, time.time() - bat_dau, os.path.basename(dich)))
                 elif ma < 0:
@@ -744,6 +755,30 @@ class TrangDungVideo(QWidget):
             return ""
         self._ffmpeg = ffmpeg
         return ffmpeg
+
+    def _chay_ke_hoach(self, ke_hoach, tep_loc: str, ten: str):
+        """Chạy lần lượt các bước của `ke_hoach_dung`. **Luồng nền.**
+
+        Trả `(mã, chữ lỗi)` của bước hỏng đầu tiên, hoặc `(0, "")`. Bước có
+        tệp đích còn nguyên từ lần trước (`dung_lai`) thì bỏ qua — nấc lùi bỏ
+        nhạc/phụ đề chỉ đổi bước cuối, không dựng lại cả trăm khối.
+        """
+        tong = len(ke_hoach)
+        for so, buoc in enumerate(ke_hoach, 1):
+            if self._xin_dung.is_set():
+                return 1, "đã dừng theo yêu cầu"
+            if (buoc.dung_lai and os.path.isfile(buoc.dich)
+                    and os.path.getsize(buoc.dich) > 0):
+                continue
+            if tong > 1:
+                self._bao.emit("{0}: {1} ({2}/{3})…".format(ten, buoc.mo_ta, so, tong))
+            lenh, cwd = gon_lenh(list(buoc.lenh), tep_loc)
+            ma, loi_chu = self._chay_lenh(lenh, cwd=cwd)
+            if ma != 0:
+                return ma, loi_chu
+            if not (os.path.isfile(buoc.dich) and os.path.getsize(buoc.dich) > 0):
+                return 1, "{0}: FFmpeg không ghi ra tệp".format(buoc.mo_ta)
+        return 0, ""
 
     def _chay_lenh(self, lenh: List[str], cwd: str = ""):
         """Chạy FFmpeg. **Luồng nền.** Trả `(mã thoát, chữ lỗi)`.

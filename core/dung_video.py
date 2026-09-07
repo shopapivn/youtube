@@ -61,6 +61,7 @@ __all__ = [
     "du_an_chon_tay", "phu_de_tu_txt",
     "lenh_ffmpeg", "loc_srt_style", "thoi_luong_moi_anh", "la_clip", "doc_thoi_luong",
     "gon_lenh", "loi_khong_chay_duoc", "GIOI_HAN_LENH",
+    "ke_hoach_dung", "BuocDung", "KHOI_HINH",
 ]
 
 DUOI_ANH = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
@@ -787,58 +788,24 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
         raise ValueError(
             "Bảng cảnh có {0} mốc thời gian nhưng có {1} ảnh/clip".format(
                 len(giay), len(du_an.hinh)))
-    rong, cao = DO_PHAN_GIAI.get(cai.do_phan_giai, DO_PHAN_GIAI["1080p"])
     lenh = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
-
-    for i, duong_dan in enumerate(du_an.hinh):
-        can = float(giay[i]) if giay is not None else max(0.5, giay_moi_anh)
-        if la_clip(duong_dan):
-            lenh += ["-i", duong_dan]
-        else:
-            # Ảnh tĩnh không có thời lượng: phải nói rõ giữ bao lâu, không thì
-            # nó chỉ ra đúng một khung hình.
-            lenh += ["-loop", "1", "-t", "{0:.3f}".format(max(0.1, can)),
-                     "-i", duong_dan]
     so_hinh = len(du_an.hinh)
+    phan: List[str] = []
+    for i in range(so_hinh):
+        dau_vao, loc = _mot_hinh(du_an, cai, i, giay=giay, giay_moi_anh=giay_moi_anh)
+        lenh += dau_vao
+        phan.append("[{0}:v]{1}[v{0}]".format(i, loc))
     chi_so_tieng = so_hinh
     lenh += ["-i", du_an.tieng]
     co_nhac = bool(cai.nhac_nen and du_an.nhac)
     if co_nhac:
         lenh += ["-stream_loop", "-1", "-i", du_an.nhac[0]]
 
-    # Nắn mỗi đầu vào về đúng khổ. Dùng `pad` chứ không `crop`: cắt cho vừa
-    # khung là cắt mất đầu nhân vật ở ảnh dọc.
-    #
-    # `flags=lanczos`: không ghi gì thì FFmpeg dùng `bicubic` — mềm. Ảnh của
-    # kênh thường nhỏ hơn khung đích (nhà cung cấp trả 1408 chiều ngang, khung
-    # 1080p là 1920) nên gần như tấm nào cũng bị phóng lên, và phóng bằng
-    # lanczos nét hơn thấy được. Không tốn thêm thời gian đáng kể.
-    khuon = ("scale={0}:{1}:force_original_aspect_ratio=decrease:flags=lanczos,"
-             "pad={0}:{1}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={2},format=yuv420p")
-
-    def _cat_clip(i: int) -> str:
-        """Cắt clip thứ `i` về đúng khoảng cảnh của nó. Rỗng = để nguyên.
-
-        `tpad=clone` trước, `trim` sau: cảnh dài hơn clip thì khung cuối đứng
-        yên cho tới hết khoảng (đúng như người dựng tay để hình đứng lúc người
-        đọc ngừng lấy hơi), cảnh ngắn hơn clip thì cắt bớt. Thiếu bước này,
-        FFmpeg chèn đen — một nháy đen giữa video là lỗi ai cũng thấy.
-        """
-        if giay is None or not la_clip(du_an.hinh[i]):
-            return ""
-        can = max(0.1, float(giay[i]))
-        return ("tpad=stop_mode=clone:stop_duration={0:.3f},"
-                "trim=duration={0:.3f},setpts=PTS-STARTPTS,".format(can))
-
-    phan = ["[{0}:v]{1}{2}[v{0}]".format(
-        i, _cat_clip(i), khuon.format(rong, cao, cai.fps))
-        for i in range(so_hinh)]
     phan.append("{0}concat=n={1}:v=1:a=0[vcat]".format(
         "".join("[v{0}]".format(i) for i in range(so_hinh)), so_hinh))
     nhan_v = "[vcat]"
     if cai.phu_de and du_an.phu_de:
-        phan.append("[vcat]subtitles='{0}':force_style='{1}'[vsub]".format(
-            _thoat_loc(du_an.phu_de), loc_srt_style(cai)))
+        phan.append("[vcat]{0}[vsub]".format(_loc_phu_de(du_an, cai)))
         nhan_v = "[vsub]"
     if co_nhac:
         phan.append(loc_tron_nhac(
@@ -856,6 +823,224 @@ def lenh_ffmpeg(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str, *,
     lenh += ["-c:a", "aac", "-b:a", "192k",
              "-shortest", "-movflags", "+faststart", dich]
     return lenh
+
+
+#: Nắn mỗi đầu vào về đúng khổ. Dùng `pad` chứ không `crop`: cắt cho vừa
+#: khung là cắt mất đầu nhân vật ở ảnh dọc.
+#:
+#: `flags=lanczos`: không ghi gì thì FFmpeg dùng `bicubic` — mềm. Ảnh của
+#: kênh thường nhỏ hơn khung đích (nhà cung cấp trả 1408 chiều ngang, khung
+#: 1080p là 1920) nên gần như tấm nào cũng bị phóng lên, và phóng bằng
+#: lanczos nét hơn thấy được. Không tốn thêm thời gian đáng kể.
+_KHUON = ("scale={0}:{1}:force_original_aspect_ratio=decrease:flags=lanczos,"
+          "pad={0}:{1}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p")
+
+
+def _mot_hinh(du_an: DuAn, cai: CaiDatDung, i: int, *,
+              giay: Optional[Sequence[float]], giay_moi_anh: float
+              ) -> Tuple[List[str], str]:
+    """Tham số `-i` và chuỗi lọc cho ảnh/clip thứ `i`. `(đầu vào, lọc)`.
+
+    Chuỗi lọc KHÔNG có nhãn `[i:v]…[vi]` — người gọi tự gắn, vì trong một khối
+    thì số thứ tự đầu vào khác số thứ tự trong dự án.
+
+    ═══ MỖI CẢNH PHẢI RA ĐÚNG SỐ KHUNG, KHÔNG HỤT MỘT KHUNG ═══
+
+    Đo 07/09/2026 trên 120 cảnh: bảng cảnh cộng lại 608,0 giây, video ra 604,0
+    giây — **mỗi cảnh hụt đúng một khung**. Ảnh tĩnh được FFmpeg đọc ở 25
+    hình/giây (mặc định của `image2`) rồi mới đổi sang 30 bằng `fps=`; cảnh
+    2,8 giây thành 70 khung ở 25 → khung cuối nằm ở 2,76 giây → đổi sang 30
+    chỉ ra 83 khung thay vì 84. Clip cũng vậy: `trim` cắt ở nhịp gốc 25 rồi
+    mới đổi nhịp. Mỗi cảnh một khung, 120 cảnh là 4 giây: hình chạy trước lời
+    4 giây ở cuối video mười phút — đúng cái *"lệch cảnh với voice"* chủ dự án
+    sợ.
+
+    Nên: ảnh tĩnh đọc **thẳng ở nhịp đích** (`-framerate`), clip **đổi nhịp
+    trước rồi mới cắt** (`fps` đứng trước `tpad`/`trim`). Cảnh 2,8 giây ở 30
+    hình/giây là 84 khung, không hơn không kém, và tổng video bằng đúng tổng
+    bảng cảnh.
+
+    Clip có bảng cảnh thì cắt về đúng khoảng cảnh: `tpad=clone` trước, `trim`
+    sau — cảnh dài hơn clip thì khung cuối đứng yên cho tới hết khoảng (đúng
+    như người dựng tay để hình đứng lúc người đọc ngừng lấy hơi), cảnh ngắn hơn
+    clip thì cắt bớt. Thiếu bước này FFmpeg chèn đen — một nháy đen giữa video
+    là lỗi ai cũng thấy.
+    """
+    rong, cao = DO_PHAN_GIAI.get(cai.do_phan_giai, DO_PHAN_GIAI["1080p"])
+    duong_dan = du_an.hinh[i]
+    can = float(giay[i]) if giay is not None else max(0.5, giay_moi_anh)
+    nhip = "fps={0},".format(cai.fps)
+    if la_clip(duong_dan):
+        dau_vao = ["-i", duong_dan]
+        cat = ""
+        if giay is not None:
+            can = max(0.1, can)
+            cat = ("tpad=stop_mode=clone:stop_duration={0:.3f},"
+                   "trim=duration={0:.3f},setpts=PTS-STARTPTS,".format(can))
+    else:
+        # Ảnh tĩnh không có thời lượng: phải nói rõ giữ bao lâu, không thì nó
+        # chỉ ra đúng một khung hình.
+        dau_vao = ["-framerate", str(cai.fps), "-loop", "1",
+                   "-t", "{0:.3f}".format(max(0.1, can)), "-i", duong_dan]
+        cat = ""
+    return dau_vao, nhip + cat + _KHUON.format(rong, cao)
+
+
+def _loc_phu_de(du_an: DuAn, cai: CaiDatDung) -> str:
+    return "subtitles='{0}':force_style='{1}'".format(
+        _thoat_loc(du_an.phu_de), loc_srt_style(cai))
+
+
+#: Số ảnh/clip tối đa trong MỘT lệnh FFmpeg. Quá số này là dựng theo khối.
+#:
+#: 100 ảnh với đường dẫn tương đối là chừng 5.000 ký tự dòng lệnh, xa giới hạn
+#: 32.767 của Windows; và một khối 100 ảnh là một đoạn mp4 vài phút — hỏng
+#: khối nào chỉ mất khối ấy.
+KHOI_HINH = 100
+
+
+@dataclass(frozen=True)
+class BuocDung:
+    """Một lệnh FFmpeg trong kế hoạch dựng. `dich` là tệp bước này ghi ra.
+
+    `dung_lai` = tệp đích còn nguyên từ lần chạy trước thì bỏ qua bước này:
+    nấc lùi của `phuong_an_dung` bỏ nhạc hay bỏ phụ đề chỉ đổi bước CUỐI, các
+    khối hình không đổi — dựng lại 20 khối chỉ để bỏ nhạc là phí nửa giờ.
+    """
+
+    mo_ta: str
+    lenh: Tuple[str, ...]
+    dich: str
+    dung_lai: bool = False
+
+
+def ke_hoach_dung(du_an: DuAn, cai: CaiDatDung, ffmpeg: str, dich: str,
+                  tam: str, *, giay_moi_anh: float = 4.0, ne_giong: bool = True,
+                  giay: Optional[Sequence[float]] = None,
+                  khoi: int = KHOI_HINH, giay_tieng: float = 0.0) -> List[BuocDung]:
+    """Các lệnh FFmpeg cần chạy, theo thứ tự, để ra `dich`.
+
+    Không chạy FFmpeg; thứ duy nhất ghi ra đĩa là tệp danh sách khối trong
+    `tam` (bước nối cần nó, và nó chỉ là mấy dòng tên tệp).
+
+    ═══ HÀNG NGHÌN ẢNH THÌ KHÔNG THỂ MỘT LỆNH ═══
+
+    Chủ dự án, 07/09/2026: *"có những dự án hàng nghìn ảnh mà"*. Một lệnh FFmpeg
+    nhận mọi ảnh làm đầu vào thì dòng lệnh dài theo số ảnh, mà Windows chặn ở
+    32.767 ký tự (`[WinError 206]`). Rút đường dẫn (:func:`gon_lenh`) chỉ đẩy
+    mốc lên vài trăm ảnh — không phải chữa.
+
+    Chữa là **không để số ảnh quyết định độ dài của bất kỳ lệnh nào**:
+
+    1. Chia ảnh/clip thành khối `khoi` cái. Mỗi khối một lệnh: nắn từng đầu vào
+       về khuôn, nối bằng bộ lọc `concat` (trộn ảnh với clip vẫn chạy), ghi ra
+       một đoạn mp4 câm cùng codec, cùng khổ, cùng fps.
+    2. Ghi tên các đoạn vào một tệp danh sách, cho concat demuxer nối bằng
+       `-c copy` — đọc từ tệp nên nghìn đoạn hay vạn đoạn cũng một dòng lệnh.
+       Nối được bằng `copy` vì bước 1 đã ép mọi đoạn cùng một khuôn.
+    3. Lượt cuối: đoạn nối + lời đọc (+ nhạc, + phụ đề) → `dich`. Có phụ đề thì
+       phải mã lại hình; không thì `-c:v copy`, không nén thêm lần nào.
+
+    Ít ảnh (≤ `khoi`) thì vẫn một lệnh như cũ (:func:`lenh_ffmpeg`) — không
+    mã hai lần, không tệp tạm.
+
+    Đoạn khối mã bằng bộ mã hoá đích. Khi lượt cuối phải mã lại (đốt phụ đề)
+    thì hình đi qua hai vòng nén, nên khối để `crf 14` (gần như không mất gì)
+    thay cho `crf 20` — xem cùng lý lẽ ở `auto_khau._ghep_video`.
+
+    `giay_tieng` là độ dài lời đọc. Lượt cuối chép hình (`-c:v copy`) thì
+    `-shortest` dừng KHÔNG chính xác — đo 07/09/2026: tiếng 30 giây, video ra
+    33,3 giây, ba giây hình câm ở đuôi. Có `giay_tieng` thì cắt bằng `-t` cho
+    đúng tới khung; đường một lệnh mã lại hình nên `-shortest` vốn đã đúng.
+    """
+    so_hinh = len(du_an.hinh)
+    if so_hinh <= khoi:
+        return [BuocDung("dựng", tuple(lenh_ffmpeg(
+            du_an, cai, ffmpeg, dich, giay_moi_anh=giay_moi_anh,
+            ne_giong=ne_giong, giay=giay)), dich)]
+    if not du_an.chay_duoc:
+        raise ValueError("Dự án {0} còn thiếu: {1}".format(
+            du_an.ten, ", ".join(du_an.thieu)))
+    if giay is not None and len(giay) != so_hinh:
+        raise ValueError(
+            "Bảng cảnh có {0} mốc thời gian nhưng có {1} ảnh/clip".format(
+                len(giay), so_hinh))
+
+    ma_lai = bool(cai.phu_de and du_an.phu_de)
+    # Tên khối mang tên bộ mã hoá: nấc lùi bỏ GPU thì phải mã lại khối bằng
+    # CPU, không được dùng lại khối GPU đã hỏng dở.
+    nhan_ma = "gpu" if _dung_gpu(cai) else "cpu"
+    cac_buoc: List[BuocDung] = []
+    ten_khoi: List[str] = []
+    so_khoi = (so_hinh + khoi - 1) // khoi
+    for k in range(so_khoi):
+        dau, cuoi = k * khoi, min(so_hinh, (k + 1) * khoi)
+        tep = os.path.join(tam, "khoi-{0}-{1:04d}.mp4".format(nhan_ma, k + 1))
+        lenh = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
+        phan = []
+        for j, i in enumerate(range(dau, cuoi)):
+            dau_vao, loc = _mot_hinh(du_an, cai, i, giay=giay,
+                                     giay_moi_anh=giay_moi_anh)
+            lenh += dau_vao
+            phan.append("[{0}:v]{1}[v{0}]".format(j, loc))
+        phan.append("{0}concat=n={1}:v=1:a=0[vcat]".format(
+            "".join("[v{0}]".format(j) for j in range(cuoi - dau)), cuoi - dau))
+        lenh += ["-filter_complex", ";".join(phan), "-map", "[vcat]", "-an"]
+        lenh += _tham_so_video(cai, trung_gian=ma_lai)
+        lenh += ["-movflags", "+faststart", tep]
+        cac_buoc.append(BuocDung(
+            "khối {0}/{1} (ảnh {2}–{3})".format(k + 1, so_khoi, dau + 1, cuoi),
+            tuple(lenh), tep, dung_lai=True))
+        ten_khoi.append(os.path.basename(tep))
+
+    danh_sach = os.path.join(tam, "khoi-{0}.txt".format(nhan_ma))
+    noi = os.path.join(tam, "noi-{0}.mp4".format(nhan_ma))
+    cac_buoc.append(BuocDung(
+        "nối {0} khối".format(so_khoi),
+        (ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-f", "concat",
+         "-safe", "0", "-i", danh_sach, "-c", "copy", noi),
+        noi, dung_lai=True))
+    # Tệp danh sách ghi ngay lúc lập kế hoạch: nó chỉ là tên các khối, và khối
+    # nào chưa có thì bước nối sẽ tự hỏng chứ không lặng lẽ bỏ qua.
+    os.makedirs(tam, exist_ok=True)
+    with open(danh_sach, "w", encoding="utf-8") as tep_ds:
+        for ten in ten_khoi:
+            tep_ds.write("file '{0}'\n".format(ten.replace("'", "'\\''")))
+
+    lenh = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", noi,
+            "-i", du_an.tieng]
+    co_nhac = bool(cai.nhac_nen and du_an.nhac)
+    if co_nhac:
+        lenh += ["-stream_loop", "-1", "-i", du_an.nhac[0]]
+    phan = []
+    nhan_v = "0:v:0"
+    if ma_lai:
+        phan.append("[0:v]{0}[vsub]".format(_loc_phu_de(du_an, cai)))
+        nhan_v = "[vsub]"
+    if co_nhac:
+        phan.append(loc_tron_nhac("1:a", "2:a", "aout",
+                                  am_luong_deu=cai.am_luong_nhac, ne_giong=ne_giong))
+        nhan_a = "[aout]"
+    else:
+        nhan_a = "1:a:0"
+    if phan:
+        lenh += ["-filter_complex", ";".join(phan)]
+    lenh += ["-map", nhan_v, "-map", nhan_a]
+    if ma_lai:
+        # `-r` ép nhịp ra cố định. Không có nó, FFmpeg đọc luồng nối từ nhiều
+        # tệp và **bỏ khung ở mốc nối** — đo 07/09/2026: 1.824 khung vào, 983
+        # khung ra, mốc đổi cảnh giữa video biến mất. Có `-r` thì ra đủ từng
+        # khung, bằng đúng đường một lệnh.
+        lenh += _tham_so_video(cai) + ["-r", str(cai.fps)]
+    else:
+        lenh += ["-c:v", "copy"]
+    lenh += ["-c:a", "aac", "-b:a", "192k", "-shortest"]
+    if not ma_lai and giay_tieng > 0:
+        lenh += ["-t", "{0:.3f}".format(giay_tieng)]
+    lenh += ["-movflags", "+faststart", dich]
+    cac_buoc.append(BuocDung("gắn tiếng" + (", phụ đề" if ma_lai else "")
+                             + (", nhạc" if co_nhac else ""), tuple(lenh), dich))
+    return cac_buoc
 
 
 #: Windows từ chối mở tiến trình khi cả dòng lệnh dài quá 32.767 ký tự
@@ -942,20 +1127,30 @@ def loi_khong_chay_duoc(loi: OSError) -> str:
     return "không mở được FFmpeg: {0}".format(loi)
 
 
-def _tham_so_video(cai: CaiDatDung) -> List[str]:
+def _dung_gpu(cai: CaiDatDung) -> bool:
+    return bool(getattr(cai, "tang_toc_gpu", False)
+                and _gpu_dung_duoc(getattr(cai, "goc", "")))
+
+
+def _tham_so_video(cai: CaiDatDung, trung_gian: bool = False) -> List[str]:
     """Tham số `-c:v` + preset cho tab Dựng video, theo lựa chọn tăng tốc GPU.
 
     Hỏi **bài tự kiểm** trước (`core/tu_kiem_dung.py`) rồi mới tới bảng khảo
     sát phần cứng: bảng khảo sát chỉ đọc tên encoder, mà `h264_nvenc` có tên
     trên mọi bản FFmpeg dựng cho Windows kể cả máy không có card nào. Bài tự
     kiểm thì đã **encode thật một lượt** rồi mới trả lời.
+
+    `trung_gian`: bản này còn bị mã lại một lần nữa (khối hình trước khi đốt
+    phụ đề) — nén gần như không mất gì, vì nén mất dữ liệu hai lần là hỏng
+    chồng hỏng.
     """
-    if getattr(cai, "tang_toc_gpu", False) and _gpu_dung_duoc(getattr(cai, "goc", "")):
-        return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20",
+    chat = "14" if trung_gian else "20"
+    if _dung_gpu(cai):
+        return ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", chat,
                 "-pix_fmt", "yuv420p"]
     # Mặc định an toàn: CPU
-    return ["-c:v", "libx264", "-preset", "medium", "-crf", "20",
-            "-pix_fmt", "yuv420p"]
+    return ["-c:v", "libx264", "-preset", "fast" if trung_gian else "medium",
+            "-crf", chat, "-pix_fmt", "yuv420p"]
 
 
 def _gpu_dung_duoc(goc: str) -> bool:

@@ -29,7 +29,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core import ffmpeg_goi_san as fgs  # noqa: E402
 from core.dung_video import (  # noqa: E402
-    GIOI_HAN_LENH, CaiDatDung, DuAn, gon_lenh, lenh_ffmpeg, loi_khong_chay_duoc,
+    GIOI_HAN_LENH, CaiDatDung, DuAn, gon_lenh, ke_hoach_dung, lenh_ffmpeg,
+    loi_khong_chay_duoc,
 )
 
 
@@ -125,6 +126,104 @@ class TestGonLenh:
         assert gon == lenh
         assert cwd == ""
         assert not os.path.exists(str(tmp_path / "loc.txt"))
+
+
+class TestDungTheoKhoi:
+    """Chủ dự án 07/09/2026: *"có những dự án hàng nghìn ảnh mà"*.
+
+    Không lệnh nào được dài theo số ảnh: chia khối, nối bằng tệp danh sách.
+    """
+
+    def _kh(self, tmp_path, so_anh, **cai):
+        du_an = _du_an_nhieu_anh(str(tmp_path), so_anh)
+        tam = str(tmp_path / "DONE" / "_khoi")
+        return du_an, ke_hoach_dung(du_an, CaiDatDung(**cai), "ffmpeg",
+                                    str(tmp_path / "DONE" / "ra.mp4"), tam,
+                                    giay=[3.0] * so_anh, ne_giong=False), tam
+
+    def test_it_anh_thi_van_mot_lenh_nhu_cu(self, tmp_path):
+        du_an, kh, _tam = self._kh(tmp_path, 5)
+        assert len(kh) == 1
+        assert list(kh[0].lenh) == lenh_ffmpeg(
+            du_an, CaiDatDung(), "ffmpeg", str(tmp_path / "DONE" / "ra.mp4"),
+            giay=[3.0] * 5, ne_giong=False)
+
+    def test_nghin_anh_khong_lenh_nao_dai_theo_so_anh(self, tmp_path):
+        _du_an, kh, tam = self._kh(tmp_path, 2500)
+        assert len(kh) == 25 + 2, "25 khối + nối + gắn tiếng"
+        for b in kh:
+            gon, _cwd = gon_lenh(list(b.lenh), str(tmp_path / "loc.txt"))
+            assert len(subprocess.list2cmdline(gon)) < GIOI_HAN_LENH, b.mo_ta
+        with open(os.path.join(tam, "khoi-cpu.txt"), encoding="utf-8") as tep:
+            dong = tep.read().splitlines()
+        assert len(dong) == 25 and dong[0] == "file 'khoi-cpu-0001.mp4'"
+
+    def test_khoi_chia_dung_anh_va_khong_bo_sot(self, tmp_path):
+        du_an, kh, _tam = self._kh(tmp_path, 250)
+        khoi = [b for b in kh if b.mo_ta.startswith("khối")]
+        assert [b.mo_ta for b in khoi] == [
+            "khối 1/3 (ảnh 1–100)", "khối 2/3 (ảnh 101–200)", "khối 3/3 (ảnh 201–250)"]
+        dau_vao = [t for b in khoi for i, t in enumerate(b.lenh[:-1])
+                   if b.lenh[i - 1] == "-i" and t.endswith(".png")]
+        assert dau_vao == list(du_an.hinh), "mỗi ảnh đúng một lần, đúng thứ tự"
+        assert "-an" in khoi[0].lenh, "khối là hình câm, tiếng gắn ở bước cuối"
+        assert all(b.dung_lai for b in khoi), "khối xong rồi thì lần sau dùng lại"
+
+    def test_buoc_cuoi_gan_tieng_phu_de_va_ma_lai(self, tmp_path):
+        du_an, kh, _tam = self._kh(tmp_path, 150)
+        cuoi = kh[-1]
+        assert cuoi.dich.endswith("ra.mp4") and not cuoi.dung_lai
+        assert du_an.tieng in cuoi.lenh
+        loc = cuoi.lenh[cuoi.lenh.index("-filter_complex") + 1]
+        assert "subtitles=" in loc
+        assert "libx264" in cuoi.lenh, "đốt phụ đề thì phải mã lại hình"
+        # Không ép nhịp ra thì FFmpeg bỏ khung ở mốc nối (đo: 1.824 → 983 khung).
+        assert cuoi.lenh[cuoi.lenh.index("-r") + 1] == "30"
+        # Khối trước một lần mã nữa thì nén gần như không mất gì.
+        khoi = kh[0].lenh
+        assert khoi[khoi.index("-crf") + 1] == "14"
+
+    def test_khong_phu_de_thi_buoc_cuoi_chep_hinh_khong_nen_them(self, tmp_path):
+        _du_an, kh, _tam = self._kh(tmp_path, 150, phu_de=False)
+        cuoi = kh[-1]
+        assert "-filter_complex" not in cuoi.lenh
+        assert cuoi.lenh[cuoi.lenh.index("-c:v") + 1] == "copy"
+        khoi = kh[0].lenh
+        assert khoi[khoi.index("-crf") + 1] == "20", "khối chính là hình cuối"
+
+    def test_moi_canh_ra_dung_so_khung_khong_hut(self, tmp_path):
+        """Đo 07/09/2026: 120 cảnh cộng 608 giây, video ra 604 — mỗi cảnh hụt
+        một khung vì ảnh đọc ở 25 hình/giây rồi mới đổi sang 30. Ảnh phải đọc
+        thẳng ở nhịp đích; clip phải đổi nhịp TRƯỚC rồi mới cắt."""
+        du_an = _du_an_nhieu_anh(str(tmp_path), 2)
+        clip = _cham(os.path.join(du_an.thu_muc, "VISUAL"), "canh-0002.mp4")[0]
+        du_an = DuAn(ten=du_an.ten, thu_muc=du_an.thu_muc, tieng=du_an.tieng,
+                     phu_de=du_an.phu_de, hinh=du_an.hinh + (clip,))
+        lenh = lenh_ffmpeg(du_an, CaiDatDung(fps=30), "ffmpeg", "ra.mp4",
+                           giay=[2.8, 4.1, 5.5], ne_giong=False)
+        i = lenh.index(du_an.hinh[0])
+        assert lenh[i - 7:i] == ["-framerate", "30", "-loop", "1", "-t", "2.800", "-i"]
+        loc = lenh[lenh.index("-filter_complex") + 1]
+        doan_clip = [d for d in loc.split(";") if d.startswith("[2:v]")][0]
+        assert doan_clip.index("fps=30") < doan_clip.index("tpad"), \
+            "đổi nhịp trước rồi mới cắt, không thì cắt ở nhịp gốc lại hụt khung"
+        assert "trim=duration=5.500" in doan_clip
+
+    def test_buoc_cuoi_chep_hinh_thi_cat_dung_do_dai_tieng(self, tmp_path):
+        """`-shortest` với `-c:v copy` dừng trễ vài giây (đo: tiếng 30, video 33,3)."""
+        du_an = _du_an_nhieu_anh(str(tmp_path), 150)
+        kh = ke_hoach_dung(du_an, CaiDatDung(phu_de=False), "ffmpeg", "ra.mp4",
+                           str(tmp_path / "_khoi"), giay=[3.0] * 150,
+                           ne_giong=False, giay_tieng=447.25)
+        cuoi = list(kh[-1].lenh)
+        assert cuoi[cuoi.index("-t") + 1] == "447.250"
+
+    def test_buoc_noi_doc_danh_sach_tu_tep(self, tmp_path):
+        _du_an, kh, tam = self._kh(tmp_path, 150)
+        noi = kh[-2]
+        assert noi.mo_ta.startswith("nối")
+        assert "concat" in noi.lenh and os.path.join(tam, "khoi-cpu.txt") in noi.lenh
+        assert "copy" in noi.lenh
 
 
 class TestLoiKhongChayDuoc:
@@ -289,6 +388,60 @@ class TestTabDungVideoNoiThat:
         assert "đang tải FFmpeg" in chu, "khách phải thấy đang tải, không phải im lặng"
         assert "Kết thúc: 1 xong, 0 lỗi" in chu
         assert t._ffmpeg.endswith("ffmpeg.exe"), "nhớ bản vừa tải cho lần sau"
+
+    def test_nghin_anh_dung_theo_khoi_roi_don_sach(self, trang, monkeypatch):
+        """Hàng nghìn ảnh: mọi lệnh ngắn, khối nối lại, thư mục khối dọn sau."""
+        t, _app, goc = trang
+        du_an = _du_an_nhieu_anh(goc, 1000)
+        t._quet_im(du_an.thu_muc)
+        monkeypatch.setattr("ui_qt.trang_edit.thieu_gi", lambda *_a, **_k: [])
+        da_chay = []
+
+        def gia(lenh, **_k):
+            da_chay.append(lenh)
+            assert len(subprocess.list2cmdline(lenh)) < GIOI_HAN_LENH
+            with open(lenh[-1], "wb") as ra:
+                ra.write(b"video gia")
+            return 0, ""
+
+        monkeypatch.setattr(t, "_chay_lenh", gia)
+        t._ffmpeg = "ffmpeg-gia"
+        t._chay()
+        chu = t._log.toPlainText()
+        assert "1000 ảnh/clip — dựng theo 10 khối" in chu
+        assert len(da_chay) == 12, "10 khối + nối + gắn tiếng"
+        assert "Kết thúc: 1 xong, 0 lỗi" in chu
+        assert not os.path.isdir(os.path.join(t._ra.value, "_khoi-video-dau-tien")), \
+            "khối đã vào video thì dọn"
+
+    def test_lui_nac_bo_phu_de_khong_dung_lai_ca_tram_khoi(self, trang, monkeypatch):
+        """Bản FFmpeg thiếu libass: chỉ bước cuối hỏng — khối dựng xong phải
+        được dùng lại, không mã lại từ đầu."""
+        t, _app, goc = trang
+        du_an = _du_an_nhieu_anh(goc, 250)
+        t._quet_im(du_an.thu_muc)
+        monkeypatch.setattr("ui_qt.trang_edit.thieu_gi", lambda *_a, **_k: [])
+        so_khoi = []
+
+        def gia(lenh, **_k):
+            if "khoi-cpu-" in lenh[-1]:
+                so_khoi.append(lenh[-1])
+            if "-filter_complex_script" in lenh:
+                with open(lenh[lenh.index("-filter_complex_script") + 1],
+                          encoding="utf-8") as tep:
+                    if "subtitles=" in tep.read():
+                        return 1, "No such filter: subtitles"
+            with open(lenh[-1], "wb") as ra:
+                ra.write(b"video gia")
+            return 0, ""
+
+        monkeypatch.setattr(t, "_chay_lenh", gia)
+        t._ffmpeg = "ffmpeg-gia"
+        t._chay()
+        chu = t._log.toPlainText()
+        assert "không chèn được phụ đề" in chu
+        assert "Kết thúc: 1 xong, 0 lỗi" in chu
+        assert len(so_khoi) == 3, "ba khối mã đúng một lần, nấc lùi dùng lại"
 
     def test_tai_khong_duoc_va_khong_co_ban_nao_thi_noi_that(self, trang, monkeypatch):
         t, _app, _goc = trang
