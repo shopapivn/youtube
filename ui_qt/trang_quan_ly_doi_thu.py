@@ -116,7 +116,13 @@ class TrangDanhBa(QWidget):
         self._mot_nut_dang_chay = False
         self._cho_may_ao = None            # (kênh, mốc giao việc) — để báo khi máy ảo im
         self._tin_trang_chu.connect(self._tu_chay_mot_nut)
-        tram_mod.dat_hook_trang_chu(self._tin_trang_chu.emit)
+        self._hook_trang_chu = self._tin_trang_chu.emit
+        tram_mod.dat_hook_trang_chu(self._hook_trang_chu)
+        # Trang chết thì PHẢI rút tên khỏi danh sách toàn cục của trạm. Bỏ quên
+        # là để lại một mục trỏ vào widget C++ đã xoá, và luồng nền của trạm gọi
+        # trúng nó thì giết cả tiến trình — xem `tram.go_hook_trang_chu`.
+        self.destroyed.connect(
+            lambda *_a, _h=self._hook_trang_chu: tram_mod.go_hook_trang_chu(_h))
         self._cot: List[str] = list(db.COT)
         self._hang: List[List[str]] = []
         self._dang_do = False

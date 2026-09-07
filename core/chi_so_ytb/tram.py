@@ -215,9 +215,36 @@ TRE_HOOK_TRANG_CHU = 150.0
 
 
 def dat_hook_trang_chu(ham: "Callable[[str], None]") -> None:
-    """Đăng ký một hàm chạy sau mỗi ĐỢT trang chủ. Đăng ký trùng thì thôi."""
+    """Đăng ký một hàm chạy sau mỗi ĐỢT trang chủ. Đăng ký trùng thì thôi.
+
+    Đăng ký thì PHẢI gỡ — xem `go_hook_trang_chu`.
+    """
     if ham not in HOOK_TRANG_CHU:
         HOOK_TRANG_CHU.append(ham)
+
+
+def go_hook_trang_chu(ham: "Callable[[str], None]") -> None:
+    """Gỡ một hàm đã đăng ký. Chưa có thì thôi, không kêu.
+
+    ═══ VÌ SAO PHẢI CÓ HÀM NÀY: GIẾT CẢ TIẾN TRÌNH, KHÔNG PHẢI LỖI THƯỜNG ═══
+
+    `HOOK_TRANG_CHU` là danh sách TOÀN CỤC, còn thứ đăng ký vào đó là
+    `self._tin_trang_chu.emit` của trang Quản lý đối thủ — **một phương thức
+    gắn vào widget Qt**. Trang chết đi mà mục trong danh sách vẫn nằm lại, trỏ
+    tới một đối tượng C++ đã bị xoá. 150 giây sau `threading.Timer` gọi nó ở
+    luồng nền → `Windows fatal exception: access violation`.
+
+    Và `except Exception` ở `_goi_hook_trang_chu` **không bắt được** thứ đó:
+    access violation không phải ngoại lệ Python, nó giết thẳng tiến trình.
+    Triệu chứng đã trả giá: một lượt `pytest` sập ở ~97%, `faulthandler` đổ
+    ngăn xếp **150.773 lần** ra tệp **1,8 GB**, tiến trình treo — và cái xác
+    treo ấy giữ luôn cổng 8765, khiến lần mở tool sau báo *"chương trình khác
+    giữ"*. Chính là sự cố chủ dự án hỏi ngày 07/09/2026.
+    """
+    try:
+        HOOK_TRANG_CHU.remove(ham)
+    except ValueError:
+        pass
 
 
 _GOI_VM_BO_THU = {"__pycache__", "logs", "tien-ich", "tokens",
@@ -699,6 +726,19 @@ class Tram:
         threading.Thread(target=goi, daemon=True, name="tram-loa").start()
 
     def tat(self) -> None:
+        # Huỷ hẹn giờ TRƯỚC mọi lối thoát. Hẹn gọi hook còn treo tới 150 giây
+        # sau khi trạm tắt: nó là luồng nền, tắt máy chủ không đụng tới nó, và
+        # lúc nó tỉnh dậy thì giao diện có thể đã chết — đúng đường sập chép ở
+        # `go_hook_trang_chu`. Đặt sau `if not self._may: return` là bỏ sót
+        # đúng ca hay gặp nhất: trạm nhận gói rồi tắt mà chưa từng `bat()`.
+        with self._khoa_viec:
+            hen = list(self._hen_trang_chu.values())
+            self._hen_trang_chu.clear()
+        for h in hen:
+            try:
+                h.cancel()
+            except Exception:  # noqa: BLE001 — huỷ hụt thì thôi, đừng chặn đường tắt
+                pass
         if not self._may:
             return
         self._nghi_goi.set()
