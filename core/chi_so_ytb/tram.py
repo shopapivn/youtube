@@ -781,6 +781,18 @@ class Tram:
                     # y nguyên thì lượt quét đó không cào được gì.
                     self._goi_moc[viec["id"]] = (viec["loai"], self.so_goi)
                     viec = self._viec.pop(i)
+                    cu = self._viec_dang.get(kenh)
+                    if cu and cu.get("id") != viec["id"]:
+                        # 11:27 07/09: agent bị mở lại (bấm "Cập nhật" trên máy ảo) khi đang quét Studio
+                        # (#7); bản mới lấy #8 và ghi đè ô "đang làm" → #7 biến mất không dấu vết.
+                        self._goi_moc.pop(cu.get("id"), None)
+                        self._ket_qua_viec.append({
+                            "id": cu.get("id"), "kenh": kenh, "loai": cu.get("loai"), "ket_qua": "",
+                            "loi": "máy ảo lấy việc mới khi việc này chưa báo xong — agent bị mở lại giữa chừng",
+                            "canh_bao": "", "luc": datetime.now().isoformat(timespec="seconds")})
+                        del self._ket_qua_viec[:-20]
+                        self.ghi("máy ảo kênh {0}: việc #{1} MẤT — agent lấy #{2} khi chưa báo xong #{1}".format(
+                            kenh, cu.get("id"), viec["id"]))
                     self._viec_dang[kenh] = {"id": viec["id"], "loai": viec["loai"], "may": an_toan(may),
                                              "luc": datetime.now().isoformat(timespec="seconds")}
                     self._luu_hop_viec()

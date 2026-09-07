@@ -502,3 +502,18 @@ def test_viec_dang_lam_qua_han_thi_khai_tu_khi_agent_hoi_lai(tmp_path):
         assert t.tinh_trang("TL4-T7")["viec_dang"]["id"] == so2
     finally:
         t.tat()
+
+
+def test_agent_lay_viec_moi_khi_viec_cu_chua_xong_thi_viec_cu_ghi_la_mat(tmp_path):
+    """11:27 07/09: bấm Cập nhật trên máy ảo → agent mở lại giữa việc #7, bản mới lấy #8, #7 biến mất."""
+    t = T.Tram(cong=0, goc=str(tmp_path))
+    t.bat()
+    try:
+        so7, so8 = t.giao_quet_day_du("TL4-T7")
+        assert t.lay_viec("TL4-T7", "PC4")["id"] == so7
+        assert t.lay_viec("TL4-T7", "PC4")["id"] == so8      # agent mới, #7 chưa báo xong
+        tt = t.tinh_trang("TL4-T7")
+        assert tt["viec_dang"]["id"] == so8
+        assert tt["vua_xong"][-1]["id"] == so7 and "chưa báo xong" in tt["vua_xong"][-1]["loi"]
+    finally:
+        t.tat()
