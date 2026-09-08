@@ -102,6 +102,10 @@ class LoiMoi(NamedTuple):
     dang_chay: int
     #: Số job đang nằm chờ ở hàng chờ máy chủ.
     hang_doi: int
+    #: Câu máy chủ giải thích vì sao trần là con số ấy (``reason``). Quan trọng
+    #: nhất khi ``tran == 0``: đó là lý do nhà máy không nhận việc, và tool
+    #: phải nói câu ấy ra thay vì để khách nhìn chữ "Chờ" (08/09/2026).
+    ly_do: str = ""
 
 
 #: Mặc định 60 giây mỗi request — SDK_SPEC §1.
@@ -537,7 +541,8 @@ class ShopAPI(BaseClient):
         dang_chay = _so("running")
         cho_trong = max(0, suc_chua - dang_chay) if suc_chua else 0
         return LoiMoi(tran=tran, cho_trong=cho_trong, dang_chay=dang_chay,
-                      hang_doi=_so("queued"))
+                      hang_doi=_so("queued"),
+                      ly_do=str(chi_tiet.get("reason") or ""))
 
     def chay_ca_me(
         self,

@@ -340,6 +340,18 @@ class NhipDo:
         with self._khoa:
             if tran <= 0:
                 self._tran = 0
+                # ═══ ĐANG DỪNG RỒI THÌ ĐỪNG DỪNG LẠI TỪ ĐẦU — 08/09/2026 ═══
+                #
+                # Trần được hỏi lại mỗi 20 giây, quãng dừng dài 30 giây. Cứ mỗi
+                # lần hỏi mà máy chủ vẫn nói 0 là đặt lại quãng dừng từ đầu, nên
+                # nó KHÔNG BAO GIỜ hết: job thăm dò không bao giờ được bắn, cổng
+                # ở 0 vĩnh viễn, khách nhìn chữ "Chờ" hàng giờ. Đo trên máy chủ
+                # thật khi kho tài khoản ảnh 0/106 dùng được. Để quãng dừng
+                # chạy hết rồi thăm dò MỘT job: máy chủ từ chối (503, không trừ
+                # tiền) thì tool nói được câu "máy chủ đang bận, thử lại sau…"
+                # thay vì im lặng; máy chủ nhận thì mở lại ngay.
+                if self._dong_ho() < self._dung_toi and self._tham_do:
+                    return
                 self._nha_may_dung(CHO_KHI_DUNG)
                 return
             if self._tran is not None and self._tran > 0 and tran >= 2 * self._tran:

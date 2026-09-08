@@ -129,6 +129,11 @@ STATUS_LABELS: Dict[str, str] = {
 #: Trạng thái còn đang chiếm chỗ trong hàng đợi.
 ACTIVE_STATUSES = (STATUS_WAITING, STATUS_CREATING, STATUS_RUNNING, STATUS_DOWNLOADING)
 
+#: Tên nhà máy để nói với khách — không dùng mã `image`/`tts` trên màn hình.
+TEN_NHA_MAY: Dict[str, str] = {
+    "image": "ảnh", "video": "video", "tts": "giọng đọc", "music": "nhạc",
+}
+
 #: Số lần thử lại tối đa cho một job khi gặp lỗi tạm thời (429, 503, mất mạng).
 #: SDK đã tự thử lại bên trong mỗi request rồi; đây là lớp thứ hai ở mức job.
 MAX_JOB_ATTEMPTS = 4
@@ -464,6 +469,11 @@ class JobManager:
         #: Mốc `monotonic` sớm nhất được phép nhả job KẾ TIẾP của mỗi loại —
         #: van rải nhịp chống cú đấm đồng loạt, xem `RAI_NHIP_GIAY`.
         self._nha_sau: Dict[str, float] = {kind: 0.0 for kind in HARD_CAPS}
+        #: Câu máy chủ giải thích vì sao nhà máy loại này đang không nhận việc
+        #: (trần 0). Rỗng = đang nhận bình thường.
+        self._ly_do_dung: Dict[str, str] = {kind: "" for kind in HARD_CAPS}
+        #: Lần gần nhất đã ghi lý do chờ lên các việc đang xếp hàng của mỗi loại.
+        self._lan_bao_cho: Dict[str, float] = {kind: 0.0 for kind in HARD_CAPS}
         #: Hàng đợi CHƯA GỬI, tách theo loại. Dispatcher chỉ nhả job xuống pool
         #: khi cổng của loại đó còn chỗ — nhờ vậy số luồng thật sự mở ra luôn
         #: bằng số job đang chạy, không phải bằng số job khách đưa vào.
@@ -750,7 +760,14 @@ class JobManager:
             client = self._client
             if client is not None:
                 try:
-                    self._doc_loi_moi(nhip, client, kind)
+                    loi_moi = self._doc_loi_moi(nhip, client, kind)
+                    # Trần 0 = nhà máy không nhận việc. Giữ câu giải thích của
+                    # máy chủ để `_bao_dang_cho` nói lại cho khách; trần > 0
+                    # thì xoá.
+                    if loi_moi is not None:
+                        self._ly_do_dung[kind] = (
+                            str(getattr(loi_moi, "ly_do", "") or "")
+                            if int(loi_moi.tran) <= 0 else "")
                 except Exception:  # noqa: BLE001
                     # Không hỏi được trần KHÔNG phải lý do dừng chạy. Vòng dò
                     # vẫn còn ba tín hiệu kia (429/503/độ trễ hàng chờ); mất
@@ -761,9 +778,44 @@ class JobManager:
         cong = self._cong.get(kind)
         if cong is not None and moi != cong.suc_chua:
             cong.dat_suc_chua(moi)
+        if moi == 0:
+            self._bao_dang_cho(kind, nhip)
+
+    def _bao_dang_cho(self, kind: str, nhip) -> None:
+        """Cổng đang đóng vì nhà máy dừng: ghi LÝ DO lên từng việc đang chờ.
+
+        Khách 08/09/2026: bấm "Chạy cả loạt", dòng ghi "⏳ Chờ" rồi đứng như
+        thế mãi. Máy chủ lúc ấy trả trần ảnh = 0 kèm một câu giải thích rất rõ
+        (kho tài khoản 0/106 dùng được) — nhưng tool nuốt câu đó và chỉ hiện
+        chữ "Chờ". Đây là chỗ đưa câu ấy lên bảng, mỗi 10 giây một lần.
+        """
+        bay_gio = time.monotonic()
+        if bay_gio - self._lan_bao_cho.get(kind, 0.0) < 10.0:
+            return
+        self._lan_bao_cho[kind] = bay_gio
+        ly_do = self._ly_do_dung.get(kind, "")
+        cho = 0.0
+        try:
+            cho = float(nhip.cho_bao_lau())
+        except Exception:  # noqa: BLE001
+            pass
+        chu = "Nhà máy {0} đang không nhận việc".format(TEN_NHA_MAY.get(kind, kind))
+        if ly_do:
+            chu += ": " + ly_do.split(".")[0].strip()
+        chu += ". Tự thử lại sau {0:.0f} giây — chưa trừ tiền.".format(max(1.0, cho))
+        with self._lock:
+            dang_cho = [r for r, _v in self._hang_doi.get(kind, ())]
+        if not dang_cho:
+            return
+        for record in dang_cho:
+            if record.status == STATUS_WAITING and record.message != chu:
+                self._update(record, STATUS_WAITING, chu)
+        if self._ly_do_dung.get("_da_log_" + kind) != chu:
+            self._ly_do_dung["_da_log_" + kind] = chu
+            self._log(chu)
 
     @staticmethod
-    def _doc_loi_moi(nhip, client, kind: str) -> None:
+    def _doc_loi_moi(nhip, client, kind: str):
         """Một lần đọc ``/v1/me``, hai tín hiệu: trần (chặn trên) và chỗ trống.
 
         Chỗ trống là thứ chữa quãng 42 phút đo được ngày 23/08/2026 — mẻ 1000
@@ -776,11 +828,12 @@ class JobManager:
         hoi = getattr(client, "cho_nha_may_dang_moi", None)
         if hoi is None:
             nhip.dat_tran(client.tran_song_song(kind))
-            return
+            return None
         loi_moi = hoi(kind)
         # Thứ tự có ý: đặt trần TRƯỚC để `moi_vao` cắt được theo trần mới nhất.
         nhip.dat_tran(loi_moi.tran)
         nhip.moi_vao(loi_moi.cho_trong)
+        return loi_moi
 
     def _bao_nhip(self, kind: str, exc: Optional[BaseException]) -> None:
         """Đưa kết quả một job về cho vòng tự dò của đúng loại đó."""

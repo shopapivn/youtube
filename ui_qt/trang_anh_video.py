@@ -1834,11 +1834,16 @@ class TabHangLoat(QWidget):
 
     @staticmethod
     def _nhan_ngan(ban_ghi) -> str:
-        from core.jobs import STATUS_LABELS
+        from core.jobs import STATUS_LABELS, STATUS_WAITING
 
         tt = str(getattr(ban_ghi, "status", ""))
         tien = int(getattr(ban_ghi, "progress", 0) or 0)
         nhan_tt = STATUS_LABELS.get(tt, tt)
+        # Đang chờ mà có lý do (nhà máy không nhận việc) thì nói lý do ra — chữ
+        # "Chờ" trơ trọi hàng giờ là thứ khách chụp gửi về 08/09/2026.
+        loi_nhan = str(getattr(ban_ghi, "message", "") or "")
+        if tt == STATUS_WAITING and loi_nhan:
+            return "{0} — {1}".format(nhan_tt, loi_nhan)
         return "{0} {1}%".format(nhan_tt, tien) if tien and tt != STATUS_DONE \
             else nhan_tt
 
