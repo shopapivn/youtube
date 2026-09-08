@@ -245,6 +245,42 @@ class TestChonMoc:
         assert _so_trong_ten(r"D:\x\VISUAL\canh-7.png") == 7
         assert _so_trong_ten(r"D:\x\VISUAL\bia.png") is None
 
+    def test_khong_co_bang_canh_thi_chia_anh_theo_cau_phu_de(self, tmp_path):
+        """Khách không phải điền gì: ảnh đổi đúng lúc giọng đọc sang câu mới."""
+        from core.phu_de import Cau, viet_srt
+
+        srt = str(tmp_path / "phu-de.srt")
+        # 6 câu, mốc thật có hở; chữ dài ngắn khác nhau.
+        cau = [(0.0, 2.0, "Một câu rất là dài dằng dặc ở đầu video này."),
+               (2.5, 4.0, "Câu hai ngắn."),
+               (4.6, 7.0, "Câu ba cũng khá dài để chia cho đều chữ."),
+               (7.4, 9.0, "Câu bốn vừa."),
+               (9.5, 12.0, "Câu năm dài hơn một chút nữa đây."),
+               (12.3, 14.0, "Hết.")]
+        viet_srt(srt, [Cau(so=i + 1, bat_dau=a, ket_thuc=b, chu=c) for i, (a, b, c) in enumerate(cau)])
+        giay = mc.giay_theo_srt(srt, 3, giay_tieng=15.0)
+        assert len(giay) == 3
+        moc = [0.0]
+        for g in giay[:-1]:
+            moc.append(round(moc[-1] + g, 3))
+        assert moc[0] == 0.0
+        assert all(any(abs(m - a) < 1e-6 for a, _b, _c in cau) for m in moc), \
+            "mỗi ảnh phải bắt đầu đúng lúc một câu bắt đầu"
+        assert abs(sum(giay) - 15.0) < 1e-6, "ảnh cuối giữ tới hết tiếng"
+
+    def test_srt_uoc_luong_hoac_it_cau_thi_khong_chia_theo_srt(self, tmp_path):
+        from core.phu_de import Cau, viet_srt
+
+        srt = str(tmp_path / "phu-de.srt")
+        viet_srt(srt, [Cau(so=i + 1, bat_dau=i * 3.0, ket_thuc=(i + 1) * 3.0, chu="câu %d" % i)
+                       for i in range(6)])      # nối khít = ước lượng
+        assert mc.giay_theo_srt(srt, 3) == []
+        viet_srt(srt, [Cau(so=1, bat_dau=0.0, ket_thuc=2.0, chu="một"),
+                       Cau(so=2, bat_dau=2.5, ket_thuc=4.0, chu="hai"),
+                       Cau(so=3, bat_dau=4.5, ket_thuc=6.0, chu="ba"),
+                       Cau(so=4, bat_dau=6.5, ket_thuc=8.0, chu="bốn")])
+        assert mc.giay_theo_srt(srt, 9) == [], "ít câu hơn ảnh thì chịu"
+
     def test_doc_duoc_bang_xlsx(self, tmp_path):
         from openpyxl import Workbook
 
@@ -369,6 +405,25 @@ class TestTabDungVideoNoiRoNguonMoc:
         assert "nghe lại giọng đọc" in chu
         assert "giọng đọc thật" in chu
         assert "CHÚ Ý" not in chu
+
+    def test_khong_co_bang_canh_co_srt_thi_chia_theo_cau(self, trang, monkeypatch):
+        from core.phu_de import Cau, viet_srt
+
+        dung, app, goc = trang
+        d = _du_an_tool(goc, CANH_THAT)
+        os.remove(os.path.join(d, "EXCEL", "4-canh.json"))
+        viet_srt(os.path.join(d, "EXCEL", "phu-de.srt"),
+                 [Cau(so=i + 1, bat_dau=mc_giay(c["srt_start"]),
+                      ket_thuc=mc_giay(c["srt_end"]), chu=c["srt_text"])
+                  for i, c in enumerate(CANH_THAT)])
+        monkeypatch.setattr("core.phu_de.nghe_bang_whisper",
+                            lambda *a, **k: pytest.fail("có .srt thì không nghe lại"))
+        from ui_qt.trang_edit import TrangDungVideo
+        t = dung(TrangDungVideo(app))
+        assert "chia theo câu phụ đề" in t._du_an[0].trang_thai
+        t._chay()
+        chu = t._log.toPlainText()
+        assert "theo câu trong phụ đề" in chu and "Kết thúc: 1 xong" in chu
 
     def test_bang_moc_that_thi_khong_nghe_lai(self, trang, monkeypatch):
         dung, app, goc = trang

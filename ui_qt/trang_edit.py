@@ -42,7 +42,7 @@ from core.dung_video import (
     phu_de_tu_txt, phuong_an_dung, quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
 )
 from core.ffmpeg_goi_san import bao_dam_ffmpeg, thieu_gi
-from core.moc_canh import LECH_UOC_LUONG, chon_moc
+from core.moc_canh import LECH_UOC_LUONG, chon_moc, giay_theo_srt
 from core.tron_tieng import co_ne_giong
 
 from . import theme
@@ -666,8 +666,19 @@ class TrangDungVideo(QWidget):
                                    ghi=lambda c: self._bao.emit(
                                        "{0}: {1}".format(du_an.ten, c)))
                     tung_canh = giay_tung_hinh(moc.canh, du_an.hinh, giay)
+                # Không có bảng cảnh (hoặc bảng không khớp ảnh): chia ảnh theo
+                # CÂU trong phụ đề — mốc thật của giọng đọc — chứ không chia đều
+                # theo đồng hồ. Khách không phải điền gì thêm.
+                theo_srt = False
+                if not tung_canh and du_an.phu_de.lower().endswith(".srt"):
+                    tung_canh = giay_theo_srt(du_an.phu_de, len(du_an.hinh), giay)
+                    theo_srt = bool(tung_canh)
                 try:
-                    if tung_canh and moc is not None and moc.tin:
+                    if theo_srt:
+                        dong.append("{0}: không có bảng cảnh — chia {1} ảnh/clip "
+                                    "theo câu trong phụ đề, mốc lấy từ giọng đọc "
+                                    "thật.".format(du_an.ten, len(tung_canh)))
+                    elif tung_canh and moc is not None and moc.tin:
                         dong.append("{0}: {1} — {2} cảnh, {3:.0f} giây hình cho "
                                     "{4:.0f} giây tiếng.".format(
                                         du_an.ten, moc.ghi_chu, len(tung_canh),

@@ -122,8 +122,10 @@ class DuAn:
             return "thiếu " + ", ".join(self.thieu)
         # Không có bảng cảnh thì hình chia đều theo thời gian — chắc chắn không
         # bám lời. Phải nói ra ở đúng cột khách nhìn trước khi bấm Dựng.
-        return ("sẵn sàng" if self.bang_canh
-                else "sẵn sàng — không có bảng cảnh, hình chia đều, không bám lời")
+        if self.bang_canh:
+            return "sẵn sàng"
+        return ("sẵn sàng (chia theo câu phụ đề)" if self.phu_de.lower().endswith(".srt")
+                else "sẵn sàng (chia đều)")
 
 
 @dataclass

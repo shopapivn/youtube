@@ -973,15 +973,8 @@ class TabHangLoat(QWidget):
         them = ("\n\n{0} dòng chỉ có mô tả clip — mấy dòng ấy sẽ làm clip "
                 "thẳng từ ảnh tham chiếu bạn đưa, không tạo ảnh mới."
                 .format(chi_clip)) if chi_clip else ""
-        co_loi = sum(1 for m in dong if m.get("loi"))
-        if da_chep and co_loi:
-            them += ("\n\nĐã chép bảng vào EXCEL của dự án: tab Dựng video sẽ "
-                     "đặt từng ảnh đúng lúc giọng đọc tới câu trong cột "
-                     "loi_doc.")
-        elif da_chep:
-            them += ("\n\nBảng không có cột loi_doc (lời đọc từng cảnh), nên "
-                     "khi dựng video hình sẽ chia đều theo thời gian, không "
-                     "bám lời. Muốn bám lời: điền cột ấy rồi nạp lại.")
+        if da_chep:
+            them += "\n\nĐã chép một bản bảng cảnh vào EXCEL của dự án."
         self._app.show_message(
             "Đã nạp bảng cảnh",
             "{0} dòng từ {1}.{2}".format(len(dong), os.path.basename(duong),

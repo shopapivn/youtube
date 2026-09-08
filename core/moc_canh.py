@@ -47,7 +47,7 @@ from .phu_de import NGUONG_KHOP, _chuan_hoa, _khop, _rai_thoi_gian
 __all__ = [
     "KetMoc", "NGUON_BANG", "NGUON_NGHE_LAI", "NGUON_DA_NGHE", "NGUON_UOC_LUONG",
     "doc_canh_co_chu", "moc_uoc_luong", "moc_theo_tieng", "chon_moc",
-    "LECH_UOC_LUONG",
+    "LECH_UOC_LUONG", "giay_theo_srt",
 ]
 
 #: Nguồn mốc — để nhật ký nói được thật.
@@ -264,6 +264,47 @@ def _ghi_sidecar(duong_bang: str, duong_tieng: str, ket: KetMoc) -> None:
 
 
 # ── Cửa duy nhất cho khâu dựng ──────────────────────────────────────────────
+
+
+def giay_theo_srt(duong_srt: str, so_hinh: int, giay_tieng: float = 0.0) -> List[float]:
+    """Không có bảng cảnh: chia `so_hinh` ảnh theo **câu phụ đề**, mốc thật.
+
+    ═══ CHIA THEO CÂU, KHÔNG CHIA THEO ĐỒNG HỒ ═══
+
+    Không ai bảo được ảnh nào ứng với câu nào, nên chỉ có thể giả định các ảnh
+    phủ kịch bản theo thứ tự, mỗi ảnh một phần bằng nhau. Nhưng "bằng nhau"
+    phải tính theo **chữ**, và mốc đổi ảnh phải rơi đúng lúc giọng đọc **bắt
+    đầu một câu** — chỗ ngừng lấy hơi thuộc về ảnh trước, y như người dựng
+    tay. Chia đều theo giây thì ảnh đổi giữa câu, và câu dài câu ngắn lệch dần.
+
+    Trả danh sách rỗng khi `.srt` không có mốc thật (ước lượng) hoặc ít câu
+    hơn số ảnh — khi ấy nơi gọi quay về chia đều và nói thẳng.
+    """
+    from .phu_de import doc_srt  # noqa: PLC0415
+
+    if so_hinh <= 0 or not _srt_dang_tin(duong_srt):
+        return []
+    with open(duong_srt, "r", encoding="utf-8-sig", errors="replace") as tep:
+        cau = doc_srt(tep.read())
+    cau = [c for c in cau if _chuan_hoa(c.chu)]
+    if len(cau) < so_hinh:
+        return []
+    tong = float(sum(len(_chuan_hoa(c.chu)) for c in cau))
+    moc: List[float] = []
+    da = 0.0
+    k = 0
+    for c in cau:
+        # Ảnh thứ k bắt đầu ở câu đầu tiên mà phần chữ đã qua chạm mốc k/n.
+        while k < so_hinh and da >= tong * k / so_hinh - 1e-9:
+            moc.append(c.bat_dau)
+            k += 1
+        da += len(_chuan_hoa(c.chu))
+    while len(moc) < so_hinh:
+        moc.append(cau[-1].bat_dau)
+    het = max(cau[-1].ket_thuc, giay_tieng)
+    giay = [max(0.1, moc[i + 1] - moc[i]) for i in range(so_hinh - 1)]
+    giay.append(max(0.1, het - moc[-1]))
+    return giay
 
 
 def _srt_dang_tin(duong_srt: str) -> bool:
