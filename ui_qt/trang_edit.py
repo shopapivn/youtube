@@ -37,11 +37,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QColor
 
 from core.dung_video import (
-    DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn, doc_bang_canh,
+    DO_PHAN_GIAI, MAU_CHU, VI_TRI_PHU_DE, CaiDatDung, DuAn,
     doc_thoi_luong, giay_tung_hinh, gon_lenh, ke_hoach_dung, loi_khong_chay_duoc,
     phu_de_tu_txt, phuong_an_dung, quet_thu_muc, thoi_luong_moi_anh, tim_ffmpeg,
 )
 from core.ffmpeg_goi_san import bao_dam_ffmpeg, thieu_gi
+from core.moc_canh import LECH_UOC_LUONG, chon_moc
 from core.tron_tieng import co_ne_giong
 
 from . import theme
@@ -649,14 +650,31 @@ class TrangDungVideo(QWidget):
                 # Có bảng cảnh thì mỗi cảnh chiếm đúng khoảng của nó. Không có
                 # thì chia đều — và **nói ra** là đang chia đều, vì đó là lúc
                 # hình chắc chắn trôi khỏi lời và khách cần biết vì sao.
-                tung_canh = giay_tung_hinh(
-                    doc_bang_canh(du_an.bang_canh), du_an.hinh, giay)
+                #
+                # Và mốc trong bảng phải là mốc ĐO TỪ GIỌNG ĐỌC. Khách báo
+                # 08/09/2026 hình lệch lời: bảng cảnh mang mốc ước lượng (máy
+                # không nghe được giọng), lệch tới hàng chục giây. Xem
+                # `core/moc_canh.py` — kiểm, nghe lại nếu cần, và nói thật.
+                tung_canh: List[float] = []
+                moc = None
+                if du_an.bang_canh:
+                    moc = chon_moc(du_an.bang_canh, du_an.tieng, giay,
+                                   cancel=self._xin_dung,
+                                   ghi=lambda c: self._bao.emit(
+                                       "{0}: {1}".format(du_an.ten, c)))
+                    tung_canh = giay_tung_hinh(moc.canh, du_an.hinh, giay)
                 try:
-                    if tung_canh:
-                        dong.append("{0}: theo bảng cảnh — {1} cảnh, {2:.0f} "
-                                    "giây hình cho {3:.0f} giây tiếng.".format(
-                                        du_an.ten, len(tung_canh),
+                    if tung_canh and moc is not None and moc.tin:
+                        dong.append("{0}: {1} — {2} cảnh, {3:.0f} giây hình cho "
+                                    "{4:.0f} giây tiếng.".format(
+                                        du_an.ten, moc.ghi_chu, len(tung_canh),
                                         sum(tung_canh), giay))
+                    elif tung_canh and moc is not None:
+                        dong.append("{0}: CHÚ Ý — {1}. Dựng theo mốc ước lượng: "
+                                    "hình có thể lệch lời {2}. Muốn đúng, chạy "
+                                    "lại trên máy nghe được giọng đọc (Tuỳ chọn "
+                                    "→ Kiểm tra máy).".format(
+                                        du_an.ten, moc.ghi_chu, LECH_UOC_LUONG))
                     elif du_an.bang_canh:
                         dong.append("{0}: bảng cảnh không khớp với số ảnh/clip "
                                     "đang có — chia đều thời lượng.".format(du_an.ten))

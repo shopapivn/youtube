@@ -6196,6 +6196,31 @@ def _khau_dung(bc: BoiCanh):
         # như người dựng tay vẫn làm: người đọc ngừng thì hình vẫn ở đó.
         moc = [_giay_srt(c.get("srt_start")) for c in canh]
         het = [_giay_srt(c.get("srt_end")) for c in canh]
+        # ═══ VÀ MỐC ẤY PHẢI LÀ MỐC ĐO TỪ GIỌNG ĐỌC ═══
+        #
+        # Khâu phụ đề không nghe được (máy yếu, hoặc bộ nghe trả về thứ không
+        # khớp — đã xảy ra 2/20 lượt ngay trên máy chủ dự án) thì mốc trong
+        # `4-canh.json` là mốc RẢI THEO SỐ CHỮ: đo 08/09/2026 lệch mốc thật
+        # trung bình 4–11 giây, có chỗ 27 giây — chính là "hình lệch lời" khách
+        # báo. Trước khi dựng, kiểm và nghe lại lấy mốc thật; không được thì
+        # nói thẳng. Xem `core/moc_canh.py`.
+        from .moc_canh import NGUON_BANG, NGUON_UOC_LUONG, LECH_UOC_LUONG, chon_moc  # noqa: PLC0415
+
+        ket_moc = chon_moc(os.path.join(d, "4-canh.json"), mp3,
+                           _dai_clip(ffmpeg, mp3),
+                           ngon_ngu=getattr(bc.kenh, "ngon_ngu", ""),
+                           nghe=bc.nghe, cancel=bc.cancel, ghi=bc.ghi)
+        if ket_moc.tin and ket_moc.nguon != NGUON_BANG:
+            theo_so = {c["so"]: c for c in ket_moc.canh}
+            moc = [theo_so.get(int(c["scene_id"]), {}).get("bat_dau", m)
+                   for c, m in zip(canh, moc)]
+            het = [theo_so.get(int(c["scene_id"]), {}).get("ket_thuc", h)
+                   for c, h in zip(canh, het)]
+            bc.ghi("  " + ket_moc.ghi_chu + ".")
+        elif ket_moc.nguon == NGUON_UOC_LUONG:
+            bc.ghi("  CHÚ Ý: {0}. Dựng theo mốc ước lượng — hình có thể lệch lời "
+                   "{1}. Muốn đúng, chạy lại khâu dựng trên máy nghe được giọng "
+                   "đọc.".format(ket_moc.ghi_chu, LECH_UOC_LUONG))
         giay = []
         for i in range(len(canh)):
             if i + 1 < len(canh):
