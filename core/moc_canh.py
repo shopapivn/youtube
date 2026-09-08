@@ -266,15 +266,33 @@ def _ghi_sidecar(duong_bang: str, duong_tieng: str, ket: KetMoc) -> None:
 # ── Cửa duy nhất cho khâu dựng ──────────────────────────────────────────────
 
 
+def _srt_dang_tin(duong_srt: str) -> bool:
+    """Tệp `.srt` có mốc đo từ giọng (có hở) hay mốc ước lượng (nối khít)."""
+    from .phu_de import doc_srt  # noqa: PLC0415
+
+    if not duong_srt or not os.path.isfile(duong_srt):
+        return False
+    try:
+        with open(duong_srt, "r", encoding="utf-8-sig", errors="replace") as tep:
+            cau = doc_srt(tep.read())
+    except OSError:
+        return False
+    return len(cau) >= 4 and not moc_uoc_luong(
+        [{"so": c.so, "bat_dau": c.bat_dau, "ket_thuc": c.ket_thuc} for c in cau])
+
+
 def chon_moc(duong_bang: str, duong_tieng: str, giay_tieng: float, *,
              ngon_ngu: str = "", nghe: Optional[Callable[..., List]] = None,
              cancel: Optional[threading.Event] = None,
-             ghi: Optional[Callable[[str], None]] = None) -> KetMoc:
+             ghi: Optional[Callable[[str], None]] = None,
+             duong_srt: str = "") -> KetMoc:
     """Mốc cảnh đáng tin nhất lấy được cho `duong_bang` + `duong_tieng`.
 
     Thứ tự: bảng có mốc thật và khớp độ dài tiếng → dùng ngay; đã nghe lần
-    trước cho đúng file tiếng này → dùng; còn lại nghe lại; nghe không được →
-    trả mốc bảng với `nguon = NGUON_UOC_LUONG` để nơi gọi nói thật.
+    trước cho đúng file tiếng này → dùng; có `duong_srt` với mốc thật (tab
+    Phụ đề đã nghe rồi) → ép lời đọc từng cảnh vào phụ đề, **không cần nghe
+    lại**, tức thì; còn lại nghe lại; nghe không được → trả mốc bảng với
+    `nguon = NGUON_UOC_LUONG` để nơi gọi nói thật.
     """
     def noi(dong: str) -> None:
         if ghi is not None:
@@ -303,6 +321,17 @@ def chon_moc(duong_bang: str, duong_tieng: str, giay_tieng: float, *,
     da = _doc_sidecar(duong_bang, duong_tieng)
     if da is not None:
         return da
+
+    if _srt_dang_tin(duong_srt):
+        from .phu_de import nghe_tu_srt  # noqa: PLC0415
+
+        ket = moc_theo_tieng(duong_tieng, canh, ngon_ngu=ngon_ngu,
+                             nghe=lambda *_a, **_k: nghe_tu_srt(duong_srt),
+                             cancel=cancel)
+        if ket.tin:
+            ket.ghi_chu = "mốc cảnh ép từ phụ đề đã khớp giọng đọc (khớp {0:.0%})".format(ket.khop)
+            _ghi_sidecar(duong_bang, duong_tieng, ket)
+            return ket
 
     noi("{0} — nghe lại giọng đọc để lấy mốc thật (chạy trên máy, miễn phí, "
         "vài phút với video dài)…".format(ly_do))

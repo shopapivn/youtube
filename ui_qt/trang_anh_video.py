@@ -961,14 +961,56 @@ class TabHangLoat(QWidget):
         self.bang.setRowCount(0)
         for m in dong:
             self.them_dong(m["anh"], m["video"], m["tham_chieu"])
+        # ═══ GIỮ MỘT BẢN BẢNG CẢNH TRONG DỰ ÁN, CHO TAB DỰNG VIDEO ═══
+        #
+        # Khách 08/09/2026: dựng xong hình lệch lời. Tab Dựng video đặt hình
+        # theo bảng cảnh trong ngăn EXCEL, mà bảng nạp ở đây trước nay chỉ
+        # sống trong bộ nhớ của tab này — sang tab Dựng video là "không có bảng
+        # cảnh, chia đều". Chép một bản vào EXCEL/ (không đụng tệp gốc của
+        # khách) thì Dựng video thấy được cột `loi_doc` và ép hình theo lời.
+        da_chep = self._chep_bang_canh_vao_du_an(duong)
         chi_clip = sum(1 for m in dong if not m["anh"] and m["video"])
         them = ("\n\n{0} dòng chỉ có mô tả clip — mấy dòng ấy sẽ làm clip "
                 "thẳng từ ảnh tham chiếu bạn đưa, không tạo ảnh mới."
                 .format(chi_clip)) if chi_clip else ""
+        co_loi = sum(1 for m in dong if m.get("loi"))
+        if da_chep and co_loi:
+            them += ("\n\nĐã chép bảng vào EXCEL của dự án: tab Dựng video sẽ "
+                     "đặt từng ảnh đúng lúc giọng đọc tới câu trong cột "
+                     "loi_doc.")
+        elif da_chep:
+            them += ("\n\nBảng không có cột loi_doc (lời đọc từng cảnh), nên "
+                     "khi dựng video hình sẽ chia đều theo thời gian, không "
+                     "bám lời. Muốn bám lời: điền cột ấy rồi nạp lại.")
         self._app.show_message(
             "Đã nạp bảng cảnh",
             "{0} dòng từ {1}.{2}".format(len(dong), os.path.basename(duong),
                                          them))
+
+    def _chep_bang_canh_vao_du_an(self, duong: str) -> str:
+        """Chép bảng vừa nạp vào `EXCEL/bang-canh.xlsx` của dự án đang mở.
+
+        Trả đường dẫn đã chép, hoặc rỗng khi không biết dự án / chép hỏng.
+        Chỉ THÊM một tệp vào ngăn EXCEL, không đổi gì tệp gốc của khách.
+        """
+        import shutil  # noqa: PLC0415
+
+        from core import du_an as _du_an  # noqa: PLC0415
+
+        goc = getattr(self._app, "base_dir", "")
+        ten = getattr(self._app, "du_an", "")
+        if not goc or not ten:
+            return ""
+        try:
+            ngan = _du_an.thu_muc_ngan(goc, ten, "EXCEL")
+            os.makedirs(ngan, exist_ok=True)
+            dich = os.path.join(ngan, "bang-canh.xlsx")
+            if os.path.normcase(os.path.abspath(duong)) != os.path.normcase(
+                    os.path.abspath(dich)):
+                shutil.copyfile(duong, dich)
+            return dich
+        except (OSError, ValueError):
+            return ""
 
     def _thanh_chay(self) -> QWidget:
         khung = the()

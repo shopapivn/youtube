@@ -659,6 +659,9 @@ class TrangDungVideo(QWidget):
                 moc = None
                 if du_an.bang_canh:
                     moc = chon_moc(du_an.bang_canh, du_an.tieng, giay,
+                                   duong_srt=(du_an.phu_de
+                                              if du_an.phu_de.lower().endswith(".srt")
+                                              else ""),
                                    cancel=self._xin_dung,
                                    ghi=lambda c: self._bao.emit(
                                        "{0}: {1}".format(du_an.ten, c)))

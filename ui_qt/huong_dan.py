@@ -757,6 +757,14 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
         "luu_y": [
             "Chạy bằng FFmpeg ngay trên máy bạn — không cần mạng, không trừ tiền.",
+            "HÌNH BÁM LỜI cần một bảng cảnh trong EXCEL: bảng của Prompt "
+            "Visuals (có sẵn mốc giây), hoặc bảng Excel của tab Ảnh & Video có "
+            "điền cột “loi_doc” (lời đọc của từng cảnh). Không có bảng, tôi "
+            "chia đều thời gian cho các ảnh — cột Trạng thái ghi rõ, và hình "
+            "sẽ không bám lời.",
+            "Mốc trong bảng chỉ là ước lượng (máy lúc làm phụ đề không nghe "
+            "được giọng) thì tôi tự ép lại theo phụ đề hoặc nghe lại giọng đọc "
+            "trước khi dựng; nhật ký ghi rõ mốc lấy từ đâu.",
             "Tool KHÔNG bao giờ xoá file gốc của bạn.",
             "Phụ đề: đưa thẳng file kịch bản .txt cũng được, tôi tự ép nó khớp "
             "vào giọng đọc nên chữ đúng từng chữ. Đang có sẵn file .srt sai "

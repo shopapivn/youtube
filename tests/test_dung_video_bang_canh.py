@@ -191,7 +191,8 @@ class TestDocDuAn:
         du = doc_du_an(d)
         assert du.chay_duoc
         assert du.bang_canh == ""
-        assert du.trang_thai == "sẵn sàng (chia đều)"
+        assert du.trang_thai.startswith("sẵn sàng")
+        assert "chia đều" in du.trang_thai and "không bám lời" in du.trang_thai
 
 
 def doc_bang_canh_gia():

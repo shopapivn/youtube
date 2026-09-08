@@ -184,6 +184,67 @@ class TestChonMoc:
         assert ket.nguon == mc.NGUON_UOC_LUONG
         assert "không có lời đọc" in ket.ghi_chu
 
+    def test_co_srt_khop_giong_thi_ep_theo_srt_khong_can_nghe_lai(self, tmp_path):
+        """Tab Phụ đề đã nghe rồi: mốc thật nằm trong .srt — dùng ngay, tức thì."""
+        from core.phu_de import Cau, viet_srt
+
+        bang = _ghi_bang(tmp_path, _uoc_luong(CANH_THAT))
+        tieng = _tieng(tmp_path)
+        srt = str(tmp_path / "phu-de.srt")
+        # Phụ đề câu-theo-câu với mốc thật (có hở chỗ ngừng lấy hơi).
+        viet_srt(srt, [Cau(so=i + 1, bat_dau=mc_giay(c["srt_start"]),
+                           ket_thuc=mc_giay(c["srt_end"]), chu=c["srt_text"])
+                       for i, c in enumerate(CANH_THAT)])
+
+        def khong_duoc_goi(*_a, **_k):
+            raise AssertionError("có .srt khớp giọng mà vẫn đi nghe lại")
+
+        ket = mc.chon_moc(bang, tieng, 20.0, nghe=khong_duoc_goi, duong_srt=srt)
+        assert ket.tin and ket.nguon == mc.NGUON_NGHE_LAI
+        assert [round(c["bat_dau"], 1) for c in ket.canh] == [0.0, 5.0, 12.0, 14.5]
+        assert "phụ đề" in ket.ghi_chu
+
+    def test_srt_uoc_luong_thi_khong_tin_srt_ma_nghe_lai(self, tmp_path):
+        from core.phu_de import Cau, viet_srt
+
+        bang = _ghi_bang(tmp_path, _uoc_luong(CANH_THAT))
+        tieng = _tieng(tmp_path)
+        srt = str(tmp_path / "phu-de.srt")
+        moc = 0.0
+        cau = []
+        for i, c in enumerate(CANH_THAT):          # nối khít = ước lượng
+            cau.append(Cau(so=i + 1, bat_dau=moc, ket_thuc=moc + 5.0, chu=c["srt_text"]))
+            moc += 5.0
+        viet_srt(srt, cau)
+        goi = []
+        ket = mc.chon_moc(bang, tieng, 20.0, duong_srt=srt,
+                          nghe=lambda *a, **k: goi.append(1) or _nghe_that(CANH_THAT)(*a, **k))
+        assert goi, ".srt ước lượng thì phải nghe lại"
+        assert ket.tin
+
+    def test_bang_chi_co_loi_doc_khong_co_moc_van_dung_duoc(self, tmp_path):
+        """Bảng Excel tay của tab Ảnh & Video: có cột loi_doc, không có giây."""
+        from core.dung_video import bang_canh_dung_duoc, doc_bang_canh
+
+        canh = [{"scene_id": c["scene_id"], "img_prompt": "x", "video_prompt": "",
+                 "loi_doc": c["srt_text"]} for c in CANH_THAT]
+        bang = _ghi_bang(tmp_path, canh)
+        assert doc_bang_canh(bang) == [], "không có mốc thật"
+        assert bang_canh_dung_duoc(bang), "có lời đọc thì khâu dựng tự tìm mốc"
+        ket = mc.chon_moc(bang, _tieng(tmp_path), 20.0, nghe=_nghe_that(CANH_THAT))
+        assert ket.tin
+        assert [round(c["bat_dau"], 1) for c in ket.canh] == [0.0, 5.0, 12.0, 14.5]
+
+    def test_ten_anh_bat_dau_bang_so_thi_so_ay_la_so_canh(self):
+        """Tab Ảnh & Video đặt tên `005_a cat with 2 dogs.jpg`: cảnh 5, không phải 2."""
+        from core.dung_video import _so_trong_ten
+
+        assert _so_trong_ten(r"D:\x\VISUAL\005_a cat with 2 dogs.jpg") == 5
+        assert _so_trong_ten(r"D:\x\VISUAL\012_3D render of a city.mp4") == 12
+        assert _so_trong_ten(r"D:\x\5-anh\12.png") == 12
+        assert _so_trong_ten(r"D:\x\VISUAL\canh-7.png") == 7
+        assert _so_trong_ten(r"D:\x\VISUAL\bia.png") is None
+
     def test_doc_duoc_bang_xlsx(self, tmp_path):
         from openpyxl import Workbook
 

@@ -120,7 +120,10 @@ class DuAn:
             return "đã dựng xong"
         if self.thieu:
             return "thiếu " + ", ".join(self.thieu)
-        return "sẵn sàng" if self.bang_canh else "sẵn sàng (chia đều)"
+        # Không có bảng cảnh thì hình chia đều theo thời gian — chắc chắn không
+        # bám lời. Phải nói ra ở đúng cột khách nhìn trước khi bấm Dựng.
+        return ("sẵn sàng" if self.bang_canh
+                else "sẵn sàng — không có bảng cảnh, hình chia đều, không bám lời")
 
 
 @dataclass
@@ -358,21 +361,34 @@ def doc_du_an(thu_muc: str, *, thu_muc_ra: str = "", can_phu_de: bool = False) -
 def _tim_bang_canh(thu_muc: str, con: Dict[str, str]) -> str:
     """Bảng cảnh của dự án — trong thư mục, hay trong ngăn `EXCEL/`.
 
-    Chỉ nhận file **đọc ra được mốc thời gian**: một bảng cảnh chỉ có lời nhắc
-    mà không có `srt_start` thì giữ lại làm gì cũng không biết cảnh nào dài bao
-    lâu, mà bảng lại ghi "theo bảng cảnh" — hứa suông.
+    Nhận bảng **có mốc thời gian**, hoặc bảng **có lời đọc từng cảnh** (cột
+    `srt_text` / `loi_doc`): không có mốc thì khâu dựng vẫn tìm được mốc bằng
+    cách ép lời đọc của cảnh vào phụ đề hay giọng đọc (`core/moc_canh`). Bảng
+    chỉ có lời nhắc ảnh, không mốc không lời đọc, thì không dùng được — không
+    ai biết cảnh nào dài bao lâu.
     """
     cho = [thu_muc] + [con[t] for t in ("excel",) if t in con]
     for duong in cho:
         for ten in _TEN_BANG_CANH:
             tep = os.path.join(duong, ten)
-            if os.path.isfile(tep) and doc_bang_canh(tep):
+            if os.path.isfile(tep) and bang_canh_dung_duoc(tep):
                 return tep
     for duong in cho:
         for tep in _liet_ke(duong, (".xlsx", ".json")):
-            if doc_bang_canh(tep):
+            if bang_canh_dung_duoc(tep):
                 return tep
     return ""
+
+
+def bang_canh_dung_duoc(tep: str) -> bool:
+    """Bảng có mốc thời gian, hoặc có lời đọc của (đa số) cảnh."""
+    if doc_bang_canh(tep):
+        return True
+    from .moc_canh import doc_canh_co_chu  # noqa: PLC0415 — tránh nhập vòng
+
+    canh = doc_canh_co_chu(tep)
+    co_chu = sum(1 for c in canh if str(c.get("chu", "")).strip())
+    return bool(canh) and co_chu >= max(1, len(canh) // 2)
 
 
 def du_an_chon_tay(ten: str, thu_muc_hinh: str, tieng: str, *,
@@ -413,7 +429,8 @@ def du_an_chon_tay(ten: str, thu_muc_hinh: str, tieng: str, *,
     return DuAn(ten=ten, thu_muc=thu_muc_hinh, tieng=tep_tieng, phu_de=phu_de,
                 hinh=tuple(hinh), nhac=tep_nhac, thieu=tuple(thieu),
                 da_xong=da_xong,
-                bang_canh=bang_canh if doc_bang_canh(bang_canh) else "")
+                bang_canh=bang_canh if (bang_canh and os.path.isfile(bang_canh)
+                                        and bang_canh_dung_duoc(bang_canh)) else "")
 
 
 def _mot_tep(duong: str, duoi: Sequence[str]) -> str:
@@ -572,8 +589,18 @@ def _giay(moc) -> float:
 
 
 def _so_trong_ten(duong_dan: str) -> Optional[int]:
-    """Số cảnh nằm trong tên tệp (`5-anh/12.png` → 12). Không có thì `None`."""
+    """Số cảnh nằm trong tên tệp (`5-anh/12.png` → 12). Không có thì `None`.
+
+    Tên **bắt đầu bằng số** thì số ấy là số cảnh — tab Ảnh & Video đặt tên
+    `005_a cat with 2 dogs.jpg` (số thứ tự + đầu lời nhắc). Bản trước lấy số
+    CUỐI trong tên, nên tấm ấy thành cảnh 2: ảnh gắn nhầm cảnh, mỗi ảnh chiếm
+    khoảng thời gian của cảnh khác — hình lệch lời mà bảng cảnh vẫn đúng.
+    Tên không bắt đầu bằng số (`anh-12.png`) thì vẫn lấy số cuối như cũ.
+    """
     ten = os.path.splitext(os.path.basename(duong_dan))[0]
+    dau = re.match(r"\s*(\d+)", ten)
+    if dau:
+        return int(dau.group(1))
     so = re.findall(r"\d+", ten)
     return int(so[-1]) if so else None
 

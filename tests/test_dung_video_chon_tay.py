@@ -61,7 +61,7 @@ class TestChonTay:
             json.dump([{"scene_id": 1, "img_prompt": "mèo"}], tep)
         du = du_an_chon_tay("", anh, giong, bang_canh=rac)
         assert du.bang_canh == ""
-        assert du.trang_thai == "sẵn sàng (chia đều)"
+        assert du.trang_thai.startswith("sẵn sàng") and "chia đều" in du.trang_thai
 
     def test_bang_canh_dung_thi_nhan(self, tmp_path):
         anh, giong = self._ba_noi(tmp_path)

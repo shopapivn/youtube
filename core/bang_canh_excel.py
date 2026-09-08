@@ -36,7 +36,13 @@ class LoiBangCanh(ValueError):
 
 
 #: Cột của file mẫu, theo đúng thứ tự.
-COT = ("scene_id", "img_prompt", "video_prompt", "reference_files")
+#:
+#: `loi_doc` (08/09/2026): lời đọc của cảnh ấy, chép nguyên từ kịch bản. Tab
+#: Dựng video cần nó để biết cảnh nào bắt đầu ở giây thứ mấy — ép lời đọc vào
+#: phụ đề / giọng đọc thật (`core/moc_canh`). Không có cột này thì hình chia
+#: đều theo thời gian, chắc chắn không bám lời. Để trống được nếu khách không
+#: dựng bằng tool.
+COT = ("scene_id", "img_prompt", "video_prompt", "reference_files", "loi_doc")
 
 #: Cột bắt buộc phải có mặt trong file. `reference_files` để trống được — khách
 #: có thể dùng ô ảnh tham chiếu chung cho cả loạt thay vì điền từng dòng.
@@ -95,6 +101,7 @@ def doc_excel(duong: str) -> List[Dict[str, Any]]:
                 "anh": anh,
                 "video": video,
                 "tham_chieu": lay("reference_files"),
+                "loi": lay("loi_doc"),
             })
         if not ra:
             raise LoiBangCanh(
@@ -130,13 +137,16 @@ def viet_mau(duong_dich: str) -> str:
                   "Warm afternoon light through thin curtains, a person seen "
                   "from behind by the window, quiet room",
                   "slow push in, dust drifting in the light",
-                  r"D:\Anh tham chieu\nv1.png"])
+                  r"D:\Anh tham chieu\nv1.png",
+                  "Chiều hôm ấy, cô ngồi bên cửa sổ rất lâu."])
     trang.append([2,
                   "Close-up of hands holding a warm ceramic cup, steam catching "
                   "the backlight",
-                  "", r"D:\Anh tham chieu\nv1.png, D:\Anh tham chieu\nv1-nhin-nghieng.png"])
+                  "", r"D:\Anh tham chieu\nv1.png, D:\Anh tham chieu\nv1-nhin-nghieng.png",
+                  "Tách trà trên tay đã nguội mà cô không nhận ra."])
     trang.append([3, "", "the camera drifts left across an empty room",
-                  r"D:\Anh tham chieu\khung-dau.png"])
+                  r"D:\Anh tham chieu\khung-dau.png",
+                  "Căn phòng trống, chỉ còn tiếng đồng hồ."])
 
     huong = sach.create_sheet("huong-dan")
     for dong in (
@@ -150,6 +160,11 @@ def viet_mau(duong_dich: str) -> str:
          "ĐƯỜNG DẪN đầy đủ tới ảnh tham chiếu trên máy bạn, KHÔNG phải chỉ tên "
          "file. Nhiều ảnh thì cách nhau dấu phẩy. Bỏ trống thì dùng ảnh bạn "
          "chọn chung cho cả loạt."),
+        ("loi_doc", "Nên, nếu dựng video",
+         "Lời đọc của cảnh này, chép NGUYÊN từ kịch bản (câu nào giọng đọc "
+         "đang đọc khi cảnh này hiện). Tab Dựng video dùng nó để đặt cảnh đúng "
+         "giây giọng đọc tới câu ấy. Bỏ trống thì hình chia đều theo thời "
+         "gian và KHÔNG bám lời."),
         ("", "", ""),
         ("Cách lấy đường dẫn:", "",
          "Mở thư mục chứa ảnh → bấm chuột PHẢI vào ảnh → chọn “Sao chép dưới "
@@ -174,6 +189,7 @@ def viet_mau(duong_dich: str) -> str:
     trang.column_dimensions["B"].width = 52
     trang.column_dimensions["C"].width = 40
     trang.column_dimensions["D"].width = 20
+    trang.column_dimensions["E"].width = 48
 
     sach.save(duong_dich)
     return duong_dich

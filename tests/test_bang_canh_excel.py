@@ -82,8 +82,20 @@ class TestGiuTenCotTiengAnh:
     """Giữ tên VE3 để file từ Prompt Visuals nạp thẳng sang được."""
 
     def test_ten_cot_dung_khuon_VE3(self):
-        assert COT == ("scene_id", "img_prompt", "video_prompt",
-                       "reference_files")
+        assert COT[:4] == ("scene_id", "img_prompt", "video_prompt",
+                           "reference_files")
+
+    def test_co_cot_loi_doc_de_tab_dung_video_bam_loi(self, tmp_path):
+        """08/09/2026: không có lời đọc từng cảnh thì khâu dựng chia đều, hình
+        không bám lời. Mẫu phải có cột, và đọc lên phải giữ được nó."""
+        assert "loi_doc" in COT
+        dong = doc_excel(viet_mau(str(tmp_path / "mau.xlsx")))
+        assert all(d["loi"] for d in dong), "ba dòng mẫu đều có lời đọc làm mẫu"
+        from openpyxl import load_workbook
+
+        s = load_workbook(viet_mau(str(tmp_path / "mau.xlsx")))
+        chu = "\n".join(str(o.value or "") for hang in s["huong-dan"].iter_rows() for o in hang)
+        assert "loi_doc" in chu and "bám lời" in chu
 
     def test_file_kieu_prompt_visuals_nap_thang_duoc(self, tmp_path):
         """File từ tab Prompt Visuals có thừa nhiều cột — vẫn phải nạp được."""
@@ -271,6 +283,25 @@ class TestTabHangLoat:
         tab.bang.setRowCount(0)
         tab.them_dong("", "", "nv1.png")
         assert tab.canh() == []
+
+    def test_nap_excel_chep_mot_ban_vao_EXCEL_cua_du_an(self, qt_app, tmp_path):
+        """08/09/2026: bảng nạp ở đây phải tới được tab Dựng video — nó nằm ở
+        ngăn EXCEL của dự án, không phải trong bộ nhớ của tab này."""
+        tab, app = _dung_tab(str(tmp_path))
+        app.base_dir = str(tmp_path / "tool")
+        app.du_an = "video-dau-tien"
+        mau = viet_mau(str(tmp_path / "mau.xlsx"))
+        dich = tab._chep_bang_canh_vao_du_an(mau)
+        assert dich.endswith(os.path.join("EXCEL", "bang-canh.xlsx"))
+        assert os.path.isfile(dich)
+        assert os.path.isfile(mau), "không đụng tệp gốc của khách"
+        from core.dung_video import bang_canh_dung_duoc
+
+        assert bang_canh_dung_duoc(dich), "mẫu có loi_doc nên Dựng video dùng được"
+
+    def test_khong_biet_du_an_thi_khong_chep_khong_ne_loi(self, qt_app, tmp_path):
+        tab, _app = _dung_tab(str(tmp_path))
+        assert tab._chep_bang_canh_vao_du_an(viet_mau(str(tmp_path / "mau.xlsx"))) == ""
 
     def test_nap_excel_do_thang_vao_bang(self, qt_app, tmp_path):
         """Vòng tròn khép kín: tải mẫu, nạp lên, bảng có đúng ba dòng."""
