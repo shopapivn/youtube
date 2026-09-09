@@ -232,8 +232,9 @@ def test_mo_tab_len_la_chon_san_luot_do_moi_nhat(qt_app, tmp_path):
 
     trang = _dung_trang(goc)
 
-    assert trang._chon_luot.count() == 2
-    assert trang._chon_luot.currentText().startswith("0003")
+    # Từ 09/09/2026 ô "Lượt" thành bảng Video: mới nhất ở trên, tự chọn dòng đầu.
+    assert trang._bang_video.rowCount() == 2
+    assert trang._bang_video.item(0, 2).text() == "0003"
     luot = trang._doc()
     assert luot is not None, "mở tool lên mà không nạp lại lượt nào là lỗi cũ"
     assert luot.ma_luot == "0003"
@@ -305,10 +306,10 @@ def test_doi_kenh_thi_doi_luon_danh_sach_luot(qt_app, tmp_path):
     _dung_luot(goc, "BBB", "0010", xong_toi=1, tao_luc=2000.0)
     trang = _dung_trang(goc)
 
-    assert trang._chon_luot.count() == 1        # AAA đứng đầu bảng chữ cái
+    assert trang._bang_video.rowCount() == 1    # AAA đứng đầu bảng chữ cái
     trang._chon_kenh.setCurrentIndex(trang._chon_kenh.findText("BBB"))
 
-    assert trang._chon_luot.count() == 2
+    assert trang._bang_video.rowCount() == 2
     assert trang._doc().ma_luot == "0010"
 
 
@@ -367,7 +368,8 @@ def test_doi_luot_thi_dai_phim_dung_lai_tu_dau(qt_app, tmp_path):
     trang = _dung_trang(goc)
     assert trang._dai.count() == 2               # 0002 là lượt mới nhất
 
-    trang._chon_luot.setCurrentIndex(trang._chon_luot.findData(mot.thu_muc))
+    trang._bang_video.setCurrentCell(1, 0)      # dòng 2 = lượt 0001 (cũ hơn)
+    assert trang._duong == mot.thu_muc
 
     assert [trang._dai.item(i).text()
             for i in range(trang._dai.count())] == ["Cảnh 1"]

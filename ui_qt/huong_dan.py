@@ -497,198 +497,80 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     },
     "auto": {
         "tieu_de": "Video sản xuất tự động",
-        "tom_tat": "Dán link tư liệu, bấm một nút, ra video hoàn thiện.",
+        "tom_tat": "Dán nội dung, bấm Chạy, ra video hoàn thiện — bấm nhiều "
+                   "lần là nhiều video.",
         "buoc": [
-            "Chọn kênh. Kênh quyết định tiếng nói, giọng đọc, nhân vật và "
-            "phong cách hình. Chưa có kênh hợp ý? Bấm “Tạo kênh mới”.",
-            "Đưa tư liệu vào — CẦN MỘT TRONG HAI: dán link video để tôi tự "
-            "lấy lời thoại, hoặc dán thẳng nội dung vào ô bên dưới (bài của "
-            "bạn, hay lời thoại bạn đã có sẵn). Có nội dung thì tôi bỏ qua "
-            "link — và không phụ thuộc vào việc YouTube có cho tải hay không.",
-            "Điền tiêu đề và chữ ảnh bìa nếu bạn đã nghĩ sẵn — bỏ trống thì "
-            "tôi tự đặt.",
-            "Riêng kênh “Timelapse (một chỗ, ngàn năm)” thì KHÁC: nó không kể "
-            "lại nội dung của ai, nên không cần link cũng không cần tư liệu. "
-            "Chỉ cần một dòng tiêu đề nói rõ NƠI nào và khoảng thời gian nào — "
-            "ví dụ “Thăng Long — Hà Nội nhìn từ một khúc sông Hồng, 1010 đến "
-            "nay”. Tôi tự dựng bảng mốc thời gian, vẽ từng thời đại từ đúng "
-            "một góc máy, rồi nối lại thành phim. Kênh này không có lời đọc: "
-            "muốn có tiếng thì thả một tệp .mp3 vào thư mục nhạc của kênh, "
-            "không thì phim ra sẽ câm.",
-            "Đã viết kịch bản ở chỗ khác rồi? Dán bài vào ô nội dung và bật "
-            "“Đây là kịch bản hoàn chỉnh”. Tôi bỏ qua khâu viết — không tốn "
-            "tiền khâu đó — và chạy thẳng từ khâu giọng đọc.",
-            "Bấm Chạy. Bảng tiến độ cho biết đang ở khâu nào.",
-            "NHIỀU VIDEO một lúc: dán nội dung video 1, bấm “Thêm vào hàng "
-            "đợi” — ô nhập trống ra, dán video 2, lại “Thêm”… (đổi kênh giữa "
-            "chừng cũng được, mỗi dòng nhớ kênh riêng). Xong chọn ở ô Hàng đợi "
-            "“Chạy lần lượt” hay “Chạy 2–3 video cùng lúc”, rồi bấm “Chạy hàng "
-            "đợi”. Bấm “Chạy” khi hàng đang có việc thì video mới xếp sau, "
-            "tới lượt là chạy.",
-            "Hôm sau mở tool lên, ô “Lượt” đã sẵn lượt gần nhất của kênh. "
-            "Chọn đúng lượt còn dở rồi bấm “Chạy tiếp”. Hàng đợi hôm qua cũng "
-            "còn nguyên: bấm “Chạy hàng đợi” là chạy tiếp phần chờ.",
+            "Chọn kênh. Kênh quyết định tiếng, giọng đọc, nhân vật và phong "
+            "cách hình. Tạo kênh mới hay nhân bản thì ở tab Quản lý kênh; "
+            "“Sửa kênh” ở đây mở đúng kênh đang chọn.",
+            "Dán vào ô lớn MỘT trong hai: link video (tôi tự lấy lời thoại) "
+            "hoặc thẳng nội dung — lời thoại đối thủ, bài của bạn. Tool tự "
+            "nhận đâu là link. Đã có kịch bản viết xong thì dán bài và bật "
+            "“Đây là kịch bản hoàn chỉnh”: bỏ qua khâu viết, không tốn tiền "
+            "khâu đó.",
+            "Riêng kênh “Timelapse” không cần nội dung: chỉ cần tiêu đề nói rõ "
+            "NƠI nào và khoảng thời gian nào — ví dụ “Thăng Long — Hà Nội nhìn "
+            "từ một khúc sông Hồng, 1010 đến nay”. Kênh này không có lời đọc; "
+            "muốn có tiếng thì thả một tệp .mp3 vào thư mục nhạc của kênh.",
+            "Tiêu đề bỏ trống thì tôi tự đặt. Chữ ảnh bìa, “Dừng để xem trước "
+            "khi dựng”, “Xuất lại qua CapCut” nằm trong “Tuỳ chọn” — không cần "
+            "thì cứ để gập.",
+            "Bấm Chạy. Video hiện thành một dòng trong bảng Video, tám khâu "
+            "của nó ở ngay dưới. Muốn thêm video: dán nội dung tiếp rồi lại "
+            "bấm Chạy — video sau xếp hàng, chạy lần lượt hay 2–3 cái cùng lúc "
+            "tuỳ ô chọn ở đầu bảng Video.",
+            "Hôm sau mở tool lên, bảng Video vẫn còn nguyên: video chờ hôm qua "
+            "thì bấm “Chạy các video chờ”; video dở thì chọn dòng đó rồi bấm "
+            "“Chạy tiếp” — khâu đã xong không tính tiền lại.",
         ],
         "luu_y": [
             "Chạy lần lượt: video này xong mới tới video sau — dễ theo dõi, "
-            "máy nhẹ. Chạy 2–3 cùng lúc: nhanh hơn, nhưng mỗi video chậm hơn "
-            "một chút vì chung một đường lên máy chủ; khâu phụ đề, dựng và "
-            "CapCut vẫn làm từng video một trên máy bạn (hai bản Whisper hay "
-            "hai CapCut cùng bấm là hỏng). Tiền không đổi theo cách chạy.",
-            "Bảng tiến độ luôn xem MỘT lượt. Bấm đúp một dòng trong hàng đợi "
-            "(hoặc chọn ở ô “Lượt”) để xem lượt đó. Nút “Dừng” chỉ dừng lượt "
-            "đang xem; “Dừng tất cả” dừng mọi lượt đang chạy, lượt chờ nằm "
-            "yên. Một video hỏng không chặn video sau — hết hàng tôi báo một "
-            "câu tổng kết: xong mấy, hỏng mấy.",
-            "Nhật ký khi có nhiều video thì mỗi dòng có tên kênh/lượt ở đầu, "
-            "để biết dòng ấy của video nào.",
-            "Tắt tool không mất gì. Ô “Lượt” liệt kê mọi lần chạy đã có của "
-            "kênh, kèm chữ cho biết lượt đó xong hay còn dở tới khâu mấy.",
-            "Bấm “Chạy” là mở lượt MỚI và làm lại từ khâu 1, kể cả "
-            "những khâu đã xong. Khi lượt gần nhất còn dở, tôi sẽ hỏi lại "
-            "trước; muốn đi tiếp việc cũ thì chọn “Chạy tiếp”.",
+            "máy nhẹ. Chạy 2–3 cùng lúc: nhanh hơn, mỗi video chậm hơn một "
+            "chút vì chung một đường lên máy chủ; khâu phụ đề, dựng và CapCut "
+            "vẫn làm từng video một trên máy bạn. Tiền không đổi theo cách chạy.",
+            "Một nút “Chạy tiếp / Dừng” theo dòng đang chọn: dòng đang chạy thì "
+            "là Dừng (video khác vẫn chạy); dòng chờ thì Dừng = rút khỏi hàng; "
+            "dòng dở thì là Chạy tiếp. “Dừng tất cả” dừng mọi video đang chạy, "
+            "video chờ nằm yên. Một video hỏng không chặn video sau; chạy hết "
+            "hàng tôi báo một câu: xong mấy, hỏng mấy.",
+            "Bấm Dừng lúc nào cũng được — phần đã làm giữ nguyên. Tắt tool "
+            "cũng không mất gì.",
             "Tám khâu: kịch bản → giọng đọc → phụ đề → bảng cảnh → ảnh → clip "
-            "→ ảnh bìa → dựng. Khâu phụ đề và khâu dựng chạy ngay trên máy "
-            "bạn.",
-            "Khâu kịch bản, với kênh đặt “Số bản content” > 1, đi bốn bước và "
-            "nhật ký hiện đúng từng bước: viết N bản → chấm & chọn một bản "
-            "(kèm điểm mạnh, điểm yếu) → hoàn thiện bản đó (sửa điểm yếu, phát "
-            "huy điểm mạnh, làm mượt; không hơn thì giữ bản cũ) → rà soát: lệch "
-            "tiếng, tách câu, thẻ cảm xúc. Mọi bản và bản chấm nằm trong thư "
-            "mục lượt: 1-ban-A…E.txt, 1-ban-hoan-thien.txt, 1-cham-diem.txt.",
-            "Ở khâu ảnh, tôi gửi hết cả trăm cảnh cùng một lúc, và ảnh của "
-            "cảnh nào xong thì làm clip của cảnh đó ngay — nên hàng “clip” và "
-            "hàng “ảnh bìa” có thể chạy số trước khi tới lượt chúng.",
-            "Bấm Dừng lúc nào cũng được. Phần đã làm giữ nguyên; bấm “Chạy "
-            "tiếp” là đi tiếp từ đúng chỗ đó.",
-            "Ô “Xuất lại qua CapCut sau khi dựng” (mặc định tắt): bật thì "
-            "dựng xong video, tôi đưa nó vào CapCut cài trên máy này và tự "
-            "bấm Xuất — bạn có thêm 9-video-capcut.mp4 do chính CapCut mã "
-            "hoá, nằm cạnh 8-video.mp4. Chạy trên máy, không tốn tiền. Lúc "
-            "đó CapCut TỰ MỞ VÀ TỰ BẤM trên màn hình chừng một hai phút — "
-            "đừng dùng chuột phím, xong nó tự đóng; CapCut đang mở dở cũng "
-            "bị đóng (bản nháp CapCut tự lưu nên không mất gì). Cỡ và chất "
-            "lượng xuất lấy theo lần bạn bấm Xuất tay gần nhất trong CapCut. "
-            "Nếu bước này hỏng, video dựng xong vẫn nguyên; bản nháp nằm ở ô "
-            "đầu trang chủ CapCut để bạn mở lên bấm Xuất tay.",
-            "Không ưng một khâu? Chọn dòng đó rồi bấm “Làm lại khâu này”. Sửa "
-            "kịch bản thì phải “Làm lại từ khâu này” — giọng đọc cũ đang đọc "
-            "bản kịch bản không còn nữa.",
-            "Dải ảnh dưới bảng hiện từng cảnh ngay khi tạo xong. Lúc đang "
-            "chạy, bấm đúp một tấm là mở ảnh gốc để xem cho to.",
-            "Cảnh nào nhìn không ổn thì SỬA LỜI NHẮC, thế thôi — sửa là tôi "
-            "làm lại. Bấm “Sửa lời nhắc từng cảnh” (ngay trên dải ảnh), hoặc "
-            "bấm đúp đúng tấm ảnh chưa ưng: bảng đủ MỌI cảnh của lượt mở ra, "
-            "nhảy sẵn tới cảnh đó. Bấm một cảnh rồi gõ vào hai ô bên dưới, "
-            "xong bấm “Tạo lại”.",
-            "Sửa ô nào quyết định làm lại cái gì — không có nút nào để chọn: "
-            "sửa LỜI NHẮC ẢNH thì tôi làm lại ảnh RỒI làm lại clip của cảnh ấy "
-            "(clip lấy ảnh làm khung đầu, giữ clip cũ là giữ chuyển động của "
-            "một tấm ảnh không còn nữa); chỉ sửa LỜI NHẮC VIDEO thì tôi giữ "
-            "nguyên ảnh, chỉ dựng lại clip cho rẻ.",
-            "Sửa mấy cảnh cũng được, mỗi cảnh một kiểu cũng được: cả mẻ đi "
-            "trong MỘT lượt chạy. Dòng chữ ngay trên nút nói trước cảnh nào "
-            "làm lại ảnh + clip, cảnh nào chỉ clip. Cảnh bạn không sửa thì "
-            "không ai đụng tới và không trả tiền lần thứ hai. Chạy xong tôi "
-            "dừng lại để bạn xem, chưa dựng video — ưng rồi bấm “Chạy tiếp”.",
-            "Bảng cảnh chỉ mở khi lượt đang DỪNG. Lúc đang chạy, khâu đã đọc "
-            "bảng cảnh vào bộ nhớ từ đầu nên sửa cũng không tới được nó — bấm "
-            "Dừng trước, phần đã làm vẫn giữ nguyên.",
-            "Kênh dựng theo CÚ MÁY DÀI (nối cảnh) thì bảng cảnh hiện một dòng "
-            "cảnh báo vàng: ở kênh loại đó nhiều cảnh liền nhau là một đoạn "
-            "quay chung, clip từng cảnh chỉ là lát cắt ra từ đoạn ấy — nên sửa "
-            "lời nhắc một cảnh CHƯA ra hình mới. Lời nhắc vẫn được lưu; muốn "
-            "đổi hình thật thì hiện phải làm lại cả khâu ảnh.",
-            "Nút “Tạo kênh mới” dẫn bạn đi qua năm bước làm một video, mỗi "
-            "bước một màn hình, cứ bấm “Tiếp ▶”: ① đặt tên rồi chọn kiểu vẽ "
-            "(thấy luôn ảnh nhân vật mẫu) và khán giả; ② giọng đọc; "
-            "③ hình ảnh và nhân vật; ④ các prompt; ⑤ dựng video. Mỗi "
-            "bước đã điền sẵn từ mẫu bạn chọn, nên đi thẳng tới cuối không sửa "
-            "gì cũng ra một kênh chạy được — bạn không phải mở tệp nào ra gõ.",
-            "Chọn khán giả là chọn luôn tốc độ đọc của tiếng ấy. Nhật 298 ký "
-            "tự mỗi phút, Việt 832, Anh 920 — chênh gần ba lần, nên cùng một "
-            "kịch bản mà đọc bằng tiếng khác thì độ dài video khác hẳn. Bước ② "
-            "chỉ còn chọn giọng đọc; độ dài do content quyết, không đặt ở đây. "
-            "Bước Giọng đọc còn ô “Ngôn ngữ của kênh”: điền sẵn theo khán giả "
-            "bạn chọn ở Bước ①. Đây là tiếng KỊCH BẢN được viết ra, nên khai sai "
-            "là cả kênh viết nhầm tiếng — chỉ đổi khi kênh làm cho khán giả nước khác.",
-            "Chưa có mã giọng (Voice ID)? Ngay bước này có liên kết mở Thư viện "
-            "giọng của nhà cung cấp để nghe thử và lấy mã.",
-            "Bước ③ “Hình ảnh & nhân vật” lên trước vì chọn phong cách hình và "
-            "nhân vật xong thì các prompt ở bước sau mới tạo ảnh/video đúng "
-            "phong cách ấy. Ở đây phong cách hình bày thành lưới thẻ CÓ ẢNH MẪU "
-            "(Anime, Điện ảnh thực tế, Màu nước, Truyện tranh, 3D…) — bấm một "
-            "thẻ là mở cửa sổ xem TO. Trong cửa sổ ấy chỉ có một ô lớn và một "
-            "dải ô nhỏ ngay dưới: ba ô có chữ “Ảnh” là ba ảnh mẫu, và một ô có "
-            "dấu ▶ là video mẫu 8 giây của cảnh đầu — để bạn thấy phong cách ấy "
-            "lúc chuyển động. Bấm ô ảnh thì ô lớn hiện ảnh đó; bấm ô ▶ thì máy "
-            "bạn mở video ra xem bằng đúng trình xem sẵn có — một cái bấm, "
-            "không có nút nào phải học. Xem xong ưng "
-            "thì bấm “Lưu” là xong bước này: tool tự điền lời tả và đồng bộ nó "
-            "sang mọi prompt tạo ảnh, video, ảnh bìa. Ảnh và video mẫu tạo sẵn "
-            "trong tool, xem bao nhiêu lần cũng không tốn ví.",
-            "Chưa biết mình muốn phong cách nào nhưng đã có sẵn vài ảnh trông "
-            "đúng ý? Bấm “🔎 Tôi có ảnh mẫu — tự chọn giúp” ở bước ③ rồi chọn "
-            "một tới ba ảnh: tôi nhìn ảnh rồi chọn phong cách gần nhất và điền "
-            "sẵn hộ bạn. Đây là một lượt gọi API (trừ ví một ít); không đọc "
-            "được ảnh thì tôi nói thẳng để bạn chọn tay.",
-            "Bước ③ chỉ bày ra hai việc: chọn phong cách và tải ảnh nhân vật — "
-            "bấm “Tải nhân vật lên” là mọi cảnh của kênh sẽ giống người trong "
-            "ảnh đó. Muốn tả phong cách bằng lời của mình thì chọn thẻ “Tùy "
-            "chỉnh” rồi mở “⚙ Chỉnh sâu” mà gõ vào ô “Lời tả phong cách”. Mọi "
-            "thứ cho người đã rành — các khoá hình tiếng Anh và liên kết "
-            "“Tạo/sửa bộ vẽ nâng cao…” — đều nằm trong “⚙ Chỉnh sâu”, không cần "
-            "thì cứ để đóng.",
-            "Bước ④ “Các prompt” là chỗ quản lý mọi PROMPT của kênh, bày "
-            "thành các thẻ bấm vào để mở: prompt tạo tiêu đề + chữ thumbnail, "
-            "prompt content, prompt review (đảm bảo content đạt tiêu chuẩn), "
-            "prompt tạo ra các prompt ảnh + video, prompt ảnh thumbnail, prompt "
-            "nhạc nền… Mỗi prompt là một câu tool gửi cho Claude (API) để ra "
-            "kết quả; đã điền sẵn từ mẫu, bấm vào thẻ để mở ra sửa, không sửa "
-            "gì cũng chạy được. Cùng bước này chọn cách lấy nội dung (chiến lược).",
-            "Thẻ “Bản đồ hình” (prompt 7-ke-hoach.md) chạy TRƯỚC khi chia cảnh: "
-            "AI đọc cả kịch bản một lượt rồi chia thành chương — mỗi chương một "
-            "bối cảnh thật (ga tàu, phòng trọ, bếp đêm, văn phòng…), một vật ẩn "
-            "dụ đổi dần, một câu bản lề — rồi mới viết prompt ảnh/video từng "
-            "cảnh theo bản đồ ấy. Nhờ vậy 13 phút video có chương, có chỗ đổi "
-            "cảnh, khán giả thấy đời mình trong hình. Bản đồ nằm ở sheet "
-            "“story_map” trong 4-canh.xlsx của lượt. Xoá thẻ này thì tool vẫn "
-            "chạy, chỉ là chia cảnh không có bản đồ như trước.",
-            "Nút “Quản lý kênh” mở đúng năm bước ấy nhưng nạp sẵn kênh đang "
-            "chọn, nút cuối là “Lưu”: sửa được cả các prompt, giọng đọc, "
-            "nhạc nền, độ phân giải và phong cách hình ngay trong tool.",
-            "Kênh MẪU của tool (TL4-T7, story-3d…) được cập nhật theo tool: mỗi "
-            "lần cập nhật, bản mẫu mới ghi đè bản trên máy bạn. Muốn tùy chỉnh "
-            "thì bấm “Nhân bản” cạnh ô chọn kênh — bản sao là kênh RIÊNG của "
-            "bạn (mang đủ prompt, phong cách, ảnh nhân vật), cập nhật không "
-            "bao giờ đụng vào. Bấm Lưu trong Quản lý kênh khi đang mở kênh mẫu "
-            "thì tool cũng hỏi và mời nhân bản.",
-            "Liên kết “Tạo/sửa bộ vẽ nâng cao…” (nằm trong “⚙ Chỉnh sâu” ở bước "
-            "③) là chỗ tạo và sửa "
-            "chính bốn mảnh dựng nên kênh: ngách, bộ vẽ, bộ văn hoá và chiến "
-            "lược. Chọn loại → chọn bộ có sẵn hoặc “➕ Tạo mới…” → điền các ô có "
-            "nhãn tiếng Việt → Lưu. Không phải mở tệp nào gõ tay nữa. Bộ mới "
-            "hiện ngay trong ô chọn khi bạn tạo kênh.",
-            "Thêm bộ văn hoá / tiếng mới thì phải điền “số ký tự mỗi phút” ĐO "
-            "THẬT từ giọng bạn dùng (lấy số ký tự kịch bản chia số phút file "
-            "mp3). Để 0 thì tool không cho lưu — đúng vậy, vì lấy nhầm số là "
-            "hỏng độ dài video.",
-            "Chiến lược “Sáng tạo — tự viết” không cần link đối thủ: bạn dán "
-            "thẳng ý tưởng hoặc dàn ý vào ô tư liệu (để trống cũng chạy, khi "
-            "đó AI viết chỉ từ tiêu đề). Chiến lược “Cover” thì cần link — bước "
-            "④ nhắc ngay dưới ô chọn chiến lược.",
-            "Nhà cung cấp trả clip 1280×720, và trước đây video ra đúng cỡ đó. "
-            "Muốn to hơn thì vào “Quản lý kênh” → thẻ “Dựng video” → chọn "
-            "1080p, 1440p hay 4K. Không tốn thêm đồng nào, chỉ tốn thời gian "
-            "máy bạn chạy: chọn 4K thì khâu dựng lâu hơn khoảng bốn lần và tệp "
-            "to hơn khoảng năm lần.",
-            "Nói thật về 4K: phóng 720p lên 4K KHÔNG tạo thêm chi tiết có "
-            "thật — phần nét thêm ra là máy đoán. Cái được thật là YouTube "
-            "dùng bộ mã hoá tốt hơn cho video 4K, nên người xem ở 1080p vẫn "
-            "thấy sạch hơn. Đó là cách YouTube đang làm, không phải lời hứa "
-            "của họ.",
-            "Kết quả nằm ở PROJECTS/AUTO/<kênh>/<số>/ — có video, phụ đề, 3 "
-            "ảnh bìa và mọi tệp trung gian.",
+            "→ ảnh bìa → dựng. Phụ đề và dựng chạy ngay trên máy bạn. Ở khâu "
+            "ảnh tôi gửi cả trăm cảnh cùng lúc, ảnh cảnh nào xong thì làm clip "
+            "cảnh đó ngay — nên hàng “clip” có thể chạy số trước lượt nó.",
+            "Bấm đúp một khâu trong bảng tiến độ là mở thư mục kết quả của nó. "
+            "“Mở thư mục” mở cả lượt: video, phụ đề, 3 ảnh bìa và mọi tệp "
+            "trung gian nằm ở PROJECTS/AUTO/<kênh>/<số>/.",
+            "Không ưng một khâu? Chọn khâu đó rồi bấm “Làm lại…”. Tôi hỏi "
+            "“chỉ khâu này” hay “từ khâu này trở đi” — sửa kịch bản thì phải "
+            "từ khâu này trở đi, vì giọng đọc cũ đang đọc bản không còn nữa. "
+            "Xong bấm “Chạy tiếp”.",
+            "Cảnh nào nhìn không ổn thì SỬA LỜI NHẮC — bấm “Sửa lời nhắc từng "
+            "cảnh”, hoặc bấm đúp đúng tấm ảnh chưa ưng trong dải ảnh. Sửa lời "
+            "nhắc ẢNH thì tôi làm lại ảnh rồi clip của cảnh ấy; chỉ sửa lời "
+            "nhắc VIDEO thì giữ ảnh, dựng lại clip. Cảnh không sửa không trả "
+            "tiền lần hai. Tạo lại xong tôi dừng để bạn xem — ưng rồi bấm "
+            "“Chạy tiếp”. Bảng cảnh chỉ mở khi video đang dừng.",
+            "Đã có kịch bản hay bảng cảnh làm ở chỗ khác? Chọn khâu đó, bấm "
+            "“Khác” → “Nạp file có sẵn” — tool bỏ qua khâu ấy. “Tải file mẫu” "
+            "cùng chỗ cho file đúng cột.",
+            "Khâu kịch bản, với kênh đặt “Số bản content” > 1, viết N bản → "
+            "chấm & chọn → hoàn thiện → rà soát; mọi bản nằm trong thư mục "
+            "lượt: 1-ban-A…E.txt, 1-ban-hoan-thien.txt, 1-cham-diem.txt.",
+            "“Xuất lại qua CapCut” (trong Tuỳ chọn, mặc định tắt): dựng xong "
+            "tôi đưa video vào CapCut trên máy này và tự bấm Xuất — có thêm "
+            "9-video-capcut.mp4 cạnh 8-video.mp4, không tốn tiền. Lúc đó CapCut "
+            "TỰ MỞ VÀ TỰ BẤM trên màn hình chừng một hai phút, đừng dùng chuột "
+            "phím. Hỏng thì video dựng xong vẫn nguyên, bản nháp nằm ở ô đầu "
+            "trang chủ CapCut để bấm Xuất tay.",
+            "Kênh MẪU của tool được cập nhật theo tool — bản mẫu mới ghi đè "
+            "bản trên máy. Muốn tuỳ chỉnh thì nhân bản ở tab Quản lý kênh: bản "
+            "sao là kênh riêng, cập nhật không đụng vào.",
+            "Độ phân giải video ra chọn ở Cài đặt (hoặc riêng từng kênh trong "
+            "Sửa kênh → Dựng video). 4K không thêm chi tiết thật, nhưng YouTube "
+            "cấp bộ mã hoá tốt hơn cho video 4K nên người xem ở 1080p vẫn thấy "
+            "sạch hơn; đổi lại khâu dựng lâu hơn khoảng bốn lần.",
         ],
     },
     "prompt-visuals": {

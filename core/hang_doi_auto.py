@@ -306,16 +306,6 @@ class HangDoiAuto:
         self._bao_doi()
         return True
 
-    def don_xong(self) -> int:
-        """Bỏ mọi mục đã xong khỏi bảng. Trả về số mục đã bỏ."""
-        with self._khoa:
-            truoc = len(self._ds)
-            self._ds = [m for m in self._ds if m.trang_thai != XONG]
-            bo = truoc - len(self._ds)
-        if bo:
-            self._bao_doi()
-        return bo
-
     def mo(self) -> None:
         """Mở hàng: trống chỗ là nạp mục chờ vào chạy."""
         with self._khoa:
@@ -420,9 +410,11 @@ class HangDoiAuto:
     def nap(self, goc: str) -> int:
         """Nạp lại hàng đợi lần trước. Trả về số mục nạp được.
 
-        Chỉ nạp mục mà thư mục lượt **còn trên đĩa** — khách xoá thư mục thì
-        mục ấy không còn gì để chạy. Không tự mở hàng: mở tool lên mà tự chạy
-        tiếp ba video là tự tiêu tiền khi chưa ai bấm gì.
+        Chỉ nạp mục còn VIỆC (chờ; "đang chạy" lúc tắt tool cũng về chờ) và
+        thư mục lượt **còn trên đĩa**. Mục đã xong / hỏng / dừng không nạp:
+        chúng là lượt trên đĩa, bảng Video của tab đã liệt kê theo kênh. Không
+        tự mở hàng: mở tool lên mà tự chạy tiếp ba video là tự tiêu tiền khi
+        chưa ai bấm gì.
         """
         try:
             with open(duong_tep(goc), "r", encoding="utf-8") as tep:
@@ -436,7 +428,7 @@ class HangDoiAuto:
             if not isinstance(g, dict):
                 continue
             m = MucDoi.from_dict(g)
-            if m.thu_muc and os.path.isdir(m.thu_muc):
+            if m.trang_thai == CHO and m.thu_muc and os.path.isdir(m.thu_muc):
                 muc.append(m)
         with self._khoa:
             self._so = self._kep(goi.get("so_song_song", self._so))

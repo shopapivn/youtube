@@ -1,7 +1,9 @@
 """Hàng đợi nhiều lượt của tab Tự động: lần lượt hay vài lượt cùng lúc.
 
 Chủ dự án, 09/09/2026: trước làm nhiều video thì mở nhiều bản tool; từ 07/09
-tool chỉ cho mở một bản, nên phải có hàng đợi ngay trong tab.
+tool chỉ cho mở một bản, nên phải có hàng đợi ngay trong tab. Cùng ngày: *"giao
+diện đang quá nhiều thứ — cần đơn giản, hiệu quả"* → bấm Chạy là xếp hàng, một
+bảng Video thay cho ô "Lượt" + bảng hàng đợi, một nút Chạy tiếp/Dừng.
 
 Mọi bài dưới đây dùng lượt GIẢ: `khoi_chay` chỉ ghi lại mục được gọi, bài kiểm
 tự gọi `bao_xong` để giả lượt kết thúc. Không mạng, không tốn tiền.
@@ -227,18 +229,6 @@ def test_khong_bo_duoc_muc_dang_chay():
     assert [m.ma_luot for m in hd.ds] == ["a"]
 
 
-def test_don_xong_chi_bo_muc_xong():
-    hd = HangDoiAuto(_Ghi(), so_song_song=3)
-    a, b, c = _muc("a"), _muc("b"), _muc("c")
-    for m in (a, b, c):
-        hd.them(m)
-    hd.mo()
-    hd.bao_xong(a)
-    hd.bao_xong(b, loi="x")
-    assert hd.don_xong() == 1
-    assert [m.ma_luot for m in hd.ds] == ["b", "c"]
-
-
 def test_on_het_nhan_dung_dot_vua_chay():
     het = []
     hd = HangDoiAuto(_Ghi(), so_song_song=1, on_het=het.append)
@@ -271,13 +261,14 @@ def test_luu_roi_nap_lai_muc_dang_chay_thanh_cho(tmp_path):
     assert os.path.isfile(duong_tep(goc))
 
     moi = HangDoiAuto(_Ghi())
-    assert moi.nap(goc) == 3
+    assert moi.nap(goc) == 2
     assert moi.so_song_song == 2
     tt = {m.ma_luot: m.trang_thai for m in moi.ds}
-    assert tt == {"a": DOI_XONG, "b": CHO, "c": CHO}, (
-        "mục 'đang chạy' lúc tắt tool phải về CHỜ để bấm Chạy hàng đợi là tiếp")
+    assert tt == {"b": CHO, "c": CHO}, (
+        "mục 'đang chạy' lúc tắt tool phải về CHỜ; mục đã xong không nạp — "
+        "nó là lượt trên đĩa, bảng Video liệt kê theo kênh")
     assert not moi.dang_mo, "mở tool lên không được tự chạy"
-    assert moi.ds[1].mo_ta == "video b"
+    assert moi.ds[0].mo_ta == "video b"
 
 
 def test_nap_bo_qua_muc_ma_thu_muc_khong_con(tmp_path):
@@ -365,10 +356,25 @@ def test_tom_tat_noi_ro_cach_chay():
     hd.them(_muc("b"))
     chu = tom_tat(hd)
     assert "2 video" in chu and "2 chờ" in chu and "lần lượt" in chu
-    assert "Chạy hàng đợi" in chu
     hd.dat_so_song_song(2)
     hd.mo()
     assert "2 cùng lúc" in tom_tat(hd) and "2 đang chạy" in tom_tat(hd)
+
+
+# ── Một ô dán cho cả link lẫn nội dung ───────────────────────────────────────
+
+
+def test_tach_link_va_tu_lieu():
+    from ui_qt.trang_auto import tach_link_va_tu_lieu as tach
+
+    assert tach("") == ("", "")
+    assert tach("  https://www.youtube.com/watch?v=abc \n") == (
+        "https://www.youtube.com/watch?v=abc", "")
+    assert tach("youtu.be/abc") == ("youtu.be/abc", "")
+    # Nhiều dòng là nội dung, dù dòng đầu là link (bài có dẫn nguồn).
+    chu = "https://x.y/z\nĐây là bài của tôi."
+    assert tach(chu) == ("", chu)
+    assert tach("Một câu ngắn không phải link") == ("", "Một câu ngắn không phải link")
 
 
 # ── Giao diện ────────────────────────────────────────────────────────────────
@@ -432,46 +438,49 @@ def trang(qt_app, tmp_path, monkeypatch):
     return t
 
 
-def test_them_vao_hang_doi_mo_luot_moi_va_khong_chay(trang):
-    trang._o_tu_lieu.setPlainText("x" * 500)
-    trang._o_tieu_de.setText("Video một")
-    trang._them_hang_doi()
-    trang._o_tu_lieu.setPlainText("y" * 500)
-    trang._o_tieu_de.setText("Video hai")
-    trang._them_hang_doi()
+def _chay_voi(trang, chu, tieu_de=""):
+    trang._o_tu_lieu.setPlainText(chu)
+    trang._o_tieu_de.setText(tieu_de)
+    trang._chay()
 
-    assert trang._app.tin == [], "không được hỏi 'lượt còn dở' khi lượt ấy đang trong hàng"
-    assert [m.ma_luot for m in trang._hang_doi.ds] == ["0001", "0002"]
-    assert [m.mo_ta for m in trang._hang_doi.ds] == ["Video một", "Video hai"]
-    assert trang.da_khoi_chay == [], "Thêm vào hàng đợi thì CHƯA chạy"
+
+def _cot_trang_thai(trang):
+    b = trang._bang_video
+    return [b.item(i, 4).text() for i in range(b.rowCount())]
+
+
+def test_bam_chay_nhieu_lan_la_xep_hang_va_chay_lan_luot(trang):
+    _chay_voi(trang, "x" * 500, "Video một")
+    _chay_voi(trang, "y" * 500, "Video hai")
+    _chay_voi(trang, "z" * 500)
+
+    assert trang._app.tin == [], "không hỏi 'lượt còn dở' khi lượt ấy đang trong hàng"
+    assert trang.da_khoi_chay == ["0001"], "lần lượt: mới chạy đúng cái đầu"
+    b = trang._bang_video
+    assert [b.item(i, 2).text() for i in range(b.rowCount())] == ["0001", "0002", "0003"]
+    assert b.item(0, 3).text() == "Video một"
+    assert b.item(2, 3).text() == "nội dung dán thẳng"
+    assert _cot_trang_thai(trang) == ["ĐANG CHẠY", "chờ", "chờ"]
     assert trang._o_tu_lieu.toPlainText() == "" and trang._o_tieu_de.text() == "", (
         "ô nhập phải trống ra để dán video tiếp theo")
-    assert trang._bang_doi.rowCount() == 2
-    assert trang._bang_doi.item(1, 4).text() == "chờ"
-    assert trang._nut_chay_hang.isEnabled()
-    # Tư liệu đã nằm trong thư mục lượt.
     d = os.path.join(trang._app.base_dir, "PROJECTS", "AUTO", "K", "0002")
     with open(os.path.join(d, "0-tu-lieu.txt"), encoding="utf-8") as f:
         assert f.read().startswith("yyy")
 
-
-def test_chay_hang_doi_lan_luot(trang):
-    for i in range(3):
-        trang._o_tu_lieu.setPlainText(str(i) * 500)
-        trang._them_hang_doi()
-    trang._chay_hang_doi()
-    assert trang.da_khoi_chay == ["0001"]
-    assert trang._bang_doi.item(0, 4).text() == "ĐANG CHẠY"
-    assert not trang._nut_chay_hang.isEnabled()
-    assert trang._nut_dung_tat_ca.isEnabled()
-    # Lượt đang xem là lượt đang chạy → Dừng bật, Chạy tiếp tắt.
-    assert trang._duong.endswith("0001")
-    assert trang._nut_dung.isEnabled() and not trang._nut_tiep.isEnabled()
-
-    muc = trang._hang_doi.ds[0]
-    trang._hang_doi.bao_xong(muc)
+    # Xong cái đầu → cái hai tự chạy, bảng đổi theo.
+    trang._hang_doi.bao_xong(trang._hang_doi.ds[0])
     assert trang.da_khoi_chay == ["0001", "0002"]
-    assert trang._bang_doi.item(0, 4).text() == "xong"
+    assert _cot_trang_thai(trang) == ["xong", "ĐANG CHẠY", "chờ"]
+
+
+def test_dan_link_thi_luot_nho_link(trang):
+    _chay_voi(trang, "https://www.youtube.com/watch?v=abc123")
+    from core.auto import doc_luot
+
+    luot = doc_luot(trang._hang_doi.ds[0].thu_muc)
+    assert luot.dau_vao["link"] == "https://www.youtube.com/watch?v=abc123"
+    assert not os.path.exists(os.path.join(luot.thu_muc, "0-tu-lieu.txt"))
+    assert trang._bang_video.item(0, 3).text().startswith("https://")
 
 
 def test_chay_hai_cung_luc(trang):
@@ -480,48 +489,62 @@ def test_chay_hai_cung_luc(trang):
 
     assert cai_dat.doc(trang._app.base_dir)["auto_so_song_song"] == 2
     for i in range(3):
-        trang._o_tu_lieu.setPlainText(str(i) * 500)
-        trang._them_hang_doi()
-    trang._chay_hang_doi()
+        _chay_voi(trang, str(i) * 500)
     assert trang.da_khoi_chay == ["0001", "0002"]
 
 
-def test_bam_chay_khi_hang_dang_co_viec_thi_xep_sau(trang):
-    trang._o_tu_lieu.setPlainText("a" * 500)
-    trang._chay()
-    assert trang.da_khoi_chay == ["0001"]
-    trang._o_tu_lieu.setPlainText("b" * 500)
-    trang._chay()
-    assert trang._app.tin == [], "không hỏi 'lượt 0001 còn dở' — nó đang chạy trong hàng"
-    assert [m.trang_thai for m in trang._hang_doi.ds] == [DANG, CHO]
-
-
-def test_chay_tiep_len_dau_hang_cho(trang):
+def test_nut_tiep_dung_doi_chu_theo_dong_dang_chon(trang):
     for i in range(2):
-        trang._o_tu_lieu.setPlainText(str(i) * 500)
-        trang._them_hang_doi()
-    trang._chay_hang_doi()                      # 0001 chạy, 0002 chờ
+        _chay_voi(trang, str(i) * 500)
+    cu = _dung_luot(trang._app.base_dir, "K", "L-cu", xong_toi=6, tao_luc=1.0)
+    trang._nap_luot()
+    b = trang._bang_video
+    assert [b.item(i, 2).text() for i in range(b.rowCount())] == ["0001", "0002", "L-cu"]
+
+    b.setCurrentCell(0, 0)                      # đang chạy
+    assert trang._nut_tiep_dung.text() == "Dừng"
+    assert not trang._nut_lam_lai.isEnabled(), "đang chạy thì không làm lại"
+    b.setCurrentCell(1, 0)                      # chờ → Dừng = rút khỏi hàng
+    assert trang._nut_tiep_dung.text() == "Dừng"
+    b.setCurrentCell(2, 0)                      # lượt cũ trên đĩa
+    assert trang._duong == cu.thu_muc
+    assert trang._nut_tiep_dung.text() == "Chạy tiếp"
+    assert trang._nut_lam_lai.isEnabled()
+    assert trang._nut_hang.text() == "Dừng tất cả" and trang._nut_hang.isEnabled()
+
+
+def test_dung_chi_dung_luot_dang_xem(trang):
+    trang._chon_song_song.setCurrentIndex(trang._chon_song_song.findData(2))
+    for i in range(2):
+        _chay_voi(trang, str(i) * 500)
+    a, b = trang._hang_doi.ds
+    trang._bang_video.setCurrentCell(1, 0)
+    assert trang._duong == b.thu_muc
+    trang._bam_tiep_dung()
+    assert b.huy.is_set() and not a.huy.is_set()
+
+
+def test_dung_dong_cho_la_rut_khoi_hang(trang):
+    for i in range(2):
+        _chay_voi(trang, str(i) * 500)
+    trang._bang_video.setCurrentCell(1, 0)
+    trang._bam_tiep_dung()
+    assert [m.ma_luot for m in trang._hang_doi.ds] == ["0001"]
+    # Lượt vẫn còn trên đĩa nên vẫn hiện ở bảng, giờ là lượt "dở".
+    assert _cot_trang_thai(trang)[1].startswith("dở")
+
+
+def test_chay_tiep_luot_cu_len_dau_hang_cho(trang):
+    for i in range(2):
+        _chay_voi(trang, str(i) * 500)          # 0001 chạy, 0002 chờ
     cu = _dung_luot(trang._app.base_dir, "K", "L-cu", xong_toi=6, tao_luc=1.0)
     trang._duong = cu.thu_muc
     trang._chay_tiep()
     assert [m.ma_luot for m in trang._hang_doi.ds] == ["0001", "L-cu", "0002"]
 
 
-def test_dung_chi_dung_luot_dang_xem(trang):
-    trang._chon_song_song.setCurrentIndex(trang._chon_song_song.findData(2))
-    for i in range(2):
-        trang._o_tu_lieu.setPlainText(str(i) * 500)
-        trang._them_hang_doi()
-    trang._chay_hang_doi()
-    a, b = trang._hang_doi.ds
-    trang._duong = b.thu_muc
-    trang._dung()
-    assert b.huy.is_set() and not a.huy.is_set()
-
-
 def test_xong_doc_luot_ma_dat_dung_chu(trang):
-    trang._o_tu_lieu.setPlainText("a" * 500)
-    trang._chay()
+    _chay_voi(trang, "a" * 500)
     muc = trang._hang_doi.ds[0]
     from core.auto import doc_luot
 
@@ -531,22 +554,30 @@ def test_xong_doc_luot_ma_dat_dung_chu(trang):
     trang._xong(muc, luot)
     assert muc.trang_thai == DOI_XONG
     assert trang._app.tin and trang._app.tin[-1][0] == "Xong"
+    assert _cot_trang_thai(trang) == ["xong"]
 
 
 def test_hang_doi_con_sau_khi_dung_lai_trang(trang, qt_app):
-    trang._o_tu_lieu.setPlainText("a" * 500)
-    trang._them_hang_doi()
+    for i in range(2):
+        _chay_voi(trang, str(i) * 500)          # 0001 đang chạy, 0002 chờ
     import ui_qt.trang_auto as ta
 
     lai = ta.TrangTuDong(_AppGia(trang._app.base_dir))
-    assert [m.ma_luot for m in lai._hang_doi.ds] == ["0001"]
-    assert lai._bang_doi.rowCount() == 1
-    assert not lai._hang_doi.dang_mo
+    assert [m.ma_luot for m in lai._hang_doi.ds] == ["0001", "0002"]
+    assert not lai._hang_doi.dang_mo, "mở tool lên không tự chạy"
+    assert _cot_trang_thai(lai) == ["chờ", "chờ"]
+    assert lai._nut_hang.text() == "Chạy các video chờ"
 
 
-def test_ban_hang_doi_khong_keo_rong_trang(trang):
+def test_khong_hoi_luot_do_khi_no_dang_trong_hang(trang):
+    _chay_voi(trang, "a" * 500)
+    # `_hoi_truoc_khi_mo_luot_moi` dựng hộp thoại thật — gọi tới là bài treo.
+    trang._hoi_truoc_khi_mo_luot_moi = lambda _do: pytest.fail("không được hỏi")
+    _chay_voi(trang, "b" * 500)
+    assert len(trang._hang_doi.ds) == 2
+
+
+def test_trang_khong_keo_rong_qua_760(trang):
     for i in range(2):
-        trang._o_tu_lieu.setPlainText(str(i) * 500)
-        trang._o_tieu_de.setText("Tiêu đề rất dài " * 10)
-        trang._them_hang_doi()
+        _chay_voi(trang, str(i) * 500, "Tiêu đề rất dài " * 10)
     assert trang.minimumSizeHint().width() <= 760
