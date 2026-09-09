@@ -30,7 +30,8 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+import re
+from typing import Dict, List, Optional, Sequence, Tuple
 
 __all__ = ["TEN_THU_MUC", "thu_muc_tai_xuong", "thu_muc_du_lieu", "liet_ke_kenh",
            "doc_kenh", "bao_cao_cho_ai", "BanGhi", "thu_muc_extension",
@@ -613,3 +614,158 @@ def bao_cao_cho_ai(ban_ghi: List[BanGhi], ten_kenh: str = "",
              "nào (YouTube không phát ra, người ta không bấm vào, hay bấm vào rồi bỏ giữa chừng), "
              "và tôi nên làm gì tiếp theo?")
     return "\n".join(L)
+
+
+#: Dấu vào ý thứ nhất trong phụ đề — cùng bộ với `viet_nhieu_ban.DAU_Y_DAU`.
+_DAU_Y_DAU = ("一つ目", "1つ目", "１つ目", "ひとつ目", "最初の", "まず")
+_DAU_DANG_KY = ("チャンネル登録", "登録")
+_SRT_MOC = re.compile(r"(\d+):(\d\d):(\d\d)[,.](\d{1,3})\s*-->\s*(\d+):(\d\d):(\d\d)[,.](\d{1,3})")
+
+
+def _giay(h, m, s, ms) -> float:
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / (1000.0 if len(ms) == 3 else 100.0)
+
+
+def _doc_srt(duong: str) -> List[Tuple[float, float, str]]:
+    """`[(bắt đầu, kết thúc, chữ)]` từ một tệp .srt; hỏng thì `[]`."""
+    try:
+        chu = io.open(duong, encoding="utf-8").read()
+    except Exception:  # noqa: BLE001
+        return []
+    ra: List[Tuple[float, float, str]] = []
+    for khoi in re.split(r"\n\s*\n", chu.strip()):
+        dong = khoi.strip().splitlines()
+        for i, d in enumerate(dong):
+            m = _SRT_MOC.search(d)
+            if m:
+                g = m.groups()
+                ra.append((_giay(*g[:4]), _giay(*g[4:]), " ".join(x.strip() for x in dong[i + 1:])))
+                break
+    return ra
+
+
+def _mm_ss(giay: float) -> str:
+    giay = int(round(giay))
+    return "{0}:{1:02d}".format(giay // 60, giay % 60)
+
+
+def _lam_tieu_de(t: str) -> str:
+    return re.sub(r"[\s\W_]+", "", (t or "").lower())
+
+
+def tim_luot_theo_tieu_de(tieu_de: str, thu_muc_auto: str) -> str:
+    """Thư mục lượt AUTO có `1-tieu-de.txt` TITLE khớp `tieu_de` — '' nếu không.
+
+    Đây là mối nối lượt ↔ video đã đăng, không cần ai nhập tay: kênh remake đăng
+    đúng tiêu đề tool đặt. Nhiều lượt cùng tiêu đề (chạy lại) → lấy lượt có phụ
+    đề và mới nhất. Quét mọi kênh trong PROJECTS/AUTO — bản thử `…-v2` đăng lên
+    cùng kênh YouTube với bản gốc.
+    """
+    muon = _lam_tieu_de(tieu_de)
+    if not muon or not thu_muc_auto or not os.path.isdir(thu_muc_auto):
+        return ""
+    tot = ""
+    tot_moc = (-1, -1.0)
+    for tep in glob.glob(os.path.join(thu_muc_auto, "*", "*", "1-tieu-de.txt")):
+        try:
+            for dong in io.open(tep, encoding="utf-8").read().splitlines():
+                if dong.strip().upper().startswith("TITLE:"):
+                    if _lam_tieu_de(dong.split(":", 1)[1]) == muon:
+                        d = os.path.dirname(tep)
+                        moc = (1 if os.path.isfile(os.path.join(d, "3-phu-de.srt")) else 0,
+                               os.path.getmtime(tep))
+                        if moc > tot_moc:
+                            tot, tot_moc = d, moc
+                    break
+        except Exception:  # noqa: BLE001
+            continue
+    return tot
+
+
+def su_that_tu_luot(thu_muc_luot: str, retention: Optional[Sequence[float]] = None) -> List[str]:
+    """Sự thật rút từ chính lượt AUTO của video: ý 1 vào lúc nào, mời đăng ký ở đâu,
+    và bộ chấm đã đoán rớt thế nào so với đường giữ chân thật.
+
+    Tất cả từ tệp lượt để lại (phụ đề, 1-ban-do-rot-*.json) — không gọi AI. Đây là
+    phần làm "mỗi lần chạy tốt hơn" thành tự động: chi-so về số mới là dòng mới
+    tự hiện trong khối sự thật cho bộ chấm lần sau.
+    """
+    ra: List[str] = []
+    if not thu_muc_luot or not os.path.isdir(thu_muc_luot):
+        return ra
+    srt = _doc_srt(os.path.join(thu_muc_luot, "3-phu-de.srt"))
+    if srt:
+        tong = srt[-1][1] or 1.0
+        y1 = next((a for a, _b, t in srt if any(x in t for x in _DAU_Y_DAU) and a > 20), None)
+        dk = next((a for a, _b, t in srt if any(x in t for x in _DAU_DANG_KY)), None)
+        if y1 is not None:
+            ra.append("ý thứ nhất vào ở {0} ({1:.0f}% bài)".format(_mm_ss(y1), 100 * y1 / tong))
+        if dk is not None:
+            ra.append("mời đăng ký ở {0} ({1:.0f}% bài)".format(_mm_ss(dk), 100 * dk / tong))
+    if retention:
+        for ten in ("1-ban-do-rot-cuoi.json", "1-ban-do-rot-ghep.json"):
+            p = os.path.join(thu_muc_luot, ten)
+            if os.path.isfile(p):
+                try:
+                    from ..vong_cham_sua import so_voi_that  # noqa: PLC0415
+                    ban_do = json.load(io.open(p, encoding="utf-8"))
+                    dong = so_voi_that(ban_do, retention)
+                    if dong:
+                        ra.append("bộ chấm đoán so với thật:")
+                        ra.extend("  " + d for d in dong)
+                except Exception:  # noqa: BLE001
+                    pass
+                break
+    return ra
+
+
+def su_that_kenh(kenh: str, goc: Optional[str] = None, so_video: int = 6,
+                 tep_them: Optional[str] = None, thu_muc_auto: Optional[str] = None) -> str:
+    """Vài dòng SỰ THẬT ĐÃ ĐO của kênh, đưa cho bộ chấm kịch bản làm chuẩn so.
+
+    Không phải luật: chỉ là số Studio đã trả về (xem trung bình, còn bao nhiêu
+    người ở mốc 10 / 30 / cuối) của mấy video gần nhất, cộng tệp ghi tay
+    `tep_them` (chủ kênh / phiên phân tích ghi thêm: "V7: ý 1 vào ở 3:55, AVD
+    rơi đúng đó"). Bộ chấm tự cân — không ai ép nó theo con số nào. Không có
+    số thì trả rỗng, nơi gọi tự ghi "(chưa có)".
+    """
+    dong: List[str] = []
+    if thu_muc_auto is None and goc:
+        thu_muc_auto = os.path.join(os.path.dirname(os.path.abspath(goc)), "PROJECTS", "AUTO")
+    try:
+        moi_nhat: Dict[str, BanGhi] = {}
+        for b in doc_kenh(kenh, goc):
+            cu = moi_nhat.get(b.video_id)
+            if cu is None or (b.moc_gio or 0) >= (cu.moc_gio or 0):
+                moi_nhat[b.video_id] = b
+        ds = sorted(moi_nhat.values(), key=lambda x: x.ngay_dang or "", reverse=True)
+        so = 0
+        for b in ds:
+            if so >= so_video:
+                break
+            if not b.tieu_de or (b.avd_pct is None and not b.retention):
+                continue
+            so += 1
+            phan = []
+            if b.avd_pct is not None:
+                phan.append("xem trung bình {0}% độ dài".format(_s(b.avd_pct)))
+            if b.retention:
+                r = b.retention
+                phan.append("còn {0}% người ở mốc 10%, {1}% ở 30%, {2}% cuối".format(
+                    r[len(r) // 10], r[len(r) * 3 // 10], r[-1]))
+            # Nối với lượt AUTO đã làm ra video này (khớp tiêu đề) → ý 1, mời đăng
+            # ký, và bộ chấm đoán so với thật — không ai phải nhập tay.
+            luot = tim_luot_theo_tieu_de(b.tieu_de, thu_muc_auto or "")
+            them = su_that_tu_luot(luot, b.retention) if luot else []
+            dong.append("- {0}: {1}".format(b.tieu_de[:48], " · ".join(phan + [t for t in them if not t.startswith("  ") and "đoán" not in t])))
+            dong.extend("  " + t for t in them if t.startswith("  ") or "đoán" in t)
+    except Exception:  # noqa: BLE001 — thiếu số thì thôi, không làm vỡ khâu viết
+        pass
+    if tep_them and os.path.isfile(tep_them):
+        try:
+            them = io.open(tep_them, encoding="utf-8").read().strip()
+            if them:
+                dong.append(them)
+        except Exception:  # noqa: BLE001
+            pass
+    return "\n".join(dong)

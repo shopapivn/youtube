@@ -16,6 +16,11 @@ Ràng buộc cứng, ngoài ra không có gì khác:
 - Viết bằng <<NGON_NGU>> tự nhiên, không lệch tiếng, không sót lời dẫn.
 - Người xem phải là CHÍNH NGƯỜI có đặc điểm trong tiêu đề. Bản nào mở bằng "quanh bạn có một người như thế" (người xem thành người quan sát), hoặc gọi họ là đáng sợ/不気味/怖い, hoặc nhắc tuổi tác/hưu trí/con cháu, thì LOẠI dù các phần khác hay.
 
+Hai thứ thật để đối chiếu thêm — người xem gốc nhớ gì ở video gốc, và trên kênh tôi đoạn mở nào đã giữ được người, đoạn mở nào làm người rớt (không có thì bỏ qua):
+<<BINH_LUAN_GOC>>
+
+<<SU_THAT_KENH>>
+
 Số đo tôi tính sẵn cho từng bản:
 <<SO_DO>>
 

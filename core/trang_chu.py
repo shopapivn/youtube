@@ -30,7 +30,7 @@ import json
 import os
 import re
 import threading
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from . import doi_thu_kenh as so
 from .phan_tuyen import TU_LOAI_TRU
@@ -181,6 +181,38 @@ def tra_video(ma: str, *, lang: str = "", cancel: Optional[threading.Event] = No
         "mo_ta": str(tt.get("description") or "")[:600],
         "sub_kenh": str(tt.get("channel_follower_count") or ""),
     }
+
+
+def binh_luan_video(ma: str, *, so: int = 30, lang: str = "",
+                    cancel: Optional[threading.Event] = None) -> List[Tuple[int, str]]:
+    """Bình luận nhiều like nhất dưới một video, bằng yt-dlp — **có mạng, không tốn tiền**.
+
+    Trả `[(like, chữ), …]` xếp theo like giảm dần, chỉ bình luận gốc (không lấy trả
+    lời). Đây là "người xem thật khen chỗ nào" — thứ bộ chấm kịch bản cần mà kịch
+    bản gốc không nói. Lấy không được → `[]`, nơi gọi tự ghi "(không có)".
+    """
+    from .youtube import _args_ngon_ngu, _extract  # noqa: PLC0415 — cùng gói
+
+    n = max(1, int(so or 1))
+    args = _args_ngon_ngu(lang)
+    yt = args.setdefault("youtube", {})
+    # max_comments = "tổng, số bình luận gốc, số trả lời, trả lời mỗi luồng"
+    yt["max_comments"] = [str(n * 2), str(n * 2), "0", "0"]
+    yt["comment_sort"] = ["top"]
+    tt = _extract("https://www.youtube.com/watch?v=" + ma,
+                  {"extract_flat": False, "getcomments": True, "extractor_args": args},
+                  cancel=cancel) or {}
+    ra: List[Tuple[int, str]] = []
+    for c in tt.get("comments") or []:
+        if not isinstance(c, dict):
+            continue
+        if c.get("parent") not in (None, "", "root"):
+            continue
+        chu = " ".join(str(c.get("text") or "").split())
+        if chu:
+            ra.append((int(c.get("like_count") or 0), chu))
+    ra.sort(key=lambda x: -x[0])
+    return ra[:n]
 
 
 def phan_loai_tam_ly(tieu_de: str, tags: Sequence[str] = (), mo_ta: str = "",

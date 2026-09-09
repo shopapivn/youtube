@@ -32,11 +32,11 @@ hạn của mọi cách làm trên máy khách.
 
 ## Đường triệt để: xin mốc từ chính nhà máy giọng nói
 
-Máy chủ đọc bằng **ElevenLabs**. ElevenLabs có sẵn đường trả audio **kèm mốc
-thời gian tới từng ký tự**, cùng giá, cùng giọng, cùng cách đọc:
+Cổng giọng nói mà máy chủ đang dùng có sẵn đường trả audio **kèm mốc thời gian
+tới từng ký tự**, cùng giá, cùng giọng, cùng cách đọc:
 
 ```
-POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps
+POST …/v1/text-to-speech/{voice_id}/with-timestamps
 → { "audio_base64": "...",
     "alignment": { "characters": ["N","g","à",…],
                    "character_start_times_seconds": [0.0, 0.058, …],
@@ -52,7 +52,7 @@ Có `alignment` thì:
 * **bảng cảnh** lấy mốc cảnh từ đó, video không thể lệch;
 * không đổi số đoạn đọc, không đổi tông giọng, không tốn thêm tiền.
 
-### Việc ở máy chủ (`apps/api`, module tts)
+### Việc ở máy chủ (module tts)
 
 1. Gọi `…/with-timestamps` thay cho `…/text-to-speech/{voice_id}`.
 2. Lưu `alignment` cùng job; trả trong kết quả job một tệp thứ hai

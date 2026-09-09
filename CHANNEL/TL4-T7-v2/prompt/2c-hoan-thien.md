@@ -7,6 +7,8 @@ kịch bản dưới đây đã được chọn là bản tốt nhất trong <<S
 Độ dài khoảng <<CHARS>> ký tự (bản đang có <<CHARS_DRAFT>>).
 
 giữ nguyên cấu trúc, các ý, nghiên cứu, con số và ẩn dụ. không viết lại từ đầu, không thêm ý mới ngoài những gì cần để sửa điểm yếu. viết bằng <<NGON_NGU>>.
+người xem gốc đã khen những câu này dưới bản gốc — thứ họ nhớ thì phải còn trong bản hoàn thiện (không có thì bỏ qua):
+<<BINH_LUAN_GOC>>
 trả về NGUYÊN VĂN toàn bộ kịch bản sau khi hoàn thiện, không nhận xét, không tiêu đề, không tạo file, không mô tả việc đã làm, không liệt kê chỗ đã sửa, không đếm ký tự — bản trả về đi thẳng vào máy đọc giọng nói.
 
 kịch bản gốc đã viral (để lấy chất liệu nếu cần):

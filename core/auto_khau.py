@@ -2259,6 +2259,18 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 chu_bia = doc or tieu_de
                 if not doc:
                     bc.ghi("  (không lấy được chữ bìa — tạm dùng tiêu đề đối thủ)")
+                # ═══ CHỮ BÌA TRÙNG VIDEO TRƯỚC CỦA KÊNH THÌ NHỜ AI VIẾT CHỮ KHÁC ═══
+                trung = _chu_bia_trung_luot_truoc(d, chu_bia) if doc else ""
+                if trung and khuon_tieu_de.strip():
+                    bc.kiem_dung()
+                    bc.ghi("  chữ bìa đối thủ trùng chữ bìa một video trước của kênh "
+                           "(「{0}」) — nhờ AI viết chữ bìa khác.".format(trung[:40]))
+                    tra = _goi(bc, _thay(khuon_tieu_de, dict(
+                        chung, COMPETITOR_TITLE=tieu_de_doi_thu)),
+                        _khoa_chat(luot, "tieu-de:bia-khac"))
+                    _t, b = _doc_tieu_de(tra)
+                    if b and not _chu_bia_trung_luot_truoc(d, b):
+                        chu_bia = b
                 # Bố cục để riêng: khâu ảnh bìa chạy sau, và chạy tiếp một lượt
                 # đứt giữa chừng thì bước đọc ảnh này bị bỏ qua.
                 if bo_cuc:
@@ -2400,6 +2412,7 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # *"đang có 2.933, thêm khoảng 480 nữa"* là giao một việc đo được.
             # Nên: đo, nói chênh lệch cụ thể, nắn, đo lại — tối đa ba vòng.
             truoc_nan = ban_nhap
+            ban_sau_viet = ban_nhap
             ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap, muc_tieu_kt)
 
             # ═══ ĐỌC LẠI CHỈ KHI ĐÃ NẮN ═══
@@ -2431,6 +2444,16 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                            "lệch {1:.0%})".format(_lech(cuoi, muc_tieu_kt),
                                                   _lech(ban_nhap, muc_tieu_kt)))
 
+            # ═══ CHẤM LẦN CUỐI — CHỈ KHI BÀI CÒN ĐỔI SAU VÒNG CHẤM-SỬA ═══
+            #
+            # Nắn độ dài và đọc lại đều viết lên bài. Bài đổi thì hỏi bộ chấm
+            # thêm một vòng: "so với gốc, còn mất gì đáng giữ không" — mất thì
+            # vá, không thì đi. Bài không đổi thì không tốn lượt nào.
+            if (max(0, int(getattr(k, "so_vong_cham", 0) or 0)) > 0
+                    and ban_nhap != ban_sau_viet):
+                ban_nhap = _vong_cham_sua_luot(bc, luot, k, chung, ban_nhap,
+                                               tu_lieu, d, nhan="cuoi", so_vong=1)
+
             # ═══ RÀ SOÁT CHO GIỌNG ĐỌC — BƯỚC CUỐI, SAU KHI ĐỘ DÀI ĐÃ CHỐT ═══
             #
             # `3-sua.md` tách mỗi câu một dòng, chèn thẻ cảm xúc và đặt dấu
@@ -2451,6 +2474,7 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                     bc.kiem_dung()
                     bc.ghi("  rà soát bản cuối: lệch tiếng, tách câu, chèn thẻ "
                            "cảm xúc…")
+                    truoc_sua = ban_nhap
                     sua = _goi(
                         bc, _thay(khuon_sua, dict(chung, DRAFT=ban_nhap)),
                         _khoa_chat(luot, "3-sua.md"),
@@ -2460,6 +2484,14 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                     if not sua:
                         raise RuntimeError("bước “rà soát bản cuối” trả về rỗng")
                     ban_nhap = sua
+                    # ═══ GÁC BẢN ĐỌC: rà soát là bước viết CUỐI, trước đó không ai kiểm ═══
+                    #
+                    # Tách câu + chèn thẻ vẫn là viết lên bài; câu tuột thể văn ở lượt
+                    # 0012 có thể sinh ra ở đây. Kênh bật vòng chấm-sửa thì thêm một
+                    # lượt AI đọc bản trước/sau bằng tai người bản ngữ (chủ dự án
+                    # 09/09/2026: "không tiếc API ở bất cứ bước nào"). Kênh khác giữ nguyên.
+                    if max(0, int(getattr(k, "so_vong_cham", 0) or 0)) > 0:
+                        ban_nhap = _kiem_ban_doc(bc, luot, k, chung, truoc_sua, ban_nhap)
                     _ghi_chu(nhap3, ban_nhap + "\n")
 
             # ═══ KỊCH BẢN CÓ SẴN THẺ CẢM XÚC THÌ TÁCH LÀM HAI ═══
@@ -2578,6 +2610,184 @@ def _trung_nguyen_van(moi: str, goc: str, n: int = 10) -> float:
 TEP_BAN_VIET = "1-ban-{0}.txt"
 TEP_CHAM_DIEM = "1-cham-diem.txt"
 TEP_HOOK = "1-hook-{0}.txt"
+#: Bình luận nhiều like nhất dưới video gốc — lấy một lần, dùng cho mọi vòng chấm.
+TEP_BINH_LUAN_GOC = "0-binh-luan-goc.txt"
+
+
+def _khoi_khan_gia(bc: "BoiCanh", k: Kenh, d: str) -> Dict[str, str]:
+    """Hai khối DỮ LIỆU khán giả cho mọi bộ chấm/sửa của lượt: `BINH_LUAN_GOC`, `SU_THAT_KENH`.
+
+    Không phải luật — là thứ người xem thật đã nói và số Studio đã trả về:
+    * `BINH_LUAN_GOC`: 30 bình luận nhiều like nhất dưới video gốc (yt-dlp, miễn
+      phí), lấy một lần cho cả lượt, cất ở `0-binh-luan-goc.txt`.
+    * `SU_THAT_KENH`: xem trung bình / còn bao nhiêu người ở mốc 10-30-cuối của
+      mấy video gần nhất, cộng `nghien-cuu/su-that-cham.txt` ghi tay. Kênh bản
+      thử (`…-v2`) không có chi-so riêng thì lấy của kênh gốc cùng tên — hai bản
+      đăng lên cùng một kênh YouTube.
+    Không có thì trả "(không có)" / "(chưa có)" — lời nhắc bảo bỏ qua.
+    """
+    from .vong_cham_sua import khoi_binh_luan  # noqa: PLC0415
+
+    tep_bl = os.path.join(d, TEP_BINH_LUAN_GOC)
+    bl = _doc_chu(tep_bl).strip()
+    if not bl:
+        ma_goc = _doc_doi_thu(d).get("video_id", "")
+        if ma_goc:
+            try:
+                from .trang_chu import binh_luan_video  # noqa: PLC0415
+                bc.ghi("  lấy bình luận người xem dưới video gốc…")
+                bl = khoi_binh_luan(binh_luan_video(
+                    ma_goc, so=20, lang=k.ngon_ngu, cancel=bc.cancel))
+                bc.ghi("  {0} bình luận.".format(len(bl.splitlines()) if bl else 0))
+            except Exception as loi:  # noqa: BLE001 — không có bình luận vẫn chấm được
+                bc.ghi("  (không lấy được bình luận gốc: {0})".format(str(loi)[:80]))
+                bl = ""
+        _ghi_chu(tep_bl, (bl or "(không lấy được)") + "\n")
+    if bl.startswith("(không"):
+        bl = ""
+
+    st = ""
+    duong_kenh = str(getattr(k, "duong", "") or "")
+    if duong_kenh:
+        try:
+            from .chi_so_ytb import su_that_kenh  # noqa: PLC0415
+            ma = str(getattr(k, "ma", "") or "")
+            goc_kenh = os.path.dirname(duong_kenh)
+            st = su_that_kenh(ma, goc_kenh,
+                              tep_them=os.path.join(duong_kenh, "nghien-cuu", "su-that-cham.txt"))
+            ma_goc = re.sub(r"[-_]v\d+$", "", ma, flags=re.IGNORECASE)
+            if ma_goc and ma_goc != ma:
+                them = su_that_kenh(ma_goc, goc_kenh)
+                if them:
+                    st = (them + "\n" + st).strip()
+        except Exception:  # noqa: BLE001
+            st = ""
+    return {"BINH_LUAN_GOC": bl or "(không có)", "SU_THAT_KENH": st or "(chưa có)"}
+
+
+def _vong_cham_sua_luot(bc: "BoiCanh", luot: LuotChay, k: Kenh, chung: Dict[str, Any],
+                        ban: str, tu_lieu: str, d: str, *, nhan: str,
+                        so_vong: int) -> str:
+    """Chạy vòng chấm toàn bài → vá → chấm so cho một bản, ghi biên bản ra lượt.
+
+    `nhan` phân biệt hai lần gọi trong một lượt: "ghep" (ngay sau khi ghép hook)
+    và "cuoi" (sau nắn độ dài — chỉ khi bài còn đổi). Thiếu lời nhắc thì trả bản
+    nguyên. Xem `core/vong_cham_sua.py` vì sao có vòng này.
+    """
+    khuon_cham = k.prompt.get("2g-cham-toan-bai.md", "")
+    khuon_va = k.prompt.get("2h-va-toan-bai.md", "")
+    if not khuon_cham.strip() or not khuon_va.strip() or not (ban or "").strip():
+        return ban
+    from .vong_cham_sua import ban_do_json, vong_cham_sua  # noqa: PLC0415
+
+    o = dict(chung)
+    if "BINH_LUAN_GOC" not in o or "SU_THAT_KENH" not in o:
+        o.update(_khoi_khan_gia(bc, k, d))
+    o.setdefault("NGON_NGU", ten_tieng(k.ngon_ngu))
+    dem = {"cham": 0, "va": 0}
+
+    # Khoá mang cả BĂM LỜI NHẮC: `_khoa_chat` chỉ theo (kênh, lượt, bước), mà trong
+    # vòng này cùng "bước" có thể chấm những bài KHÁC nhau khi chạy tiếp một lượt
+    # đứt giữa chừng — khoá trùng là máy chủ trả câu chấm cũ cho bài mới. Băm
+    # theo lời nhắc thì bài y hệt vẫn không trả tiền hai lần, bài khác thì khoá khác.
+    def khoa(buoc: str, loi_nhac: str) -> str:
+        import hashlib  # noqa: PLC0415
+        bam = hashlib.sha1(loi_nhac.encode("utf-8")).hexdigest()[:10]
+        return _khoa_chat(luot, "{0}:{1}".format(buoc, bam))
+
+    def goi_cham(loi_nhac: str) -> str:
+        bc.kiem_dung()
+        dem["cham"] += 1
+        return _goi(bc, loi_nhac, khoa("2g:{0}:{1}".format(nhan, dem["cham"]), loi_nhac))
+
+    def goi_va(loi_nhac: str) -> str:
+        bc.kiem_dung()
+        dem["va"] += 1
+        return _goi(bc, loi_nhac, khoa("2h:{0}:{1}".format(nhan, dem["va"]), loi_nhac),
+                    toi_da_token=16384)
+
+    def luu(ten: str, chu: str) -> None:
+        _ghi_chu(os.path.join(d, "1-vong-{0}-{1}.txt".format(nhan, ten)), chu + "\n")
+
+    moi, bien_ban, ban_do = vong_cham_sua(
+        goi_cham, goi_va, ban, tu_lieu, khuon_cham=khuon_cham, khuon_va=khuon_va,
+        chung=o, so_vong=so_vong, so_ban_va=max(1, int(getattr(k, "so_ban_va", 2) or 2)),
+        ghi=bc.ghi, don=lambda c: _don_ban(c, k.ngon_ngu), luu=luu)
+    _ghi_chu(os.path.join(d, "1-vong-cham-{0}.txt".format(nhan)), bien_ban + "\n")
+    if ban_do:
+        # Để sau giờ 85 đặt cạnh đường giữ chân thật của Studio — cách duy nhất
+        # để bộ chấm được khán giả thật sửa, thay vì tự tin vào gu của mình.
+        _ghi_chu(os.path.join(d, "1-ban-do-rot-{0}.json".format(nhan)), ban_do_json(ban_do) + "\n")
+    if moi.strip() and moi != ban:
+        bc.ghi("  → vòng chấm-sửa ({0}) đổi bài: {1} → {2} ký tự.".format(nhan, len(ban), len(moi)))
+        return moi
+    return ban
+
+
+def _kiem_ban_doc(bc: "BoiCanh", luot: LuotChay, k: Kenh, chung: Dict[str, Any],
+                  truoc: str, sau: str) -> str:
+    """Một lượt AI gác bản ĐÃ rà soát (`prompt/2i-kiem-doc.md`): "OK" thì giữ, có sửa
+    thì nhận khi bản sửa vẫn là bản ấy (trùng chữ ≥ 85%, dài ±10%, cùng số dòng ---).
+    Thiếu lời nhắc hoặc hỏng ở đâu cũng trả `sau` nguyên vẹn.
+    """
+    khuon = k.prompt.get("2i-kiem-doc.md", "")
+    if not khuon.strip() or not (sau or "").strip():
+        return sau
+    from .viet_nhieu_ban import trung_nguyen_van  # noqa: PLC0415
+    import hashlib  # noqa: PLC0415
+
+    loi_nhac = _thay(khuon, dict(chung, TRUOC=truoc or "", DRAFT=sau))
+    bam = hashlib.sha1(loi_nhac.encode("utf-8")).hexdigest()[:10]
+    try:
+        bc.kiem_dung()
+        bc.ghi("  gác bản đọc: nghe lại bản sau rà soát…")
+        tra = (_goi(bc, loi_nhac, _khoa_chat(luot, "2i-kiem-doc.md:" + bam),
+                    toi_da_token=16384) or "").strip()
+    except Exception as loi:  # noqa: BLE001 — gác hỏng thì giữ bản đã có
+        bc.ghi("  (gác bản đọc hỏng: {0} — giữ bản rà soát)".format(str(loi)[:80]))
+        return sau
+    if not tra or tra.strip(" .。!").upper() == "OK":
+        bc.ghi("  gác bản đọc: OK.")
+        return sau
+    rao = re.search(r"```(?:\w+)?\s*(.+?)\s*```", tra, re.DOTALL)
+    moi = (rao.group(1) if rao else tra).strip()
+    ti_le = len(moi) / max(1, len(sau))
+    giu = trung_nguyen_van(moi, sau)
+    if giu < 0.85 or not (0.9 <= ti_le <= 1.1) or moi.count("\n---") != sau.count("\n---"):
+        bc.ghi("  (bỏ bản gác: trùng chữ {0:.0%}, dài x{1:.2f} — không còn là bản rà soát)"
+               .format(giu, ti_le))
+        return sau
+    bc.ghi("  gác bản đọc: có sửa ({0} → {1} ký tự).".format(len(sau), len(moi)))
+    return moi
+
+
+def _chu_bia_trung_luot_truoc(d: str, chu_bia: str, nguong: float = 0.8) -> str:
+    """Chữ bìa của một lượt TRƯỚC trong cùng kênh giống `chu_bia` ≥ `nguong` — '' nếu không.
+
+    Lượt 0012 (09/09/2026): kênh lấy chữ bìa bằng cách đọc ảnh bìa đối thủ, mà đối
+    thủ ấy chép y bìa của nguồn V7 → hai video liền của kênh cùng một dòng chữ
+    bìa. Người xem thấy hai bìa giống nhau trên một kênh sẽ coi là một video.
+    """
+    import difflib  # noqa: PLC0415
+    import glob  # noqa: PLC0415
+
+    def lam(c: str) -> str:
+        return re.sub(r"[\s『』「」・、。!?！？]+", "", c or "")
+
+    goc = lam(chu_bia)
+    if not goc:
+        return ""
+    # Nhìn qua MỌI kênh trong PROJECTS/AUTO, không chỉ kênh đang chạy: TL4-T7 và
+    # TL4-T7-v2 (bản thử lời nhắc) đăng lên cùng một kênh YouTube — V9 chạy ở v2
+    # mà chỉ so trong v2 thì vẫn ra bìa y hệt V7 bên kênh cũ.
+    cha = os.path.dirname(os.path.dirname(d))
+    for tep in sorted(glob.glob(os.path.join(cha, "*", "*", "1-tieu-de.txt"))):
+        if os.path.normcase(os.path.dirname(tep)) == os.path.normcase(d):
+            continue
+        _t, b = _doc_tieu_de(_doc_chu(tep))
+        if b and difflib.SequenceMatcher(None, lam(b), goc).ratio() >= nguong:
+            return b
+    return ""
 
 
 def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
@@ -2635,6 +2845,15 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
     from .viet_nhieu_ban import cham_va_chon  # noqa: PLC0415
 
     khuon_cham = k.prompt.get("2b-cham.md", "")
+    # ═══ KÊNH BẬT VÒNG CHẤM-SỬA: MỌI BỘ CHẤM/SỬA ĐỀU ĐƯỢC XEM KHÁN GIẢ THẬT ═══
+    #
+    # Bình luận dưới video gốc + số giữ chân đã đo của kênh đi vào `chung` từ
+    # đây, nên bộ chấm 3 bản, bước hoàn thiện, bộ chấm hook — lời nhắc nào có ô
+    # `<<BINH_LUAN_GOC>>` / `<<SU_THAT_KENH>>` — đều nhận được. Kênh không bật
+    # (`so_vong_cham` = 0) đi y đường cũ, không một lượt mạng nào thêm.
+    so_vong = max(0, int(getattr(k, "so_vong_cham", 0) or 0))
+    if so_vong > 0:
+        chung = dict(chung, **_khoi_khan_gia(bc, k, d))
 
     def goi_cham(loi_nhac: str) -> str:
         bc.kiem_dung()
@@ -2672,33 +2891,54 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                 bc.ghi("  bộ chấm chê bản {0}: {1}".format(
                     chr(65 + chon), diem_yeu[:220]))
 
-            def goi_ht(loi_nhac: str) -> str:
-                bc.kiem_dung()
-                return _goi(bc, loi_nhac, _khoa_chat(luot, "2c-hoan-thien.md"),
-                            toi_da_token=16384)
+            # ═══ KÊNH BẬT VÒNG CHẤM-SỬA: HOÀN THIỆN VÀI BẢN RỒI CHỌN, KHÔNG CHẶN ĐỘ DÀI ═══
+            #
+            # Lượt 0012: bản hoàn thiện sửa đúng thứ bộ chấm chê (ý 1 muộn, thiếu
+            # câu hỏi) rồi bị mã vứt vì dài ×1,27 > 1,25 — trong khi bản chọn đang
+            # THIẾU 32% và bước nắn độ dài đứng ngay sau. Kênh bật vòng: nới trần
+            # tới ×1,5, và làm `so_ban_va` bản rồi để bộ chấm chọn — cùng nết
+            # "làm nhiều chọn một" của cả template. Kênh không bật đi y đường cũ.
+            so_ht = max(1, int(getattr(k, "so_ban_va", 1) or 1)) if so_vong > 0 else 1
+            tran_ht = 1.5 if so_vong > 0 else 1.25
+            khuon_ht = dien_o_giu_lai(k.prompt.get("2c-hoan-thien.md", ""),
+                                      dict(chung, SO_BAN=len(ban)))
+            ung_vien: List[str] = []
+            ghi_ht = ""
+            for j in range(so_ht):
+                khoa_j = "2c-hoan-thien.md" + (":ban{0}".format(j + 1) if j else "")
 
-            ban_ht, da_ht, ghi_ht = hoan_thien_ban(
-                goi_ht, ban_chon, tu_lieu, diem_manh=diem_manh, diem_yeu=diem_yeu,
-                ngon_ngu=ten_tieng(k.ngon_ngu), phut=str(chung.get("PHUT", "")),
-                chars=int(muc_tieu or 0),
-                # KHÔNG dùng `_thay` (xoá ô còn sót) — `<<DRAFT>>`, `<<DIEM_*>>`
-                # phải còn nguyên cho `hoan_thien_ban` điền.
-                khuon=dien_o_giu_lai(k.prompt.get("2c-hoan-thien.md", ""),
-                                     dict(chung, SO_BAN=len(ban))),
-                ghi=bc.ghi)
-            if da_ht:
-                _ghi_chu(os.path.join(d, "1-ban-hoan-thien.txt"), ban_ht + "\n")
+                def goi_ht(loi_nhac: str, _khoa=khoa_j) -> str:
+                    bc.kiem_dung()
+                    return _goi(bc, loi_nhac, _khoa_chat(luot, _khoa), toi_da_token=16384)
+
+                ban_ht, da_ht, ghi_j = hoan_thien_ban(
+                    goi_ht, ban_chon, tu_lieu, diem_manh=diem_manh, diem_yeu=diem_yeu,
+                    ngon_ngu=ten_tieng(k.ngon_ngu), phut=str(chung.get("PHUT", "")),
+                    chars=int(muc_tieu or 0),
+                    # KHÔNG dùng `_thay` (xoá ô còn sót) — `<<DRAFT>>`, `<<DIEM_*>>`
+                    # phải còn nguyên cho `hoan_thien_ban` điền.
+                    khuon=khuon_ht, ghi=bc.ghi, dai_toi_da=tran_ht)
+                ghi_ht = (ghi_ht + " · " if ghi_ht else "") + ghi_j
+                if da_ht:
+                    ung_vien.append(ban_ht)
+                    _ghi_chu(os.path.join(d, "1-ban-hoan-thien{0}.txt".format(
+                        "-" + chr(65 + j) if so_ht > 1 else "")), ban_ht + "\n")
+            if ung_vien:
                 ten_goc = "bản {0} chưa hoàn thiện".format(chr(65 + chon))
+                ten_ht = tuple("bản {0} đã hoàn thiện{1}".format(
+                    chr(65 + chon), " " + chr(65 + j) if so_ht > 1 else "")
+                    for j in range(len(ung_vien)))
                 i_hon, ly_do_so, _d, _b = cham_va_chon(
                     goi_cham if khuon_cham.strip() else None,
-                    [ban_chon, ban_ht], tu_lieu, khuon_cham=khuon_cham,
+                    [ban_chon] + ung_vien, tu_lieu, khuon_cham=khuon_cham,
                     chung=chung, muc_tieu=muc_tieu, ghi=bc.ghi,
-                    ky_tu_moi_phut=nhip,
-                    ten_ban=(ten_goc, "bản {0} đã hoàn thiện".format(
-                        chr(65 + chon))))
-                if i_hon == 1:
-                    ban_chon = ban_ht
-                    ghi_ht += " — bộ chấm chọn bản hoàn thiện: " + ly_do_so[:200]
+                    ky_tu_moi_phut=nhip, ten_ban=(ten_goc,) + ten_ht)
+                if i_hon >= 1:
+                    ban_chon = ung_vien[i_hon - 1]
+                    # Giữ nguyên chữ "chọn bản hoàn thiện" — nhật ký và dòng
+                    # "→ dùng bản … đã hoàn thiện" bên dưới đọc đúng cụm ấy.
+                    ghi_ht += " — bộ chấm chọn bản hoàn thiện{0}: {1}".format(
+                        (" " + chr(65 + i_hon - 1)) if so_ht > 1 else "", ly_do_so[:200])
                 else:
                     ghi_ht += (" — bộ chấm vẫn thích bản chưa hoàn thiện: "
                                + ly_do_so[:200])
@@ -2779,6 +3019,15 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         except Exception as loi:  # noqa: BLE001 — hook hỏng không được vỡ bài
             bc.ghi("  (bỏ qua bước hook: {0})".format(str(loi)[:120]))
             ghi_hook = "lỗi: " + str(loi)[:120]
+    # ═══ CHẤM BẢN GHÉP XONG NHƯ MỘT BÀI, VÁ, CHẤM SO — VÀI VÒNG ═══
+    #
+    # Mọi bước trên chấm PHẦN của mình (bản viết, hook) rồi ghép lại; chưa ai
+    # hỏi "bài ghép xong có kém gốc chỗ nào". Lượt 0012: hook mới cắt mất
+    # nghịch lý + Savanna mà bộ chấm cả bài vừa bảo giữ. Xem `core/vong_cham_sua.py`.
+    so_vong = max(0, int(getattr(k, "so_vong_cham", 0) or 0))
+    if so_vong > 0:
+        ban_chon = _vong_cham_sua_luot(bc, luot, k, chung, ban_chon, tu_lieu, d,
+                                       nhan="ghep", so_vong=so_vong)
     _ghi_chu(os.path.join(d, TEP_CHAM_DIEM),
              "{0}\n\nChọn: bản {1}\nĐiểm: {2}\nLý do: {3}\n{4}{5}".format(
                  bang, chr(65 + chon), json.dumps(diem, ensure_ascii=False),

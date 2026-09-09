@@ -75,7 +75,8 @@ do_dai_theo_goc: false
 #  CTA kéo bình luận — theo mục đích YouTube đề xuất).
 #  Hạ 5 → 3 ngày 04/09/2026: chữ tiết kiệm được dồn sang bước viết hook riêng.
 #  Ba bản vẫn đủ để chọn lọc; bản thứ tư, thứ năm gần như không đổi kết quả.
-so_ban_nhap: 3
+#  v2 09/09/2026, chủ kênh: "nâng lượt viết 3 → 5, nhiều dữ liệu hơn sẽ chọn được bản ok hơn".
+so_ban_nhap: 5
 # ── Viết riêng ĐOẠN MỞ ĐẦU, chấm bằng tiêu chí riêng ─────────────────────────
 #  Chủ dự án, 04/09/2026: *"bước viết hook sẽ riêng và có tiêu chí chấm riêng
 #  cũng viết hook vài lần để chọn bản ok"*.
@@ -86,6 +87,14 @@ so_ban_hook: 3
 #  Sau khi chọn bản: vá đúng "chỗ dễ rớt" bộ chấm chỉ ra (giữ ≥90% câu, rồi bộ
 #  chấm so lại hai bản — không hơn thì bỏ). Thuê bao nên bật; khách đi ví để false.
 hoan_thien: true
+# ── Vòng chấm TOÀN BÀI → vá vài bản → chấm so (09/09/2026, chỉ bật ở v2) ────
+#  Bản ghép xong (hook mới + thân) được chấm như MỘT bài, so với bản gốc, với
+#  bình luận người xem gốc (yt-dlp, miễn phí) và số giữ chân đã đo của kênh
+#  (nghien-cuu/su-that-cham.txt ghi thêm được). Vá chỗ kém nhất bằng vài bản rồi
+#  chấm so; tối đa 3 vòng. Xem core/vong_cham_sua.py. Chủ kênh: "chấm sửa xong
+#  chấm lại vài lần cũng được, không tiếc token"; TL4-T7 cũ giữ dây chuyền cũ.
+so_vong_cham: 3
+so_ban_va: 2
 # ── Tiêu đề & chữ bìa: lấy nguyên của đối thủ ────────────────────────────────
 #  Kênh này lấy NGUYÊN tiêu đề đối thủ, và ĐỌC chữ trên ảnh bìa đối thủ làm chữ
 #  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ

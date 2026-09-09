@@ -18,6 +18,14 @@ Ràng buộc cứng, ngoài ra không có gì khác:
 - KHÔNG CHÉP: trùng nguyên văn trên 45% là gần chép, trừ nặng.
 - Viết bằng <<NGON_NGU>> tự nhiên, không lệch tiếng, không sót lời dẫn.
 
+Hai thứ thật để đối chiếu thêm, ngoài bản gốc — người xem gốc khen câu nào thì bản nào giữ được câu ấy là hơn; kênh tôi đã đo được người rớt ở đâu thì bản nào tránh được chỗ ấy là hơn:
+
+bình luận nhiều like nhất dưới bản gốc (số trong ngoặc là like; không có thì bỏ qua):
+<<BINH_LUAN_GOC>>
+
+số giữ chân đã đo trên kênh tôi (không có thì bỏ qua):
+<<SU_THAT_KENH>>
+
 số đo tôi tính sẵn cho từng bản (phút đọc quy từ số ký tự theo giọng đọc của kênh):
 <<SO_DO>>
 

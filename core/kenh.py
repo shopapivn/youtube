@@ -82,7 +82,17 @@ BUOC_PROMPT = (
     # vượt bản gốc, vì các bản viết ra đều bắt chước hook đối thủ nên thừa
     # hưởng cả điểm yếu của nó.
     ("2f-va-hook.md", "Vá đoạn mở đã chọn theo lời chê"),
+    # Chỉ chạy khi kênh khai `so_vong_cham` > 0: chấm bản GHÉP XONG như một
+    # bài (bản đồ rớt so với gốc, có bình luận người xem gốc + số giữ chân đã
+    # đo của kênh), vá vài bản cùng một lời chê, chấm so, lặp vài vòng. Chủ dự
+    # án, 09/09/2026: *"chấm sửa xong chấm lại vài lần cũng được… mục đích cuối
+    # ra được content hay khán giả yêu thích và họ xem đến hết"*.
+    ("2g-cham-toan-bai.md", "Chấm bản ghép xong như một bài, so với gốc và người xem gốc"),
+    ("2h-va-toan-bai.md", "Vá chỗ kém nhất bộ chấm chỉ ra (viết vài bản, chấm so)"),
     ("3-sua.md", "Rà soát: sửa lệch tiếng, tách câu, chèn thẻ"),
+    # Chỉ chạy khi kênh khai `so_vong_cham` > 0: một lượt AI nghe lại bản ĐÃ rà
+    # soát bằng tai người bản ngữ — rà soát là bước viết cuối, trước đó không ai gác.
+    ("2i-kiem-doc.md", "Gác bản đọc: so bản trước/sau rà soát bằng tai người bản ngữ"),
     ("4-do-dai.md", "Nắn cho đúng độ dài"),
     ("5-hoan-thien.md", "Đọc lại lần cuối cho mượt"),
     ("6-seo.md", "Mô tả, hashtag, từ khoá"),
@@ -210,6 +220,15 @@ class Kenh:
     #: kênh chạy thuê bao bật lên không tốn gì. Khoá cũ `va_cho_rot` trong
     #: kenh.yaml vẫn được đọc như cờ này.
     hoan_thien: bool = False
+    #: ═══ VÒNG CHẤM TOÀN BÀI → VÁ → CHẤM SO (`core/vong_cham_sua.py`) ═══
+    #:
+    #: Số vòng tối đa chấm bản GHÉP XONG rồi vá chỗ kém nhất. 0 = tắt (mặc
+    #: định — mỗi vòng là ~3 lượt chữ). Cần `prompt/2g-cham-toan-bai.md` và
+    #: `2h-va-toan-bai.md`; thiếu một tệp thì tắt. Kênh thuê bao đặt 3.
+    so_vong_cham: int = 0
+    #: Mỗi vòng vá mấy bản rồi chấm so — "làm nhiều rồi chọn", không sửa một
+    #: lần rồi tin. 2 là đủ để có cái mà chọn.
+    so_ban_va: int = 2
     #: ═══ KÊNH MẪU CỦA TOOL hay KÊNH RIÊNG CỦA KHÁCH ═══
     #:
     #: Chủ dự án, 26/08/2026: *"các template đó tao có cập nhật nên nếu khách
@@ -603,6 +622,8 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         ghim_hai_dau=bool(cai.get("ghim_hai_dau", False)),
         xuat_capcut=bool(cai.get("xuat_capcut", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),
+        so_vong_cham=min(5, max(0, int(_so(cai.get("so_vong_cham"), 0)))),
+        so_ban_va=min(4, max(1, int(_so(cai.get("so_ban_va"), 2)))),
         mau_cua_tool=_co(cai.get("mau_cua_tool")),
         kenh_rieng=_co(cai.get("kenh_rieng")),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
