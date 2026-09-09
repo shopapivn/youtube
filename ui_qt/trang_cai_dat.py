@@ -42,7 +42,10 @@ DO_PHAN_GIAI = ("4K", "1440p", "1080p", GIU_NGUYEN)
 #: một ngày nào đó có tuỳ chọn chỉ sửa được bằng cách mở tệp JSON — đúng thứ
 #: tab này sinh ra để dẹp.
 MUC_RIENG = ("do_phan_giai", "muc_song_song",
-             "chrome_sach_nguon", "chrome_sach_kich_thuoc")
+             "chrome_sach_nguon", "chrome_sach_kich_thuoc",
+             # Ô chọn "chạy lần lượt / 2–3 video cùng lúc" nằm ngay ở thẻ
+             # Hàng đợi của tab Tự động — chỗ người ta cần nó, không ở đây.
+             "auto_so_song_song")
 
 #: Nguồn Chrome cho tab Chrome sạch, `(khoá lưu, nhãn)`.
 NGUON_CHROME = (

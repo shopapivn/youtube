@@ -519,10 +519,29 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "“Đây là kịch bản hoàn chỉnh”. Tôi bỏ qua khâu viết — không tốn "
             "tiền khâu đó — và chạy thẳng từ khâu giọng đọc.",
             "Bấm Chạy. Bảng tiến độ cho biết đang ở khâu nào.",
+            "NHIỀU VIDEO một lúc: dán nội dung video 1, bấm “Thêm vào hàng "
+            "đợi” — ô nhập trống ra, dán video 2, lại “Thêm”… (đổi kênh giữa "
+            "chừng cũng được, mỗi dòng nhớ kênh riêng). Xong chọn ở ô Hàng đợi "
+            "“Chạy lần lượt” hay “Chạy 2–3 video cùng lúc”, rồi bấm “Chạy hàng "
+            "đợi”. Bấm “Chạy” khi hàng đang có việc thì video mới xếp sau, "
+            "tới lượt là chạy.",
             "Hôm sau mở tool lên, ô “Lượt” đã sẵn lượt gần nhất của kênh. "
-            "Chọn đúng lượt còn dở rồi bấm “Chạy tiếp”.",
+            "Chọn đúng lượt còn dở rồi bấm “Chạy tiếp”. Hàng đợi hôm qua cũng "
+            "còn nguyên: bấm “Chạy hàng đợi” là chạy tiếp phần chờ.",
         ],
         "luu_y": [
+            "Chạy lần lượt: video này xong mới tới video sau — dễ theo dõi, "
+            "máy nhẹ. Chạy 2–3 cùng lúc: nhanh hơn, nhưng mỗi video chậm hơn "
+            "một chút vì chung một đường lên máy chủ; khâu phụ đề, dựng và "
+            "CapCut vẫn làm từng video một trên máy bạn (hai bản Whisper hay "
+            "hai CapCut cùng bấm là hỏng). Tiền không đổi theo cách chạy.",
+            "Bảng tiến độ luôn xem MỘT lượt. Bấm đúp một dòng trong hàng đợi "
+            "(hoặc chọn ở ô “Lượt”) để xem lượt đó. Nút “Dừng” chỉ dừng lượt "
+            "đang xem; “Dừng tất cả” dừng mọi lượt đang chạy, lượt chờ nằm "
+            "yên. Một video hỏng không chặn video sau — hết hàng tôi báo một "
+            "câu tổng kết: xong mấy, hỏng mấy.",
+            "Nhật ký khi có nhiều video thì mỗi dòng có tên kênh/lượt ở đầu, "
+            "để biết dòng ấy của video nào.",
             "Tắt tool không mất gì. Ô “Lượt” liệt kê mọi lần chạy đã có của "
             "kênh, kèm chữ cho biết lượt đó xong hay còn dở tới khâu mấy.",
             "Bấm “Chạy” là mở lượt MỚI và làm lại từ khâu 1, kể cả "

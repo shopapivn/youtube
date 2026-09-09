@@ -208,6 +208,11 @@ MAC_DINH: Dict[str, Any] = {
     # `core/jobs.py` vẫn tự climb tới trần thật máy chủ ở mọi mốc, nên mốc không
     # đổi tổng tiền, chỉ đổi tốc độ tiêu. Xem `luong_khoi_dau` và `MUC_SONG_SONG`.
     "muc_song_song": "mac_dinh",
+
+    # Tab Tự động: hàng đợi chạy bao nhiêu VIDEO cùng lúc (1 = lần lượt, tối
+    # đa 3 — xem `core/hang_doi_auto.py`). Mặc định 1: chạy lần lượt là cách
+    # dễ đoán nhất; muốn nhanh thì khách tự chọn ở ô "Hàng đợi" của tab.
+    "auto_so_song_song": 1,
 }
 
 _KHOA = threading.Lock()

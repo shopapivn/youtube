@@ -114,7 +114,9 @@ def _trang(luot, dang_chay=False):
 
     trang = TrangTuDong.__new__(TrangTuDong)
     trang._app = _AppGia()
-    trang._dang_chay = dang_chay
+    # Từ 09/09/2026 "đang chạy" là câu hỏi về LƯỢT ĐANG XEM trong hàng đợi
+    # (`_luot_dang_chay`), không còn là cờ `_dang_chay` của cả trang.
+    trang._luot_dang_chay = lambda: dang_chay
     trang._duong = luot.thu_muc
     trang.nhat_ky = []
     trang.da_chay = []
@@ -122,7 +124,7 @@ def _trang(luot, dang_chay=False):
     trang._doc = lambda: luot
     trang._ghi = trang.nhat_ky.append
     trang._quen_canh_dai = trang.quen.append
-    trang._bat_dau = lambda l, dung_sau="": trang.da_chay.append(dung_sau)
+    trang._bat_dau = lambda l, dung_sau="", **_k: trang.da_chay.append(dung_sau)
     return trang
 
 

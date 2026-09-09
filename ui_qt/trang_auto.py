@@ -13,6 +13,14 @@ từ đầu — vừa chờ vừa trả tiền lại cho bảy khâu vốn đã 
 
 Phần nghĩ nằm hết ở `core/auto.py` (thứ tự, trạng thái) và `core/auto_khau.py`
 (việc thật). Tệp này chỉ dựng nút và đổ trạng thái ra bảng.
+
+═══ NHIỀU VIDEO MỘT LÚC (09/09/2026) ═══
+
+Trang từng giữ đúng MỘT lượt đang chạy. Cách làm nhiều video là mở nhiều bản
+tool — mà từ 07/09 tool chỉ cho mở một bản. Nên giờ có **hàng đợi**
+(`core/hang_doi_auto.py`): bấm "Thêm vào hàng đợi" bao nhiêu lần tuỳ ý, chọn
+chạy lần lượt hay 2–3 video cùng lúc, bấm "Chạy hàng đợi". Bảng tiến độ vẫn
+xem TỪNG lượt; ô "Lượt" và bảng hàng đợi là chỗ chuyển qua lại.
 """
 
 from __future__ import annotations
@@ -20,7 +28,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
@@ -28,10 +36,13 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from core.auto import (BO_QUA, CHO, DANG, HONG, MA_KHAU, XONG, LuotChay,
-                       chay, dat_lam_lai, doc_luot, ghi_luot, khau_tieu_tien,
-                       liet_ke_luot, moi_luot, san_pham_khau, ten_khau,
-                       tom_tat)
+from core import cai_dat
+from core.auto import (BO_QUA, CHO, DANG, HONG, KHAU_KHONG_CHAN, MA_KHAU, XONG,
+                       LuotChay, chay, dat_lam_lai, doc_luot, ghi_luot,
+                       khau_tieu_tien, liet_ke_luot, moi_luot, san_pham_khau,
+                       ten_khau, tom_tat)
+from core import hang_doi_auto as hd
+from core.hang_doi_auto import HangDoiAuto, MucDoi, khoa_khau_may
 from core.kenh import doc_kenh, kiem_kenh, liet_ke_kenh
 
 from . import theme
@@ -168,13 +179,19 @@ class TrangTuDong(QWidget):
         self._app = app
         #: Thư mục lượt đang xem. Rỗng = chưa chọn lượt nào.
         self._duong = ""
-        #: Thư mục lượt đang chạy — khác `_duong` khi người dùng ngó sang lượt
-        #: khác giữa chừng. Dùng để biết chữ `dang` trên đĩa là thật hay là dấu
-        #: vết của một lần bị giết.
-        self._duong_chay = ""
         self._ds_luot: List[LuotChay] = []
-        self._huy: Optional[threading.Event] = None
-        self._dang_chay = False
+        # ═══ HÀNG ĐỢI THAY CHO "MỘT LƯỢT ĐANG CHẠY" ═══
+        #
+        # Trước 09/09/2026 trang giữ `_dang_chay` + `_huy` cho đúng một lượt.
+        # Nay mọi lượt đang chạy / chờ chạy nằm trong `_hang_doi`; câu hỏi "lượt
+        # ĐANG XEM có đang chạy không" là `_luot_dang_chay()`. Hàng đợi nhớ qua
+        # lần tắt tool (workspace/auto-hang-doi.json) nhưng KHÔNG tự chạy lại —
+        # mở tool lên mà tự tiêu tiền cho ba video là không ai bấm gì cả.
+        self._hang_doi = HangDoiAuto(
+            lambda muc: self._khoi_chay_muc(muc),
+            so_song_song=cai_dat.doc(app.base_dir).get("auto_so_song_song", 1),
+            on_doi=self._hang_doi_doi, on_het=self._hang_doi_het)
+        self._hang_doi.nap(app.base_dir)
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 20, 24, 20)
@@ -183,6 +200,7 @@ class TrangTuDong(QWidget):
             "Video sản xuất tự động",
             "Một nút: từ link tư liệu ra video hoàn thiện."))
         doc.addWidget(self._the_chay())
+        doc.addWidget(self._the_hang_doi())
         doc.addWidget(self._the_tien_do(), 1)
 
         hang_log = HangXuongDong()
@@ -203,6 +221,12 @@ class TrangTuDong(QWidget):
                                                  theme.CHU_MO))
         doc.addWidget(self._log)
         self._nap_kenh()
+        self._ve_hang_doi()
+
+    def _luot_dang_chay(self) -> bool:
+        """Lượt ĐANG XEM có đang chạy không. Mọi chỗ từng hỏi `_dang_chay` —
+        mở bảng cảnh, làm lại, nạp file — đều hỏi câu này."""
+        return bool(self._duong) and self._hang_doi.dang_chay(self._duong)
 
     #: Hai nấc chiều cao ô nhật ký. Nấc nhỏ để bảng tiến độ còn chỗ; nấc lớn
     #: vừa đủ ~18 dòng, đọc được một đoạn có đầu có đuôi.
@@ -314,10 +338,26 @@ class TrangTuDong(QWidget):
         nut = HangXuongDong()
         self._nut_chay = nut_chinh("Chạy", self._chay)
         self._nut_chay.setFixedWidth(150)
+        self._nut_chay.setToolTip(
+            "Mở lượt mới cho nội dung đang điền và chạy ngay. Hàng đợi đang "
+            "có việc thì lượt này xếp sau, chạy tới lượt là chạy.")
         nut.addWidget(self._nut_chay)
+        # ═══ NHIỀU VIDEO: XẾP TRƯỚC, CHẠY SAU ═══
+        #
+        # Dán link 1 → Thêm, dán link 2 → Thêm… rồi bấm "Chạy hàng đợi" một
+        # lần. Mỗi lần thêm là một lượt mới trên đĩa (tư liệu đã ghi vào thư
+        # mục lượt), nên ô nhập trống ra ngay để dán cái tiếp theo.
+        self._nut_them = nut_phu("Thêm vào hàng đợi", self._them_hang_doi,
+                                 rong=170)
+        self._nut_them.setToolTip(
+            "Mở lượt mới cho nội dung đang điền nhưng CHƯA chạy — xếp vào "
+            "hàng đợi bên dưới. Thêm đủ rồi bấm “Chạy hàng đợi”.")
+        nut.addWidget(self._nut_them)
         self._nut_tiep = nut_phu("Chạy tiếp", self._chay_tiep, rong=140)
         nut.addWidget(self._nut_tiep)
         self._nut_dung = nut_phu("Dừng", self._dung, rong=96)
+        self._nut_dung.setToolTip("Dừng lượt đang xem. Các lượt khác trong "
+                                  "hàng đợi vẫn chạy.")
         self._nut_dung.setEnabled(False)
         nut.addWidget(self._nut_dung)
         self._nut_mo = nut_phu("Mở thư mục kết quả", self._mo_ket_qua, rong=200)
@@ -370,6 +410,217 @@ class TrangTuDong(QWidget):
             "máy bạn. Bấm Dừng lúc nào cũng được — phần đã "
             "làm giữ nguyên, bấm “Chạy tiếp” là đi tiếp từ đúng chỗ đó."))
         return khung
+
+    # ── Khối 1b: hàng đợi nhiều video ────────────────────────────────────────
+
+    def _the_hang_doi(self) -> QWidget:
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 14)
+        v.setSpacing(8)
+
+        hang = HangXuongDong()
+        hang.addWidget(nhan("Hàng đợi", "h2"))
+        self._chon_song_song = QComboBox()
+        self._chon_song_song.setMinimumWidth(190)
+        for n in range(1, hd.SO_SONG_SONG_TOI_DA + 1):
+            self._chon_song_song.addItem(
+                "Chạy lần lượt, từng video" if n == 1
+                else "Chạy {0} video cùng lúc".format(n), n)
+        i = self._chon_song_song.findData(self._hang_doi.so_song_song)
+        self._chon_song_song.setCurrentIndex(max(0, i))
+        self._chon_song_song.setToolTip(
+            "Lần lượt: video này xong mới tới video sau — dễ theo dõi, máy "
+            "nhẹ.\nCùng lúc: 2–3 video chạy song song, nhanh hơn nhưng mỗi "
+            "video chậm hơn một chút vì chung một đường lên máy chủ. Khâu "
+            "phụ đề, dựng và CapCut vẫn chạy từng video một trên máy bạn.")
+        self._chon_song_song.currentIndexChanged.connect(
+            lambda _i: self._doi_song_song())
+        hang.addWidget(self._chon_song_song)
+        self._nut_chay_hang = nut_phu("Chạy hàng đợi", self._chay_hang_doi,
+                                      rong=150)
+        hang.addWidget(self._nut_chay_hang)
+        self._nut_dung_tat_ca = nut_phu("Dừng tất cả", self._dung_tat_ca,
+                                        rong=130)
+        self._nut_dung_tat_ca.setEnabled(False)
+        hang.addWidget(self._nut_dung_tat_ca)
+        v.addLayout(hang)
+
+        self._nhan_doi = self._phu("")
+        v.addWidget(self._nhan_doi)
+
+        self._bang_doi = QTableWidget(0, 5)
+        self._bang_doi.setHorizontalHeaderLabels(
+            ["#", "Kênh", "Lượt", "Nội dung", "Trạng thái"])
+        self._bang_doi.verticalHeader().setVisible(False)
+        self._bang_doi.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._bang_doi.setSelectionBehavior(QTableWidget.SelectRows)
+        self._bang_doi.setSelectionMode(QTableWidget.SingleSelection)
+        dau = self._bang_doi.horizontalHeader()
+        for i in (0, 1, 2, 4):
+            dau.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+        dau.setSectionResizeMode(3, QHeaderView.Stretch)
+        self._bang_doi.setMinimumWidth(1)
+        self._bang_doi.setFixedHeight(150)
+        self._bang_doi.itemDoubleClicked.connect(lambda _m: self._xem_muc_doi())
+        v.addWidget(self._bang_doi)
+
+        hang2 = HangXuongDong()
+        hang2.addWidget(nut_phu("Xem lượt này", self._xem_muc_doi, rong=140))
+        hang2.addWidget(nut_phu("Bỏ khỏi hàng đợi", self._bo_muc_doi, rong=170))
+        hang2.addWidget(nut_phu("Dọn mục đã xong", self._don_xong, rong=160))
+        v.addLayout(hang2)
+        v.addWidget(self._phu(
+            "Mỗi dòng là một video. Bấm đúp một dòng để xem tiến độ của nó ở "
+            "bảng bên dưới. Tắt tool, hàng đợi vẫn còn — mở lên bấm “Chạy "
+            "hàng đợi” là chạy tiếp phần chờ, khâu đã xong không làm lại."))
+        return khung
+
+    def _ve_hang_doi(self) -> None:
+        from PyQt5.QtGui import QColor  # noqa: PLC0415
+
+        ds = self._hang_doi.ds
+        chon = self._muc_doi_dang_chon()
+        self._bang_doi.setRowCount(len(ds))
+        for hang, muc in enumerate(ds):
+            o = [QTableWidgetItem(str(hang + 1)), QTableWidgetItem(muc.ma_kenh),
+                 QTableWidgetItem(muc.ma_luot),
+                 QTableWidgetItem((muc.mo_ta or "")[:120])]
+            chu = hd.CHU_TRANG_THAI.get(muc.trang_thai, muc.trang_thai)
+            if muc.loi and muc.trang_thai != hd.DANG:
+                chu += " · " + muc.loi[:80]
+            tt = QTableWidgetItem(chu)
+            mau = {hd.XONG: theme.XANH, hd.HONG: theme.DO,
+                   hd.DANG: theme.VANG}.get(muc.trang_thai)
+            if mau:
+                tt.setForeground(QColor(mau))
+            o.append(tt)
+            for cot, muc_o in enumerate(o):
+                muc_o.setData(Qt.UserRole, muc.thu_muc)
+                self._bang_doi.setItem(hang, cot, muc_o)
+            if chon and muc.thu_muc == chon.thu_muc:
+                self._bang_doi.selectRow(hang)
+        self._nhan_doi.setText(hd.tom_tat(self._hang_doi))
+        self._nut_dung_tat_ca.setEnabled(self._hang_doi.co_viec_dang_chay)
+        self._nut_chay_hang.setEnabled(
+            self._hang_doi.so_cho > 0 and not self._hang_doi.dang_mo)
+
+    def _muc_doi_dang_chon(self) -> Optional[MucDoi]:
+        hang = self._bang_doi.currentRow()
+        if hang < 0:
+            return None
+        o = self._bang_doi.item(hang, 0)
+        return self._hang_doi.tim(str(o.data(Qt.UserRole) or "")) if o else None
+
+    def _xem_muc_doi(self) -> None:
+        muc = self._muc_doi_dang_chon()
+        if muc is None:
+            self._app.show_message("Chưa chọn dòng nào",
+                                   "Bấm vào một dòng trong hàng đợi trước.")
+            return
+        self._xem_luot(muc.thu_muc, muc.ma_kenh)
+
+    def _xem_luot(self, thu_muc: str, ma_kenh: str) -> None:
+        """Chuyển bảng tiến độ sang lượt này — đổi cả ô Kênh nếu cần."""
+        self._duong = thu_muc
+        if ma_kenh and self._chon_kenh.currentText().strip() != ma_kenh:
+            i = self._chon_kenh.findText(ma_kenh)
+            if i >= 0:
+                # `currentTextChanged` → `_ve_kenh` → `_nap_luot` chọn đúng
+                # `_duong` vừa đặt.
+                self._chon_kenh.setCurrentIndex(i)
+                return
+        self._nap_luot()
+
+    def _bo_muc_doi(self) -> None:
+        muc = self._muc_doi_dang_chon()
+        if muc is None:
+            self._app.show_message("Chưa chọn dòng nào",
+                                   "Bấm vào một dòng trong hàng đợi trước.")
+            return
+        if not self._hang_doi.bo(muc.thu_muc):
+            self._app.show_message(
+                "Lượt này đang chạy",
+                "Bấm “Dừng” (hoặc “Dừng tất cả”) trước rồi mới bỏ được. Phần "
+                "đã làm vẫn nằm trong thư mục lượt, không mất.")
+            return
+        self._ghi("Đã bỏ lượt {0}/{1} khỏi hàng đợi — thư mục lượt vẫn còn, "
+                  "chọn ở ô “Lượt” và bấm “Chạy tiếp” là xếp lại được."
+                  .format(muc.ma_kenh, muc.ma_luot))
+        self._luu_hang_doi()
+
+    def _don_xong(self) -> None:
+        bo = self._hang_doi.don_xong()
+        if bo:
+            self._ghi("Đã dọn {0} mục xong khỏi hàng đợi.".format(bo))
+            self._luu_hang_doi()
+
+    def _doi_song_song(self) -> None:
+        n = int(self._chon_song_song.currentData() or 1)
+        n = self._hang_doi.dat_so_song_song(n)
+        cai_dat.dat(self._app.base_dir, "auto_so_song_song", n)
+        self._ghi("Hàng đợi: {0}.".format(
+            "chạy lần lượt" if n == 1 else "chạy {0} video cùng lúc".format(n)))
+        self._luu_hang_doi()
+        self._ve_hang_doi()
+
+    def _chay_hang_doi(self) -> None:
+        if self._hang_doi.so_cho == 0:
+            self._app.show_message(
+                "Hàng đợi trống",
+                "Chưa có video nào chờ. Điền nội dung ở trên rồi bấm “Thêm vào "
+                "hàng đợi”, hoặc chọn một lượt còn dở và bấm “Chạy tiếp”.")
+            return
+        self._ghi("[HÀNG ĐỢI] Bắt đầu chạy {0} video chờ, {1}.".format(
+            self._hang_doi.so_cho,
+            "lần lượt" if self._hang_doi.so_song_song == 1
+            else "{0} cùng lúc".format(self._hang_doi.so_song_song)))
+        self._hang_doi.mo()
+
+    def _dung_tat_ca(self) -> None:
+        self._hang_doi.dung_tat_ca()
+        self._ghi("Đã yêu cầu dừng mọi lượt đang chạy — phần đã làm vẫn giữ "
+                  "nguyên; các lượt chờ nằm yên trong hàng đợi.")
+
+    def _hang_doi_doi(self) -> None:
+        # Hàng đợi chỉ được sửa trên luồng giao diện (nút bấm và `_xong`/
+        # `_hong` đều về đây qua `run_bg`), nên vẽ thẳng.
+        self._ve_hang_doi()
+        self._ve_bang()
+
+    def _hang_doi_het(self, dot: List[MucDoi]) -> None:
+        """Hết việc: nói một câu tổng kết thay vì bật một hộp cho mỗi video."""
+        self._luu_hang_doi()
+        if not dot:
+            return
+        xong = [m for m in dot if m.trang_thai == hd.XONG]
+        hong = [m for m in dot if m.trang_thai == hd.HONG]
+        dung = [m for m in dot if m.trang_thai == hd.DUNG]
+        if len(dot) == 1 and xong:
+            self._app.show_message(
+                "Xong",
+                "Video hoàn thiện, phụ đề và 3 ảnh bìa nằm trong:\n{0}".format(
+                    xong[0].thu_muc))
+            return
+        if len(dot) == 1:
+            return      # một lượt dừng/hỏng: nhật ký và bảng đã nói rồi
+        dong = ["Hàng đợi đã chạy hết {0} video.".format(len(dot))]
+        if xong:
+            dong.append("Xong: " + ", ".join(
+                "{0}/{1}".format(m.ma_kenh, m.ma_luot) for m in xong))
+        if hong:
+            dong.append("Hỏng: " + "; ".join(
+                "{0}/{1} — {2}".format(m.ma_kenh, m.ma_luot, m.loi)
+                for m in hong))
+        if dung:
+            dong.append("Dừng (còn dở): " + ", ".join(
+                "{0}/{1}".format(m.ma_kenh, m.ma_luot) for m in dung))
+        dong.append("Video nằm trong PROJECTS/AUTO/<kênh>/<lượt>/8-video.mp4. "
+                    "Lượt hỏng hay dừng: chọn ở ô “Lượt” rồi bấm “Chạy tiếp”.")
+        self._app.show_message("Hàng đợi xong", "\n\n".join(dong))
+
+    def _luu_hang_doi(self) -> None:
+        self._hang_doi.luu(self._app.base_dir)
 
     def _phu(self, chu: str):
         nh = nhan(chu, "phu")
@@ -560,7 +811,7 @@ class TrangTuDong(QWidget):
         # đúng cảnh ấy để sửa.
         self._nhan_dai.setText(
             ("Ảnh từng cảnh — bấm đúp một tấm để mở ảnh gốc ({0} tấm)."
-             if self._dang_chay else
+             if self._luot_dang_chay() else
              "Ảnh từng cảnh — bấm đúp tấm nào chưa ưng để sửa lời nhắc cảnh "
              "đó ({0} tấm).").format(len(self._dai_da_co)) if co else
             "Khâu tạo ảnh chạy xong tới đâu, ảnh hiện ra tới đó.")
@@ -606,7 +857,7 @@ class TrangTuDong(QWidget):
         # Chưa sửa được (đang chạy, chưa có bảng cảnh…) thì vẫn phải làm MỘT
         # việc gì đó có ích: mở ảnh gốc ra xem. Bấm đúp mà chỉ nhận về một hộp
         # báo lỗi là cái bấm phí.
-        if (self._dang_chay or not self._duong or not so
+        if (self._luot_dang_chay() or not self._duong or not so
                 or not self._mo_bang_canh(so, im_lang=True)):
             from PyQt5.QtCore import QUrl  # noqa: PLC0415
             from PyQt5.QtGui import QDesktopServices  # noqa: PLC0415
@@ -629,7 +880,7 @@ class TrangTuDong(QWidget):
             return khong(
                 "Chưa chọn lượt",
                 "Chọn một lượt ở ô “Lượt” rồi mới xem được bảng cảnh của nó.")
-        if self._dang_chay:
+        if self._luot_dang_chay():
             # Khâu đang chạy đã đọc `4-canh.json` vào bộ nhớ từ lúc bắt đầu:
             # sửa lúc này không vào được tới nó, mà lại tưởng là đã sửa.
             return khong(
@@ -692,7 +943,7 @@ class TrangTuDong(QWidget):
 
         if not sua:
             return False
-        if self._dang_chay:
+        if self._luot_dang_chay():
             self._app.show_message("Đang chạy",
                                    "Bấm Dừng trước rồi hãy tạo lại.")
             return False
@@ -743,7 +994,8 @@ class TrangTuDong(QWidget):
         self._ghi("Đang chạy nền — xong sẽ hiện lại. Chưa dựng video; xem "
                   "xong ưng thì bấm “Chạy tiếp”.")
         # Dừng sau khâu clip: tạo lại xong dừng lại để xem tiếp, chưa dựng.
-        self._bat_dau(luot, dung_sau="clip")
+        # Ưu tiên lên đầu hàng: người vừa sửa đang đợi đúng lượt này.
+        self._bat_dau(luot, dung_sau="clip", uu_tien=True)
         return True
 
     def _quen_canh_dai(self, so_canh: int) -> None:
@@ -802,7 +1054,10 @@ class TrangTuDong(QWidget):
                     "\nKênh MẪU của tool — cập nhật sẽ ghi đè. Muốn sửa cho "
                     "riêng mình thì bấm “Nhân bản”." if k.mau_cua_tool else ""))
             self._nhan_kenh.setStyleSheet("color:{0};".format(theme.CHU_MO))
-        self._nut_chay.setEnabled(not thieu and not self._dang_chay)
+        # Kênh chạy được là bấm được — lượt khác đang chạy không còn là lý do
+        # khoá nút: lượt mới xếp vào hàng đợi.
+        self._nut_chay.setEnabled(not thieu)
+        self._nut_them.setEnabled(not thieu)
         self._nap_luot()
 
     # ── Lượt chạy ────────────────────────────────────────────────────────────
@@ -815,6 +1070,13 @@ class TrangTuDong(QWidget):
         """
         if luot.xong_het:
             return "{0} · xong".format(luot.ma_luot)
+        # Đang nằm trong hàng đợi thì nói thế trước — đó là câu trả lời cho
+        # "có phải bấm gì không": không, nó đang/sắp chạy rồi.
+        muc = self._hang_doi.tim(luot.thu_muc)
+        if muc is not None and muc.trang_thai == hd.DANG:
+            return "{0} · ĐANG CHẠY".format(luot.ma_luot)
+        if muc is not None and muc.trang_thai == hd.CHO:
+            return "{0} · chờ trong hàng đợi".format(luot.ma_luot)
         hong = luot.khau_dang_hong
         if hong:
             return "{0} · dừng ở khâu {1}".format(
@@ -861,9 +1123,7 @@ class TrangTuDong(QWidget):
         """
         if not self._duong:
             return None
-        return doc_luot(
-            self._duong,
-            dang_chay=self._dang_chay and self._duong == self._duong_chay)
+        return doc_luot(self._duong, dang_chay=self._luot_dang_chay())
 
     def _mo_quan_ly(self) -> None:
         from .kenh import HopKenh  # noqa: PLC0415
@@ -970,12 +1230,19 @@ class TrangTuDong(QWidget):
         except Exception:  # noqa: BLE001 — kênh hỏng thì cứ hỏi tư liệu như cũ
             return False
 
-    def _chay(self) -> None:
+    def _them_hang_doi(self) -> None:
+        """“Thêm vào hàng đợi”: mở lượt mới cho nội dung đang điền, chưa chạy."""
+        self._chay(chi_xep=True)
+
+    def _chay(self, chi_xep: bool = False) -> None:
         ma = self._chon_kenh.currentText().strip()
         if not ma:
             return
         do = self.luot_con_do()
-        if do is not None:
+        # Lượt gần nhất còn dở NHƯNG đang nằm trong hàng đợi thì không hỏi:
+        # với hàng đợi, kênh có nhiều lượt dở cùng lúc là chuyện bình thường —
+        # đó chính là "nhiều content". Chỉ hỏi khi nó dở mà không ai lo.
+        if do is not None and not self._hang_doi.con_viec(do.thu_muc):
             chon = self._hoi_truoc_khi_mo_luot_moi(do)
             if not chon:
                 return
@@ -1032,7 +1299,16 @@ class TrangTuDong(QWidget):
         # Tích "dừng để xem" thì chạy tới hết khâu ảnh bìa rồi dừng — lúc đó đủ
         # ảnh và clip từng cảnh để soi, còn khâu dựng vẫn ở trạng thái chờ.
         dung_sau = "thumbnail" if self._o_dung_truoc_dung.isChecked() else ""
-        self._bat_dau(luot, dung_sau=dung_sau)
+        if self._bat_dau(luot, dung_sau=dung_sau, chi_xep=chi_xep):
+            # Nội dung đã nằm trong thư mục lượt. Trống ô ra để dán video tiếp
+            # theo — không thì "Thêm" lần hai lại mở lượt y hệt lần một.
+            self._xoa_o_nhap()
+
+    def _xoa_o_nhap(self) -> None:
+        self._o_link.clear()
+        self._o_tu_lieu.setPlainText("")
+        self._o_tieu_de.clear()
+        self._o_chu_bia.clear()
 
     @staticmethod
     def _ghi_tep(luot: LuotChay, ten: str, chu: str) -> None:
@@ -1098,51 +1374,113 @@ class TrangTuDong(QWidget):
             return
         # "Chạy tiếp" luôn đi tới hết — kể cả khi ô "dừng để xem" còn tích. Tích
         # ấy chỉ chặn LƯỢT MỚI; đây là lúc người dùng đã xem xong và muốn dựng.
-        self._bat_dau(luot)
-
-    def _bat_dau(self, luot: LuotChay, *, dung_sau: str = "") -> None:
-        if self._dang_chay:
+        if self._luot_dang_chay():
+            self._app.show_message("Đang chạy", "Lượt này đang chạy rồi.")
             return
+        # Lên đầu hàng: người bấm "Chạy tiếp" đang đợi đúng lượt này.
+        self._bat_dau(luot, uu_tien=True)
+
+    @staticmethod
+    def _mo_ta_luot(luot: LuotChay) -> str:
+        """Một dòng nhận ra lượt trong bảng hàng đợi: tiêu đề, không thì link."""
+        dv = luot.dau_vao or {}
+        for khoa in ("tieu_de", "link"):
+            chu = str(dv.get(khoa) or "").strip()
+            if chu:
+                return chu
+        return "nội dung dán thẳng"
+
+    def _bat_dau(self, luot: LuotChay, *, dung_sau: str = "",
+                 chi_xep: bool = False, uu_tien: bool = False) -> bool:
+        """Xếp lượt vào hàng đợi; `chi_xep=False` thì mở hàng cho chạy luôn.
+
+        Trả `True` khi đã xếp được. Việc *chạy thật* nằm ở `_khoi_chay_muc`,
+        do hàng đợi gọi khi tới lượt — có thể là ngay bây giờ, có thể là sau
+        ba video khác.
+        """
         k = doc_kenh(self._app.base_dir, luot.ma_kenh)
         thieu = kiem_kenh(k)
         if thieu:
             self._app.show_message("Kênh chưa đủ điều kiện", "\n".join(thieu))
-            return
-        # Ô "Xuất lại qua CapCut" áp cho lượt sắp chạy — cả "Chạy" lẫn "Chạy
-        # tiếp" đều qua đây. Chỉ ÉP BẬT chứ không ép tắt: kênh nào chủ ý khai
-        # `xuat_capcut: true` trong kenh.yaml thì vẫn chạy dù ô không tích.
+            return False
+        muc = MucDoi(thu_muc=luot.thu_muc, ma_kenh=luot.ma_kenh,
+                     ma_luot=luot.ma_luot, dung_sau=dung_sau,
+                     mo_ta=self._mo_ta_luot(luot))
+        # Ô "Xuất lại qua CapCut" áp cho lượt vừa xếp — cả "Chạy" lẫn "Chạy
+        # tiếp" đều qua đây — và được NHỚ THEO LƯỢT, vì tới lúc lượt này chạy
+        # thì ô trên màn hình có thể đã đổi. Chỉ ÉP BẬT chứ không ép tắt: kênh
+        # nào chủ ý khai `xuat_capcut: true` trong kenh.yaml thì vẫn chạy dù ô
+        # không tích (xem `_khoi_chay_muc`).
         if self._o_xuat_capcut.isChecked():
-            k.xuat_capcut = True
+            muc.xuat_capcut = True
+        muc = self._hang_doi.them(muc, uu_tien=uu_tien)
         self._duong = luot.thu_muc
-        self._duong_chay = luot.thu_muc
-        self._huy = threading.Event()
-        self._dang_chay = True
-        self._nut_chay.setEnabled(False)
-        self._nut_tiep.setEnabled(False)
-        self._nut_dung.setEnabled(True)
         self._nut_mo.setEnabled(True)
-        self._ghi("[BẮT ĐẦU] lượt {0} của kênh {1}.".format(
+        vi_tri = self._hang_doi.vi_tri_cho(luot.thu_muc)
+        if vi_tri:
+            self._ghi("[XẾP] lượt {0} của kênh {1} vào hàng đợi{2}.".format(
+                luot.ma_luot, luot.ma_kenh,
+                " (thứ {0} trong số chờ)".format(vi_tri) if vi_tri > 1 else ""))
+        if not chi_xep:
+            self._hang_doi.mo()
+        self._luu_hang_doi()
+        self._nap_luot()
+        return True
+
+    def _nhay_sang_luot_vua_chay(self, muc: MucDoi) -> None:
+        """Người đang xem một lượt KHÔNG chạy (vừa xong, hay đang ngó lượt cũ)
+        thì chuyển sang lượt vừa được nạp — chạy lần lượt mà bảng cứ đứng ở
+        video 1 đã xong thì không thấy video 2 đang tới đâu. Đang xem một lượt
+        khác cũng đang chạy thì giữ nguyên; chỉ nhảy lúc NẠP, không nhảy ở mỗi
+        lần vẽ lại — kẻo người đang soi lượt cũ bị kéo đi liên tục."""
+        if not self._luot_dang_chay():
+            self._xem_luot(muc.thu_muc, muc.ma_kenh)
+
+    def _khoi_chay_muc(self, muc: MucDoi) -> None:
+        """Hàng đợi gọi: tới lượt `muc` rồi, chạy nền đi. Xong phải `bao_xong`.
+
+        Ném lỗi ở đây là hàng đợi tự đánh dấu mục hỏng và nạp mục sau — không
+        phải lo giữ hàng sống.
+        """
+        luot = doc_luot(muc.thu_muc)
+        if luot is None:
+            raise RuntimeError("không đọc được lượt ở " + muc.thu_muc)
+        k = doc_kenh(self._app.base_dir, luot.ma_kenh)
+        thieu = kiem_kenh(k)
+        if thieu:
+            raise RuntimeError("kênh chưa đủ điều kiện: " + "; ".join(thieu))
+        if muc.xuat_capcut:
+            k.xuat_capcut = True
+        huy = muc.huy
+        self._nhay_sang_luot_vua_chay(muc)
+        self._ghi_luot(muc, "[BẮT ĐẦU] lượt {0} của kênh {1}.".format(
             luot.ma_luot, luot.ma_kenh))
         self._nap_luot()
 
-        huy = self._huy
+        def ghi(dong: str) -> None:
+            self._ghi_nen(muc, dong)
 
         def viec():
             from core.auto_khau import BoiCanh, dung_bo_viec  # noqa: PLC0415
 
             bc = BoiCanh(
                 goc=self._app.base_dir, kenh=k,
-                goi_chat=self._dung_goi_chat(),
-                goi_chat_kich_ban=self._dung_goi_chat_kich_ban(),
+                goi_chat=self._dung_goi_chat(huy, ghi),
+                goi_chat_kich_ban=self._dung_goi_chat_kich_ban(huy, ghi),
                 client=self._app.client
                 if getattr(self._app, "client", None) is not None
                 else self._dung_client(),
-                on_log=self._ghi_nen, cancel=huy,
+                on_log=ghi, cancel=huy,
                 on_nhip=self._nhip_nen)
-            return chay(luot, dung_bo_viec(bc), on_log=self._ghi_nen,
-                        on_doi=self._doi_nen, cancel=huy, dung_sau=dung_sau)
+            # Khâu chạy trên máy (Whisper, FFmpeg, CapCut) chỉ MỘT lượt một
+            # lúc — xem `core/hang_doi_auto.khoa_khau_may`.
+            viec_khau = khoa_khau_may(dung_bo_viec(bc), cancel=huy, ghi=ghi)
+            return chay(luot, viec_khau, on_log=ghi,
+                        on_doi=self._doi_nen, cancel=huy,
+                        dung_sau=muc.dung_sau)
 
-        self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
+        self._app.run_bg(viec, on_ok=lambda l: self._xong(muc, l),
+                         on_err=lambda e: self._hong(muc, e))
 
     def _dung_client(self, giay_cho: float = 0.0):
         """Client ShopAPI. `giay_cho` để dựng bản riêng cho lời gọi dài."""
@@ -1163,8 +1501,13 @@ class TrangTuDong(QWidget):
     #: là thứ làm hỏng lượt chạy thật đầu tiên (14/08/2026).
     GIAY_CHO_VIET = 900.0
 
-    def _dung_goi_chat(self):
+    def _dung_goi_chat(self, huy: Optional[threading.Event] = None,
+                       ghi: Optional[Callable[[str], None]] = None):
         """Hàm gọi AI viết chữ, qua đúng ví ShopAPI của tool.
+
+        `huy` là cờ dừng CỦA LƯỢT đang dựng — mỗi lượt trong hàng đợi một cờ,
+        bấm Dừng lượt này không cắt lời gọi của lượt kia. `ghi` là đường nhật
+        ký của lượt ấy (gọi được từ luồng nền).
 
         Việc *phân loại sự cố* và *đợi bao lâu* nằm ở `core/su_co.py` — một chỗ
         duy nhất cho cả tool. Ở đây chỉ còn hai việc:
@@ -1182,7 +1525,7 @@ class TrangTuDong(QWidget):
                                           tin_nhan_viet)
 
             def kiem_dung():
-                if self._huy is not None and self._huy.is_set():
+                if huy is not None and huy.is_set():
                     raise RuntimeError("đã dừng")
 
             # Có ảnh (đọc chữ trên bìa đối thủ) thì gửi kèm dạng khối ảnh mà cổng
@@ -1202,11 +1545,12 @@ class TrangTuDong(QWidget):
             return goi_van_ban(
                 client, tin_nhan_viet(noi_dung),
                 mo_hinh=mo_hinh, toi_da_token=int(toi_da_token), khoa=khoa,
-                on_log=self._ghi_nen, kiem_dung=kiem_dung)
+                on_log=ghi, kiem_dung=kiem_dung)
 
         return goi
 
-    def _dung_goi_chat_kich_ban(self):
+    def _dung_goi_chat_kich_ban(self, huy: Optional[threading.Event] = None,
+                                ghi: Optional[Callable[[str], None]] = None):
         """Đường viết chữ RIÊNG cho khâu kịch bản, hoặc `None` nếu đi ví chung.
 
         Chỉ khác `None` khi chủ máy bật "Kịch bản viết bằng Claude Code" trong
@@ -1228,28 +1572,46 @@ class TrangTuDong(QWidget):
                 "tắt nút đó để viết bằng ví ShopAPI.")
 
         def kiem_dung():
-            if self._huy is not None and self._huy.is_set():
+            if huy is not None and huy.is_set():
                 raise RuntimeError("đã dừng")
 
-        return dung_goi_chat_max(self._app.base_dir, on_log=self._ghi_nen,
+        return dung_goi_chat_max(self._app.base_dir, on_log=ghi,
                                  kiem_dung=kiem_dung)
 
     def _dung(self) -> None:
-        if self._huy is not None:
-            self._huy.set()
-        self._ghi("Đã yêu cầu dừng — phần đã làm vẫn giữ nguyên.")
+        """Dừng LƯỢT ĐANG XEM. Các lượt khác trong hàng đợi không bị đụng."""
+        if not self._duong or not self._hang_doi.dung_mot(self._duong):
+            if self._hang_doi.co_viec_dang_chay:
+                self._app.show_message(
+                    "Lượt đang xem không chạy",
+                    "Lượt bạn đang xem không chạy. Muốn dừng lượt khác thì "
+                    "chọn nó ở ô “Lượt” (hoặc bấm đúp dòng đó trong hàng "
+                    "đợi), hoặc bấm “Dừng tất cả”.")
+            return
+        self._ghi("Đã yêu cầu dừng lượt đang xem — phần đã làm vẫn giữ "
+                  "nguyên; lượt khác trong hàng đợi vẫn chạy.")
 
-    def _xong(self, luot: LuotChay) -> None:
-        self._duong = luot.thu_muc
+    def _xong(self, muc: MucDoi, luot: LuotChay) -> None:
+        """`core/auto.chay` trả về là lượt KẾT THÚC, chưa chắc XONG: nó trả
+        lượt cả khi một khâu hỏng hẳn, khi người bấm Dừng, khi tới chốt "dừng
+        để xem". Đọc lượt mà đặt đúng chữ cho hàng đợi."""
+        hong = [m for m in luot.khau_dang_hong if m not in KHAU_KHONG_CHAN]
+        if muc.huy.is_set():
+            self._hang_doi.bao_xong(muc, dung=True, loi="đã dừng")
+        elif hong:
+            self._hang_doi.bao_xong(muc, loi=tom_tat(luot))
+        elif luot.xong_het:
+            self._ghi_luot(muc, "[XONG] Video nằm ở 8-video.mp4.")
+            self._hang_doi.bao_xong(muc)
+        elif muc.dung_sau:
+            self._hang_doi.bao_xong(
+                muc, dung=True,
+                loi="dừng sau “{0}” để xem".format(ten_khau(muc.dung_sau)))
+        else:
+            self._hang_doi.bao_xong(muc, dung=True, loi=tom_tat(luot))
         self._ket_thuc()
-        if luot.xong_het:
-            self._ghi("[XONG] Video nằm ở 8-video.mp4.")
-            self._app.show_message(
-                "Xong",
-                "Video hoàn thiện, phụ đề và 3 ảnh bìa nằm trong:\n{0}".format(
-                    luot.thu_muc))
 
-    def _hong(self, loi: BaseException) -> None:
+    def _hong(self, muc: MucDoi, loi: BaseException) -> None:
         # Lưới an toàn cuối. `run_bg` đã tự chờ-rồi-thử-lại các lỗi TẠM (mạng
         # chập, 429, máy chủ bận) mà KHÔNG báo ra; lọt được tới đây nghĩa là đã
         # thử mãi vẫn không xong. Vẫn KHÔNG dựng hộp lỗi cho loại tạm — khách
@@ -1258,20 +1620,25 @@ class TrangTuDong(QWidget):
         #
         # Dùng CHUNG `tu_xu_ly_ngam` — đúng bộ phân loại dựng ra câu "Mạng bị
         # gián đoạn" — nên không còn cảnh một nơi gọi là mạng, nơi kia lại không.
-        from core.errors import tu_xu_ly_ngam  # noqa: PLC0415
+        from core.errors import describe, tu_xu_ly_ngam  # noqa: PLC0415
         if tu_xu_ly_ngam(loi):
-            self._ghi("[MẠNG] Mạng chập chờn — đã tự thử lại nhiều lần mà chưa "
-                      "kết nối được. Kiểm tra VPN/wifi rồi bấm “Chạy tiếp”, "
-                      "phần đã làm vẫn giữ nguyên.")
+            self._ghi_luot(muc, "[MẠNG] Mạng chập chờn — đã tự thử lại nhiều "
+                                "lần mà chưa kết nối được. Kiểm tra VPN/wifi "
+                                "rồi bấm “Chạy tiếp”, phần đã làm vẫn giữ nguyên.")
+            self._hang_doi.bao_xong(muc, dung=True, loi="mạng gián đoạn")
         else:
+            try:
+                cau = describe(loi).title
+            except Exception:  # noqa: BLE001 — câu lỗi không được chặn kết sổ
+                cau = str(loi)[:120]
+            # Đánh dấu hỏng TRƯỚC khi hiện hộp: hộp là modal, mà lượt kế tiếp
+            # trong hàng đợi phải được nạp ngay chứ không đợi ai bấm OK.
+            self._hang_doi.bao_xong(muc, loi=cau)
             self._app.show_error(loi)
         self._ket_thuc()
 
     def _ket_thuc(self) -> None:
-        self._dang_chay = False
-        self._duong_chay = ""
-        self._nut_dung.setEnabled(False)
-        self._nut_tiep.setEnabled(True)
+        self._luu_hang_doi()
         # `_ve_kenh` kéo theo `_nap_luot` → `_ve_bang`, nên nhãn trong ô chọn
         # lượt cũng cập nhật theo (“đang dở, xong 6/8” → “xong”).
         self._ve_kenh()
@@ -1327,6 +1694,11 @@ class TrangTuDong(QWidget):
                                QTableWidgetItem(" · ".join(chi_tiet)[:200]))
         self._tom_tat.setText(
             tom_tat(luot) if luot is not None else "Chưa chạy lượt nào.")
+        # Nút theo LƯỢT ĐANG XEM: đang chạy thì Dừng được, chưa chạy thì Chạy
+        # tiếp được. Lượt khác chạy hay không, không liên quan tới hai nút này.
+        dang = self._luot_dang_chay()
+        self._nut_dung.setEnabled(dang)
+        self._nut_tiep.setEnabled(bool(self._duong) and not dang)
         self._ve_dai_phim()
 
     def _khau_dang_chon(self) -> str:
@@ -1361,7 +1733,7 @@ class TrangTuDong(QWidget):
             self._app.show_message("Chưa chọn khâu",
                                    "Bấm vào một dòng trong bảng trước.")
             return
-        if self._dang_chay:
+        if self._luot_dang_chay():
             self._app.show_message("Đang chạy",
                                    "Bấm Dừng trước rồi hãy làm lại.")
             return
@@ -1449,7 +1821,7 @@ class TrangTuDong(QWidget):
                 "Bạn điền link rồi bấm “Chạy” một lần để tool mở lượt chạy, "
                 "sau đó mới nạp file vào được.")
             return
-        if self._dang_chay:
+        if self._luot_dang_chay():
             self._app.show_message("Đang chạy",
                                    "Bấm Dừng trước rồi hãy nạp file.")
             return
@@ -1507,8 +1879,17 @@ class TrangTuDong(QWidget):
     def _ghi(self, dong: str) -> None:
         self._log.appendPlainText(dong)
 
-    def _ghi_nen(self, dong: str) -> None:
-        self._app.goi_tren_luong_ve(lambda: self._ghi(dong))
+    def _ghi_luot(self, muc: MucDoi, dong: str) -> None:
+        """Ghi một dòng CỦA MỘT LƯỢT (trên luồng giao diện). Hàng đợi có hơn
+        một mục thì gắn tên lượt lên đầu dòng — hai video chạy cùng lúc mà
+        nhật ký trộn vào nhau không tên thì không đọc nổi cái gì của cái gì."""
+        if len(self._hang_doi.ds) > 1:
+            dong = "[{0}/{1}] {2}".format(muc.ma_kenh, muc.ma_luot, dong)
+        self._ghi(dong)
+
+    def _ghi_nen(self, muc: MucDoi, dong: str) -> None:
+        """Như `_ghi_luot` nhưng gọi được từ luồng nền."""
+        self._app.goi_tren_luong_ve(lambda: self._ghi_luot(muc, dong))
 
     def _doi_nen(self, _luot: LuotChay) -> None:
         self._app.goi_tren_luong_ve(self._ve_bang)
