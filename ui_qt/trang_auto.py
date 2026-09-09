@@ -54,7 +54,8 @@ from core.kenh import doc_kenh, kiem_kenh, liet_ke_kenh
 from . import theme
 from .widgets import HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu, the, tieu_de_trang
 
-__all__ = ["TrangTuDong", "kiem_tu_lieu", "tach_link_va_tu_lieu"]
+__all__ = ["TrangTuDong", "kiem_tu_lieu", "tach_link_va_tu_lieu", "tach_nhieu_link",
+           "la_link"]
 
 #: Chữ trong cột trạng thái. Chữ, không icon — chủ dự án 14/08/2026.
 CHU_TRANG_THAI = {
@@ -126,6 +127,28 @@ def tach_link_va_tu_lieu(chu: str) -> Tuple[str, str]:
         if d.lower().startswith(("http://", "https://", "www.", "youtu")):
             return d, ""
     return "", chu
+
+
+def la_link(dong: str) -> bool:
+    return (dong or "").strip().lower().startswith(("http://", "https://", "www.", "youtu"))
+
+
+def tach_nhieu_link(chu: str) -> List[str]:
+    """MỌI dòng đều là link → trả danh sách link (mỗi link sẽ là một video).
+
+    Chủ dự án 09/09/2026: *"tao dán 2 link mỗi link 1 dòng nó không nhận"* —
+    bản trước chỉ nhận link khi cả ô là MỘT dòng, hai dòng link bị coi là "tư
+    liệu" rồi báo "quá ngắn". Trả `[]` khi có dòng không phải link (đó là nội
+    dung dán, để `tach_link_va_tu_lieu` lo) hoặc chỉ có một link.
+    """
+    dong = [d.strip() for d in (chu or "").splitlines() if d.strip()]
+    if len(dong) < 2 or not all(la_link(d) for d in dong):
+        return []
+    thay: List[str] = []
+    for d in dong:
+        if d not in thay:
+            thay.append(d)
+    return thay
 
 
 def _dem_trong_khau(tt) -> str:
@@ -242,28 +265,36 @@ class TrangTuDong(QWidget):
         self._nhan_kenh = self._phu("")
         v.addWidget(self._nhan_kenh)
 
-        # MỘT ô cho cả link lẫn nội dung — xem `tach_link_va_tu_lieu`.
+        # ═══ HAI ĐẦU VÀO, ĐÚNG HAI (chủ dự án 09/09/2026) ═══
+        #
+        # 1. Dán LINK — mỗi dòng một link là mỗi link một video (xem
+        #    `tach_nhieu_link`); dán thẳng nội dung để viết cũng vào ô này.
+        # 2. TẢI KỊCH BẢN LÊN — tệp .txt đã viết xong: bỏ qua khâu viết.
+        # Ô tích "Đây là kịch bản hoàn chỉnh" + "Chọn tệp" của bản trước là hai
+        # khái niệm cho một việc, khách không hiểu → gộp thành một nút.
         self._o_tu_lieu = QPlainTextEdit()
         self._o_tu_lieu.setPlaceholderText(
-            "Dán link YouTube (tôi tự lấy lời thoại), hoặc dán thẳng nội "
-            "dung: lời thoại đối thủ, bài của bạn, kịch bản đã viết xong.\n"
-            "Kênh timelapse: chỉ cần tiêu đề ở ô dưới.")
+            "Dán link YouTube — mỗi dòng một link là mỗi link một video.\n"
+            "Dán thẳng nội dung (lời thoại, bài của bạn) cũng được: tôi viết lại.\n"
+            "Đã có kịch bản viết xong thì bấm “Tải kịch bản lên”.")
         self._o_tu_lieu.setFixedHeight(88)
         v.addWidget(self._o_tu_lieu)
 
         hang_tl = HangXuongDong()
-        self._o_la_kich_ban = QCheckBox("Đây là kịch bản hoàn chỉnh")
-        self._o_la_kich_ban.setToolTip(
-            "Bật khi thứ bạn dán là BÀI ĐÃ VIẾT XONG. Tôi bỏ qua khâu viết — "
-            "không tốn tiền khâu đó — chạy thẳng từ khâu giọng đọc.")
-        hang_tl.addWidget(self._o_la_kich_ban)
-        hang_tl.addWidget(nut_phu("Chọn tệp…", self._chon_tu_lieu, rong=110))
-        v.addLayout(hang_tl)
-
         self._o_tieu_de = QLineEdit()
-        self._o_tieu_de.setPlaceholderText(
-            "Tiêu đề video — bỏ trống thì tôi tự đặt")
-        v.addWidget(self._o_tieu_de)
+        self._o_tieu_de.setPlaceholderText("Tiêu đề — bỏ trống thì tôi tự đặt")
+        self._o_tieu_de.setToolTip(
+            "Áp cho video sắp bấm Chạy. Dán nhiều link thì bỏ trống, rồi sửa "
+            "tiêu đề từng video trong bảng bên dưới (bấm đúp ô Tiêu đề).")
+        self._o_tieu_de.setMinimumWidth(320)
+        hang_tl.addWidget(self._o_tieu_de)
+        nut_tai = nut_phu("Tải kịch bản lên…", self._tai_kich_ban, rong=160)
+        nut_tai.setToolTip(
+            "Chọn một hay nhiều tệp .txt là BÀI ĐÃ VIẾT XONG. Mỗi tệp một "
+            "video, tôi bỏ qua khâu viết — không tốn tiền khâu đó — chạy "
+            "thẳng từ khâu giọng đọc. Tiêu đề lấy ở ô bên trái hoặc dòng đầu tệp.")
+        hang_tl.addWidget(nut_tai)
+        v.addLayout(hang_tl)
 
         # Việc hiếm xếp sau một mũi tên, mặc định gập.
         self._nut_tuy_chon = QToolButton()
@@ -373,22 +404,31 @@ class TrangTuDong(QWidget):
         self._nhan_hang = self._phu("")
         v.addWidget(self._nhan_hang)
 
-        self._bang_video = QTableWidget(0, 5)
+        # Hai cột cuối SỬA ĐƯỢC (bấm đúp): chủ dự án 09/09/2026 — chạy nhiều
+        # video thì tiêu đề / chữ bìa phải chỉnh được cho TỪNG video ngay ở
+        # danh sách chờ, không phải điền trước lúc dán.
+        self._bang_video = QTableWidget(0, 7)
         self._bang_video.setHorizontalHeaderLabels(
-            ["#", "Kênh", "Lượt", "Nội dung", "Trạng thái"])
+            ["#", "Kênh", "Lượt", "Nội dung", "Trạng thái", "Tiêu đề (sửa được)",
+             "Chữ bìa (sửa được)"])
         self._bang_video.verticalHeader().setVisible(False)
-        self._bang_video.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._bang_video.setEditTriggers(
+            QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
         self._bang_video.setSelectionBehavior(QTableWidget.SelectRows)
         self._bang_video.setSelectionMode(QTableWidget.SingleSelection)
         dau = self._bang_video.horizontalHeader()
-        for i in (0, 1, 2):
+        for i in (0, 1, 2, 4):
             dau.setSectionResizeMode(i, QHeaderView.ResizeToContents)
-        dau.setSectionResizeMode(3, QHeaderView.Stretch)
-        dau.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        for i in (3, 5, 6):
+            dau.setSectionResizeMode(i, QHeaderView.Stretch)
         self._bang_video.setMinimumWidth(1)
         self._bang_video.setFixedHeight(150)
+        self._bang_video.setToolTip(
+            "Bấm đúp ô Tiêu đề / Chữ bìa để sửa cho riêng video đó. Video đang "
+            "chạy thì không sửa được.")
         self._bang_video.currentCellChanged.connect(
             lambda *_a: self._chon_hang_doi())
+        self._bang_video.itemChanged.connect(self._sua_o_bang)
         v.addWidget(self._bang_video)
 
         # Nút theo DÒNG ĐANG CHỌN. Chạy tiếp / Dừng là một nút đổi chữ.
@@ -415,6 +455,8 @@ class TrangTuDong(QWidget):
             lambda _c: self._nap_san())
         menu.addAction("Tải file mẫu của khâu đang chọn…").triggered.connect(
             lambda _c: self._tai_mau())
+        menu.addSeparator()
+        menu.addAction("Xoá video này…").triggered.connect(lambda _c: self._xoa_luot())
         self._nut_khac.setMenu(menu)
         hang2.addWidget(self._nut_khac)
         v.addLayout(hang2)
@@ -779,13 +821,18 @@ class TrangTuDong(QWidget):
         chon = -1
         for i, luot in enumerate(hang):
             chu, mau = self._nhan_trang_thai_luot(luot)
+            dv = luot.dau_vao or {}
             o = [QTableWidgetItem(str(i + 1)), QTableWidgetItem(luot.ma_kenh),
                  QTableWidgetItem(luot.ma_luot),
                  QTableWidgetItem(self._mo_ta_luot(luot)[:120]),
-                 QTableWidgetItem(chu)]
+                 QTableWidgetItem(chu),
+                 QTableWidgetItem(str(dv.get("tieu_de") or "")),
+                 QTableWidgetItem(str(dv.get("chu_bia") or ""))]
             if mau:
                 o[4].setForeground(QColor(mau))
             for cot, muc_o in enumerate(o):
+                if cot < 5:
+                    muc_o.setFlags(muc_o.flags() & ~Qt.ItemIsEditable)
                 self._bang_video.setItem(i, cot, muc_o)
             if self._duong and os.path.normcase(luot.thu_muc) == os.path.normcase(self._duong):
                 chon = i
@@ -810,6 +857,107 @@ class TrangTuDong(QWidget):
         if 0 <= i < len(self._ds_hang):
             self._duong = self._ds_hang[i][0]
         self._ve_bang()
+
+    #: Cột nào của bảng Video sửa được, và ghi vào khoá nào của `dau_vao`.
+    COT_SUA = {5: "tieu_de", 6: "chu_bia"}
+
+    def _sua_o_bang(self, o: QTableWidgetItem) -> None:
+        """Người bấm đúp sửa tiêu đề / chữ bìa một dòng → ghi thẳng vào lượt."""
+        try:
+            i, cot = o.row(), o.column()
+        except RuntimeError:     # ô đã bị bảng vẽ lại xoá mất
+            return
+        if cot not in self.COT_SUA or not (0 <= i < len(self._ds_hang)):
+            return
+        thu_muc = self._ds_hang[i][0]
+        moi = o.text().strip()
+        if self._hang_doi.dang_chay(thu_muc):
+            self._ghi("Video đang chạy — dừng rồi mới sửa tiêu đề / chữ bìa.")
+            self._nap_luot()
+            return
+        self.dat_tieu_de_chu_bia(thu_muc, **{self.COT_SUA[cot]: moi})
+        self._nap_luot()
+
+    def dat_tieu_de_chu_bia(self, thu_muc: str, tieu_de: Optional[str] = None,
+                            chu_bia: Optional[str] = None) -> bool:
+        """Đặt tiêu đề / chữ bìa cho MỘT lượt, kể cả khi nó đã đặt tên rồi.
+
+        Ghi vào `dau_vao` (khâu kịch bản chưa chạy thì dùng đúng thứ này), và
+        nếu `1-tieu-de.txt` đã có thì ghi lại tệp ấy — khâu ảnh bìa và SEO chạy
+        sau đọc tệp đó. Khâu ảnh bìa đã xong rồi thì nói thật là bìa cũ không đổi.
+        """
+        luot = doc_luot(thu_muc)
+        if luot is None:
+            return False
+        if tieu_de is not None:
+            luot.dau_vao["tieu_de"] = tieu_de
+        if chu_bia is not None:
+            luot.dau_vao["chu_bia"] = chu_bia
+        ghi_luot(luot)
+        tep = os.path.join(thu_muc, "1-tieu-de.txt")
+        if os.path.exists(tep):
+            cu_td = cu_cb = ""
+            for dong in self._doc_tep_chu(tep).splitlines():
+                if dong.strip().upper().startswith("TITLE:"):
+                    cu_td = dong.split(":", 1)[1].strip()
+                elif dong.strip().upper().startswith("THUMB:"):
+                    cu_cb = dong.split(":", 1)[1].strip()
+            td = str(luot.dau_vao.get("tieu_de") or "").strip() or cu_td
+            cb = str(luot.dau_vao.get("chu_bia") or "").strip() or cu_cb
+            with open(tep, "w", encoding="utf-8") as f:
+                f.write("TITLE: {0}\nTHUMB: {1}\n".format(td, cb))
+            if luot.tt("thumbnail").trang_thai == XONG:
+                self._ghi("Đã ghi tiêu đề/chữ bìa mới cho lượt {0}, nhưng ảnh bìa đã "
+                          "làm rồi — muốn bìa mới thì chọn dòng, “Làm lại…” khâu ảnh bìa."
+                          .format(luot.ma_luot))
+                return True
+        self._ghi("Lượt {0}: {1}".format(luot.ma_luot, " · ".join(
+            x for x in (("tiêu đề → " + tieu_de) if tieu_de is not None else "",
+                        ("chữ bìa → " + chu_bia) if chu_bia is not None else "") if x)))
+        return True
+
+    def _xoa_luot(self) -> None:
+        """Khác → Xoá video này: rút khỏi hàng và xoá cả thư mục lượt trên đĩa.
+
+        Chủ dự án 09/09/2026: *"các video chờ, chạy dở không xoá được nên
+        không tuỳ chỉnh được"*. Đang chạy thì phải Dừng trước — xoá thư mục
+        dưới chân một lượt đang ghi là hỏng cả hai.
+        """
+        if not self._duong:
+            return
+        luot = self._doc()
+        if luot is None:
+            return
+        if self._luot_dang_chay():
+            self._app.show_message("Đang chạy", "Bấm Dừng trước rồi hãy xoá.")
+            return
+        if not self._hoi_xoa(luot):
+            return
+        import shutil  # noqa: PLC0415
+
+        thu_muc = luot.thu_muc
+        self._hang_doi.bo(thu_muc)
+        try:
+            shutil.rmtree(thu_muc)
+        except OSError as loi:
+            self._app.show_message("Không xoá được", "{0}\n{1}".format(thu_muc, loi))
+        self._ghi("Đã xoá lượt {0}/{1}.".format(luot.ma_kenh, luot.ma_luot))
+        self._duong = ""
+        self._luu_hang_doi()
+        self._nap_luot()
+
+    def _hoi_xoa(self, luot: LuotChay) -> bool:
+        hop = QMessageBox(self)
+        hop.setIcon(QMessageBox.Warning)
+        hop.setWindowTitle("Xoá lượt {0}".format(luot.ma_luot))
+        hop.setText(
+            "Xoá video {0}/{1}?\n\nCả thư mục của nó (kịch bản, giọng đọc, ảnh, "
+            "clip, video) sẽ bị xoá khỏi máy. Không lấy lại được.".format(
+                luot.ma_kenh, luot.ma_luot))
+        nut_xoa = hop.addButton("Xoá", QMessageBox.DestructiveRole)
+        hop.addButton("Thôi", QMessageBox.RejectRole)
+        hop.exec_()
+        return hop.clickedButton() is nut_xoa
 
     def _doc(self) -> Optional[LuotChay]:
         """Trạng thái lượt đang xem — **đọc lại từ đĩa mỗi lần gọi**."""
@@ -880,11 +1028,30 @@ class TrangTuDong(QWidget):
                 return
         from core.timelapse import TEP_DAN_Y  # noqa: PLC0415
 
+        dung_sau = "thumbnail" if self._o_dung_truoc_dung.isChecked() else ""
+        # ═══ NHIỀU LINK, MỖI DÒNG MỘT LINK → MỖI LINK MỘT VIDEO ═══
+        nhieu = tach_nhieu_link(self._o_tu_lieu.toPlainText())
+        if nhieu:
+            xep = 0
+            for link in nhieu:
+                luot = moi_luot(self._app.base_dir, ma, self._ma_luot_moi(ma), {
+                    "link": link, "tieu_de": "", "chu_bia": ""})
+                ghi_luot(luot)
+                if self._bat_dau(luot, dung_sau=dung_sau):
+                    xep += 1
+            if xep:
+                self._ghi("Đã xếp {0} video, mỗi link một video. Tiêu đề và chữ "
+                          "bìa của từng video sửa ngay trong bảng (bấm đúp ô)."
+                          .format(xep))
+                self._o_tu_lieu.setPlainText("")
+                self._o_tieu_de.clear()
+                self._o_chu_bia.clear()
+            return
+
         link, tu_lieu = tach_link_va_tu_lieu(self._o_tu_lieu.toPlainText())
-        la_kich_ban = self._o_la_kich_ban.isChecked()
         tieu_de = self._o_tieu_de.text().strip()
         tieu_de_loi, noi_dung_loi = kiem_tu_lieu(
-            link, tu_lieu, la_kich_ban, tieu_de=tieu_de,
+            link, tu_lieu, tieu_de=tieu_de,
             chi_tieu_de=self._chi_can_tieu_de(ma))
         if tieu_de_loi:
             self._app.show_message(tieu_de_loi, noi_dung_loi)
@@ -901,8 +1068,6 @@ class TrangTuDong(QWidget):
                 self._ghi_tep(luot, TEP_DAN_Y, tu_lieu)
                 self._ghi("Dùng dàn ý của bạn ({0} chữ) làm xương sống — tôi "
                           "vẫn tra cứu để kiểm và bù cho đủ mốc.".format(len(tu_lieu)))
-            elif la_kich_ban:
-                self._nap_kich_ban_san(luot, tu_lieu, tieu_de, chu_bia)
             elif tu_lieu:
                 # Dây chuyền đọc `0-tu-lieu.txt` TRƯỚC link → khâu tải tự bỏ qua.
                 self._ghi_tep(luot, "0-tu-lieu.txt", tu_lieu)
@@ -911,7 +1076,6 @@ class TrangTuDong(QWidget):
         except OSError as loi:
             self._app.show_message("Không lưu được nội dung", str(loi))
             return
-        dung_sau = "thumbnail" if self._o_dung_truoc_dung.isChecked() else ""
         if self._bat_dau(luot, dung_sau=dung_sau):
             # Nội dung đã nằm trong thư mục lượt — trống ô để dán video tiếp.
             self._o_tu_lieu.setPlainText("")
@@ -936,6 +1100,9 @@ class TrangTuDong(QWidget):
         chu_bia = chu_bia or tieu_de[:20]
         self._ghi_tep(luot, "1-tieu-de.txt",
                       "TITLE: {0}\nTHUMB: {1}".format(tieu_de, chu_bia))
+        # Bảng Video đọc tiêu đề/chữ bìa từ `dau_vao` — ghi để cột sửa được hiện đúng.
+        luot.dau_vao["tieu_de"] = tieu_de
+        luot.dau_vao["chu_bia"] = chu_bia
         tt = luot.tt("kich-ban")
         tt.trang_thai = XONG
         tt.loi = ""
@@ -945,23 +1112,64 @@ class TrangTuDong(QWidget):
         self._ghi("Dùng kịch bản bạn đưa ({0} ký tự) — bỏ qua khâu viết, "
                   "chạy thẳng từ khâu giọng đọc.".format(len(bai)))
 
-    def _chon_tu_lieu(self) -> None:
-        duong, _ = QFileDialog.getOpenFileName(
-            self, "Chọn tệp nội dung", "",
-            "Tệp chữ (*.txt *.md);;Mọi loại file (*)")
-        if not duong:
-            return
+    @staticmethod
+    def _doc_tep_chu(duong: str) -> str:
         for bang_ma in ("utf-8", "utf-8-sig", "cp1258", "latin-1"):
             try:
                 with open(duong, "r", encoding=bang_ma) as tep:
-                    self._o_tu_lieu.setPlainText(tep.read())
-                break
+                    return tep.read()
             except UnicodeDecodeError:
                 continue
+        return ""
+
+    def _tai_kich_ban(self) -> None:
+        """Nút “Tải kịch bản lên”: mỗi tệp là một video, bỏ qua khâu viết."""
+        duong_ds, _ = QFileDialog.getOpenFileNames(
+            self, "Chọn kịch bản đã viết xong (mỗi tệp một video)", "",
+            "Tệp chữ (*.txt *.md);;Mọi loại file (*)")
+        if not duong_ds:
+            return
+        self.nap_kich_ban_tu_tep(duong_ds)
+
+    def nap_kich_ban_tu_tep(self, duong_ds: List[str]) -> int:
+        """Đưa các tệp kịch bản vào hàng, trả về số video đã xếp. Tách khỏi hộp
+        chọn tệp để bài kiểm gọi thẳng được."""
+        ma = self._chon_kenh.currentText().strip()
+        if not ma:
+            self._app.show_message("Chưa có kênh", "Chọn kênh trước.")
+            return 0
+        tieu_de_o = self._o_tieu_de.text().strip() if len(duong_ds) == 1 else ""
+        chu_bia_o = self._o_chu_bia.text().strip() if len(duong_ds) == 1 else ""
+        dung_sau = "thumbnail" if self._o_dung_truoc_dung.isChecked() else ""
+        xep = 0
+        for duong in duong_ds:
+            try:
+                bai = self._doc_tep_chu(duong).strip()
             except OSError as loi:
-                self._app.show_message("Không đọc được tệp", str(loi))
-                return
-        self._ghi("Đã nạp nội dung từ {0}".format(duong))
+                self._app.show_message("Không đọc được tệp", "{0}\n{1}".format(duong, loi))
+                continue
+            loi_td, loi_nd = kiem_tu_lieu("", bai, la_kich_ban=True)
+            if loi_td:
+                self._app.show_message("{0}: {1}".format(os.path.basename(duong), loi_td), loi_nd)
+                continue
+            luot = moi_luot(self._app.base_dir, ma, self._ma_luot_moi(ma), {
+                "link": "", "tieu_de": tieu_de_o, "chu_bia": chu_bia_o,
+                "tep_kich_ban": duong})
+            ghi_luot(luot)
+            try:
+                self._nap_kich_ban_san(luot, bai, tieu_de_o, chu_bia_o)
+            except OSError as loi:
+                self._app.show_message("Không lưu được kịch bản", str(loi))
+                continue
+            if self._bat_dau(luot, dung_sau=dung_sau):
+                xep += 1
+        if xep:
+            self._o_tieu_de.clear()
+            self._o_chu_bia.clear()
+            if xep > 1:
+                self._ghi("Đã xếp {0} video từ {0} tệp kịch bản. Tiêu đề và chữ bìa "
+                          "từng video sửa trong bảng (bấm đúp ô).".format(xep))
+        return xep
 
     def _chay_tiep(self) -> None:
         luot = self._doc()

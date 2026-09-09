@@ -503,11 +503,18 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Chọn kênh. Kênh quyết định tiếng, giọng đọc, nhân vật và phong "
             "cách hình. Tạo kênh mới hay nhân bản thì ở tab Quản lý kênh; "
             "“Sửa kênh” ở đây mở đúng kênh đang chọn.",
-            "Dán vào ô lớn MỘT trong hai: link video (tôi tự lấy lời thoại) "
-            "hoặc thẳng nội dung — lời thoại đối thủ, bài của bạn. Tool tự "
-            "nhận đâu là link. Đã có kịch bản viết xong thì dán bài và bật "
-            "“Đây là kịch bản hoàn chỉnh”: bỏ qua khâu viết, không tốn tiền "
-            "khâu đó.",
+            "Đầu vào chỉ có HAI loại. Một: dán link video vào ô lớn — mỗi dòng "
+            "một link là mỗi link một video, tôi tự lấy lời thoại rồi viết lại "
+            "(dán thẳng nội dung để tôi viết lại cũng được). Hai: bấm “Tải "
+            "kịch bản lên” chọn tệp .txt đã viết xong — mỗi tệp một video, bỏ "
+            "qua khâu viết, không tốn tiền khâu đó.",
+            "Chạy nhiều video thì tiêu đề và chữ bìa của TỪNG video chỉnh ngay "
+            "trong bảng Video: bấm đúp ô “Tiêu đề” hoặc “Chữ bìa” của dòng đó. "
+            "Video đang chạy thì không sửa được; video đã làm ảnh bìa rồi thì "
+            "sửa xong phải “Làm lại…” khâu ảnh bìa.",
+            "Muốn bỏ hẳn một video (đang chờ, chạy dở, hay đã xong): chọn dòng "
+            "đó, bấm Khác → “Xoá video này”. Đang chạy thì Dừng trước. Xoá là "
+            "xoá cả thư mục của nó trên máy.",
             "Riêng kênh “Timelapse” không cần nội dung: chỉ cần tiêu đề nói rõ "
             "NƠI nào và khoảng thời gian nào — ví dụ “Thăng Long — Hà Nội nhìn "
             "từ một khúc sông Hồng, 1010 đến nay”. Kênh này không có lời đọc; "
