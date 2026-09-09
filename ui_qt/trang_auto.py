@@ -208,22 +208,18 @@ class TrangTuDong(QWidget):
         doc.setSpacing(12)
         doc.addWidget(tieu_de_trang(
             "Video sản xuất tự động", "Dán nội dung, bấm Chạy, ra video."))
+        # ═══ BA KHỐI, ĐÚNG THỨ TỰ LÀM VIỆC (chủ dự án 09/09/2026) ═══
+        #
+        # "Cách sắp xếp không logic": bản trước gom hàng đợi, bảng video, nút
+        # của KHÂU và bảng khâu vào một thẻ, nút "Làm lại khâu" nằm ngay dưới
+        # bảng VIDEO. Giờ mỗi khối một việc, đọc từ trên xuống là xong:
+        #   1. Tạo video      — chọn kênh, dán nội dung, bấm Chạy.
+        #   2. Danh sách video — hàng đợi + mọi nút tác động lên MỘT VIDEO.
+        #   3. Tiến độ        — tám khâu của video đang chọn + nút của KHÂU,
+        #                       dải ảnh và nhật ký của chính video ấy.
         doc.addWidget(self._the_lam_moi())
-        doc.addWidget(self._the_video())
-
-        hang_log = HangXuongDong()
-        hang_log.addWidget(nhan("Nhật ký", "h2"))
-        self._nut_log = nut_phu("Xem rộng", self._doi_co_log, rong=120)
-        hang_log.addWidget(self._nut_log)
-        doc.addLayout(hang_log)
-        self._log = QPlainTextEdit()
-        self._log.setReadOnly(True)
-        self._log.setFixedHeight(self.CAO_LOG_NHO)
-        self._log.setStyleSheet(
-            "background:{0}; border:1px solid {1}; border-radius:8px;"
-            " color:{2}; font-size:12px;".format(theme.THE_MO, theme.VIEN,
-                                                 theme.CHU_MO))
-        doc.addWidget(self._log)
+        doc.addWidget(self._the_danh_sach())
+        doc.addWidget(self._the_tien_do())
         doc.addStretch(1)
         self._nap_kenh()
 
@@ -250,8 +246,9 @@ class TrangTuDong(QWidget):
         v.setContentsMargins(18, 16, 18, 16)
         v.setSpacing(8)
 
+        v.addWidget(nhan("Bước 1 · Tạo video", "h2"))
         hang = HangXuongDong()
-        hang.addWidget(nhan("Kênh", "h2"))
+        hang.addWidget(nhan("Kênh"))
         self._chon_kenh = QComboBox()
         self._chon_kenh.setMinimumWidth(170)
         self._chon_kenh.currentTextChanged.connect(lambda _t: self._ve_kenh())
@@ -371,16 +368,17 @@ class TrangTuDong(QWidget):
                 "Bước “Xuất lại qua CapCut” cần CapCut bản máy tính cài trên "
                 "chính máy này. Cài CapCut, mở nó một lần, rồi bật lại ô này.")
 
-    # ── Thẻ 2: video ─────────────────────────────────────────────────────────
+    # ── Thẻ 2: danh sách video (hàng đợi + nút theo VIDEO đang chọn) ─────────
 
-    def _the_video(self) -> QWidget:
+    def _the_danh_sach(self) -> QWidget:
         khung = the()
         v = QVBoxLayout(khung)
         v.setContentsMargins(18, 14, 18, 16)
         v.setSpacing(8)
 
+        v.addWidget(nhan("Bước 2 · Danh sách video", "h2"))
         hang = HangXuongDong()
-        hang.addWidget(nhan("Video", "h2"))
+        hang.addWidget(nhan("Hàng đợi:"))
         self._chon_song_song = QComboBox()
         self._chon_song_song.setMinimumWidth(170)
         for n in range(1, hd.SO_SONG_SONG_TOI_DA + 1):
@@ -431,36 +429,30 @@ class TrangTuDong(QWidget):
         self._bang_video.itemChanged.connect(self._sua_o_bang)
         v.addWidget(self._bang_video)
 
-        # Nút theo DÒNG ĐANG CHỌN. Chạy tiếp / Dừng là một nút đổi chữ.
+        # Nút theo VIDEO ĐANG CHỌN — chỉ những việc làm với cả video.
+        # Chạy tiếp / Dừng là một nút đổi chữ.
         hang2 = HangXuongDong()
+        hang2.addWidget(nhan("Video đang chọn:"))
         self._nut_tiep_dung = nut_phu("Chạy tiếp", self._bam_tiep_dung, rong=130)
         hang2.addWidget(self._nut_tiep_dung)
         self._nut_mo = nut_phu("Mở thư mục", self._mo_ket_qua, rong=130)
         hang2.addWidget(self._nut_mo)
-        self._nut_bang_canh = nut_phu("Sửa lời nhắc từng cảnh",
-                                      lambda: self._mo_bang_canh(), rong=200)
-        self._nut_bang_canh.setToolTip(
-            "Bảng đủ mọi cảnh: ảnh nhỏ, lời đọc, hai lời nhắc. Sửa lời nhắc "
-            "ẢNH thì tôi làm lại ảnh + clip cảnh đó; chỉ sửa lời nhắc VIDEO "
-            "thì giữ ảnh, dựng lại clip. Cảnh không sửa không tính tiền lại.")
-        hang2.addWidget(self._nut_bang_canh)
-        self._nut_lam_lai = nut_phu("Làm lại…", self._lam_lai, rong=120)
-        self._nut_lam_lai.setToolTip(
-            "Chọn một khâu trong bảng tiến độ rồi bấm: làm lại chỉ khâu ấy, "
-            "hay từ khâu ấy trở đi.")
-        hang2.addWidget(self._nut_lam_lai)
-        self._nut_khac = nut_phu("Khác", rong=90)
-        menu = QMenu(self._nut_khac)
-        menu.addAction("Nạp file có sẵn cho khâu đang chọn…").triggered.connect(
-            lambda _c: self._nap_san())
-        menu.addAction("Tải file mẫu của khâu đang chọn…").triggered.connect(
-            lambda _c: self._tai_mau())
-        menu.addSeparator()
-        menu.addAction("Xoá video này…").triggered.connect(lambda _c: self._xoa_luot())
-        self._nut_khac.setMenu(menu)
-        hang2.addWidget(self._nut_khac)
+        self._nut_xoa = nut_phu("Xoá video này…", self._xoa_luot, rong=150)
+        self._nut_xoa.setToolTip(
+            "Bỏ hẳn video đang chọn (chờ, chạy dở hay đã xong) — xoá cả thư "
+            "mục của nó trên máy. Đang chạy thì Dừng trước.")
+        hang2.addWidget(self._nut_xoa)
         v.addLayout(hang2)
+        return khung
 
+    # ── Thẻ 3: tiến độ video đang chọn (tám khâu + nút theo KHÂU) ────────────
+
+    def _the_tien_do(self) -> QWidget:
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(18, 14, 18, 16)
+        v.setSpacing(8)
+        v.addWidget(nhan("Bước 3 · Tiến độ video đang chọn", "h2"))
         self._tom_tat = self._phu("Chưa chạy video nào.")
         v.addWidget(self._tom_tat)
         self._bang = QTableWidget(len(MA_KHAU), 4)
@@ -479,7 +471,50 @@ class TrangTuDong(QWidget):
         self._bang.setFixedHeight(292)
         self._bang.itemDoubleClicked.connect(lambda _m: self._xem_khau())
         v.addWidget(self._bang)
+
+        # Nút theo KHÂU ĐANG CHỌN trong bảng trên — nằm ngay dưới bảng khâu,
+        # không lẫn với nút của video.
+        hang3 = HangXuongDong()
+        hang3.addWidget(nhan("Khâu đang chọn:"))
+        self._nut_lam_lai = nut_phu("Làm lại…", self._lam_lai, rong=120)
+        self._nut_lam_lai.setToolTip(
+            "Chọn một khâu trong bảng trên rồi bấm: làm lại chỉ khâu ấy, "
+            "hay từ khâu ấy trở đi.")
+        hang3.addWidget(self._nut_lam_lai)
+        self._nut_bang_canh = nut_phu("Sửa lời nhắc từng cảnh",
+                                      lambda: self._mo_bang_canh(), rong=200)
+        self._nut_bang_canh.setToolTip(
+            "Bảng đủ mọi cảnh: ảnh nhỏ, lời đọc, hai lời nhắc. Sửa lời nhắc "
+            "ẢNH thì tôi làm lại ảnh + clip cảnh đó; chỉ sửa lời nhắc VIDEO "
+            "thì giữ ảnh, dựng lại clip. Cảnh không sửa không tính tiền lại.")
+        hang3.addWidget(self._nut_bang_canh)
+        self._nut_khac = nut_phu("Khác", rong=90)
+        menu = QMenu(self._nut_khac)
+        menu.addAction("Nạp file có sẵn cho khâu đang chọn…").triggered.connect(
+            lambda _c: self._nap_san())
+        menu.addAction("Tải file mẫu của khâu đang chọn…").triggered.connect(
+            lambda _c: self._tai_mau())
+        self._nut_khac.setMenu(menu)
+        hang3.addWidget(self._nut_khac)
+        v.addLayout(hang3)
+
         v.addWidget(self._dai_phim())
+
+        # Nhật ký của chính video đang chọn — nằm trong khối này, không lơ
+        # lửng cuối trang.
+        hang_log = HangXuongDong()
+        hang_log.addWidget(nhan("Nhật ký"))
+        self._nut_log = nut_phu("Xem rộng", self._doi_co_log, rong=120)
+        hang_log.addWidget(self._nut_log)
+        v.addLayout(hang_log)
+        self._log = QPlainTextEdit()
+        self._log.setReadOnly(True)
+        self._log.setFixedHeight(self.CAO_LOG_NHO)
+        self._log.setStyleSheet(
+            "background:{0}; border:1px solid {1}; border-radius:8px;"
+            " color:{2}; font-size:12px;".format(theme.THE_MO, theme.VIEN,
+                                                 theme.CHU_MO))
+        v.addWidget(self._log)
         return khung
 
     # ── Dải phim ─────────────────────────────────────────────────────────────
@@ -713,7 +748,11 @@ class TrangTuDong(QWidget):
         self._nap_kenh()
 
     def _nap_kenh(self) -> None:
-        cu = self._chon_kenh.currentText()
+        # Mở tool lên thì kênh dùng lần cuối phải ở sẵn đó — chủ dự án
+        # 09/09/2026: "template cuối dùng khi mở lên nó sẽ ở đó, để không chọn
+        # lại". Lần đầu (ô còn trống) lấy từ cài đặt; sau đó giữ cái đang chọn.
+        cu = (self._chon_kenh.currentText()
+              or str(cai_dat.doc(self._app.base_dir).get("auto_kenh_cuoi") or ""))
         self._chon_kenh.blockSignals(True)
         self._chon_kenh.clear()
         for ma in liet_ke_kenh(self._app.base_dir):
@@ -733,6 +772,8 @@ class TrangTuDong(QWidget):
             self._nut_chay.setEnabled(False)
             self._nap_luot()
             return
+        if cai_dat.doc(self._app.base_dir).get("auto_kenh_cuoi") != ma:
+            cai_dat.dat(self._app.base_dir, "auto_kenh_cuoi", ma)
         k = doc_kenh(self._app.base_dir, ma)
         thieu = kiem_kenh(k)
         if thieu:
@@ -1498,6 +1539,7 @@ class TrangTuDong(QWidget):
             "Chạy tiếp từ đúng khâu còn dở — khâu đã xong không tính tiền lại.")
         self._nut_tiep_dung.setEnabled(co)
         self._nut_mo.setEnabled(co)
+        self._nut_xoa.setEnabled(co and not dang)
         self._nut_bang_canh.setEnabled(co and not dang)
         self._nut_lam_lai.setEnabled(co and not dang)
         self._nut_khac.setEnabled(co and not dang)

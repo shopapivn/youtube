@@ -581,3 +581,25 @@ def test_trang_khong_keo_rong_qua_760(trang):
     for i in range(2):
         _chay_voi(trang, str(i) * 500, "Tiêu đề rất dài " * 10)
     assert trang.minimumSizeHint().width() <= 760
+
+
+def test_mo_lai_tool_van_o_kenh_dung_lan_cuoi(qt_app, tmp_path, monkeypatch):
+    """Chủ dự án 09/09/2026: "template cuối dùng khi mở lên nó sẽ ở đó, để không
+    chọn lại". Chọn kênh B, dựng lại tab (= mở tool lần sau) → vẫn ở B."""
+    import ui_qt.trang_auto as ta
+    from core import cai_dat
+
+    goc = str(tmp_path)
+    for ma in ("A-KENH", "B-KENH", "C-KENH"):
+        _dung_kenh(goc, ma)
+    monkeypatch.setattr(ta, "kiem_kenh", lambda _k: [])
+    t1 = ta.TrangTuDong(_AppGia(goc))
+    t1._chon_kenh.setCurrentText("B-KENH")
+    assert cai_dat.doc(goc)["auto_kenh_cuoi"] == "B-KENH"
+
+    t2 = ta.TrangTuDong(_AppGia(goc))
+    assert t2._chon_kenh.currentText() == "B-KENH"
+    # Kênh đã ghi không còn (bị xoá) thì rơi về kênh đầu, không nổ.
+    cai_dat.dat(goc, "auto_kenh_cuoi", "KHONG-CON")
+    t3 = ta.TrangTuDong(_AppGia(goc))
+    assert t3._chon_kenh.currentText() == "A-KENH"

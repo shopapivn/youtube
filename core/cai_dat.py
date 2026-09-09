@@ -213,6 +213,9 @@ MAC_DINH: Dict[str, Any] = {
     # đa 3 — xem `core/hang_doi_auto.py`). Mặc định 1: chạy lần lượt là cách
     # dễ đoán nhất; muốn nhanh thì khách tự chọn ở ô "Hàng đợi" của tab.
     "auto_so_song_song": 1,
+    # Tab Tự động: kênh (template) chọn lần cuối — mở tool lên là ở sẵn đó,
+    # không phải chọn lại (chủ dự án 09/09/2026). Trống = kênh đầu danh sách.
+    "auto_kenh_cuoi": "",
 }
 
 _KHOA = threading.Lock()

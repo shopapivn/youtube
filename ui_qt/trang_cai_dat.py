@@ -45,7 +45,10 @@ MUC_RIENG = ("do_phan_giai", "muc_song_song",
              "chrome_sach_nguon", "chrome_sach_kich_thuoc",
              # Ô chọn "chạy lần lượt / 2–3 video cùng lúc" nằm ngay ở thẻ
              # Hàng đợi của tab Tự động — chỗ người ta cần nó, không ở đây.
-             "auto_so_song_song")
+             "auto_so_song_song",
+             # Kênh chọn lần cuối ở tab Tự động: chính ô "Kênh" của tab ấy là
+             # nơi chỉnh — tool chỉ nhớ hộ, không cần ô ở đây.
+             "auto_kenh_cuoi")
 
 #: Nguồn Chrome cho tab Chrome sạch, `(khoá lưu, nhãn)`.
 NGUON_CHROME = (
