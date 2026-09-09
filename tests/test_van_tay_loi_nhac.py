@@ -107,7 +107,10 @@ class TestKhauAnhDungVanTay:
         chu = self._nguon()
         khuc = chu[chu.index("def _khau_clip(bc: BoiCanh)"):]
         khuc = khuc[:khuc.index("def _khau_thumbnail")]
-        assert "_bo_clip_cu_hon_anh(bc, tep, anh)" in khuc, (
-            "hàm này viết ra từ 25/08 mà chưa nơi nào gọi — clip cũ hơn ảnh vẫn lọt")
+        assert "_bo_clip_cu_hon_anh(bc, tep, anh, so_anh_clip)" in khuc, (
+            "khâu clip phải hỏi sổ ảnh↔clip — ảnh bị thay mà clip cũ vẫn lọt")
+        assert "getmtime" not in khuc, (
+            "so mtime ảnh/clip là làm lại clip vô cớ (25/08/2026: 3.000 ₫) — so nội dung qua sổ")
+        assert "so_anh_clip.dat(so_canh" in khuc, "làm clip xong phải ghi clip làm từ ảnh nào"
         assert "van_tay_clip.khac(so_canh" in khuc
         assert "van_tay_clip.dat(so_canh" in khuc

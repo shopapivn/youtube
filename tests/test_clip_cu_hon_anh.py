@@ -2,12 +2,19 @@
 
 Đo 25/08/2026 (story-3d/0001): 18 ảnh mèo làm lại lúc 20:05 nhưng 18 clip vẫn là bản
 19:3x và video cuối vẫn là con mèo cũ — "Làm lại khâu ảnh" không làm mất hiệu lực gì cả.
+
+═══ NHƯNG KHÔNG SO MTIME (09/09/2026) ═══
+
+Bản trước so giờ sửa tệp. Ảnh bị ghi lại sau khi có clip (xoá dấu, làm sạch) mà hình
+không đổi → sáu clip làm lại vô cớ, 3.000 ₫. Giờ so NỘI DUNG ảnh qua sổ
+`_van-tay-clip-anh.json`: clip làm từ ảnh vân tay nào, ảnh giờ vân tay khác → lỗi thời.
+Không có sổ thì không đoán.
 """
 import os
 import time
 from types import SimpleNamespace
 
-from core.auto_khau import _bo_clip_cu_hon_anh, _nguon_moi_hon_video
+from core.auto_khau import VanTay, _bo_clip_cu_hon_anh, _dau_tep, _nguon_moi_hon_video
 
 
 def _bc():
@@ -19,26 +26,57 @@ def _cham(p, t):
     os.utime(p, (t, t))
 
 
-def test_clip_cu_hon_anh_thi_cat_di(tmp_path):
+def _so(tmp_path):
+    return VanTay(str(tmp_path / VanTay.TEN_CLIP_ANH))
+
+
+def test_anh_bi_thay_tam_khac_thi_cat_clip(tmp_path):
     anh = tmp_path / "5.png"; clip = tmp_path / "5.mp4"
-    anh.write_bytes(b"a"); clip.write_bytes(b"c")
-    goc = time.time()
-    _cham(clip, goc - 100); _cham(anh, goc)                 # ảnh mới hơn clip
+    anh.write_bytes(b"anh luc lam clip"); clip.write_bytes(b"c")
+    so = _so(tmp_path)
+    so.dat(5, _dau_tep(str(anh)))
+    anh.write_bytes(b"anh khac han")                       # khách thay tấm khác
+    _cham(anh, time.time() - 1000)                          # dù giờ tệp CŨ hơn clip
     bc = _bc()
-    assert _bo_clip_cu_hon_anh(bc, str(clip), str(anh))
+    assert _bo_clip_cu_hon_anh(bc, str(clip), str(anh), so)
     assert not clip.exists() and (tmp_path / "5.mp4.cu").exists()
     assert any("làm lại clip" in d for d in bc._nk)
 
 
-def test_clip_moi_hon_anh_thi_giu(tmp_path):
+def test_anh_ghi_lai_nhung_noi_dung_y_cu_thi_giu(tmp_path):
+    """Đúng vụ 25/08: ảnh MỚI HƠN clip theo mtime nhưng là cùng một tấm."""
+    anh = tmp_path / "5.png"; clip = tmp_path / "5.mp4"
+    anh.write_bytes(b"a"); clip.write_bytes(b"c")
+    so = _so(tmp_path)
+    so.dat(5, _dau_tep(str(anh)))
+    goc = time.time()
+    _cham(clip, goc - 100); _cham(anh, goc)                 # ảnh "mới hơn" clip
+    assert not _bo_clip_cu_hon_anh(_bc(), str(clip), str(anh), so)
+    assert clip.exists()
+
+
+def test_khong_co_so_thi_khong_doan(tmp_path):
+    """Lượt chạy bằng bản tool cũ: không có sổ → giữ clip, không tiêu tiền theo phỏng đoán."""
     anh = tmp_path / "5.png"; clip = tmp_path / "5.mp4"
     anh.write_bytes(b"a"); clip.write_bytes(b"c")
     goc = time.time()
-    _cham(anh, goc - 100); _cham(clip, goc)
-    assert not _bo_clip_cu_hon_anh(_bc(), str(clip), str(anh))
+    _cham(clip, goc - 100); _cham(anh, goc)
+    assert not _bo_clip_cu_hon_anh(_bc(), str(clip), str(anh), _so(tmp_path))
     assert clip.exists()
     # Thiếu một trong hai thì không đụng gì.
-    assert not _bo_clip_cu_hon_anh(_bc(), str(tmp_path / "khong.mp4"), str(anh))
+    so = _so(tmp_path); so.dat(5, "x")
+    assert not _bo_clip_cu_hon_anh(_bc(), str(tmp_path / "khong.mp4"), str(anh), so)
+
+
+def test_dau_tep_theo_noi_dung():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        a = os.path.join(d, "a.png"); b = os.path.join(d, "b.png")
+        open(a, "wb").write(b"xyz"); open(b, "wb").write(b"xyz")
+        assert _dau_tep(a) == _dau_tep(b) and len(_dau_tep(a)) == 16
+        open(b, "wb").write(b"xyw")
+        assert _dau_tep(a) != _dau_tep(b)
+    assert _dau_tep(os.path.join(d, "khong-co.png")) == ""
 
 
 def test_video_cu_hon_clip_thi_bao_dung_lai(tmp_path):
@@ -144,3 +182,38 @@ def test_clip_tai_ve_hong_thi_tao_lai_khoa_moi(tmp_path, monkeypatch):
     (tmp_path / "7.png").write_bytes(b"png")
     _ak._lam_clip(bc, luot, c, str(tmp_path / "7.png"), str(tmp_path / "7.mp4"), 8)
     assert khoa == ["k", "k:hong2"]
+
+
+# ═══ Tiến độ khâu clip không được hiện "0/134" suốt lúc chờ một cảnh kẹt ═══
+
+
+def test_dem_tien_do_cu_muoi_viec_la_ghi_du_van_nhip(tmp_path):
+    """09/09/2026 (TL4-T7-v2/0001): 133 clip có sẵn báo dồn trong nửa giây, van
+    nhịp 0,4 s nuốt hết, bảng đứng ở 0/134 suốt 24 phút chờ cảnh 123."""
+    from core.auto_khau import BoiCanh, dem_tien_do
+    from core.auto import DANG, TrangThaiKhau
+
+    ghi = []
+    bc = BoiCanh(goc=str(tmp_path), kenh=None, goi_chat=lambda *_a, **_k: "",
+                 on_nhip=lambda luot: ghi.append(tt.ghi_chu["xong"]))
+    tt = TrangThaiKhau(ma="clip", trang_thai=DANG)
+    bao = dem_tien_do(bc, _NS(thu_muc=str(tmp_path)), tt, "clip", giu_nhip=60.0)
+    for n in range(0, 134):
+        bao(n, 134)                                     # 134 lượt báo trong tích tắc
+    assert ghi[0] == 0 and ghi[-1] >= 130, ghi
+    assert all(b - a <= 10 for a, b in zip(ghi, ghi[1:])), "không được nhảy cóc quá 10 việc"
+
+
+def test_dong_tien_do_noi_ro_phan_da_co_san(tmp_path):
+    from core.auto_khau import BoiCanh, _chay_song_song
+
+    nk = []
+    bc = BoiCanh(goc=str(tmp_path), kenh=None, goi_chat=lambda *_a, **_k: "",
+                 on_log=nk.append)
+    muc = [{"scene_id": i} for i in range(1, 21)]
+    # 19 mục có sẵn, 1 mục làm mới.
+    _chay_song_song(bc, muc, lambda c: (c["scene_id"], c["scene_id"] != 7), "clip",
+                    mac_dinh=4)
+    dong = [d for d in nk if d.strip().startswith("clip: ")]
+    assert dong and all("đã có sẵn, không làm lại" in d for d in dong), nk
+    assert any("(19 đã có sẵn, không làm lại)" in d for d in nk), nk

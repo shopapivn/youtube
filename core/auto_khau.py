@@ -4435,6 +4435,7 @@ def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str,
     hẳn). Lỗi vẫn được nói ra một lần trong nhật ký chứ không nuốt im.
     """
     moc = [0.0]
+    da_ghi = [0]
     da_than = [False]
 
     def bao(xong: int, tong: int) -> None:
@@ -4442,9 +4443,18 @@ def dem_tien_do(bc: BoiCanh, luot: LuotChay, tt: TrangThaiKhau, viec: str,
         tt.ghi_chu["tong"] = int(tong)
         tt.ghi_chu["viec"] = viec
         bay_gio = time.time()
-        if giu_nhip and xong < tong and bay_gio - moc[0] < float(giu_nhip):
+        # ═══ GIỮ NHỊP KHÔNG ĐƯỢC NUỐT MẤT CON SỐ ═══
+        #
+        # Đo 09/09/2026 (TL4-T7-v2/0001): khâu clip mở ra thấy 133/134 clip đã
+        # có sẵn, 133 lượt báo dồn vào cùng nửa giây nên van nhịp bỏ qua hết,
+        # rồi cả khâu ngồi đợi MỘT cảnh kẹt ở máy chủ 24 phút — suốt 24 phút
+        # ấy bảng hiện "0/134". Chủ kênh nhìn vào và tin tool đang làm lại
+        # 134 clip (500 ₫ mỗi clip). Nên cứ đủ mười việc là ghi, bất kể nhịp.
+        if (giu_nhip and xong < tong and bay_gio - moc[0] < float(giu_nhip)
+                and int(xong) - da_ghi[0] < 10):
             return
         moc[0] = bay_gio
+        da_ghi[0] = int(xong)
         try:
             bc.nhip(luot)
         except OSError as loi:
@@ -4524,7 +4534,12 @@ def _chay_song_song(bc: BoiCanh, muc: List[Dict[str, Any]], lam, ten: str,
                 da_co += 1 if san_co else 0
                 bao_nhip()
                 if xong % 10 == 0 or xong == tong:
-                    bc.ghi("  {0}: {1}/{2} xong.".format(ten, xong, tong))
+                    # Nói rõ phần "có sẵn": dòng "clip: 130/134 xong" chạy
+                    # vèo trong một giây trông y hệt tool đang làm lại 130
+                    # clip — chủ kênh đã hiểu đúng như thế (09/09/2026).
+                    bc.ghi("  {0}: {1}/{2} xong{3}.".format(
+                        ten, xong, tong,
+                        " ({0} đã có sẵn, không làm lại)".format(da_co) if da_co else ""))
     finally:
         bc.nha_may_tat = None
     # ═══ BẤM DỪNG THÌ PHẢI BÁO ĐÚNG LÀ ĐÃ DỪNG ═══
@@ -5591,6 +5606,9 @@ class VanTay:
     #: kết quả là thứ khách mở ra xem và chép đi, đừng rắc tệp kỹ thuật vào đó.
     TEN_ANH = "_van-tay-anh.json"
     TEN_CLIP = "_van-tay-clip.json"
+    #: Clip của cảnh nào được làm từ ẢNH NÀO (băm nội dung tệp ảnh). Xem
+    #: `_bo_clip_cu_hon_anh` — thay cho phép so mtime từng làm lại clip vô cớ.
+    TEN_CLIP_ANH = "_van-tay-clip-anh.json"
 
     def __init__(self, duong: str) -> None:
         self._duong = duong
@@ -5656,8 +5674,24 @@ def _bo_clip_cu(bc: BoiCanh, tep_clip: str) -> bool:
     return True
 
 
-def _bo_clip_cu_hon_anh(bc: BoiCanh, tep_clip: str, tep_anh: str) -> bool:
-    """Clip CŨ HƠN ảnh của chính nó thì cất đi (`<n>.mp4.cu`) và trả True.
+def _dau_tep(duong: str) -> str:
+    """Vân tay NỘI DUNG một tệp (sha1 rút gọn); tệp không đọc được thì ""."""
+    import hashlib  # noqa: PLC0415
+
+    try:
+        bam = hashlib.sha1()
+        with open(duong, "rb") as tep:
+            for khuc in iter(lambda: tep.read(1 << 20), b""):
+                bam.update(khuc)
+        return bam.hexdigest()[:16]
+    except OSError:
+        return ""
+
+
+def _bo_clip_cu_hon_anh(bc: BoiCanh, tep_clip: str, tep_anh: str,
+                        so_anh: "VanTay") -> bool:
+    """Clip được làm từ một tấm ảnh KHÁC tấm đang nằm đây thì cất đi
+    (`<n>.mp4.cu`) và trả True.
 
     ═══ VÌ SAO ═══
 
@@ -5665,18 +5699,31 @@ def _bo_clip_cu_hon_anh(bc: BoiCanh, tep_clip: str, tep_anh: str) -> bool:
     một tấm xấu, tool tạo ảnh mới — nhưng clip cũ vẫn nằm đó, khâu clip thấy
     "đã có" nên bỏ qua, và video cuối vẫn là con mèo cũ. Đo 25/08/2026
     (story-3d/0001): 18 ảnh mèo làm lại lúc 20:05, 18 clip vẫn là bản 19:3x.
-    Ảnh mới hơn clip nghĩa là clip đã lỗi thời — làm lại, không bỏ qua.
+
+    ═══ VÌ SAO KHÔNG SO MTIME ═══
+
+    Bản trước so giờ sửa tệp: ảnh mới hơn clip → làm lại. Nhưng ảnh còn bị
+    ghi lại sau khi clip đã có (xoá dấu, làm sạch thẻ) mà nội dung hình không
+    đổi — 25/08/2026 sáu clip bị làm lại vô cớ, 3.000 ₫. Và chép tệp bằng
+    Explorer giữ nguyên giờ của tệp gốc, nên một tấm khách thay tay có thể
+    "cũ hơn" clip và lọt.
+
+    Nên so NỘI DUNG: `so_anh` (`_van-tay-clip-anh.json`) nhớ clip cảnh này
+    được làm từ ảnh có vân tay nào. Khác → ảnh đã thay → clip lỗi thời.
+    **Không có sổ thì không đoán** (lượt chạy bằng bản tool cũ): giữ clip,
+    như `VanTay`. Tool tự vẽ lại ảnh thì đã có `_bo_clip_cu` gọi đúng lúc ấy.
     """
     try:
         if not (os.path.exists(tep_clip) and os.path.exists(tep_anh)):
             return False
-        if os.path.getmtime(tep_clip) >= os.path.getmtime(tep_anh):
+        so_canh = os.path.basename(tep_clip).split(".", 1)[0]
+        if not so_anh.khac(so_canh, _dau_tep(tep_anh)):
             return False
         os.replace(tep_clip, tep_clip + ".cu")
     except OSError:
         return False
-    bc.ghi("    {0}: ảnh mới hơn clip — làm lại clip (bản cũ giữ ở .cu).".format(
-        os.path.basename(tep_clip)))
+    bc.ghi("    {0}: ảnh của cảnh đã thay bằng tấm khác — làm lại clip (bản cũ "
+           "giữ ở .cu).".format(os.path.basename(tep_clip)))
     return True
 
 
@@ -5742,6 +5789,9 @@ def _khau_anh(bc: BoiCanh):
         # không được lấy ảnh cũ ra dùng (xem `VanTay`).
         van_tay = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_ANH))
         van_tay_clip = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_CLIP))
+        # Clip làm từ ảnh nào — để khâu clip biết ảnh đã thay mà không phải
+        # đoán theo mtime (xem `_bo_clip_cu_hon_anh`).
+        so_anh_clip = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_CLIP_ANH))
         thu_muc_bia, muc_bia, _thieu_bia, ta_bia, tieu_de, chu_bia = \
             _chuan_bi_bia(bc, luot)
         giay = _giay_clip(bc)
@@ -5800,6 +5850,7 @@ def _khau_anh(bc: BoiCanh):
                           khung_dau=_co_khung_dau(bc) or bool(anh_cuoi),
                           anh_cuoi=anh_cuoi or None)
                 van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
+                so_anh_clip.dat(so_canh, _dau_tep(tep_anh))
             except Cancelled:
                 raise
             except Exception as loi:  # noqa: BLE001
@@ -5848,7 +5899,19 @@ def _khau_anh(bc: BoiCanh):
                 # bằng bản tool chưa biết xoá dấu. Xoá lại ở đây thì lượt cũ
                 # chạy tiếp cũng ra clip sạch. Ảnh đã sạch rồi thì `xoa_dau`
                 # tự nhận ra và không đụng vào, nên gọi thừa không hại gì.
+                #
+                # Tool tự ghi lại tấm ảnh (xoá dấu) thì clip đã làm từ tấm ấy
+                # VẪN ĐÚNG — cập nhật sổ ảnh↔clip theo, kẻo khâu clip tưởng
+                # ảnh bị thay mà làm lại clip (đúng lỗi 25/08/2026, 3.000 ₫).
+                # Chỉ cập nhật khi sổ đang khớp tấm trước lúc xoá dấu: sổ lệch
+                # sẵn nghĩa là ảnh đã bị thay từ trước, để nguyên cho khâu
+                # clip bắt.
+                truoc = _dau_tep(tep)
                 _xoa_dau(bc, tep)
+                sau = _dau_tep(tep)
+                if sau != truoc and not so_anh_clip.khac(so_canh, truoc) \
+                        and os.path.exists(os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))):
+                    so_anh_clip.dat(so_canh, sau)
             them("anh")
             bat_clip(x, tep)
             return so_canh, san_co
@@ -5999,6 +6062,24 @@ def _khau_clip(bc: BoiCanh):
         giay = _giay_clip(bc)
         so = SoTheoDoi(bc, nhip=bc.nhip_hoi)
         van_tay_clip = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_CLIP))
+        so_anh_clip = VanTay(os.path.join(luot.thu_muc, VanTay.TEN_CLIP_ANH))
+
+        # ═══ NÓI TRƯỚC CÓ SẴN BAO NHIÊU, LÀM NỐT CÁI NÀO ═══
+        #
+        # Dây chuyền ở khâu ảnh thường đã bắn gần hết clip. Khâu này mở ra mà
+        # chỉ hiện "0/134" rồi ngồi đợi một cảnh kẹt ở máy chủ 24 phút thì
+        # người nhìn tin chắc tool đang làm lại 134 clip — đo 09/09/2026,
+        # TL4-T7-v2/0001, không một clip nào bị làm lại nhưng chủ kênh đã
+        # hiểu như thế. Nói rõ ngay từ dòng đầu.
+        co_san = [int(c["scene_id"]) for c in canh
+                  if os.path.exists(os.path.join(thu_muc, "{0}.mp4".format(int(c["scene_id"]))))]
+        thieu = [int(c["scene_id"]) for c in canh if int(c["scene_id"]) not in set(co_san)]
+        if co_san:
+            bc.ghi("  clip: {0}/{1} đã có sẵn từ khâu ảnh — không làm lại{2}.".format(
+                len(co_san), len(canh),
+                ("; làm nốt {0} cảnh: {1}".format(
+                    len(thieu), ", ".join(str(x) for x in thieu[:12])
+                    + ("…" if len(thieu) > 12 else "")) if thieu else "")))
 
         def mot_canh(c):
             so_canh = int(c["scene_id"])
@@ -6007,12 +6088,12 @@ def _khau_clip(bc: BoiCanh):
             if os.path.exists(tep):
                 # ═══ "ĐÃ CÓ TỆP" CHƯA ĐỦ ĐỂ BỎ QUA ═══
                 #
-                # Hai cách một clip trở nên lỗi thời mà tệp vẫn nằm đó:
-                # ảnh của chính nó vừa được vẽ lại (`_bo_clip_cu_hon_anh` —
-                # viết ra từ 25/08 nhưng chưa nơi nào gọi), và lời nhắc clip
+                # Hai cách một clip trở nên lỗi thời mà tệp vẫn nằm đó: ảnh
+                # của chính nó đã bị thay bằng tấm khác (`_bo_clip_cu_hon_anh`
+                # — so NỘI DUNG ảnh qua sổ, không so mtime), và lời nhắc clip
                 # đã đổi (`VanTay`). Cả hai đều từng làm khách xem lại đúng
                 # video cũ sau khi đã sửa và trả tiền cho lượt sửa.
-                cu = _bo_clip_cu_hon_anh(bc, tep, anh)
+                cu = _bo_clip_cu_hon_anh(bc, tep, anh, so_anh_clip)
                 if not cu and van_tay_clip.khac(so_canh, c.get("video_prompt") or ""):
                     bc.ghi("    cảnh {0}: lời nhắc clip đã đổi — làm lại "
                            "clip.".format(so_canh))
@@ -6030,6 +6111,7 @@ def _khau_clip(bc: BoiCanh):
                       khung_dau=_co_khung_dau(bc) or bool(anh_cuoi),
                       anh_cuoi=anh_cuoi or None)
             van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
+            so_anh_clip.dat(so_canh, _dau_tep(anh))
             return so_canh, False
 
         try:
