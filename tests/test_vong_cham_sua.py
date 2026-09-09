@@ -46,7 +46,8 @@ def _json(**k):
 
 
 class _Ai:
-    """Mỗi lượt gọi trả về mục kế tiếp; nhớ lời nhắc để kiểm. Mục là Exception thì ném."""
+    """Mỗi lượt gọi trả về mục kế tiếp; nhớ lời nhắc để kiểm. Mục là Exception
+    thì ném; mục là hàm thì gọi với lời nhắc (bộ chấm "đọc" bài rồi mới chọn)."""
 
     def __init__(self, tra):
         self.tra = list(tra)
@@ -57,7 +58,42 @@ class _Ai:
         r = self.tra.pop(0)
         if isinstance(r, Exception):
             raise r
+        if callable(r):
+            return r(loi_nhac)
         return r
+
+
+def _nhan_cua(loi_nhac, chua):
+    """Nhãn (A/B/C…) của bản trong lời nhắc có chứa `chua`; '' nếu không có.
+    Các bản được XÁO thứ tự trước khi bày (`thu_tu_cham`), nên bộ chấm giả phải
+    đọc lời nhắc thay vì tin bản cũ luôn là A."""
+    for khoi in loi_nhac.split("=== BẢN ")[1:]:
+        nhan, _, than = khoi.partition(" ===")
+        if chua in than.replace("\n", ""):
+            return nhan.strip()
+    return ""
+
+
+def chon_ban_co(chua, **them):
+    """Bộ chấm so giả: chọn bản có `chua` (bản vá); không có → A."""
+    def _cham(loi_nhac):
+        nhan = _nhan_cua(loi_nhac, chua) or "A"
+        ket = {"chon": nhan}
+        if "ban_do_rot" in them:
+            ket["ban_do_rot"] = {nhan: them["ban_do_rot"]}
+        return _json(**ket)
+    return _cham
+
+
+def chon_ban_khong_co(chua):
+    """Bộ chấm so giả: vẫn thích bản cũ (bản KHÔNG chứa `chua`)."""
+    def _cham(loi_nhac):
+        for khoi in loi_nhac.split("=== BẢN ")[1:]:
+            nhan, _, than = khoi.partition(" ===")
+            if chua not in than.replace("\n", ""):
+                return _json(chon=nhan.strip())
+        return _json(chon="A")
+    return _cham
 
 
 # ── 1. Dừng đúng lúc ─────────────────────────────────────────────────────────
@@ -74,9 +110,9 @@ class TestDung:
     def test_hai_vong_lien_khong_hon_thi_dung(self):
         # chấm: sửa · so: chọn cũ · chấm: sửa · so: chọn cũ → dừng (không tới vòng 3)
         cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="đoạn 2 khô"),
-                    _json(chon="A"),
+                    chon_ban_khong_co(CAU_THEM),
                     _json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="đoạn 2 khô"),
-                    _json(chon="A"),
+                    chon_ban_khong_co(CAU_THEM),
                     _json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="đoạn 2 khô")])
         va = _Ai([BAN_VA] * 6)
         ban, bien_ban, _bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, so_vong=3, so_ban_va=2)
@@ -88,7 +124,7 @@ class TestDung:
         # mỗi vòng đều nhận bản vá → chạy đúng so_vong vòng rồi thôi
         tra = []
         for _ in range(3):
-            tra += [_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), _json(chon="B")]
+            tra += [_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), chon_ban_co(CAU_THEM)]
         cham = _Ai(tra)
         va = _Ai([BAN_VA] * 6)
         ban, bien_ban, _bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, so_vong=3, so_ban_va=2)
@@ -103,7 +139,7 @@ class TestNhanBanVa:
     def test_nhan_ban_va_khi_bo_cham_chon_no(self):
         cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="thiếu nghịch lý",
                           mat_gi_cua_goc="con số nghiên cứu"),
-                    _json(chon="B", ban_do_rot={"B": [{"doan": "mở", "con_lai": 80}]}),
+                    chon_ban_co(CAU_THEM, ban_do_rot=[{"doan": "mở", "con_lai": 80}]),
                     _json(chon="A", giu_hay_sua="giữ")])
         va = _Ai([BAN_VA, BAN_VA])
         ban, bien_ban, bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, so_vong=3, so_ban_va=2)
@@ -128,13 +164,13 @@ class TestNhanBanVa:
         # bản vá dài ×1,4 (từng bị rào chắn 1,25 của bước hoàn thiện vứt) vẫn tới bộ chấm
         dai = BAN + CAU_THEM * 8
         assert 1.3 < len(dai) / len(BAN) < 1.6
-        cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), _json(chon="B")])
+        cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), chon_ban_co(CAU_THEM)])
         va = _Ai([dai])
         ban, _bb, _bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, so_vong=1, so_ban_va=1)
         assert ban == dai
 
     def test_don_chu_ai_tra_ve_truoc_khi_cham(self):
-        cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), _json(chon="B")])
+        cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), chon_ban_co(CAU_THEM)])
         va = _Ai(["GHI CHÚ: đã sửa\n" + BAN_VA])
         ban, _bb, _bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, so_vong=1, so_ban_va=1,
                                      don=lambda c: c.split("\n", 1)[1])
@@ -142,6 +178,25 @@ class TestNhanBanVa:
 
     def test_nguong_viet_lai(self):
         assert 0.3 <= GIU_CHU_VA <= 0.7
+
+    def test_bay_cung_hinh_thuc_va_xao_thu_tu(self):
+        """0001 trên v2: bộ chấm chê một câu, hai bản vá bỏ câu ấy, chấm so vẫn
+        chọn "A" = bản cũ luôn đứng đầu. Nay: mọi bản bày mỗi câu một dòng, và
+        thứ tự xáo theo nội dung (cùng đầu vào → cùng thứ tự)."""
+        from core.vong_cham_sua import hien_de_cham, thu_tu_cham
+        assert hien_de_cham("一人の夜。部屋の静けさ。\n\n深く息を。") == "一人の夜。\n部屋の静けさ。\n深く息を。"
+        ba = ["x" * 50 + "。", "y" * 50 + "。", "z" * 50 + "。"]
+        t = thu_tu_cham(ba)
+        assert sorted(t) == [0, 1, 2] and t == thu_tu_cham(list(ba))
+        # qua nhiều đầu vào khác nhau, bản đầu KHÔNG luôn ở vị trí A
+        vi_tri_dau = {thu_tu_cham([s * 40 + "。", "b" * 40 + "。"])[0] for s in "abcdefghij"}
+        assert vi_tri_dau == {0, 1}
+        # chấm so: bộ chấm chọn theo NỘI DUNG (bản có câu thêm) dù nó ở vị trí nào
+        cham = _Ai([chon_ban_co(CAU_THEM)])
+        i, _ket = cham_toan_bai(cham, [BAN, BAN_VA], GOC_DOI_THU)
+        assert i == 1
+        nhan = _nhan_cua(cham.nhan[0], CAU_THEM)
+        assert nhan in ("A", "B")
 
 
 # ── 3. Không bao giờ vỡ bài ──────────────────────────────────────────────────
@@ -157,7 +212,7 @@ class TestKhongVo:
         assert i == 0 and "loi" in ket
 
     def test_va_hong_mot_ban_van_di_tiep(self):
-        cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), _json(chon="B")])
+        cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="x"), chon_ban_co(CAU_THEM)])
         va = _Ai([RuntimeError("mạng"), BAN_VA])
         ban, _bb, _bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, so_vong=1, so_ban_va=2)
         assert ban == BAN_VA
@@ -182,7 +237,8 @@ class TestDuLieu:
             "PHUT": "13"})
         p = cham.nhan[0]
         assert "多数派が正解とは限らない" in p and "xem trung bình 28%" in p
-        assert GOC_DOI_THU in p and BAN in p and "<<" not in p
+        from core.vong_cham_sua import hien_de_cham
+        assert GOC_DOI_THU in p and hien_de_cham(BAN) in p and "<<" not in p
 
     @pytest.mark.parametrize("nhan,thu_muc", KENH)
     def test_loi_nhac_kenh_du_o_va_khong_day_luat_cung(self, nhan, thu_muc):
@@ -214,7 +270,7 @@ class TestDuLieu:
         cham_md = io.open(os.path.join(thu_muc, "2g-cham-toan-bai.md"), encoding="utf-8").read()
         va_md = io.open(os.path.join(thu_muc, "2h-va-toan-bai.md"), encoding="utf-8").read()
         cham = _Ai([_json(chon="A", giu_hay_sua="sửa", cho_kem_nhat="đoạn 2 khô",
-                          mat_gi_cua_goc="con số"), _json(chon="B")])
+                          mat_gi_cua_goc="con số"), chon_ban_co(CAU_THEM)])
         va = _Ai([BAN_VA])
         ban, _bb, _bd = vong_cham_sua(cham, va, BAN, GOC_DOI_THU, khuon_cham=cham_md,
                                      khuon_va=va_md, so_vong=1, so_ban_va=1,

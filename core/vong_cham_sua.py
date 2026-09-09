@@ -35,7 +35,10 @@ Studio có đường giữ chân thật, đặt hai thứ cạnh nhau là cách 
 
 from __future__ import annotations
 
+import hashlib
 import json
+import random
+import re
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .goi_van_ban import loc_json
@@ -43,7 +46,8 @@ from .viet_nhieu_ban import _thay, nhan_ban, trung_nguyen_van
 
 __all__ = ["KHUON_CHAM_TOAN_BAI", "KHUON_VA_TOAN_BAI", "GIU_CHU_VA",
            "DAI_VA_MIN", "DAI_VA_MAX", "khoi_binh_luan", "cham_toan_bai",
-           "vong_cham_sua", "so_voi_that", "ban_do_json"]
+           "vong_cham_sua", "so_voi_that", "ban_do_json", "hien_de_cham",
+           "thu_tu_cham"]
 
 #: Khuôn mặc định khi kênh không có `prompt/2g-cham-toan-bai.md`. Ô:
 #: `<<SO_BAN>>`, `<<PHUT>>`, `<<COMPETITOR_TRANSCRIPT>>`, `<<BINH_LUAN_GOC>>`,
@@ -108,6 +112,44 @@ def _ten_ban(i: int, ten_ban: Optional[Sequence[str]]) -> str:
     return "bản " + nhan_ban(i)
 
 
+_HET_CAU = re.compile(r"(?<=[。！？!?])\s*")
+
+
+def hien_de_cham(ban: str) -> str:
+    """Bản đưa cho bộ chấm: MỖI CÂU MỘT DÒNG, bỏ dòng trống — cùng một hình thức
+    cho mọi bản.
+
+    Đo trên TL4-T7-v2/0001 (09/09/2026): bản ghép 17 dòng, bản vá 13 dòng, bản
+    cuối 257 dòng — cùng nội dung mà trông khác nhau; bộ chấm so hai bản là so
+    cả cách trình bày. Chuẩn hoá thì nó chỉ còn so chữ.
+    """
+    cau = [c.strip() for c in _HET_CAU.split(ban or "") if c and c.strip()]
+    ra: List[str] = []
+    for c in cau:
+        for d in c.splitlines():
+            d = d.strip()
+            if d:
+                ra.append(d)
+    return "\n".join(ra)
+
+
+def thu_tu_cham(cac_ban: Sequence[str]) -> List[int]:
+    """Thứ tự bày các bản trước bộ chấm — XÁO theo nội dung, để bản đang có không
+    luôn đứng ở vị trí A.
+
+    Đo trên TL4-T7-v2/0001: hai vòng liền bộ chấm chỉ đúng một câu thừa, hai bản
+    vá đều bỏ câu ấy, mà chấm so vẫn chọn "A" — bản cũ, luôn đứng đầu. Xáo theo
+    băm nội dung nên cùng đầu vào thì cùng thứ tự (khoá idempotency vẫn trùng).
+    """
+    n = len(cac_ban)
+    if n <= 1:
+        return list(range(n))
+    hat = int(hashlib.sha1("\n".join(cac_ban).encode("utf-8")).hexdigest()[:8], 16)
+    thu_tu = list(range(n))
+    random.Random(hat).shuffle(thu_tu)
+    return thu_tu
+
+
 def cham_toan_bai(goi: Callable[[str], str], cac_ban: Sequence[str], goc: str, *,
                   khuon: str = "", chung: Optional[Dict[str, Any]] = None,
                   ghi: Optional[Callable[[str], None]] = None,
@@ -115,14 +157,17 @@ def cham_toan_bai(goi: Callable[[str], str], cac_ban: Sequence[str], goc: str, *
                   ) -> Tuple[int, Dict[str, Any]]:
     """Chấm `cac_ban` như những bài trọn vẹn. Trả `(chỉ số bản chọn, JSON bộ chấm)`.
 
-    Chấm hỏng (gọi lỗi, JSON lỗi, chọn chữ lạ) → chọn bản đầu (bản đang có) và
-    JSON mang khoá `loi`. Không bao giờ ném — vòng chấm không được làm vỡ bài.
+    Các bản được bày theo `thu_tu_cham` (xáo) và `hien_de_cham` (cùng hình
+    thức); chỉ số trả về là chỉ số trong `cac_ban` GỐC, bản đồ rớt cũng được
+    đổi nhãn về nhãn gốc. Chấm hỏng (gọi lỗi, JSON lỗi, chọn chữ lạ) → chọn
+    bản đầu (bản đang có) và JSON mang khoá `loi`. Không bao giờ ném.
     """
+    thu_tu = thu_tu_cham(cac_ban)          # vị trí bày j → chỉ số gốc thu_tu[j]
     o = dict(chung or {})
     o.update({
         "SO_BAN": len(cac_ban),
-        "CAC_BAN": "\n\n".join("=== BẢN {0} ===\n{1}".format(nhan_ban(i), b)
-                               for i, b in enumerate(cac_ban)),
+        "CAC_BAN": "\n\n".join("=== BẢN {0} ===\n{1}".format(
+            nhan_ban(j), hien_de_cham(cac_ban[i])) for j, i in enumerate(thu_tu)),
         "COMPETITOR_TRANSCRIPT": goc or "",
     })
     o.setdefault("BINH_LUAN_GOC", "(không có)")
@@ -139,9 +184,15 @@ def cham_toan_bai(goi: Callable[[str], str], cac_ban: Sequence[str], goc: str, *
             ghi("  (chấm toàn bài hỏng: {0} — giữ bản đang có)".format(str(loi)[:90]))
         return 0, {"loi": str(loi)[:200]}
     chu = str(ket.get("chon") or "").strip().upper()[:1]
-    i = ord(chu) - 65 if chu else 0
-    if not (0 <= i < len(cac_ban)):
-        i = 0
+    j = ord(chu) - 65 if chu else 0
+    i = thu_tu[j] if 0 <= j < len(thu_tu) else 0
+    # Bản đồ rớt trả theo nhãn BÀY (A, B…) — đổi về nhãn gốc để nơi gọi đọc đúng.
+    bd = ket.get("ban_do_rot")
+    if isinstance(bd, dict) and len(cac_ban) > 1:
+        ket["ban_do_rot"] = {nhan_ban(thu_tu[jj]): v for jj, v in
+                             ((ord(k.strip().upper()[:1]) - 65, v) for k, v in bd.items()
+                              if k and k.strip())
+                             if 0 <= jj < len(thu_tu)}
     if ghi is not None:
         ghi("  chấm toàn bài: chọn {0} · {1} · kém nhất: {2}".format(
             _ten_ban(i, ten_ban), str(ket.get("giu_hay_sua") or "?").strip(),
