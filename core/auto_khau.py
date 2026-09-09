@@ -3643,16 +3643,43 @@ def _muc_luc_tu_srt(srt: str) -> "list[str]":
         return []
 
     def nhan(chu: str) -> str:
-        return chu.lstrip("-—– ").strip().rstrip("。.、,").strip()[:60]
+        chu = chu.lstrip("-—– ").strip().rstrip("。.、,").strip()
+        if len(chu) > 60:
+            # Dài quá thì cắt ở dấu ngắt gần nhất, không cắt ngang chữ.
+            cat = max(chu.rfind(d, 20, 60) for d in ("、", "──", "—", "。"))
+            chu = chu[:cat] if cat > 0 else chu[:60]
+        return chu.rstrip("。.、,").strip()
 
-    muc = [(0.0, nhan(cau[0][1]))]
+    def het_cau(chu: str) -> bool:
+        return chu.rstrip().endswith(("。", "！", "？", "!", "?", ".", "」"))
+
+    def ghep(i: int) -> str:
+        """Nhãn chương = cả CÂU mở chương, ghép các dòng phụ đề từ `i` tới khi
+        gặp dấu hết câu (tối đa 4 dòng / 60 ký tự).
+
+        Phụ đề tách dòng ở dấu phẩy, nên lấy MỘT dòng làm nhãn thì hai chương
+        mở cùng khuôn 「一つ目の特徴は、…」 ra hai nhãn y hệt nhau — đúng chuyện
+        xảy ra ở TL4-T7-v2/0001 (09/09/2026): mục lục có hai dòng "一つ目の特徴は".
+        """
+        chu = cau[i][1].lstrip("-—– ").strip()
+        j = i + 1
+        while (not het_cau(chu) and j < len(cau) and j - i < 4
+               and len(chu) < 60 and not cau[j][1].startswith("---")):
+            chu += cau[j][1].strip()
+            j += 1
+        return nhan(chu)
+
+    muc = [(0.0, ghep(0))]
     for i, (giay, chu) in enumerate(cau):
         if chu.startswith("---") and giay >= 10:
-            chu = nhan(chu)
+            chu = ghep(i)
             # Dòng `---` đôi khi chỉ là câu chuyển ("では、") — cụt quá thì
             # không làm nhãn chương được, ghép thêm câu ngay sau nó.
             if len(chu) < 6 and i + 1 < len(cau):
                 chu = (chu + "、" + nhan(cau[i + 1][1])).lstrip("、")
+            # Vẫn trùng nhãn chương trước (cùng câu mở) thì nối thêm câu kế.
+            if muc and chu == muc[-1][1] and i + 1 < len(cau):
+                chu = nhan(chu + "、" + ghep(i + 1))
             muc.append((giay, chu))
     if len(muc) < 3:
         return []
