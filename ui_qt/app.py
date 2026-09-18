@@ -60,6 +60,11 @@ _NHIP_MS = 150
 #: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
 #: xem `ui_qt/bang_viec.py` để biết vì sao.
 TRANG = (
+    # Chủ dự án, 18/09/2026: một VPS chạy 5 kênh tự động. Trung tâm là chỗ
+    # DUY NHẤT trông cả vòng tự chạy (bảng kênh, chờ duyệt, hiệu quả, nhật ký,
+    # thêm kênh, cài máy) — đứng ĐẦU thanh bên, nhóm riêng "TỰ CHẠY"; trên VPS
+    # nó là trang mở ra đầu tiên (`_trang_mo_dau`).
+    ("trung_tam", "", "Trung tâm"),
     # Chủ dự án, 31/08/2026: nhóm miễn phí *"đề ở trên cùng, đổi tên luôn thành
     # Công cụ YTB"* — tab share free không cần api, khách chưa có tài khoản mở
     # tool ra là thấy ngay thứ dùng được liền. Tên "Công cụ YTB" nằm ở TIÊU ĐỀ
@@ -114,6 +119,7 @@ TRANG = (
 #: Chỉ là chữ kẻ trên thanh bên — không thêm trang, không đổi khoá. Vỏ nào
 #: dựng `ThanhBen` mà không truyền `nhom` thì thanh bên y như cũ.
 NHOM_TRANG = {
+    "trung_tam": "TỰ CHẠY",
     "skill": "CÔNG CỤ YTB",
     "content": "LÀM VIDEO",
     "chrome-sach": "AUTOMATION",
@@ -404,8 +410,7 @@ class CuaSoChinh(QWidget):
         # Cắm khoá vẫn còn, nhưng chỉ khi khách **tự bấm**: nút "Cắm khoá
         # ShopAPI" và nút "Mở VS Code" ở tab Agent. Một hành động của tool phải
         # bắt nguồn từ một hành động của người.
-        self.show_page(self.TRANG_DAU if self.config.is_ready
-                       else self.TRANG_DAU_CHUA_KHOA)
+        self.show_page(self._trang_mo_dau())
 
         self._dong_ho = QTimer(self)
         self._dong_ho.timeout.connect(self._bom)
@@ -438,8 +443,10 @@ class CuaSoChinh(QWidget):
         from .trang_gpm_vps import TrangGpmVps
         from .trang_phan_tich import TrangPhanTich
         from .trang_quan_ly_kenh import TrangQuanLyKenh
+        from .trang_trung_tam import TrangTrungTam
 
         xuong = {
+            "trung_tam": lambda: TrangTrungTam(self),
             "skill": lambda: TrangSkill(self),
             "chrome-sach": lambda: TrangGpmVps(self),
             "phan-tich": lambda: TrangPhanTich(self),
@@ -462,6 +469,23 @@ class CuaSoChinh(QWidget):
             self._trang[khoa] = trang
             self._vo_cuon[khoa] = self._boc_cuon(trang)
             self._chong.addWidget(self._vo_cuon[khoa])
+
+    def _trang_mo_dau(self) -> str:
+        """Trang hiện ra lúc mở tool.
+
+        Máy nhà: Tài khoản (xem `TRANG_DAU`). VPS chạy kênh: trang Trung tâm —
+        ở đó không ai đăng nhập lại mỗi ngày, người mở VPS ra là để xem kênh
+        đang chạy thế nào (`core.che_do_vps.trang_mo_dau`). Mô-đun ấy chưa có
+        hay hỏng thì cứ như máy nhà.
+        """
+        mac_dinh = self.TRANG_DAU if self.config.is_ready else self.TRANG_DAU_CHUA_KHOA
+        try:
+            from core import che_do_vps  # noqa: PLC0415
+
+            muon = che_do_vps.trang_mo_dau(self.base_dir)
+        except Exception:  # noqa: BLE001 — thiếu mô-đun: máy nhà
+            muon = None
+        return muon if (muon and muon in self._trang) else mac_dinh
 
     def _boc_cuon(self, trang: QWidget) -> QWidget:
         """Bọc một trang trong vùng cuộn DỌC.

@@ -247,8 +247,10 @@ def go_hook_trang_chu(ham: "Callable[[str], None]") -> None:
         pass
 
 
+#: `goi-vps` = bộ cài VPS (`core/goi_vps.py`): ~1,5 GB mã + dữ liệu kênh +
+#: Whisper — tuyệt đối không được lọt vào gói cập nhật vm/ (18/09/2026).
 _GOI_VM_BO_THU = {"__pycache__", "logs", "tien-ich", "tokens",
-                  "clients", "replied", "transcripts"}
+                  "clients", "replied", "transcripts", "goi-vps"}
 
 
 def _tep_goi_vm(goc_vm: Optional[str] = None) -> List[tuple]:
@@ -1404,6 +1406,27 @@ def _lam_xu_ly(tram: "Tram"):
                 return self._tra(json.dumps(
                     {"viec": viec, "cai_dat": cai}, ensure_ascii=False)
                     .encode("utf-8"), "application/json; charset=utf-8")
+            if self.path.startswith("/tu-chay"):
+                # 7 sổ ngày GẦN NHẤT của `tu_chay.py --tat-ca` (sổ CHO CẢ MÁY,
+                # xem `core/tu_chay.chay_tat_ca` — khác sổ riêng từng kênh).
+                # Máy nhà mở tab là thấy đêm qua VPS đã làm gì, không phải
+                # SSH vào đọc `workspace/tu-chay/*.json` bằng tay.
+                from core.tu_chay import THU_MUC_BAO_CAO_TAT_CA  # noqa: PLC0415
+
+                thu_muc = os.path.join(tram.goc, THU_MUC_BAO_CAO_TAT_CA)
+                try:
+                    ten_tep = sorted(t for t in os.listdir(thu_muc) if t.endswith(".json"))
+                except OSError:
+                    ten_tep = []
+                so_ngay = []
+                for ten in ten_tep[-7:]:
+                    try:
+                        with io.open(os.path.join(thu_muc, ten), encoding="utf-8") as tep:
+                            so_ngay.append(json.load(tep))
+                    except (OSError, ValueError):
+                        continue
+                return self._tra(json.dumps(so_ngay, ensure_ascii=False).encode("utf-8"),
+                                 "application/json; charset=utf-8")
             return self._tra(b"ok")
 
         def do_POST(self):

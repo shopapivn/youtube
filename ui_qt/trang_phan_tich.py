@@ -36,8 +36,8 @@ from PyQt5.QtGui import (
     QDesktopServices, QIcon, QKeySequence, QPixmap,
 )
 from PyQt5.QtWidgets import (
-    QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
-    QMenu, QMessageBox, QPlainTextEdit, QSpinBox, QTableWidget,
+    QCheckBox, QComboBox, QDialog, QHBoxLayout, QHeaderView, QInputDialog,
+    QLineEdit, QMenu, QMessageBox, QPlainTextEdit, QSpinBox, QTableWidget,
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -52,19 +52,22 @@ from core.youtube import parse_inputs
 from . import theme
 from .cua_so_loc_doi_thu import HopLocDoiThu
 from .trang_chi_so_ytb import TrangChiSoYTB
+from .trang_cong_thuc_v7 import TrangCongThucV7
 from .trang_quan_ly_doi_thu import TrangDanhBa, TrangTuyen
 from .widgets import (
     HangXuongDong, mo_thu_muc, nhan, nut_chinh, nut_phu, the, tieu_de_trang,
 )
 
-__all__ = ["TrangPhanTich", "TrangDoiThu"]
+__all__ = ["TrangPhanTich", "TrangDoiThu", "TrangMayVM", "HopChonKenhVPS"]
 
-#: Nhãn các mục con — xếp theo dòng chảy: xem ngách (Đối thủ) → xem mình
-#: (Chỉ số kênh) → chốt (Quyết định content). "Máy VM" đứng cuối — hạ tầng.
+#: Nhãn các mục con — xếp theo dòng chảy: xem ngách (Đối thủ) → content họ làm → tuyến → xem mình
+#: (Chỉ số kênh) → chốt video làm tiếp (Công thức V7). Bốn mục đầu là NGUỒN DỮ LIỆU; mục cuối là
+#: QUYẾT ĐỊNH, và MỘT NÚT ở mục Đối thủ chạy luôn nó ở cuối chuỗi (18/09/2026: "chạy một nút thì mọi
+#: thứ sau khi xong v7 cũng phải có số liệu đủ và chuẩn để tao còn biết làm video nào tiếp").
 # 02/09 (lần 2): "cái đọc số liệu đã lấy được... đưa về bên phân tích và
 # nghiên cứu" — mục Chỉ số kênh Ở ĐÂY là bản CHỈ ĐỌC (phan=("doc",));
 # hạ tầng cào (trạm + tiện ích) và Máy VM nằm bên tab VPS & Máy VM.
-TAB_CON = ("Đối thủ", "Content", "Tuyến", "Chỉ số kênh", "Quyết định content")
+TAB_CON = ("Đối thủ", "Content", "Tuyến", "Chỉ số kênh", "Công thức V7")
 
 #: Nhịp tự kiểm "đến hạn quét chưa" khi tool đang mở. Nửa tiếng một lần hỏi
 #: cái đồng hồ trên đĩa — không phải một lượt gọi mạng nào.
@@ -1411,137 +1414,113 @@ def _view_trung_vi(kenh) -> int:
     return int(statistics.median(view)) if view else 0
 
 
-class TrangQuyetDinh(QWidget):
-    """Bộ não của chu kỳ: đọc HẾT dữ liệu kênh → đề xuất sản xuất gì tiếp.
+class HopChonKenhVPS(QDialog):
+    """Chọn kênh mang theo VPS rồi gói CẢ TOOL vào `vm/goi-vps/` — 18/09/2026,
+    bước E của `vm/KE-HOACH-5-KENH.md`: *"đóng gói kênh vào vps và kênh đó sẽ
+    tự chạy"*.
 
-    Chủ dự án, 01/09/2026: *"từ phân tích all các dữ liệu studio để nắm bắt
-    được kênh → dữ liệu content hiện tại có → ra quyết định sản xuất gì tiếp
-    theo"*. Ba nguồn nó đọc đều do các mục bên cạnh nuôi: chỉ số Studio,
-    sổ đối thủ, sổ đã sản xuất/đã đăng — nguồn nào trống thì bản đề xuất
-    nói thẳng phần đó thiếu.
-
-    Một lượt bấm = MỘT lượt gọi mô hình viết chữ (loại rẻ, trừ ví như các
-    Skill chữ) — nói rõ ngay trên nút để không ai bất ngờ vì hoá đơn.
+    Khác hẳn "Tạo bộ cài VM" (chỉ điền `vm/config.json`): nút này gọi
+    `core.goi_vps.dong_goi_vps`, nặng hơn nhiều (chép cả mã tool, dữ liệu
+    kênh, bộ nghe Whisper, FFmpeg) nên PHẢI chạy ở luồng nền — bấm xong không
+    được để cửa sổ đứng hình, và người dùng cần thấy tiến trình vì việc này
+    có thể mất vài phút với kênh nhiều dữ liệu.
     """
 
-    def __init__(self, app):
-        super().__init__()
+    def __init__(self, app, kenh_mac_dinh: str = "", cha=None):
+        super().__init__(cha)
+        self.setWindowTitle("Tạo bộ cài VPS")
+        self.setMinimumWidth(420)
         self._app = app
         self._dang_chay = False
 
-        doc = QVBoxLayout(self)
-        doc.setContentsMargins(24, 20, 24, 20)
-        doc.setSpacing(12)
-        doc.addWidget(tieu_de_trang(
-            "Quyết định content",
-            "Đọc chỉ số kênh + sổ đối thủ + sổ đã đăng, đề xuất 5 đề tài."))
-
-        khung = the()
-        v = QVBoxLayout(khung)
-        v.setContentsMargins(18, 16, 18, 16)
+        v = QVBoxLayout(self)
         v.setSpacing(8)
-        d0 = QHBoxLayout()
-        d0.addWidget(nhan("Kênh:", "h2"))
-        self._chon_kenh = QComboBox()
-        self._chon_kenh.setEditable(True)
-        self._chon_kenh.setMinimumWidth(200)
-        for ma in liet_ke_kenh(self._app.base_dir):
-            self._chon_kenh.addItem(ma)
-        d0.addWidget(self._chon_kenh)
-        d0.addStretch(1)
-        v.addLayout(d0)
-        d1 = QHBoxLayout()
-        # "&&" vì Qt coi "&" trong nhãn nút là phím tắt và nuốt mất — đúng
-        # bệnh đã bắt được ở thanh bên hôm 31/08.
-        self._nut_chay = nut_chinh("Phân tích && đề xuất (1 lượt gọi chữ)",
-                                   self._chay, rong=280)
-        d1.addWidget(self._nut_chay)
-        self._nut_xem = nut_phu("Xem dữ liệu sẽ gửi", self._xem_du_lieu,
-                                rong=170)
-        self._nut_xem.setToolTip(
-            "Hiện đúng khối dữ liệu sẽ đưa cho AI — miễn phí, để bạn biết nó "
-            "nhìn thấy gì trước khi tốn một lượt gọi.")
-        d1.addWidget(self._nut_xem)
-        d1.addStretch(1)
-        v.addLayout(d1)
-        doc.addWidget(khung)
+        v.addWidget(nhan(
+            "Gói CẢ TOOL (không chỉ vm/) cho một VPS chạy độc lập: chọn kênh "
+            "mang theo — mỗi kênh chép TOÀN BỘ dữ liệu (kịch bản, đối thủ, "
+            "chỉ số, kế hoạch đăng), kênh đó coi VPS là NHÀ MỚI. Việc này có "
+            "thể mất vài phút và vài trăm MB tới vài GB, tuỳ dữ liệu kênh.",
+            "muted"))
 
-        khung2 = the()
-        v2 = QVBoxLayout(khung2)
-        v2.setContentsMargins(18, 14, 18, 16)
-        v2.setSpacing(8)
-        d2 = QHBoxLayout()
-        d2.addWidget(nhan("Bản đề xuất", "h2"))
-        self._nhan_luu = nhan("", "phu")
-        d2.addWidget(self._nhan_luu)
-        d2.addStretch(1)
-        d2.addWidget(nut_phu("Chép", self._chep, rong=90))
-        v2.addLayout(d2)
-        self._ket_qua = QPlainTextEdit()
-        self._ket_qua.setReadOnly(True)
-        self._ket_qua.setPlaceholderText(
-            "Bấm “Phân tích & đề xuất” — kết quả hiện ở đây và tự lưu vào "
-            "CHANNEL/<kênh>/nghien-cuu/de-xuat-<ngày>.md")
-        self._ket_qua.setMinimumHeight(260)
-        v2.addWidget(self._ket_qua, 1)
-        doc.addWidget(khung2, 1)
+        self._o_kenh: Dict[str, QCheckBox] = {}
+        for ma in liet_ke_kenh(app.base_dir):
+            o = QCheckBox(ma)
+            o.setChecked(ma == kenh_mac_dinh)
+            v.addWidget(o)
+            self._o_kenh[ma] = o
 
-    def _kenh(self) -> str:
-        return self._chon_kenh.currentText().strip()
+        self._nhan_trang_thai = nhan("", "muted")
+        self._nhan_trang_thai.setWordWrap(True)
+        v.addWidget(self._nhan_trang_thai)
 
-    def _xem_du_lieu(self) -> None:
-        from core.quyet_dinh_content import gom_du_lieu  # noqa: PLC0415
+        self._log = QPlainTextEdit()
+        self._log.setReadOnly(True)
+        self._log.setMaximumHeight(160)
+        self._log.hide()
+        v.addWidget(self._log)
 
-        kenh = self._kenh()
-        if not kenh:
-            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
-            return
-        self._nhan_luu.setText("(đang xem dữ liệu — chưa gọi AI, chưa tốn gì)")
-        self._ket_qua.setPlainText(gom_du_lieu(self._app.base_dir, kenh))
+        hang = HangXuongDong()
+        self._nut_tao = nut_chinh("Tạo bộ cài VPS", self._bat_dau, rong=150)
+        hang.addWidget(self._nut_tao)
+        self._nut_dong = nut_phu("Đóng", self.reject, rong=90)
+        hang.addWidget(self._nut_dong)
+        v.addLayout(hang)
 
-    def _chay(self) -> None:
-        kenh = self._kenh()
-        if not kenh:
-            self._app.show_message("Chưa chọn kênh", "Chọn kênh trước đã.")
-            return
-        if self._app.client is None:
-            self._app.bao_can_khoa()
-            return
+    def _kenh_da_chon(self) -> List[str]:
+        return [ma for ma, o in self._o_kenh.items() if o.isChecked()]
+
+    def _bat_dau(self) -> None:
         if self._dang_chay:
             return
+        cac_kenh = self._kenh_da_chon()
+        if not cac_kenh:
+            self._app.show_message("Chưa chọn kênh",
+                                   "Tích ít nhất một kênh để mang theo VPS.")
+            return
         self._dang_chay = True
-        self._nut_chay.setEnabled(False)
-        self._nhan_luu.setText("đang phân tích…")
-        goc, client = self._app.base_dir, self._app.client
+        self._nut_tao.setEnabled(False)
+        self._nut_tao.setText("Đang gói…")
+        self._log.show()
+        self._log.setPlainText("")
+        threading.Thread(target=self._chay_goi, args=(cac_kenh,),
+                         daemon=True).start()
 
-        def viec() -> tuple:
-            from core.quyet_dinh_content import (  # noqa: PLC0415
-                de_xuat, luu_de_xuat,
-            )
+    def _ghi(self, dong: str) -> None:
+        """Gọi được từ luồng nền — chữ luôn đi qua luồng giao diện."""
+        self._app.goi_tren_luong_ve(lambda: self._log.appendPlainText(dong))
 
-            chu = de_xuat(client, goc, kenh)
-            return chu, luu_de_xuat(goc, kenh, chu)
+    def _chay_goi(self, cac_kenh: List[str]) -> None:
+        """**Luồng nền.** Không được gọi API, không được đụng giao diện trực
+        tiếp — mọi cập nhật đi qua :meth:`_ghi` / ``goi_tren_luong_ve``."""
+        from core import goi_vps  # noqa: PLC0415
 
-        self._app.run_bg(viec, on_ok=self._xong, on_err=self._hong)
+        try:
+            ket = goi_vps.dong_goi_vps(self._app.base_dir,
+                                       kenh_mang_theo=cac_kenh, on_log=self._ghi)
+        except Exception as loi:  # noqa: BLE001 — báo thật, không để cửa sổ chết
+            self._app.goi_tren_luong_ve(lambda: self._xong(loi=str(loi)))
+            return
+        self._app.goi_tren_luong_ve(lambda: self._xong(ket=ket))
 
-    def _xong(self, ket: tuple) -> None:
-        chu, duong = ket
+    def _xong(self, ket: Optional[dict] = None, loi: str = "") -> None:
         self._dang_chay = False
-        self._nut_chay.setEnabled(True)
-        self._ket_qua.setPlainText(chu)
-        self._nhan_luu.setText("đã lưu: " + os.path.basename(duong))
-
-    def _hong(self, loi: BaseException) -> None:
-        self._dang_chay = False
-        self._nut_chay.setEnabled(True)
-        self._nhan_luu.setText("")
-        self._app.show_error(loi)
-
-    def _chep(self) -> None:
-        from PyQt5.QtWidgets import QApplication as _App
-
-        _App.clipboard().setText(self._ket_qua.toPlainText())
-        self._nhan_luu.setText("đã chép vào bộ nhớ tạm")
+        self._nut_tao.setEnabled(True)
+        self._nut_tao.setText("Tạo bộ cài VPS")
+        if loi:
+            self._nhan_trang_thai.setText("Lỗi: " + loi)
+            self._app.show_message("Gói bộ cài VPS không xong", loi)
+            return
+        thu_muc = str((ket or {}).get("thu_muc") or "")
+        self._nhan_trang_thai.setText("Đã gói xong.")
+        if thu_muc:
+            mo_thu_muc(os.path.dirname(thu_muc))
+        self._app.show_message(
+            "Đã tạo bộ cài VPS",
+            "Chép CẢ thư mục vm/ vừa mở sang VPS (đặt cạnh các trình duyệt "
+            "kênh <mã>\\<mã>.exe), rồi nhấp đúp CAI-DAT-VM.bat — bộ cài nhận "
+            "ra goi-vps/ và tự cài trọn vẹn: mã tool, thư viện, bộ nghe, "
+            "FFmpeg, rồi tự mở MyTool lên.")
+        self.accept()
 
 
 class TrangMayVM(QWidget):
@@ -1619,6 +1598,12 @@ class TrangMayVM(QWidget):
             "thư mục vm/ — chép cả thư mục đó sang máy ảo, nhấp đúp "
             "CAI-DAT-VM.bat là nối luôn, không phải gõ gì.")
         d0b.addWidget(nut_goi)
+        nut_vps = nut_phu("Tạo bộ cài VPS", self._tao_bo_cai_vps, rong=150)
+        nut_vps.setToolTip(
+            "Gói CẢ TOOL (không chỉ vm/) kèm dữ liệu kênh, bộ nghe Whisper "
+            "và FFmpeg vào vm/goi-vps/ — cho một VPS chạy kênh 24/7 độc lập, "
+            "khác hẳn 'Tạo bộ cài VM' (chỉ đăng/trả lời cmt).")
+        d0b.addWidget(nut_vps)
         # Hai nút "Quét Studio ngay" và "Quét trang chủ" đã DỜI sang tab Nghiên cứu ›
         # Đối thủ và GỘP thành một (chủ dự án 05/09/2026: "bỏ cái quét studio ở vps mà
         # để ở tab phân tích nghiên cứu rồi làm đồng bộ 1 nút đủ chức năng"). Tab này
@@ -2106,6 +2091,17 @@ class TrangMayVM(QWidget):
             "đặt cạnh Chrome của kênh), rồi nhấp đúp CAI-DAT-VM.bat — hết, "
             "không phải gõ gì. Từ đó máy ảo bật lên là tự chạy." + nhac)
 
+    def _tao_bo_cai_vps(self) -> None:
+        """Mở hộp chọn kênh rồi gói CẢ TOOL cho VPS (`core/goi_vps.py`).
+
+        Khác "Tạo bộ cài VM": việc này NẶNG (chép mã + dữ liệu kênh + bộ
+        nghe + FFmpeg) nên chạy ở luồng nền bên trong hộp thoại, không chặn
+        cửa sổ chính — xem :class:`HopChonKenhVPS`.
+        """
+        kenh_mac_dinh = self._chon_kenh.currentText().strip()
+        hop = HopChonKenhVPS(self._app, kenh_mac_dinh, cha=self)
+        hop.exec_()
+
     def _ve(self) -> None:
         tram = self._tram()
         may = tram.may_dang_noi() if tram is not None else []
@@ -2141,10 +2137,10 @@ class TrangPhanTich(QWidget):
         self.doi_thu = TrangDoiThu(app)
         self.tuyen = TrangTuyen(app)
         self.chi_so = TrangChiSoYTB(app, phan=("doc",))
-        self.quyet_dinh = TrangQuyetDinh(app)
+        self.cong_thuc_v7 = TrangCongThucV7(app)
         for muc, ten in ((self.danh_ba, TAB_CON[0]), (self.doi_thu, TAB_CON[1]),
                          (self.tuyen, TAB_CON[2]), (self.chi_so, TAB_CON[3]),
-                         (self.quyet_dinh, TAB_CON[4])):
+                         (self.cong_thuc_v7, TAB_CON[4])):
             self.tabs.addTab(muc, ten)
         # Ba mục đầu cùng nói về MỘT kênh: đổi kênh ở mục này thì hai mục kia
         # đi theo. Không đồng bộ thì khách xem danh bạ kênh A trong khi bảng
@@ -2155,7 +2151,7 @@ class TrangPhanTich(QWidget):
     def _dong_bo_kenh(self, _i: int) -> None:
         """Mục vừa mở đi theo kênh mà mục Content đang mở."""
         ten = getattr(self.doi_thu, "_kenh_dang_mo", "")
-        for muc in (self.danh_ba, self.tuyen):
+        for muc in (self.danh_ba, self.tuyen, self.cong_thuc_v7):
             if self.tabs.currentWidget() is muc and ten:
                 try:
                     muc.dat_kenh(ten)
@@ -2163,7 +2159,7 @@ class TrangPhanTich(QWidget):
                     pass
 
     def doi_du_an(self, ten: str) -> None:
-        for con in (self.danh_ba, self.doi_thu, self.tuyen, self.chi_so):
+        for con in (self.danh_ba, self.doi_thu, self.tuyen, self.chi_so, self.cong_thuc_v7):
             tiep = getattr(con, "doi_du_an", None)
             if tiep is not None:
                 try:

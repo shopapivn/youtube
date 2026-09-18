@@ -593,9 +593,41 @@ async function datLich() {
   if (n) log(`đặt thêm ${n} lịch`);
 }
 
+// ═══ BÁO THỨC MỐC NỔ TRỄ → LƯU THEO TUỔI THẬT, KHÔNG THEO NHÃN DỰ ĐỊNH ═══
+//
+// VPS giờ chỉ mở trình duyệt của MỘT kênh MỘT LẦN/NGÀY (phiên ngắn trước giờ đăng của kênh
+// đó, xem `vm/KE-HOACH.md`). Báo thức mốc (`snap|id|h`, đặt trong `datLich()`) đặt cho đúng
+// giờ `ngay_dang_ms + h*giờ`, nhưng Chrome không mở nên nó nằm chờ QUÁ HẠN — rồi cả chùm báo
+// thức quá hạn (6h, 13h, 18h, 24h, 30h, 36h…) nổ gần như cùng lúc ngay khi Chrome mở lên.
+// Báo thức tên "13h" khi đó chụp đúng lúc video đã 23 giờ tuổi, nhưng nếu vẫn lưu vào thư
+// mục `13h/` thì đó là NHÃN DỰ ĐỊNH của báo thức, không phải tuổi thật của dữ liệu bên trong
+// — `core/cong_thuc_v7.py` phía công cụ (mã `video_cua_kenh`/`da_co_video_thang`) từng tin
+// thẳng nhãn này và chấm nhầm.
+//
+// Chọn LƯU THEO TUỔI THẬT thay vì BỎ QUA bản chụp trễ: bỏ qua là vứt một lượt vừa tốn ~1
+// phút tải trang thật (đúng thứ mục "chỉ đánh dấu đã chụp khi thật sự có chỉ số" ở
+// `chupVideo` đang tránh — thà chụp lại thừa còn hơn mất hẳn một mốc). Tool phía công cụ
+// (`core/chi_so_ytb/gom.py: tuoi_that_gio`) đã tự tính lại tuổi thật từ `captured_at` trong
+// mọi trường hợp, nên phần này không phải lưới an toàn DUY NHẤT — nhưng nhãn đúng ngay từ
+// đầu giúp người đọc tay (`bang-tom-tat.csv`, `DOC-O-DAY.txt`) không bị nhãn sai đánh lừa,
+// và không phải chờ bộ chấm suy ngược hộ.
+//
+// Ngưỡng "trễ": báo thức nhanh nhất trong MOC cách nhau 5–7 giờ, nên trễ quá 3 giờ đã đủ để
+// phân biệt "đúng hẹn, lệch chút vì Studio trả chậm/`moLink` chờ tới 45 giây" khỏi "kẹt cả
+// phiên, đợi hôm sau Chrome mới mở lại".
 chrome.alarms.onAlarm.addListener(async (a) => {
   const [k, id, h] = a.name.split('|');
-  if (k === 'snap') await chupVideo(id, `${h}h`);
+  if (k === 'snap') {
+    const tre = Date.now() - (a.scheduledTime || Date.now());
+    if (tre > 3 * 3600e3) {
+      const v = (await st('videos', {}))[id];
+      const tuoiThat = v ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : Number(h);
+      log(`mốc ${h}h trễ ${(tre / 3600e3).toFixed(1)}h (VPS mới mở trình duyệt) — lưu theo tuổi thật ${tuoiThat}h, không lưu nhầm nhãn ${h}h`);
+      await chupVideo(id, `${tuoiThat}h`, true);
+    } else {
+      await chupVideo(id, `${h}h`);
+    }
+  }
   else if (k === 'ngay') {
     const v = (await st('videos', {}))[id];
     await chupVideo(id, `${v ? Math.round((Date.now() - v.ngay_dang_ms) / 36e5) : 0}h`);

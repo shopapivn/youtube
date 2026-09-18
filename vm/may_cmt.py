@@ -975,6 +975,41 @@ def discover_channels():
     return found
 
 
+def _tu_tra_loi_bat(channel):
+    """Kenh nay co duoc TU TRA LOI BINH LUAN khong - doc thiet lap agent
+    chep xuong (vm/cai-dat-tool.json, tool day xuong moi nhip tim).
+
+    May NHIEU kenh (toi da 5, 1 VPS - vm/KE-HOACH.md): chi MOT tien trinh
+    may_cmt.py cho ca may, run_all() lap qua tung kenh co token - kenh nao
+    dang TAT thi BO QUA o day. Khong thay du lieu gi -> mac dinh BAT, dung
+    nep vm_cai_dat.MAC_DINH (tu_tra_loi_cmt = True)."""
+    duong = os.path.join(BASE_DIR, "cai-dat-tool.json")
+    try:
+        with open(duong, "r", encoding="utf-8") as f:
+            du = json.load(f) or {}
+    except Exception:
+        return True
+    theo_kenh = (du.get("kenh") or {}).get(channel)
+    if isinstance(theo_kenh, dict) and "tu_tra_loi_cmt" in theo_kenh:
+        return bool(theo_kenh["tu_tra_loi_cmt"])
+    if "tu_tra_loi_cmt" in du:
+        return bool(du["tu_tra_loi_cmt"])
+    return True
+
+
+def _doc_co_dong_lenh(argv):
+    """Doc "--kenh X --mot-lan" tu dong lenh - che do PHIEN (agent.py goi
+    subprocess MOT LUOT cho DUNG mot kenh, xem vm/KE-HOACH.md "5 kenh / 1 VPS
+    - buoc A"). Tra (mot_lan: bool, kenh: str|None). Ham THUAN."""
+    mot_lan = "--mot-lan" in argv
+    kenh = None
+    if "--kenh" in argv:
+        i = argv.index("--kenh")
+        if i + 1 < len(argv):
+            kenh = argv[i + 1]
+    return mot_lan, kenh
+
+
 def run_all():
     channels = discover_channels()
     if not channels:
@@ -982,6 +1017,9 @@ def run_all():
         return
     print(f"🚀 Phat hien {len(channels)} kenh: {channels}")
     for ch in channels:
+        if not _tu_tra_loi_bat(ch):
+            print(f"⏭️ {ch}: tu_tra_loi_cmt dang TAT (tool) -> bo qua.")
+            continue
         try:
             process_channel(ch)  # tu bo qua neu kenh chua co token
         except Exception as e:
@@ -1105,6 +1143,19 @@ if __name__ == "__main__":
             print("Dung: python cmt.py test <ten_kenh>")
         else:
             process_channel(args[1], max_posts=POSTS_PER_RUN)
+
+    elif "--mot-lan" in args:
+        # Che do PHIEN: MOT luot cho DUNG mot kenh, khong vong lap production
+        # ben duoi - agent.py goi subprocess "--kenh X --mot-lan" ngay trong
+        # phien cua kenh do. Van ton trong cong tac tu_tra_loi_cmt cua kenh
+        # (giong run_all() - kenh dang TAT thi bo qua, khong ai khac giu cua).
+        _mot_lan, _kenh = _doc_co_dong_lenh(args)
+        if not _kenh:
+            print("Dung: python cmt.py --kenh <ten_kenh> --mot-lan")
+        elif not _tu_tra_loi_bat(_kenh):
+            print(f"⏭️ {_kenh}: tu_tra_loi_cmt dang TAT (tool) -> bo qua.")
+        else:
+            process_channel(_kenh, max_posts=POSTS_PER_RUN)
 
     else:
         # Production: lap vo han, moi chu ky quet tat ca kenh co token

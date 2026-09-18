@@ -647,6 +647,22 @@ def nghe_trong_tien_trinh_nay(duong_mp3: str, *, ngon_ngu: str = "",
         pc = doc_ket_qua(base_dir)
         ten, device = chon_whisper_model(pc)
         compute_type = "float16" if device == "cuda" else "int8"
+        # Máy yếu (CPU) dùng "small": nếu bộ nghe đã nằm sẵn trên đĩa (thư mục
+        # `models/` của tool — bộ cài VPS đặt nó ở đó — hoặc bộ đệm HF) thì
+        # nạp thẳng từ đĩa. VPS chỉ có IPv6 không tải được tệp HuggingFace, và
+        # biến WHISPER_MODEL_DIR không sống qua khởi động lại / lịch Windows.
+        if ten == "small":
+            try:
+                from pathlib import Path  # noqa: PLC0415
+                from core.model_installer import duong_model  # noqa: PLC0415
+
+                goc_tool = Path(os.path.abspath(__file__)).parent.parent
+                co = duong_model(goc_tool, "faster-whisper-small")
+                if co is not None:
+                    san = str(co)
+                    ten = san
+            except Exception:  # noqa: BLE001 — tìm không được thì để thư viện tự lo như cũ
+                pass
 
     may = WhisperModel(ten, device=device, compute_type=compute_type,
                        local_files_only=bool(san and os.path.isdir(san)))

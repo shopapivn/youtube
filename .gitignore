@@ -81,6 +81,15 @@ vm/clients/
 vm/replied/
 vm/transcripts/
 vm/phien-ban.txt
+# Bộ cài VPS tự đóng gói (core/goi_vps.py, nút "Tạo bộ cài VPS"): tool.zip +
+# dữ liệu kênh thật + bộ nghe Whisper + FFmpeg — nặng (có thể tới vài GB) và
+# mang đúng dữ liệu kinh doanh của khách, không phải mã của tool.
+vm/goi-vps/
+
+# `MyTool/CLAUDE.local.md` (vm/cai_dat_vps.py chép từ vm/VPS-CLAUDE.md) là
+# tệp máy VPS tự sinh, không phải mã nguồn — và trùng tên với khuôn
+# `CLAUDE.local.md` mà Claude Code tự đọc trên MÁY NHÀ nếu ai đó lỡ tạo.
+CLAUDE.local.md
 # Du lieu KINH DOANH cua tung kenh - khong bao gio len GitHub cong khai
 # (kho nay khach cung tai ve): so lieu Studio, so doi thu, ke hoach dang,
 # thiet lap may ao. Khuon san xuat (prompt/) van di theo kho nhu cu.
@@ -89,6 +98,12 @@ CHANNEL/*/ke-hoach-dang/
 # Hop viec giao cho may ao (tram ghi ra, xem core/chi_so_ytb/tram.py): trang
 # thai luc chay cua RIENG may nay, khong phai thu de phat hanh.
 CHANNEL/hop-viec-may-ao.json
+
+# Bang cheo-kenh cua tung NHOM kenh (core/nhom_kenh.py): so lieu Studio va
+# ten kenh ghep lai tu nhieu kenh - van la du lieu KINH DOANH, cung luat voi
+# CHANNEL/*/chi-so/ o tren, chi khac la no nam CANH cac kenh chu khong o
+# TRONG mot kenh nen khong khop duoc mau CHANNEL/*/...
+CHANNEL/_NHOM/
 
 # Trang thai luc chay o goc kho, sinh ra moi lan mo tool:
 # `.dang-mo.lock` la khoa mot-ban-mot-luc (shopapi_studio_qt.py).

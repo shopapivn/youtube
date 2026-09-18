@@ -394,6 +394,46 @@ class Kenh:
     #: lời, vì hạ đều thì nhạc không biết đường tránh chỗ nào.
     am_luong_nhac: float = 0.12
 
+    # ── Kênh tự chạy (không người trông, `core/tu_chay.py`) ──────────────────
+    #
+    # Một kênh chạy trên VPS, một lượt một ngày, không ai ngồi bấm gì. Các
+    # khoá dưới đây chỉ có tác dụng khi đọc qua `core/tu_chay.py` — tab Tự
+    # động (chạy tay, có người ngồi xem) không đụng tới chúng.
+
+    #: Bật thì kênh này nằm trong `tu_chay.kenh_tu_chay()` — CLI
+    #: `python tu_chay.py --tat-ca` chạy nó mỗi ngày. Tắt (mặc định) = kênh
+    #: vẫn chạy tay như trước, `tu_chay.py` bỏ qua hẳn.
+    tu_chay: bool = False
+    #: Tự điền ngày giờ đăng vào `ke-hoach-dang/ke-hoach.csv` ngay sau khi bàn
+    #: giao — máy ảo đăng đúng giờ đó, KHÔNG CẦN AI DUYỆT LẠI. Tắt (mặc định)
+    #: = ngày giờ để TRỐNG, chính bạn gõ tay vào bảng kế hoạch khi ưng — van an
+    #: toàn cho người mới bật `tu_chay` mà chưa tin tool hoàn toàn.
+    tu_duyet: bool = False
+    #: Giờ đăng cố định mỗi ngày khi `tu_duyet: true`, dạng `"HH:MM"` (ví dụ
+    #: `"20:00"`). Rỗng = không tự đặt được dù `tu_duyet` có bật.
+    gio_dang: str = ""
+    #: Trần chi tiêu MỘT NGÀY của kênh này, tính bằng ĐỒNG. 0 = chưa khai —
+    #: `tu_chay.py` ở chế độ thật (`--thu` tắt) SẼ TỪ CHỐI sản xuất khi trần
+    #: bằng 0: chạy không người trông mà không có trần là tiêu tiền không giới hạn.
+    ngan_sach_ngay: int = 0
+    #: Thư mục `done` mà máy ảo nhìn thấy qua ổ chia sẻ (xem
+    #: `core/ban_giao_dang.py`) — nơi tool chép gói mp4+srt+ảnh bìa sau khi
+    #: sản xuất xong. Rỗng = sản xuất xong nhưng KHÔNG bàn giao; tool nói rõ lý
+    #: do trong báo cáo chứ không lặng lẽ bỏ qua.
+    thu_muc_done: str = ""
+    #: Số video một ngày. 1 (mặc định) — `tu_chay.py` không tạo quá số này
+    #: trong một ngày cho một kênh, dù gọi lại nhiều lần trong ngày.
+    video_moi_ngay: int = 1
+    #: Chủ dự án, 18/09/2026: video đăng xong rồi thì ảnh/clip/mp3 nặng của lượt
+    #: đó chỉ còn chiếm đĩa VPS chứ không ai dùng lại — bật cờ này để tool TỰ
+    #: XOÁ chúng sau khi đăng (`core/don_dep.py`). Tắt (mặc định) = không đụng
+    #: gì, giữ nguyên nết cũ. Chữ/ảnh bìa đã chọn/metadata KHÔNG bao giờ bị xoá
+    #: dù cờ này bật — chỉ ảnh cảnh, clip, mp3 giọng đọc, video đã dựng.
+    tu_don: bool = False
+    #: Chờ bao nhiêu GIỜ sau khi đăng mới xoá — hạn ân xá phòng khi YouTube xử
+    #: lý hỏng và phải tải lại. 24 (mặc định). Chỉ có tác dụng khi `tu_don: true`.
+    don_sau_gio: int = 24
+
     #: Toàn bộ `style.yaml`, giữ nguyên để đưa thẳng cho bước viết lời nhắc.
     #: Nội dung `chien-luoc.yaml` nếu kênh dựng từ khuôn có chiến lược.
     #: Rỗng nghĩa là kênh chạy đường mặc định (remake).
@@ -407,6 +447,19 @@ class Kenh:
     anh_nv: List[str] = field(default_factory=list)
     #: Nội dung từng bước lời nhắc, khoá là tên tệp.
     prompt: Dict[str, str] = field(default_factory=dict)
+
+    #: ═══ NHÓM KÊNH CÙNG NGÁCH (`core/nhom_kenh.py`) ═══
+    #:
+    #: Kế hoạch một VPS chạy nhiều kênh cùng ngách, mỗi kênh đánh một TỆP khán
+    #: giả riêng (xem `CHANNEL/TL4-T7/nghien-cuu/BAN-DO-TEP-KHAN-GIA.md`), rồi
+    #: các kênh "kéo nhau lên": không remake trùng nguồn, chia sẻ đối thủ mới
+    #: dò được, so sánh video nào đang thắng.
+    #:
+    #: `nhom` — tên nhóm; rỗng = kênh đứng một mình, không đồng bộ với ai.
+    #: `tep`  — mã/tên tệp khán giả kênh này đánh (ví dụ "1", "4") — chỉ để
+    #: hiển thị và để bảng chéo kênh biết dán nhãn nào, không có logic riêng.
+    nhom: str = ""
+    tep: str = ""
 
     duong: str = ""
 
@@ -648,8 +701,18 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         # Kẹp trong 0..1. Số âm làm FFmpeg đảo pha, số lớn hơn 1 làm nhạc át
         # hẳn giọng đọc — cả hai đều là gõ nhầm chứ không ai cố ý.
         am_luong_nhac=min(1.0, max(0.0, _so(cai.get("am_luong_nhac"), 0.12))),
+        tu_chay=_co(cai.get("tu_chay")),
+        tu_duyet=_co(cai.get("tu_duyet")),
+        gio_dang=str(cai.get("gio_dang") or "").strip(),
+        ngan_sach_ngay=max(0, int(_so(cai.get("ngan_sach_ngay"), 0))),
+        thu_muc_done=str(cai.get("thu_muc_done") or "").strip(),
+        video_moi_ngay=max(1, int(_so(cai.get("video_moi_ngay"), 1))),
+        tu_don=_co(cai.get("tu_don")),
+        don_sau_gio=max(0, int(_so(cai.get("don_sau_gio"), 24))),
         style=doc_yaml(os.path.join(thu_muc, TEP_STYLE)),
         chien_luoc=doc_yaml(os.path.join(thu_muc, TEP_CHIEN_LUOC)),
+        nhom=str(cai.get("nhom") or "").strip(),
+        tep=str(cai.get("tep") or "").strip(),
         duong=thu_muc,
     )
     kenh.anh_nv = _anh_trong(os.path.join(thu_muc, THU_MUC_NV))

@@ -48,6 +48,18 @@ MAC_DINH: Dict[str, object] = {
     # chủ kênh gạt công tắc ở tab Quản lý kênh (đường đăng TAY đang là chính).
     "tu_dang": False,
     "tu_tra_loi_cmt": True,
+    # Chế độ PHIÊN (5 kênh/1 VPS — bước A, 18/09/2026, xem vm/KE-HOACH.md):
+    # mỗi kênh MỘT phiên/ngày (mở trình duyệt → quét → đăng kênh đó → trả lời
+    # cmt kênh đó → đóng), thay vì giữ browser sống 24/7. None = TỰ ĐỘNG theo
+    # số kênh của máy (agent.che_do_phien_bat: >=2 kênh thì BẬT, máy một-kênh
+    # cũ giữ nếp giu_chrome/gio_quet như trước — VM đang sống KHÔNG tự đổi
+    # hành vi); true/false = chủ dự án ép tay từ tool.
+    "che_do_phien": None,
+    # Phiên chạy trước giờ đăng bao nhiêu phút (đủ để quét + đăng + trả lời
+    # cmt xong TRƯỚC khi video lên sóng thật).
+    "phien_truoc_phut": 60,
+    # Giờ phiên khi kênh KHÔNG có gì đăng hôm nay (vẫn quét + trả lời cmt).
+    "gio_phien": "07:30",
 }
 
 #: Những khoá tool được phép đẩy xuống máy ảo. Agent cũng lọc lại đúng danh
@@ -88,7 +100,7 @@ def luu(goc: str, kenh: str, **thay_doi) -> None:
     os.replace(tam, duong)
 
 
-def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
+def dong_goi_vm(goc: str, kenh: str, ung_vien, *, thu_muc_vm: str = "") -> str:
     """Điền sẵn `vm/config.json` để thư mục vm/ chép đi là chạy được luôn.
 
     Chủ dự án, 02/09/2026: *"bên tool chỉ cần setup để thư mục vm chuẩn —
@@ -101,8 +113,14 @@ def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
     địa chỉ mạng trong, VPS thuê ngoài phải đi địa chỉ IPv6 toàn cầu —
     agent tự thử lần lượt (`vm/agent.chay` → `chon_tram`). Tên máy để
     trống cho agent lấy tên máy THẬT lúc chạy.
+
+    `thu_muc_vm`: nơi ghi `config.json` (mặc định `<goc>/vm`, như trước).
+    `core/goi_vps.py` truyền một thư mục khác (bản nháp trong `vm/goi-vps/`
+    hay một thư mục tạm lúc kiểm thử) để KHÔNG đụng `vm/config.json` thật
+    của máy đang chạy tool — hàm này vẫn đọc `goc/VERSION` như cũ.
     """
-    duong = os.path.join(goc, "vm", "config.json")
+    thu_muc_vm = thu_muc_vm or os.path.join(goc, "vm")
+    duong = os.path.join(thu_muc_vm, "config.json")
     cau_hinh = {
         # Hai khoá cho MÁY ĐĂNG (vm/may_dang.py — gốc là dang.py của kho
         # upload): nguồn kế hoạch là TOOL, và mã kênh cho khổ dòng cũ.
@@ -128,7 +146,7 @@ def dong_goi_vm(goc: str, kenh: str, ung_vien) -> str:
     try:
         with open(os.path.join(goc, "VERSION"), encoding="utf-8") as tep:
             ban = tep.read().strip()
-        with open(os.path.join(goc, "vm", "phien-ban.txt"), "w",
+        with open(os.path.join(thu_muc_vm, "phien-ban.txt"), "w",
                   encoding="utf-8") as tep:
             tep.write(ban)
     except OSError:

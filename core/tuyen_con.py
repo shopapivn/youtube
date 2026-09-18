@@ -24,7 +24,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from .phan_tuyen import DAU_MOC_TUOI, MA_LECH_NHIP, MA_TRUNG_NIEN, _dinh_tu_loai_tru
 
-__all__ = ["CHU_DE", "MA_THAP", "MA_TO_MO", "MA_CANH_GIAC", "nhan_dien", "dien_chu_de", "ten_chu_de"]
+__all__ = ["CHU_DE", "MA_THAP", "MA_TO_MO", "MA_CANH_GIAC", "nhan_dien", "dien_chu_de", "ten_chu_de",
+           "regex_cua_tep"]
 
 MA_THAP = "nguoi-bi-danh-gia-thap-hon-nang-luc-that"
 MA_TO_MO = "nguoi-to-mo-xem-minh-la-kieu-nguoi-nao"
@@ -70,6 +71,27 @@ CHU_DE_TRUNG_NIEN: List[Tuple[str, str, "re.Pattern[str]"]] = [
 ]
 
 _TU_KHOA_TRUNG_NIEN = re.compile("片付け|捨て|断捨離|掃除|物が多い|ミニマ|もったいな|家事卒業|物忘れ|認知症|脳の老化|海馬|人生後半|昭和|1970|1974|老い|老け")
+
+
+#: Không có tuyến con nào cho tệp này (mã lạ) — regex không khớp gì cả, thay vì `None` để mọi
+#: nơi gọi khỏi phải tự kiểm tra rỗng.
+_KHONG_KHOP = re.compile(r"(?!x)x")
+
+
+def regex_cua_tep(ma: str) -> "re.Pattern[str]":
+    """Regex nhận diện của MỘT TỆP — hợp mọi từ khoá tuyến con thuộc tệp đó.
+
+    Dùng làm `tu_khop` cho `chot_doi_thu.chot` khi kênh trong nhóm đánh một tệp KHÁC tệp 1
+    (`MA_LECH_NHIP` giữ nguyên `chot_doi_thu.TU_KHOP_LECH_NHIP` — tay soạn riêng, không đổi
+    qua hàm này) — không có nó thì mọi kênh trong nhóm bị đo bằng từ khoá của tệp 1, và kênh
+    tệp 3/4/8 không kênh nào "khớp tuyến" được, dồn hết về "thị trường (gần ngách)".
+
+    Mã lạ (không có trong `CHU_DE` lẫn không phải `MA_TRUNG_NIEN`) → regex không khớp gì.
+    """
+    ds = CHU_DE_TRUNG_NIEN if ma == MA_TRUNG_NIEN else CHU_DE.get(ma)
+    if not ds:
+        return _KHONG_KHOP
+    return re.compile("|".join(rx.pattern for _m, _ten, rx in ds))
 
 
 def ten_chu_de(ma: str) -> str:

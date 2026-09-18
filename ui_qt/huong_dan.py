@@ -241,6 +241,48 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Cuộn tới đâu hiện tới đó — sổ nghìn dòng cũng không phải chờ.",
         ],
     },
+    "phan-tich.cong-thuc-v7": {
+        "tieu_de": "Công thức V7 — chọn content làm tiếp",
+        "tom_tat": "Xếp hạng content trong sổ đối thủ bằng thang 100 điểm, dựa "
+                   "vào pool đề xuất của CHÍNH kênh bạn: khán giả YouTube đang đưa "
+                   "tới kênh muốn xem gì, và bản nào đã thắng đúng thứ đó.",
+        "buoc": [
+            "Cách dùng hằng ngày: bấm MỘT NÚT ở mục Đối thủ. Chuỗi đó tự bổ sung "
+            "kênh còn thiếu từ pool, quét số, rồi chấm Công thức V7 (có ví thì AI "
+            "thẩm định luôn). Xong mở mục này là thấy bảng “Nên làm tiếp” — mở mục "
+            "là tự chấm lại trên số mới nhất.",
+            "1. Muốn chấm tay: chọn kênh, bấm “Chấm lại (miễn phí)”. Máy đọc sổ "
+            "content và danh bạ đối thủ (các mục bên cạnh) cùng số liệu Studio của "
+            "kênh bạn. Dòng tóm tắt cho biết video nào đang THẮNG và cụm chủ đề nào "
+            "đang thắng.",
+            "Thang điểm: Cụm đang thắng (30) · Bảng video đề xuất (25) — khán giả "
+            "video đó có bấm sang bạn và ở lại không · Nguồn nổ thật (20) — gấp "
+            "bao nhiêu lần view thường của kênh nguồn · Đang lên (15) · Khuôn (10) "
+            "— độ dài và dạng chân dung người. Từ 75 điểm là “Làm ngay”, 60–74 "
+            "“Nên làm”, 45–59 “Dự bị”.",
+            "“Thẩm định bằng AI” (tuỳ chọn, tốn lượt gọi chữ): AI xem lại nhóm "
+            "đầu bảng — cụm chủ đề, dạng video, tệp tuổi nhắm tới, và có trùng "
+            "đề tài với video bạn đã đăng không. Tool báo số lượt gọi và hỏi "
+            "trước khi gọi. AI không sửa con số nào.",
+            "“Bổ sung kênh còn thiếu” (miễn phí): kênh của những video khán giả "
+            "bạn đã bấm trong pool nhưng sổ chưa có → đưa vào hộp thư đối thủ. "
+            "Chạy MỘT NÚT ở tab Phân tích & Nghiên cứu để quét số, rồi chấm lại.",
+            "2. Bảng “Nên làm tiếp”: chọn một dòng để đọc lý do, bấm đúp để mở "
+            "video, “Chốt làm video này” để ghi vào sổ dự đoán.",
+            "3. Sổ dự đoán: đăng xong, dán mã video của bạn; đủ 48 giờ bấm “Kiểm "
+            "48 giờ” để biết điểm cao có thắng thật không.",
+        ],
+        "luu_y": [
+            "Bị loại trước khi chấm: content đã remake (PROJECTS/AUTO của kênh, "
+            "kể cả bản -v2), kênh nguồn đã “bỏ”, tiêu đề nhắm người lớn tuổi, "
+            "khác chủ đề, độ dài ngoài 8–40 phút.",
+            "Kết quả AI được nhớ trong nghien-cuu/v7-tham-dinh.json: bấm lại không "
+            "trả tiền lại. Kênh vừa đăng thêm video thì AI phải so trùng lại.",
+            "Từ khoá cụm, trọng số và ngưỡng nằm trong nghien-cuu/cong-thuc-v7.json "
+            "— bấm “Cấu hình” để sửa.",
+            "Mỗi lần chấm tự lưu nghien-cuu/cham-v7-<ngày>.csv và .md.",
+        ],
+    },
     "quan-ly-kenh": {
         "tieu_de": "Quản lý kênh",
         "tom_tat": "Mỗi kênh một hồ sơ nằm trong thư mục CHANNEL: phong cách "
@@ -252,12 +294,108 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "“Tạo kênh mới” dựng một kênh trống theo từng bước.",
             "“Nhân bản” chép một kênh thành bản riêng của bạn — sửa thoải mái, "
             "cập nhật tool không đụng vào.",
+            "“Tạo kênh trong nhóm” chép một kênh sang kênh mới CÙNG NHÓM, đánh "
+            "một tệp khán giả khác — xem bài “Tự chạy hằng ngày” ngay dưới thẻ "
+            "kênh để hiểu nhóm là gì.",
             "Chạy sản xuất cho kênh nằm ở tab “Video sản xuất tự động”; số liệu "
-            "kênh xem ở tab “Phân tích & Nghiên cứu”.",
+            "kênh xem ở tab “Phân tích & Nghiên cứu”. Muốn kênh TỰ chạy hằng "
+            "ngày, không cần bấm gì, thì bấm “? Hướng dẫn” trên thẻ “Tự chạy "
+            "hằng ngày” ở cuối trang này.",
         ],
         "luu_y": [
             "Kênh MẪU của tool được cập nhật đè theo tool — đừng sửa thẳng vào "
             "kênh mẫu, hãy Nhân bản trước rồi sửa bản riêng.",
+        ],
+    },
+    "tu-chay-kenh": {
+        "tieu_de": "Tự chạy hằng ngày",
+        "tom_tat": "Cho MỘT kênh tự làm video mỗi ngày, không cần bạn ngồi mở "
+                   "tool và bấm — máy tự nghiên cứu, tự chọn đề tài, tự sản "
+                   "xuất trong một trần tiền bạn đặt trước.",
+        "buoc": [
+            "Chọn kênh trong danh sách phía trên rồi tick “Cho kênh này tự "
+            "chạy”. Chưa tick thì mọi ô khác trong thẻ này không có tác dụng "
+            "— kênh vẫn chạy tay như cũ.",
+            "Đặt “Trần tiền mỗi ngày” — số tiền tối đa kênh này được tiêu MỘT "
+            "NGÀY. Để 0₫ (chưa đặt trần) thì tool KHÔNG tự sản xuất, kể cả khi "
+            "đã tick tự chạy — đây là van an toàn, không phải lỗi.",
+            "Muốn video lên sóng luôn, không cần bạn duyệt lại: tick “Tự đăng, "
+            "không chờ duyệt” rồi đặt “Giờ đăng”. Để tắt (mặc định) thì video "
+            "làm xong nằm chờ, bạn tự gõ giờ đăng khi đã ưng bản.",
+            "Chọn “Thư mục bàn giao” — nơi tool chép gói video đã xong để máy "
+            "ảo lấy đăng. Để trống thì video làm xong không đi đâu cả, tool sẽ "
+            "nói rõ trong báo cáo.",
+            "“Nhóm kênh” + “Tệp khán giả”: gộp nhiều kênh cùng ngách để chúng "
+            "chia sẻ sổ đối thủ và không remake trùng nguồn của nhau. Một mình "
+            "thì để trống nhóm.",
+            "Bấm “Chạy thử (không tốn tiền)” để xem hôm nay tool SẼ chọn video "
+            "nào — bước này chỉ nghiên cứu và chọn đề tài, không sản xuất, "
+            "không mất một đồng nào.",
+            "“Lịch hằng ngày” ở cuối thẻ bật cho MÁY này tự chạy toàn bộ các "
+            "kênh đã tick “tự chạy”, đúng giờ đặt, mỗi ngày một lần.",
+        ],
+        "luu_y": [
+            "Không đặt trần tiền thì tool không tự sản xuất — không phải lỗi, "
+            "đây là cách tool tránh tiêu tiền không giới hạn khi không ai ngồi "
+            "trông.",
+            "“Tự đăng” là video LÊN SÓNG THẬT không ai duyệt lại — chỉ bật khi "
+            "bạn đã tin kịch bản và hình ảnh của kênh này.",
+            "Lịch hằng ngày chỉ chạy được khi MÁY ĐANG BẬT và ĐÃ ĐĂNG NHẬP vào "
+            "đúng giờ đặt — tắt máy hoặc đăng xuất thì hôm đó kênh không chạy.",
+        ],
+    },
+    "trung_tam": {
+        "tieu_de": "Trung tâm",
+        "tom_tat": "Một chỗ để trông mọi kênh tự chạy: kênh nào đang làm gì, "
+                   "video hôm nay là gì, bao giờ lên sóng, tiêu bao nhiêu, còn "
+                   "cách bật kiếm tiền bao xa. Trang tự làm mới mỗi 30 giây từ "
+                   "tệp trên máy — không tốn tiền, không hỏi máy chủ.",
+        "buoc": [
+            "Một ngày chạy thế này. Đúng giờ “Lịch hằng ngày” (ví dụ 02:00), "
+            "máy làm LẦN LƯỢT từng kênh đã bật Tự chạy: tìm hiểu đối thủ, chọn "
+            "một video đang nổ đúng tệp khán giả của kênh, rồi làm đủ tám khâu "
+            "(kịch bản → giọng đọc → … → dựng). Mỗi video mất khoảng 2–4 giờ.",
+            "Làm xong, video được chép sang chỗ máy đăng lấy. Khoảng 60 phút "
+            "trước giờ đăng của từng kênh, máy đăng mở trình duyệt của kênh đó, "
+            "xem số liệu, đăng video, trả lời bình luận, rồi đóng lại — một "
+            "kênh một lúc. Video đã đăng quá 24 giờ thì đồ nặng được dọn (nếu "
+            "kênh bật Tự dọn).",
+            "Bảng kênh — Bây giờ: kênh đang ở đâu, nói bằng lời thường. Video "
+            "hôm nay: tiêu đề video đang làm. Đăng lúc: ngày giờ lên sóng, hoặc "
+            "“chờ duyệt”. 7 ngày: tổng lượt xem · tỷ lệ bấm · đăng ký mới của "
+            "video đăng trong tuần. YPP: giờ xem và người đăng ký so với mốc "
+            "bật kiếm tiền (4.000 giờ, 1.000 người). Tiền: hôm nay đã tiêu / "
+            "trần mỗi ngày. Ô Tự chạy: bật tắt kênh ngay tại đây.",
+            "Bấm một dòng để xem kênh đó ở khung dưới. Tiến độ: tám khâu của "
+            "video đang làm, video nguồn và lý do chọn; “Chạy ngay” làm luôn "
+            "không chờ lịch, “Chạy thử” chỉ xem hôm nay SẼ chọn video nào (không "
+            "tốn tiền).",
+            "Chờ duyệt: video đã xong nhưng chưa có giờ đăng. Chọn một dòng, "
+            "bấm “Xem video” để xem lại, rồi “Duyệt đăng” để đặt ngày giờ — "
+            "hoặc “Bỏ” nếu không muốn đăng (tệp vẫn giữ).",
+            "Hiệu quả: từng video ở mốc 24, 48, 72 giờ (lượt hiển thị · tỷ lệ "
+            "bấm · % xem trung bình) và video đang nghẽn ở cổng nào. Nhật ký: "
+            "máy đã làm gì hôm nay. Cài đặt: trần tiền, giờ đăng, tự đăng, thư "
+            "mục bàn giao của kênh.",
+            "Thêm kênh: ba bước — chép từ một kênh mẫu (hoặc chọn kênh có "
+            "sẵn), chỉ trình duyệt của kênh cho máy đăng, rồi đặt trần tiền và "
+            "giờ đăng. Cài đặt máy: tài khoản, lịch hằng ngày, thư mục bàn giao "
+            "mặc định, kiểm tra cập nhật.",
+        ],
+        "luu_y": [
+            "Trần tiền: kênh chưa đặt trần mỗi ngày thì tool KHÔNG tự sản xuất "
+            "— đây là van an toàn, không phải lỗi. Tiền ở dải trên cùng là số "
+            "ƯỚC TÍNH lúc cho chạy; số ví trừ thật xem ở trang Tài khoản.",
+            "“Tự đăng, không chờ duyệt” nghĩa là video LÊN SÓNG THẬT mà không ai "
+            "xem lại. Chỉ bật khi bạn đã tin kịch bản và hình của kênh đó.",
+            "Dòng tô đỏ là kênh đang hỏng. Rê chuột lên chữ đỏ để đọc lý do, "
+            "mở mục Nhật ký để xem chi tiết. Hỏng giữa chừng thì lượt sau tự "
+            "làm tiếp đúng chỗ dở, không trả tiền lại phần đã xong — sửa xong "
+            "nguyên nhân (ví dụ nạp tiền, đặt trần) rồi bấm “Chạy ngay” nếu "
+            "không muốn chờ tới lịch hôm sau.",
+            "Lịch hằng ngày chỉ chạy khi máy ĐANG BẬT và ĐÃ ĐĂNG NHẬP đúng giờ.",
+            "Các kênh cùng nhóm nên có giọng đọc, nhân vật và cách mở bài khác "
+            "nhau — mục “Nhóm kênh” cuối trang báo khi chúng giống nhau quá.",
         ],
     },
     "chrome-sach": {

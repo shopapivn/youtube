@@ -52,6 +52,21 @@ _C = {"ma": "Mã gói", "ngay": "Ngày đăng", "gio": "Giờ đăng",
 _C_LINK = ("Link card 1", "Link card 2", "Link card 3", "Link card 4")
 
 
+def _danh_sach_kenh(cau_hinh: dict) -> list:
+    """Mọi kênh máy này ĐĂNG — một VPS giờ phục vụ tới 5 kênh cùng niche.
+
+    `CAC_KENH`/`cac_kenh` (bộ cài đóng gói cho máy nhiều kênh) thắng nếu
+    có; không thì về kênh đơn `CHANNEL_CODE`/`kenh` (nếp một-máy-một-kênh
+    cũ — giữ NGUYÊN cho mọi máy đang chạy, không đụng gì tới chúng).
+    """
+    nhieu = (cau_hinh.get("CAC_KENH") or cau_hinh.get("cac_kenh") or [])
+    ds = [str(k).strip() for k in nhieu if str(k).strip()]
+    if ds:
+        return list(dict.fromkeys(ds))
+    don = str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or "")
+    return [don] if don else []
+
+
 def _tram(cau_hinh: dict) -> str:
     """Địa chỉ trạm: config trước; trống thì lấy bản agent đã CHỐT mỗi nhịp
     tim (`cai-dat-tool.json` cạnh đây) — config đóng gói cố ý để trống `tram`
@@ -68,10 +83,10 @@ def _tram(cau_hinh: dict) -> str:
         return ""
 
 
-def _tai_csv(cau_hinh: dict) -> str:
-    """Kế hoạch tươi từ trạm; trạm tắt thì dùng bản đã tải lần trước."""
+def _tai_csv(cau_hinh: dict, kenh: str) -> str:
+    """Kế hoạch tươi CỦA MỘT KÊNH từ trạm; trạm tắt thì dùng bản đã tải lần
+    trước (mỗi kênh một tệp đệm riêng — máy nhiều kênh không giẫm nhau)."""
     tram = _tram(cau_hinh)
-    kenh = str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or "")
     duong_cache = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                "ke-hoach-{0}.csv".format(kenh or "kenh"))
     if tram and kenh:
@@ -93,20 +108,15 @@ def _tai_csv(cau_hinh: dict) -> str:
         return ""
 
 
-def get_rows(cau_hinh: dict, trang_thai_ok: str = "EDIT XONG") -> list:
-    """Toàn bộ dòng theo KHỔ CŨ — thế chân `get_rows_fast(INPUT_SHEET)`.
-
-    Ô trạng thái (AV) được dựng từ hai cột của kế hoạch: `Trạng thái đăng`
-    thắng (máy đã đăng rồi thì kể "ĐÃ ĐĂNG" để vòng dọn dẹp xoá thư mục);
-    chưa đăng mà `Sẵn sàng` có chữ thì kể `trang_thai_ok` — đúng chữ mà
-    `dang.py` đang so (`STATUS_OK` trong config của nó).
-    """
-    chu = _tai_csv(cau_hinh)
+def _hang_mot_kenh(cau_hinh: dict, kenh: str, trang_thai_ok: str) -> list:
+    """Các dòng (khổ CŨ) của MỘT kênh — đóng đúng mã kênh của nó ở cột AI,
+    không ép chung một mã như máy một-kênh trước đây."""
+    chu = _tai_csv(cau_hinh, kenh)
     if not chu.strip():
-        return [[""] * RONG_DONG]
+        return []
     dong_csv = list(csv.reader(io.StringIO(chu)))
     if not dong_csv:
-        return [[""] * RONG_DONG]
+        return []
     cot = [str(o) for o in dong_csv[0]]
     o = {ten: (cot.index(ten) if ten in cot else None)
          for ten in list(_C.values()) + list(_C_LINK)}
@@ -115,8 +125,7 @@ def get_rows(cau_hinh: dict, trang_thai_ok: str = "EDIT XONG") -> list:
         i = o.get(ten)
         return str(d[i]).strip() if i is not None and i < len(d) else ""
 
-    kenh = str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or "")
-    ra = [[""] * RONG_DONG]           # dòng tiêu đề giả — dang.py bỏ qua dòng 0
+    ra = []
     for d in dong_csv[1:]:
         if not d or not lay(d, _C["ma"]):
             continue
@@ -137,15 +146,41 @@ def get_rows(cau_hinh: dict, trang_thai_ok: str = "EDIT XONG") -> list:
     return ra
 
 
-def bao_dang(cau_hinh: dict, ma: str, trang_thai: str = "ĐÃ ĐĂNG") -> bool:
+def get_rows(cau_hinh: dict, trang_thai_ok: str = "EDIT XONG") -> list:
+    """Toàn bộ dòng theo KHỔ CŨ — thế chân `get_rows_fast(INPUT_SHEET)`.
+
+    Máy phục vụ NHIỀU kênh (tối đa 5, một VPS — xem `vm/KE-HOACH.md`): gộp
+    kế hoạch của TỪNG kênh (mỗi kênh một lượt `GET /ke-hoach?kenh=X` riêng),
+    mỗi dòng mang đúng MÃ KÊNH CỦA NÓ. `dang.py` (qua `get_all_ready_codes`)
+    tự lọc theo kênh nó đang đăng — không cần biết gì đổi ở đây; máy MỘT
+    kênh thì y hệt trước (một lượt gọi, một mã kênh).
+
+    Ô trạng thái (AV) được dựng từ hai cột của kế hoạch: `Trạng thái đăng`
+    thắng (máy đã đăng rồi thì kể "ĐÃ ĐĂNG" để vòng dọn dẹp xoá thư mục);
+    chưa đăng mà `Sẵn sàng` có chữ thì kể `trang_thai_ok` — đúng chữ mà
+    `dang.py` đang so (`STATUS_OK` trong config của nó).
+    """
+    ra = [[""] * RONG_DONG]           # dòng tiêu đề giả — dang.py bỏ qua dòng 0
+    for kenh in _danh_sach_kenh(cau_hinh):
+        ra.extend(_hang_mot_kenh(cau_hinh, kenh, trang_thai_ok))
+    return ra
+
+
+def bao_dang(cau_hinh: dict, ma: str, trang_thai: str = "ĐÃ ĐĂNG",
+            kenh: str = None) -> bool:
     """Báo về trạm một gói đã đăng — thế chân `update_source_status`.
+
+    `kenh`: kênh THẬT của gói (máy nhiều kênh — rút từ cột AI của dòng kế
+    hoạch, `may_dang.py` truyền vào); bỏ trống thì lấy kênh mặc định của
+    máy (nếp một-kênh cũ, `CHANNEL_CODE`/`kenh` của config).
 
     Trạm tắt đúng lúc báo thì ghi vào sổ chờ cạnh tệp này; lần gọi sau (hay
     lần chạy sau) gửi bù — không được để mất một dòng "ĐÃ ĐĂNG": mất nó là
     lần chạy sau đăng LẶP đúng video ấy lên kênh thật.
     """
     tram = _tram(cau_hinh)
-    kenh = str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or "")
+    kenh = (str(kenh).strip() if kenh else
+           str(cau_hinh.get("CHANNEL_CODE") or cau_hinh.get("kenh") or ""))
     duong_cho = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "cho-bao-{0}.json".format(kenh or "kenh"))
     cho = []

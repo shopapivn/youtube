@@ -225,3 +225,225 @@ Vệ sinh dài hạn (02/09, "không có bug khi dùng dài hạn"):
   Khởi động của Windows, trỏ `CHAY-NGAM.vbs` (chạy ẩn, tìm Python bằng
   chính CAI-DAT-VM.bat). Agent lạc trạm lâu (10 nhịp hỏng) thì tự dò lại
   ứng viên + ngồi nghe loa gọi của trạm 65 giây.
+
+## 5 kênh / 1 VPS — bước A (18/09/2026)
+
+Nâng `vm/` từ "một máy một kênh" lên "một VPS phục vụ tới NĂM kênh CÙNG
+NICHE", mỗi kênh một trình duyệt `<MÃ>\<MÃ>.exe` nằm SIBLING nhau (vd
+`...\TL\TL4-T7\`, `...\TL\KENH2\`... với `vm/` đặt cạnh). Luật thiết kế của
+chủ dự án: MỘT hành động mỗi bên, còn lại tự chạy; vẫn đúng MỘT tiến trình
+mỗi loại trên máy (một `giao_dien`, một `agent`, một `may_dang`, một
+`may_cmt` — cổng khoá 8766/8767/8768/8769 KHÔNG đổi); mỗi con tự lo CẢ NĂM
+kênh bên trong nó, không nhân bản tiến trình.
+
+- **`vm/config.json`**: thêm `cac_kenh: [...]` (và `chrome_theo_kenh: {}`
+  cho ai cần ghi tay đường Chrome riêng một kênh) — CÒN đọc `kenh` đơn như
+  cũ khi `cac_kenh` trống, máy một-kênh KHÔNG phải đổi gì. `cai_dat_vm.py`
+  tự đoán cả danh sách qua `agent.doan_cac_kenh()` (nếp `<MÃ>\<MÃ>.exe`
+  cạnh nhau) — zero typing; đoán được >1 kênh thì bake thẳng vào
+  `cac_kenh`, đoán được đúng 1 thì `cac_kenh` để trống (nếp cũ). Tách hàm
+  `_kenh_va_danh_sach()` khỏi `cai()` để test được mà không phải chạy
+  bộ cài thật (bộ cài có thể ngồi chờ mạng 10 phút).
+- **`agent.py`**: `doan_cac_kenh()` trả TẤT CẢ kênh cạnh vm/ (khác
+  `doan_kenh()` cũ — vẫn giữ, trả rỗng khi thấy >1). Vòng `chay()` giờ lặp
+  qua `danh_sach_kenh(cau_hinh)` MỖI NHỊP TIM: một `GET /viec?kenh=X&may=Y`
+  cho từng kênh (nhịp 30 giây không đổi — tốn thêm vài lượt gọi LAN rẻ,
+  không nện trạm dày hơn), rồi làm việc TUẦN TỰ (Chrome/PyAutoGUI chỉ có
+  một màn hình). `cau_hinh_kenh()` dựng cấu hình hiệu lực cho từng kênh
+  (đường Chrome riêng — bỏ trường `chrome` đơn khi máy có >1 kênh, trừ khi
+  tool điền `chrome_theo_kenh`). Mắt cào (`bao_dam_tien_ich`) giờ tải vào
+  `tien-ich/<kênh>/` RIÊNG cho máy nhiều kênh (máy một-kênh vẫn dùng thư
+  mục phẳng `tien-ich/` như trước) — dùng CHUNG một thư mục sẽ làm mọi
+  kênh báo nhầm số liệu về đúng một kênh. `viec_theo_lich()` đổi khoá
+  `trang-thai.json` thành `quet_cuoi@<kênh>@<khe>`; mốc đời cũ (không mã
+  kênh) chỉ được "thừa kế" cho khe đầu của KÊNH CHÍNH (`la_kenh_dau=True`,
+  mặc định) — kênh 2..5 không mượn lịch sử của kênh 1. `dang-lam.json` giờ
+  mang thêm `"kenh"`. `cai-dat-tool.json` có khối `"kenh": {<mã>: {...}}`
+  cho từng kênh (`_chep_cho_gui` đọc-sửa-ghi để kênh sau không xoá kênh
+  trước trong cùng một nhịp tim) + vẫn giữ khoá TOP-LEVEL mirror đúng kênh
+  CHÍNH cho bên đọc cũ (GUI/may_dang/may_cmt chỉ biết một kênh).
+- **`nguon_tool.py`**: `get_rows()` gọi `GET /ke-hoach?kenh=X` cho TỪNG
+  kênh trong `CAC_KENH`/`cac_kenh` rồi gộp, mỗi dòng đóng đúng mã kênh của
+  chính nó (không còn ép mọi dòng về `CHANNEL_CODE` của máy). `bao_dang()`
+  nhận thêm `kenh=` tuỳ chọn (rút từ cột AI của dòng — `may_dang.py` truyền
+  vào), bỏ trống thì về kênh mặc định như cũ.
+- **`may_dang.py`**: đã tự `discover_channels()` + đăng tuần tự từ trước —
+  chỉ thêm `_tu_dang_bat(ch_code)` (đọc `cai-dat-tool.json["kenh"][mã]`,
+  mặc định TẮT khi chưa có dữ liệu, khớp `vm_cai_dat.MAC_DINH`) để BỎ QUA
+  đúng kênh đang tắt trong vòng `main()`; `update_source_status()` nhận
+  `channel_code=` (từ `IDX_CHANNEL_AI` của dòng) truyền xuống
+  `nguon_tool.bao_dang` — gói của kênh nào báo về đúng kế hoạch kênh đó.
+- **`may_cmt.py`**: thêm `_tu_tra_loi_bat(channel)` tương tự (mặc định
+  BẬT, khớp `vm_cai_dat.MAC_DINH`), `run_all()` bỏ qua kênh đang tắt.
+- **`giao_dien.py`**: máy MỘT kênh giữ NGUYÊN hai công tắc chung như cũ;
+  máy NHIỀU kênh hiện một bảng nhỏ (mã kênh · quét cuối · Tự đăng · Tự trả
+  lời cmt riêng từng hàng) — `doc_cong_tac_kenh`/`_ghi_cong_tac_kenh_cuc_bo`
+  đọc/ghi đúng khối của kênh đó, `_goi_thiet_lap_vm` POST `/thiet-lap-vm`
+  mang đúng mã kênh của hàng (không còn ngầm định kênh đầu như bản nháp
+  đầu). `doc_cong_tac()` (quyết định có nên MỞ HẲN tiến trình dang/cmt)
+  giờ là HOẶC giữa các kênh — một kênh bật là phải mở, con tự lọc bên
+  trong bằng hai hàm `_tu_dang_bat`/`_tu_tra_loi_bat` ở trên.
+- **Không đụng**: `core/chi_so_ytb/tram.py` (đã sẵn `kenh` theo query/field
+  cho `/viec`, `/ke-hoach`, `/thiet-lap-vm`), `core/vm_cai_dat.py` (đã
+  sẵn theo kênh), số cổng khoá một-mình, `core/tu_chay.py`,
+  `core/nhom_kenh.py`.
+- **Test mới**: `tests/test_vm_nhieu_kenh.py` — đoán nhiều kênh, cấu hình
+  theo kênh, mốc lịch theo kênh + di sản chỉ vào kênh chính, một nhịp tim
+  hỏi HẾT các kênh qua `Tram` thật (cổng 0), gộp kế hoạch nhiều kênh, báo
+  đăng đúng kênh của dòng, gating `_tu_dang_bat`/`_tu_tra_loi_bat`, các hàm
+  thuần của `giao_dien.py`, và `cai_dat_vm._kenh_va_danh_sach`. Mọi test
+  máy MỘT kênh cũ (79 bài, `tests/test_vm_agent.py`) vẫn xanh nguyên —
+  không sửa một bài nào trong đó.
+
+**Còn phải làm/thử trên VM thật:**
+- Chưa chạy thật trên một VPS có 5 trình duyệt kênh cạnh nhau — chỉ mô
+  phỏng qua `Tram` cục bộ (cổng 0) trong test. Cần xác nhận `--load-
+  extension` với 5 thư mục `tien-ich/<kênh>/` riêng không đụng độ khi mở
+  nhiều cửa sổ Chrome portable cùng lúc trên một máy thật.
+- Bảng nhiều-kênh của `giao_dien.py` chưa chụp màn hình thử (Tkinter,
+  không tự test được ngoài các hàm thuần) — cần chủ dự án xem qua bố cục
+  (bảng nhỏ có tràn mép cửa sổ 1000×600 khi tên kênh dài không).
+- "Đăng cuối" chưa có trong bảng nhiều-kênh (chỉ có "Quét cuối") — chưa có
+  nguồn dữ liệu đáng tin (`vm/stats.py` được `may_dang.py`/`may_cmt.py`
+  tham chiếu phòng hờ nhưng chưa tồn tại); để trống thay vì bịa số.
+- `ghep_tool_dang.py` (đường vá `D:\upload\dang.py` gốc, khác với
+  `may_dang.py` đã "chính chủ" ở đây) CHƯA đụng tới — nó vẫn vá ra bản
+  một-kênh; nếu ai còn dùng đường vá đó cho máy nhiều kênh thì phải nâng
+  cấp riêng, chưa nằm trong bước này.
+- `vm/KE-HOACH-5-KENH.md` (một phiên khác đang viết song song, kế hoạch
+  "kênh tự chạy 100%" rộng hơn — nhạc trưởng chạy không cửa sổ, VPS = tool
+  chính + vm/ cùng máy) là một mảnh KHÁC, không đụng trong bước này; bước A
+  ở đây chỉ là lớp vận chuyển việc/kế hoạch/thiết lập cho nhiều kênh.
+
+## Chế độ PHIÊN — thay giữ 5 trình duyệt sống 24/7 (18/09/2026)
+
+Quyết định chủ dự án (VPS đã nâng 8 GB RAM/4 lõi, 5 kênh): KHÔNG giữ Chrome
+của cả 5 kênh sống suốt ngày nữa. Mỗi kênh có đúng MỘT PHIÊN/ngày, ngay
+trước giờ đăng của nó: mở trình duyệt kênh đó → quét Studio + trang chủ →
+đăng ĐÚNG kênh đó (một lượt) → trả lời cmt ĐÚNG kênh đó (một lượt) → đóng
+trình duyệt → sang kênh kế; các phiên KHÔNG bao giờ chồng nhau.
+
+- **Bật/tắt:** `che_do_phien` (mặc định `None` = TỰ ĐỘNG theo số kênh của
+  máy — `agent.che_do_phien_bat`: máy ≥2 kênh thì bật, máy MỘT kênh — mọi
+  VM đang sống hôm nay — thì giữ NGUYÊN nếp cũ `giu_chrome`/`gio_quet`, chủ
+  dự án phải tự ép `true` mới đổi). Hai khoá đi kèm: `phien_truoc_phut`
+  (mặc định 60 — phiên chạy trước giờ đăng bao nhiêu phút) và `gio_phien`
+  (mặc định "07:30" — mốc phiên khi kênh không có gì đăng hôm nay, vẫn quét
+  + trả lời cmt). Cả ba khoá đi qua đúng đường cũ: `core/vm_cai_dat.MAC_DINH`
+  ↔ `vm/agent.KHOA_TU_TOOL`, tool chỉnh trên `may-ao.json`, agent nhận lại
+  qua `/viec` mỗi nhịp tim — không thêm đường dây mới.
+- **Giờ mục tiêu:** lấy giờ đăng SỚM NHẤT của kênh hôm nay từ `GET /ke-hoach`
+  (dòng "Sẵn sàng" + chưa "Trạng thái đăng"), trừ lùi `phien_truoc_phut`;
+  tính MỘT LẦN/ngày rồi cất vào `trang-thai.json`
+  (`phien_muc_tieu@<kênh>@<ngày>`) — nhịp tim sau chỉ so giờ với mốc đã cất,
+  không hỏi `/ke-hoach` lại (luật CLAUDE.md: hỏi dày không làm việc xong sớm
+  hơn). Kênh không có gì đăng hôm nay thì dùng `gio_phien` (vẫn quét + cmt).
+- **Hàng đợi một-lúc-một-kênh:** `agent.chay_hang_doi_phien` xét mọi kênh đã
+  tới giờ mà chưa chạy hôm nay, chọn mục tiêu SỚM NHẤT, chạy ĐÚNG MỘT phiên
+  rồi trả về ngay (agent là một tiến trình, một luồng — không cần khoá gì
+  thêm). Hai kênh cùng phút thì kênh này chạy trước, kênh kia đợi nhịp tim
+  sau (tự nhiên "tuần tự"); phiên trễ/kéo dài tự đẩy lùi phiên kế vì nhịp
+  sau mới xét lại. Việc TAY từ tool (`GET /viec` — "Quét Studio ngay"…) vẫn
+  đi qua đúng vòng cũ, chạy TRƯỚC hàng đợi phiên trong cùng một nhịp tim,
+  cùng một luồng nên không bao giờ chồng lên phiên.
+- **Một-shot cho may_dang.py/may_cmt.py:** cả hai đọc thêm cờ dòng lệnh
+  `--kenh X --mot-lan` (`_doc_co_dong_lenh`) — chạy ĐÚNG một kênh rồi thoát
+  hẳn, không vòng lặp `while True` production nữa. Chọn thiết kế SUBPROCESS
+  một lượt (không phải tệp yêu-cầu `vm/yeu-cau-dang.json`) vì nó giữ đúng
+  MỘT chủ khoá cổng 8768/8769 tại mọi thời điểm mà không cần xây thêm cơ chế
+  đọc-ghi-tệp-yêu-cầu: máy MỘT kênh (nếp cũ) vẫn có thể chạy `may_dang.py`
+  tự lặp như trước (giữ khoá suốt ngày); máy chế độ phiên thì `giao_dien.py`
+  KHÔNG mở hai con này tự lặp nữa (`_duoc_bat` trả `False` khi phiên bật) —
+  agent là người DUY NHẤT bật chúng, mỗi lần một lượt ngắn — nên tại mọi thời
+  điểm chỉ có MỘT tiến trình từng cầm khoá, dù ở chế độ nào.
+  `may_dang.main(chi_kenh=...)` lọc `discover_channels()` xuống đúng một
+  kênh; `may_cmt.py` tôn trọng `_tu_tra_loi_bat(kênh)` ngay trong nhánh
+  `--mot-lan` (không chỉ ở `run_all()`).
+- **`may_dang.py` xác nhận (đọc mã 18/09):** KHÔNG đăng công khai ngay — nó
+  dán ngày/giờ hẹn vào màn "Hẹn lịch" của YouTube rồi bấm nút lên lịch
+  (`handle_step3_4_flow`/`TEMPLATE_SCHEDULE_PUBLISH`), tức dùng bộ đếm giờ
+  CỦA CHÍNH YOUTUBE để publish, không tự đăng ngay lúc bấm. Nó cũng có thể
+  bắt đầu tải/nhập metadata SỚM hơn giờ hẹn khá nhiều: `get_all_ready_codes`
+  chỉ đòi `target_dt > now` (còn ở tương lai) chứ không đòi "gần tới giờ" —
+  nên một phiên chạy 60 phút trước giờ đăng vẫn kịp tải + hẹn lịch, và nếu
+  giờ hẹn đã trôi qua lúc tới bước dán giờ thì tự đẩy thành "giờ hiện tại +
+  10 phút" (không đăng "quá khứ").
+- **Gói video cùng máy — bỏ SMB/tsclient/IPv4 thật (yêu cầu điều phối viên,
+  18/09):** kênh tự chạy trên VPS ghi gói thẳng vào `thu_muc_done` NGAY TRÊN
+  MÁY đăng — `may_dang._cung_may()` nhận ra khi `SERVER_DONE_ROOT` cấu hình
+  == `LOCAL_DONE_ROOT`, hoặc là một đường ổ đĩa LOCAL (không phải
+  `\\server\chia_sẻ`) — đúng thì `main()` trỏ `LOCAL_DONE_ROOT`/
+  `SERVER_DONE_ROOT` về CÙNG một thư mục, bỏ hẳn `smb_connect()`/
+  `smb_disconnect()` (không bật IPv4 một giây nào) và bước copy (nguồn =
+  đích, `_do_ensure_local` tự thấy "đã khớp" mà không sao byte nào). Nhánh
+  lỗi-thì-xoá-rồi-copy-lại (video hỏng giữa chừng) cũng được canh: cùng máy
+  thì KHÔNG xoá gì (đó là bản GỐC duy nhất, không có "server" nào để copy
+  lại) — chỉ báo thật rồi bỏ qua mã đó. Đường CŨ (khác máy, có copy thật)
+  giờ tự XOÁ bản sao local ngay sau khi xác nhận "ĐÃ ĐĂNG" — trước đây bản
+  sao đó nằm lại vĩnh viễn, không ai dọn (`core/don_dep.py` chỉ dọn đúng
+  `thu_muc_done` gốc, không biết gì về bản sao ở `LOCAL_DONE_ROOT`).
+- **Nhãn mốc chụp khi Chrome chỉ mở theo phiên (đọc mã, không sửa —
+  `core/chi_so_ytb` ngoài phạm vi bước này):** `core/ytb_extension/
+  background.js` đặt lịch `chrome.alarms` cho từng mốc giờ CỐ ĐỊNH
+  (6/13/18/24/30/36/48/72…h) và CHỈ đặt lịch khi mốc đó còn ở tương lai lúc
+  `datLich()` chạy; báo thức KHÔNG đặt lại theo tuổi thật lúc bắn — tên mốc
+  trong thư mục lưu (`snap|id|h` → `${h}h`) là con số ĐÃ ĐỊNH SẴN lúc đặt
+  lịch, không phải tuổi video tại lúc chụp thật. Với một phiên/ngày (Chrome
+  chỉ sống một khoảng ngắn quanh giờ đăng), các mốc RƠI ĐÚNG nhịp 24 giờ
+  (24h, 48h, 72h, 96h…) gần như luôn được đặt lịch ở phiên TRƯỚC đó khi còn
+  cách ~0,5–1h trong tương lai (= `phien_truoc_phut`), và vì phiên thường mở
+  đủ lâu (đăng + cmt) để vượt qua đúng mốc đó, nên chúng có xu hướng bắn
+  ĐÚNG lúc, nhãn khớp tuổi thật — `cong_thuc_v7.video_cua_kenh()` (cửa sổ
+  46–52h cho "48h") vì vậy PHẦN LỚN vẫn đọc đúng. Các mốc KHÔNG khớp nhịp
+  24h (6/13/18/30/36/96…) gần như chắc chắn trôi qua lúc Chrome đang tắt —
+  báo thức bị bỏ lại "quá hạn", và Chrome chỉ bắn nó ở lần mở KẾ TIẾP (nhịp
+  tim của alarms API: báo thức quá hạn bắn ngay khi trình duyệt sống lại),
+  tức là ghi dữ liệu chụp ở tuổi thật ~24h SAU mốc danh nghĩa, nhưng vẫn lưu
+  dưới ĐÚNG cái tên cũ (`13h`, `30h`…). Hai nơi đọc lại phản ứng khác nhau:
+  `core/chi_so_ytb/gom.py` đã có sẵn phòng thủ (dòng ~87, đúc kết từ một sự
+  cố THẬT — "thư mục 33h của video 2 mang mtime trễ 6 tiếng") — nó KHÔNG tin
+  tên thư mục, tự tính lại giờ thật từ mtime lúc chụp trừ giờ đăng
+  (`moc_gio = round((t - g) / 3600)`), nên đầu ra của nó vẫn đúng. Nhưng
+  `core/cong_thuc_v7.video_cua_kenh()` thì KHÔNG — nó đọc `gio = _gio_moc(con)`
+  THẲNG từ TÊN thư mục và chỉ lọc theo cửa sổ số (12–14h cho "13h", 46–52h
+  cho "48h"), không so gì với thời điểm chụp thật. Rủi ro rõ nhất: mốc "13h"
+  — chính là mốc sổ tay kênh dùng để phán "sống hay chết" sớm nhất — gần như
+  KHÔNG BAO GIỜ khớp nhịp 24h nên gần như luôn bắn trễ (~23–24h thật) mà vẫn
+  mang tên "13h"; `cong_thuc_v7` sẽ đọc nhầm số liệu ở tuổi ~23h rồi tưởng đó
+  là số liệu 13h. Đây là PHÁT HIỆN, không sửa — sửa `cong_thuc_v7.py` không
+  thuộc phạm vi bước phiên này (tệp bị khoá cho một nhánh khác); cách chữa
+  hợp lý nhất (nếu ai nhận việc đó) là làm y hệt `gom.py`: đọc mtime thật của
+  `tong-quan.json`, không tin tên thư mục.
+- **Test:** `tests/test_vm_phien.py` (29 bài) — `che_do_phien_bat` tự động
+  theo số kênh + tool ép tay; giờ mục tiêu từ CSV kế hoạch (bỏ dòng chưa
+  duyệt/đã đăng/ngày khác, chọn SỚM NHẤT) trừ lùi phút, fallback khi kênh
+  rảnh hôm nay; `den_gio_phien`; tính mục tiêu MỘT LẦN qua `Tram` cổng 0 thật
+  rồi cất — trạm tắt sau đó vẫn ra đúng mốc; hàng đợi hai kênh cùng phút chỉ
+  chạy MỘT, kênh sớm hơn luôn thắng dù đứng sau trong danh sách; thứ tự một
+  phiên (quét Studio → quét trang chủ → đăng → cmt → đóng), một bước hỏng
+  không chặn bước sau; `_chay_mot_lan` (subprocess thật, "xong"/"QUÁ HẠN");
+  `--kenh X --mot-lan` của cả hai tool con (đọc bằng kỹ thuật cắt-mã-nguồn-
+  rồi-exec như `test_vm_nhieu_kenh.py`, không nạp cả module vì đụng
+  PyAutoGUI); máy MỘT kênh chạy `chay(cau_hinh, mot_vong=True)` KHÔNG đụng
+  hàng đợi phiên, máy nhiều kênh (`cac_kenh` ≥2) tự động ĐI QUA hàng đợi và
+  không gọi `giu_chrome`; khoá whitelist hai đầu khớp nhau; `may_dang._cung_may`
+  (cùng đường / đường local không UNC / đường UNC / rỗng). Toàn bộ
+  `python -m pytest tests/ -q`: 3338 passed, 6 skipped (chạy sạch — hai lần
+  chạy trước đó thấy 1-2 bài NGOÀI phạm vi bước này đỏ thoáng qua rồi xanh
+  lại khi chạy riêng, khớp cảnh báo "nhiều phiên song song sửa cùng kho" ở
+  đầu tệp này, không phải lỗi do bước phiên gây ra).
+
+**Còn để ngỏ / cần chủ dự án xem:**
+- Chưa chạy PHIÊN thật trên VPS — chỉ mô phỏng hàng đợi + `_chay_mot_lan`
+  (subprocess thật, script Python giả) trong test; chưa thử với Chrome +
+  PyAutoGUI thật một vòng phiên trọn vẹn.
+- `giao_dien.py` bảng nhiều-kênh đổi cột "Quét cuối" → "Phiên kế" khi phiên
+  bật (mã kênh · "HH:MM" · ✓/⚠ kết quả phiên gần nhất) — chưa chụp màn hình
+  thử, tiêu đề cột chốt lúc MỞ bảng (đổi chế độ phiên khi bảng đang mở thì
+  nội dung ô cập nhật ngay, tiêu đề cột thì phải mở lại bảng mới đổi).
+- Nhãn mốc chụp lệch (mục trên) — phát hiện, chưa sửa; nằm ngoài phạm vi
+  `core/chi_so_ytb`/`core/cong_thuc_v7.py` của bước này.
+- `phien_han_dang_giay`/`phien_han_cmt_giay` (hạn chờ subprocess, mặc định
+  90 phút/30 phút) là khoá MÁY (`config.json`), chưa đưa vào
+  `core/vm_cai_dat` — đây là hạn kỹ thuật, không phải núm chủ dự án cần vặn
+  từ tool; thêm sau nếu thực tế cần chỉnh theo kênh.

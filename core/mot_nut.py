@@ -50,9 +50,10 @@ from . import doi_thu_kenh as so
 from . import phan_tuyen as pt
 from . import quet_doi_thu
 from . import trang_chu as tcm
+from . import tuyen_con
 from . import tuyen_noi_dung as tn
 from .da_lam import danh_dau_da_lam, doc_ma_da_lam
-from .phan_tuyen import DAU_MOC_TUOI, MA_LECH_NHIP, _dinh_tu_loai_tru, sua_so_theo_luat_cung
+from .phan_tuyen import DAU_MOC_TUOI, MA_LECH_NHIP, MA_TRUNG_NIEN, _dinh_tu_loai_tru, sua_so_theo_luat_cung
 
 __all__ = ["BaoCao", "TEP_BAO_CAO", "TEP_DANH_SACH", "chay", "doc_danh_sach", "dien_tuyen_kenh",
            "tuyen_dang_danh", "tuyen_de_xuat", "gan_tuyen_ai"]
@@ -104,6 +105,9 @@ class BaoCao:
     vuot: List[DongDeXuat] = field(default_factory=list)
     tep_bao_cao: str = ""
     nhat_ky: List[str] = field(default_factory=list)
+    #: Công thức V7 chạy ở cuối chuỗi (18/09/2026): số kênh bổ sung từ pool, số dòng AI thẩm định,
+    #: đếm theo loại và top đề xuất — để mở mục Công thức V7 là có sẵn "làm video nào tiếp".
+    v7: Dict[str, object] = field(default_factory=dict)
 
     def tom_tat(self) -> str:
         ai = ""
@@ -111,12 +115,16 @@ class BaoCao:
             ai = " · AI: hỏi {0} kênh (loại {1}), gán tuyến {2}/{3} dòng".format(
                 self.chot.get("ai_hoi", 0), self.chot.get("ai_loai", 0),
                 self.gan_tuyen.get("ghi", 0), self.gan_tuyen.get("can", 0))
+        v7 = ""
+        if self.v7.get("top"):
+            v7 = " · V7: Làm ngay {0}, Nên làm {1} — số 1: {2}".format(
+                self.v7.get("lam_ngay", 0), self.v7.get("nen_lam", 0), self.v7["top"][0])
         return ("trang chủ: {0} video · +{1} kênh hộp thư → chốt: +{2} theo dõi, {3} bỏ, {4} chờ bạn · "
-                "quét {5} kênh / {6} video · MỚI đúng tuyến {7} (+{8} chưa gán tuyến) · BỨT {9} · VƯỢT {10}{11}"
+                "quét {5} kênh / {6} video · MỚI đúng tuyến {7} (+{8} chưa gán tuyến) · BỨT {9} · VƯỢT {10}{11}{12}"
                 .format(self.trang_chu.get("video", 0), self.trang_chu.get("kenh_moi", 0),
                         self.chot.get("theo_doi", 0), self.chot.get("bo", 0), self.chot.get("o_lai", 0),
                         self.quet.get("kenh", 0), self.quet.get("video", 0), len(self.moi),
-                        len(self.moi_chua_tuyen), len(self.but), len(self.vuot), ai))
+                        len(self.moi_chua_tuyen), len(self.but), len(self.vuot), ai, v7))
 
 
 def tuyen_de_xuat(goc: str, kenh: str) -> List[pt.TuyenDeXuat]:
@@ -144,7 +152,8 @@ def tuyen_de_xuat(goc: str, kenh: str) -> List[pt.TuyenDeXuat]:
 
 def gan_tuyen_ai(goc: str, kenh: str, client, *, gan: Optional[Callable[..., list]] = None,
                  on_log: Optional[Callable[[str], None]] = None,
-                 cancel: Optional[threading.Event] = None) -> Dict[str, int]:
+                 cancel: Optional[threading.Event] = None,
+                 bo_qua_zatsugaku: bool = False) -> Dict[str, int]:
     """Bước 4b: gán tuyến bằng AI cho dòng content CHƯA có nhãn. Ghi khi AI đủ chắc, còn thì để trống.
 
     Ánh xạ theo LINK, không theo vị trí — bảng có thể đổi giữa chừng (cùng luật với nút "Gán tuyến").
@@ -186,6 +195,7 @@ def gan_tuyen_ai(goc: str, kenh: str, client, *, gan: Optional[Callable[..., lis
     kenh_nguon = [str(d[i_k]) if i_k is not None and i_k < len(d) else "" for d in can]
     gan = gan or pt.gan_tuyen
     ket = gan(client, tieu_de, tuyen_co, kenh_nguon=kenh_nguon, on_log=on_log,
+              bo_qua_zatsugaku=bo_qua_zatsugaku,
               kiem_dung=(lambda: (_ for _ in ()).throw(RuntimeError("dừng")) if cancel is not None and cancel.is_set() else None))
     theo_link = {}
     for d, k in zip(can, ket):
@@ -249,6 +259,11 @@ def _xep_hang(goc: str, kenh: str, tuyen: List[str], hom_nay: _dt.date):
     o = {c: i for i, c in enumerate(cot)}
     if not hang or so.COT_LINK not in o:
         return [], [], [], []
+    # Kênh đang đánh tệp 3 (tò mò) thì 雑学 KHÔNG phải từ loại trừ — kênh chuyên nhất của
+    # tệp ấy tự gọi mình là 雑学. Kênh đang đánh tệp trung niên thì mốc tuổi (DAU_MOC_TUOI)
+    # KHÔNG phải lý do loại — đó chính là nhân vật chính tệp ấy đi tìm.
+    bo_qua_zats = tuyen_con.MA_TO_MO in tuyen
+    giu_mac_tuoi = MA_TRUNG_NIEN in tuyen
     diem = cham.cham_bang(cot, hang, hom_nay=hom_nay)
     c2, h2 = db.doc(goc, kenh)
     o2 = db.chi_so_cot(list(c2))
@@ -266,7 +281,9 @@ def _xep_hang(goc: str, kenh: str, tuyen: List[str], hom_nay: _dt.date):
         if o_(d, so.COT_DA_LAM).strip():
             continue
         td = o_(d, "Tiêu đề video")
-        if not td.strip() or _dinh_tu_loai_tru(td) or any(m in td for m in DAU_MOC_TUOI):
+        if not td.strip() or _dinh_tu_loai_tru(td, bo_qua_zatsugaku=bo_qua_zats):
+            continue
+        if not giu_mac_tuoi and any(m in td for m in DAU_MOC_TUOI):
             continue
         nhan = o_(d, so.COT_TUYEN).strip()
         dong = DongDeXuat(tieu_de=td, kenh=ten_kenh, link=o_(d, so.COT_LINK), view=int(_so(o_(d, "View"))),
@@ -353,6 +370,12 @@ def _viet_bao_cao(goc: str, kenh: str, bc: BaoCao, luc: _dt.datetime) -> str:
             bc.quet.get("kenh", 0), bc.quet.get("video", 0), bc.quet.get("dong_truoc", 0), bc.quet.get("dong_sau", 0)),
         "- Gán tuyến AI: {0}/{1} dòng · Luật cứng: {2} · Đã làm: {3} dòng\n".format(
             bc.gan_tuyen.get("ghi", 0), bc.gan_tuyen.get("can", 0), bc.luat_cung, bc.da_lam),
+        # Công thức V7 đứng TRÊN ba bảng cũ: nó là câu trả lời "làm video nào tiếp", ba bảng kia là thị trường.
+        "## Công thức V7 — nên làm tiếp\n\n" + (
+            "\n".join("{0}. {1}".format(i, t) for i, t in enumerate(bc.v7.get("top") or [], 1))
+            or "_(chưa có — xem nhật ký bên dưới)_") + (
+            "\n\nKênh bổ sung từ pool: {0} · AI thẩm định: {1} tiêu đề. Bảng đầy đủ: mục **Công thức V7**."
+            .format(bc.v7.get("kenh_bo_sung", 0), bc.v7.get("ai", 0))) + "\n",
         bang("MỚI ≤ {0} ngày, đúng tuyến (chưa làm, kênh theo dõi, không thẻ già)".format(NGAY_MOI), bc.moi),
         bang("MỚI ≤ {0} ngày, CHƯA gán tuyến — bấm “Gán tuyến” rồi chạy lại".format(NGAY_MOI), bc.moi_chua_tuyen),
         bang("BỨT — chạy nhanh hơn mức thường của chính nó (≥ ×{0})".format(NGUONG_BUT), bc.but, cot_dau="bứt"),
@@ -395,6 +418,40 @@ def doc_danh_sach(goc: str, kenh: str) -> Optional[Dict]:
         return None
 
 
+def _cham_v7(goc: str, kenh: str, bc: BaoCao, client, goi_v7: Optional[Callable], log) -> None:
+    """Cuối chuỗi: chấm Công thức V7 trên sổ vừa quét; có ví thì AI thẩm định nhóm đầu bảng rồi chấm lại.
+
+    Chủ dự án, 18/09/2026: *"chạy một nút thì mọi thứ sau khi xong v7 cũng phải có số liệu đủ và chuẩn để
+    tao còn biết làm video nào tiếp"*. AI ở đây cùng ví với ba chỗ AI khác của chuỗi, và chỉ gửi tiêu đề
+    CHƯA thẩm định (kết quả nhớ trong `v7-tham-dinh.json`) — lượt hằng ngày thường chỉ tốn vài lượt gọi.
+    Hỏng ở đâu thì ghi nhật ký rồi thôi: bảng MỚI/BỨT/VƯỢT phía trên vẫn phải ra.
+    """
+    try:
+        from . import cong_thuc_v7 as v7  # noqa: PLC0415
+
+        log("V7: chấm công thức V7…")
+        kq = v7.cham(goc, kenh)
+        if client is not None or goi_v7 is not None:
+            from . import cong_thuc_v7_ai as ai  # noqa: PLC0415
+
+            so_td, luot = ai.uoc_luot(goc, kenh, kq)
+            if so_td:
+                log("V7: AI thẩm định {0} tiêu đề ({1} lượt gọi chữ)…".format(so_td, luot))
+                bc.v7["ai"] = ai.tham_dinh(client, goc, kenh, kq, goi=goi_v7 or ai.goi_van_ban, on_log=log)
+                kq = v7.cham(goc, kenh)
+        v7.luu_bao_cao(goc, kenh, kq)
+        dem: Dict[str, int] = {}
+        for d in kq.ung_vien:
+            dem[d.loai] = dem.get(d.loai, 0) + 1
+        bc.v7.update(lam_ngay=dem.get(v7.LAM_NGAY, 0), nen_lam=dem.get(v7.NEN_LAM, 0),
+                     top=["{0} ({1} điểm)".format(d.tieu_de[:50], d.diem) for d in kq.ung_vien[:5]
+                          if d.loai in (v7.LAM_NGAY, v7.NEN_LAM)],
+                     canh_bao=list(kq.canh_bao))
+        log("V7: Làm ngay {0} · Nên làm {1}".format(bc.v7["lam_ngay"], bc.v7["nen_lam"]))
+    except Exception as loi:  # noqa: BLE001
+        log("  V7 hỏng, bảng MỚI/BỨT/VƯỢT vẫn ra: {0}".format(str(loi)[:120]))
+
+
 def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Optional[float] = None,
          client=None,
          tra_video: Optional[Callable[..., Dict[str, str]]] = None,
@@ -403,6 +460,7 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
          goi_ai: Optional[Callable] = None,
          hoi_ai_kenh: Optional[Callable] = None,
          gan_tuyen: Optional[Callable] = None,
+         goi_v7: Optional[Callable] = None,
          so_video: int = 60,
          on_log: Optional[Callable[[str], None]] = None,
          cancel: Optional[threading.Event] = None,
@@ -422,18 +480,44 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
 
     lang, phut = _ho_so(goc, kenh, lang, phut_muc_tieu)
     bc.tuyen = tuyen_dang_danh(goc, kenh)
+    # Kênh trong nhóm đánh một tệp KHÁC tệp 1 (nhóm-kênh, xem `nhom_kenh`): 雑学 KHÔNG phải
+    # dấu loại ở đây — kênh chuyên nhất của tệp 3 tự gọi mình là 雑学 (BAN-DO-TEP-KHAN-GIA.md).
+    # Dùng suốt cả chuỗi (trang chủ, chốt danh bạ, gán tuyến, luật cứng) — lệch một chỗ là
+    # lối tắt câm lặng dừng chạy, đúng luật CLAUDE.md.
+    bo_qua_zats = tuyen_con.MA_TO_MO in bc.tuyen
     if client is not None and goi_ai is None:
         goi_ai = lambda tds: tcm.phan_loai_bang_ai(client, tds)  # noqa: E731
 
     log("1/7 trang chủ máy ảo: tra + lọc tâm lý{0}…".format(" (+AI cho phần lưỡng lự)" if goi_ai else ""))
-    tham = {"lang": lang, "goi_ai": goi_ai, "cancel": cancel, "on_log": log}
+    tham = {"lang": lang, "goi_ai": goi_ai, "cancel": cancel, "on_log": log,
+            "bo_qua_zatsugaku": bo_qua_zats}
     if tra_video is not None:
         tham["tra"] = tra_video
     bc.trang_chu = tcm.hoan_thien(goc, kenh, **tham)
 
+    # V7 — kênh của video khán giả kênh đã bấm (pool đề xuất) mà sổ chưa có: đưa vào hộp thư NGAY TRƯỚC
+    # bước chốt, để chính lượt này lọc và quét số của chúng. Miễn phí, hỏng thì bỏ qua.
+    try:
+        from . import cong_thuc_v7 as v7  # noqa: PLC0415
+
+        thieu = v7.kenh_con_thieu(goc, kenh)
+        bc.v7["kenh_bo_sung"] = v7.them_vao_hop_thu(goc, kenh, [l for l, _x, _t in thieu])
+        if thieu:
+            log("V7: bổ sung {0} kênh từ pool đề xuất vào hộp thư".format(bc.v7["kenh_bo_sung"]))
+    except Exception as loi:  # noqa: BLE001
+        log("  V7 bổ sung kênh hỏng, đi tiếp: {0}".format(str(loi)[:100]))
+
+    # Dùng đúng từ khoá nhận biết của TỆP kênh đang đánh thay vì bộ "lệch nhịp" mặc định —
+    # không thì kênh tệp 3/4/8 không kênh nào "khớp tuyến" được ở cửa 4 của `chot_doi_thu`.
+    # Tệp 1 giữ nguyên bộ mặc định (`TU_KHOP_LECH_NHIP`, tay soạn riêng).
+    tham_chot: Dict[str, object] = {"lang": lang, "phut_muc_tieu": phut, "lay_kenh": lay_kenh,
+                                    "client": client, "hoi": hoi_ai_kenh, "on_log": log, "cancel": cancel,
+                                    "bo_qua_zatsugaku": bo_qua_zats}
+    if len(bc.tuyen) == 1 and bc.tuyen[0] != MA_LECH_NHIP:
+        tham_chot["tu_khop"] = tuyen_con.regex_cua_tep(bc.tuyen[0])
+
     log("2/7 chốt hộp thư vào danh bạ (bốn cửa máy{0})…".format(" + cửa AI" if client is not None else ""))
-    bc.chot = chot_doi_thu.chot(goc, kenh, lang=lang, phut_muc_tieu=phut, lay_kenh=lay_kenh,
-                                client=client, hoi=hoi_ai_kenh, on_log=log, cancel=cancel)
+    bc.chot = chot_doi_thu.chot(goc, kenh, **tham_chot)
 
     log("3/7 quét content mọi kênh đang theo dõi…")
     links = db.dang_theo_doi(goc, kenh)
@@ -443,8 +527,6 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
     # 4a. Tệp → tuyến con bằng TỪ KHOÁ trước (miễn phí, lặp lại được): dòng nhận ra thì có cả tệp lẫn
     # chủ đề; AI ở 4b chỉ còn phần máy không nhận ra. (06/09: phân theo tệp khán giả, có tuyến con.)
     try:
-        from . import tuyen_con  # noqa: PLC0415
-
         bc.chu_de = tuyen_con.dien_chu_de(goc, kenh)
         log("4/7 tuyến con theo từ khoá: điền chủ đề {0} dòng, tệp cho {1} dòng trống".format(
             bc.chu_de.get("chu_de", 0), bc.chu_de.get("tep_moi", 0)))
@@ -453,13 +535,14 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
         bc.chu_de = {"chu_de": 0, "tep_moi": 0, "xem": 0}
     log("4/7 gán tuyến bằng AI cho dòng chưa có nhãn…" if client is not None else "4/7 (không có ví — bỏ qua gán tuyến AI)")
     try:
-        bc.gan_tuyen = gan_tuyen_ai(goc, kenh, client, gan=gan_tuyen, on_log=log, cancel=cancel)
+        bc.gan_tuyen = gan_tuyen_ai(goc, kenh, client, gan=gan_tuyen, on_log=log, cancel=cancel,
+                                    bo_qua_zatsugaku=bo_qua_zats)
     except Exception as loi:  # noqa: BLE001 — AI hỏng thì dòng để trống, chuỗi vẫn đi tiếp
         log("  gán tuyến AI hỏng, để trống: {0}".format(str(loi)[:120]))
         bc.gan_tuyen = {"can": 0, "ghi": 0}
 
     log("5/7 luật cứng lên nhãn tuyến…")
-    bc.luat_cung = sua_so_theo_luat_cung(goc, kenh)
+    bc.luat_cung = sua_so_theo_luat_cung(goc, kenh, bo_qua_zatsugaku=bo_qua_zats)
 
     log("6/7 đánh lại cột Đã làm…")
     cot, hang = so.doc_bang(goc, kenh)
@@ -474,6 +557,7 @@ def chay(goc: str, kenh: str, *, lang: Optional[str] = None, phut_muc_tieu: Opti
         log("  điền tuyến cho kênh hỏng: {0}".format(str(loi)[:80]))
     luc = _dt.datetime.now()
     bc.moi, bc.moi_chua_tuyen, bc.but, bc.vuot = _xep_hang(goc, kenh, bc.tuyen, hom_nay or luc.date())
+    _cham_v7(goc, kenh, bc, client, goi_v7, log)
     bc.tep_bao_cao = _viet_bao_cao(goc, kenh, bc, luc)
     log("xong: " + bc.tom_tat())
     return bc

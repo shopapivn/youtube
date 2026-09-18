@@ -50,7 +50,8 @@ from .so_csv import chi_so_cot, doc_csv, luu_csv
 
 __all__ = ["COT", "TRANG_THAI", "DANG_DANH", "DANG_XEM", "BO", "TEP",
            "duong_so", "doc", "luu", "ma_tu_ten", "danh_sach", "ten_theo_ma",
-           "them", "khoi_tu_bang", "tuyen_cua_kenh"]
+           "them", "khoi_tu_bang", "tuyen_cua_kenh", "TEP_THEO_SO", "ma_tep",
+           "gieo_cho_kenh"]
 
 TEP = "tuyen.csv"
 
@@ -212,6 +213,156 @@ def khoi_tu_bang(goc: str, kenh: str, gia_tri_da_dung: Sequence[str]) -> int:
         da_co.add(ma)
         them_moi += 1
     return them_moi
+
+
+# ═══ NĂM TỆP KHÁN GIẢ — cầu nối số ↔ mã ↔ chân dung ═══════════════════════════
+#
+# `CHANNEL/TL4-T7/nghien-cuu/BAN-DO-TEP-KHAN-GIA.md` (04/09/2026) đặt số cho 5 tệp: 1·2·3·4·8
+# (không liền mạch — 5, 6, 7 là ba "tệp" dựng rồi bỏ, xem tài liệu ấy). Số này đi vào
+# `kenh.yaml` (khoá `tep`) vì gõ một chữ số dễ hơn gõ mã dài; nơi cần MÃ (tuyen.csv, sổ content,
+# `cong_thuc_v7`, `tuyen_con`) thì đổi qua `ma_tep`.
+#
+# Nhập TRỄ (trong hàm, không ở đầu tệp): `phan_tuyen` đã nhập ngược `tuyen_noi_dung.ma_tu_ten`,
+# và `tuyen_con` nhập `phan_tuyen` — nhập thẳng ở đầu tệp này thành vòng tròn.
+
+
+def _theo_so() -> Dict[str, str]:
+    from .phan_tuyen import MA_LECH_NHIP, MA_TRUNG_NIEN  # noqa: PLC0415 — tránh vòng nhập, xem trên
+    from .tuyen_con import MA_CANH_GIAC, MA_THAP, MA_TO_MO  # noqa: PLC0415
+
+    return {"1": MA_LECH_NHIP, "2": MA_THAP, "3": MA_TO_MO, "4": MA_TRUNG_NIEN, "8": MA_CANH_GIAC}
+
+
+def __getattr__(ten):  # PEP 562 — cho `tuyen_noi_dung.TEP_THEO_SO` đọc như một hằng số bình thường
+    if ten == "TEP_THEO_SO":
+        return _theo_so()
+    raise AttributeError(ten)
+
+
+def ma_tep(tep) -> str:
+    """Số tệp ("1"/"2"/"3"/"4"/"8", theo `BAN-DO-TEP-KHAN-GIA.md`) hay chính mã tệp → mã tệp.
+
+    Không nhận ra (số lạ, chữ lạ, rỗng) → `""`. Nhận cả số nguyên lẫn chữ ("1", 1) vì
+    `kenh.yaml` có thể chép qua lại giữa YAML và giao diện dưới hai dạng.
+    """
+    tep = str(tep or "").strip()
+    if not tep:
+        return ""
+    theo_so = _theo_so()
+    if tep in theo_so:
+        return theo_so[tep]
+    if tep in theo_so.values():
+        return tep
+    return ""
+
+
+#: Chân dung 5 tệp — CHÉP ĐÚNG bảng "Insight — câu họ thầm nghĩ" của `BAN-DO-TEP-KHAN-GIA.md`.
+#: Dùng làm số liệu DỰ PHÒNG khi kênh gốc chưa có `tuyen.csv` — chính tài liệu ấy ghi nhận
+#: TL4-T7 bản ship không mang theo `tuyen.csv` (`.gitignore` bỏ qua `nghien-cuu/`, xem mục
+#: "MỘT VIỆC CHƯA LÀM"), nên một kênh em nhân bản từ TL4-T7 mới cứng thường rơi đúng ca này.
+def _chan_dung_5_tep() -> Dict[str, Dict[str, str]]:
+    from .phan_tuyen import MA_LECH_NHIP, MA_TRUNG_NIEN  # noqa: PLC0415
+    from .tuyen_con import MA_CANH_GIAC, MA_THAP, MA_TO_MO  # noqa: PLC0415
+
+    return {
+        MA_LECH_NHIP: {
+            "ten": "Người sống lệch nhịp số đông",
+            "insight": "Ai cũng thế, mình thì không. Chắc mình có vấn đề.",
+            "luc_bam": "tự nghi ngờ", "ho_can": "được gỡ tội",
+            "tu_khoa": "không hứng thú thể thao · thích ở một mình · ít bạn · phòng bừa · "
+                       "không dùng mạng xã hội",
+        },
+        MA_THAP: {
+            "ten": "Người bị đánh giá thấp hơn năng lực thật",
+            "insight": "Tôi nhìn ra thứ người khác không nhìn ra — mà cái đó không được tính "
+                       "vào đâu.",
+            "luc_bam": "ấm ức", "ho_can": "được đo lại",
+            "tu_khoa": "học vấn không đẹp mà giỏi việc · ít nói mà nói trúng · thức khuya · "
+                       "bị coi là khó gần",
+        },
+        MA_TO_MO: {
+            "ten": "Người tò mò xem mình là kiểu người nào",
+            "insight": "Cái thói quen vặt vãnh này của tôi — hoá ra nó nói lên điều gì?",
+            "luc_bam": "thoải mái", "ho_can": "được tặng điều thú vị",
+            "tu_khoa": "làm vườn · leo núi · chó mèo hay lại gần · giữ xe cũ · dậy sớm — "
+                       "toàn thứ vô hại, kể cả 雑学 vặt vãnh",
+        },
+        MA_TRUNG_NIEN: {
+            "ten": "Người trung niên thu gọn đời sống",
+            "insight": "Đời đang trôi khỏi tay tôi. Tôi cần một thứ mình còn cầm được.",
+            "luc_bam": "đời nhạt dần", "ho_can": "một việc làm được ngay",
+            "tu_khoa": "dọn nhà, bỏ bớt đồ · trí nhớ, não già · tuổi tác là nhân vật chính",
+        },
+        MA_CANH_GIAC: {
+            "ten": "Người cảnh giác kẻ độc hại",
+            "insight": "Tôi từng tin sai một người — lần này phải đọc ra hắn trước.",
+            "luc_bam": "cảnh giác", "ho_can": "mắt nhìn người",
+            "tu_khoa": "nhận diện người độc hại, thao túng, hai mặt, hay đổ lỗi cho người khác",
+        },
+    }
+
+
+def gieo_cho_kenh(goc: str, ma_goc: str, ma_moi: str, ma_tep: str) -> int:  # noqa: A002 — xem docstring
+    """Gieo `tuyen.csv` cho kênh MỚI (`ma_moi`) vừa tách khỏi `ma_goc`, đánh dấu tệp nó
+    nhắm (`ma_tep`, đã qua hàm cùng tên ở trên) là "đang đánh".
+
+    Cả 5 tệp cùng một NGÁCH nên bản đồ tệp là dữ liệu CHUNG — không phải phán quyết riêng
+    của kênh gốc (khác hẳn `doi-thu.csv`/`cong-thuc-v7.json`, xem `nhom_kenh`). Vì vậy hàm
+    này CHÉP cả bảng của kênh gốc sang, chỉ đổi TRẠNG THÁI cho khớp kênh mới:
+
+    * dòng đúng `ma_tep`              → "đang đánh", "Kênh của tôi" = `ma_moi`.
+    * dòng "đang đánh"/"đang xem" khác → "đang xem", "Kênh của tôi" để trống (đó là phán
+      quyết "kênh NÀO đánh tuyến ấy" — kênh mới không đánh nó thì không được nhận vơ).
+    * dòng "bỏ"                       → giữ nguyên "bỏ" (kèm lý do khách đã ghi).
+
+    Kênh gốc CHƯA có `tuyen.csv` (ví dụ TL4-T7 bản ship, xem "MỘT VIỆC CHƯA LÀM" trong
+    `BAN-DO-TEP-KHAN-GIA.md`) thì dựng từ `_chan_dung_5_tep()` — cùng nội dung tài liệu ấy.
+
+    `ma_tep` không nhận ra được (không khớp mã tệp nào đã biết) thì không ghi gì, trả 0 —
+    KHÔNG bịa một dòng "đang đánh" rỗng.
+
+    Trả số dòng đã ghi vào `tuyen.csv` của kênh mới.
+    """
+    dich = str(ma_tep or "").strip()
+    cot_goc, hang_goc = doc(goc, ma_goc)
+    if not hang_goc:
+        chan_dung = _chan_dung_5_tep()
+        if dich not in chan_dung:
+            return 0
+        cot = list(COT)
+        o = chi_so_cot(cot)
+        hang: List[List[str]] = []
+        for ma, cd in chan_dung.items():
+            dong = [""] * len(cot)
+            dong[o["Mã"]] = ma
+            dong[o["Tên tuyến"]] = cd["ten"]
+            dong[o["Trạng thái"]] = DANG_DANH if ma == dich else DANG_XEM
+            dong[o["Kênh của tôi"]] = ma_moi if ma == dich else ""
+            dong[o["Insight"]] = cd["insight"]
+            dong[o["Lúc bấm họ đang"]] = cd["luc_bam"]
+            dong[o["Họ cần"]] = cd["ho_can"]
+            dong[o["Từ khoá nhận biết"]] = cd["tu_khoa"]
+            hang.append(dong)
+        luu(goc, ma_moi, cot, hang)
+        return len(hang)
+
+    o = chi_so_cot(list(cot_goc))
+    i_ma, i_tt, i_kenh = o.get("Mã"), o.get("Trạng thái"), o.get("Kênh của tôi")
+    if i_ma is None or i_tt is None:
+        return 0
+    hang = []
+    for d in hang_goc:
+        dong = list(d) + [""] * (len(cot_goc) - len(d))
+        ma = dong[i_ma].strip()
+        if dong[i_tt].strip() == BO:
+            hang.append(dong)
+            continue
+        dong[i_tt] = DANG_DANH if ma == dich else DANG_XEM
+        if i_kenh is not None:
+            dong[i_kenh] = ma_moi if ma == dich else ""
+        hang.append(dong)
+    luu(goc, ma_moi, list(cot_goc), hang)
+    return len(hang)
 
 
 def tuyen_cua_kenh(goc: str, kenh: str, ma_kenh: str) -> List[str]:

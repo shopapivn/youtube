@@ -1,9 +1,12 @@
 {
     "_ghi_chu": "Chi con thu cua RIENG cai may nay. Moi num van (gio quet, giu Chrome...) chinh tren TOOL: tab Phan tich & Nghien cuu > May VM.",
+    "_ghi_chu_nhieu_kenh": "1 VPS toi da 5 kenh CUNG NICHE: dien 'cac_kenh' la danh sach ma, moi kenh mot trinh duyet <MA>\\<MA>.exe nam CANH NHAU (vd C:\\Users\\...\\TL\\TL4-T7\\, C:\\Users\\...\\TL\\KENH2\\...). Bo trong ('cac_kenh': []) thi agent tu doan theo cac thu muc canh ben; may CHI MOT kenh thi dung 'kenh' nhu truoc, khong can dong 'cac_kenh'.",
     "tram": "",
     "kenh": "",
+    "cac_kenh": [],
     "ten_may": "",
     "chrome": "",
+    "chrome_theo_kenh": {},
     "studio_url": "https://studio.youtube.com",
     "tool_dang": ""
 }

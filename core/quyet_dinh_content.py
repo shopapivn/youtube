@@ -77,8 +77,14 @@ def _khuc_chi_so(goc: str, kenh: str) -> str:
         from .chi_so_ytb import bao_cao_cho_ai, doc_kenh  # noqa: PLC0415
 
         from core.chi_so_ytb import doc_kenh_tong  # noqa: PLC0415
-        return _cat(bao_cao_cho_ai(doc_kenh(kenh, goc), kenh,
-                                   kenh_tong=doc_kenh_tong(kenh, goc)))
+
+        from .kenh import duong_kenh  # noqa: PLC0415
+
+        # Bộ đọc chỉ số nhận thư mục CHỨA các kênh (`CHANNEL/`), không phải gốc tool —
+        # truyền gốc tool thì nó tìm `<gốc>/<kênh>/chi-so` và khối này luôn rỗng.
+        thu_muc_kenh = duong_kenh(goc)
+        return _cat(bao_cao_cho_ai(doc_kenh(kenh, thu_muc_kenh), kenh,
+                                   kenh_tong=doc_kenh_tong(kenh, thu_muc_kenh)))
     except Exception as loi:  # noqa: BLE001 — thiếu chỉ số thì nói thiếu
         return "Chưa đọc được chỉ số Studio ({0}).".format(loi)
 

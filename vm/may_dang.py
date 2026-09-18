@@ -31,6 +31,7 @@
 
 import os
 import logging
+import sys
 import time
 import random
 import math
@@ -115,6 +116,10 @@ CHANNEL_CODE      = CFG.get("CHANNEL_CODE", _GROUP_CODE)
 RUN_BROWSER_EXE   = CFG.get("RUN_BROWSER_EXE", os.path.join(_GROUP_DIR, f"{_GROUP_CODE}.exe"))
 LOCAL_DONE_ROOT   = CFG.get("LOCAL_DONE_ROOT", os.path.join(_USER_HOME, "Desktop", "done"))
 SERVER_DONE_ROOT  = CFG.get("SERVER_DONE_ROOT", r"\\tsclient\D\AUTO\done")
+#: Đường SERVER_DONE_ROOT GỐC từ config — TRƯỚC khi smb_connect() có thể ghi
+#: đè bằng đường ổ đĩa đã map (Z:\...). `_cung_may()` cần bản gốc này để biết
+#: người dùng có cấu hình một đường LOCAL hay không.
+SERVER_DONE_ROOT_GOC = SERVER_DONE_ROOT
 
 # SMB — auto-detect IP từ GROUP, config override nếu có
 SMB_SERVER = CFG.get("SMB_SERVER", _auto_smb)
@@ -142,6 +147,51 @@ logging.info(f"Config: Channels se duoc tu dong phat hien tu thu muc cung cap.")
 # Đường dẫn thư mục video
 BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
 FOLDER_PATTERN    = os.path.join(LOCAL_DONE_ROOT, "{code}")
+
+
+def _tu_dang_bat(channel_code):
+    """Kenh nay co duoc TU DANG khong - doc thiet lap agent chep xuong
+    (vm/cai-dat-tool.json, tool day xuong tu tab Quan ly kenh moi nhip tim).
+
+    May NHIEU kenh (toi da 5, 1 VPS - vm/KE-HOACH.md): chi MOT tien trinh
+    may_dang.py cho ca may, tu discover_channels() roi dang TUAN TU tung
+    kenh - kenh nao dang TAT thi BO QUA o day, khong ai khac giu cua.
+    Khong thay du lieu gi (agent chua tung noi duoc tram) -> mac dinh TAT,
+    dung nep "dang tay la duong chinh" cua vm_cai_dat.MAC_DINH."""
+    duong = os.path.join(BASE_DIR, "cai-dat-tool.json")
+    try:
+        with open(duong, "r", encoding="utf-8") as f:
+            du = json.load(f) or {}
+    except Exception:
+        return False
+    theo_kenh = (du.get("kenh") or {}).get(channel_code)
+    if isinstance(theo_kenh, dict) and "tu_dang" in theo_kenh:
+        return bool(theo_kenh["tu_dang"])
+    if "tu_dang" in du:
+        return bool(du["tu_dang"])
+    return False
+
+
+def _doc_co_dong_lenh(argv):
+    """Doc "--kenh X --mot-lan" tu dong lenh - che do PHIEN (agent.py goi
+    MOT LUOT cho DUNG mot kenh, xem vm/KE-HOACH.md "5 kenh / 1 VPS - buoc A").
+    Tra (mot_lan: bool, kenh: str|None). Ham THUAN, khong dung gi ngoai."""
+    mot_lan = "--mot-lan" in argv
+    kenh = None
+    if "--kenh" in argv:
+        i = argv.index("--kenh")
+        if i + 1 < len(argv):
+            kenh = argv[i + 1]
+    return mot_lan, kenh
+
+
+def _loc_kenh(channels, chi_kenh=None):
+    """Loc danh sach kenh phat hien duoc xuong DUNG mot kenh khi `chi_kenh`
+    co gia tri (che do phien: --kenh X --mot-lan) - khong doi gi khi
+    `chi_kenh` rong (nep cu, main() lo moi kenh nhu truoc)."""
+    if not chi_kenh:
+        return list(channels)
+    return [c for c in channels if c.get("code") == chi_kenh]
 
 
 def discover_channels():
@@ -625,9 +675,12 @@ def find_row_by_code(rows, code):
     return None
 
 
-def update_source_status(client, code, status="ĐÃ ĐĂNG"):
+def update_source_status(client, code, status="ĐÃ ĐĂNG", channel_code=None):
+    # channel_code: kenh THAT cua goi (may nhieu kenh - IDX_CHANNEL_AI cua
+    # dong dang dang, xem call site). Bo trong -> nguon_tool tu lay kenh
+    # mac dinh cua may (nep mot-kenh cu).
     if NGUON == "tool":
-        return nguon_tool.bao_dang(CFG, code, status)
+        return nguon_tool.bao_dang(CFG, code, status, kenh=channel_code)
 
     """Tìm dòng trong sheet NGUON có cột G == code, ghi status vào cột M."""
     def _update():
@@ -688,6 +741,31 @@ def get_tomorrow_codes(rows, channel_code=None):
 # └──────────────────────────────────────────────────────────────────────┘
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _cung_may(server_done_root=None, local_done_root=None):
+    """Gói video đã nằm SẴN trên máy NÀY chưa (kênh tự chạy trên VPS — sản
+    xuất + đăng CÙNG một máy, xem vm/KE-HOACH-5-KENH.md "Chốt kiến trúc: VPS
+    = tool chính + vm/ trên CÙNG một máy"). Đúng khi MỘT trong hai:
+
+    1. `SERVER_DONE_ROOT` cấu hình == `LOCAL_DONE_ROOT` — tool trỏ thẳng
+       CÙNG một thư mục cho cả hai vai (nếp khuyên dùng cho máy tự chạy).
+    2. `SERVER_DONE_ROOT` là đường LOCAL của chính máy này (không phải
+       `\\\\server\\chia_se`) — đọc thẳng được, không cần map ổ SMB nào.
+
+    Đúng thì `main()` bỏ hẳn SMB/IPv4 và bỏ luôn bước copy (nguồn = đích,
+    `_do_ensure_local` tự thấy "đã khớp" mà không sao chép byte nào) — copy
+    một bản y hệt sang chỗ khác trên CÙNG máy chỉ tốn đĩa và không ai dọn
+    (core/don_dep.py chỉ dọn đúng `thu_muc_done` gốc).
+    """
+    goc = str(server_done_root if server_done_root is not None
+              else SERVER_DONE_ROOT_GOC or "").strip()
+    dia = str(local_done_root if local_done_root is not None else LOCAL_DONE_ROOT)
+    if not goc:
+        return False
+    if os.path.normcase(os.path.normpath(goc)) == os.path.normcase(os.path.normpath(dia)):
+        return True
+    return not (goc.startswith("\\\\") or goc.startswith("//"))
 
 
 #: CO VAN IPv4 dung chung voi agent (vm/van-ipv4.json). Luat sat cua chu
@@ -2136,7 +2214,11 @@ def handle_step3_4_flow(active_row, client, code):
 
     # === CẬP NHẬT TRẠNG THÁI ===
     try:
-        update_source_status(client, code, "ĐÃ ĐĂNG")
+        # Kenh THAT cua dong (khong phai CHANNEL_CODE mac dinh cua may) - may
+        # nhieu kenh (toi da 5, 1 VPS) thi cac dong khong cung mot kenh.
+        _kenh_dong = (active_row[IDX_CHANNEL_AI]
+                     if len(active_row) > IDX_CHANNEL_AI else None) or None
+        update_source_status(client, code, "ĐÃ ĐĂNG", channel_code=_kenh_dong)
         logging.info("Da cap nhat 'DA DANG' cho ma %s.", code)
     except Exception as e:
         logging.warning("Cap nhat trang thai loi: %s", e)
@@ -2208,8 +2290,14 @@ def wait_for_internet(max_wait=1800):
     return False
 
 
-def post_channel(ch, ready_codes, input_rows, client):
-    """Đăng video cho 1 kênh. Trả về số mã đã đăng thành công."""
+def post_channel(ch, ready_codes, input_rows, client, cung_may=False):
+    """Đăng video cho 1 kênh. Trả về số mã đã đăng thành công.
+
+    `cung_may`: gói video đã nằm SẴN trên máy này (`_cung_may()`, kênh tự
+    chạy trên VPS) — không có "bản server riêng" để xoá-rồi-copy-lại khi
+    video lỗi, và không xoá bản local sau khi đăng xong (đó là BẢN GỐC,
+    core/don_dep.py mới là người dọn nó, có grace period hẳn hoi).
+    """
     import traceback
     ch_code = ch["code"]
     ch_exe = ch["exe"]
@@ -2239,7 +2327,10 @@ def post_channel(ch, ready_codes, input_rows, client):
             logging.error("Khong tim thay dong du lieu cho ma: %s", code)
             continue
 
-        target_folder = FOLDER_PATTERN.format(code=code)
+        target_folder = os.path.join(LOCAL_DONE_ROOT, code)  # KHÔNG dùng FOLDER_PATTERN — nó
+                                                              # đóng băng LOCAL_DONE_ROOT lúc nạp
+                                                              # module, trong khi main() có thể đã
+                                                              # trỏ lại đường CÙNG MÁY (_cung_may()).
         logging.info("Thu muc ma: %s", target_folder)
 
         if not has_required_files(os.path.join(LOCAL_DONE_ROOT, code)):
@@ -2343,10 +2434,18 @@ def post_channel(ch, ready_codes, input_rows, client):
                     continue
 
                 error_retry_count[code] = retries + 1
-                logging.info(f"Dong browser, xoa file loi, copy lai tu server (lan thu {retries + 1}/2)...")
                 close_browsers_gently_in_rdp(ch_exe)
                 rsleep("small")
 
+                if cung_may:
+                    # Cung may: day la BAN GOC duy nhat, khong co "server"
+                    # nao khac de copy lai - xoa la mat trang, chi bao that
+                    # roi bo qua ma nay (khong tu suy bay dat).
+                    logging.error(f"Ma {code}: file loi nhung dang o CUNG MAY "
+                                 "(khong co ban server rieng de copy lai) -> bo qua ma nay.")
+                    continue
+
+                logging.info(f"Xoa file loi, copy lai tu server (lan thu {retries + 1}/2)...")
                 local_folder_err = os.path.join(LOCAL_DONE_ROOT, code)
                 try:
                     if os.path.isdir(local_folder_err):
@@ -2389,7 +2488,6 @@ def post_channel(ch, ready_codes, input_rows, client):
         ok = handle_step3_4_flow(active_row, client, code)
 
         if ok == "VIDEO_ERROR":
-            logging.error(f"Video loi truoc khi len lich! Xoa va copy lai ma {code}.")
             retries = error_retry_count.get(code, 0)
             if retries >= 2:
                 logging.error(f"Ma {code} da loi {retries} lan -> BO QUA.")
@@ -2397,6 +2495,11 @@ def post_channel(ch, ready_codes, input_rows, client):
             error_retry_count[code] = retries + 1
             close_browsers_gently_in_rdp(ch_exe)
             rsleep("small")
+            if cung_may:
+                logging.error(f"Ma {code}: video loi truoc khi len lich, dang o CUNG MAY "
+                             "(khong co ban server rieng de copy lai) -> bo qua ma nay.")
+                continue
+            logging.error(f"Video loi truoc khi len lich! Xoa va copy lai ma {code}.")
             local_folder_err = os.path.join(LOCAL_DONE_ROOT, code)
             try:
                 if os.path.isdir(local_folder_err):
@@ -2423,6 +2526,16 @@ def post_channel(ch, ready_codes, input_rows, client):
 
         processed_codes.add(code)
         first_time = False
+        if not cung_may:
+            # Bản local chỉ là BẢN SAO tạm để đăng (nguồn thật ở server/
+            # thu_muc_done — core/don_dep.py dọn đúng bản GỐC đó sau khi
+            # "ĐÃ ĐĂNG" + grace). Đăng xong thì xoá ngay bản sao thừa này,
+            # đừng để lại một bản không ai dọn.
+            try:
+                shutil.rmtree(os.path.join(LOCAL_DONE_ROOT, code), ignore_errors=True)
+                logging.info(f"Da xoa ban sao local (dang xong): {code}")
+            except Exception:
+                pass
 
       except Exception as ex_code:
         logging.error(f"LOI KHONG XAC DINH voi ma {code}: {ex_code}")
@@ -2435,7 +2548,10 @@ def post_channel(ch, ready_codes, input_rows, client):
     return len(processed_codes)
 
 
-def main():
+def main(chi_kenh=None):
+    """`chi_kenh`: che do PHIEN - chay dung MOT kenh roi tra ve (agent.py goi
+    subprocess "--kenh X --mot-lan"); None = nep cu, lo TAT CA kenh phat hien
+    duoc (vong lap vo han o __main__ ben duoi)."""
     import traceback
     random.seed()
 
@@ -2448,7 +2564,22 @@ def main():
     if not channels:
         channels = [{"code": CHANNEL_CODE, "exe": RUN_BROWSER_EXE, "dir": _CHANNEL_DIR}]
         logging.info(f"Khong tim thay kenh tu thu muc -> dung config: {CHANNEL_CODE}")
+    if chi_kenh:
+        channels = _loc_kenh(channels, chi_kenh)
+        if not channels:
+            logging.warning(f"Che do phien: khong thay kenh '{chi_kenh}' trong danh sach phat hien duoc -> bo qua.")
+            return
     logging.info(f"Phat hien {len(channels)} kenh: {[c['code'] for c in channels]}")
+
+    # Kenh tu chay CUNG MAY (san xuat + dang tren CUNG mot VPS, xem
+    # vm/KE-HOACH-5-KENH.md): goi da nam san, khong can SMB/tsclient/IPv4 gi
+    # ca - doc THANG tu SERVER_DONE_ROOT, bo het buoc copy sang cho khac.
+    global SERVER_DONE_ROOT, LOCAL_DONE_ROOT
+    cung_may = _cung_may()
+    if cung_may:
+        LOCAL_DONE_ROOT = SERVER_DONE_ROOT = SERVER_DONE_ROOT_GOC
+        logging.info(f"[*] Kenh tu chay CUNG MAY -> doc thang {LOCAL_DONE_ROOT}, "
+                     "khong SMB/IPv4, khong copy sang cho khac.")
 
     # === BƯỚC 0: Đóng browser cũ ===
     logging.info("[0/5] Dong browser cu (neu con tu phien truoc)...")
@@ -2482,8 +2613,11 @@ def main():
             return
 
     # === BƯỚC 2: Bật IPv4 + SMB + tạo client (cho việc GHI status khi đăng video) ===
-    logging.info("[2/5] Ket noi SMB may chu (bat IPv4)...")
-    smb_connect()
+    if cung_may:
+        logging.info("[2/5] Cung may -> bo qua SMB/IPv4 (goi da nam san tren dia).")
+    else:
+        logging.info("[2/5] Ket noi SMB may chu (bat IPv4)...")
+        smb_connect()
     client = None
     try:
         client = gs_client() if NGUON != "tool" else None
@@ -2504,6 +2638,9 @@ def main():
 
     for ch in channels:
         ch_code = ch["code"]
+        if NGUON == "tool" and not _tu_dang_bat(ch_code):
+            logging.info(f"Kenh {ch_code}: tu_dang dang TAT (tool) -> bo qua.")
+            continue
         ready_codes = get_all_ready_codes(input_rows, ch_code)
         if not ready_codes:
             logging.info(f"Kenh {ch_code}: khong co ma thoa dieu kien hom nay.")
@@ -2535,15 +2672,20 @@ def main():
         total_codes += len(filtered)
 
     if not channel_tasks:
-        logging.info("Khong co kenh nao co ma can dang. Ngat SMB.")
-        smb_disconnect()
+        logging.info("Khong co kenh nao co ma can dang."
+                     + ("" if cung_may else " Ngat SMB."))
+        if not cung_may:
+            smb_disconnect()
         return
 
     logging.info(f"[3/5] Tong cong {len(channel_tasks)} kenh, {total_codes} ma can dang.")
 
     # === BƯỚC 4: Tắt SMB + IPv4 ===
-    logging.info("[4/5] Ngat SMB, tat IPv4. Tu day dung du lieu local + IPv6.")
-    smb_disconnect()
+    if cung_may:
+        logging.info("[4/5] Cung may -> khong co SMB/IPv4 nao de tat.")
+    else:
+        logging.info("[4/5] Ngat SMB, tat IPv4. Tu day dung du lieu local + IPv6.")
+        smb_disconnect()
 
     # === BƯỚC 5: Đăng video cho TỪNG KÊNH ===
     total_posted = 0
@@ -2558,7 +2700,7 @@ def main():
         close_browsers_gently_in_rdp(ch_exe)
         rsleep("small")
 
-        posted = post_channel(ch, ready_codes, input_rows, client)
+        posted = post_channel(ch, ready_codes, input_rows, client, cung_may=cung_may)
         total_posted += posted
         # Ghi so video dang HOM NAY cho kenh (de GUI hien tong quan)
         try:
@@ -2602,6 +2744,17 @@ if __name__ == "__main__":
         raise SystemExit(1)
     if not _khoa_mot_minh():
         logging.error("Da co mot may dang khac dang chay - thoat de khong dang doi.")
+        raise SystemExit(0)
+    _mot_lan, _chi_kenh = _doc_co_dong_lenh(sys.argv[1:])
+    if _mot_lan:
+        # Che do PHIEN: MOT luot cho DUNG mot kenh, khong vong lap - xem
+        # vm/KE-HOACH.md "5 kenh / 1 VPS - buoc A". Khoa mot-minh o tren van
+        # la NGUOI GIU DUY NHAT trong luc chay (nha vao roi tra lai ngay).
+        try:
+            main(chi_kenh=_chi_kenh)
+        except Exception as e:
+            logging.error("Loi khi chay main() (--mot-lan): %s", e)
+            raise SystemExit(1)
         raise SystemExit(0)
     fail_count = 0
     while True:

@@ -304,6 +304,18 @@ def main() -> int:
     cua_so = CuaSoChinh(BASE_DIR)
     cua_so._khoa_mot_ban = khoa  # giữ tham chiếu: khoá sống cùng cửa sổ
     cua_so.show()
+
+    # ═══ CHẾ ĐỘ VPS: BẬT TRẠM + NUÔI BA CON vm/ CÙNG MyTool ═══
+    #
+    # Chỉ có tác dụng khi máy này có `vps.json` cạnh tool (VPS 5 kênh/1 máy,
+    # xem `vm/KE-HOACH-5-KENH.md` bước E) — máy thường thì hàm này không làm
+    # gì. Móc nhỏ, mọi việc thật nằm ở `core/khoi_dong_vps.py`.
+    try:
+        from core import khoi_dong_vps
+
+        khoi_dong_vps.gan_vao_cua_so(cua_so, BASE_DIR)
+    except Exception:  # noqa: BLE001 — chế độ VPS hỏng không được chặn tool
+        pass
     if os.environ.get("SHOPAPI_STUDIO_CHAY_THU"):
         # Cửa thoát để test chạy thật file này rồi dừng.
         from PyQt5.QtCore import QTimer

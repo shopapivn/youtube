@@ -34,7 +34,11 @@ def _hoi_danh_sach_kenh(tram: str) -> list:
 
 
 def chon_kenh(tram: str) -> str:
-    """Kênh: đoán trước, không được thì menu bấm số, cùng lắm mới gõ tay."""
+    """Kênh: đoán trước, không được thì menu bấm số, cùng lắm mới gõ tay.
+
+    Chỉ dùng khi máy CHỈ phục vụ một kênh (0 hay 1 thư mục `<MÃ>\\<MÃ>.exe`
+    cạnh bên) — máy nhiều kênh (2..5) không qua hàm này, xem :func:`cai`.
+    """
     kenh = agent.doan_kenh()
     if kenh:
         print("  - Ma kenh (doan theo thu muc canh ben):", kenh)
@@ -50,6 +54,25 @@ def chon_kenh(tram: str) -> str:
         except (ValueError, IndexError):
             pass
     return input("  Go ma kenh (vd TL4-T7): ").strip()
+
+
+def _kenh_va_danh_sach(tram: str) -> tuple:
+    """(kênh chính, danh sách kênh) — tách riêng khỏi :func:`cai` để test
+    được mà không phải chạy hết bộ cài (bộ cài có thể ngồi CHỜ mạng tới
+    10 phút khi chưa thấy trạm).
+
+    Máy phục vụ NHIỀU kênh (tối đa 5, một VPS cùng niche —
+    `vm/KE-HOACH.md`): thay vì hỏi chọn MỘT trong nhiều thư mục
+    `<MÃ>\\<MÃ>.exe` cạnh bên (như trước), giờ bake CẢ DANH SÁCH — zero
+    typing, không ai phải gõ gì. Máy chỉ một kênh thì y hệt trước
+    (`cac_kenh` để trống, `chon_kenh` hỏi/đoán như cũ).
+    """
+    cac_kenh = agent.doan_cac_kenh()
+    if len(cac_kenh) > 1:
+        print("  - May nay phuc vu {0} kenh (tu doan theo thu muc canh ben): {1}"
+              .format(len(cac_kenh), ", ".join(cac_kenh)))
+        return cac_kenh[0], cac_kenh
+    return chon_kenh(tram), []
 
 
 def cai() -> dict:
@@ -83,16 +106,17 @@ def cai() -> dict:
                   "roi dan dia chi vao day.")
             tram = input("  Dia chi tram: ").strip()
 
-    kenh = chon_kenh(tram)
+    kenh, cac_kenh = _kenh_va_danh_sach(tram)
     chrome = agent.tim_chrome({"kenh": kenh})
     print("  - Chrome cua kenh:", chrome or "(chua thay - agent se tu tim lai "
                                             "moi lan chay; dat thu muc vm canh "
                                             "Chrome la thay)")
 
     cau_hinh = {
-        "tram": tram, "kenh": kenh,
+        "tram": tram, "kenh": kenh, "cac_kenh": cac_kenh,
         "ten_may": os.environ.get("COMPUTERNAME", "vm"),
         "chrome": "",              # de trong: agent tu tim theo nep canh nhau
+        "chrome_theo_kenh": {},
         "studio_url": "https://studio.youtube.com",
         "tool_dang": "",
     }
@@ -145,6 +169,16 @@ def dang_ky_tu_chay() -> str:
 
 
 if __name__ == "__main__":
+    # 18/09/2026: nut "Tao bo cai VPS" (may nha) dong goi CA TOOL vao
+    # vm/goi-vps/ — thu muc vm/ do phai di duong khac han (`cai_dat_vps.py`,
+    # dung MyTool/ ben canh vm/, khong phai bang dieu khien nhe nay).
+    # `CAI-DAT-VM.bat` da tu re duong o cap .bat; nhanh nay la luoi do THU
+    # HAI, phong ai do chay thang `python cai_dat_vm.py`.
+    if os.path.isdir(os.path.join(GOC, "goi-vps")):
+        import cai_dat_vps
+
+        raise SystemExit(cai_dat_vps.main())
+
     print("=" * 60)
     print("   MyTool VM - cai len may ao nay")
     print("=" * 60)

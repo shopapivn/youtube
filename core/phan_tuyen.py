@@ -182,9 +182,17 @@ _DUOI_PHU_DINH = ("に興味がない", "に全く興味がない", "に興味�
                   "に興味のない", "に夢中になれない", "に全く興味のない")
 
 
-def _dinh_tu_loai_tru(tieu_de: str) -> bool:
-    """Tiêu đề có dính từ loại trừ KHÔNG được phủ định ngay sau đó không."""
+def _dinh_tu_loai_tru(tieu_de: str, *, bo_qua_zatsugaku: bool = False) -> bool:
+    """Tiêu đề có dính từ loại trừ KHÔNG được phủ định ngay sau đó không.
+
+    `bo_qua_zatsugaku=True`: bỏ riêng "雑学" khỏi danh sách loại trừ — dùng cho kênh đang
+    đánh TỆP 3 (người tò mò), vì kênh chuyên nhất của tệp ấy tự gọi mình là 雑学 (xem
+    `BAN-DO-TEP-KHAN-GIA.md`: カップ麺を待つ間に見たい雑学, 71%). Mặc định `False` — mọi nơi
+    gọi cũ (tệp 1, hay chưa biết kênh đang đánh tệp nào) không đổi hành vi.
+    """
     for t in TU_LOAI_TRU:
+        if bo_qua_zatsugaku and t == "雑学":
+            continue
         i = tieu_de.find(t)
         while i >= 0:
             duoi = tieu_de[i + len(t):]
@@ -201,17 +209,21 @@ def _dinh_tu_loai_tru(tieu_de: str) -> bool:
 
 
 def ap_luat_cung(tieu_de: str, kenh_nguon: str, ma: str,
-                 ma_co: "Sequence[str] | set") -> str:
+                 ma_co: "Sequence[str] | set", *, bo_qua_zatsugaku: bool = False) -> str:
     """Nhãn sau khi qua luật cứng. Ô trống giữ trống — trống là việc của AI.
 
     1. Từ loại trừ ở tiêu đề hay tên kênh nguồn → `MA_KHAC`, bất kể nhãn nào.
     2. Nhãn "lệch nhịp" mà tiêu đề lấy tuổi tác làm nhân vật chính → tệp trung
        niên nếu sổ có tệp ấy; sổ không có thì `MA_KHAC` — KHÔNG bịa mã.
+
+    `bo_qua_zatsugaku` — xem `_dinh_tu_loai_tru`; truyền `True` khi kênh đang đánh TỆP 3.
     """
     ma = str(ma or "").strip()
     if not ma:
         return ma
-    if _dinh_tu_loai_tru(tieu_de or "") or any(t in (kenh_nguon or "") for t in TU_LOAI_TRU):
+    tu_kenh = [t for t in TU_LOAI_TRU if not (bo_qua_zatsugaku and t == "雑学")]
+    if _dinh_tu_loai_tru(tieu_de or "", bo_qua_zatsugaku=bo_qua_zatsugaku) \
+            or any(t in (kenh_nguon or "") for t in tu_kenh):
         return MA_KHAC
     if ma == MA_LECH_NHIP and any(t in (tieu_de or "") for t in DAU_MOC_TUOI):
         return MA_TRUNG_NIEN if MA_TRUNG_NIEN in set(ma_co) else MA_KHAC
@@ -219,12 +231,16 @@ def ap_luat_cung(tieu_de: str, kenh_nguon: str, ma: str,
 
 
 def sua_so_theo_luat_cung(goc: str, kenh: str,
-                          ma_co: "Optional[Sequence[str]]" = None) -> Dict[str, int]:
+                          ma_co: "Optional[Sequence[str]]" = None, *,
+                          bo_qua_zatsugaku: bool = False) -> Dict[str, int]:
     """Áp luật cứng lên MỌI nhãn đang có trong `content.csv`. Không gọi AI.
 
     Trả `{"loai_tru": n, "sang_trung_nien": n, "tong_da_xem": n}` để báo cho
     khách. Ghi sổ CHỈ khi có gì đổi (`luu_bang` đã ghi nguyên tử + sao lưu ngày).
     Ô trống không đụng; ghi chú và mọi cột khác giữ nguyên từng ký tự.
+
+    `bo_qua_zatsugaku` — xem `_dinh_tu_loai_tru`; người gọi (`mot_nut.chay`) truyền `True`
+    khi tệp kênh đang đánh là TỆP 3 (người tò mò) — nhãn cứng cũ mặc định `False`.
     """
     from . import doi_thu_kenh as so  # noqa: PLC0415 — tránh vòng nhập
     from .so_csv import chi_so_cot  # noqa: PLC0415
@@ -251,7 +267,7 @@ def sua_so_theo_luat_cung(goc: str, kenh: str,
         cu = str(d[j_t]).strip()
         moi = ap_luat_cung(str(d[j_td]) if j_td < len(d) else "",
                            str(d[j_k]) if j_k is not None and j_k < len(d) else "",
-                           cu, ma_co)
+                           cu, ma_co, bo_qua_zatsugaku=bo_qua_zatsugaku)
         if moi == cu:
             continue
         d[j_t] = moi
@@ -795,7 +811,8 @@ def gan_tuyen(client: Any, tieu_de: Sequence[str],
               kiem_dung: Optional[Callable[[], None]] = None,
               so_moi_lo: int = SO_TIEU_DE_MOI_LO_GAN,
               tron: Optional[random.Random] = None,
-              kenh_nguon: Sequence[str] = ()) -> List[KetGan]:
+              kenh_nguon: Sequence[str] = (),
+              bo_qua_zatsugaku: bool = False) -> List[KetGan]:
     """Gán tuyến cho từng tiêu đề → danh sách **cùng thứ tự, cùng độ dài**.
 
     `kenh_nguon` (cùng thứ tự với `tieu_de`, được để trống) cho lớp luật cứng
@@ -803,6 +820,9 @@ def gan_tuyen(client: Any, tieu_de: Sequence[str],
 
     `tron` khác `None` thì thứ tự trong mỗi lô được đảo trước khi gửi (kết
     quả vẫn trả về đúng thứ tự gốc). Dùng cho `do_on_dinh` — xem đầu file.
+
+    `bo_qua_zatsugaku` — xem `_dinh_tu_loai_tru`; truyền `True` khi kênh đang đánh TỆP 3,
+    kẻo lớp luật cứng đứng sau model tự tay đè "khac" lên đúng cửa vào của tệp ấy.
 
     Ô nào AI không trả về thì để `KetGan()` rỗng chứ không đôn dòng khác lên:
     gán nhầm tuyến cho một video là đúng thứ hỏng mà cả tệp này sinh ra để
@@ -870,7 +890,7 @@ def gan_tuyen(client: Any, tieu_de: Sequence[str],
         if not ket.ma:
             continue
         kn = kenh_nguon[i] if i < len(kenh_nguon) else ""
-        moi = ap_luat_cung(goc[i], kn, ket.ma, ma_co)
+        moi = ap_luat_cung(goc[i], kn, ket.ma, ma_co, bo_qua_zatsugaku=bo_qua_zatsugaku)
         if moi != ket.ma:
             ra[i] = KetGan(ma=moi, do_tin=100 if moi == MA_KHAC else ket.do_tin)
     return ra

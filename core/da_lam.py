@@ -91,26 +91,43 @@ def doc_ma_da_lam(goc: str, kenh: str) -> Dict[str, str]:
 
     Thư mục không tồn tại cũng trả về rỗng: kênh chưa sản xuất lượt nào là
     trạng thái bình thường của một kênh mới.
+
+    ═══ CẢ BẢN THỬ `<kênh>-v2`, `-v3` (17/09/2026) ═══
+
+    Kênh TL4-T7 sản xuất V10–V12 trong `PROJECTS/AUTO/TL4-T7-v2/` (khuôn mới) nhưng
+    sổ nghiên cứu vẫn ở `CHANNEL/TL4-T7/`. Chỉ quét đúng tên kênh thì ba nguồn đã
+    làm đứng hạng 1 và 8 của bảng "nên làm tiếp". Lượt trong bản thử ghi nhãn
+    `v2/0004` để không lẫn với lượt `0004` của khuôn gốc.
     """
-    thu_muc = os.path.join(goc, THU_MUC_AUTO, kenh)
+    auto = os.path.join(goc, THU_MUC_AUTO)
     ra: Dict[str, str] = {}
     tay = doc_da_lam_tay(goc, kenh)
     try:
-        ten_luot = sorted(os.listdir(thu_muc))
+        anh_em = sorted(d for d in os.listdir(auto)
+                        if d == kenh or re.fullmatch(re.escape(kenh) + r"-v\d+", d))
     except OSError:
         return dict(tay)
-    for ten in ten_luot:
-        duong = os.path.join(thu_muc, ten, TEP_NGUON)
+    # Khuôn gốc trước, bản thử sau — cùng luật "lượt sớm nhất thắng".
+    anh_em.sort(key=lambda d: (d != kenh, d))
+    for thu in anh_em:
+        thu_muc = os.path.join(auto, thu)
+        tien_to = "" if thu == kenh else thu[len(kenh) + 1:] + "/"
         try:
-            with open(duong, "r", encoding="utf-8") as tep:
-                chu = tep.read()
+            ten_luot = sorted(os.listdir(thu_muc))
         except OSError:
             continue
-        tim = _DONG_MA.search(chu)
-        if tim:
-            # Lượt SỚM NHẤT thắng: nếu vô tình làm hai lần cùng một video thì
-            # cái đáng chỉ ra là lần đầu, còn lần sau là cái nhầm cần thấy.
-            ra.setdefault(tim.group(1), ten)
+        for ten in ten_luot:
+            duong = os.path.join(thu_muc, ten, TEP_NGUON)
+            try:
+                with open(duong, "r", encoding="utf-8") as tep:
+                    chu = tep.read()
+            except OSError:
+                continue
+            tim = _DONG_MA.search(chu)
+            if tim:
+                # Lượt SỚM NHẤT thắng: nếu vô tình làm hai lần cùng một video thì
+                # cái đáng chỉ ra là lần đầu, còn lần sau là cái nhầm cần thấy.
+                ra.setdefault(tim.group(1), tien_to + ten)
     for ma, ghi_chu in tay.items():
         ra.setdefault(ma, ghi_chu)
     return ra

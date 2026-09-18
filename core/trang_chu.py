@@ -64,12 +64,19 @@ HANDLE_LOAI_TRU = ("zatsugaku", "zatugaku", "zatsu", "trivia", "matome", "2ch", 
 TEN_KENH_LOAI_TRU = ("要約", "まとめ", "朗読", "オーディオブック", "名言集", "ゆっくり解説", "切り抜き")
 
 
-def kenh_bi_loai(ten_kenh: str = "", link_kenh: str = "") -> bool:
-    """Kênh nguồn dính từ loại trừ (kanji ở tên) hay romaji ở handle/link."""
-    if any(t in (ten_kenh or "") for t in TU_LOAI_TRU) or any(t in (ten_kenh or "") for t in TEN_KENH_LOAI_TRU):
+def kenh_bi_loai(ten_kenh: str = "", link_kenh: str = "", *, bo_qua_zatsugaku: bool = False) -> bool:
+    """Kênh nguồn dính từ loại trừ (kanji ở tên) hay romaji ở handle/link.
+
+    `bo_qua_zatsugaku=True`: kênh đang đánh TỆP 3 (người tò mò) — kênh chuyên nhất của tệp ấy
+    TỰ GỌI MÌNH là 雑学 (`BAN-DO-TEP-KHAN-GIA.md`: カップ麺を待つ間に見たい雑学, 71%). Không có
+    cờ này thì lượt cào trang chủ loại thẳng chính nguồn remake tốt nhất của kênh ấy — kênh
+    còn chưa kịp vào hộp thư đã bị bỏ. Mặc định `False`: hành vi mọi nơi gọi cũ không đổi.
+    """
+    tu = TU_LOAI_TRU if not bo_qua_zatsugaku else tuple(t for t in TU_LOAI_TRU if t != "雑学")
+    if any(t in (ten_kenh or "") for t in tu) or any(t in (ten_kenh or "") for t in TEN_KENH_LOAI_TRU):
         return True
     h = (link_kenh or "").lower()
-    return any(t in h for t in HANDLE_LOAI_TRU) or any(t in (link_kenh or "") for t in TU_LOAI_TRU)
+    return any(t in h for t in HANDLE_LOAI_TRU) or any(t in (link_kenh or "") for t in tu)
 
 
 _CHU_NHAT = re.compile(r"[぀-ヿ一-鿿]")
@@ -216,13 +223,17 @@ def binh_luan_video(ma: str, *, so: int = 30, lang: str = "",
 
 
 def phan_loai_tam_ly(tieu_de: str, tags: Sequence[str] = (), mo_ta: str = "",
-                     ten_kenh: str = "", link_kenh: str = "", lang: str = "") -> str:
+                     ten_kenh: str = "", link_kenh: str = "", lang: str = "", *,
+                     bo_qua_zatsugaku: bool = False) -> str:
     """'dung' · 'lech' · 'lung' — bằng từ khoá ngách, không gọi ai.
 
     Thứ tự cố ý: từ loại trừ thắng trước (雑学 trong tên kênh là loại dù tiêu đề có 心理学);
     rồi MẠNH (một từ là đủ); rồi YẾU (cần ≥ 2). Còn lại là lưỡng lự — chỗ duy nhất đáng tốn AI.
+
+    `bo_qua_zatsugaku` — xem `kenh_bi_loai`; kênh đang đánh TỆP 3 thì 雑学 không loại.
     """
-    if any(t in (tieu_de or "") for t in TU_LOAI_TRU) or kenh_bi_loai(ten_kenh, link_kenh):
+    tu = TU_LOAI_TRU if not bo_qua_zatsugaku else tuple(t for t in TU_LOAI_TRU if t != "雑学")
+    if any(t in (tieu_de or "") for t in tu) or kenh_bi_loai(ten_kenh, link_kenh, bo_qua_zatsugaku=bo_qua_zatsugaku):
         return "lech"
     if (tieu_de or ten_kenh) and not dung_tieng((tieu_de or "") + " " + (ten_kenh or ""), lang):
         return "lech"
@@ -304,7 +315,8 @@ def hoan_thien(goc: str, kenh: str, *, lang: str = "",
                goi_ai: Optional[Callable[[Sequence[str]], Dict[str, str]]] = None,
                cancel: Optional[threading.Event] = None,
                on_log: Optional[Callable[[str], None]] = None,
-               toi_da_tra: int = 400) -> Dict[str, int]:
+               toi_da_tra: int = 400,
+               bo_qua_zatsugaku: bool = False) -> Dict[str, int]:
     """Việc "phía sau" mà chủ dự án nói: tra → lọc tâm lý → kênh vào hộp thư.
 
     `tra`     — tách ra để test dựng dữ liệu giả không cần mạng.
@@ -357,7 +369,8 @@ def hoan_thien(goc: str, kenh: str, *, lang: str = "",
             if kq.get("short"):
                 d["Short"] = "x"
         loai = phan_loai_tam_ly(d.get("Tiêu đề", ""), kq.get("tags", ()), kq.get("mo_ta", ""),
-                                d.get("Kênh", ""), d.get("Link kênh", ""), lang)
+                                d.get("Kênh", ""), d.get("Link kênh", ""), lang,
+                                bo_qua_zatsugaku=bo_qua_zatsugaku)
         if d.get("Short") == "x" and loai == "dung":
             loai = "lech"                 # Short không remake được — không phải nguồn
         if loai == "lech":

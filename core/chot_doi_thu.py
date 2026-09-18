@@ -102,8 +102,14 @@ class UngVien:
 def do_ung_vien(link: str, *, lang: str = "", phut_muc_tieu: float = 0.0,
                 lay_kenh: Optional[Callable[..., object]] = None,
                 tu_khop: "re.Pattern[str]" = TU_KHOP_LECH_NHIP,
-                cancel: Optional[threading.Event] = None) -> UngVien:
-    """Một kênh → một `UngVien`. Lỗi mạng/kênh chết ghi vào `loi`, không ném."""
+                cancel: Optional[threading.Event] = None,
+                bo_qua_zatsugaku: bool = False) -> UngVien:
+    """Một kênh → một `UngVien`. Lỗi mạng/kênh chết ghi vào `loi`, không ném.
+
+    `bo_qua_zatsugaku=True` — xem `trang_chu.kenh_bi_loai`: kênh đang đánh TỆP 3 (người tò
+    mò) thì 雑学 không còn là dấu loại ở cổng thể loại — kênh chuyên nhất của tệp ấy tự gọi
+    mình là 雑学. Mặc định `False`: hành vi mọi nơi gọi cũ không đổi.
+    """
     if lay_kenh is None:
         from .youtube import fetch_channel  # noqa: PLC0415 — yt-dlp chỉ nạp khi cần
 
@@ -125,7 +131,8 @@ def do_ung_vien(link: str, *, lang: str = "", phut_muc_tieu: float = 0.0,
         dai_tv=loc.phut_giay(so.dai_trung_vi_s) if so.dai_trung_vi_s else "",
         view_tv=so.view_trung_vi, dinh_tren_subs=so.ty_le_cao_nhat,
         pct_gia=round(100 * gia / n), pct_khop=round(100 * khop / n), pct_khop_go_toi=round(100 * khop_go / n),
-        the_loai_loai=kenh_bi_loai(so.ten, link), cua_may_dat=may.dat, ly_do_may=may.ly_do, tieu_de=td,
+        the_loai_loai=kenh_bi_loai(so.ten, link, bo_qua_zatsugaku=bo_qua_zatsugaku),
+        cua_may_dat=may.dat, ly_do_may=may.ly_do, tieu_de=td,
         so_do=so,
     )
 
@@ -224,13 +231,18 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
          client=None, mo_ta_kenh: Optional[str] = None,
          hoi: Optional[Callable[..., loc.DanhGia]] = None,
          on_log: Optional[Callable[[str], None]] = None,
-         cancel: Optional[threading.Event] = None) -> Dict[str, object]:
+         cancel: Optional[threading.Event] = None,
+         bo_qua_zatsugaku: bool = False) -> Dict[str, object]:
     """Chấm `links` (mặc định: cả hộp thư) và ghi thẳng vào danh bạ.
 
     `client` khác `None` → thêm cửa AI cho kênh máy định theo dõi / để lại (mỗi kênh một lượt gọi,
     trừ ví). `hoi` tách ra để test. Trả `{"cham", "theo_doi", "bo", "o_lai", "loi", "ai_hoi",
     "ai_loai", "theo_doi_links", "bo_links"}`. Kênh đã có trong danh bạ với trạng thái khách đặt
     tay thì KHÔNG bị máy đổi — máy chỉ chấm thư chưa mở (hoặc danh sách được truyền vào).
+
+    `bo_qua_zatsugaku` — xem `do_ung_vien`; kênh đang đánh TỆP 3 (`mot_nut.chay` tự tính cờ
+    này từ `tuyen_dang_danh`) thì cổng thể loại ở đây không loại kênh chỉ vì nó tự gọi mình
+    là 雑学. Mặc định `False`: hành vi cũ không đổi.
     """
     def log(m):
         if on_log is not None:
@@ -257,7 +269,7 @@ def chot(goc: str, kenh: str, *, links: Optional[Sequence[str]] = None, lang: st
         if cancel is not None and cancel.is_set():
             break
         uv = do_ung_vien(link, lang=lang, phut_muc_tieu=phut_muc_tieu, lay_kenh=lay_kenh,
-                         tu_khop=tu_khop, cancel=cancel)
+                         tu_khop=tu_khop, cancel=cancel, bo_qua_zatsugaku=bo_qua_zatsugaku)
         dem["cham"] += 1
         tt, ly_do = quyet(uv)
         la_ban_dua = db.khoa(link) in ban_dua and not (uv.loi or not uv.ten)

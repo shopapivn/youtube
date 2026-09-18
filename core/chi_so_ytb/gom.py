@@ -81,6 +81,70 @@ def luc_chup(tm):
     return datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")
 
 
+def _captured_at_that(thu_muc_moc):
+    """Epoch giây CHỤP THẬT — CHỈ đọc `captured_at` trong `raw/*`, KHÔNG suy từ mtime.
+
+    Khác `luc_chup` (có lùi về mtime cho gói cũ, xem docstring hàm đó): hàm này phục vụ
+    `tuoi_that_gio`, nơi cần biết THẬT SỰ có đo được tuổi hay không. mtime là giờ tệp TỚI
+    MÁY NÀY (chép/đồng bộ) — dùng nó để tính TUỔI thì sai theo đúng cách `luc_chup` đã cảnh
+    báo, nên ở đây thà trả `None` để nơi gọi lùi về nhãn thư mục còn hơn suy nhầm.
+
+    `None` nếu không gói raw nào mang `captured_at` đọc được.
+    """
+    moc = []
+    for p in glob.glob(os.path.join(thu_muc_moc, "raw", "*")):
+        try:
+            with io.open(p, "r", encoding="utf-8", errors="ignore") as f:
+                m = re.search(r'"captured_at"\s*:\s*"([^"]+)"', f.read(400))
+            if m:
+                t = datetime.datetime.strptime(m.group(1)[:19], "%Y-%m-%dT%H:%M:%S")
+                moc.append(t.replace(tzinfo=datetime.timezone.utc).timestamp())
+        except Exception:
+            pass
+    return max(moc) if moc else None
+
+
+def tuoi_that_gio(thu_muc_moc):
+    """Tuổi THẬT của video (giờ, có thể lẻ) TẠI LÚC CHỤP = giờ chụp thật − giờ đăng — đọc
+    thẳng từ gói dữ liệu, KHÔNG suy từ tên thư mục `thu_muc_moc` (kiểu `13h`, `48h`).
+
+    ═══ VÌ SAO CẦN HÀM NÀY ═══
+
+    VPS giờ chỉ mở trình duyệt của một kênh MỘT LẦN/ngày (phiên ngắn trước giờ đăng của
+    kênh đó). Báo thức mốc (`chrome.alarms`) quá hạn dồn lại nổ thành CHÙM ngay khi Chrome
+    mở: báo thức tên "13h" có thể chụp đúng lúc video đã 23 giờ tuổi, nhưng tiện ích vẫn
+    lưu vào thư mục `13h/` vì đó là NHÃN DỰ ĐỊNH của báo thức, không phải tuổi thật lúc
+    chụp. `core/cong_thuc_v7.py` trước đây tin thẳng tên thư mục này.
+
+    Cùng cơ chế `captured_at` mà `gom()`/`gio_dang()` dùng để suy lại mốc giờ (đọc trong
+    docstring `luc_chup`) — ở đây trả thẳng số giờ, không định dạng chuỗi, để nơi gọi so
+    với một cửa sổ dung sai (`core.cong_thuc_v7.CUA_SO_TUOI_THAT`).
+
+    Trả `None` khi không đủ dữ liệu để tính: thiếu `_thong-tin.json`/`ngay_dang`, hoặc
+    không gói raw nào mang `captured_at` — nơi gọi khi đó lùi về nhãn thư mục.
+    """
+    cap = _captured_at_that(thu_muc_moc)
+    if cap is None:
+        return None
+    try:
+        with io.open(os.path.join(thu_muc_moc, "_thong-tin.json"), encoding="utf-8") as f:
+            tt = json.load(f)
+    except (OSError, ValueError):
+        return None
+    ngay = tt.get("ngay_dang")
+    if not ngay:
+        return None
+    try:
+        dang = datetime.datetime.strptime(str(ngay)[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        try:
+            dang = datetime.datetime.strptime(str(ngay)[:10], "%Y-%m-%d")
+        except ValueError:
+            return None
+    dang_ts = dang.replace(tzinfo=datetime.timezone.utc).timestamp()
+    return (cap - dang_ts) / 3600.0
+
+
 def gio_dang(ban_ghi):
     """Giờ đăng thật của từng video, suy ngược từ các bản có nhãn mốc của extension:
     giờ đăng = lúc chụp − mốc. Lấy TRUNG VỊ vì một vài thư mục bị ghi đè muộn nên lệch hẳn

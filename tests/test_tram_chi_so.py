@@ -265,6 +265,37 @@ def test_goi_cu_khong_co_captured_at_van_doc_duoc(tmp_path):
     assert len(luc_chup(str(tmp_path / "24h"))) == 16      # "YYYY-MM-DD HH:MM"
 
 
+# ───────────────────────────────── tuổi THẬT (captured_at − ngay_dang), không tin tên thư mục
+def test_tuoi_that_gio_tinh_dung_tu_captured_at_va_ngay_dang(tmp_path):
+    from core.chi_so_ytb.gom import tuoi_that_gio
+    d = tmp_path / "13h"
+    (d / "raw").mkdir(parents=True)
+    io.open(d / "raw" / "a.json", "w", encoding="utf-8").write(
+        json.dumps({"captured_at": "2026-09-14T23:00:00.000Z", "url": "x", "response": {}}))
+    io.open(d / "_thong-tin.json", "w", encoding="utf-8").write(
+        json.dumps({"tieu_de": "x", "ngay_dang": "2026-09-14T00:00:00.000Z"}))
+    assert tuoi_that_gio(str(d)) == pytest.approx(23.0)
+
+
+def test_tuoi_that_gio_khong_du_du_lieu_tra_none(tmp_path):
+    """Thiếu captured_at, hoặc thiếu _thong-tin.json/ngay_dang — trả `None`, KHÔNG suy từ
+    mtime (khác `luc_chup`): đây là con số quyết định có tin thư mục hay không, đoán ẩu ở
+    đây thì hỏng ngay chỗ nó phải chặn."""
+    from core.chi_so_ytb.gom import tuoi_that_gio
+    d1 = tmp_path / "khong-raw"
+    (d1 / "raw").mkdir(parents=True)
+    io.open(d1 / "raw" / "a.json", "w", encoding="utf-8").write("{}")   # không có captured_at
+    io.open(d1 / "_thong-tin.json", "w", encoding="utf-8").write(
+        json.dumps({"ngay_dang": "2026-09-14T00:00:00.000Z"}))
+    assert tuoi_that_gio(str(d1)) is None
+
+    d2 = tmp_path / "khong-thong-tin"
+    (d2 / "raw").mkdir(parents=True)
+    io.open(d2 / "raw" / "a.json", "w", encoding="utf-8").write(
+        json.dumps({"captured_at": "2026-09-14T23:00:00.000Z"}))
+    assert tuoi_that_gio(str(d2)) is None   # thiếu _thong-tin.json
+
+
 # ───────────────────────────────── mốc giờ lấy từ tên thư mục
 def test_moc_gio_lay_tu_ten_thu_muc():
     """Số giờ sau khi đăng không có trong gói nào của Studio — nhưng tên thư mục thì có."""
@@ -517,3 +548,38 @@ def test_agent_lay_viec_moi_khi_viec_cu_chua_xong_thi_viec_cu_ghi_la_mat(tmp_pat
         assert tt["vua_xong"][-1]["id"] == so7 and "chưa báo xong" in tt["vua_xong"][-1]["loi"]
     finally:
         t.tat()
+
+
+# ───────────────────────────────── GET /tu-chay: sổ ngày của `tu_chay.py --tat-ca` ──────────
+
+
+def test_tu_chay_tra_ve_toi_da_7_so_ngay_gan_nhat(tram_dang_chay, tmp_path):
+    """Máy nhà mở tab là thấy VPS đêm qua đã làm gì — không phải SSH vào đọc
+    `workspace/tu-chay/*.json` bằng tay. Chỉ 7 sổ GẦN NHẤT, không phải cả kho."""
+    import datetime as _dt
+
+    from core.tu_chay import ghi_bao_cao_tat_ca
+
+    for i in range(9):
+        ngay = (_dt.date(2026, 9, 1) + _dt.timedelta(days=i)).isoformat()
+        ghi_bao_cao_tat_ca(str(tmp_path), ngay, {
+            "luc": ngay + "T02:00:00", "che_do": "that",
+            "ket_qua": [{"kenh": "K1", "ok": True, "tom_tat": "K1: xong", "loi": ""}],
+            "tong_uoc_vnd": 90000, "nhom_dong_bo": []})
+
+    with urllib.request.urlopen(
+            f"http://127.0.0.1:{tram_dang_chay.cong}/tu-chay", timeout=5) as f:
+        du = json.loads(f.read().decode("utf-8"))
+    assert len(du) == 7, "chỉ 7 sổ ngày gần nhất, không phải cả kho"
+    ngay_tra_ve = [d["ngay"] for d in du]
+    assert ngay_tra_ve == sorted(ngay_tra_ve)
+    assert ngay_tra_ve[-1] == "2026-09-09"       # ngày mới nhất phải có mặt
+    assert "2026-09-01" not in ngay_tra_ve        # ngày cũ nhất (thứ 9 tính lùi) bị bỏ
+    assert du[-1]["runs"][0]["ket_qua"][0]["tom_tat"] == "K1: xong"
+
+
+def test_tu_chay_chua_co_so_ngay_nao_thi_tra_danh_sach_rong(tram_dang_chay):
+    with urllib.request.urlopen(
+            f"http://127.0.0.1:{tram_dang_chay.cong}/tu-chay", timeout=5) as f:
+        du = json.loads(f.read().decode("utf-8"))
+    assert du == []

@@ -30,6 +30,8 @@ if GOC not in sys.path:
 
 import tkinter as tk
 
+import agent  # cạnh đây, chỉ thư viện chuẩn — dùng chung logic chế độ phiên
+
 THU_LOG = os.path.join(GOC, "logs")
 os.makedirs(THU_LOG, exist_ok=True)
 CREATE_NO_WINDOW = 0x08000000
@@ -52,9 +54,119 @@ CAC_CON = (
 )
 
 
+def _danh_sach_kenh_may():
+    """Kênh máy này phục vụ — đọc từ config.json. `cac_kenh` (máy 1 VPS
+    phục vụ tới 5 kênh cùng niche) thắng; không thì kênh đơn `kenh` (nếp
+    một-máy-một-kênh cũ)."""
+    try:
+        du = json.load(open(os.path.join(GOC, "config.json"), encoding="utf-8"))
+    except Exception:
+        du = {}
+    nhieu = [str(k).strip() for k in (du.get("cac_kenh") or []) if str(k).strip()]
+    if nhieu:
+        return list(dict.fromkeys(nhieu))
+    don = str(du.get("kenh") or "").strip()
+    return [don] if don else []
+
+
+def _che_do_phien_hieu_luc():
+    """Chế độ phiên (18/09 — xem vm/KE-HOACH.md "5 kênh / 1 VPS — bước A")
+    có đang bật hiệu lực trên máy này không — dùng chung phép tính với agent
+    (`agent.che_do_phien_bat`): tự động theo số kênh của máy, trừ khi cai-dat-
+    tool.json (agent chép xuống từ tool) ép rõ true/false."""
+    try:
+        cfg = json.load(open(os.path.join(GOC, "config.json"), encoding="utf-8"))
+    except Exception:
+        cfg = {}
+    try:
+        du = json.load(open(os.path.join(GOC, "cai-dat-tool.json"), encoding="utf-8"))
+    except Exception:
+        du = {}
+    return agent.che_do_phien_bat(cfg, {"che_do_phien": du.get("che_do_phien")})
+
+
+def doc_cong_tac_kenh(kenh):
+    """Công tắc Tự đăng / Tự trả lời CỦA MỘT KÊNH — `cai-dat-tool.json`
+    `["kenh"][kenh]` thắng; không có thì khoá top-level (đời cũ, hoặc kênh
+    CHÍNH của máy); không có nữa thì mặc định như `vm_cai_dat.MAC_DINH`
+    (tự đăng tắt, tự trả lời cmt bật)."""
+    ra = {"tu_dang": False, "tu_tra_loi_cmt": True}
+    try:
+        du = json.load(open(os.path.join(GOC, "cai-dat-tool.json"), encoding="utf-8"))
+    except Exception:
+        du = {}
+    theo_kenh = (du.get("kenh") or {}).get(kenh)
+    if isinstance(theo_kenh, dict):
+        for k in ("tu_dang", "tu_tra_loi_cmt"):
+            if k in theo_kenh:
+                ra[k] = bool(theo_kenh[k])
+        return ra
+    for k in ("tu_dang", "tu_tra_loi_cmt"):
+        if k in du:
+            ra[k] = bool(du[k])
+    return ra
+
+
+def _ghi_cong_tac_kenh_cuc_bo(kenh, tu_dang, tu_cmt):
+    """Ghi NGAY công tắc của MỘT KÊNH vào `cai-dat-tool.json["kenh"][kenh]`
+    — núm phải DÍNH trước khi báo về tool kịp (xem `doi_cong_tac`: tool đẩy
+    thiết lập cũ xuống mỗi nhịp tim, không ghi cục bộ trước thì núm tự lật
+    lại trong vài giây)."""
+    duong = os.path.join(GOC, "cai-dat-tool.json")
+    try:
+        du = json.load(open(duong, encoding="utf-8")) if os.path.isfile(duong) else {}
+        if not isinstance(du, dict):
+            du = {}
+    except Exception:
+        du = {}
+    theo_kenh = du.get("kenh")
+    if not isinstance(theo_kenh, dict):
+        theo_kenh = {}
+    rieng = dict(theo_kenh.get(kenh) or {})
+    rieng["tu_dang"], rieng["tu_tra_loi_cmt"] = bool(tu_dang), bool(tu_cmt)
+    theo_kenh[kenh] = rieng
+    du["kenh"] = theo_kenh
+    try:
+        with open(duong + ".tmp", "w", encoding="utf-8") as tep:
+            json.dump(du, tep, ensure_ascii=False, indent=1)
+        os.replace(duong + ".tmp", duong)
+    except Exception:
+        pass
+
+
+def _goi_thiet_lap_vm(tram, kenh, tu_dang, tu_cmt, cho=10):
+    """(luồng nền) Báo công tắc CỦA MỘT KÊNH về tool — `POST /thiet-lap-vm`
+    mang đúng `kenh` (máy nhiều kênh: không còn ngầm định kênh đầu)."""
+    if not tram or not kenh:
+        return
+    try:
+        import urllib.request
+        du = json.dumps({"kenh": kenh, "tu_dang": bool(tu_dang),
+                         "tu_tra_loi_cmt": bool(tu_cmt)}).encode("utf-8")
+        urllib.request.urlopen(urllib.request.Request(
+            tram.rstrip("/") + "/thiet-lap-vm", data=du,
+            headers={"Content-Type": "application/json"}), timeout=cho).read()
+    except Exception:
+        pass
+
+
 def doc_cong_tac():
     """Núm tự đăng / tự trả lời: config.json là gốc, cai-dat-tool.json
-    (MyTool ở máy nhà đẩy xuống qua agent) THẮNG. Agent luôn bật."""
+    (MyTool ở máy nhà đẩy xuống qua agent) THẮNG. Agent luôn bật.
+
+    Máy NHIỀU kênh: đây chỉ còn quyết định có nên CHẠY HẲN hai con
+    dang/cmt không — CHẠY nếu bất kỳ MỘT kênh nào muốn bật (con tự bỏ qua
+    từng kênh đang tắt bên trong nó, xem `_tu_dang_bat`/`_tu_tra_loi_bat`
+    của `may_dang.py`/`may_cmt.py`); trạng thái hiện trên bảng vẫn theo
+    từng kênh riêng (`doc_cong_tac_kenh`)."""
+    cac_kenh = _danh_sach_kenh_may()
+    if len(cac_kenh) > 1:
+        bat = {"agent": True, "tu_dang": False, "tu_tra_loi_cmt": False}
+        for kenh in cac_kenh:
+            cong = doc_cong_tac_kenh(kenh)
+            bat["tu_dang"] = bat["tu_dang"] or cong["tu_dang"]
+            bat["tu_tra_loi_cmt"] = bat["tu_tra_loi_cmt"] or cong["tu_tra_loi_cmt"]
+        return bat
     # tu_dang mac dinh TAT (02/09 chu du an: dang tay la duong chinh,
     # bat o tab Quan ly kenh cua MyTool khi san sang)
     ra = {"agent": True, "tu_dang": False, "tu_tra_loi_cmt": True}
@@ -320,7 +432,7 @@ def _giai_nen_goi_vm(du_lieu, goc_vm):
 _BO_TEP = {"config.json", "cai-dat-tool.json", "agent.pid",
            "agent.log", "trang-thai.json"}
 _BO_THU = {"__pycache__", "logs", "tien-ich", "tokens",
-           "clients", "replied", "transcripts"}
+           "clients", "replied", "transcripts", "goi-vps"}
 
 
 def dau_van_cuc_bo(goc_vm=None):
@@ -361,6 +473,23 @@ def _may_dang_ban(thu_log, gan_day_giay=600):
     return False
 
 
+def da_dung_mytool_vps(goc_vm=None):
+    """Máy này đã dùng MyTool ở "chế độ VPS" chưa — dấu hiệu là `vps.json`
+    trong một thư mục `MyTool` ANH EM của `vm/` (`..\\MyTool\\vps.json`,
+    xem `core/che_do_vps.py` bên MyTool).
+
+    Có dấu ấy nghĩa là MyTool đã tự nuôi ba con này rồi
+    (`core/giam_sat_vm.py`) — bảng Tkinter ở đây đứng ra thêm chỉ tổ có HAI
+    người cùng nhắm một khoá cổng (8767/8768/8769: người tới sau luôn thua,
+    khoá một-mình không hỏng gì) mà không được tích sự gì, lại còn cắm thêm
+    lối tắt/dọn lối tắt đời cũ (`cam_loi_tat`) một cách vô nghĩa. Máy VM một-
+    kênh CŨ (không có MyTool cạnh nó) thì `vps.json` không tồn tại — hàm này
+    trả `False`, mọi thứ y nguyên như trước.
+    """
+    goc = goc_vm or GOC
+    return os.path.isfile(os.path.join(os.path.dirname(goc), "MyTool", "vps.json"))
+
+
 def mot_minh_gui():
     """Chỉ một bảng điều khiển — cổng khoá kiểu agent, chết là HĐH nhả."""
     import socket
@@ -380,6 +509,8 @@ class BangDieuKhien:
         self.luc = {k: 0.0 for k, _t, _f, _l in CAC_CON}      # mở lúc nào
         self.mo_lai_luc = {k: 0.0 for k, _t, _f, _l in CAC_CON}
         self.cong_tac = doc_cong_tac()
+        self._cac_kenh = _danh_sach_kenh_may()
+        self._che_do_phien = _che_do_phien_hieu_luc()
         self._nhip = 0
         self._dang_cap_nhat = False
         self._co_ban_moi = False       # luồng soi nền bật cờ, vòng chính áp
@@ -405,16 +536,58 @@ class BangDieuKhien:
             nhan.pack(side="left", padx=(2, 14))
             self.den[khoa] = nhan
 
-        self.o_dang = tk.BooleanVar(value=self.cong_tac["tu_dang"])
-        self.o_cmt = tk.BooleanVar(value=self.cong_tac["tu_tra_loi_cmt"])
-        tk.Checkbutton(dau, text="Tự đăng", variable=self.o_dang,
-                       command=self.doi_cong_tac, bg=NEN, fg=CHU,
-                       selectcolor=NEN_O, activebackground=NEN,
-                       font=("Segoe UI", 9, "bold")).pack(side="right", padx=4)
-        tk.Checkbutton(dau, text="Tự trả lời cmt", variable=self.o_cmt,
-                       command=self.doi_cong_tac, bg=NEN, fg=CHU,
-                       selectcolor=NEN_O, activebackground=NEN,
-                       font=("Segoe UI", 9, "bold")).pack(side="right", padx=4)
+        # Máy MỘT kênh (nếp cũ): hai công tắc chung ngay trên đầu, y hệt
+        # trước — không đổi gì cho những máy đang chạy ổn.
+        # Máy NHIỀU kênh (tới 5, một VPS cùng niche): mỗi kênh một hàng
+        # riêng (bảng nhỏ bên dưới) — công tắc chung không còn đủ nghĩa vì
+        # mỗi kênh có thể bật/tắt khác nhau.
+        self.o_dang = self.o_cmt = None
+        self._vars_kenh = {}
+        self._nhan_quet_kenh = {}
+        if len(self._cac_kenh) <= 1:
+            self.o_dang = tk.BooleanVar(value=self.cong_tac["tu_dang"])
+            self.o_cmt = tk.BooleanVar(value=self.cong_tac["tu_tra_loi_cmt"])
+            tk.Checkbutton(dau, text="Tự đăng", variable=self.o_dang,
+                           command=self.doi_cong_tac, bg=NEN, fg=CHU,
+                           selectcolor=NEN_O, activebackground=NEN,
+                           font=("Segoe UI", 9, "bold")).pack(side="right", padx=4)
+            tk.Checkbutton(dau, text="Tự trả lời cmt", variable=self.o_cmt,
+                           command=self.doi_cong_tac, bg=NEN, fg=CHU,
+                           selectcolor=NEN_O, activebackground=NEN,
+                           font=("Segoe UI", 9, "bold")).pack(side="right", padx=4)
+        else:
+            bang = tk.Frame(self.cua, bg=NEN)
+            bang.pack(fill="x", padx=10, pady=(0, 4))
+            dong_dau = tk.Frame(bang, bg=NEN)
+            dong_dau.pack(fill="x")
+            for chu, rong in (("Kênh", 16),
+                             ("Phiên kế" if self._che_do_phien else "Quét cuối", 20)):
+                tk.Label(dong_dau, text=chu, width=rong, anchor="w",
+                        font=("Segoe UI", 8, "bold"), fg=VANG,
+                        bg=NEN).pack(side="left")
+            for kenh in self._cac_kenh:
+                cong = doc_cong_tac_kenh(kenh)
+                hang = tk.Frame(bang, bg=NEN)
+                hang.pack(fill="x")
+                tk.Label(hang, text=kenh, width=16, anchor="w", fg=CHU,
+                        bg=NEN, font=("Consolas", 9)).pack(side="left")
+                nhan_quet = tk.Label(hang, text="…", width=20, anchor="w",
+                                     fg=CHU, bg=NEN, font=("Consolas", 9))
+                nhan_quet.pack(side="left")
+                self._nhan_quet_kenh[kenh] = nhan_quet
+                v_dang = tk.BooleanVar(value=cong["tu_dang"])
+                v_cmt = tk.BooleanVar(value=cong["tu_tra_loi_cmt"])
+                self._vars_kenh[kenh] = (v_dang, v_cmt)
+                tk.Checkbutton(hang, text="Tự đăng", variable=v_dang,
+                               command=lambda k=kenh: self._doi_cong_tac_kenh(k),
+                               bg=NEN, fg=CHU, selectcolor=NEN_O,
+                               activebackground=NEN,
+                               font=("Segoe UI", 9)).pack(side="left", padx=4)
+                tk.Checkbutton(hang, text="Tự trả lời cmt", variable=v_cmt,
+                               command=lambda k=kenh: self._doi_cong_tac_kenh(k),
+                               bg=NEN, fg=CHU, selectcolor=NEN_O,
+                               activebackground=NEN,
+                               font=("Segoe UI", 9)).pack(side="left", padx=4)
 
         hang_nut = tk.Frame(self.cua, bg=NEN)
         hang_nut.pack(fill="x", padx=10, pady=(0, 6))
@@ -451,12 +624,47 @@ class BangDieuKhien:
 
     # ------------------------------------------------------------------
     def _ten_kenh(self):
+        cac = self._cac_kenh if hasattr(self, "_cac_kenh") else _danh_sach_kenh_may()
+        if len(cac) > 1:
+            return "{0} (+{1} kênh khác)".format(cac[0], len(cac) - 1)
         try:
             du = json.load(open(os.path.join(GOC, "config.json"),
                                 encoding="utf-8"))
             return str(du.get("kenh") or "?")
         except Exception:
             return "?"
+
+    def _phien_ke_kenh(self, kenh):
+        """"HH:MM" mục tiêu phiên hôm nay của MỘT kênh + dấu kết quả lần
+        chạy gần nhất (✓ xong, ⚠ có bước lỗi/quá hạn) — cột "Phiên kế" khi
+        chế độ phiên đang bật (18/09 — xem vm/KE-HOACH.md)."""
+        try:
+            tt = json.load(open(os.path.join(GOC, "trang-thai.json"),
+                                encoding="utf-8"))
+        except Exception:
+            tt = {}
+        hom_nay = time.strftime("%Y-%m-%d")
+        muc_tieu = tt.get("phien_muc_tieu@{0}@{1}".format(kenh, hom_nay)) or "…"
+        if tt.get("phien_cuoi@" + kenh) != hom_nay:
+            return muc_tieu
+        kq = tt.get("phien_ket_qua@" + kenh) or {}
+        chu = " ".join(str(kq.get(k, "")) for k in
+                       ("quet_studio", "quet_trang_chu", "dang", "cmt"))
+        hong = ("lỗi" in chu) or ("QUÁ HẠN" in chu) or ("không mở được" in chu)
+        return "{0} {1}".format(muc_tieu, "⚠" if hong else "✓")
+
+    def _quet_cuoi_kenh(self, kenh):
+        """Lần quét gần nhất của MỘT kênh — mốc mới nhất trong các khe
+        `quet_cuoi@<kênh>@<khe>` của `trang-thai.json` cạnh agent."""
+        try:
+            du = json.load(open(os.path.join(GOC, "trang-thai.json"),
+                                encoding="utf-8"))
+        except Exception:
+            return "chưa có"
+        tien_to = "quet_cuoi@{0}@".format(kenh)
+        moc = sorted(v for k, v in du.items()
+                    if isinstance(k, str) and k.startswith(tien_to) and v)
+        return moc[-1] if moc else "chưa có"
 
     def _thu_nho(self):
         try:
@@ -465,7 +673,15 @@ class BangDieuKhien:
             pass
 
     def _duoc_bat(self, khoa):
-        return khoa == "agent" or bool(self.cong_tac.get(khoa, True))
+        if khoa == "agent":
+            return True
+        if self._che_do_phien:
+            # Chế độ phiên: agent tự mở may_dang.py/may_cmt.py MỘT LƯỢT
+            # ("--kenh X --mot-lan") ngay trong phiên của từng kênh — bảng
+            # KHÔNG tự mở chúng chạy nền 24/7 nữa (hai người giữ cửa 8768/
+            # 8769 cùng lúc là vô nghĩa, khoá một-mình sẽ chỉ để MỘT sống).
+            return False
+        return bool(self.cong_tac.get(khoa, True))
 
     # ------------------------------------------------------------------
     def doi_cong_tac(self):
@@ -515,6 +731,20 @@ class BangDieuKhien:
                 timeout=10).read()
         except Exception:
             pass
+
+    def _doi_cong_tac_kenh(self, kenh):
+        """Gạt núm của MỘT kênh (bảng nhiều-kênh) — cùng luật DÍNH như
+        `doi_cong_tac`: ghi cục bộ trước, rồi báo về tool bằng đúng `kenh`
+        này (không còn ngầm định kênh đầu)."""
+        v_dang, v_cmt = self._vars_kenh[kenh]
+        d, c = bool(v_dang.get()), bool(v_cmt.get())
+        _ghi_cong_tac_kenh_cuc_bo(kenh, d, c)
+        import threading
+        threading.Thread(target=_goi_thiet_lap_vm,
+                         args=(self._tram(), kenh, d, c), daemon=True).start()
+        # Một kênh tắt không được giết con dang/cmt nếu kênh KHÁC còn bật —
+        # con tự bỏ qua từng kênh tắt bên trong nó (_tu_dang_bat/…).
+        self.cong_tac = doc_cong_tac()
 
     def chay_lai_het(self):
         for khoa, _ten, tep, log in CAC_CON:
@@ -651,15 +881,39 @@ class BangDieuKhien:
                     text="bản {0} · mới nhất".format(doc_phien_ban()))
             # Thiết lập tool đẩy xuống — đọc lại ~12 giây/lần, đổi là theo ngay
             if self._nhip % 5 == 2:
+                che_do_moi = _che_do_phien_hieu_luc()
+                if che_do_moi != self._che_do_phien:
+                    self._che_do_phien = che_do_moi
+                    if che_do_moi:
+                        # Vừa bật phiên — hai con tự lặp cũ (nếu đang chạy)
+                        # phải nhường cổng 8768/8769 cho agent tự one-shot.
+                        for khoa in ("tu_dang", "tu_tra_loi_cmt"):
+                            if self._song(khoa):
+                                giet(self.tt[khoa])
+                                self.tt[khoa] = None
                 moi = doc_cong_tac()
                 if moi != self.cong_tac:
                     self.cong_tac = moi
-                    self.o_dang.set(moi["tu_dang"])
-                    self.o_cmt.set(moi["tu_tra_loi_cmt"])
+                    if self.o_dang is not None:      # máy MỘT kênh (nếp cũ)
+                        self.o_dang.set(moi["tu_dang"])
+                        self.o_cmt.set(moi["tu_tra_loi_cmt"])
                     for khoa in ("tu_dang", "tu_tra_loi_cmt"):
                         if not moi[khoa] and self._song(khoa):
                             giet(self.tt[khoa])
                             self.tt[khoa] = None
+                # Máy NHIỀU kênh: mỗi kênh tự đọc lại công tắc + mốc quét
+                # cuối của MÌNH — một kênh đổi không phải vẽ lại cả bảng.
+                for kenh, (v_dang, v_cmt) in self._vars_kenh.items():
+                    cong = doc_cong_tac_kenh(kenh)
+                    if bool(v_dang.get()) != cong["tu_dang"]:
+                        v_dang.set(cong["tu_dang"])
+                    if bool(v_cmt.get()) != cong["tu_tra_loi_cmt"]:
+                        v_cmt.set(cong["tu_tra_loi_cmt"])
+                    nhan = self._nhan_quet_kenh.get(kenh)
+                    if nhan is not None:
+                        nhan.config(text=(self._phien_ke_kenh(kenh)
+                                          if self._che_do_phien
+                                          else self._quet_cuoi_kenh(kenh)))
             for khoa, ten, tep, log in CAC_CON:
                 song = self._song(khoa)
                 bat = self._duoc_bat(khoa)
@@ -710,6 +964,20 @@ class BangDieuKhien:
 
 
 if __name__ == "__main__":
+    if da_dung_mytool_vps():
+        # Chế độ VPS: MyTool cạnh đây đã tự nuôi cả ba con — không cắm lối
+        # tắt, không tự mở gì, chỉ nói một câu rồi thoát.
+        try:
+            import tkinter.messagebox as mb
+            an = tk.Tk()
+            an.withdraw()
+            mb.showinfo(
+                "Đã dùng MyTool",
+                "Máy này đã dùng MyTool (chế độ VPS) — mở MyTool.")
+            an.destroy()
+        except Exception:
+            pass
+        os._exit(0)
     if not mot_minh_gui():
         try:
             import tkinter.messagebox as mb

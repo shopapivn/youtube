@@ -78,6 +78,25 @@ def bang(rt):
     return dims, mets
 
 
+def cot_tuyet_doi(rt, loai_chi_so):
+    """Giá trị cột SỐ THẬT của một chỉ số — cột mang `total`. Không có thì `None`.
+
+    Ô YouTube đánh dấu `undefinedValueIndices` (chưa có số) trả `None` thay vì 0,
+    để "chưa có" không bị đọc thành "bằng không".
+    """
+    for c in rt.get("metricColumns", []) or []:
+        if (c.get("metric") or {}).get("type") != loai_chi_so:
+            continue
+        for k in ("counts", "percentages", "milliseconds"):
+            if isinstance(c.get(k), dict) and "total" in c[k] and "values" in c[k]:
+                gia_tri = list(c[k]["values"])
+                for i in c.get("undefinedValueIndices") or []:
+                    if 0 <= i < len(gia_tri):
+                        gia_tri[i] = None
+                return gia_tri
+    return None
+
+
 def nap(thu_muc):
     fs = sorted(glob.glob(os.path.join(thu_muc, "*.json")))
     if not fs:
@@ -270,10 +289,14 @@ def sinh(thu_muc, out, thoi_luong=None, gio=None):
                     keys = dims["TRAFFIC_SOURCE_DETAIL"]
                     imp = mets.get("VIDEO_THUMBNAIL_IMPRESSIONS")
                     if imp and imp[1] == "counts":          # bảng chi tiết (join): có imp từng nguồn
-                        ctr = mets.get("VIDEO_THUMBNAIL_IMPRESSIONS_VTR", ([], None))[0]
-                        vw = mets.get("EXTERNAL_VIEWS", ([], None))[0]
-                        avd = mets.get("AVERAGE_WATCH_TIME", ([], None))[0]
-                        wt = mets.get("EXTERNAL_WATCH_TIME", ([], None))[0]
+                        # Bảng join có HAI cột cho mỗi chỉ số: "% trên tổng" trước, số thật sau
+                        # (chỉ số thật mang `total`). `bang()` chọn cột đầu cho CTR/AVD → CTR sai
+                        # hàng chục lần, AVD 0:00:00 (đo 17/09/2026). Lấy thẳng cột có `total`.
+                        imp = (cot_tuyet_doi(d, "VIDEO_THUMBNAIL_IMPRESSIONS") or imp[0], "counts")
+                        ctr = cot_tuyet_doi(d, "VIDEO_THUMBNAIL_IMPRESSIONS_VTR") or mets.get("VIDEO_THUMBNAIL_IMPRESSIONS_VTR", ([], None))[0]
+                        vw = cot_tuyet_doi(d, "EXTERNAL_VIEWS") or mets.get("EXTERNAL_VIEWS", ([], None))[0]
+                        avd = cot_tuyet_doi(d, "AVERAGE_WATCH_TIME") or mets.get("AVERAGE_WATCH_TIME", ([], None))[0]
+                        wt = cot_tuyet_doi(d, "EXTERNAL_WATCH_TIME") or mets.get("EXTERNAL_WATCH_TIME", ([], None))[0]
                         for i, k in enumerate(keys):
                             pool_rows[k] = (imp[0][i] if i < len(imp[0]) else 0, ctr[i] if i < len(ctr) else None, vw[i] if i < len(vw) else None,
                                             avd[i] if i < len(avd) else None, wt[i] if i < len(wt) else None)

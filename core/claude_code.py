@@ -86,6 +86,8 @@ __all__ = [
     "lenh_chay_duoc", "tim_lenh", "LENH_CAI_CLAUDE", "DIA_CHI_CAI",
     "danh_dau_da_chao", "duong_trang_thai_chung", "MODEL_MAC_DINH",
     "duong_settings_may", "cai_vao_may", "go_khoi_may",
+    "DIA_CHI_TAI_XUONG_CLAUDE", "toi_duoc", "lenh_cai_npm",
+    "cai_dat_du_phong_npm", "cai_dat_co_du_phong",
 ]
 
 #: Gói npm của Claude Code.
@@ -248,8 +250,17 @@ _CHO_NODE = (
 _CHO_CLAUDE = (os.path.join(os.path.expanduser("~"), ".local", "bin"),)
 
 
-def tim_lenh(ten: str) -> str:
+def tim_lenh(ten: str, goc: str = "") -> str:
     """Tìm một lệnh: PATH trước, rồi những chỗ cài quen thuộc.
+
+    `goc` (tuỳ chọn) là thư mục tool — có nó thì tìm thêm trong
+    `<goc>/runtime/`, chỗ `core/node_goi_san.py` tự tải Node **gói sẵn** về
+    (đường dự phòng qua npm khi bản cài gốc không dùng được, xem
+    `LENH_CAI_NPM` — Codex đã dùng đúng thư mục này từ trước). `npm install
+    -g` trên Windows đặt script toàn cục NGAY CẠNH `node.exe`/`npm.cmd`, nên
+    `claude.cmd` cài qua đường dự phòng nằm trong `runtime/node-…/`, một chỗ
+    PATH của tiến trình không bao giờ thấy — không dò thêm ở đây thì khách
+    cài xong vẫn bị báo "chưa có Claude Code".
 
     Trả về đường dẫn đầy đủ, hoặc rỗng nếu chịu.
     """
@@ -260,6 +271,19 @@ def tim_lenh(ten: str) -> str:
         for thu_muc in _CHO_NODE + _CHO_CLAUDE:
             for duoi in (".cmd", ".CMD", ".exe", ".bat", ""):
                 thu = os.path.join(thu_muc, ten + duoi)
+                if os.path.isfile(thu):
+                    return thu
+    if goc:
+        from .node_goi_san import thu_muc_runtime  # noqa: PLC0415 — cùng gói
+
+        runtime = thu_muc_runtime(goc)
+        try:
+            con = sorted(os.listdir(runtime), reverse=True) if os.path.isdir(runtime) else []
+        except OSError:
+            con = []
+        for ten_thu_muc in con:
+            for duoi in (".cmd", ".CMD", ".exe", ".bat", ""):
+                thu = os.path.join(runtime, ten_thu_muc, ten + duoi)
                 if os.path.isfile(thu):
                     return thu
     return ""
@@ -307,7 +331,7 @@ def _tim(ten: str) -> str:
     return ""
 
 
-def kiem_tra() -> TinhTrang:
+def kiem_tra(goc: str = "") -> TinhTrang:
     """Xem máy khách đang có gì. **Không cài gì cả.**
 
     Chạy bằng **đường dẫn đầy đủ**, không phải tên trần. Trên Windows `npm` là
@@ -315,6 +339,12 @@ def kiem_tra() -> TinhTrang:
     thật: `shutil.which("npm")` tìm thấy nhưng `subprocess.run(["npm", …])` báo
     không có lệnh, nên Studio kết luận nhầm là máy chưa cài npm rồi đòi cài lại
     Node trên một máy đã có sẵn.
+
+    `goc` (tuỳ chọn) là thư mục tool — cùng tham số `core.codex.kiem_tra` đã
+    có từ trước. Truyền vào thì còn dò thêm Node/npm **gói sẵn**
+    (`core/node_goi_san.py`, tải khi đường npm dự phòng chạy — xem
+    `cai_dat_co_du_phong`) và `claude.cmd` mà `npm install -g` đặt CẠNH nó,
+    một chỗ PATH của tiến trình không bao giờ thấy.
     """
     # Tắt màn hình chào TRƯỚC khi dò. `claude --version` chạy ngay bên dưới, và
     # trên máy chưa từng chạy Claude Code thì chính lệnh đó làm màn hình chào
@@ -326,6 +356,17 @@ def kiem_tra() -> TinhTrang:
     tt.node = _chay_lay_chu([duong_node, "--version"]) if duong_node else ""
     tt.npm = _chay_lay_chu([duong_npm, "--version"]) if duong_npm else ""
     tt.duong_npm = duong_npm
+    if goc and not tt.npm:
+        # Cùng nếp `core.codex.kiem_tra`: Node bản gói sẵn tool tự tải về
+        # (đường dự phòng npm, xem `cai_dat_co_du_phong`) nằm trong
+        # `<goc>/runtime/`, không có trong PATH.
+        from .node_goi_san import tim_node_da_tai  # noqa: PLC0415
+
+        npm_rieng = tim_node_da_tai(goc)
+        if npm_rieng:
+            tt.npm = "gói sẵn trong thư mục tool"
+            tt.duong_npm = npm_rieng
+            tt.node = tt.node or "gói sẵn"
     # ═══ KHÔNG CHẠY `claude` ĐỂ DÒ. CHỈ XEM TỆP CÓ HAY KHÔNG ═══
     #
     # Câu hỏi tab này cần trả lời là "máy đã có Claude Code chưa", và **sự tồn
@@ -349,7 +390,7 @@ def kiem_tra() -> TinhTrang:
     #
     # Nên: dò bằng đường dẫn, không bằng cách chạy. Mất chuỗi số hiệu, đổi lại
     # không còn cửa sổ lạ nào — một cuộc đổi chác không cần cân nhắc.
-    tt.duong_claude = tim_lenh("claude")
+    tt.duong_claude = tim_lenh("claude", goc)
     if tt.duong_claude:
         tt.claude = "đã cài"
     tt.duong_code = _tim("code")
@@ -381,6 +422,153 @@ def lenh_cai_dat(tt: TinhTrang, *, them_vscode: bool = False,
         lenh.append([tt.duong_code or "code", "--install-extension",
                      EXT_VSCODE, "--force"])
     return lenh
+
+
+# ── Dự phòng qua npm: VPS chỉ IPv6 với không tới `downloads.claude.ai` ────────
+#
+# Đo thật (xem `vm/KE-HOACH-5-KENH.md`): máy ảo thuê ngoài đa phần CHỈ CÓ
+# IPv6, và `downloads.claude.ai` — nơi `LENH_CAI_CLAUDE` (`claude.ai/install.
+# ps1`) tải nhị phân thật về — KHÔNG có bản ghi AAAA. Bản cài gốc đứng im
+# không báo lỗi rõ ràng trên đường đó; khách (hoặc VPS không ai ngồi canh)
+# thấy tab Agent mãi báo "Claude Code — chưa có".
+#
+# `registry.npmjs.org` và `nodejs.org` đều có IPv6 (đo cùng ngày), nên
+# `npm install -g @anthropic-ai/claude-code` là đường vòng dùng được. Cần
+# Node để có `npm`; máy không có thì tải Node **gói sẵn** — dùng lại
+# `core/node_goi_san.py` (ZIP thẳng từ `nodejs.org`, không cần quyền quản
+# trị, không cần `winget`) THAY vì một trình cài `.msi`: đây đã là "cách cài
+# hiện có" của chính kho này (Codex dùng y hệt đường này từ trước, xem
+# `core/codex.py::kiem_tra`/`lenh_cai_dat`), và một `.msi` cần `msiexec`
+# chạy với quyền quản trị — thứ một VPS không ai ngồi bấm "Yes" cho UAC
+# không chắc có.
+
+#: Địa chỉ dùng để ĐO đường tới `downloads.claude.ai` — không tải gì, chỉ hỏi
+#: có với tới được không.
+DIA_CHI_TAI_XUONG_CLAUDE = "https://downloads.claude.ai"
+
+
+def toi_duoc(dia_chi: str = DIA_CHI_TAI_XUONG_CLAUDE, *, cho: float = 6.0,
+            mo: Optional[Callable[..., object]] = None) -> Optional[bool]:
+    """Máy này với TỚI `dia_chi` không.
+
+    `True`/`False`, hoặc `None` khi không hỏi rõ được (ví dụ `mo` ném một lỗi
+    lạ không phải lỗi mạng). `None` ≠ `False` — xem cùng luật ở
+    `ho_tro_cong_cu`: không biết chắc thì đừng doạ khách bằng một kết luận
+    chưa chắc có.
+
+    Nhận được MỘT phản hồi HTTP (kể cả lỗi 403/404) đã đủ chứng minh máy
+    **với tới được** máy chủ đó — câu hỏi ở đây là đường mạng, không phải
+    nội dung trang.
+    """
+    import urllib.error  # noqa: PLC0415
+
+    from .mang_an_toan import mo_url  # noqa: PLC0415 — cùng gói
+
+    try:
+        with (mo or mo_url)(dia_chi, cho=cho) as _phan_hoi:
+            return True
+    except urllib.error.HTTPError:
+        return True  # có đáp — dù là lỗi HTTP — nghĩa là mạng thông
+    except urllib.error.URLError:
+        return False  # không kết nối được — đúng dấu hiệu IPv6-only đã đo
+    except Exception:  # noqa: BLE001 — lỗi lạ thì "không biết", đừng đoán
+        return None
+
+
+def lenh_cai_npm(duong_npm: str = "") -> List[str]:
+    """Lệnh cài Claude Code qua npm — đường dự phòng, xem ghi chú phía trên."""
+    return [duong_npm or "npm", "install", "-g", GOI_NPM]
+
+
+def cai_dat_du_phong_npm(goc: str, *, chay: Optional[Callable[[Sequence[str]], object]] = None,
+                         tai_node: Optional[Callable[..., str]] = None,
+                         bao: Optional[Callable[[str], None]] = None) -> TinhTrang:
+    """Cài Claude Code qua npm, tải Node gói sẵn nếu máy chưa có. Trả về
+    `TinhTrang` đã dò lại sau khi thử — gọi `.san_sang`/`.claude` để biết có
+    ăn không, đừng tin vào mã thoát của một lệnh riêng lẻ.
+
+    `chay`/`tai_node` là cửa tiêm cho test (chạy tiến trình thật + tải mạng
+    thật đều bị cấm trong bộ test theo luật của kho này).
+    """
+    bao = bao or (lambda _dong: None)
+    chay = chay or _chay_lenh_du_phong
+    tai_node = tai_node or _tai_node_that
+
+    duong_npm = tim_lenh("npm", goc)
+    if not duong_npm:
+        bao("› máy chưa có npm — tải Node bản gói sẵn (không cần quyền quản trị)")
+        try:
+            duong_npm = tai_node(goc, bao=bao)
+            bao("  xong — " + duong_npm)
+        except Exception as loi:  # noqa: BLE001 — nói thật rồi vẫn dò lại tt
+            bao("  không tải được Node: {0}".format(loi))
+            return kiem_tra(goc)
+
+    lenh = lenh_chay_duoc(lenh_cai_npm(duong_npm))
+    bao("› " + " ".join(lenh))
+    try:
+        xong = chay(lenh)
+    except Exception as loi:  # noqa: BLE001
+        bao("  npm install lỗi: {0}".format(loi))
+        return kiem_tra(goc)
+    ma = getattr(xong, "returncode", None)
+    bao("  xong" if not ma else "  npm install trả mã lỗi {0}".format(ma))
+    return kiem_tra(goc)
+
+
+def cai_dat_co_du_phong(goc: str, tt: Optional[TinhTrang] = None, *,
+                        chay_native: Optional[Callable[[Sequence[str]], object]] = None,
+                        chay_npm: Optional[Callable[[Sequence[str]], object]] = None,
+                        toi_duoc_fn: Optional[Callable[[], Optional[bool]]] = None,
+                        tai_node: Optional[Callable[..., str]] = None,
+                        bao: Optional[Callable[[str], None]] = None) -> TinhTrang:
+    """Toàn bộ chuỗi cài Claude Code, TỰ CHỌN đường: bản cài gốc trước, npm
+    khi đường đó không ra được `claude` — vì bản cài gốc THẤT BẠI, hoặc vì đo
+    trước đã biết `downloads.claude.ai` không với tới (VPS chỉ IPv6).
+
+    Đây là hàm MỘT CỬA cho nơi gọi (tab Agent, hay một lượt cài tự động trên
+    VPS): gọi một lần, nhận lại `TinhTrang` cuối cùng, không cần biết đường
+    nào đã thắng. Mọi bước lỗi đều được `bao` NÓI THẬT — không có bước nào
+    bị nuốt lặng lẽ.
+    """
+    bao = bao or (lambda _dong: None)
+    tt = tt or kiem_tra(goc)
+    if tt.claude:
+        return tt
+
+    kha_nang = (toi_duoc_fn or toi_duoc)()
+    if kha_nang is False:
+        bao("› downloads.claude.ai không với tới được từ máy này (có thể là "
+            "VPS chỉ IPv6) — bỏ qua bản cài gốc, cài thẳng qua npm")
+    else:
+        bao("› cài Claude Code (bản cài gốc)")
+        chay_native = chay_native or _chay_lenh_du_phong
+        try:
+            chay_native(list(LENH_CAI_CLAUDE))
+        except Exception as loi:  # noqa: BLE001 — nói thật rồi vẫn thử npm
+            bao("  bản cài gốc lỗi: {0}".format(loi))
+        tt = kiem_tra(goc)
+        if tt.claude:
+            return tt
+        bao("  bản cài gốc không ra được Claude Code — thử qua npm")
+
+    return cai_dat_du_phong_npm(goc, chay=chay_npm, tai_node=tai_node, bao=bao)
+
+
+def _chay_lenh_du_phong(lenh: Sequence[str], timeout: float = 900):
+    """`subprocess.run` mặc định cho hai hàm trên — cùng khuôn với
+    `_chay_lay_chu`: ẩn cửa sổ, `stdin` đóng (không có gì để hỏi), `CI=1`."""
+    co = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    return subprocess.run(list(lenh), capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=timeout,
+                          stdin=subprocess.DEVNULL, env=_moi_truong_do(),
+                          creationflags=co)
+
+
+def _tai_node_that(goc: str, bao: Optional[Callable[[str], None]] = None) -> str:
+    from .node_goi_san import cai_node  # noqa: PLC0415
+
+    return cai_node(goc, bao=bao)
 
 
 def them_duong_vao_path(moi: Dict[str, str]) -> Dict[str, str]:

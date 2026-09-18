@@ -539,6 +539,47 @@ def dich_tieu_de(client: Any, tieu_de: Sequence[str],
 # ── Sổ tay kênh (mô tả "kênh của tôi là gì") ─────────────────────────────────
 
 
+def _mo_ta_tu_tuyen(goc: str, kenh: str) -> str:
+    """Dự phòng khi kênh CHƯA có `CLAUDE.md` (kênh vừa tách trong nhóm — xem `nhom_kenh`,
+    thường chưa kịp viết sổ tay riêng): dựng vài câu mô tả từ dòng "đang đánh" của
+    `tuyen.csv`, để cửa AI (`hoi_ai_kenh`) không hoàn toàn MÙ về kênh mình.
+
+    Không có `tuyen.csv`, hoặc không dòng nào "đang đánh" → chuỗi rỗng — lời nhắc nói
+    thẳng chưa có mô tả, không bịa ra một cái ngách nào (cùng luật với `doc_so_tay`).
+    """
+    from . import tuyen_noi_dung as tn  # noqa: PLC0415 — tránh vòng import
+
+    try:
+        cot, hang = tn.doc(goc, kenh)
+    except Exception:  # noqa: BLE001 — sổ tuyến thiếu/hỏng thì coi như chưa có mô tả
+        return ""
+    o = {c: i for i, c in enumerate(cot)}
+    i_tt = o.get("Trạng thái")
+    if i_tt is None:
+        return ""
+
+    def o_(d, ten):
+        i = o.get(ten)
+        return str(d[i]).strip() if i is not None and i < len(d) else ""
+
+    for d in hang:
+        if i_tt < len(d) and str(d[i_tt]).strip() != tn.DANG_DANH:
+            continue
+        ten, insight, ho_can, mo_ta = (o_(d, "Tên tuyến"), o_(d, "Insight"),
+                                       o_(d, "Họ cần"), o_(d, "Mô tả"))
+        if not (ten or insight):
+            continue
+        dong = ["Kênh này đang đánh tuyến khán giả: {0}.".format(ten or "(chưa đặt tên)")]
+        if insight:
+            dong.append("Insight (câu họ thầm nghĩ khi bấm vào video): {0}".format(insight))
+        if ho_can:
+            dong.append("Xem xong họ cần: {0}.".format(ho_can))
+        if mo_ta:
+            dong.append(mo_ta)
+        return " ".join(dong)
+    return ""
+
+
 def doc_so_tay(goc: str, kenh: str) -> str:
     """Khúc đầu `CHANNEL/<kênh>/CLAUDE.md` — mô tả kênh cho AI đọc.
 
@@ -547,16 +588,20 @@ def doc_so_tay(goc: str, kenh: str) -> str:
     là gì, cho ai xem, khác người ta chỗ nào" — thứ AI cần để phán một kênh
     lạ có cùng ngách hay không.
 
-    Thiếu file thì trả chuỗi rỗng; lời nhắc sẽ nói thẳng là chưa có mô tả,
-    chứ không bịa ra một cái ngách nào.
+    Thiếu file thì THỬ dựng mô tả từ dòng "đang đánh" của `tuyen.csv`
+    (`_mo_ta_tu_tuyen`) — đúng ca một kênh EM vừa tách trong nhóm (`nhom_kenh
+    .tao_kenh_trong_nhom`), chưa kịp có `CLAUDE.md` riêng nhưng ĐÃ có tuyến.
+    Không có cả hai thì trả chuỗi rỗng; lời nhắc sẽ nói thẳng là chưa có mô
+    tả, chứ không bịa ra một cái ngách nào.
     """
     from .doi_thu_kenh import ten_kenh_an_toan  # noqa: PLC0415 — tránh vòng import
     from .kenh import duong_kenh  # noqa: PLC0415
 
-    duong = os.path.join(duong_kenh(goc, ten_kenh_an_toan(kenh)), "CLAUDE.md")
+    ma_an_toan = ten_kenh_an_toan(kenh)
+    duong = os.path.join(duong_kenh(goc, ma_an_toan), "CLAUDE.md")
     try:
         with open(duong, "r", encoding="utf-8") as tep:
             chu = tep.read()
     except OSError:
-        return ""
+        return _mo_ta_tu_tuyen(goc, ma_an_toan)[:MO_TA_KENH_TOI_DA].strip()
     return chu[:MO_TA_KENH_TOI_DA].strip()
