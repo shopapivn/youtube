@@ -415,3 +415,96 @@ class TestGoiVanBanNhanAnh:
         assert len(anh) == 1
         assert anh[0]["source"]["type"] == "base64"
         assert anh[0]["source"]["data"] == "AAA"
+
+
+class TestGoThuongHieuNguon:
+    """Gỡ chữ ký kênh nguồn khỏi ĐUÔI tiêu đề, không đụng luận điểm.
+
+    Chủ dự án, 21/09/2026: *"ví dụ video này chẳng hạn không thể lấy 100% được"* — nguồn của
+    V10/V11/V12 đến từ ba kênh vốn viết cùng khuôn nên bê nguyên được; các nguồn mới thì đặt nhãn
+    ở cuối câu, kèm hashtag và tên kênh họ. Số liệu đo trên đúng sáu nguồn đang chọn.
+    """
+
+    def test_go_duoi_hashtag(self):
+        from core.auto_khau import _go_thuong_hieu_nguon
+
+        ra = _go_thuong_hieu_nguon(
+            "【賢い大人】精神年齢が高い人ほど、対人関係でこう振る舞う #心理学 #人間関係", "真夜中の心理学")
+        assert ra == "【賢い大人】精神年齢が高い人ほど、対人関係でこう振る舞う"
+
+    def test_go_ten_kenh_sau_dau_gach_doc(self):
+        from core.auto_khau import _go_thuong_hieu_nguon
+
+        ra = _go_thuong_hieu_nguon(
+            "【ズレの正体】低IQの人の頭の中はこんな世界｜ちょっとダークな心理学", "ちょっとダークな心理学")
+        assert ra == "【ズレの正体】低IQの人の頭の中はこんな世界"
+
+    def test_go_nhan_thuong_hieu_cuoi_cau(self):
+        from core.auto_khau import _go_thuong_hieu_nguon
+
+        ra = _go_thuong_hieu_nguon(
+            "我慢の限界を超えた優しい人の「ゾッとする」行動5選【グレーな心理学】", "心理学と脳科学")
+        assert ra == "我慢の限界を超えた優しい人の「ゾッとする」行動5選"
+
+    def test_khong_pha_khuon_cua_chinh_kenh_minh(self):
+        """Kênh mình CÓ dùng đuôi "| 脳科学" — cắt mù mọi đuôi ｜ là phá khuôn đang thắng."""
+        from core.auto_khau import _go_thuong_hieu_nguon
+
+        for td in ("この5つのことを一人で行っているなら、あなたの知能は思っている以上に特別かもしれません | 脳科学",
+                   "【心理学】なぜかお金持ちに見えない人の「恐ろしい特徴」｜脳科学が証明した、気配を消して豊かになる人の正体",
+                   "【心理学】お金持ちほど絶対に買わないもの"):
+            assert _go_thuong_hieu_nguon(td, "") == td, td
+
+    def test_khong_an_mat_ca_tieu_de(self):
+        """Tiêu đề chỉ có mỗi một cặp ngoặc thì không được gỡ thành chuỗi rỗng."""
+        from core.auto_khau import _go_thuong_hieu_nguon
+
+        assert _go_thuong_hieu_nguon("【心理学】", "") == "【心理学】"
+
+
+class TestDeBaiNanKhuon:
+    def test_de_bai_mang_mau_that_va_giu_luan_diem(self):
+        from core.auto_khau import de_bai_nan_khuon
+
+        mau = ["【心理学】なぜかお金持ちに見えない人の「恐ろしい特徴」｜脳科学が証明した、気配を消して豊かになる人の正体",
+               "【心理学】高級ブランドに興味がない人ほど持っている「意外な特徴」"]
+        de = de_bai_nan_khuon("我慢の限界を超えた優しい人の「ゾッとする」行動5選", mau, "心理学")
+        for t in mau:
+            assert t in de, "phải đưa đúng tiêu đề ĐANG THẮNG làm mẫu"
+        assert "GIỮ NGUYÊN luận điểm" in de
+        assert "【心理学】" in de
+        assert "TITLE:" in de
+
+    def test_khong_co_mau_thi_van_dung_de_bai(self):
+        from core.auto_khau import de_bai_nan_khuon
+
+        assert "TITLE:" in de_bai_nan_khuon("x", [], "")
+
+
+class TestMauKhuonLayTuKenhGoc:
+    """Bản thử `<kênh>-v2` không có `chi-so/` riêng — phải lùi về kênh gốc lấy mẫu.
+
+    Chủ dự án, 21/09/2026: lượt sản xuất thật chạy trên template TL4-T7-v2, và số liệu Studio nằm
+    hết ở `CHANNEL/TL4-T7/chi-so/` (cùng một kênh YouTube). Không lùi thì bước nắn khuôn lấy 0 mẫu
+    rồi tự tắt — đúng lượt 17:06 hôm nay đã ra tiêu đề chưa nắn vì lỗi này.
+    """
+
+    def test_v2_lui_ve_kenh_goc(self):
+        import os
+
+        import pytest as _pt
+
+        from core.auto_khau import tieu_de_thang_cua_kenh
+
+        goc = os.path.join(os.path.dirname(__file__), "..")
+        if not os.path.isdir(os.path.join(goc, "CHANNEL", "TL4-T7", "chi-so")):
+            _pt.skip("kho này chưa có số liệu chi-so/ của TL4-T7")
+        assert not os.path.isdir(os.path.join(goc, "CHANNEL", "TL4-T7-v2", "chi-so")), (
+            "bài này chỉ có nghĩa khi bản -v2 KHÔNG có chi-so/ riêng")
+        assert tieu_de_thang_cua_kenh(goc, "TL4-T7-v2"), "phải lấy được mẫu từ kênh gốc"
+        assert tieu_de_thang_cua_kenh(goc, "TL4-T7-v2") == tieu_de_thang_cua_kenh(goc, "TL4-T7")
+
+    def test_kenh_khong_co_so_lieu_tra_rong(self):
+        from core.auto_khau import tieu_de_thang_cua_kenh
+
+        assert tieu_de_thang_cua_kenh("/khong/co/thuc", "KENH-LA") == []

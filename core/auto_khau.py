@@ -736,14 +736,19 @@ def _doc_chu(duong: str) -> str:
 # Chạy lại một lượt thì bước lấy lời thoại bị bỏ qua (đã có `0-tu-lieu.txt`),
 # nên `ket.title`/`ket.video_id` không còn. Kênh `nguyen_goc` cần cả hai để
 # lấy nguyên tiêu đề và dựng địa chỉ ảnh bìa. Ghi ra một tệp bên cạnh lời thoại.
-def _ghi_doi_thu(d: str, tieu_de: str, video_id: str, duration_s: int = 0) -> None:
+def _ghi_doi_thu(d: str, tieu_de: str, video_id: str, duration_s: int = 0,
+                 kenh_nguon: str = "") -> None:
+    # CHANNEL thêm 21/09/2026: tiêu đề nguồn hay kết thúc bằng chính tên kênh ấy
+    # ("…こんな世界｜ちょっとダークな心理学") — biết tên mới cắt đúng chữ ký mà không
+    # đụng vào đuôi "| 脳科学" vốn là khuôn của kênh mình. Xem `_go_thuong_hieu_nguon`.
+    # Dòng này khuyết ở mọi lượt chạy cũ; đọc ra chuỗi rỗng là bình thường.
     _ghi_chu(os.path.join(d, "0-doi-thu.txt"),
-             "TITLE: {0}\nVIDEO_ID: {1}\nDURATION: {2}\n".format(
-                 tieu_de or "", video_id or "", int(duration_s or 0)))
+             "TITLE: {0}\nVIDEO_ID: {1}\nDURATION: {2}\nCHANNEL: {3}\n".format(
+                 tieu_de or "", video_id or "", int(duration_s or 0), kenh_nguon or ""))
 
 
 def _doc_doi_thu(d: str) -> Dict[str, str]:
-    ra = {"title": "", "video_id": "", "duration": "0"}
+    ra = {"title": "", "video_id": "", "duration": "0", "channel": ""}
     for dong in _doc_chu(os.path.join(d, "0-doi-thu.txt")).splitlines():
         if dong.startswith("TITLE:"):
             ra["title"] = dong[len("TITLE:"):].strip()
@@ -751,6 +756,8 @@ def _doc_doi_thu(d: str) -> Dict[str, str]:
             ra["video_id"] = dong[len("VIDEO_ID:"):].strip()
         elif dong.startswith("DURATION:"):
             ra["duration"] = dong[len("DURATION:"):].strip() or "0"
+        elif dong.startswith("CHANNEL:"):
+            ra["channel"] = dong[len("CHANNEL:"):].strip()
     return ra
 
 
@@ -2120,7 +2127,8 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # lấy này bị bỏ qua nên `ket` không còn — đọc lại từ tệp bên cạnh.
             _ghi_doi_thu(d, getattr(ket, "title", "") or "",
                          getattr(ket, "video_id", "") or "",
-                         getattr(ket, "duration_s", 0) or 0)
+                         getattr(ket, "duration_s", 0) or 0,
+                         (getattr(ket, "channel", "") or getattr(ket, "uploader", "") or ""))
             # Đếm KÝ TỰ, không đếm "chữ" theo dấu cách: tiếng Nhật/Trung không có
             # dấu cách nên 14.000 ký tự in ra "1 chữ" — chủ dự án tưởng tư liệu rỗng.
             bc.ghi("  tư liệu: {0} ký tự ≈ {1} phút đọc.".format(
@@ -2251,6 +2259,32 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # ảnh, ảnh không tải được) thì lấy tiêu đề làm chữ bìa: đường lui an
             # toàn, không bao giờ làm vỡ lượt chạy.
             tieu_de = tieu_de or tieu_de_doi_thu
+            # ═══ GỠ CHỮ KÝ KÊNH NGUỒN, RỒI NẮN VỀ KHUÔN KÊNH MÌNH ═══
+            #
+            # Chủ dự án, 21/09/2026: *"không thể lấy 100% được"*. Ba nguồn của V10/V11/V12 bê
+            # nguyên được vì kênh họ vốn viết cùng khuôn; các nguồn mới thì không. Tầng cơ học
+            # gỡ hashtag / tên kênh / nhãn thương hiệu ở đuôi; tầng AI nắn vỏ câu, giữ luận điểm.
+            sach = _go_thuong_hieu_nguon(tieu_de, doi_thu.get("channel", ""))
+            if sach and sach != tieu_de:
+                bc.ghi("  gỡ chữ ký kênh nguồn khỏi tiêu đề: 「{0}」".format(sach[:60]))
+                tieu_de = sach
+            if k.nan_khuon_tieu_de:
+                mau = tieu_de_thang_cua_kenh(bc.goc, k.ma)
+                if not mau:
+                    bc.ghi("  (chưa có video thắng nào trong chi-so/ — bỏ qua bước nắn khuôn)")
+                else:
+                    bc.kiem_dung()
+                    bc.ghi("  nắn tiêu đề về khuôn kênh (mẫu: {0} video đang thắng)…".format(len(mau)))
+                    try:
+                        tra = _goi(bc, de_bai_nan_khuon(tieu_de, mau, k.nhan_tieu_de),
+                                   _khoa_chat(luot, "tieu-de:nan-khuon"))
+                        moi, _b = _doc_tieu_de(tra)
+                    except Exception as loi:  # noqa: BLE001 — hỏng thì giữ tiêu đề nguồn, không vỡ lượt
+                        bc.ghi("  (nắn khuôn không xong, giữ tiêu đề nguồn: {0})".format(str(loi)[:70]))
+                        moi = ""
+                    if moi:
+                        bc.ghi("  khuôn kênh: 「{0}」".format(moi[:70]))
+                        tieu_de = moi
             if not chu_bia:
                 bc.kiem_dung()
                 bc.ghi("  đang đọc chữ trên ảnh bìa đối thủ…")
@@ -3347,6 +3381,103 @@ _CAP_NGOAC_NHAN = {"【": "】", "[": "]", "［": "］"}
 #: Nhãn khoa học coi là "cùng phe" với 心理学 — thêm nhãn cho tiêu đề CHƯA có
 #: nhãn đầu nào, chứ không ép đổi 【脳科学】 đang thắng thành 【心理学】.
 _NHAN_TUONG_DUONG = {"心理学": ("心理学", "脳科学")}
+
+#: Đuôi thẻ hashtag của kênh nguồn: "… #心理学 #人間関係". Kênh mình không dùng hashtag
+#: trong tiêu đề — 14/14 video đã đăng đều không có (tra kênh sống 21/09/2026).
+_DUOI_HASHTAG = re.compile(r"(?:\s*[#＃][^\s#＃]+)+\s*$")
+
+#: Đuôi "｜tên kênh nguồn" / "【tên kênh nguồn】" ở CUỐI câu. Đây là chữ ký thương hiệu của
+#: kênh khác, không phải một phần luận điểm — bê nguyên sang là quảng cáo không công cho họ.
+_DUOI_NGOAC = re.compile(r"\s*[【\[［][^】\]］]{1,20}[】\]］]\s*$")
+
+
+def _go_thuong_hieu_nguon(tieu_de: str, ten_kenh_nguon: str = "") -> str:
+    """Gỡ chữ ký thương hiệu của KÊNH NGUỒN khỏi đuôi tiêu đề, giữ nguyên luận điểm.
+
+    Chủ dự án, 21/09/2026: *"không thể lấy 100% được"*. Ba kiểu chữ ký đo được trên đúng sáu
+    nguồn đang chọn:
+
+        …対人関係でこう振る舞う #心理学 #人間関係      → thẻ hashtag
+        …こんな世界｜ちょっとダークな心理学            → tên kênh sau dấu ｜
+        …「ゾッとする」行動5選【グレーな心理学】        → tên kênh trong ngoặc cuối
+
+    Chỉ gỡ ở ĐUÔI và chỉ gỡ những gì chắc chắn là chữ ký. Phần thân câu — thứ đã chứng minh có
+    người bấm — không đụng tới; nắn khuôn câu là việc của AI, không phải của mấy cái biểu thức này.
+    """
+    td = (tieu_de or "").strip()
+    if not td:
+        return td
+    td = _DUOI_HASHTAG.sub("", td).strip()
+    # Đuôi "｜X" / "| X": chỉ cắt khi X đúng là tên kênh nguồn. Kênh mình CÓ dùng dạng
+    # "…かもしれません | 脳科学", nên cắt mù mọi đuôi ｜ là phá cả khuôn của chính mình.
+    ten = (ten_kenh_nguon or "").strip()
+    if ten:
+        for dau in ("｜", "|", "／", "/"):
+            i = td.rfind(dau)
+            if i > 0 and td[i + len(dau):].strip() == ten:
+                td = td[:i].strip()
+                break
+    # Ngoặc ở CUỐI câu: nhãn thể loại/thương hiệu, không phải luận điểm. Ngoặc ở ĐẦU câu do
+    # `_chuan_hoa_nhan_tieu_de` lo — ở đó nó còn có thể là mồi câu (【賢い大人】), phải đọc mới biết.
+    if not _CAP_NGOAC_NHAN.get(td[:1]) or _DUOI_NGOAC.search(td[1:]):
+        moi = _DUOI_NGOAC.sub("", td).strip()
+        if moi:
+            td = moi
+    return td
+
+
+def tieu_de_thang_cua_kenh(goc: str, ma_kenh: str, toi_da: int = 6) -> List[str]:
+    """Tiêu đề các video ĐANG THẮNG của chính kênh — bản mẫu để nắn khuôn, hiển thị cao trước.
+
+    Đọc qua `cong_thuc_v7` vì cờ THẮNG đã được định nghĩa ở đó (hiển thị 48h ≥ ngưỡng) và không
+    nên có hai định nghĩa "thắng" trong kho. Thiếu số liệu Studio thì trả danh sách rỗng, và bước
+    nắn khuôn tự tắt — không có mẫu thì không nắn bừa.
+    """
+    # Bản thử `<kênh>-v2` KHÔNG có `chi-so/` riêng: nó đăng lên cùng một kênh YouTube với kênh
+    # gốc, số liệu Studio nằm hết bên `CHANNEL/<kênh>/chi-so/`. Không lùi về kênh gốc thì bước
+    # nắn khuôn lấy 0 mẫu và tự tắt — mà `-v2` lại đúng là template đang sản xuất. Cùng quy ước
+    # với `core/da_lam.doc_ma_da_lam`, vốn đã gom cả lượt chạy ở `<kênh>-v\d+`.
+    ma_goc = re.sub(r"-v\d+$", "", ma_kenh or "")
+    for ma in ([ma_kenh, ma_goc] if ma_goc != ma_kenh else [ma_kenh]):
+        try:
+            from . import cong_thuc_v7 as _v7  # noqa: PLC0415 — tránh vòng nhập lúc nạp mô-đun
+            ds = [v for v in _v7.video_cua_kenh(goc, ma) if v.thang and v.tieu_de]
+        except Exception:  # noqa: BLE001 — không có chi-so/ thì thử kênh gốc, rồi mới chịu thua
+            continue
+        if ds:
+            ds.sort(key=lambda v: -(v.hien_thi_48h or 0))
+            return [v.tieu_de for v in ds[:toi_da]]
+    return []
+
+
+def de_bai_nan_khuon(tieu_de_nguon: str, mau: Sequence[str], nhan: str = "") -> str:
+    """Lời nhắc nắn tiêu đề nguồn về KHUÔN của kênh mình, giữ nguyên luận điểm đã chứng minh.
+
+    Chủ dự án, 21/09/2026: *"không lấy 100% được vì from đang win của kênh mình nó hơi khác với
+    kênh khác"*. Đúng: ba nguồn của V10/V11/V12 vốn viết cùng khuôn nên bê nguyên được, còn các
+    nguồn mới thì không. Nhưng thứ đã chứng minh có người bấm là LUẬN ĐIỂM, nên chỉ nắn vỏ.
+
+    Mẫu lấy từ chính video đang thắng của kênh, không viết cứng vào mã: khuôn đổi thì mẫu tự đổi.
+    """
+    ds = [t for t in (mau or []) if t]
+    return (
+        "Bạn đặt tiêu đề cho một kênh YouTube tâm lý tiếng Nhật.\n\n"
+        "KHUÔN CỦA KÊNH — đây là các tiêu đề ĐANG THẮNG, hãy bắt chước đúng hình dạng này:\n"
+        + "\n".join("- " + t for t in ds)
+        + "\n\nTIÊU ĐỀ NGUỒN cần nắn lại:\n{nguon}\n\n"
+        "LUẬT:\n"
+        "1. GIỮ NGUYÊN luận điểm và đối tượng của nguồn — đó là thứ đã chứng minh có người bấm. "
+        "Không đổi chủ đề, không thêm ý mới, không bịa số liệu.\n"
+        "2. BỎ mọi dấu vết của kênh nguồn: tên kênh, hashtag, nhãn thương hiệu của họ.\n"
+        "3. Viết lại theo đúng hình dạng của các tiêu đề mẫu ở trên: chủ ngữ là MỘT KIỂU NGƯỜI, "
+        "phần thưởng là một danh từ trong 「」, và nếu mẫu có vế hai sau ｜ thì dùng vế hai để "
+        "khẳng định bằng khoa học.\n"
+        "4. Ngoặc đầu câu của nguồn có thể là MỒI CÂU (ví dụ 【賢い大人】) chứ không phải nhãn thể "
+        "loại — nếu là mồi thì giữ ý đó trong câu, đừng vứt đi.\n"
+        "{nhan}"
+        "5. Độ dài tương đương các mẫu. Chỉ trả về MỘT dòng:\nTITLE: <tiêu đề>"
+    ).format(nguon=tieu_de_nguon,
+             nhan=("4b. Nhãn thể loại ở đầu câu phải là 【{0}】.\n".format(nhan) if nhan else ""))
 
 
 def _chuan_hoa_nhan_tieu_de(tieu_de: str, nhan: str) -> str:

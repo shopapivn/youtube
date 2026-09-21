@@ -140,6 +140,13 @@ def dung_kenh(tmp_path) -> str:
         "YT_RELATED.{0},Content,【雑学】昔より物欲が減った人の心理,120,12.5,15,15,0:09:00,2.2".format(A),
         "YT_RELATED.{0},Content,物欲が止まらない人へ,400,4.5,18,17,0:03:31,1.0".format(C),
         "YT_RELATED.{0},Content,お金持ちの家と貧乏な家,200,9.0,18,18,0:07:30,2.0".format("otherMONEY1"),
+        # F là NGUỒN CỦA V12 — video đã thắng thật, nên nó PHẢI có dòng riêng trong bảng (đo trên
+        # kênh thật 21/09/2026: 27 lượt xem, hệ số 1,31). Bộ mẫu cũ thiếu dòng này, nên khi cửa 2
+        # thành cổng bắt buộc thì nó bắt công thức loại đúng cái nguồn đã chứng minh là trúng.
+        "YT_RELATED.{0},Content,【雑学】お金持ちほど絶対に買わないもの,300,9.0,27,26,0:07:30,3.4".format(F),
+        # N có tín hiệu thật và nhiều lượt xem (đo thật: 1.787 hiển thị, 133 lượt) — nhờ vậy bẫy 1
+        # kiểm được đúng điều cần kiểm: CÓ mặt trong bảng nhưng KHÔNG ăn điểm cụm nhờ chữ 脳.
+        "YT_RELATED.{0},Content,日本人は、世界の見え方が違う特異種族,1787,8.5,133,130,0:06:20,14.0".format(N),
         "YT_RELATED.{0},Content,video của chính mình,330,10.9,47,46,0:07:00,5.3".format(W2),
     ]) + "\n")
     # bảng đề xuất của W2 — raw join hai cột
@@ -202,22 +209,32 @@ def test_cong_loai(tmp_path):
     assert ly_do[G] == "khác chủ đề"
     assert ly_do[H] == "kênh nguồn đã bỏ"
     assert F not in ly_do, "bẫy 2: nhãn 【雑学】 + tuyến khac không được loại content đúng cụm"
+    # 21/09/2026 — hai cổng mới, cả hai rút từ kết quả thật chứ không phải phỏng đoán:
+    # B (nguồn của V14) không có dòng nào trong bảng đề xuất → V14 khởi động yếu.
+    # C nằm trên kênh trung vị 1.100, đúng hồ sơ nguồn của V9 (gấp 277× trên kênh 429) đã chết.
+    assert ly_do[B] == "không có trong bảng đề xuất của video thắng"
+    assert ly_do[C].startswith("kênh nguồn quá yếu")
 
 
 # ── thang điểm ───────────────────────────────────────────────────────────────
 
 def test_thu_tu_hieu_chinh_tren_so_that(tmp_path):
-    """Đúng thứ tự phân tích tay ngày 17/09: A (có tín hiệu bảng) > B (gốc ×56) > C (cách làm, kênh yếu)."""
+    """Thứ tự sau khi có KẾT QUẢ THẬT của V13/V14 (21/09/2026), không còn là phỏng đoán 17/09.
+
+    Bản 17/09 chốt "A > B > C": B (nguồn ×56, không có trong bảng) vẫn được chấm, chỉ thấp điểm
+    hơn A. Kênh đã chạy đúng thứ tự ấy và trả lời: A thành V13 → 2.239 hiển thị ở 66 giờ; B thành
+    V14 → khởi động yếu. Cả bốn video THẮNG đều có dòng riêng trong bảng. Nên cửa 2 không còn là
+    điểm số mà là CỔNG, và B bị loại thẳng thay vì đứng hạng nhì.
+    """
     _goc, kq = _cham(tmp_path)
     diem = {d.ma: d for d in kq.ung_vien}
-    assert diem[A].diem > diem[B].diem > diem[C].diem
+    bi_loai = {d.ma: d.bi_loai for d in kq.bi_loai}
+    assert B in bi_loai and C in bi_loai, "B/C giờ bị CỔNG loại, không còn được chấm điểm"
     assert diem[A].loai == v7.LAM_NGAY
-    assert diem[A].diem_cum == 30 and diem[A].diem_pool == 25
-    assert diem[B].diem_pool > 0 and diem[B].pool_diem is None, "B không có mặt: chỉ ăn điểm cụm trong bảng"
-    assert diem[B].diem_pool <= v7.CAU_HINH_MAC_DINH["pool"]["tran_chi_co_cum"]
-    assert diem[C].pool_diem is not None and diem[C].pool_diem < 1, "khách từ C bấm nhưng xem ngắn"
-    assert any("cách làm" in x for x in diem[C].ly_do)
-    assert any("kênh yếu" in x for x in diem[C].ly_do)
+    assert diem[A].diem_pool == 25
+    # Cụm "vật chất" thắng 2/3 trên kênh mẫu nên không còn ăn trọn 30 điểm — xem `thanh_tich_cum`.
+    assert 0 < diem[A].diem_cum < 30
+    assert diem[A].diem > diem[F].diem, "A có tín hiệu bảng mạnh hơn F"
     assert kq.ung_vien[0].ma == A
 
 
@@ -271,7 +288,7 @@ def test_csv_du_dong_thang_raw_top50_khi_hoa(tmp_path):
     raw["response"]["results"][1]["value"]["resultTable"]["metricColumns"][0]["counts"]["total"] = 21818
     _ghi(os.path.join(tm, W1, "48h", "raw", "a_reach_viewers_join_2.json"), json.dumps(raw))
     b = v7.doc_bang_de_xuat(tm, W1)
-    assert b["tep"].endswith("traffic-related.csv") and len(b["dong"]) == 4
+    assert b["tep"].endswith("traffic-related.csv") and len(b["dong"]) == 6
 
 
 def test_giai_ma_cot_tuyet_doi():

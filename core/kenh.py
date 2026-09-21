@@ -271,6 +271,14 @@ class Kenh:
     #: (V8–V12) đều có. `nguyen_goc` giữ NGUYÊN phần nội dung (đã chứng minh có người bấm) nhưng nhãn đầu
     #: là chuyện "cửa hàng nào khán giả quen bước vào" — chuyện của kênh nhận, không phải kênh nguồn.
     nhan_tieu_de: str = ""
+    #: `nguyen_goc`: sau khi gỡ chữ ký kênh nguồn, nhờ AI NẮN VỎ CÂU về khuôn tiêu đề đang thắng
+    #: của chính kênh (mẫu đọc từ `chi-so/`, không viết cứng). Luận điểm giữ nguyên.
+    #:
+    #: Chủ dự án, 21/09/2026: *"không lấy 100% được vì from đang win của kênh mình nó hơi khác với
+    #: kênh khác"*. Đúng — nguồn của V10/V11/V12 đến từ ひととき心理学・心理ラボ・心理学のおやつ, vốn
+    #: viết cùng khuôn nên bê nguyên được; còn các nguồn mới để nhãn ở cuối câu, kèm hashtag và
+    #: tên kênh họ. Tắt (mặc định) thì hành vi y như cũ: chỉ chuẩn hoá nhãn đầu.
+    nan_khuon_tieu_de: bool = False
     #: Mã giọng đọc trên cổng ShopAPI.
     voice_id: str = ""
     #: Engine dựng clip — quyết định trần độ dài mỗi cảnh (veo3 8s, seedance 10s).
@@ -690,6 +698,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         kenh_rieng=_co(cai.get("kenh_rieng")),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
         nhan_tieu_de=str(cai.get("nhan_tieu_de") or "").strip(),
+        nan_khuon_tieu_de=_co(cai.get("nan_khuon_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),
         mo_hinh=str(cai.get("mo_hinh") or "claude-sonnet-5"),

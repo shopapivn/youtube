@@ -126,7 +126,7 @@ CAU_HINH_MAC_DINH: Dict = {
     # xếp cùng hồ sơ ấy. Kênh nguồn của các video thắng đều từ 3.150 trở lên.
     # `san_view`: sàn view TUYỆT ĐỐI của nguồn. "Gấp" là số tương đối nên nó một mình không đủ.
     "no": {"san": 3, "boi_so_15": 8, "tran": 25, "kenh_yeu_duoi": 1500, "tru_kenh_yeu": 5,
-           "san_view": 50000},
+           "san_view": 50000, "loai_kenh_yeu": True},
     "khuon": {"tot": [12, 21], "tam": [8, 30], "loai_duoi": 8, "loai_tren": 40},
     "loai": {"lam_ngay": 75, "nen_lam": 60, "du_bi": 45},
     "ket_qua_48h": {"thang": 20000, "truot": 6000},
@@ -540,6 +540,25 @@ def _sai_so_moc(duong_con: str, con: str, muc: int) -> Optional[float]:
     return abs(gio - muc) if lo_g <= gio <= hi_g else None
 
 
+#: Nội suy xa nhất cho phép, mỗi bên mốc (giờ). Rộng hơn thì hai đầu quá xa, đường hiển thị không
+#: còn thẳng để nội suy — thà không có số còn hơn có số sai.
+NOI_SUY_TOI_DA = 30.0
+
+
+def _noi_suy(duong_thoi_gian: Sequence[Tuple[float, float]], muc: int) -> Optional[float]:
+    """Hiển thị ước ở mốc `muc` giờ, nội suy tuyến tính giữa hai bản chụp kề nó. `None` nếu không
+    có đủ một bản trước và một bản sau trong tầm `NOI_SUY_TOI_DA`."""
+    truoc = [(t, v) for t, v in duong_thoi_gian if t <= muc and muc - t <= NOI_SUY_TOI_DA]
+    sau = [(t, v) for t, v in duong_thoi_gian if t > muc and t - muc <= NOI_SUY_TOI_DA]
+    if not truoc or not sau:
+        return None
+    t0, v0 = max(truoc, key=lambda x: x[0])
+    t1, v1 = min(sau, key=lambda x: x[0])
+    if t1 <= t0:
+        return None
+    return v0 + (v1 - v0) * (muc - t0) / (t1 - t0)
+
+
 def _doc_json(f: str) -> Dict:
     try:
         with io.open(f, encoding="utf-8") as tep:
@@ -587,6 +606,12 @@ def video_cua_kenh(goc: str, kenh: str, ch: Optional[Dict] = None,
         # Ứng viên cho mỗi mốc mục tiêu (13/48h): (độ lệch so mốc, hiển thị) — xem `_sai_so_moc`.
         # Chọn bằng TUỔI THẬT của bản chụp, không tin thẳng tên thư mục (`CUA_SO_TUOI_THAT`).
         ung_vien: Dict[int, List[Tuple[float, float]]] = {}
+        #: Mọi bản chụp đo được tuổi thật: `[(tuổi giờ, hiển thị)]` — để NỘI SUY khi không bản nào
+        #: lọt cửa sổ. VPS chỉ mở trình duyệt một lần mỗi ngày nên bản chụp trôi: của V11 rơi vào
+        #: 57,1h và V12 vào 36,0h/72,8h, không cái nào trong cửa sổ 44–54h. Hệ quả 21/09/2026 là
+        #: hai video THẮNG LỚN nhất kênh biến mất khỏi danh sách "đang thắng", kéo theo bảng đề
+        #: xuất của chúng — nguồn tín hiệu tốt nhất — bị loại khỏi cửa 2.
+        duong_thoi_gian: List[Tuple[float, float]] = []
         for con in os.listdir(duong):
             duong_con = os.path.join(duong, con)
             tt = _doc_json(os.path.join(duong_con, "_thong-tin.json"))
@@ -599,10 +624,18 @@ def video_cua_kenh(goc: str, kenh: str, ch: Optional[Dict] = None,
             if tq.get("impressions") is None:
                 continue
             hien_thi = float(tq["impressions"])
+            tuoi_that = _gom.tuoi_that_gio(duong_con)
+            if tuoi_that is not None:
+                duong_thoi_gian.append((float(tuoi_that), hien_thi))
             for muc in CUA_SO_TUOI_THAT:
                 sai_so = _sai_so_moc(duong_con, con, muc)
                 if sai_so is not None:
                     ung_vien.setdefault(muc, []).append((sai_so, hien_thi))
+        for muc in CUA_SO_TUOI_THAT:
+            if muc not in ung_vien:
+                noi = _noi_suy(duong_thoi_gian, muc)
+                if noi is not None:
+                    ung_vien[muc] = [(0.0, noi)]
         if vm.ngay_dang:
             try:
                 dang = _dt.datetime.strptime(vm.ngay_dang[:19], "%Y-%m-%dT%H:%M:%S")
@@ -980,6 +1013,13 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
         # ứng viên 4.600 view đậu cửa 5 chỉ vì kênh nguồn trung vị 565 → "gấp 8,1 lần".
         elif dong.view is not None and dong.view < float(ch["no"].get("san_view", 0) or 0):
             dong.bi_loai = "nguồn quá nhỏ ({0:,.0f} view)".format(dong.view).replace(",", ".")
+        # Kênh nguồn quá yếu — LOẠI, không còn chỉ trừ 5 điểm. Kênh nguồn của cả bốn video thắng
+        # đều có trung vị từ 3.150 trở lên (ghi sẵn ở chú thích khối "no"), còn V9 lấy nguồn gấp
+        # 277 lần trên kênh trung vị 429 và chết. Trung vị thấp làm hệ số "gấp" phồng lên, nên
+        # kênh càng chết thì cửa 5 càng cho điểm cao — đúng cái bẫy đã ăn hai lần.
+        elif (ch["no"].get("loai_kenh_yeu") and tv is not None
+              and tv < float(ch["no"]["kenh_yeu_duoi"])):
+            dong.bi_loai = "kênh nguồn quá yếu (trung vị {0:,.0f} view)".format(tv).replace(",", ".")
         if dong.bi_loai:
             loai.append(dong)
             continue
@@ -1007,6 +1047,10 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
         # cửa 1 (cùng cụm) một mình vẫn đủ đưa chúng lên đầu bảng. Giờ thì không.
         po = ch["pool"]
         luot_min = float(po.get("luot_toi_thieu", 0) or 0)
+        # Chỉ bắt buộc khi kênh THỰC SỰ đã có bảng đề xuất để đối chiếu. Kênh mới chưa có video
+        # thắng nào, hay video thắng chưa đủ 24-48 giờ, thì chưa có gì để bắt — loại hết thì
+        # bảng trống trơn, không còn là công cụ chọn nữa.
+        bat_buoc = bool(po.get("bat_buoc")) and bool(pool)
         g = pool.get(ma)
         if g and g[3] >= max(1.0, luot_min):
             b, x, dp = _he_so(g, k)
@@ -1014,7 +1058,7 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
             dong.diem_pool = _quy_pool(dp, ch, ts["pool"])
             dong.ly_do.append("có trong bảng đề xuất: bấm ×{0}, xem ×{1} ({2:.0f} lượt xem)".format(
                 _vn(b, 2), _vn(x, 2), g[3]))
-        elif po.get("bat_buoc"):
+        elif bat_buoc:
             dong.bi_loai = ("bảng đề xuất chỉ {0:.0f} lượt xem (cần {1:.0f})".format(g[3], luot_min)
                             if g else "không có trong bảng đề xuất của video thắng")
             loai.append(dong)

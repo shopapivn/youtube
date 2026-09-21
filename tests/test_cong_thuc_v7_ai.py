@@ -24,18 +24,27 @@ from core import cong_thuc_v7_ai as ai
 from core import doi_thu_kenh as so
 
 from test_cong_thuc_v7 import (  # noqa: E402 — thư mục tests/ nằm sẵn trong sys.path
-    A, BAY_GIO, C, KENH, W1, W2, _ghi, _raw_join, dung_kenh,
+    A, BAY_GIO, C, F, KENH, W1, W2, _ghi, _raw_join, dung_kenh,
 )
 
 T = "trungV7xxxx"    # cùng luận điểm với V7 đã đăng
 OLD = "lonTuoi0001"  # nhắm người lớn tuổi nhưng không có chữ khoá tuổi nào
+CL = "cachLam0001"   # dạng "cách làm", nhưng trên kênh nguồn KHOẺ — để tách bạch hai cổng
 
 
 def _them_ung_vien(goc):
+    # Cửa 2 là CỔNG BẮT BUỘC từ 21/09/2026 (xem `cong_thuc_v7.cham`), nên hai ứng viên thêm ở đây
+    # cũng phải có dòng thật trong bảng đề xuất — đúng như mọi nguồn của bốn video đã thắng.
+    tep = os.path.join(goc, "CHANNEL", KENH, "chi-so", W1, "48h", "traffic-related.csv")
+    with io.open(tep, "a", encoding="utf-8") as f:
+        f.write("YT_RELATED.{0},Content,「これ」を一人でやれる人は高IQ,260,8.0,21,20,0:06:40,2.3\n".format(T))
+        f.write("YT_RELATED.{0},Content,人生の最終章で静かにしていること,240,7.5,18,17,0:06:30,1.9\n".format(OLD))
+        f.write("YT_RELATED.{0},Content,お金が貯まる方法,250,7.8,19,18,0:06:20,2.0\n".format(CL))
     cot, hang = so.doc_bang(goc, KENH)
     for ma, kenh, td, view, tang, dai in (
             (T, "強者が隠す真実", "【脳科学】「これ」を一人でやれる人は高IQの可能性があります", "66000", "3000", "20:29"),
-            (OLD, "お金の心理", "お金に困らない人が人生の最終章で静かにしていること", "150000", "2500", "18:00")):
+            (OLD, "お金の心理", "お金に困らない人が人生の最終章で静かにしていること", "150000", "2500", "18:00"),
+            (CL, "ひととき心理学", "お金が貯まる方法を脳科学が見つけました", "140000", "2200", "17:30")):
         d = dict.fromkeys(cot, "")
         d.update({"Kênh": kenh, "Tiêu đề video": td, "Link video": "https://www.youtube.com/watch?v=" + ma,
                   "View": view, so.COT_TANG: tang, "Thời lượng": dai})
@@ -111,11 +120,17 @@ def test_ket_qua_ai_doi_diem_that(kenh):
     assert any("trùng đề tài" in x for x in sau[T].ly_do)
     # nhắm người lớn tuổi mà không có chữ khoá → AI loại
     assert loai.get(OLD) == "AI: nhắm người lớn tuổi"
-    # "cách làm" mất điểm khuôn dạng
-    assert sau[C].dang == "cach-lam" and sau[C].diem_khuon <= 5
+    # "cách làm" mất điểm khuôn dạng. Dùng CL chứ không dùng C: từ 21/09/2026 C bị CỔNG "kênh
+    # nguồn quá yếu" (trung vị 1.100) loại trước khi tới phần chấm khuôn.
+    assert loai[C].startswith("kênh nguồn quá yếu")
+    assert sau[CL].dang == "cach-lam" and sau[CL].diem_khuon <= 5
     # số đo không đổi
     assert sau[A].view == truoc[A].view and sau[A].diem_pool == truoc[A].diem_pool
-    assert kq.ung_vien[0].ma == A
+    # Đầu bảng phải là một nguồn CÓ dòng thật trong bảng đề xuất. Không chốt cứng A hay F: hai
+    # dòng ấy chênh nhau một điểm và thứ tự lật theo phân vị "đang lên", chốt cứng là ép bài kiểm
+    # bám một thứ tự không có ý nghĩa.
+    assert kq.ung_vien[0].ma in (A, F)
+    assert kq.ung_vien[0].pool_diem is not None
 
 
 def test_lo_hong_khong_giet_ca_luot(kenh, monkeypatch):
@@ -179,7 +194,8 @@ def test_mot_nut_cham_v7_co_ai_va_bao_cao(kenh):
     goi = AIGia()
     mot_nut._cham_v7(kenh, KENH, bc, object(), goi, nhat_ky.append)
     assert goi.lan > 0 and bc.v7["ai"] > 0
-    assert bc.v7["lam_ngay"] >= 1 and bc.v7["top"][0].startswith("【雑学】昔より物欲が減った人の心理")
+    assert bc.v7["lam_ngay"] >= 1
+    assert bc.v7["top"][0].startswith("【雑学】"), bc.v7["top"]
     assert "V7: Làm ngay" in bc.tom_tat()
     assert os.path.isfile(os.path.join(so.thu_muc_nghien_cuu(kenh, KENH), "v7-tham-dinh.json"))
     goi2 = AIGia()
