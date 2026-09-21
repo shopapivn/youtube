@@ -137,3 +137,7 @@ CHANNEL/*/may-ao.json
 CHANNEL/*/CLAUDE.md
 CHANNEL/*/NHAT-KY-KENH.md
 CHANNEL/*/DOC-CHI-SO-DE-SUA-CONTENT.md
+# Cong thuc chon content cua rieng mot kenh — tai san kinh doanh cua chu du an,
+# khong phai mã tool. 21/09/2026: tep nay suyt lot len kho cong khai trong mot
+# lan commit quet ca cay (`git add -A`) — chan thang cho chac.
+CHANNEL/*/CONG-THUC-V7.md
