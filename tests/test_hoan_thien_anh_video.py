@@ -276,18 +276,22 @@ def test_cap_nhat_lui_ve_uid_khi_khong_co_idem(qt_app):
 # ── 5. Tỉ lệ theo chế độ ở tab Hàng loạt ─────────────────────────────────────
 
 def test_che_do_anh_co_ty_le_4_3_va_3_4(qt_app, tmp_path):
-    """Chế độ Tạo ảnh phải cho chọn 4:3 và 3:4; video/chuỗi thì không."""
+    """Chế độ Tạo ảnh phải cho chọn 4:3 và 3:4; video/chuỗi thì không.
+
+    Combo giờ hiện TÊN thân thiện ("Ngang (YouTube)"…), mã thật nằm ở
+    `itemData`/`currentData` — xem `ui_qt.trang_anh_video._combo_ma`.
+    """
     from ui_qt.trang_anh_video import TabHangLoat, CD_ANH, CD_VIDEO, CD_CHUOI
 
     tab, _app = _dung_hang_loat(str(tmp_path))
 
     tab._dat_che_do(CD_ANH)
-    anh = [tab.ty_le.itemText(i) for i in range(tab.ty_le.count())]
+    anh = [tab.ty_le.itemData(i) for i in range(tab.ty_le.count())]
     assert "4:3" in anh and "3:4" in anh, "ảnh phải có đủ 5 tỉ lệ"
 
     for cd in (CD_VIDEO, CD_CHUOI):
         tab._dat_che_do(cd)
-        video = [tab.ty_le.itemText(i) for i in range(tab.ty_le.count())]
+        video = [tab.ty_le.itemData(i) for i in range(tab.ty_le.count())]
         assert "4:3" not in video, "engine video chỉ nhận 16:9/9:16/1:1"
 
 
@@ -296,9 +300,10 @@ def test_doi_che_do_giu_ty_le_dang_chon_neu_con_hop_le(qt_app, tmp_path):
 
     tab, _app = _dung_hang_loat(str(tmp_path))
     tab._dat_che_do(CD_ANH)
-    tab.ty_le.setCurrentText("9:16")
+    idx = tab.ty_le.findData("9:16")
+    tab.ty_le.setCurrentIndex(idx)
     tab._dat_che_do(CD_VIDEO)
-    assert tab.ty_le.currentText() == "9:16", "9:16 còn hợp lệ thì phải giữ"
+    assert tab.ty_le.currentData() == "9:16", "9:16 còn hợp lệ thì phải giữ"
 
 
 # ── 6. Đánh lại số thứ tự sau khi dồn dòng ───────────────────────────────────
@@ -322,17 +327,19 @@ def test_danh_so_lai_khop_dong_that(qt_app, tmp_path):
     assert so == ["1", "2"], "cột # phải đánh lại liền mạch"
 
 
-# ── 7. Engine video chỉ hiện khi chế độ có làm video ─────────────────────────
+# ── 7. Kiểu clip chỉ hiện khi chế độ có làm video ─────────────────────────────
 
 def test_engine_an_o_che_do_tao_anh(qt_app, tmp_path):
-    """Chế độ Tạo ảnh giấu ô Engine video; hai chế độ kia hiện lại."""
+    """Chế độ Tạo ảnh giấu ô Kiểu clip; hai chế độ kia hiện lại."""
     from ui_qt.trang_anh_video import CD_ANH, CD_VIDEO, CD_CHUOI
 
     tab, _app = _dung_hang_loat(str(tmp_path))
 
     tab._dat_che_do(CD_ANH)
-    assert tab.engine.isHidden(), "Tạo ảnh: engine video là tuỳ chọn thừa"
-    assert tab._nhan_engine.isHidden(), "giấu cả nhãn 'Engine video'"
+    assert tab.engine.isHidden(), "Tạo ảnh: kiểu clip là tuỳ chọn thừa"
+    assert tab._nhan_engine.isHidden(), "giấu cả nhãn 'Kiểu clip'"
+    assert tab._nhan_engine.text() == "Kiểu clip", (
+        "\"Engine\" là từ kỹ thuật, không được lên màn hình")
 
     for cd in (CD_VIDEO, CD_CHUOI):
         tab._dat_che_do(cd)

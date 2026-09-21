@@ -539,6 +539,13 @@ def canh_de_xem(hang: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
             "scene_id": so,
             "srt_start": _lay(dong, vi_tri, "srt_start"),
             "srt_end": _lay(dong, vi_tri, "srt_end"),
+            # Cảnh này ở giây nào, dài bao lâu — bảng cảnh hiện thành cột
+            # "Giây". Chủ dự án 21/09/2026: Excel *"không thể edit được vì đâu
+            # biết scene nào ở giây nào"*; ba con số vốn đã nằm sẵn trong file.
+            "duration": _lay(dong, vi_tri, "duration"),
+            # Ảnh/clip đã tạo cho cảnh: bảng lấy đường này để hiện tấm nhỏ.
+            "img_path": _lay(dong, vi_tri, "img_path"),
+            "video_path": _lay(dong, vi_tri, "video_path"),
             "srt_text": _lay(dong, vi_tri, "srt_text"),
             # Ảnh tham chiếu của cảnh (đường dẫn thật sau khi tab ghi lại) — Bước 5
             # thử vài cảnh phải gửi kèm, không thì mèo thử ra một con mèo khác.
@@ -551,6 +558,26 @@ def canh_de_xem(hang: Sequence[Sequence[Any]]) -> List[Dict[str, Any]]:
         })
     ra.sort(key=lambda c: c["scene_id"])
     return ra
+
+
+#: Cột sheet `scenes` bắt buộc phải có thì bảng cảnh mới mở ra sửa được.
+#: Mốc thời gian (`srt_start`…) KHÔNG nằm đây: file thiếu nó thì cột Giây ghi
+#: "—", vẫn sửa và tạo lại được — thà mở ra thiếu một cột còn hơn không mở.
+COT_CANH_BAT_BUOC = ("scene_id", "img_prompt", "video_prompt")
+
+
+def cot_canh_thieu(hang: Sequence[Sequence[Any]]) -> List[str]:
+    """Sheet `scenes` này thiếu những cột nào — tra theo TÊN, không theo vị trí.
+
+    Dùng cho nút "Mở tệp cũ": khách có thể trỏ vào một file Excel bất kỳ, và
+    câu trả lời phải nói thẳng thiếu cột gì chứ không mở ra một bảng trống rồi
+    im lặng. Trả về danh sách rỗng = mở được.
+    """
+    vi_tri = _vi_tri_cot([list(d) for d in (hang or [])] or [[]])
+    if vi_tri is None:
+        vi_tri = {str(c or "").strip(): i
+                  for i, c in enumerate((hang or [[]])[0] if hang else [])}
+    return [c for c in COT_CANH_BAT_BUOC if c not in vi_tri]
 
 
 def _bang_de_xem(hang: Sequence[Sequence[Any]], cot: Sequence[str],

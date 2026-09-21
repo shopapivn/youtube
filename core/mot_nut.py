@@ -439,6 +439,12 @@ def _cham_v7(goc: str, kenh: str, bc: BaoCao, client, goi_v7: Optional[Callable]
                 log("V7: AI thẩm định {0} tiêu đề ({1} lượt gọi chữ)…".format(so_td, luot))
                 bc.v7["ai"] = ai.tham_dinh(client, goc, kenh, kq, goi=goi_v7 or ai.goi_van_ban, on_log=log)
                 kq = v7.cham(goc, kenh)
+            # AI đọc CATALOGUE kênh nguồn — một tiêu đề lẻ không cho biết kênh ấy bán gì, cả kệ
+            # hàng thì có. Xem `cong_thuc_v7_ai.de_bai_kenh` (21/09/2026).
+            bc.v7["ai_kenh"] = ai.tham_dinh_kenh(goc=goc, kenh=kenh, kq=kq, client=client,
+                                                 goi=goi_v7 or ai.goi_van_ban, on_log=log)
+            if bc.v7["ai_kenh"]:
+                kq = v7.cham(goc, kenh)
         v7.luu_bao_cao(goc, kenh, kq)
         dem: Dict[str, int] = {}
         for d in kq.ung_vien:

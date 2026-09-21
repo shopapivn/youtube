@@ -91,6 +91,8 @@ class TestTL4LayNguyenDoiThu:
         assert k.che_do_tieu_de == "nguyen_goc"
         # 24/08/2026: độ dài về mốc 12–15 phút cố định, không bám bản gốc.
         assert k.do_dai_theo_goc is False
+        # 18/09/2026: nhãn 【心理学】 ở đầu tiêu đề — chuyện của kênh nhận, không phải kênh nguồn.
+        assert k.nhan_tieu_de == "心理学"
 
 
 class TestNoiVaoLoiNhac:

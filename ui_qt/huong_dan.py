@@ -575,7 +575,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "buoc": [
             "Gõ mô tả vào ô dưới cùng.",
             "Chọn Ảnh hay Video, chọn tỉ lệ khung. Ảnh thì chọn thêm số lượng, "
-            "video thì chọn engine.",
+            "video thì chọn kiểu clip — mỗi kiểu hiện luôn “clip mấy giây” ngay "
+            "trong tên, và di chuột vào là thấy giá mỗi clip.",
+            "Giá tạm giữ hiện ngay cạnh nút → (ví dụ “~100₫”), đổi loại/số "
+            "lượng/kiểu clip là số đó cập nhật ngay — bấm Gửi mới biết đã bị "
+            "trừ bao nhiêu là chuyện không nên có.",
+            "Video BẮT BUỘC có ảnh đầu vào (bấm nút “+” gắn ảnh trước) — thiếu "
+            "ảnh thì tôi báo ngay, không để bạn gửi hụt tốn một lượt gọi.",
             "Bấm Gửi. Ô nhập trống ngay — cứ gõ tiếp cái sau, KHÔNG phải chờ "
             "cái trước xong.",
             "Kết quả hiện thành ô ảnh, mới nhất lên đầu. Bấm vào ô để mở file.",
@@ -588,7 +594,8 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "tiền một tấm y hệt tấm bạn vừa không ưng.",
             "Thanh tiến độ dưới lưới cho biết cả loạt xong bao nhiêu; tấm nào "
             "hỏng thì hiện màu đỏ để bạn biết cần làm lại.",
-            "Veo3 ra clip 8 giây, Seedance 10 giây.",
+            "Veo3 ra clip 8 giây, Seedance 10 giây — Seedance đắt hơn vì mỗi "
+            "tài khoản nguồn chỉ ra được rất ít clip mỗi ngày.",
             "Ảnh hoặc clip hỏng được hoàn tiền và chạy lại được.",
         ],
     },
@@ -599,32 +606,51 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Chọn việc bạn cần ở trên cùng: “Tạo ảnh”, “Tạo video”, hay “Ảnh → "
             "Video” (tạo ảnh xong cho nó động đậy thành clip). Bảng sẽ hiện đúng "
             "cột cho việc đó, không bày thừa.",
-            "Đổ danh sách cảnh vào bảng — ba cách: bấm “Dán danh sách” rồi dán "
-            "cả danh sách, mỗi dòng một cảnh (nhanh nhất); hoặc “Nạp Excel” "
-            "(bấm “Tải file mẫu” để lấy file điền sẵn cột); hoặc gõ/dán thẳng "
-            "từng dòng vào bảng.",
+            "Đổ danh sách cảnh vào bảng — bốn cách: bấm “Dán danh sách” rồi dán "
+            "cả danh sách, mỗi dòng một cảnh (nhanh nhất); “Nạp Excel” (bấm "
+            "“Tải file mẫu” để lấy file điền sẵn cột); gõ thẳng từng dòng vào "
+            "bảng; hoặc copy nhiều dòng/cột từ Excel rồi bấm vào một ô trong "
+            "bảng và Ctrl+V — dán thẳng như dán vào Excel, bảng tự thêm dòng "
+            "cho đủ chỗ.",
             "Muốn ảnh bám một nhân vật? Chọn “Ảnh tham chiếu cho cả loạt”, hoặc "
             "bấm “＋ ảnh” ở từng dòng để chọn ảnh riêng cho dòng đó.",
-            "Chọn tỉ lệ, engine, chỗ lưu rồi bấm “Chạy cả loạt”.",
+            "Chọn tỉ lệ, kiểu clip, chỗ lưu. Nút “Chạy cả loạt” tự hiện luôn giá "
+            "— ví dụ “Chạy cả loạt (12 ảnh + 12 clip ~6.600₫)” — cập nhật ngay "
+            "khi bạn đổi chế độ, tỉ lệ, kiểu clip hay sửa bảng, để bạn biết "
+            "trước sắp tốn bao nhiêu rồi mới bấm.",
+            "Đang chạy mà muốn dừng? Bấm “Dừng” — dòng chưa gửi thì bỏ luôn, "
+            "không tốn tiền; dòng đã gửi mà máy chủ chưa làm xong thì được huỷ "
+            "và hoàn tiền tạm giữ; dòng đã xong trước đó vẫn tính tiền bình "
+            "thường. Chuỗi ảnh→video tự động cũng dừng theo, không tự nối tiếp.",
             "Xong tới đâu, mỗi dòng tự hiện ảnh/clip bé ở cột “Kết quả” — bấm "
             "vào là mở xem cỡ lớn, khỏi phải mở thư mục dò tìm.",
+            "Có vài dòng báo lỗi (mạng chập chờn, mô tả bị từ chối…)? Bấm “Chạy "
+            "lại dòng hỏng” — gửi lại đúng những dòng đó, giữ nguyên mô tả, "
+            "không đụng tới các dòng đã xong.",
             "Chưa ưng một dòng? Bấm “Làm lại” ngay trên dòng đó: đổi mô tả ẢNH "
             "thì tôi làm lại cả ảnh lẫn clip; chỉ đổi mô tả VIDEO thì tôi làm "
             "lại mỗi clip, giữ nguyên ảnh — không tốn tiền tạo lại ảnh.",
         ],
         "luu_y": [
             "Ba việc, ba chế độ: “Tạo ảnh” chỉ ra ảnh; “Tạo video” làm clip "
-            "thẳng từ ảnh đầu vào bạn đưa (mỗi dòng cần một ảnh); “Ảnh → Video” "
-            "tạo ảnh của cảnh rồi cho chính ảnh đó thành khung đầu cho clip.",
+            "thẳng từ ảnh đầu vào bạn đưa (mỗi dòng cần một ảnh, thiếu ảnh tôi "
+            "báo ngay); “Ảnh → Video” tạo ảnh của cảnh rồi cho chính ảnh đó "
+            "thành khung đầu cho clip.",
             "Ảnh tham chiếu là thứ giữ cho nhân vật không đổi mặt giữa các "
             "cảnh. Dòng nào chọn ảnh riêng thì dòng ấy thắng ảnh chung.",
             "Chọn ảnh bằng nút “＋ ảnh” — không phải gõ đường dẫn. Mỗi dòng chọn "
             "được tối đa 10 ảnh.",
+            "Tỉ lệ hiện tên thường (“Ngang (YouTube)”, “Dọc (Shorts)”, “Vuông”…), "
+            "kiểu clip hiện luôn “clip mấy giây” và giá mỗi clip khi bạn rê "
+            "chuột vào — Veo3 ra clip 8 giây, Seedance 10 giây, đắt hơn vì mỗi "
+            "tài khoản nguồn chỉ ra được rất ít clip mỗi ngày.",
             "File Excel từ tab Prompt Visuals nạp thẳng sang đây được, không "
             "phải sửa gì.",
             "“Dán danh sách” dán theo đúng chế độ đang chọn: ở “Tạo video” mỗi "
             "dòng là mô tả video, hai chế độ kia mỗi dòng là mô tả ảnh. Muốn "
             "điền cả hai trên một dòng thì ngăn bằng dấu | .",
+            "“Xoá hết” giờ hỏi lại trước khi xoá, nói rõ mất bao nhiêu dòng — "
+            "bấm nhầm không còn mất trắng bảng cảnh không lấy lại được.",
             "Cả loạt gói gọn trong MỘT bảng để bạn nhìn tổng quan. Muốn soi kỹ "
             "từng thẻ để tuỳ chỉnh thì bấm “Xem chi tiết kết quả” ở dưới — mặc "
             "định đóng, và nút đó cũng cho biết cả loạt xong tới đâu (mấy/mấy).",
@@ -682,7 +708,8 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
     "prompt-visuals": {
         "tieu_de": "Prompt Visuals",
         "tom_tat": "Đưa file giọng đọc (mp3) vào là ra file Excel đủ prompt "
-                   "ảnh + video của từng cảnh — có chỗ thử vài cảnh thật.",
+                   "ảnh + video của từng cảnh — xem và sửa ngay trong tab, "
+                   "biết cảnh nào ở giây nào, tạo lại từng cảnh được.",
         "buoc": [
             "Bước 1 — Giọng đọc: bấm “Chọn file mp3…”. Có kịch bản .txt thì "
             "bấm “+ kịch bản .txt” — prompt bám đúng tên riêng, thuật ngữ hơn "
@@ -720,20 +747,32 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "ảnh bối cảnh loc…) đặt cạnh Excel, gắn vào từng cảnh, để nhân vật "
             "và nơi chốn giữ nguyên qua cả phim. Ảnh tham chiếu tốn ví như ảnh "
             "thường (thường 3–6 tấm).",
-            "Bước 4 (hiện ra sau khi xong) — Xem, sửa prompt và thử vài cảnh "
-            "thật: năm tab “Cảnh” (prompt ảnh + video từng cảnh, kèm lời đọc "
-            "dịch tiếng Việt), “Ảnh bìa”, “Nhạc Suno”, “Nhân vật & bối cảnh”, "
-            "“Đạo diễn”. Bấm vào ô để sửa rồi “Lưu chỉnh sửa vào Excel”. Ngay "
-            "dưới bảng là “Tạo thử ảnh + video” cho 1–3 cảnh đầu: chưa ưng thì "
-            "đổi phong cách hoặc sửa prompt rồi thử lại; ưng rồi mang file Excel "
-            "sang tab Ảnh & Video → Hàng loạt chạy hết.",
+            "Bước 4 — Xem, sửa prompt và tạo lại từng cảnh: năm tab “Cảnh”, "
+            "“Ảnh bìa”, “Nhạc Suno”, “Nhân vật & bối cảnh”, “Đạo diễn”. Tab "
+            "“Cảnh” chính là bảng cảnh của tab Tự động: mỗi dòng một cảnh, có "
+            "ảnh nhỏ, lời đọc (dịch tiếng Việt) và cột “Giây” cho biết cảnh ấy "
+            "ở đoạn nào của lời đọc — ví dụ “01:12–01:19 · 7s”. Bấm một dòng "
+            "rồi sửa lời nhắc ở hai ô lớn bên dưới; cảnh đã sửa thì số cảnh "
+            "đậm lên. Sửa xong bấm “Lưu chỉnh sửa vào Excel”. Bấm đúp ô ảnh là "
+            "mở ảnh gốc cho to.",
+            "Muốn xem thử hình thật: tick ô vuông ở đầu những dòng muốn làm "
+            "(hoặc bấm “Tick 3 cảnh đầu”), chọn “Làm lại ảnh + clip” / “Chỉ "
+            "làm lại ảnh” / “Chỉ làm lại clip”, rồi bấm “Tạo lại cảnh đã chọn”. "
+            "Giá hiện ngay dưới trước khi bấm. Xong thì ảnh nhỏ của đúng dòng "
+            "ấy đổi luôn, và đường dẫn ảnh/clip được ghi vào Excel. Cảnh không "
+            "tick thì không ai đụng tới. Ưng rồi thì mang file Excel sang tab "
+            "Ảnh & Video → Hàng loạt để chạy hết.",
+            "Đóng tool rồi mở lại vẫn sửa tiếp được: bấm “Mở tệp cũ” ở Bước 4 "
+            "rồi chọn file Excel đã tạo hôm trước — không phải chạy lại lượt "
+            "nào. File không phải bảng cảnh thì tôi nói thẳng là thiếu cột gì.",
         ],
         "luu_y": [
             "Phong cách đã lưu (kể cả prompt bạn sửa ở ⚙ Nâng cao) nằm trong ô "
             "“Dùng lại” ở Bước 2; muốn bỏ thì mở ⚙ Nâng cao bấm “Xoá phong cách "
             "đã lưu này”.",
-            "Bước thử tiêu tiền thật (mỗi cảnh 1 ảnh + 1 clip) — giá hiện "
-            "ngay trên nút, việc lỗi hoàn 100%. Đồ thử nằm trong thư mục con "
+            "“Tạo lại cảnh đã chọn” tiêu tiền thật (mỗi cảnh 1 ảnh + 1 clip, "
+            "hoặc chỉ một trong hai tuỳ bạn chọn) — giá hiện ngay dưới nút, "
+            "việc lỗi hoàn 100%. Ảnh và clip nằm trong thư mục con "
             "“thu-phong-cach”, không lẫn với kết quả chạy loạt.",
             "Lần đầu phải bấm “Tải bộ nghe” — khoảng 0,5 GB, tải một lần rồi "
             "thôi. Việc nghe chạy ngay trên máy bạn.",

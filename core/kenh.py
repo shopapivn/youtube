@@ -262,6 +262,15 @@ class Kenh:
     #: trong lời nhắc chưa bao giờ chạy — cờ này mở nó ra mà không đụng nội dung
     #: lời nhắc. Riêng `nguyen_goc` KHÔNG chạy lời nhắc này.
     che_do_tieu_de: str = "faithful"
+    #: Nhãn thể loại 【...】 kênh muốn thấy ở ĐẦU tiêu đề khi dùng `nguyen_goc`. Rỗng (mặc định) = không
+    #: đụng gì — nết cũ.
+    #:
+    #: Chủ dự án, 18/09/2026: video 13 lấy nguyên tiêu đề đối thủ 【雑学】昔より物欲が減った人の心理, nhưng
+    #: 【雑学】 là nhãn của KÊNH NGUỒN, không phải của kênh mình. Tra thật bằng yt-dlp trên kênh sống: 9/12
+    #: video đã đăng có nhãn khoa học tâm lý/não bộ ở đầu, và cả năm video gần nhất theo Công thức V7
+    #: (V8–V12) đều có. `nguyen_goc` giữ NGUYÊN phần nội dung (đã chứng minh có người bấm) nhưng nhãn đầu
+    #: là chuyện "cửa hàng nào khán giả quen bước vào" — chuyện của kênh nhận, không phải kênh nguồn.
+    nhan_tieu_de: str = ""
     #: Mã giọng đọc trên cổng ShopAPI.
     voice_id: str = ""
     #: Engine dựng clip — quyết định trần độ dài mỗi cảnh (veo3 8s, seedance 10s).
@@ -680,6 +689,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         mau_cua_tool=_co(cai.get("mau_cua_tool")),
         kenh_rieng=_co(cai.get("kenh_rieng")),
         che_do_tieu_de=ten_che_do(cai.get("che_do_tieu_de")),
+        nhan_tieu_de=str(cai.get("nhan_tieu_de") or "").strip(),
         voice_id=str(cai.get("voice_id") or ""),
         engine=str(cai.get("engine") or "veo3"),
         mo_hinh=str(cai.get("mo_hinh") or "claude-sonnet-5"),

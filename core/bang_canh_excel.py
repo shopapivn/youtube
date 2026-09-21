@@ -48,6 +48,13 @@ COT = ("scene_id", "img_prompt", "video_prompt", "reference_files", "loi_doc")
 #: có thể dùng ô ảnh tham chiếu chung cho cả loạt thay vì điền từng dòng.
 COT_BAT_BUOC = ("scene_id", "img_prompt", "video_prompt")
 
+#: Cột KHÔNG bắt buộc, chỉ đọc được thì lấy — file do tab Prompt Visuals xuất
+#: ra có sẵn những cột này (21/09/2026: soát lại vì mở một file như vậy ở đây
+#: từng làm rớt mất lời đọc lẫn mốc thời gian, dù cả hai đều nằm sẵn trong
+#: file). Không có trong `COT` vì file mẫu tay (`viet_mau`) không cần khách gõ
+#: thêm — mẫu tay không có mốc thời gian, không có gì để dạy.
+_COT_TUY_CHON = ("srt_text", "srt_text_vi", "srt_start", "srt_end", "duration")
+
 
 def _mo_sach(duong: str):
     try:
@@ -87,7 +94,7 @@ def doc_excel(duong: str) -> List[Dict[str, Any]]:
                 "File Excel thiếu cột: {0}.\n\nBạn bấm “Tải file mẫu”, điền "
                 "vào đó rồi tải lên lại.".format(", ".join(thieu)))
 
-        vi = {c: dau.index(c) for c in COT if c in dau}
+        vi = {c: dau.index(c) for c in COT + _COT_TUY_CHON if c in dau}
         ra: List[Dict[str, Any]] = []
         for hang in trang.iter_rows(min_row=2, values_only=True):
             lay = lambda c: (  # noqa: E731 — gọn hơn một hàm con ở đây
@@ -96,12 +103,24 @@ def doc_excel(duong: str) -> List[Dict[str, Any]]:
             anh, video = lay("img_prompt"), lay("video_prompt")
             if not anh and not video:
                 continue
+            # `loi_doc` là cột khách tự gõ ở file mẫu — có thì ưu tiên vì đó
+            # đúng lời khách chép tay. File từ Prompt Visuals không có cột
+            # này, nhưng CÓ `srt_text` (câu phụ đề gốc, cùng ngôn ngữ với
+            # giọng đọc thật) — ưu tiên nó hơn `srt_text_vi` (chỉ là bản dịch
+            # tham khảo, không khớp giọng đọc) để tab Dựng video còn ép mốc
+            # đúng bằng `core/moc_canh`.
             ra.append({
                 "so": lay("scene_id") or str(len(ra) + 1),
                 "anh": anh,
                 "video": video,
                 "tham_chieu": lay("reference_files"),
-                "loi": lay("loi_doc"),
+                "loi": lay("loi_doc") or lay("srt_text") or lay("srt_text_vi"),
+                # Mốc thời gian — không phải mọi khách đều có, để trống thì
+                # nơi gọi chia đều như trước, không sao. Nhưng CÓ thì không
+                # được rớt mất chỉ vì đi qua bộ đọc này.
+                "srt_start": lay("srt_start"),
+                "srt_end": lay("srt_end"),
+                "duration": lay("duration"),
             })
         if not ra:
             raise LoiBangCanh(

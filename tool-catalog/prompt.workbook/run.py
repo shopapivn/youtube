@@ -39,19 +39,124 @@ from core.srt_scenes import (  # noqa: E402
     clock, enforce_max_duration, group_cues, max_seconds_for, parse_srt, target_seconds_for,
 )
 
-#: Cot cua sheet `scenes`. Giu DUNG thu tu nay: khau dung video doc file Excel
-#: nay theo ten cot, va `video_note = "SKIP"` la cach bao no bo qua mot canh.
+#: Cot cua sheet `scenes`. Moi ten cot phai giu nguyen: khau dung video va moi
+#: bo doc khac tra cot theo TEN (khong theo vi tri), va `video_note = "SKIP"`
+#: la cach bao no bo qua mot canh.
+#:
+#: ═══ THU TU 21/09/2026 — CHU DU AN: "khong the edit duoc vi dau biet scene
+#: nao o giay nao" ═══
+#:
+#: Mo thi thay 25 cot dat ten ky thuat, moc thoi gian (`srt_start`/`srt_end`/
+#: `duration`) chim giua chung. Doi thu tu — KHONG doi ten cot nao — dua cac
+#: cot NGUOI DOC can len dau: cai canh ay o giay nao, giong doc dang noi gi
+#: (`srt_text`/`srt_text_vi`), roi hai cot duy nhat khach can SUA
+#: (`img_prompt`/`video_prompt`). Con lai la so sach cua tool, giu y nguyen thu
+#: tu cu phia sau. `core/auto_khau.COT_CANH` doi CUNG MOT KIEU — sua ben nay
+#: thi sua ben do, hai file phai ra cung mot hinh dang cot.
 SCENE_COLUMNS = [
-    "scene_id", "srt_start", "srt_end", "duration", "planned_duration", "srt_text",
-    "scene_kind", "subject_mode", "primary_subject", "primary_action", "visual_anchor",
-    "must_not_show", "img_prompt", "prompt_json", "video_prompt", "img_path", "video_path",
-    "status_img", "status_vid", "characters_used", "location_used", "reference_files", "media_id",
-    "video_note", "segment_id",
-    # Cot them SAU cac cot VE3 (VE3 doc theo ten nen khong anh huong): ban dich
+    "scene_id", "srt_start", "srt_end", "duration", "srt_text",
+    # Cot them SAU cot VE3 (VE3 doc theo ten nen khong anh huong): ban dich
     # tieng Viet cua loi doc — chu du an 24/08/2026 dua prompt tham khao co cot
     # "Ban dich tieng Viet" de khach hieu canh dang noi gi ma toi uu prompt.
     "srt_text_vi",
+    "img_prompt", "video_prompt",
+    "planned_duration", "scene_kind", "subject_mode", "primary_subject", "primary_action",
+    "visual_anchor", "must_not_show", "prompt_json", "img_path", "video_path",
+    "status_img", "status_vid", "characters_used", "location_used", "reference_files", "media_id",
+    "video_note", "segment_id",
 ]
+
+#: Cỡ cột (theo TÊN cột) cho sheet `scenes` — mốc/hẹp, lời đọc/prompt rộng có
+#: xuống dòng. `core/auto_khau._RONG_COT_CANH` giữ y hệt bảng này; đổi một bên
+#: thì đổi cả bên kia.
+_RONG_COT_CANH = {
+    "scene_id": 9, "srt_start": 11, "srt_end": 11, "duration": 10,
+    "planned_duration": 10, "status_img": 11, "status_vid": 11,
+    "media_id": 12, "video_note": 12, "segment_id": 10,
+    "characters_used": 18, "location_used": 18, "img_path": 22, "video_path": 22,
+    "srt_text": 40, "srt_text_vi": 40, "img_prompt": 54, "video_prompt": 54,
+    "primary_subject": 24, "primary_action": 24, "visual_anchor": 24,
+    "must_not_show": 24, "prompt_json": 30, "reference_files": 28,
+    "scene_kind": 14, "subject_mode": 14,
+}
+
+#: Cột nào bật xuống-dòng (wrap) — chữ dài mà không wrap thì Excel kéo cả
+#: dòng thành một vệt dài, khó đọc hơn cả lúc chưa sắp lại.
+_COT_XUONG_DONG = {"srt_text", "srt_text_vi", "img_prompt", "video_prompt",
+                   "primary_subject", "primary_action", "visual_anchor",
+                   "must_not_show", "prompt_json"}
+
+
+def _dinh_dang_sheet_canh(ws, cot) -> None:
+    """Khoá hàng tiêu đề + cỡ cột + xuống dòng cho prompt trên sheet `scenes`.
+
+    Không đổi GIÁ TRỊ của `srt_start`/`srt_end` (vẫn chuỗi giờ:phút:giây,mili
+    của SRT) — đổi sang một dạng số khác dễ vỡ cách đọc của
+    `core/dung_video._giay` và mọi bộ đọc khác đang ăn chuỗi này. Chỉ làm cho
+    NHÌN dễ hơn: cột hẹp lại, đứng giữa; đọc "giờ:phút:giây,mili" vẫn ra ngay
+    cảnh đang ở giây thứ mấy, không cần đổi kiểu dữ liệu.
+    """
+    from openpyxl.styles import Alignment  # noqa: PLC0415
+    from openpyxl.utils import get_column_letter  # noqa: PLC0415
+
+    ws.freeze_panes = "A2"
+    giua = Alignment(horizontal="center", vertical="center")
+    goc_tren = Alignment(wrap_text=True, vertical="top")
+    for col, ten in enumerate(cot, 1):
+        letter = get_column_letter(col)
+        ws.column_dimensions[letter].width = _RONG_COT_CANH.get(ten, 16)
+        if ten in ("srt_start", "srt_end", "duration"):
+            for row in range(2, ws.max_row + 1):
+                ws.cell(row, col).alignment = giua
+        elif ten in _COT_XUONG_DONG:
+            for row in range(2, ws.max_row + 1):
+                ws.cell(row, col).alignment = goc_tren
+
+
+def _viet_huong_dan_sheet(ws) -> None:
+    """Trang "Hướng dẫn" — tab ĐẦU TIÊN của workbook, chữ người thường đọc được.
+
+    Không nói "schema", "cột index" — chỉ nói cột nào SỬA được, cột nào là
+    mốc thời gian (đừng sửa), cột nào là sổ sách riêng của tool (đừng sửa).
+    """
+    from openpyxl.styles import Alignment, Font  # noqa: PLC0415
+
+    dam = Font(bold=True, size=13)
+    dam_nho = Font(bold=True)
+    goc_tren = Alignment(wrap_text=True, vertical="top")
+    dong = 1
+
+    def viet(chu: str, font=None) -> None:
+        nonlocal dong
+        o = ws.cell(dong, 1, chu)
+        if font is not None:
+            o.font = font
+        o.alignment = goc_tren
+        dong += 1
+
+    viet("Cách đọc bảng cảnh này", dam)
+    dong += 1
+    viet("Mở trang “scenes” để xem từng cảnh — mỗi dòng là một cảnh của video.")
+    dong += 1
+    viet("CỘT NÊN SỬA:", dam_nho)
+    viet("  • img_prompt — lời nhắc tả ẢNH của cảnh. Sửa cột này để đổi ảnh sẽ tạo ra.")
+    viet("  • video_prompt — lời nhắc tả CHUYỂN ĐỘNG của cảnh. Sửa cột này để đổi video.")
+    dong += 1
+    viet("CỘT MỐC THỜI GIAN — đừng sửa, đây là vị trí của cảnh trong giọng đọc:", dam_nho)
+    viet("  • srt_start / srt_end — cảnh này bắt đầu và kết thúc ở giờ:phút:giây nào của giọng đọc.")
+    viet("  • duration — cảnh này dài bao nhiêu giây.")
+    viet("  • srt_text (và srt_text_vi nếu có) — câu giọng đọc đang nói lúc cảnh này hiện lên, "
+         "để biết đang sửa đúng cảnh nào.")
+    dong += 1
+    viet("CÁC CỘT CÒN LẠI — đừng sửa:", dam_nho)
+    viet("  Đây là sổ sách riêng của tool (mã cảnh, trạng thái, đường dẫn ảnh/video…) để tool tự "
+         "nhớ đã làm tới đâu. Sửa vào có thể làm tool hiểu nhầm và làm lại nhầm cảnh.")
+    dong += 1
+    viet("SAU KHI SỬA XONG:", dam_nho)
+    viet("  Lưu file lại, rồi quay về tool bấm đúng nút để tạo lại — tool chỉ làm lại những cảnh "
+         "bạn vừa sửa, không phải làm lại từ đầu.")
+    ws.column_dimensions["A"].width = 100
+    ws.sheet_view.showGridLines = False
 
 #: Sheet `locations` — dung cot cua VE3_SUITE (`excel_manager.LOCATIONS_SHEET`).
 LOCATION_HEADERS = ["id", "name", "english_prompt", "location_lock",
@@ -2413,12 +2518,16 @@ def _validate_coverage(cues, scenes):
 def render_workbook(path: Path, manifest: Mapping[str, Any]) -> None:
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
-    book = Workbook(); scenes_sheet = book.active; scenes_sheet.title = "scenes"
+    book = Workbook()
+    huong_dan_sheet = book.active; huong_dan_sheet.title = "Hướng dẫn"
+    _viet_huong_dan_sheet(huong_dan_sheet)
+    scenes_sheet = book.create_sheet("scenes", 1)
     for col, name in enumerate(SCENE_COLUMNS, 1):
         cell = scenes_sheet.cell(1, col, name); cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="70AD47")
     for row, scene in enumerate(manifest["scenes"], 2):
         for col, name in enumerate(SCENE_COLUMNS, 1): scenes_sheet.cell(row, col, scene.get(name, ""))
+    _dinh_dang_sheet_canh(scenes_sheet, SCENE_COLUMNS)
     chars_sheet = book.create_sheet("characters")
     for col, header in enumerate(CHARACTER_HEADERS, 1): chars_sheet.cell(1, col, header)
     for row, nv in enumerate(manifest.get("characters") or [], 2):

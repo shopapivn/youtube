@@ -60,8 +60,11 @@ CAU_HINH_MAC_DINH: Dict = {
         "vat-chat": {"ten": "Người giàu / không ham vật chất", "tu": [
             "物欲", "金持ち", "お金", "高級", "ブランド", "買わない", "買い替え", "贅沢", "節約", "貯金", "見栄",
             "質素", "裕福", "豊か", "貧乏", "浪費", "資産", "物を減ら", "持たない", "ミニマリスト"]},
+        # 21/09/2026: thiếu "頭が良い" (が + kanji) nên 【思考心理学】本当に頭が良い人は… (777.000
+        # view) bị đọc là "không thuộc cụm nào" và mất trắng 30 điểm. Ba lối viết kia đã có sẵn.
         "tri-tue": {"ten": "Trí tuệ / IQ", "tu": [
-            "知能", "知性", "知的", "IQ", "EQ", "賢い", "頭がいい", "頭の良い", "頭のいい", "天才", "地頭", "精神年齢"]},
+            "知能", "知性", "知的", "IQ", "EQ", "賢い", "頭がいい", "頭が良い", "頭の良い", "頭のいい",
+            "天才", "地頭", "精神年齢"]},
         "mot-minh": {"ten": "Một mình", "tu": [
             "一人", "1人", "１人", "ひとり", "孤独", "ぼっち", "群れな", "友達が少な", "友人が少な"]},
         "don-dep": {"ten": "Dọn dẹp / nhà cửa", "tu": ["片付", "掃除", "散らか", "断捨離", "綺麗", "部屋"]},
@@ -75,7 +78,16 @@ CAU_HINH_MAC_DINH: Dict = {
     #: Từ nhắm người già — loại. Cộng thêm `DAU_MOC_TUOI` của phan_tuyen.
     "tu_tuoi": ["1950年代", "1960年代", "昭和", "孫", "年金", "介護", "老い", "老け", "晩年"],
     "tu_chan_dung": ["人", "特徴", "心理", "理由", "正体", "共通"],
-    "tu_cach_lam": ["方法", "やり方", "コツ", "手順", "裏ワザ", "ステップ"],
+    # "法則/ルール/技術/見分け方" là lời hứa DẠY CÁCH LÀM — khác hẳn dạng chân dung của bốn video thắng.
+    "tu_cach_lam": ["方法", "やり方", "コツ", "手順", "裏ワザ", "ステップ", "法則", "ルール", "技術",
+                    "見分け方", "作り方", "鍛え方"],
+    # 21/09/2026: "人" trong `tu_chan_dung` khớp cả 人生 / 日本人 / 大人, nên
+    # 【富の真実】お金持ちは…｜人生を変える７つのルール (kênh tự lực LIFE TRIGGER) được chấm "chân
+    # dung người". Gỡ các từ ghép này KHỎI tiêu đề trước khi dò, để "人" chỉ còn nghĩa "người".
+    # Không bỏ hẳn "人": video thắng 「お金持ちほど絶対に買わないもの」 và 「…一人で行っているなら」
+    # không có 人 làm chủ ngữ nào khác để bám.
+    "tu_ghep_khong_phai_nguoi": ["人生", "日本人", "大人", "他人", "人間", "人類", "人気", "人口",
+                                 "個人", "恋人", "本人", "芸人", "人材", "人数"],
     "trong_so": {"cum": 30, "pool": 25, "no": 20, "len": 15, "khuon": 10},
     #: Video của mình THẮNG khi hiển thị 48h ≥ max(toi_thieu, boi_so × trung vị video mình);
     #: video chưa đủ 48 giờ thắng khi 13h ≥ moi_13h. `so_video_toi_thieu` — kênh CHƯA đủ ngần
@@ -91,10 +103,30 @@ CAU_HINH_MAC_DINH: Dict = {
     # đã chứng minh kênh có thể thắng. Giữ trần impressions (dấu hiệu "có ai nhìn thấy" rẻ và
     # đáng tin nhất) — chủ dự án sẽ chốt trần CTR/AVD cuối cùng sau khi có thêm số liệu thật.
     "chuyen_v7": {"toi_thieu_impressions": 20000, "toi_thieu_ctr": 0, "toi_thieu_avd_pct": 0},
-    "pool": {"k": 10, "diem_san": 0.8, "diem_tran": 1.4, "tran_chi_co_cum": 15},
+    # `luot_toi_thieu` + `bat_buoc`: CỬA 2 LÀ BẮT BUỘC. Mục 2 hồ sơ vốn ghi "dưới 10 lượt xem bỏ
+    # qua", nhưng bộ chấm chỉ TRỪ ĐIỂM chứ không loại — nên V13 (nguồn 9 lượt) và V14 (nguồn
+    # không có dòng nào trong bảng) vẫn được chọn, và cả hai đều hỏng. Bốn video THẮNG
+    # (V7/V10/V11/V12) đều có dòng riêng với lượt xem thật. Đo 21/09/2026.
+    "pool": {"k": 10, "diem_san": 0.8, "diem_tran": 1.4, "tran_chi_co_cum": 15,
+             "luot_toi_thieu": 10, "bat_buoc": True},
+    # Cụm không chỉ "có video thắng hay không" mà còn THẮNG MẤY PHẦN. Đo trên chính kênh ở mốc
+    # 48h ngày 21/09/2026: vật chất 3/4 · trí tuệ 1/2 · một mình 1/6. Cụm "một mình" có đúng một
+    # video thắng nhưng năm video trượt — cách tính cũ vẫn cho nó trọn 30 điểm như cụm vật chất.
+    "cum_thanh_tich": {"bat": True, "san": 0.3},
+    # Ngách của KÊNH NGUỒN, đo trên cả catalogue trong sổ. Hệ số "gấp" là tương đối nên kênh tự
+    # lực (自己啓発) có trung vị thấp lại được điểm nổ cao: LIFE TRIGGER 47% đúng ngách / 42% dạng
+    # tự lực và Intellectual Noise 33%/42% đều lọt top. Kênh nguồn của bốn video thắng đều ≥ 79%.
+    "ngach": {
+        "tu": ["心理", "脳科学", "脳", "性格", "特徴", "IQ", "知能", "頭がいい", "頭が良い", "頭の良い",
+               "賢い", "人の", "人ほど", "正体", "共通", "本音", "本性"],
+        "tu_lac": ["法則", "習慣", "方法", "やり方", "コツ", "ルール", "技術", "ステップ", "作り方",
+                   "鍛え", "成功する", "人生を変え", "努力", "見分け方"],
+        "san": 0.6, "tran_lac": 0.3, "so_video_toi_thieu": 8},
     # Kênh yếu < 1.500 view trung vị: nguồn V9 (kênh 429) chậm; 全部脳のせい。 (1.100) bị nhật ký 12/09
     # xếp cùng hồ sơ ấy. Kênh nguồn của các video thắng đều từ 3.150 trở lên.
-    "no": {"san": 3, "boi_so_15": 8, "tran": 25, "kenh_yeu_duoi": 1500, "tru_kenh_yeu": 5},
+    # `san_view`: sàn view TUYỆT ĐỐI của nguồn. "Gấp" là số tương đối nên nó một mình không đủ.
+    "no": {"san": 3, "boi_so_15": 8, "tran": 25, "kenh_yeu_duoi": 1500, "tru_kenh_yeu": 5,
+           "san_view": 50000},
     "khuon": {"tot": [12, 21], "tam": [8, 30], "loai_duoi": 8, "loai_tren": 40},
     "loai": {"lam_ngay": 75, "nen_lam": 60, "du_bi": 45},
     "ket_qua_48h": {"thang": 20000, "truot": 6000},
@@ -257,6 +289,61 @@ _NHAN_THE_LOAI = re.compile(r"【[^】]*】|\[[^\]]*\]|［[^］]*］|#\S+")
 def _cum_cua(tieu_de: str, ch: Dict) -> List[str]:
     td = _NHAN_THE_LOAI.sub(" ", tieu_de or "")
     return [ma for ma, cum in ch["cum"].items() if any(t and t in td for t in cum.get("tu", []))]
+
+
+def la_chan_dung(tieu_de: str, ch: Dict) -> Optional[bool]:
+    """`True` chân dung người · `False` dạng cách làm · `None` không rõ — BẢN DỰ PHÒNG bằng từ khoá.
+
+    Chỉ chạy khi AI chưa thẩm định dòng ấy (xem `cong_thuc_v7_ai`). Điểm khác bản cũ: gỡ các từ
+    ghép chứa 人 nhưng KHÔNG nghĩa "người" (人生, 日本人, 大人…) trước khi dò, vì 21/09/2026 chính
+    chữ 人 trong 「人生を変える７つのルール」 đã cho một video tự lực đậu cửa "chân dung".
+    """
+    td = _NHAN_THE_LOAI.sub(" ", tieu_de or "")
+    if any(t and t in td for t in ch.get("tu_cach_lam", [])):
+        return False
+    for ghep in ch.get("tu_ghep_khong_phai_nguoi", []):
+        td = td.replace(ghep, " ")
+    if any(t and t in td for t in ch.get("tu_chan_dung", [])):
+        return True
+    return None
+
+
+def ngach_kenh_tu_so(ten_kenh: str, tieu_de_kenh: Sequence[str], ch: Dict) -> Optional[bool]:
+    """Kênh nguồn có cùng ngách với kênh mình không — `None` khi chưa đủ dữ liệu để nói.
+
+    BẢN DỰ PHÒNG bằng từ khoá, chỉ dùng khi AI chưa đọc catalogue kênh ấy. Hệ số "gấp" của cửa 5
+    là số TƯƠNG ĐỐI nên kênh tự lực (trung vị thấp, một video ngoại lệ) luôn được điểm nổ cao —
+    đo 21/09/2026: LIFE TRIGGER 47% đúng ngách / 42% tự lực và Intellectual Noise 33%/42% đều lọt
+    top, trong khi kênh nguồn của cả bốn video THẮNG đều từ 79% trở lên.
+    """
+    ng = ch.get("ngach") or {}
+    ds = [t for t in tieu_de_kenh if t]
+    if len(ds) < int(ng.get("so_video_toi_thieu", 8) or 8):
+        return None
+    dung = sum(1 for t in ds if any(w in t for w in ng.get("tu", [])))
+    lac = sum(1 for t in ds if any(w in t for w in ng.get("tu_lac", [])))
+    return (dung / len(ds)) >= float(ng.get("san", 0.6)) and (lac / len(ds)) <= float(ng.get("tran_lac", 0.3))
+
+
+def thanh_tich_cum(videos: Sequence["VideoMinh"], ch: Dict) -> Dict[str, float]:
+    """`{mã cụm: tỷ lệ thắng}` đo trên chính video của kênh đã đủ mốc 48 giờ.
+
+    Cách cũ chỉ hỏi "cụm này CÓ video thắng không" nên cụm một mình — 1 thắng, 5 trượt — vẫn được
+    trọn 30 điểm ngang cụm vật chất 3 thắng/1 trượt. Làm mượt kiểu Laplace để một video thắng đơn
+    lẻ không thành 100%.
+    """
+    tt = ch.get("cum_thanh_tich") or {}
+    dem: Dict[str, List[int]] = {}
+    for v in videos:
+        if v.hien_thi_48h is None:
+            continue
+        for c in v.cum:
+            o = dem.setdefault(c, [0, 0])
+            o[1] += 1
+            if v.thang:
+                o[0] += 1
+    san = float(tt.get("san", 0.3))
+    return {c: max(san, (w + 0.5) / (n + 1.0)) for c, (w, n) in dem.items()}
 
 
 # ── Bộ nhớ thẩm định AI ──────────────────────────────────────────────────────
@@ -463,6 +550,22 @@ def _doc_json(f: str) -> Dict:
 
 def thu_muc_chi_so(goc: str, kenh: str) -> str:
     return os.path.join(duong_kenh(goc, kenh), "chi-so")
+
+
+def tieu_de_theo_kenh(goc: str, kenh: str) -> Dict[str, List[str]]:
+    """`{tên kênh nguồn: [tiêu đề…]}` từ sổ content — catalogue để phán đoán NGÁCH của kênh ấy."""
+    cot, hang = so.doc_bang(goc, kenh)
+    o = {c: i for i, c in enumerate(cot)}
+    i_k, i_t = o.get("Kênh"), o.get("Tiêu đề video")
+    ra: Dict[str, List[str]] = {}
+    if i_k is None or i_t is None:
+        return ra
+    for d in hang:
+        if i_k < len(d) and i_t < len(d):
+            ten, td = str(d[i_k]).strip(), str(d[i_t]).strip()
+            if ten and td:
+                ra.setdefault(ten, []).append(td)
+    return ra
 
 
 def video_cua_kenh(goc: str, kenh: str, ch: Optional[Dict] = None,
@@ -727,18 +830,26 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
     ai = doc_bo_nho(goc, kenh, ch)
     ch_ai = ch.get("ai") or CAU_HINH_MAC_DINH["ai"]
 
-    def cum_ai(ma: str, la_video_minh: bool = False) -> Optional[List[str]]:
-        """Cụm AI đã thẩm định (còn hiệu lực) — `None` nếu chưa có thì dùng từ khoá."""
+    def cum_ai(ma: str, la_video_minh: bool = False, tieu_de: str = "") -> Optional[List[str]]:
+        """Cụm AI đã thẩm định (còn hiệu lực) — `None` nếu chưa có thì dùng từ khoá.
+
+        AI trả "moi" (không thuộc cụm nào) thì HỎI LẠI từ khoá thay vì trả cụm rỗng: một mục
+        rỗng mất trắng 30 điểm cụm, và 21/09/2026 đúng kiểu ấy đã đánh rơi 【思考心理学】本当に
+        頭が良い人は… (777.000 view). Từ khoá sót thì AI vá, AI sót thì từ khoá vá.
+        """
         ket = ai.get(ma)
         if not con_hieu_luc(ket, cua_minh, la_video_minh):
             return None
-        return [ket["cum"]] if ket.get("cum") in ch["cum"] else []
+        if ket.get("cum") in ch["cum"]:
+            return [ket["cum"]]
+        return _cum_cua(tieu_de, ch) if tieu_de else []
 
     for v in videos:
-        c = cum_ai(v.ma, True)
+        c = cum_ai(v.ma, True, v.tieu_de)
         if c is not None:
             v.cum = c
     thang = [v for v in videos if v.thang]
+    tt_cum = thanh_tich_cum(videos, ch) if (ch.get("cum_thanh_tich") or {}).get("bat") else {}
     if not videos:
         canh_bao.append("Chưa có số liệu Studio trong chi-so/ — không biết cụm nào đang thắng, cột Cụm và "
                         "Bảng đề xuất sẽ bằng 0.")
@@ -757,7 +868,7 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
     # Điểm bảng đề xuất theo CỤM: gộp mọi dòng pool cùng cụm.
     pool_cum: Dict[str, list] = {}
     for ma, g in pool.items():
-        c_ai = cum_ai(ma)
+        c_ai = cum_ai(ma, False, g[5])
         for c in (c_ai if c_ai is not None else _cum_cua(g[5], ch)):
             tong = pool_cum.setdefault(c, [0.0, 0.0, 0.0, 0.0])
             for i in range(4):
@@ -783,10 +894,24 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
             danh_ba[ten] = (tt, tv)
     # Trung vị dự phòng khi danh bạ chưa có View TV: tính từ chính sổ content.
     theo_kenh: Dict[str, List[float]] = {}
+    # Catalogue từng kênh nguồn — để phán đoán NGÁCH (AI đọc, hoặc từ khoá dự phòng).
+    td_theo_kenh: Dict[str, List[str]] = {}
     for d in hang:
         vw = _so(o_(d, "View"))
         if vw:
             theo_kenh.setdefault(o_(d, "Kênh"), []).append(vw)
+        tdk = o_(d, "Tiêu đề video")
+        if tdk:
+            td_theo_kenh.setdefault(o_(d, "Kênh"), []).append(tdk)
+    # Phán đoán ngách của kênh nguồn: ưu tiên AI (`cong_thuc_v7_ai.tham_dinh_kenh` ghi vào bộ nhớ
+    # dưới khoá "kenh:<tên>"), chưa có thì mới đếm từ khoá.
+    ngach_kenh: Dict[str, Optional[bool]] = {}
+    for ten_k, ds_td in td_theo_kenh.items():
+        ket_k = ai.get("kenh:" + ten_k)
+        if isinstance(ket_k, dict) and ket_k.get("ngach") in ("dung", "gan", "lac"):
+            ngach_kenh[ten_k] = ket_k["ngach"] != "lac"
+        else:
+            ngach_kenh[ten_k] = ngach_kenh_tu_so(ten_k, ds_td, ch)
 
     da_lam = doc_ma_da_lam(goc, kenh)
     # Tệp TRUNG NIÊN (phan_tuyen.MA_TRUNG_NIEN): insight của tệp này CHÍNH LÀ tuổi tác, nên
@@ -820,7 +945,7 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
         ket_ai = ai.get(ma) if con_hieu_luc(ai.get(ma), cua_minh) else None
         if ket_ai:
             dong.nguon_danh_gia = NGUON_AI
-            dong.cum = [ket_ai["cum"]] if ket_ai.get("cum") in ch["cum"] else []
+            dong.cum = [ket_ai["cum"]] if ket_ai.get("cum") in ch["cum"] else _cum_cua(td, ch)
             dong.dang = str(ket_ai.get("dang") or "")
             dong.trung = int(ket_ai.get("trung") or 0)
             dong.trung_voi = str(ket_ai.get("trung_voi") or "")
@@ -846,29 +971,54 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
             dong.bi_loai = "khác chủ đề"
         elif phut is not None and (phut < kh["loai_duoi"] or phut > kh["loai_tren"]):
             dong.bi_loai = "độ dài {0} ngoài khuôn".format(_mmss(dong.dai_giay))
+        # Kênh nguồn lạc ngách — xem `ngach_kenh_tu_so`. Chỉ loại khi đã ĐỦ dữ liệu để nói (None
+        # nghĩa là chưa đủ video trong sổ, không phải "đạt").
+        elif ngach_kenh.get(dong.kenh) is False:
+            dong.bi_loai = "kênh nguồn lạc ngách"
+        # Sàn rác: chưa video nào của kênh dùng nguồn dưới 58.000 view. Sàn đặt THẤP HƠN mốc đó
+        # để chỉ cắt vùng chưa ai thử, không phủ nhận lịch sử. 21/09/2026 chủ kênh bắt được một
+        # ứng viên 4.600 view đậu cửa 5 chỉ vì kênh nguồn trung vị 565 → "gấp 8,1 lần".
+        elif dong.view is not None and dong.view < float(ch["no"].get("san_view", 0) or 0):
+            dong.bi_loai = "nguồn quá nhỏ ({0:,.0f} view)".format(dong.view).replace(",", ".")
         if dong.bi_loai:
             loai.append(dong)
             continue
 
-        # 1. Cụm đang thắng
+        # 1. Cụm đang thắng — nhân THÀNH TÍCH THẬT của cụm (thắng/tổng), xem `thanh_tich_cum`.
         suc = max([suc_cum.get(c, -1.0) for c in dong.cum] or [-1.0])
         if suc >= 0:
-            dong.diem_cum = round(ts["cum"] * (0.5 + 0.5 * suc), 1)
             ten_cum = max(dong.cum, key=lambda c: suc_cum.get(c, -1.0))
-            dong.ly_do.append("cùng cụm “{0}” với video đang thắng".format(ch["cum"][ten_cum]["ten"]))
+            tt_c = tt_cum.get(ten_cum, 1.0) if tt_cum else 1.0
+            dong.diem_cum = round(ts["cum"] * (0.5 + 0.5 * suc) * tt_c, 1)
+            dong.ly_do.append("cùng cụm “{0}” với video đang thắng{1}".format(
+                ch["cum"][ten_cum]["ten"],
+                "" if not tt_cum else " (cụm này thắng {0:.0f}% trên kênh)".format(tt_c * 100)))
         elif dong.cum:
             dong.ly_do.append("cụm “{0}” chưa có video thắng".format(ch["cum"][dong.cum[0]]["ten"]))
         else:
             dong.ly_do.append("không thuộc cụm nào đã khai")
 
-        # 2. Bảng video đề xuất
+        # 2. Bảng video đề xuất — CỔNG BẮT BUỘC khi `pool.bat_buoc`.
+        #
+        # 21/09/2026, bài học đắt nhất của công thức: bốn video THẮNG (V7/V10/V11/V12) đều có
+        # dòng RIÊNG trong bảng đề xuất với lượt xem thật. V13 lấy nguồn chỉ 9 lượt (dưới ngưỡng
+        # 10 mà chính mục 2 hồ sơ đã ghi) → 2.239 hiển thị ở 66 giờ. V14 lấy nguồn KHÔNG có dòng
+        # nào, chỉ "cùng cụm" → khởi động yếu. Bộ chấm cũ chỉ cho điểm thấp chứ không loại, nên
+        # cửa 1 (cùng cụm) một mình vẫn đủ đưa chúng lên đầu bảng. Giờ thì không.
+        po = ch["pool"]
+        luot_min = float(po.get("luot_toi_thieu", 0) or 0)
         g = pool.get(ma)
-        if g and g[3] > 0:
+        if g and g[3] >= max(1.0, luot_min):
             b, x, dp = _he_so(g, k)
             dong.pool_diem, dong.pool_xem = round(dp, 2), g[3]
             dong.diem_pool = _quy_pool(dp, ch, ts["pool"])
             dong.ly_do.append("có trong bảng đề xuất: bấm ×{0}, xem ×{1} ({2:.0f} lượt xem)".format(
                 _vn(b, 2), _vn(x, 2), g[3]))
+        elif po.get("bat_buoc"):
+            dong.bi_loai = ("bảng đề xuất chỉ {0:.0f} lượt xem (cần {1:.0f})".format(g[3], luot_min)
+                            if g else "không có trong bảng đề xuất của video thắng")
+            loai.append(dong)
+            continue
         else:
             tot = [pool_cum[c] for c in dong.cum if c in pool_cum]
             if tot:
@@ -897,12 +1047,14 @@ def cham(goc: str, kenh: str, *, bay_gio: Optional[_dt.datetime] = None) -> KetQ
             else:
                 dong.diem_khuon += ts["khuon"] / 5
                 dong.ly_do.append("AI: dạng “{0}”".format(dong.dang or "khác"))
-        elif any(t in td for t in ch.get("tu_cach_lam", [])):
-            dong.ly_do.append("dạng “cách làm”, khác dạng video thắng")
-        elif any(t in td for t in ch.get("tu_chan_dung", [])):
-            dong.diem_khuon += ts["khuon"] / 2
         else:
-            dong.diem_khuon += ts["khuon"] / 5
+            cd = la_chan_dung(td, ch)
+            if cd is False:
+                dong.ly_do.append("dạng “cách làm”, khác dạng video thắng")
+            elif cd is True:
+                dong.diem_khuon += ts["khuon"] / 2
+            else:
+                dong.diem_khuon += ts["khuon"] / 5
         if ket_ai and ket_ai.get("ly_do"):
             dong.ly_do.append("AI: " + str(ket_ai["ly_do"]))
         ung.append(dong)

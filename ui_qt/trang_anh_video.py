@@ -41,18 +41,20 @@ from collections import deque
 from typing import Dict, List, Optional
 
 from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QKeyEvent, QTextCursor
+from PyQt5.QtGui import QKeyEvent, QKeySequence, QTextCursor
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
-    QHBoxLayout, QHeaderView, QLabel, QPlainTextEdit, QPushButton, QSizePolicy,
-    QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog,
+    QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+    QPlainTextEdit, QPushButton, QSizePolicy, QTableWidget, QTableWidgetItem,
+    QTabWidget, QVBoxLayout, QWidget,
 )
 
 from core.anh_len import link_dung_lai_duoc, tai_len
-from core.jobs import JobSpec, STATUS_DONE
+from core.jobs import JobSpec, STATUS_DONE, STATUS_FAILED
+from core.money import format_vnd
 from core.pricing import (
-    ENGINE_SEEDANCE, ENGINE_VEO3, KIND_IMAGE, KIND_VIDEO, hold_for_image,
-    hold_for_video,
+    ENGINE_LABEL, ENGINE_SEEDANCE, ENGINE_VEO3, KIND_IMAGE, KIND_VIDEO,
+    hold_for_image, hold_for_video,
 )
 from core.validate import check_image, check_video
 
@@ -73,18 +75,48 @@ LOAI_VIDEO = "Video"
 _O_NHAP_MIN = 96
 _O_NHAP_MAX = 150
 
-TY_LE_ANH = ("16:9", "9:16", "1:1", "4:3", "3:4")
-TY_LE_VIDEO = ("16:9", "9:16", "1:1")
+#: Tỉ lệ khung hình: (tên khách thấy, mã gửi máy chủ). `Ngang` đứng đầu vì "đa
+#: phần họ làm ngang" (chủ dự án, 13/08/2026). Giữ nguyên MÃ ở cột hai — đổi mã
+#: là đổi luôn thứ gửi lên máy chủ, chỉ được đổi tên hiển thị ở cột một.
+KHUNG_ANH = (
+    ("Ngang (YouTube)", "16:9"),
+    ("Dọc (Shorts)", "9:16"),
+    ("Vuông", "1:1"),
+    ("Ngang (4:3)", "4:3"),
+    ("Dọc (3:4)", "3:4"),
+)
+#: Engine video chỉ nhận 3 tỉ lệ đầu — nối một ảnh 4:3/3:4 sang video là máy
+#: chủ trả 422, tốn công khách vô ích.
+KHUNG_VIDEO = KHUNG_ANH[:3]
 
-#: Ba khung người làm YouTube thật sự dùng, gọi bằng tên họ gọi.
-#: `Ngang` đứng đầu vì *"đa phần họ làm ngang"* (chủ dự án, 13/08/2026).
-KHUNG = (("Ngang", "16:9"), ("Dọc", "9:16"), ("Vuông", "1:1"))
+#: Tên hiển thị cho hai engine video — dùng chung `ENGINE_LABEL` của bảng giá
+#: để tab và bảng giá không bao giờ lệch câu chữ với nhau.
+_ENGINE_CAP = ((ENGINE_LABEL[ENGINE_VEO3], ENGINE_VEO3),
+              (ENGINE_LABEL[ENGINE_SEEDANCE], ENGINE_SEEDANCE))
 
 
 def _combo(gia_tri, mac_dinh: str, rong: int) -> QComboBox:
     c = QComboBox()
     c.addItems(list(gia_tri))
     c.setCurrentText(mac_dinh)
+    c.setFixedWidth(rong)
+    c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+    return c
+
+
+def _combo_ma(cap, ma_mac_dinh: str, rong: int) -> QComboBox:
+    """Combo hiện TÊN thân thiện cho khách, giữ MÃ thật ở `currentData()`.
+
+    Khách không đọc mã `"4:3"`/`"veo3"` là gì; máy chủ chỉ hiểu đúng mấy mã đó.
+    Tách hai việc ra: chỗ nào GỬI ĐI thì đọc `.currentData()`, chỗ nào ĐỔI CHẾ
+    ĐỘ thì so/khớp cũng bằng `.currentData()` — không bao giờ dùng `.currentText()`
+    của combo này, kẻo gửi nhầm tên hiển thị lên máy chủ.
+    """
+    c = QComboBox()
+    for ten, ma in cap:
+        c.addItem(ten, ma)
+    idx = c.findData(ma_mac_dinh)
+    c.setCurrentIndex(idx if idx >= 0 else 0)
     c.setFixedWidth(rong)
     c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
     return c
@@ -201,13 +233,14 @@ class TabThuCong(QWidget):
         self.loai = _combo((LOAI_ANH, LOAI_VIDEO), LOAI_ANH, 80)
         self.loai.currentTextChanged.connect(self._doi_loai)
 
-        self.ty_le = _combo(("16:9", "9:16", "1:1", "4:3", "3:4"), "16:9", 70)
+        self.ty_le = _combo_ma(KHUNG_ANH, "16:9", 150)
+        self.ty_le.currentIndexChanged.connect(lambda _i: self._cap_nhat_gia())
 
-        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 90)
+        self.engine = _combo_ma(_ENGINE_CAP, ENGINE_VEO3, 190)
+        self.engine.currentIndexChanged.connect(lambda _i: self._cap_nhat_gia())
 
         self.so_luong = _combo(("x1", "x2", "x3", "x4"), "x1", 60)
-
-        self.anh_vao = AnhThamChieu("", on_change=None)
+        self.so_luong.currentTextChanged.connect(lambda _t: self._cap_nhat_gia())
 
         # Hàng controls dưới: [+] [Ảnh▼] [16:9▼] [engine▼ hoặc x2▼] ... [→]
         hang = QHBoxLayout()
@@ -247,6 +280,15 @@ class TabThuCong(QWidget):
         hang.addWidget(self.so_luong)
 
         hang.addStretch(1)
+
+        # ═══ GIÁ TRƯỚC KHI GỬI ═══
+        #
+        # Chủ dự án, 21/09/2026: "tính năng tạo ảnh + video được dùng nhiều
+        # nhưng quá khó dùng" — một trong các lỗi là KHÔNG THẤY GIÁ trước khi
+        # bấm gửi. Nhãn này cập nhật ngay khi đổi Ảnh/Video, số lượng hay
+        # engine — xem `_cap_nhat_gia`.
+        self._nhan_gia = nhan("", "muted")
+        hang.addWidget(self._nhan_gia)
 
         # Nút → gửi
         self.nut_gui = QPushButton("→")
@@ -371,26 +413,49 @@ class TabThuCong(QWidget):
         self.engine.setVisible(video)
         # Số lượng chỉ cho ảnh
         self.so_luong.setVisible(not video)
-        # Tỉ lệ video chỉ có 3 loại (16:9, 9:16, 1:1), ảnh có đủ 5
-        dang_chon = self.ty_le.currentText()
-        if video:
-            self.ty_le.clear()
-            self.ty_le.addItems(["16:9", "9:16", "1:1"])
-        else:
-            self.ty_le.clear()
-            self.ty_le.addItems(["16:9", "9:16", "1:1", "4:3", "3:4"])
-        # Giữ lại lựa chọn cũ nếu còn hợp lệ
-        if dang_chon in [self.ty_le.itemText(i) for i in range(self.ty_le.count())]:
-            self.ty_le.setCurrentText(dang_chon)
-        self.anh_vao.setToolTip(
+        # Tỉ lệ video chỉ có 3 loại (16:9, 9:16, 1:1), ảnh có đủ 5. Giữ lại MÃ
+        # đang chọn (không phải chữ hiển thị) nếu mã đó còn hợp lệ ở danh sách mới.
+        dang_chon = self.ty_le.currentData()
+        self.ty_le.clear()
+        for ten, ma in (KHUNG_VIDEO if video else KHUNG_ANH):
+            self.ty_le.addItem(ten, ma)
+        idx = self.ty_le.findData(dang_chon)
+        self.ty_le.setCurrentIndex(idx if idx >= 0 else 0)
+        self.nut_upload.setToolTip(
             "Ảnh đầu vào cho clip" if video else "Ảnh tham chiếu cho ảnh mới")
         self._thu_muc.dat(self._app.default_output_dir(
             KIND_VIDEO, ENGINE_VEO3) if video
             else self._app.default_output_dir(KIND_IMAGE))
+        self._cap_nhat_gia()
 
     @property
     def la_video(self) -> bool:
         return self.loai.currentText() == LOAI_VIDEO
+
+    def _cap_nhat_gia(self) -> None:
+        """Số tiền tạm giữ hiện ngay bên nút Gửi — cập nhật mỗi lần đổi lựa chọn.
+
+        Chủ dự án, 21/09/2026: "quá khó dùng" một phần vì KHÔNG THẤY GIÁ trước
+        khi bấm gửi. Chưa dựng xong `_thanh_nhap()` thì `_nhan_gia`/`engine` có
+        thể chưa tồn tại (hàm này được gọi ngay trong lúc dựng) — bỏ qua lặng lẽ.
+        """
+        if not hasattr(self, "_nhan_gia"):
+            return
+        gia_veo3 = hold_for_video(ENGINE_VEO3, self._app.prices)
+        gia_seedance = hold_for_video(ENGINE_SEEDANCE, self._app.prices)
+        if self.la_video:
+            engine = self.engine.currentData() or ENGINE_VEO3
+            gia = hold_for_video(engine, self._app.prices)
+            self.engine.setToolTip(
+                "Veo3: clip 8 giây, tạm giữ ~{0}/clip\n"
+                "Seedance: clip 10 giây, tạm giữ ~{1}/clip".format(
+                    format_vnd(gia_veo3), format_vnd(gia_seedance)))
+        else:
+            so = int((self.so_luong.currentText() or "x1").replace("x", "") or 1)
+            gia = hold_for_image(so, self._app.prices)
+        self._nhan_gia.setText("~{0}".format(format_vnd(gia)))
+        self.nut_gui.setToolTip(
+            "Gửi (hoặc Enter) — tạm giữ khoảng {0}".format(format_vnd(gia)))
 
     # ── Gửi ──────────────────────────────────────────────────────────────────
 
@@ -439,14 +504,14 @@ class TabThuCong(QWidget):
         self._cua_toi[spec.idempotency_key] = True
         self.thu_vien.them(spec.idempotency_key, mo_ta, self.la_video,
                            so_anh_tham_chieu=len(urls),
-                           ty_le=self.ty_le.currentText(), thay_uid=thay_uid)
+                           ty_le=self.ty_le.currentData(), thay_uid=thay_uid)
         self._app.start_batch([spec], folder=thu_muc)
 
     def _dung_spec(self, mo_ta: str, urls: List[str], thu_muc: str,
                    thu_tu: int, cuc_bo=()) -> Optional[JobSpec]:
-        ty_le = self.ty_le.currentText()
+        ty_le = self.ty_le.currentData()
         if self.la_video:
-            engine = self.engine.currentText()
+            engine = self.engine.currentData()
             anh = urls[0] if urls else ""
             van_de = check_video([mo_ta], engine=engine, aspect_ratio=ty_le,
                                  image_url=anh)
@@ -497,8 +562,10 @@ class _CotBang:
     """Chỉ số cột — gõ số trần vào code là chỗ hỏng im lặng khi thêm cột."""
 
     STT, ANH, THAM_CHIEU, VIDEO, TRANG_THAI, KET_QUA, LAM_LAI = range(7)
-    TIEU_DE = ("#", "Prompt tạo ảnh", "Ảnh tham chiếu",
-               "Prompt tạo video (để trống = không làm video)",
+    #: "Lời nhắc" — chữ dùng CHUNG với sổ cảnh (bảng cảnh chia sẻ) và tab
+    #: Prompt Visuals. "Prompt" là từ kỹ thuật, không được lên màn hình.
+    TIEU_DE = ("#", "Lời nhắc ảnh", "Ảnh tham chiếu",
+               "Lời nhắc video (để trống = không làm video)",
                "Trạng thái", "Kết quả", "Làm lại")
 
 
@@ -651,12 +718,12 @@ class HopSuaCanh(QDialog):
         doc.setContentsMargins(18, 16, 18, 16)
         doc.setSpacing(8)
         if che_do != CD_VIDEO:
-            doc.addWidget(nhan("Prompt tạo ảnh", "muted"))
+            doc.addWidget(nhan("Lời nhắc ảnh", "muted"))
             self._o_anh = QPlainTextEdit(mo_ta_anh)
             self._o_anh.setMinimumHeight(_O_NHAP_MIN)
             doc.addWidget(self._o_anh, 1)
         if che_do != CD_ANH:
-            doc.addWidget(nhan("Prompt tạo video", "muted"))
+            doc.addWidget(nhan("Lời nhắc video", "muted"))
             self._o_video = QPlainTextEdit(mo_ta_video)
             self._o_video.setMinimumHeight(_O_NHAP_MIN)
             doc.addWidget(self._o_video, 1)
@@ -715,6 +782,13 @@ class TabHangLoat(QWidget):
         #: thích. Nút không làm gì mà cũng không nói gì là kiểu hỏng tệ nhất.
         self._ep_noi: set = set()
         self._dang_chay = False
+        #: Bấm "Dừng" thì bật cờ này — mọi việc TỰ ĐỘNG nối tiếp (ảnh xong tự
+        #: thành video) phải đọc cờ này và bỏ qua, chứ jobs.stop() ở dưới chỉ
+        #: lo phần máy chủ, không biết gì về hàng đợi nội bộ của TAB này.
+        self._dung_yeu_cau = False
+        #: Dòng có chặng LỖI (ảnh/video) — nguồn cho nút "Chạy lại dòng hỏng".
+        self._loi_anh: set = set()
+        self._loi_video: set = set()
         #: Chế độ đang chọn (một trong CD_ANH / CD_VIDEO / CD_CHUOI).
         self._che_do = CD_CHUOI
         #: Ảnh tham chiếu RIÊNG của từng dòng, chọn bằng NÚT trong ô bảng chứ
@@ -737,6 +811,10 @@ class TabHangLoat(QWidget):
             QAbstractItemView.EditKeyPressed
             | QAbstractItemView.AnyKeyPressed)
         self.bang.cellDoubleClicked.connect(self._mo_sua_prompt)
+        # Ctrl+V dán nhiều dòng/cột một lượt — xem `eventFilter`/`_dan_vao_bang`.
+        # Cài trên chính `self.bang`: lúc một ô đang MỞ SỬA (con trỏ nhấp nháy)
+        # thì QLineEdit của ô đó nhận phím trước, dán một ô vẫn theo lối Qt gốc.
+        self.bang.installEventFilter(self)
         dau = self.bang.horizontalHeader()
         dau.setSectionResizeMode(_CotBang.STT, QHeaderView.Fixed)
         self.bang.setColumnWidth(_CotBang.STT, 40)
@@ -847,13 +925,15 @@ class TabHangLoat(QWidget):
         hang.addWidget(nut_phu("Nạp Excel", self.nap_excel, rong=112))
         hang.addWidget(nut_phu("Tải file mẫu", self.tai_mau, rong=140))
         hang.addWidget(nut_phu("Nạp .txt", self.nap_txt, rong=104))
-        hang.addWidget(nut_phu("Thêm dòng", self.them_dong, rong=104))
+        hang.addWidget(nut_phu("Thêm dòng", self._them_dong_bam, rong=104))
         hang.addWidget(nut_phu("Xoá hết", self.xoa_het, rong=104))
         doc.addLayout(hang)
-        # Dán thẳng vào bảng cũng được: bảng nhận mọi kiểu sửa, nên copy nhiều
-        # dòng từ Excel/Word rồi Ctrl+V vào ô đầu là đầy bảng.
-        goi_y = nhan("Ba cách nhập: “Dán danh sách” (nhanh nhất), nạp Excel, "
-                     "hoặc gõ/dán thẳng vào bảng bên dưới.",
+        # Dán thẳng vào bảng: chọn một ô rồi Ctrl+V — nhận cả khối nhiều
+        # dòng/cột copy từ Excel (tách theo dòng mới + Tab), tự thêm dòng cho
+        # đủ chỗ. Xem `eventFilter`/`_dan_vao_bang`.
+        goi_y = nhan("Bốn cách nhập: “Dán danh sách” (nhanh nhất), nạp Excel, "
+                     "gõ thẳng vào bảng, hoặc bấm một ô rồi Ctrl+V để dán cả "
+                     "khối nhiều dòng/cột như dán vào Excel.",
                      "muted")
         goi_y.setMinimumWidth(1)
         doc.addWidget(goi_y)
@@ -913,15 +993,19 @@ class TabHangLoat(QWidget):
 
         # Tỉ lệ: chế độ TẠO ẢNH cho đủ 5 (thêm 4:3, 3:4). Video và chuỗi ảnh→
         # video chỉ 3, vì engine video chỉ nhận 16:9/9:16/1:1 — nối một ảnh 4:3
-        # sang clip là máy chủ trả 422, tốn công khách vô ích.
+        # sang clip là máy chủ trả 422, tốn công khách vô ích. So/khớp theo MÃ
+        # (`currentData`), không theo chữ hiển thị — combo giờ hiện tên thân
+        # thiện ("Ngang (YouTube)"…), không còn là chính mã "16:9" nữa.
         if hasattr(self, "ty_le"):
-            dang_chon = self.ty_le.currentText()
+            dang_chon = self.ty_le.currentData()
             self.ty_le.clear()
-            self.ty_le.addItems(list(TY_LE_ANH if che_do == CD_ANH
-                                     else TY_LE_VIDEO))
-            con = [self.ty_le.itemText(i) for i in range(self.ty_le.count())]
-            if dang_chon in con:
-                self.ty_le.setCurrentText(dang_chon)
+            for ten, ma in (KHUNG_ANH if che_do == CD_ANH else KHUNG_VIDEO):
+                self.ty_le.addItem(ten, ma)
+            idx = self.ty_le.findData(dang_chon)
+            self.ty_le.setCurrentIndex(idx if idx >= 0 else 0)
+
+        self._cap_nhat_gia_chay()
+        self._cap_nhat_nut_chay()
 
     def tai_mau(self) -> None:
         from core.bang_canh_excel import LoiBangCanh, viet_mau  # noqa: PLC0415
@@ -957,10 +1041,15 @@ class TabHangLoat(QWidget):
             # nhìn; "thiếu cột img_prompt" thì họ sửa được.
             self._app.show_message("File này chưa dùng được", str(loi))
             return
-        self.xoa_het()
+        # Nạp Excel THAY THẾ bảng — không hỏi lại: khách vừa tự tay chọn file,
+        # bấm "Nạp Excel" đã LÀ quyết định thay dữ liệu cũ rồi (khác với nút
+        # "Xoá hết" bấm nhầm không dặn trước).
+        self._don_bang()
         self.bang.setRowCount(0)
         for m in dong:
             self.them_dong(m["anh"], m["video"], m["tham_chieu"])
+        self._cap_nhat_gia_chay()
+        self._cap_nhat_nut_chay()
         # ═══ GIỮ MỘT BẢN BẢNG CẢNH TRONG DỰ ÁN, CHO TAB DỰNG VIDEO ═══
         #
         # Khách 08/09/2026: dựng xong hình lệch lời. Tab Dựng video đặt hình
@@ -1013,14 +1102,18 @@ class TabHangLoat(QWidget):
 
         hang = HangXuongDong()
         hang.addWidget(nhan("Tỉ lệ"))
-        self.ty_le = _combo(TY_LE_VIDEO, "16:9", 84)
+        self.ty_le = _combo_ma(KHUNG_VIDEO, "16:9", 150)
         hang.addWidget(self.ty_le)
-        # Engine chỉ có nghĩa khi có làm video. Chế độ "Tạo ảnh" giấu cả nhãn lẫn
-        # ô chọn (xem `_dat_che_do`) — bày "Engine video" ở màn hình chỉ tạo ảnh
-        # là một câu hỏi thừa khách phải bỏ qua.
-        self._nhan_engine = nhan("Engine video")
+        # "Kiểu clip" chỉ có nghĩa khi có làm video. Chế độ "Tạo ảnh" giấu cả
+        # nhãn lẫn ô chọn (xem `_dat_che_do`) — bày nó ở màn hình chỉ tạo ảnh
+        # là một câu hỏi thừa khách phải bỏ qua. Combo hiện chữ thường ("Veo3 —
+        # clip 8 giây") thay vì mã máy chủ "veo3"/"seedance", và tooltip nói rõ
+        # giá mỗi clip — xem `_cap_nhat_gia_chay`. "Engine" là từ kỹ thuật,
+        # chủ dự án 21/09/2026 bắt đổi hẳn — không được lên màn hình.
+        self._nhan_engine = nhan("Kiểu clip")
         hang.addWidget(self._nhan_engine)
-        self.engine = _combo((ENGINE_VEO3, ENGINE_SEEDANCE), ENGINE_VEO3, 112)
+        self.engine = _combo_ma(_ENGINE_CAP, ENGINE_VEO3, 190)
+        self.engine.currentIndexChanged.connect(lambda _i: self._cap_nhat_gia_chay())
         hang.addWidget(self.engine)
         doc.addLayout(hang)
 
@@ -1030,12 +1123,40 @@ class TabHangLoat(QWidget):
             "Ảnh của cảnh nào thành khung đầu cho clip của chính cảnh đó, nên "
             "nhân vật và bối cảnh không nhảy giữa các cảnh.")
         self.noi_chuoi.setStyleSheet(f"color:{theme.CHU_MO};")
+        self.noi_chuoi.toggled.connect(lambda _c: self._cap_nhat_gia_chay())
         doc.addWidget(self.noi_chuoi)
 
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
         doc.addWidget(self._thu_muc)
+
+        # ═══ CHẠY / DỪNG / CHẠY LẠI DÒNG HỎNG ═══
+        #
+        # "Chạy cả loạt" tự nói luôn giá tiền (chủ dự án 21/09: không thấy giá
+        # trước khi gửi là lỗi nặng nhất) — xem `_cap_nhat_gia_chay`. "Dừng"
+        # chỉ hiện khi có lô đang chạy; "Chạy lại dòng hỏng" chỉ hiện khi có
+        # dòng lỗi — hai nút không choán chỗ lúc không cần.
+        hang_chay = QHBoxLayout()
+        hang_chay.setContentsMargins(0, 0, 0, 0)
+        hang_chay.setSpacing(8)
         self.nut_chay = nut_chinh("Chạy cả loạt", self.chay)
-        doc.addWidget(self.nut_chay)
+        hang_chay.addWidget(self.nut_chay, 1)
+        self._nut_dung = nut_phu("Dừng", self._dung, rong=90)
+        self._nut_dung.setToolTip(
+            "Việc CHƯA gửi thì bỏ luôn, không tốn tiền. Việc ĐÃ gửi mà máy chủ "
+            "chưa làm xong thì được huỷ và hoàn tiền tạm giữ; việc đã xong thì "
+            "vẫn tính tiền như bình thường. Chuỗi ảnh→video tự động cũng dừng "
+            "theo — ảnh đang chờ nối sẽ không tự thành clip nữa.")
+        self._nut_dung.hide()
+        hang_chay.addWidget(self._nut_dung)
+        doc.addLayout(hang_chay)
+
+        self._nut_hong = nut_phu("Chạy lại dòng hỏng (0)", self._chay_lai_hong,
+                                 rong=190)
+        self._nut_hong.setToolTip(
+            "Gửi lại đúng những dòng đang báo lỗi, giữ nguyên mô tả — không "
+            "hỏi lại, không đụng tới các dòng đã xong.")
+        self._nut_hong.hide()
+        doc.addWidget(self._nut_hong, 0, Qt.AlignLeft)
         return khung
 
     # ── Bảng ─────────────────────────────────────────────────────────────────
@@ -1086,6 +1207,16 @@ class TabHangLoat(QWidget):
         widget_kq.nut_lam_lai = nut_ll
         self.bang.setCellWidget(dong, _CotBang.LAM_LAI, nut_ll)
         return dong
+
+    def _them_dong_bam(self) -> None:
+        """Nút "Thêm dòng": thêm MỘT dòng rồi cập nhật giá ngay.
+
+        Tách khỏi `them_dong` vì hàm đó còn bị gọi hàng nghìn lần trong một
+        vòng nạp Excel/dán danh sách — tính lại giá ở TỪNG lần gọi đó là biến
+        một vòng O(n) thành O(n²) đúng lúc khách nạp 1000 dòng cùng lúc.
+        """
+        self.them_dong()
+        self._cap_nhat_gia_chay()
 
     #: Nhiều nhất bấy nhiêu ảnh tham chiếu mỗi dòng — theo trần của máy chủ.
     _TRAN_THAM_CHIEU = AnhThamChieu.TRAN
@@ -1162,6 +1293,27 @@ class TabHangLoat(QWidget):
         nut.setToolTip("\n".join(duong_dan))
 
     def xoa_het(self) -> None:
+        """Nút "Xoá hết": hỏi trước, nói rõ mất bao nhiêu dòng — không lấy lại được.
+
+        Chủ dự án, 21/09/2026: bấm là mất trắng ngay, không hỏi han gì. Chỉ hỏi
+        khi bảng THẬT SỰ có gì để mất — bảng trống (mỗi dòng rỗng mặc định) thì
+        hỏi chỉ làm phiền vô ích.
+        """
+        con = sum(
+            1 for dong in range(self.bang.rowCount())
+            if self._chu(dong, _CotBang.ANH) or self._chu(dong, _CotBang.VIDEO))
+        if con:
+            tra = QMessageBox.question(
+                self, "Xoá hết bảng cảnh",
+                "Xoá {0} dòng đang có mô tả? Không lấy lại được.".format(con),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if tra != QMessageBox.Yes:
+                return
+        self._don_bang()
+
+    def _don_bang(self) -> None:
+        """Dọn bảng về trắng — KHÔNG hỏi. Dùng nội bộ khi nạp dữ liệu mới đè lên
+        (ví dụ `nap_excel`) — hỏi lại ở đó là hỏi hai lần cho một thao tác."""
         self.bang.setRowCount(0)
         self._dong_cua_anh.clear()
         self._dong_cua_video.clear()
@@ -1169,9 +1321,13 @@ class TabHangLoat(QWidget):
         self._link_noi.clear()
         self._hang_tai.clear()
         self._ep_noi.clear()
+        self._loi_anh.clear()
+        self._loi_video.clear()
         self.thu_vien.xoa_het()
         self.them_dong()
         self._cap_nhat_nut_chi_tiet()
+        self._cap_nhat_gia_chay()
+        self._cap_nhat_nut_chay()
 
     def _chu(self, dong: int, cot: int) -> str:
         o = self.bang.item(dong, cot)
@@ -1265,6 +1421,7 @@ class TabHangLoat(QWidget):
             o_bang = QTableWidgetItem("")
             self.bang.setItem(dong, cot, o_bang)
         o_bang.setText(moi)
+        self._cap_nhat_gia_chay()
 
     def _hoi_prompt(self, dong: int, la_video: bool, cu: str):
         """Hộp sửa một prompt. Trả chữ mới, hoặc `None` nếu khách bấm Huỷ.
@@ -1272,7 +1429,7 @@ class TabHangLoat(QWidget):
         Tách khỏi `_mo_sua_prompt` để bài kiểm thay được hộp thoại — mở hộp thật
         trong test là kẹt ở `exec_()`.
         """
-        tieu_de = "Sửa prompt tạo video" if la_video else "Sửa prompt tạo ảnh"
+        tieu_de = "Sửa lời nhắc video" if la_video else "Sửa lời nhắc ảnh"
         hop = QDialog(self)
         hop.setWindowTitle("{0} — cảnh {1}".format(tieu_de, dong + 1))
         hop.resize(600, 420)
@@ -1411,7 +1568,7 @@ class TabHangLoat(QWidget):
         them = self.nap_chu(chu)
         self._app.show_message(
             "Đã đổ vào bảng",
-            "{0} cảnh. Chọn tỉ lệ, engine rồi bấm Chạy.".format(them))
+            "{0} cảnh. Chọn tỉ lệ, kiểu clip rồi bấm Chạy.".format(them))
 
     # ── Hai nút trên thẻ kết quả ─────────────────────────────────────────────
 
@@ -1485,7 +1642,7 @@ class TabHangLoat(QWidget):
 
     def _gui_mot_canh_that(self, dong: int, mo_ta: str, urls,
                            thay_uid: str = "", cuc_bo=()) -> None:
-        ty_le = self.ty_le.currentText()
+        ty_le = self.ty_le.currentData()
         van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
                              reference_images=urls)
         if van_de:
@@ -1640,6 +1797,7 @@ class TabHangLoat(QWidget):
         if self.bang.rowCount() == 0:
             self.them_dong()
         self._danh_so_lai()
+        self._cap_nhat_gia_chay()
 
     def _danh_so_lai(self) -> None:
         """Đánh lại cột # cho khớp dòng thật sau khi xoá/dồn dòng.
@@ -1716,7 +1874,7 @@ class TabHangLoat(QWidget):
 
     def _chay_that(self, canh, kho_url: Dict[str, str]) -> None:
         thu_muc = self._thu_muc.value
-        ty_le = self.ty_le.currentText()
+        ty_le = self.ty_le.currentData()
         specs: List[JobSpec] = []
         so_tc: Dict[str, int] = {}          # khoá việc → số ảnh tham chiếu (badge)
         so_canh_map: Dict[str, int] = {}     # khoá việc → số cảnh (nhãn #N, theo STT)
@@ -1727,6 +1885,12 @@ class TabHangLoat(QWidget):
         self._link_noi.clear()
         self._hang_tai.clear()
         self._ep_noi.clear()
+        self._loi_anh.clear()
+        self._loi_video.clear()
+        # Lượt chạy MỚI: một cái bấm "Chạy cả loạt" tự huỷ cờ Dừng của lượt
+        # trước — không thì lô mới đẻ ra vẫn bị coi là "đã dừng" và không một
+        # việc nào được gửi tiếp (xem `cuoi_nhip`/`_chay_hang_tai`).
+        self._dung_yeu_cau = False
         for thu_tu, (dong, mo_ta, mo_ta_video) in enumerate(canh, 1):
             urls = [kho_url[d] for d in self._anh_cua_dong(dong)
                     if d in kho_url]
@@ -1792,6 +1956,7 @@ class TabHangLoat(QWidget):
             # Ảnh đầu vào đã là URL sẵn (tải ở `chay`), nên gửi thẳng.
             self._gui_video(video_ngay, thu_muc)
         self._cap_nhat_nut_chi_tiet()
+        self._cap_nhat_nut_chay()
 
     # ── Nhận sự kiện và nối ảnh → video ──────────────────────────────────────
 
@@ -1810,6 +1975,12 @@ class TabHangLoat(QWidget):
         if dong is not None:
             self._dat_tt(dong, False,
                          self._nhan_ngan(du_lieu))
+            # Nguồn cho nút "Chạy lại dòng hỏng": lỗi thì nhớ dòng, xong/gửi
+            # lại thì bỏ khỏi danh sách — nút chỉ nói đúng cái còn hỏng THẬT.
+            if trang_thai == STATUS_FAILED:
+                self._loi_anh.add(dong)
+            elif trang_thai == STATUS_DONE:
+                self._loi_anh.discard(dong)
             files = list(getattr(du_lieu, "files", ()) or ())
             if trang_thai == STATUS_DONE and files:
                 self._cho_noi[dong] = files[0]
@@ -1821,16 +1992,22 @@ class TabHangLoat(QWidget):
                 o = self._o_ket_qua(dong)
                 if o is not None:
                     o.dat_ket_qua(files[0], False)
+            self._cap_nhat_nut_chay()
             return
         dong = self._dong_cua_video.get(khoa)
         if dong is not None:
             self._dat_tt(dong, True,
                          self._nhan_ngan(du_lieu))
+            if trang_thai == STATUS_FAILED:
+                self._loi_video.add(dong)
+            elif trang_thai == STATUS_DONE:
+                self._loi_video.discard(dong)
             files = list(getattr(du_lieu, "files", ()) or ())
             if trang_thai == STATUS_DONE and files:
                 o = self._o_ket_qua(dong)
                 if o is not None:
                     o.dat_ket_qua(files[0], True)
+            self._cap_nhat_nut_chay()
 
     @staticmethod
     def _nhan_ngan(ban_ghi) -> str:
@@ -1852,8 +2029,12 @@ class TabHangLoat(QWidget):
 
         Làm ở cuối nhịp chứ không ngay trong `nhan_su_kien`: một ảnh có thể phát
         nhiều sự kiện liên tiếp, và đẩy việc ngay lúc nhận là gửi trùng.
+
+        Đã bấm Dừng thì KHÔNG tự nối tiếp nữa — `jobs.stop()` chỉ biết huỷ việc
+        đã gửi máy chủ, không biết gì về hàng `_cho_noi` riêng của tab này; phải
+        tự chặn ở đây, không thì ảnh xong SAU lúc Dừng vẫn âm thầm đẻ ra video.
         """
-        if not self._cho_noi:
+        if self._dung_yeu_cau or not self._cho_noi:
             return
         sang = dict(self._cho_noi)
         self._cho_noi.clear()
@@ -1891,6 +2072,8 @@ class TabHangLoat(QWidget):
         * chưa có → vào hàng chờ đẩy, tối đa `_TRAN_TAI` lượt bay cùng lúc, và
           dòng nào đẩy xong là video của dòng ấy bay ngay, không đợi ai.
         """
+        if self._dung_yeu_cau:
+            return
         thu_muc = self._thu_muc.value
         ngay, can_tai = [], []
         for dong, mo_ta, duong, link in cho_tai:
@@ -1926,6 +2109,8 @@ class TabHangLoat(QWidget):
         Gọi trên **luồng giao diện** (cả lúc xếp hàng lẫn lúc một lượt xong), nên
         `_dang_tai` không cần khoá.
         """
+        if self._dung_yeu_cau:
+            return
         while self._hang_tai and self._dang_tai < self._TRAN_TAI:
             dong, mo_ta, duong = self._hang_tai.popleft()
             self._dang_tai += 1
@@ -1938,6 +2123,9 @@ class TabHangLoat(QWidget):
     def _xong_tai(self, dong: int, mo_ta: str, url: str, thu_muc: str) -> None:
         """Một ảnh đã lên xong → gửi clip của ĐÚNG dòng đó, rồi rút tiếp hàng."""
         self._dang_tai = max(0, self._dang_tai - 1)
+        if self._dung_yeu_cau:
+            self._dat_tt(dong, True, "đã dừng")
+            return
         if url:
             self._gui_video([(dong, mo_ta, url)], thu_muc)
         else:
@@ -1957,8 +2145,8 @@ class TabHangLoat(QWidget):
         self._chay_hang_tai(thu_muc)
 
     def _gui_video(self, danh_sach, thu_muc: str, thay_uid: str = "") -> None:
-        engine = self.engine.currentText()
-        ty_le = self.ty_le.currentText()
+        engine = self.engine.currentData()
+        ty_le = self.ty_le.currentData()
         don_gia = hold_for_video(engine, self._app.prices)
         specs: List[JobSpec] = []
         for dong, mo_ta, url in danh_sach:
@@ -1983,6 +2171,183 @@ class TabHangLoat(QWidget):
         if specs:
             self._app.start_batch(specs, folder=thu_muc)
             self._cap_nhat_nut_chi_tiet()
+
+    # ── Dừng ─────────────────────────────────────────────────────────────────
+
+    def _dung(self) -> None:
+        """Nút "Dừng": việc chưa gửi thì bỏ, việc đã gửi mà máy chủ chưa xong
+        thì huỷ + hoàn tiền tạm giữ (xem `core/jobs.py: JobManager.stop`).
+
+        `jobs.stop()` là van CHUNG của cả tool — nó không biết gì về hàng đợi
+        nối ảnh→video riêng của tab này, nên phải tự dọn `_cho_noi`/`_hang_tai`
+        và bật cờ `_dung_yeu_cau` ở đây để `cuoi_nhip`/`_chay_hang_tai`/
+        `_xong_tai` ngừng tự đẻ thêm việc mới sau khi đã bấm Dừng.
+        """
+        self._dung_yeu_cau = True
+        self._cho_noi.clear()
+        self._hang_tai.clear()
+        self._ep_noi.clear()
+        self._dang_tai = 0
+        jobs = getattr(self._app, "jobs", None)
+        ham = getattr(jobs, "stop", None) if jobs is not None else None
+        if callable(ham):
+            try:
+                ham()
+            except Exception as loi:  # noqa: BLE001 — dừng hỏng không được giấu
+                self._app.show_error(loi)
+        self._dang_chay = False
+        self._cap_nhat_nut_chay()
+
+    # ── Giá trước khi chạy ───────────────────────────────────────────────────
+
+    def _uoc_tinh_chi_phi(self):
+        """`(số ảnh, số clip, tổng µVND)` NẾU bấm "Chạy cả loạt" ngay bây giờ.
+
+        Theo đúng luật `_chay_that`/`cuoi_nhip` dùng để quyết định việc nào
+        thật sự được gửi — dòng chỉ có mô tả clip vẫn tính (đi thẳng ra video),
+        và ở chế độ chuỗi thì clip chỉ tính khi "Ảnh vừa tạo → đầu vào video"
+        đang bật (tắt thì ảnh xong không tự nối sang video nữa).
+        """
+        gia_anh = hold_for_image(1, self._app.prices)
+        engine = self.engine.currentData() if hasattr(self, "engine") else ENGINE_VEO3
+        gia_video = hold_for_video(engine or ENGINE_VEO3, self._app.prices)
+        noi_bat = self.noi_chuoi.isChecked() if hasattr(self, "noi_chuoi") else False
+        so_anh = so_video = 0
+        for _dong, anh, video in self.canh():
+            if self._che_do == CD_VIDEO:
+                if video:
+                    so_video += 1
+            elif self._che_do == CD_ANH:
+                if anh:
+                    so_anh += 1
+            else:
+                if anh:
+                    so_anh += 1
+                    if video and noi_bat:
+                        so_video += 1
+                elif video:
+                    so_video += 1
+        tong = so_anh * gia_anh + so_video * gia_video
+        return so_anh, so_video, tong
+
+    def _cap_nhat_gia_chay(self) -> None:
+        """Nhãn nút "Chạy cả loạt" tự nói giá — chủ dự án 21/09/2026: không
+        thấy giá trước khi tốn tiền thật là lỗi nặng nhất trong tất cả."""
+        if not hasattr(self, "nut_chay"):
+            return
+        so_anh, so_video, tong = self._uoc_tinh_chi_phi()
+        if not so_anh and not so_video:
+            self.nut_chay.setText("Chạy cả loạt")
+            self.nut_chay.setToolTip("Nhập ít nhất một dòng có mô tả rồi bấm.")
+            return
+        phan = []
+        if so_anh:
+            phan.append("{0} ảnh".format(so_anh))
+        if so_video:
+            phan.append("{0} clip".format(so_video))
+        self.nut_chay.setText(
+            "Chạy cả loạt ({0} ~{1})".format(" + ".join(phan), format_vnd(tong)))
+        self.nut_chay.setToolTip(
+            "Tạm giữ khoảng {0} cho lượt này. Việc lỗi được hoàn lại đầy đủ."
+            .format(format_vnd(tong)))
+
+    def _cap_nhat_nut_chay(self) -> None:
+        """Hiện/ẩn nút Dừng theo còn việc đang chạy hay không, và đếm lại số
+        dòng hỏng cho nút "Chạy lại dòng hỏng"."""
+        if hasattr(self, "_nut_dung"):
+            (ax, av), (vx, vv) = self.thu_vien.tom_tat_theo_loai()
+            con_viec = bool((av and ax < av) or (vv and vx < vv))
+            self._nut_dung.setVisible(bool(self._dang_chay) and con_viec)
+        if hasattr(self, "_nut_hong"):
+            so_hong = len(self._dong_hong())
+            self._nut_hong.setText("Chạy lại dòng hỏng ({0})".format(so_hong))
+            self._nut_hong.setVisible(so_hong > 0)
+
+    # ── Chạy lại dòng hỏng ───────────────────────────────────────────────────
+
+    def _dong_hong(self) -> List[int]:
+        """Dòng đang có ít nhất một chặng báo lỗi (ảnh hoặc clip)."""
+        return sorted(self._loi_anh | self._loi_video)
+
+    def _chay_lai_hong(self) -> None:
+        """Gửi lại ĐÚNG những dòng đang lỗi, giữ nguyên mô tả — không hỏi lại
+        từng dòng như nút "Làm lại" đơn lẻ; đây là dọn dẹp hàng loạt sau một lô
+        có vài chục dòng hỏng vì mạng chập chờn giữa chừng."""
+        dong_hong = self._dong_hong()
+        if not dong_hong:
+            return
+        lam = 0
+        for dong in dong_hong:
+            o = self._o_ket_qua(dong)
+            if o is None:
+                continue
+            if dong in self._loi_anh and o.mo_ta_anh:
+                self._gui_mot_canh(dong, o.mo_ta_anh, thay_uid=o.uid_anh)
+                lam += 1
+            elif dong in self._loi_video and o.mo_ta_video:
+                self._lam_lai_video_dong(dong, o.mo_ta_video, o)
+                lam += 1
+        if not lam:
+            self._app.show_message(
+                "Chưa chạy lại được",
+                "Các dòng lỗi chưa có đủ mô tả để tự làm lại — mở từng dòng "
+                "(nhấp đúp ô prompt) kiểm tra rồi làm lại tay.")
+
+    # ── Dán nhiều ô từ Excel/Word ────────────────────────────────────────────
+
+    def eventFilter(self, obj, event) -> bool:
+        """Ctrl+V trên bảng (không phải lúc đang gõ trong một ô): dán NHIỀU
+        dòng/cột một lượt — xem `_dan_vao_bang`. Lúc một ô đang MỞ SỬA thì
+        QLineEdit của ô đó nhận phím trước — filter này không thấy sự kiện ấy,
+        nên dán một ô vẫn theo đúng lối Qt gốc.
+        """
+        if obj is self.bang and event.type() == QEvent.KeyPress:
+            if event.matches(QKeySequence.Paste):
+                self._dan_vao_bang()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _dan_vao_bang(self) -> None:
+        """Dán clipboard vào bảng: tách theo DÒNG MỚI rồi theo TAB, đổ từ ô
+        đang chọn, tự thêm dòng nếu thiếu, chỉ điền vào cột đang HIỆN (Prompt
+        ảnh/video) — cột ẩn theo chế độ thì bỏ qua, không âm thầm ghi chữ vào
+        chỗ khách không nhìn thấy.
+        """
+        text = QApplication.clipboard().text()
+        if not text:
+            return
+        cac_dong = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        while cac_dong and cac_dong[-1] == "":
+            cac_dong.pop()
+        if not cac_dong:
+            return
+        cot_sua = [c for c in (_CotBang.ANH, _CotBang.VIDEO)
+                  if not self.bang.isColumnHidden(c)]
+        if not cot_sua:
+            return
+        hang_bd = max(0, self.bang.currentRow())
+        cot_bd = self.bang.currentColumn()
+        if cot_bd not in cot_sua:
+            cot_bd = cot_sua[0]
+        vi_tri = cot_sua.index(cot_bd)
+        can = hang_bd + len(cac_dong)
+        while self.bang.rowCount() < can:
+            self.them_dong()
+        for i, dong_chu in enumerate(cac_dong):
+            hang = hang_bd + i
+            for j, gia_tri in enumerate(dong_chu.split("\t")):
+                ci = vi_tri + j
+                if ci >= len(cot_sua):
+                    break
+                cot = cot_sua[ci]
+                sach = gia_tri.translate(self._KY_TU_AN).strip()
+                item = self.bang.item(hang, cot)
+                if item is None:
+                    item = QTableWidgetItem("")
+                    self.bang.setItem(hang, cot, item)
+                item.setText(sach)
+        self._danh_so_lai()
+        self._cap_nhat_gia_chay()
 
 
 class TrangAnhVideo(QWidget):

@@ -60,11 +60,12 @@ _NHIP_MS = 150
 #: **Không còn tab "Hàng đợi" chung.** Mỗi tab tự giữ danh sách việc của mình —
 #: xem `ui_qt/bang_viec.py` để biết vì sao.
 TRANG = (
-    # Chủ dự án, 18/09/2026: một VPS chạy 5 kênh tự động. Trung tâm là chỗ
-    # DUY NHẤT trông cả vòng tự chạy (bảng kênh, chờ duyệt, hiệu quả, nhật ký,
-    # thêm kênh, cài máy) — đứng ĐẦU thanh bên, nhóm riêng "TỰ CHẠY"; trên VPS
-    # nó là trang mở ra đầu tiên (`_trang_mo_dau`).
-    ("trung_tam", "", "Trung tâm"),
+    # KHÔNG có trang "Trung tâm" ở đây. Chủ dự án, 21/09/2026: *"mục tự chạy
+    # trung tâm là của tool ở vps — tool của tao; còn MyTool là tool của
+    # khách… mục tự chạy không cần"*. Vòng tự chạy 5 kênh/1 VPS đã tách sang
+    # bản tool riêng bên máy ảo và tự phát triển ở đó. Mã nền (`core/tu_chay`,
+    # `core/trung_tam`, `ui_qt/trang_trung_tam.py`…) còn nằm trong kho để bản
+    # VPS dùng chung, nhưng KHÁCH không thấy trang nào của nó.
     # Chủ dự án, 31/08/2026: nhóm miễn phí *"đề ở trên cùng, đổi tên luôn thành
     # Công cụ YTB"* — tab share free không cần api, khách chưa có tài khoản mở
     # tool ra là thấy ngay thứ dùng được liền. Tên "Công cụ YTB" nằm ở TIÊU ĐỀ
@@ -119,7 +120,6 @@ TRANG = (
 #: Chỉ là chữ kẻ trên thanh bên — không thêm trang, không đổi khoá. Vỏ nào
 #: dựng `ThanhBen` mà không truyền `nhom` thì thanh bên y như cũ.
 NHOM_TRANG = {
-    "trung_tam": "TỰ CHẠY",
     "skill": "CÔNG CỤ YTB",
     "content": "LÀM VIDEO",
     "chrome-sach": "AUTOMATION",
@@ -443,10 +443,8 @@ class CuaSoChinh(QWidget):
         from .trang_gpm_vps import TrangGpmVps
         from .trang_phan_tich import TrangPhanTich
         from .trang_quan_ly_kenh import TrangQuanLyKenh
-        from .trang_trung_tam import TrangTrungTam
 
         xuong = {
-            "trung_tam": lambda: TrangTrungTam(self),
             "skill": lambda: TrangSkill(self),
             "chrome-sach": lambda: TrangGpmVps(self),
             "phan-tich": lambda: TrangPhanTich(self),

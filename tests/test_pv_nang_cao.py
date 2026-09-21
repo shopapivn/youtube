@@ -151,7 +151,9 @@ def test_tab_bon_the_va_mot_cua_chon_phong_cach():
     assert "def _the_thu(" not in chu, "Bước 5 riêng đã gộp vào Bước 4"
     assert chu.count("nut_phu(\"💾 Lưu") == 1, "một nút Lưu duy nhất"
     assert "Bước 2 — Phong cách & nhân vật" in chu
-    assert "Bước 4 — Xem, sửa prompt và thử vài cảnh thật" in chu
+    # 21/09/2026 đổi tên: không còn ô "thử N cảnh đầu", mà tick cảnh nào trong
+    # bảng thì tạo lại đúng cảnh ấy.
+    assert "Bước 4 — Xem, sửa prompt và tạo lại từng cảnh" in chu
     for o in ("_o_chi_dan", "_o_khuon_chia", "_khoi_phuc_khuon_chia"):
         assert o in chu, o
     # Ô "Nhân vật" và "Dùng lại" nằm trong _the_phong_cach, không còn ở _the_nhap.

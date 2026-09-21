@@ -1,11 +1,11 @@
-"""Bảng **mọi cảnh** của một lượt Tự động: bấm vào cảnh, sửa lời nhắc, xong.
+"""Bảng **mọi cảnh**: bấm vào cảnh, sửa lời nhắc, xong.
 
 Chủ dự án, 26/08/2026: *"tao muốn nó đơn giản mà hiệu quả, đừng vẽ nhiều nút
 linh tinh. Ví dụ tao click vào nó và sửa: nếu đã là sửa prompt ảnh thì tức là
 tạo lại ảnh và video; còn nếu sửa video thì tạo video"*.
 
-Nên ở đây **không có ô tick, không có nút chọn kiểu**. Sửa chữ chính là ra lệnh,
-và chữ nào bị sửa quyết định luôn phải làm lại cái gì:
+Nên ở đây **không có nút chọn kiểu**. Sửa chữ chính là ra lệnh, và chữ nào bị
+sửa quyết định luôn phải làm lại cái gì:
 
     sửa lời nhắc ẢNH   →  tạo lại ẢNH rồi tạo lại CLIP của cảnh đó
                           (clip lấy ảnh làm khung đầu — giữ clip cũ là giữ
@@ -15,8 +15,19 @@ và chữ nào bị sửa quyết định luôn phải làm lại cái gì:
 Sửa mấy cảnh cũng được, mỗi cảnh một kiểu cũng được: cả mẻ đi trong **một** lượt
 chạy. Cảnh không sửa thì không ai đụng tới và không trả tiền lần thứ hai.
 
-Hộp này **không gọi mạng**. Nó chỉ thu lại thứ người dùng gõ rồi giao cho
-`TrangTuDong._sua_va_tao_lai` chạy nền, đúng nếp mọi việc tốn tiền trong tool.
+Hộp này **không gọi mạng**. Nó chỉ thu lại thứ người dùng gõ rồi giao cho bên
+gọi chạy nền, đúng nếp mọi việc tốn tiền trong tool.
+
+21/09/2026 — MỘT bảng cho hai tab. Chủ dự án chê Excel của Prompt Visuals
+*"không thể edit được vì đâu biết scene nào ở giây nào"* và cả tab *"không đạt
+hiệu quả như việc sản xuất video tự động"*. Hai chỗ vốn có hai bảng khác nhau:
+bảng bên Tự động có ảnh nhỏ, dấu "đã sửa", bấm đúp mở tệp; bảng bên Prompt
+Visuals chỉ có chữ. Nay chỉ còn bảng này:
+
+* `BangCanhWidget` — ruột, nhúng được vào một tab (Prompt Visuals Bước 4);
+* `HopBangCanh`   — vẫn là cửa sổ bật lên của tab Tự động, y như cũ;
+* cột **Giây** (`mm:ss–mm:ss · 7s`) hiện ở CẢ HAI — đọc bảng là biết cảnh nào
+  ở giây nào, không phải mở Excel ra dò.
 """
 
 from __future__ import annotations
@@ -29,17 +40,23 @@ from PyQt5.QtCore import QSize, Qt, QTimer, QUrl
 from PyQt5.QtGui import (QColor, QDesktopServices, QFont, QIcon, QImageReader,
                          QPixmap)
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QDialog, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
-    QPlainTextEdit, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QHeaderView, QLabel,
+    QMessageBox, QPlainTextEdit, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QWidget,
 )
 
 from . import theme
 from .widgets import HangXuongDong, nhan, nut_chinh, nut_phu
 
-__all__ = ["HopBangCanh"]
+__all__ = ["BangCanhWidget", "HopBangCanh", "chu_giay", "giay_cua"]
 
 #: Cột trong bảng. Đổi thứ tự thì đổi luôn mấy hằng bên dưới, đừng đếm tay.
-COT_SO, COT_ANH, COT_DOC, COT_LOI_ANH, COT_LOI_CLIP = range(5)
+#: `COT_CHON` chỉ hiện khi bên gọi cho phép chọn nhiều cảnh (Prompt Visuals);
+#: tab Tự động giấu nó đi — ở đó "sửa chữ" đã là lệnh, không cần tick.
+COT_CHON, COT_SO, COT_GIAY, COT_ANH, COT_DOC, COT_LOI_ANH, COT_LOI_CLIP = range(7)
+
+#: Ba kiểu làm lại cho những cảnh được tick (Prompt Visuals).
+KIEU_ANH, KIEU_CLIP, KIEU_CA_HAI = "anh", "clip", "ca_hai"
 
 
 def loi_doc_cua(canh: Dict[str, Any]) -> str:
@@ -53,8 +70,68 @@ def loi_doc_cua(canh: Dict[str, Any]) -> str:
             or str(canh.get("srt_text") or "").strip())
 
 
-class HopBangCanh(QDialog):
-    """Bảng cảnh: sửa lời nhắc cảnh nào thì cảnh ấy được tạo lại."""
+def giay_cua(gia_tri: Any) -> Optional[float]:
+    """`00:01:02,500`, `00:08`, `62.5` → số giây. `None` nếu không đọc được.
+
+    Ba dạng vì ba nơi ghi: bộ chia cảnh ghi `hh:mm:ss,mmm`, mấy file Excel cũ
+    ghi `mm:ss`, còn `duration` là số thường.
+    """
+    chu = str(gia_tri if gia_tri is not None else "").strip().replace(",", ".")
+    if not chu:
+        return None
+    try:
+        if ":" not in chu:
+            return float(chu)
+        tong = 0.0
+        for phan in chu.split(":"):
+            tong = tong * 60 + float(phan or 0)
+        return tong
+    except (TypeError, ValueError):
+        return None
+
+
+def _dong_ho(giay: float) -> str:
+    """Giây → `mm:ss` (hoặc `h:mm:ss` khi phim dài hơn một tiếng)."""
+    tong = max(0, int(round(float(giay))))
+    gio, con = divmod(tong, 3600)
+    phut, s = divmod(con, 60)
+    if gio:
+        return "{0}:{1:02d}:{2:02d}".format(gio, phut, s)
+    return "{0:02d}:{1:02d}".format(phut, s)
+
+
+def chu_giay(canh: Dict[str, Any]) -> str:
+    """Cảnh này ở giây nào — `01:12–01:19 · 7s`, `7s`, hay `—`.
+
+    Chủ dự án, 21/09/2026: Excel *"không thể edit được vì đâu biết scene nào ở
+    giây nào"*. Ba con số vốn đã nằm sẵn trong file (`srt_start`, `srt_end`,
+    `duration`) — thiếu mỗi việc đưa lên màn hình.
+    """
+    dau = giay_cua(canh.get("srt_start"))
+    cuoi = giay_cua(canh.get("srt_end"))
+    dai = giay_cua(canh.get("duration"))
+    if dai is None and dau is not None and cuoi is not None:
+        dai = max(0.0, cuoi - dau)
+    if dau is None or cuoi is None:
+        return "{0}s".format(int(round(dai))) if dai else "—"
+    return "{0}–{1} · {2}s".format(_dong_ho(dau), _dong_ho(cuoi),
+                                   int(round(dai or 0)))
+
+
+def _nhac_giay(canh: Dict[str, Any]) -> str:
+    """Câu rê chuột của cột Giây: nói NGUYÊN VĂN ba con số trong file."""
+    dau = str(canh.get("srt_start") or "").strip()
+    cuoi = str(canh.get("srt_end") or "").strip()
+    dai = str(canh.get("duration") or "").strip()
+    if not (dau or cuoi or dai):
+        return ("Cảnh này chưa có mốc thời gian trong file — lời nhắc vẫn sửa "
+                "và tạo lại được bình thường.")
+    return "Từ {0} đến {1} · dài {2} giây (đúng như trong file)".format(
+        dau or "—", cuoi or "—", dai or "—")
+
+
+class BangCanhWidget(QWidget):
+    """Ruột của bảng cảnh — nhúng được vào tab, không phải cửa sổ riêng."""
 
     #: Cỡ ảnh nhỏ trong bảng — đúng khung 16:9, đủ để thấy sai ở đâu.
     CO_ANH = (128, 72)
@@ -62,42 +139,57 @@ class HopBangCanh(QDialog):
     #: hình cả phút; giữa hai nhịp thì bảng vẫn cuộn và vẫn gõ được.
     NHIP_ANH_MS = 30
 
-    def __init__(self, xu_ly: Callable[[Dict[int, Tuple[Optional[str], Optional[str]]]], Any],
-                 canh: List[Dict[str, Any]], duong_luot: str,
+    def __init__(self, xu_ly: Optional[Callable[[Dict[int, Tuple[Optional[str], Optional[str]]]], Any]] = None,
+                 canh: Optional[List[Dict[str, Any]]] = None, duong_luot: str = "",
                  cha: Optional[QWidget] = None, canh_dau: int = 0,
-                 noi_canh: bool = False):
+                 noi_canh: bool = False, *,
+                 tieu_de: Optional[str] = "Bảng cảnh",
+                 loi_mo_dau: Optional[str] = None,
+                 duong_anh: Optional[Callable[[Dict[str, Any]], str]] = None,
+                 duong_clip: Optional[Callable[[Dict[str, Any]], str]] = None,
+                 hien_nut_lam: bool = True,
+                 cao_bang: int = 0,
+                 chon_nhieu: bool = False,
+                 tao_lai: Optional[Callable[[List[int], str], Any]] = None,
+                 gia_cua: Optional[Callable[[List[int], str], str]] = None,
+                 xong: Optional[Callable[[], Any]] = None,
+                 nut_dong: Optional[Callable[[], Any]] = None):
         super().__init__(cha)
         self._xu_ly = xu_ly
-        self._canh = list(canh)
+        self._canh: List[Dict[str, Any]] = list(canh or [])
         self._duong = duong_luot
+        self._ham_anh = duong_anh
+        self._ham_clip = duong_clip
+        self._chon_nhieu = bool(chon_nhieu)
+        self._tao_lai = tao_lai
+        self._gia_cua = gia_cua
+        self._xong = xong
         #: Kênh dựng theo CÚ MÁY DÀI: `6-clip/N.mp4` chỉ là lát cắt ra từ
         #: cú máy chung của cả chuỗi, nên tạo lại riêng một cảnh chưa ra
         #: hình mới. Phải nói ra, không được để tool hứa suông.
         self._noi_canh = bool(noi_canh)
         #: Lời nhắc lúc mở hộp, để biết chữ nào người dùng đã sửa.
-        self._goc: Dict[int, Tuple[str, str]] = {
-            self._so(c): (str(c.get("img_prompt") or "").strip(),
-                          str(c.get("video_prompt") or "").strip())
-            for c in self._canh}
+        self._goc: Dict[int, Tuple[str, str]] = {}
         #: Đang đổ dữ liệu vào bảng — đừng coi đó là người dùng đang sửa.
         self._dang_do = False
         #: Chữ đang chạy TỪ ô lớn xuống bảng — đừng đổ ngược lên lại, nếu
         #: không con trỏ nhảy về đầu ô sau mỗi phím gõ.
         self._tu_o_lon = False
         self._cho_anh: List[Tuple[int, str]] = []
-
-        self.setWindowTitle("Bảng cảnh")
-        self.resize(1120, 700)
+        self._nut_lam: Optional[Any] = None
+        self._nut_chon: Optional[Any] = None
+        self._nhan_gia: Optional[QLabel] = None
 
         doc = QVBoxLayout(self)
-        doc.setContentsMargins(20, 18, 20, 18)
+        doc.setContentsMargins(0, 0, 0, 0)
         doc.setSpacing(10)
-        doc.addWidget(nhan("Bảng cảnh", "h2"))
-        doc.addWidget(self._phu(
+        if tieu_de:
+            doc.addWidget(nhan(tieu_de, "h2"))
+        doc.addWidget(self._phu(loi_mo_dau if loi_mo_dau is not None else (
             "Bấm một cảnh rồi sửa lời nhắc ở hai ô bên dưới. Sửa cảnh nào là "
             "tôi làm lại cảnh ấy — sửa lời nhắc ẢNH thì làm lại cả ảnh lẫn "
             "clip, chỉ sửa lời nhắc VIDEO thì giữ ảnh, chỉ dựng lại clip. "
-            "Cảnh bạn không sửa thì không ai đụng tới."))
+            "Cảnh bạn không sửa thì không ai đụng tới.")))
         if self._noi_canh:
             canh_bao = self._phu(
                 "⚠ Kênh này dựng theo CÚ MÁY DÀI: nhiều cảnh liền nhau là "
@@ -110,22 +202,30 @@ class HopBangCanh(QDialog):
             doc.addWidget(canh_bao)
 
         self._bang = self._dung_bang()
-        doc.addWidget(self._bang, 1)
+        if cao_bang > 0:
+            self._bang.setFixedHeight(int(cao_bang))
+            doc.addWidget(self._bang)
+        else:
+            doc.addWidget(self._bang, 1)
 
         doc.addWidget(self._khoi_sua())
+        if self._chon_nhieu:
+            doc.addWidget(self._khoi_chon())
 
         self._nhan_dem = self._phu("")
         doc.addWidget(self._nhan_dem)
 
-        hang = HangXuongDong()
-        self._nut_lam = nut_chinh("Tạo lại", self._giao, rong=230)
-        self._nut_lam.setEnabled(False)
-        hang.addWidget(self._nut_lam)
-        hang.addWidget(nut_phu("Đóng", self.reject, rong=100))
-        doc.addLayout(hang)
+        if hien_nut_lam or nut_dong is not None:
+            hang = HangXuongDong()
+            if hien_nut_lam:
+                self._nut_lam = nut_chinh("Tạo lại", self._giao, rong=230)
+                self._nut_lam.setEnabled(False)
+                hang.addWidget(self._nut_lam)
+            if nut_dong is not None:
+                hang.addWidget(nut_phu("Đóng", nut_dong, rong=100))
+            doc.addLayout(hang)
 
-        self._do_bang()
-        self._chon_canh(canh_dau)
+        self.dat_canh(self._canh, canh_dau=canh_dau)
         self._dong_ho = QTimer(self)
         self._dong_ho.setInterval(self.NHIP_ANH_MS)
         self._dong_ho.timeout.connect(self._nhip_anh)
@@ -164,9 +264,10 @@ class HopBangCanh(QDialog):
             return 0
 
     def _dung_bang(self) -> QTableWidget:
-        bang = QTableWidget(0, 5)
+        bang = QTableWidget(0, 7)
         bang.setHorizontalHeaderLabels(
-            ["#", "Ảnh", "Lời đọc", "Lời nhắc ảnh", "Lời nhắc video"])
+            ["", "#", "Giây", "Ảnh", "Lời đọc", "Lời nhắc ảnh",
+             "Lời nhắc video"])
         bang.verticalHeader().setVisible(False)
         # Bảng chỉ để NHÌN và chọn; gõ thì gõ ở hai ô lớn bên dưới. Cho sửa cả
         # hai chỗ là hai đường vào cùng một thứ, và ô sửa của Qt chỉ cao một
@@ -182,14 +283,17 @@ class HopBangCanh(QDialog):
             " color:{2}; font-size:12px;".format(theme.THE_MO, theme.VIEN,
                                                  theme.CHU_MO))
         tieu = bang.horizontalHeader()
-        for cot, rong in ((COT_SO, 52), (COT_ANH, self.CO_ANH[0] + 16),
-                          (COT_DOC, 280)):
+        for cot, rong in ((COT_CHON, 34), (COT_SO, 46), (COT_GIAY, 118),
+                          (COT_ANH, self.CO_ANH[0] + 16), (COT_DOC, 240)):
             tieu.setSectionResizeMode(cot, QHeaderView.Fixed)
             bang.setColumnWidth(cot, rong)
         tieu.setSectionResizeMode(COT_LOI_ANH, QHeaderView.Stretch)
         tieu.setSectionResizeMode(COT_LOI_CLIP, QHeaderView.Stretch)
+        # Không cho chọn nhiều thì cột tick chỉ tổ chiếm chỗ.
+        bang.setColumnHidden(COT_CHON, not self._chon_nhieu)
         bang.itemSelectionChanged.connect(self._nap_o_lon)
         bang.itemDoubleClicked.connect(self._bam_dup)
+        bang.itemChanged.connect(self._o_doi)
         return bang
 
     def _khoi_sua(self) -> QWidget:
@@ -229,14 +333,117 @@ class HopBangCanh(QDialog):
         hang.addLayout(cot)
         return o
 
+    # ── Tick vài cảnh rồi làm lại đúng những cảnh ấy (Prompt Visuals) ─────────
+
+    def _khoi_chon(self) -> QWidget:
+        khung = QWidget()
+        khung.setMinimumWidth(1)
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+        hang = HangXuongDong()
+        hang.addWidget(nut_phu("Tick 3 cảnh đầu", lambda: self._tick_dau(3),
+                               rong=140))
+        hang.addWidget(nut_phu("Bỏ tick", lambda: self._tick_dau(0), rong=90))
+        self._o_kieu = QComboBox()
+        self._o_kieu.setMinimumWidth(1)
+        self._o_kieu.addItem("Làm lại ảnh + clip", KIEU_CA_HAI)
+        self._o_kieu.addItem("Chỉ làm lại ảnh", KIEU_ANH)
+        self._o_kieu.addItem("Chỉ làm lại clip", KIEU_CLIP)
+        self._o_kieu.setToolTip(
+            "Clip lấy ảnh của chính cảnh đó làm khung đầu, nên đổi ảnh là nên "
+            "làm lại clip luôn.")
+        self._o_kieu.currentIndexChanged.connect(lambda _i: self._ve_chon())
+        hang.addWidget(self._o_kieu)
+        self._nut_chon = nut_chinh("Tạo lại cảnh đã chọn", self._giao_chon,
+                                   rong=220)
+        self._nut_chon.setEnabled(False)
+        hang.addWidget(self._nut_chon)
+        v.addLayout(hang)
+        self._nhan_gia = self._phu("")
+        v.addWidget(self._nhan_gia)
+        return khung
+
+    def _tick_dau(self, so_dong: int) -> None:
+        """Tick `so_dong` dòng đầu (0 = bỏ tick hết) — lối tắt thử phong cách."""
+        with self._im_lang():
+            for dong in range(self._bang.rowCount()):
+                o = self._bang.item(dong, COT_CHON)
+                if o is not None:
+                    o.setCheckState(Qt.Checked if dong < so_dong
+                                    else Qt.Unchecked)
+        self._ve_chon()
+
+    def da_tick(self) -> List[int]:
+        """Số cảnh của những dòng đang được tick, theo đúng thứ tự bảng."""
+        ra: List[int] = []
+        for dong in range(min(self._bang.rowCount(), len(self._canh))):
+            o = self._bang.item(dong, COT_CHON)
+            if o is not None and o.checkState() == Qt.Checked:
+                ra.append(self._so(self._canh[dong]))
+        return ra
+
+    def kieu_lam_lai(self) -> str:
+        return str(self._o_kieu.currentData() or KIEU_CA_HAI) \
+            if self._chon_nhieu else KIEU_CA_HAI
+
+    def _ve_chon(self) -> None:
+        """Nói TRƯỚC khi bấm: mấy cảnh, làm gì, tốn bao nhiêu."""
+        if self._nut_chon is None:
+            return
+        ds = self.da_tick()
+        self._nut_chon.setEnabled(bool(ds))
+        self._nut_chon.setText("Tạo lại cảnh đã chọn ({0})".format(len(ds)))
+        if self._nhan_gia is None:
+            return
+        if not ds:
+            self._nhan_gia.setText(
+                "Tick ô vuông ở đầu dòng để chọn cảnh muốn làm lại. Cảnh không "
+                "tick thì không ai đụng tới và không tốn đồng nào.")
+            return
+        if self._gia_cua is None:
+            self._nhan_gia.setText("Sẽ làm lại cảnh {0}.".format(_liet(ds)))
+            return
+        self._nhan_gia.setText(self._gia_cua(ds, self.kieu_lam_lai()))
+
+    def _giao_chon(self) -> None:
+        ds = self.da_tick()
+        if not ds or self._tao_lai is None:
+            return
+        self._tao_lai(ds, self.kieu_lam_lai())
+
+    def _o_doi(self, o: QTableWidgetItem) -> None:
+        """Ô tick đổi trạng thái → vẽ lại dòng đếm và giá."""
+        if self._dang_do or o is None or o.column() != COT_CHON:
+            return
+        self._ve_chon()
+
+    # ── Đổ dữ liệu ───────────────────────────────────────────────────────────
+
+    def dat_canh(self, canh: List[Dict[str, Any]], canh_dau: int = 0) -> None:
+        """Nạp một bảng cảnh khác vào (đổi file, mở tệp cũ) — vẽ lại từ đầu."""
+        self._canh = list(canh or [])
+        self._goc = {
+            self._so(c): (str(c.get("img_prompt") or "").strip(),
+                          str(c.get("video_prompt") or "").strip())
+            for c in self._canh}
+        self._cho_anh = []
+        self._do_bang()
+        self._chon_canh(canh_dau)
+        self._ve_chon()
+        if self._cho_anh and hasattr(self, "_dong_ho"):
+            self._dong_ho.start()
+
     def _do_bang(self) -> None:
         with self._im_lang():
             self._bang.setRowCount(len(self._canh))
             for dong, c in enumerate(self._canh):
                 so = self._so(c)
                 img, video = self._goc.get(so, ("", ""))
+                self._bang.setItem(dong, COT_CHON, self._o_tick())
                 self._bang.setItem(dong, COT_SO, self._o_khoa(str(so)))
-                self._bang.setItem(dong, COT_ANH, self._o_anh(so))
+                self._bang.setItem(dong, COT_GIAY, self._o_giay(c))
+                self._bang.setItem(dong, COT_ANH, self._o_anh(c))
                 self._bang.setItem(dong, COT_DOC, self._o_khoa(loi_doc_cua(c)))
                 self._bang.setItem(dong, COT_LOI_ANH, self._o_khoa(img))
                 self._bang.setItem(dong, COT_LOI_CLIP, self._o_khoa(video))
@@ -260,10 +467,27 @@ class HopBangCanh(QDialog):
             o.setToolTip(chu)
         return o
 
-    def _o_anh(self, so: int) -> QTableWidgetItem:
+    @staticmethod
+    def _o_tick() -> QTableWidgetItem:
+        o = QTableWidgetItem("")
+        o.setFlags((o.flags() & ~Qt.ItemIsEditable) | Qt.ItemIsUserCheckable)
+        o.setCheckState(Qt.Unchecked)
+        o.setToolTip("Tick để chọn cảnh này cho nút “Tạo lại cảnh đã chọn”.")
+        return o
+
+    def _o_giay(self, canh: Dict[str, Any]) -> QTableWidgetItem:
+        """Ô **Giây**: cảnh này nằm ở đoạn nào của lời đọc, dài bao lâu."""
+        o = QTableWidgetItem(chu_giay(canh))
+        o.setFlags(o.flags() & ~Qt.ItemIsEditable)
+        o.setTextAlignment(Qt.AlignCenter)
+        o.setToolTip(_nhac_giay(canh))
+        return o
+
+    def _o_anh(self, canh: Dict[str, Any]) -> QTableWidgetItem:
         """Ô ảnh: chữ nói ngay tình trạng, ảnh nhỏ nạp sau theo nhịp đồng hồ."""
+        so = self._so(canh)
         duong = self._duong_anh(so)
-        co = os.path.isfile(duong)
+        co = bool(duong) and os.path.isfile(duong)
         o = self._o_khoa("" if co else "chưa có ảnh")
         o.setTextAlignment(Qt.AlignCenter)
         o.setData(Qt.UserRole, so)
@@ -272,15 +496,46 @@ class HopBangCanh(QDialog):
             self._cho_anh.append((so, duong))
         else:
             o.setForeground(QColor(theme.CHU_MO))
-            o.setToolTip("Cảnh này chưa tạo ảnh. Sửa lời nhắc rồi bấm “Tạo "
-                         "lại” là tôi làm nó.")
+            o.setToolTip("Cảnh này chưa có ảnh. Sửa lời nhắc rồi bấm tạo lại "
+                         "là tôi làm nó.")
         return o
 
+    def _canh_theo_so(self, so: int) -> Dict[str, Any]:
+        for c in self._canh:
+            if self._so(c) == int(so or 0):
+                return c
+        return {}
+
     def _duong_anh(self, so: int) -> str:
+        if self._ham_anh is not None:
+            return str(self._ham_anh(self._canh_theo_so(so)) or "")
         return os.path.join(self._duong, "5-anh", "{0}.png".format(so))
 
     def _duong_clip(self, so: int) -> str:
+        if self._ham_clip is not None:
+            return str(self._ham_clip(self._canh_theo_so(so)) or "")
         return os.path.join(self._duong, "6-clip", "{0}.mp4".format(so))
+
+    def dat_anh(self, so_canh: int, duong: str) -> None:
+        """Cảnh `so_canh` vừa có ảnh mới trên đĩa → thay tấm nhỏ trong bảng.
+
+        Gọi sau khi một việc tạo ảnh xong: khách thấy ngay kết quả trên chính
+        dòng mình vừa chọn, không phải mở thư mục ra dò.
+        """
+        if not duong or not os.path.isfile(duong):
+            return
+        for dong in range(self._bang.rowCount()):
+            o = self._bang.item(dong, COT_ANH)
+            if o is None or int(o.data(Qt.UserRole) or 0) != int(so_canh or 0):
+                continue
+            with self._im_lang():
+                o.setText("")
+                o.setForeground(QColor(theme.CHU))
+                o.setToolTip("Bấm đúp để mở ảnh gốc cho to.")
+            self._cho_anh.append((int(so_canh), duong))
+            if hasattr(self, "_dong_ho"):
+                self._dong_ho.start()
+            return
 
     # ── Ảnh nhỏ: một tấm mỗi nhịp ────────────────────────────────────────────
 
@@ -335,8 +590,9 @@ class HopBangCanh(QDialog):
             self._sua_clip.setPlainText(self._chu(dong, COT_LOI_CLIP))
             self._sua_anh.setEnabled(True)
             self._sua_clip.setEnabled(True)
-            self._nhan_sua.setText("Đang sửa cảnh {0} — {1}".format(
+            self._nhan_sua.setText("Đang sửa cảnh {0} ({1}) — {2}".format(
                 self._so(self._canh[dong]),
+                chu_giay(self._canh[dong]),
                 loi_doc_cua(self._canh[dong])[:90] or "(không có lời đọc)"))
 
     def _go_o_lon(self, cot: int, o_lon: QPlainTextEdit) -> None:
@@ -395,7 +651,7 @@ class HopBangCanh(QDialog):
             return
         so = int(o.data(Qt.UserRole) or 0)
         for duong in (self._duong_anh(so), self._duong_clip(so)):
-            if os.path.isfile(duong):
+            if duong and os.path.isfile(duong):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(duong))
                 return
 
@@ -404,6 +660,29 @@ class HopBangCanh(QDialog):
     def _chu(self, dong: int, cot: int) -> str:
         o = self._bang.item(dong, cot)
         return (o.text() if o is not None else "").strip()
+
+    def loi_nhac_hien(self) -> Dict[int, Tuple[str, str]]:
+        """`{số cảnh: (lời nhắc ảnh, lời nhắc video)}` **đang hiện trên bảng**.
+
+        Bên Prompt Visuals, nút "Lưu chỉnh sửa vào Excel" hỏi đúng hàm này —
+        ghi lại y chữ khách đang nhìn thấy, không đọc lại file.
+        """
+        ra: Dict[int, Tuple[str, str]] = {}
+        for dong in range(min(self._bang.rowCount(), len(self._canh))):
+            ra[self._so(self._canh[dong])] = (self._chu(dong, COT_LOI_ANH),
+                                              self._chu(dong, COT_LOI_CLIP))
+        return ra
+
+    def loi_nhac_cua(self, so_canh: int) -> Tuple[str, str]:
+        return self.loi_nhac_hien().get(int(so_canh or 0), ("", ""))
+
+    def chot_goc(self) -> None:
+        """Vừa lưu xong: coi chữ đang hiện là bản gốc, xoá dấu "đã sửa"."""
+        self._goc = dict(self.loi_nhac_hien())
+        with self._im_lang():
+            for dong in range(self._bang.rowCount()):
+                self._danh_dau(dong)
+        self._ve_dem()
 
     def _da_sua(self) -> Dict[int, Tuple[Optional[str], Optional[str]]]:
         """`{số cảnh: (lời nhắc ảnh mới hay None, lời nhắc video mới hay None)}`.
@@ -414,7 +693,7 @@ class HopBangCanh(QDialog):
         đúng dòng người dùng gõ mới vào đây.
         """
         sua: Dict[int, Tuple[Optional[str], Optional[str]]] = {}
-        for dong in range(self._bang.rowCount()):
+        for dong in range(min(self._bang.rowCount(), len(self._canh))):
             so = self._so(self._canh[dong])
             cu_anh, cu_clip = self._goc.get(so, ("", ""))
             moi_anh = self._chu(dong, COT_LOI_ANH)
@@ -441,6 +720,19 @@ class HopBangCanh(QDialog):
         """Nói TRƯỚC khi bấm: sắp làm lại đúng những cảnh nào, và làm gì."""
         sua = self._da_sua()
         anh, clip = self.chia_viec(sua)
+        if self._nut_lam is None:
+            # Không có nút "Tạo lại" ở đây (Prompt Visuals lưu vào Excel bằng
+            # nút riêng) — chỉ nói cho biết đã động vào những cảnh nào.
+            if not sua:
+                self._nhan_dem.setText(
+                    "{0} cảnh. Bấm một dòng rồi sửa lời nhắc ở hai ô trên."
+                    .format(len(self._canh)))
+            else:
+                self._nhan_dem.setText(
+                    "{0} cảnh · đã sửa lời nhắc cảnh {1} — bấm “Lưu chỉnh sửa "
+                    "vào Excel” để ghi lại.".format(len(self._canh),
+                                                    _liet(sorted(sua))))
+            return
         self._nut_lam.setEnabled(bool(sua))
         if not sua:
             self._nut_lam.setText("Tạo lại")
@@ -457,15 +749,55 @@ class HopBangCanh(QDialog):
         self._nhan_dem.setText("{0} cảnh · {1}".format(
             len(self._canh), " · ".join(phan)))
 
-    # ── Hai nút ──────────────────────────────────────────────────────────────
+    # ── Giao việc ────────────────────────────────────────────────────────────
 
     def _giao(self) -> None:
         sua = self._da_sua()
-        if not sua:
+        if not sua or self._xu_ly is None:
             return
         if self._xu_ly(sua) is False:
             return      # không giao được thì để hộp mở, đừng nuốt chữ vừa gõ
-        self.accept()
+        if self._xong is not None:
+            self._xong()
+
+
+class HopBangCanh(QDialog):
+    """Cửa sổ bảng cảnh của tab Tự động — ruột dùng chung `BangCanhWidget`."""
+
+    CO_ANH = BangCanhWidget.CO_ANH
+    NHIP_ANH_MS = BangCanhWidget.NHIP_ANH_MS
+
+    def __init__(self, xu_ly: Callable[[Dict[int, Tuple[Optional[str], Optional[str]]]], Any],
+                 canh: List[Dict[str, Any]], duong_luot: str,
+                 cha: Optional[QWidget] = None, canh_dau: int = 0,
+                 noi_canh: bool = False):
+        super().__init__(cha)
+        self.setWindowTitle("Bảng cảnh")
+        self.resize(1120, 700)
+        doc = QVBoxLayout(self)
+        doc.setContentsMargins(20, 18, 20, 18)
+        doc.setSpacing(10)
+        self._noi_dung = BangCanhWidget(
+            xu_ly, canh, duong_luot, self, canh_dau=canh_dau,
+            noi_canh=noi_canh, xong=self.accept, nut_dong=self.reject)
+        doc.addWidget(self._noi_dung, 1)
+        # Bên ngoài (và bài kiểm) vẫn gọi đúng những tên cũ.
+        self._bang = self._noi_dung._bang
+        self._sua_anh = self._noi_dung._sua_anh
+        self._sua_clip = self._noi_dung._sua_clip
+        self._nut_lam = self._noi_dung._nut_lam
+        self._canh = self._noi_dung._canh
+
+    chia_viec = staticmethod(BangCanhWidget.chia_viec)
+
+    def _da_sua(self) -> Dict[int, Tuple[Optional[str], Optional[str]]]:
+        return self._noi_dung._da_sua()
+
+    def _giao(self) -> None:
+        self._noi_dung._giao()
+
+    def _chon_canh(self, so_canh: int) -> None:
+        self._noi_dung._chon_canh(so_canh)
 
     def reject(self) -> None:  # noqa: N802 — tên do Qt quy định
         """Đóng khi còn chữ chưa giao thì hỏi lại — gõ mười phút rồi mất là

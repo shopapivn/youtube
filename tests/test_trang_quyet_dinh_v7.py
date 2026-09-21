@@ -12,7 +12,9 @@ import pytest
 
 pytest.importorskip("PyQt5.QtWidgets", reason="máy chạy test không có giao diện")
 
-from test_cong_thuc_v7 import A, KENH, W1, _ghi, _raw_join, dung_kenh  # noqa: E402 — tests/ nằm sẵn trong sys.path
+from test_cong_thuc_v7 import (  # noqa: E402 — tests/ nằm sẵn trong sys.path
+    A, BAY_GIO, KENH, W1, _ghi, _raw_join, dung_kenh,
+)
 
 _APP_GIU = None
 
@@ -44,13 +46,26 @@ class _AppGia:
 
 
 @pytest.fixture
-def trang(tmp_path):
+def trang(tmp_path, monkeypatch):
     global _APP_GIU
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PyQt5.QtWidgets import QApplication
 
     _APP_GIU = QApplication.instance() or QApplication([])
     from ui_qt.trang_cong_thuc_v7 import TrangCongThucV7
+
+    # ĐỒNG HỒ ĐỨNG YÊN. Kênh giả có ngày đăng cố định (17/09/2026); trang này
+    # gọi `v7.cham(goc, kênh)` không truyền mốc nên nó chấm theo ngày THẬT của
+    # máy — mấy hôm sau, video "mới" hết mới và số video thắng tụt (3 → 2 vào
+    # 21/09). Bài ở tầng lõi vốn đã truyền `BAY_GIO`; ở đây phải ghim y như vậy,
+    # không thì bài kiểm tự hỏng theo lịch chứ không theo mã.
+    # Trang nhập `core.cong_thuc_v7` NGAY TRONG hàm (`from core import
+    # cong_thuc_v7 as v7`), nên phải ghim ở chính mô-đun lõi.
+    from core import cong_thuc_v7 as v7_loi
+
+    cham_that = v7_loi.cham
+    monkeypatch.setattr(v7_loi, "cham",
+                        lambda goc, kenh, **k: cham_that(goc, kenh, **{**k, "bay_gio": BAY_GIO}))
 
     goc = dung_kenh(tmp_path)
     app = _AppGia(goc)

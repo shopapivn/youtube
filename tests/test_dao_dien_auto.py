@@ -208,7 +208,7 @@ class TestXlsxCoDan:
         lo = wb["locations"]
         assert lo.cell(2, 1).value == "loc1" and lo.cell(2, 6).value == "loc1.png"
         assert "story_map" in wb.sheetnames
-        ws = wb.worksheets[0]
+        ws = wb["scenes"]
         dau = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
         cot = dau.index("reference_files") + 1
         assert json.loads(ws.cell(2, cot).value) == ["nv1.png", "loc1.png"]
@@ -222,7 +222,7 @@ class TestXlsxCoDan:
         wb = load_workbook(duong)
         nv = wb["characters"]
         assert nv.cell(2, 1).value == "nv1" and "locations" not in wb.sheetnames
-        ws = wb.worksheets[0]
+        ws = wb["scenes"]
         dau = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
         assert json.loads(ws.cell(2, dau.index("reference_files") + 1).value) == ["nv1.png"]
 

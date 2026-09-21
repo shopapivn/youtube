@@ -100,6 +100,10 @@ so_ban_va: 2
 #  bìa — không gọi AI viết lại (bỏ hẳn lượt gọi ấy). Đọc ảnh bìa hỏng thì chữ
 #  bìa lấy đúng tiêu đề đối thủ, không làm vỡ lượt chạy.
 che_do_tieu_de: "nguyen_goc"
+#  Nhãn đầu tiêu đề: đối thủ tự gắn nhãn theo kênh CỦA HỌ (雑学, グレーな心理学…), không phải của kênh
+#  mình. Tra thật trên kênh sống 18/09/2026 (yt-dlp): 9/12 video đã đăng có nhãn khoa học tâm lý/não
+#  bộ ở đầu, và cả 5 video gần nhất theo Công thức V7 đều có. Rỗng thì không đụng gì.
+nhan_tieu_de: "心理学"
 # ── Nhịp nghỉ giữa các phần ──────────────────────────────────────────────────
 #  Bước rà soát đặt một dòng "---" ở ranh giới các phần; tool chèn đúng chừng
 #  này giây im lặng vào đó khi ghép tiếng. Khán giả có nhịp chuyển mình, và

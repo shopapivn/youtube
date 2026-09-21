@@ -477,12 +477,15 @@ def test_trang_mo_dau_tren_vps(monkeypatch):
     assert CuaSoChinh._trang_mo_dau(cua_so) == "wallet"
 
 
-def test_co_bai_huong_dan_va_dung_dau_thanh_ben():
+def test_khong_hien_trong_tool_cua_khach():
+    """21/09/2026: trang này CHỈ dùng ở bản tool trên VPS của chủ dự án; tool
+    khách không được có nó trên thanh bên (*"mục tự chạy không cần"*). Bài
+    hướng dẫn vẫn giữ để bản VPS dùng."""
     from ui_qt.app import NHOM_TRANG, TRANG
     from ui_qt.huong_dan import HUONG_DAN
 
-    assert TRANG[0] == ("trung_tam", "", "Trung tâm")
-    assert NHOM_TRANG["trung_tam"] == "TỰ CHẠY"
+    assert "trung_tam" not in [k for k, _b, _n in TRANG]
+    assert "trung_tam" not in NHOM_TRANG
     assert HUONG_DAN["trung_tam"]["buoc"] and HUONG_DAN["trung_tam"]["luu_y"]
 
 

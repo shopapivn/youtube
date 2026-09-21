@@ -118,10 +118,12 @@ def test_tab_tu_dong_dung_dau_va_khong_co_icon(cua_so):
     """
     from ui_qt.app import TRANG
 
-    # 18/09/2026: nhóm TỰ CHẠY (một tab "Trung tâm") đứng TRÊN Công cụ YTB —
-    # chỗ duy nhất trông 5 kênh tự chạy, trang mở đầu trên VPS.
-    assert TRANG[0][0] == "trung_tam", "Trung tâm phải đứng đầu thanh bên"
-    assert TRANG[1][0] == "skill", "nhóm Công cụ YTB đứng ngay sau Trung tâm"
+    # 21/09/2026: KHÁCH không thấy vòng tự chạy 5 kênh — nó là tool riêng của
+    # chủ dự án bên máy ảo (*"mục tự chạy trung tâm là của tool ở vps… MyTool
+    # là tool của khách"*). Thanh bên của khách mở đầu bằng Công cụ YTB.
+    assert "trung_tam" not in [k for k, _b, _n in TRANG], \
+        "trang Trung tâm là của bản VPS, không được hiện trong tool của khách"
+    assert TRANG[0][0] == "skill", "nhóm Công cụ YTB đứng đầu thanh bên"
     # Chủ dự án, 31/08/2026: nhóm AUTOMATION bốn tab theo đúng thứ tự họ đọc —
     # "tab 1 là VPS & GPM… tab 4 - QUẢN LÝ KÊNH" — rồi *"Quản lý đẩy xuống
     # dưới cùng đi"*: Tài khoản & Cài đặt chốt sổ thanh bên.

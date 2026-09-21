@@ -22,7 +22,9 @@ import tempfile
 import pytest
 
 from core.auto import LuotChay, TrangThaiKhau
-from core.auto_khau import BoiCanh, _doc_doi_thu, _khau_kich_ban
+from core.auto_khau import (
+    BoiCanh, _chuan_hoa_nhan_tieu_de, _doc_doi_thu, _khau_kich_ban,
+)
 from core.kenh import Kenh, ten_che_do
 
 
@@ -85,6 +87,49 @@ def _chay(bc, kenh, d, dau_vao):
 def _tieu_de_da_ghi(d):
     with open(os.path.join(d, "1-tieu-de.txt"), encoding="utf-8") as f:
         return f.read()
+
+
+class TestChuanHoaNhanTieuDe:
+    """`nguyen_goc` giữ NGUYÊN nội dung đối thủ, chỉ sửa NHÃN THỂ LOẠI ở đầu.
+
+    Chủ dự án, 18/09/2026: video 13 lấy nguyên 【雑学】昔より物欲が減った人の心理 — 【雑学】 là nhãn của kênh
+    NGUỒN, không phải kênh mình. Tra thật trên kênh sống: 9/12 video đã đăng có nhãn khoa học tâm lý/não
+    bộ ở đầu.
+    """
+
+    def test_khong_khai_nhan_thi_khong_dung_gi(self):
+        assert _chuan_hoa_nhan_tieu_de("【雑学】お金持ちほど絶対に買わないもの", "") == \
+            "【雑学】お金持ちほど絶対に買わないもの"
+
+    def test_nhan_khac_thi_doi_chu_trong_ngoac_giu_kieu_ngoac(self):
+        assert _chuan_hoa_nhan_tieu_de("【雑学】お金持ちほど絶対に買わないもの", "心理学") == \
+            "【心理学】お金持ちほど絶対に買わないもの"
+        assert _chuan_hoa_nhan_tieu_de("[グレーな心理学] 縁を切る時にすること", "心理学") == \
+            "[心理学] 縁を切る時にすること"
+
+    def test_dung_nhan_roi_thi_giu_nguyen(self):
+        assert _chuan_hoa_nhan_tieu_de("【心理学】高級ブランドに興味がない人", "心理学") == \
+            "【心理学】高級ブランドに興味がない人"
+        assert _chuan_hoa_nhan_tieu_de("[心理学] 1人の時間を好む人", "心理学") == \
+            "[心理学] 1人の時間を好む人"
+
+    def test_nhan_tuong_duong_khong_bi_ep_doi(self):
+        # 【脳科学】 đang thắng thật trên kênh (dR8fA42KTCY) — không được ép đổi thành 【心理学】.
+        assert _chuan_hoa_nhan_tieu_de("【脳科学】一人でいても寂しくない人の脳", "心理学") == \
+            "【脳科学】一人でいても寂しくない人の脳"
+
+    def test_khong_co_ngoac_dau_thi_them_nhan_giu_nguyen_phan_con_lai(self):
+        # Khớp đúng hình dạng video 8 thật: 【心理学】…| 脳科学 — hai nhãn cùng tồn tại là bình thường.
+        assert _chuan_hoa_nhan_tieu_de(
+            "この5つのことを一人で行っているなら、あなたの知能は思っている以上に特別かもしれません | 脳科学",
+            "心理学",
+        ) == ("【心理学】この5つのことを一人で行っているなら、あなたの知能は思っている以上に特別かもしれません "
+              "| 脳科学")
+
+    def test_rong_hoac_ngoac_lech_cap_khong_vo(self):
+        assert _chuan_hoa_nhan_tieu_de("", "心理学") == ""
+        assert _chuan_hoa_nhan_tieu_de("【lệch cặp không đóng", "心理学") == \
+            "【心理学】【lệch cặp không đóng"
 
 
 class TestTenCheDo:
@@ -211,6 +256,32 @@ class TestLayNguyenTieuDeVaDocBia:
             noi_dung = _tieu_de_da_ghi(d)
         assert "TITLE: của tôi" in noi_dung and "THUMB: bìa tôi" in noi_dung
         assert goi.co_anh == []
+
+
+class TestChuanHoaNhanTrongLuotThat:
+    def test_nhan_khac_duoc_doi_thanh_nhan_kenh_TITLE_khong_dinh_len_THUMB(self):
+        def tai_loi(url):
+            raise OSError("mạng hỏng")
+
+        goi = _GoiChat()  # ảnh hỏng → chữ bìa rơi về đường lui "lấy tiêu đề"
+        lay = lambda *a, **k: _KetGia("G" * 800, "【雑学】お金持ちほど絶対に買わないもの", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=tai_loi)
+            _chay(bc, _kenh(nhan_tieu_de="心理学"), d, {"link": "http://x"})
+            noi_dung = _tieu_de_da_ghi(d)
+        assert "TITLE: 【心理学】お金持ちほど絶対に買わないもの" in noi_dung
+        # Đường lui "ảnh hỏng → lấy tiêu đề làm chữ bìa" chốt chu_bia TRƯỚC khi nhãn được chuẩn hoá,
+        # nên THUMB giữ đúng nết cũ (nguyên văn đối thủ) — nhãn chỉ đụng vào dòng TITLE.
+        assert "THUMB: 【雑学】お金持ちほど絶対に買わないもの" in noi_dung
+
+    def test_khong_khai_nhan_thi_khong_dung_gi_ca_luot_that(self):
+        goi = _GoiChat()
+        lay = lambda *a, **k: _KetGia("G" * 800, "【雑学】お金持ちほど絶対に買わないもの", "abc123")
+        with tempfile.TemporaryDirectory() as d:
+            bc = _bc(d, goi, lay=lay, tai_anh=lambda u: b"jpeg")
+            _chay(bc, _kenh(), d, {"link": "http://x"})  # kênh mặc định: nhan_tieu_de rỗng
+            noi_dung = _tieu_de_da_ghi(d)
+        assert "TITLE: 【雑学】お金持ちほど絶対に買わないもの" in noi_dung
 
 
 class TestDuongLui:

@@ -50,14 +50,19 @@ from core.chia_canh import KHUON_MAC_DINH, nhip_tu_khuon
 from core.prompt_visuals import (
     CHE_DO_CAN_ANH_NV, CHE_DO_KE, CHO_TRONG_KHUON_CHIA, DUOI_CHAN_DUNG,
     LOI_NHAC_XAY_PHONG_CACH, NODE_NGHE, PhongCach, bia_de_xem, boi_canh_de_xem,
-    canh_de_xem, cau_thieu_gi, chi_dan_tu_bo, chi_dan_tu_tra_loi_ai, dan_de_xem,
-    doi_thiet_ke_nhan_vat, dung_boi_canh, dung_workflow, goc_cua_id,
-    ke_hoach_de_xem, khuon_chia_dung_duoc, liet_ke_phong_cach,
-    loi_nhac_thiet_ke_lai, man_de_xem, nhac_de_xem, tom_tat_dan,
+    canh_de_xem, cau_thieu_gi, chi_dan_tu_bo, chi_dan_tu_tra_loi_ai,
+    cot_canh_thieu, dan_de_xem, doi_thiet_ke_nhan_vat, dung_boi_canh,
+    dung_workflow, goc_cua_id, ke_hoach_de_xem, khuon_chia_dung_duoc,
+    liet_ke_phong_cach, loi_nhac_thiet_ke_lai, man_de_xem, nhac_de_xem,
+    tom_tat_dan,
 )
 from core.validate import check_image, check_video
 
 from . import theme
+# MỘT bảng cảnh cho cả hai tab: bảng của tab Tự động (ảnh nhỏ, dấu "đã sửa",
+# bấm đúp mở tệp, cột Giây) nhúng thẳng vào Bước 4 ở đây. Chủ dự án 21/09/2026:
+# Excel *"không thể edit được vì đâu biết scene nào ở giây nào"*.
+from .bang_canh_auto import KIEU_ANH, KIEU_CA_HAI, KIEU_CLIP, BangCanhWidget
 # Mượn NGUYÊN bộ chọn phong cách của hộp Tạo kênh (tab Tự động): bảng 14 phong
 # cách + thẻ ảnh mẫu + cửa sổ xem to (3 ảnh + video mẫu, miễn phí, ship kèm
 # tool). Khách đã học cách dùng nó một lần ở Tạo kênh — ở đây gặp lại đúng nó.
@@ -108,11 +113,20 @@ class TrangPromptVisuals(QWidget):
         #: {mã: PhongCach} của các phong cách đang hiện trong ô chọn — giữ để
         #: khi chạy còn tra được khối chỉ dẫn tiếng Anh của mã đã chọn.
         self._phong_cach: "dict[str, PhongCach]" = {}
-        #: Sổ của BƯỚC 5 (thử vài cảnh thật): khoá việc → số DÒNG trong bảng
-        #: xem (bước 4). Tách ảnh/video hai sổ vì một dòng có cả hai việc.
+        #: Sổ của việc tạo lại ở Bước 4: khoá việc → SỐ CẢNH. Tách ảnh/video
+        #: hai sổ vì một cảnh có thể có cả hai việc. Ghi theo số cảnh chứ
+        #: không theo số dòng: mở tệp khác là dòng xê dịch, mà tiền đã trả cho
+        #: đúng cảnh ấy rồi.
         self._thu_dong_anh: Dict[str, int] = {}
         self._thu_dong_video: Dict[str, int] = {}
-        #: Ảnh thử vừa xong, chờ nối sang clip: dòng → (đường ảnh trên đĩa,
+        #: Số cảnh → kiểu làm lại đang chạy (`anh` / `clip` / `ca_hai`). Khách
+        #: chọn "chỉ làm lại ảnh" thì ảnh xong KHÔNG được tự gửi clip: mỗi clip
+        #: là một lần trừ tiền cho thứ họ vừa bảo đừng làm.
+        self._thu_kieu: Dict[int, str] = {}
+        #: Số cảnh → file Excel LÚC GỬI. Việc chạy cả phút; khách đổi sang file
+        #: khác trong lúc chờ mà ta ghi theo ô đang chọn là ghi đè nhầm file.
+        self._thu_tep: Dict[int, str] = {}
+        #: Ảnh vừa xong, chờ nối sang clip: số cảnh → (đường ảnh trên đĩa,
         #: link máy chủ nếu dùng lại được). Rút ở `cuoi_nhip` — một ảnh có thể
         #: phát nhiều sự kiện liền nhau, gửi ngay trong `nhan_su_kien` là trùng.
         self._thu_cho_noi: Dict[int, Tuple[str, str]] = {}
@@ -149,8 +163,10 @@ class TrangPromptVisuals(QWidget):
         doc.addWidget(self._the_nhap())
         doc.addWidget(self._the_phong_cach())
         doc.addWidget(self._the_chay())
+        # Bước 4 hiện SẴN, kể cả khi chưa chạy lượt nào: trong đó có nút "Mở
+        # tệp cũ" — giấu thẻ đi là hôm sau mở tool lên không còn đường nào vào
+        # lại bảng cảnh của file hôm trước.
         self._the_xem_w = self._the_xem()
-        self._the_xem_w.hide()
         doc.addWidget(self._the_xem_w)
         doc.addStretch(1)
 
@@ -1138,7 +1154,7 @@ class TrangPromptVisuals(QWidget):
         v = QVBoxLayout(khung)
         v.setContentsMargins(18, 16, 18, 18)
         v.setSpacing(10)
-        v.addWidget(nhan("Bước 4 — Xem, sửa prompt và thử vài cảnh thật", "h2"))
+        v.addWidget(nhan("Bước 4 — Xem, sửa prompt và tạo lại từng cảnh", "h2"))
 
         hang = HangXuongDong()
         self._o_xem = QComboBox()
@@ -1146,11 +1162,15 @@ class TrangPromptVisuals(QWidget):
         self._o_xem.setToolTip("Chọn file để xem prompt của nó.")
         self._o_xem.currentIndexChanged.connect(lambda _i: self._ve_xem())
         hang.addWidget(self._o_xem)
+        # Đóng tool rồi mở lại thì bảng này vẫn mở được — trước đây danh sách
+        # file chỉ điền NGAY SAU một lượt chạy, nên hôm sau muốn sửa tiếp là
+        # phải chạy lại từ đầu (tốn tiền) hoặc mở Excel ra tự dò.
+        hang.addWidget(nut_phu("Mở tệp cũ", self._mo_tep_cu, rong=120))
         v.addLayout(hang)
 
         self._nhan_dan = self._chu_phu(
-            "Chạy xong, prompt từng cảnh sẽ hiện ra đây theo đúng thứ tự. Bấm "
-            "vào ô prompt để sửa, rồi bấm “Lưu chỉnh sửa vào Excel”.")
+            "Chưa có gì để xem. Chạy Bước 3 xong prompt từng cảnh sẽ hiện ra "
+            "đây — hoặc bấm “Mở tệp cũ” để mở lại file Excel đã tạo hôm trước.")
         v.addWidget(self._nhan_dan)
 
         # ═══ BỐN TAB: CẢNH · ẢNH BÌA · NHẠC SUNO · NHÂN VẬT & BỐI CẢNH ═══
@@ -1158,9 +1178,20 @@ class TrangPromptVisuals(QWidget):
         # Chủ dự án 24/08/2026: *"excel vẫn chưa có prompt tạo thumbnail và
         # nhạc suno"*. Excel giờ có đủ; mỗi thứ một tab, sửa tại chỗ rồi một
         # nút Lưu ghi cả ba sheet.
-        self._bang_xem = self._bang_sua(
-            ["#", "Lời đọc", "Lời nhắc ảnh", "Lời nhắc video"], co_dinh={0: 40},
-            khong_sua=(0, 1))
+        #
+        # Tab "Cảnh" 21/09/2026 dùng ĐÚNG bảng cảnh của tab Tự động: ảnh nhỏ
+        # từng cảnh, cột Giây (`01:12–01:19 · 7s`), số cảnh đậm lên khi đã sửa,
+        # bấm đúp mở ảnh gốc, tick vài dòng rồi tạo lại đúng mấy cảnh ấy.
+        self._bang_canh = BangCanhWidget(
+            canh=[], duong_luot="", cha=self, tieu_de=None,
+            loi_mo_dau=(
+                "Bấm một dòng rồi sửa lời nhắc ở hai ô bên dưới. Cột Giây cho "
+                "biết cảnh ấy nằm ở đoạn nào của lời đọc. Sửa xong bấm “Lưu "
+                "chỉnh sửa vào Excel”; muốn xem thử hình thì tick vài dòng rồi "
+                "bấm “Tạo lại cảnh đã chọn”."),
+            duong_anh=self._anh_cua_canh, duong_clip=self._clip_cua_canh,
+            hien_nut_lam=False, cao_bang=300, chon_nhieu=True,
+            tao_lai=self._tao_lai_chon, gia_cua=self._gia_lam_lai)
         self._bang_bia = self._bang_sua(
             ["#", "Kiểu", "Lời nhắc ảnh bìa"], co_dinh={0: 40, 1: 130},
             khong_sua=(0, 1))
@@ -1180,7 +1211,7 @@ class TrangPromptVisuals(QWidget):
 
         self._tab_xem = QTabWidget()
         self._tab_xem.setMinimumWidth(1)
-        self._tab_xem.addTab(self._bang_xem, "Cảnh")
+        self._tab_xem.addTab(self._bang_canh, "Cảnh")
         khung_bia = QWidget()
         khung_bia.setMinimumWidth(1)
         vb = QVBoxLayout(khung_bia)
@@ -1213,86 +1244,91 @@ class TrangPromptVisuals(QWidget):
                                 rong=170))
         v.addLayout(hang2)
 
-        # ═══ THỬ VÀI CẢNH THẬT — cùng thẻ, ngay dưới bảng ═══
+        # ═══ KẾT QUẢ TẠO LẠI — cùng thẻ, ngay dưới bảng ═══
         #
         # Chủ dự án 24/08/2026: khách cần *"có chế độ test và ảnh vài video
-        # luôn"* — thấy phong cách thành ẢNH THẬT và CLIP THẬT trên một hai
-        # cảnh trước khi mang cả trăm cảnh sang tab Ảnh & Video. Từng là Bước 5
-        # riêng; gộp vào đây vì nó là việc làm NGAY SAU khi xem prompt, trên
-        # chính bảng này, và bớt một thẻ là bớt một chỗ để lạc.
+        # luôn"* — thấy phong cách thành ẢNH THẬT và CLIP THẬT trước khi mang
+        # cả trăm cảnh sang tab Ảnh & Video. 21/09/2026: không còn ô "thử N
+        # cảnh đầu" riêng nữa — tick dòng nào trong bảng trên thì làm lại đúng
+        # dòng ấy (nút "Tick 3 cảnh đầu" giữ lại lối tắt cũ), vì cảnh cần xem
+        # lại thường là cảnh thứ 47 chứ không phải ba cảnh đầu.
         #
-        # Tiền và nhịp: mỗi cảnh thử = 1 ảnh + 1 clip, giá nói TRƯỚC nút bấm.
-        # Mọi việc đi qua `app.start_batch` — cùng hàng đợi, cùng bộ giữ nhịp
-        # với các tab khác. Ảnh xong thì nối sang clip bằng LINK máy chủ trả
-        # sẵn khi còn dùng được (không đẩy lại ảnh lên mạng — CLAUDE.md luật 5).
-        v.addWidget(nhan("Thử vài cảnh thật", "phu"))
-        v.addWidget(self._chu_phu(
-            "Tạo thử ảnh + clip cho một hai cảnh đầu để xem phong cách có ưng "
-            "không. Chưa ưng thì đổi phong cách hoặc sửa prompt ở trên rồi thử "
-            "lại. Ưng rồi thì mang file Excel sang tab Ảnh & Video → Hàng loạt "
-            "để chạy hết."))
-        hang3 = HangXuongDong()
-        self._so_thu = QComboBox()
-        for n in (1, 2, 3):
-            self._so_thu.addItem("Thử {0} cảnh đầu".format(n), n)
-        self._so_thu.setCurrentIndex(1)
-        self._so_thu.setMinimumWidth(1)
-        self._so_thu.currentIndexChanged.connect(lambda _i: self._ve_gia_thu())
-        hang3.addWidget(self._so_thu)
-        self._nut_thu = nut_chinh("Tạo thử ảnh + video", self._thu_phong_cach)
-        self._nut_thu.setFixedWidth(220)
-        self._nut_thu.setEnabled(False)
-        hang3.addWidget(self._nut_thu)
-        v.addLayout(hang3)
-        # Giá nói trước, cập nhật theo số cảnh và engine đã chọn.
-        self._nhan_gia_thu = self._chu_phu(
-            "Tạo prompt xong (Bước 3) là thử được ngay tại đây.")
-        v.addWidget(self._nhan_gia_thu)
+        # Tiền và nhịp: giá nói TRƯỚC nút bấm, ngay dưới ô chọn. Mọi việc đi
+        # qua `app.start_batch` — cùng hàng đợi, cùng bộ giữ nhịp với các tab
+        # khác. Ảnh xong thì nối sang clip bằng LINK máy chủ trả sẵn khi còn
+        # dùng được (không đẩy lại ảnh lên mạng — CLAUDE.md luật 5).
         self._thu_vien = ThuVienKetQua(
-            "Ảnh và clip thử sẽ hiện ở đây — mỗi cảnh một thẻ ảnh, xong ảnh "
-            "thì clip của đúng cảnh đó tự chạy tiếp.")
+            "Ảnh và clip vừa tạo lại sẽ hiện ở đây — mỗi cảnh một thẻ ảnh, "
+            "xong ảnh thì clip của đúng cảnh đó tự chạy tiếp.")
         self._thu_vien.setMinimumWidth(1)
         self._thu_vien.setFixedHeight(300)
         v.addWidget(self._thu_vien)
         return khung
 
     def _cap_nhat_thu(self) -> None:
-        """Bật/tắt nút thử theo việc đã có cảnh trong bảng Bước 4 hay chưa."""
-        if not hasattr(self, "_nut_thu"):
-            return  # nút thử dựng ở cuối thẻ Bước 4 — lượt vẽ đầu chưa có
-        self._nut_thu.setEnabled(bool(self._canh_hien))
-        self._ve_gia_thu()
+        """Vẽ lại dòng đếm/giá của bảng cảnh sau khi đổi file."""
+        if hasattr(self, "_bang_canh"):
+            self._bang_canh._ve_chon()
 
-    def _ve_gia_thu(self) -> None:
-        if not hasattr(self, "_nhan_gia_thu"):
-            return
-        if not self._canh_hien:
-            self._nhan_gia_thu.setText(
-                "Tạo prompt xong (Bước 3) là thử được ngay tại đây.")
-            return
-        n = min(int(self._so_thu.currentData() or 1), len(self._canh_hien))
-        gia = n * (hold_for_image(1, self._app.prices)
-                   + hold_for_video(ENGINE_PV, self._app.prices))
-        self._nhan_gia_thu.setText(
-            "Thử {0} cảnh = {0} ảnh + {0} clip, tạm giữ khoảng {1}. Việc lỗi "
-            "được hoàn 100%.".format(n, format_vnd(gia)))
+    # ── Ảnh/clip của một cảnh nằm ở đâu ──────────────────────────────────────
+
+    @staticmethod
+    def _anh_cua_canh(canh: dict) -> str:
+        """Ảnh đã tạo của cảnh này — cột `img_path` trong Excel.
+
+        Bảng cảnh lấy đường này để hiện tấm nhỏ. Tab Tự động xếp ảnh theo
+        `5-anh/<số>.png`; ở đây file Excel tự mang đường dẫn, vì ảnh có thể do
+        tab Ảnh & Video hay lượt tạo lại ngay trong tab này sinh ra.
+        """
+        return str((canh or {}).get("img_path") or "")
+
+    @staticmethod
+    def _clip_cua_canh(canh: dict) -> str:
+        return str((canh or {}).get("video_path") or "")
+
+    def _gia_lam_lai(self, ds: List[int], kieu: str) -> str:
+        """Câu giá **nói trước khi bấm**: mấy cảnh, làm gì, tạm giữ bao nhiêu."""
+        n = len(ds)
+        moi = 0
+        if kieu in (KIEU_ANH, KIEU_CA_HAI):
+            moi += hold_for_image(1, self._app.prices)
+        if kieu in (KIEU_CLIP, KIEU_CA_HAI):
+            moi += hold_for_video(ENGINE_PV, self._app.prices)
+        viec = {KIEU_ANH: "{0} ảnh".format(n),
+                KIEU_CLIP: "{0} clip".format(n),
+                KIEU_CA_HAI: "{0} ảnh + {0} clip".format(n)}.get(
+                    kieu, "{0} việc".format(n))
+        return ("Đã chọn {0} cảnh ({1}) = {2}, tạm giữ khoảng {3}. Việc lỗi "
+                "được hoàn 100%.".format(n, _liet_canh(ds), viec,
+                                         format_vnd(n * moi)))
 
     def _thu_muc_thu(self) -> str:
         """Thư mục riêng cho đồ thử, nằm cạnh file Excel — không lẫn với kết
         quả chạy cả loạt."""
         return os.path.join(self._thu_muc.value, "thu-phong-cach")
 
-    def _thu_phong_cach(self) -> None:
-        """Gửi việc tạo ẢNH cho N cảnh đầu; clip nối tiếp khi ảnh xong.
+    def _canh_theo_so(self, so: int) -> dict:
+        for c in self._canh_hien:
+            try:
+                if int(c.get("scene_id") or 0) == int(so):
+                    return c
+            except (TypeError, ValueError):
+                continue
+        return {}
+
+    def _tao_lai_chon(self, ds: List[int], kieu: str) -> None:
+        """Làm lại ĐÚNG những cảnh được tick — ảnh, clip, hay cả hai.
 
         Lấy prompt từ CHÍNH bảng Bước 4 (bản khách vừa sửa), không đọc lại
-        Excel — khách sửa xong bấm thử là thử đúng chữ đang thấy trên màn hình.
+        Excel — khách sửa xong bấm là chạy đúng chữ đang thấy trên màn hình.
         """
+        if not ds:
+            return
         if not self._canh_hien:
             self._app.show_message(
-                "Chưa có cảnh để thử",
+                "Chưa có cảnh nào",
                 "Chạy “Tạo prompt” ở Bước 3 xong là các cảnh hiện ra ở Bước 4, "
-                "lúc đó mới có gì để thử.")
+                "lúc đó mới có gì để tạo lại.")
             return
         if self._app.client is None:
             self._app.show_message(
@@ -1300,26 +1336,33 @@ class TrangPromptVisuals(QWidget):
                 "Tạo ảnh và clip cần ví ShopAPI. Mở tab Tài khoản & Cài đặt, "
                 "gõ email và mật khẩu để đăng nhập trước.")
             return
-        n = min(int(self._so_thu.currentData() or 1), len(self._canh_hien),
-                self._bang_xem.rowCount())
+        self._ghi(self._gia_lam_lai(ds, kieu))
+        duong_tep = self._ket_qua_xem.get(self._o_xem.currentText(), "")
+        for so in ds:
+            self._thu_tep[so] = duong_tep
+        if kieu == KIEU_CLIP:
+            self._tao_lai_clip(ds)
+            return
         thu_muc = self._thu_muc_thu()
-        viec: List[Tuple[int, str, List[str]]] = []   # (dòng, prompt, ảnh tham chiếu trên máy)
-        for dong in range(n):
-            mo_ta = self._o(self._bang_xem, dong, self._COT_ANH)
+        viec: List[Tuple[int, str, List[str]]] = []   # (số cảnh, prompt, ảnh tham chiếu trên máy)
+        for so in ds:
+            mo_ta = self._bang_canh.loi_nhac_cua(so)[0]
             if not mo_ta:
                 continue
             van_de = check_image([mo_ta], n=1, aspect_ratio="16:9")
             if van_de:
                 self._app.show_message(
-                    "Cần sửa prompt cảnh {0}".format(dong + 1),
+                    "Cần sửa lời nhắc ảnh của cảnh {0}".format(so),
                     "\n".join("• " + v for v in van_de))
                 return
-            viec.append((dong, mo_ta, self._tham_chieu_cua_canh(dong)))
+            viec.append((so, mo_ta, self._tham_chieu_cua_canh(so)))
         if not viec:
             self._app.show_message(
-                "Các cảnh đầu chưa có prompt ảnh",
-                "Mở Bước 4, điền “Lời nhắc ảnh” cho các cảnh đầu rồi bấm lại.")
+                "Các cảnh đã chọn chưa có lời nhắc ảnh",
+                "Bấm vào từng cảnh ở bảng trên, điền “Lời nhắc ảnh” rồi bấm "
+                "lại.")
             return
+        self._thu_kieu = {so: kieu for so, _m, _t in viec}
         # Ảnh tham chiếu của các cảnh thử phải đi kèm — không thì con mèo thử ra
         # một con mèo khác và khách kết luận sai về phong cách. Tải lên ở luồng
         # nền (mỗi tệp một lần), rồi mới gửi.
@@ -1343,11 +1386,9 @@ class TrangPromptVisuals(QWidget):
             return
         self._gui_thu(viec, thu_muc, {})
 
-    def _tham_chieu_cua_canh(self, dong: int) -> List[str]:
-        """Đường dẫn ảnh tham chiếu CÓ THẬT trên máy của cảnh ở dòng `dong`."""
-        if dong >= len(self._canh_hien):
-            return []
-        chu = str(self._canh_hien[dong].get("reference_files") or "")
+    def _tham_chieu_cua_canh(self, so_canh: int) -> List[str]:
+        """Đường dẫn ảnh tham chiếu CÓ THẬT trên máy của cảnh số `so_canh`."""
+        chu = str(self._canh_theo_so(so_canh).get("reference_files") or "")
         ra: List[str] = []
         try:
             ds = json.loads(chu) if chu.strip().startswith("[") else chu.split(",")
@@ -1361,24 +1402,62 @@ class TrangPromptVisuals(QWidget):
 
     def _gui_thu(self, viec, thu_muc: str, kho_url: Dict[str, str]) -> None:
         specs: List[JobSpec] = []
-        for dong, mo_ta, cuc_bo in viec:
+        for so, mo_ta, cuc_bo in viec:
             urls = [kho_url[p] for p in cuc_bo if kho_url.get(p)]
             spec = JobSpec(
                 kind=KIND_IMAGE, content=mo_ta, label=mo_ta[:80],
-                index=dong + 1,
+                index=so,
                 params={"n": 1, "aspect_ratio": "16:9",
                         "reference_images": urls or None,
                         "tham_chieu_cuc_bo": [p for p in cuc_bo if kho_url.get(p)] or None},
                 out_dir=thu_muc,
                 estimate_micro=hold_for_image(1, self._app.prices))
-            self._thu_dong_anh[spec.idempotency_key] = dong
+            # Sổ ghi theo SỐ CẢNH, không theo số dòng: đổi file hay mở tệp cũ
+            # là dòng xê dịch, mà tiền thì đã trả cho đúng cảnh ấy rồi.
+            self._thu_dong_anh[spec.idempotency_key] = so
             self._thu_vien.them(spec.idempotency_key, mo_ta, False,
-                                ty_le="16:9", so_canh=dong + 1)
+                                ty_le="16:9", so_canh=so)
             specs.append(spec)
         co_tc = sum(1 for _d, _m, c in viec if c)
-        self._ghi("Thử phong cách: gửi {0} ảnh{1}, clip sẽ tự nối khi ảnh xong."
-                  .format(len(specs), " ({0} cảnh kèm ảnh tham chiếu)".format(co_tc) if co_tc else ""))
+        chi_anh = all(self._thu_kieu.get(s) == KIEU_ANH for s, _m, _c in viec)
+        self._ghi("Tạo lại: gửi {0} ảnh{1}.{2}".format(
+            len(specs),
+            " ({0} cảnh kèm ảnh tham chiếu)".format(co_tc) if co_tc else "",
+            "" if chi_anh else " Clip sẽ tự nối khi ảnh xong."))
         self._app.start_batch(specs, folder=thu_muc)
+
+    def _tao_lai_clip(self, ds: List[int]) -> None:
+        """Chỉ dựng lại CLIP: giữ nguyên ảnh cũ, đẩy nó lên rồi gửi Veo 3.
+
+        Cảnh chưa có ảnh thì nói thẳng — clip lấy ảnh làm khung đầu, không có
+        ảnh là không có gì để dựng.
+        """
+        thieu = [so for so in ds
+                 if not os.path.isfile(self._anh_cua_canh(self._canh_theo_so(so)))]
+        lam = [so for so in ds if so not in thieu]
+        if thieu:
+            self._ghi("Cảnh {0} chưa có ảnh nên chưa dựng clip được — chọn "
+                      "“Làm lại ảnh + clip” cho mấy cảnh ấy."
+                      .format(_liet_canh(thieu)))
+        if not lam:
+            self._app.show_message(
+                "Chưa có ảnh để dựng clip",
+                "Clip lấy ảnh của chính cảnh đó làm khung đầu. Chọn “Làm lại "
+                "ảnh + clip” cho những cảnh này.")
+            return
+        for so in lam:
+            mo_ta = self._bang_canh.loi_nhac_cua(so)[1]
+            if not mo_ta:
+                self._ghi("Cảnh {0} chưa có lời nhắc video — bỏ qua.".format(so))
+                continue
+            duong = self._anh_cua_canh(self._canh_theo_so(so))
+            self._app.run_bg(
+                lambda d=duong: tai_len(self._app.client, d),
+                on_ok=lambda u, s=so, mt=mo_ta: (
+                    self._gui_video_thu(s, mt, str(u)) if u else None),
+                on_err=lambda loi, s=so: self._ghi(
+                    "Cảnh {0}: gửi ảnh lên để làm clip không được ({1})"
+                    .format(s, str(loi)[:80])))
 
     # ── Nhận sự kiện job và nối ảnh thử → clip thử ───────────────────────────
     #
@@ -1408,59 +1487,99 @@ class TrangPromptVisuals(QWidget):
             files = list(getattr(du_lieu, "files", ()) or ())
             if not files:
                 return
-            dong = self._thu_dong_anh[khoa]
+            so = self._thu_dong_anh[khoa]
+            # Ảnh mới về: ghi vào bảng cảnh + vào Excel, rồi thay tấm nhỏ ở
+            # đúng dòng — khách thấy kết quả ngay trên dòng vừa tick.
+            self._ghi_ket_qua_canh(so, img_path=str(files[0]))
             link = list(getattr(du_lieu, "urls", ()) or ())
             url = str(link[0]) if link and link_dung_lai_duoc(link[0]) else ""
-            self._thu_cho_noi[dong] = (files[0], url)
+            if self._thu_kieu.get(so) != KIEU_ANH:
+                self._thu_cho_noi[so] = (files[0], url)
         elif khoa in self._thu_dong_video:
             self._thu_vien.cap_nhat(du_lieu)
+            if str(getattr(du_lieu, "status", "")) != STATUS_DONE:
+                return
+            files = list(getattr(du_lieu, "files", ()) or ())
+            if files:
+                self._ghi_ket_qua_canh(self._thu_dong_video[khoa],
+                                       video_path=str(files[0]))
+
+    def _ghi_ket_qua_canh(self, so_canh: int, img_path: str = "",
+                          video_path: str = "") -> None:
+        """Ảnh/clip vừa xong → ghi đường dẫn vào cảnh, vào Excel, và lên bảng.
+
+        Ghi cả vào file để lần sau mở lên (kể cả bằng VE3 hay tab Ảnh & Video)
+        vẫn biết cảnh này đã có hình rồi — không trả tiền làm lại lần nữa.
+        """
+        duong = self._thu_tep.get(int(so_canh), "") or \
+            self._ket_qua_xem.get(self._o_xem.currentText(), "")
+        # Vẫn đang xem đúng file đã gửi việc thì mới đổi bảng trên màn hình;
+        # khách mở file khác trong lúc chờ thì chỉ ghi xuống đĩa.
+        dang_xem = duong == self._ket_qua_xem.get(self._o_xem.currentText(), "")
+        canh = self._canh_theo_so(so_canh) if dang_xem else {}
+        gia: Dict[str, str] = {}
+        if img_path:
+            canh["img_path"] = img_path
+            canh["status_img"] = "done"
+            gia.update({"img_path": img_path, "status_img": "done"})
+            if dang_xem:
+                self._bang_canh.dat_anh(so_canh, img_path)
+        if video_path:
+            canh["video_path"] = video_path
+            canh["status_vid"] = "done"
+            gia.update({"video_path": video_path, "status_vid": "done"})
+        if not gia or not duong or not os.path.isfile(duong):
+            return
+        try:
+            self._ghi_cot_vao_xlsx(duong, "scenes", "scene_id",
+                                   {str(int(so_canh)): gia})
+        except Exception as loi:  # noqa: BLE001 — ghi hỏng không được giết tab
+            self._ghi("Cảnh {0}: có hình rồi nhưng chưa ghi được vào Excel "
+                      "({1}). Đóng file Excel đang mở rồi bấm “Lưu chỉnh sửa "
+                      "vào Excel”.".format(so_canh, str(loi)[:80]))
 
     def cuoi_nhip(self) -> None:
-        """Ảnh thử nào xong thì đẩy tiếp thành clip. Gọi mỗi nhịp bơm cửa sổ."""
+        """Ảnh nào xong thì đẩy tiếp thành clip. Gọi mỗi nhịp bơm cửa sổ."""
         if not self._thu_cho_noi:
             return
         sang = dict(self._thu_cho_noi)
         self._thu_cho_noi.clear()
-        for dong, (duong_anh, url) in sang.items():
-            mo_ta = self._o(self._bang_xem, dong, self._COT_VIDEO)
+        for so, (duong_anh, url) in sang.items():
+            mo_ta = self._bang_canh.loi_nhac_cua(so)[1]
             if not mo_ta:
-                self._ghi("Cảnh {0} không có prompt video — chỉ thử ảnh."
-                          .format(dong + 1))
+                self._ghi("Cảnh {0} không có lời nhắc video — chỉ tạo ảnh."
+                          .format(so))
                 continue
             if url:
                 # Link máy chủ trả sẵn: gửi clip luôn, không đẩy ảnh lên lại.
-                self._gui_video_thu(dong, mo_ta, url)
+                self._gui_video_thu(so, mo_ta, url)
             elif self._app.client is not None and os.path.isfile(duong_anh):
                 self._app.run_bg(
                     lambda d=duong_anh: tai_len(self._app.client, d),
-                    on_ok=lambda u, dg=dong, mt=mo_ta: (
-                        self._gui_video_thu(dg, mt, str(u)) if u else None),
-                    on_err=lambda loi, dg=dong: self._ghi(
+                    on_ok=lambda u, s=so, mt=mo_ta: (
+                        self._gui_video_thu(s, mt, str(u)) if u else None),
+                    on_err=lambda loi, s=so: self._ghi(
                         "Cảnh {0}: gửi ảnh lên để làm clip không được ({1})"
-                        .format(dg + 1, str(loi)[:80])))
+                        .format(s, str(loi)[:80])))
 
-    def _gui_video_thu(self, dong: int, mo_ta: str, url: str) -> None:
+    def _gui_video_thu(self, so_canh: int, mo_ta: str, url: str) -> None:
         van_de = check_video([mo_ta], engine=ENGINE_PV, aspect_ratio="16:9",
                              image_url=url)
         if van_de:
-            self._ghi("Cảnh {0}: prompt video chưa đạt — {1}".format(
-                dong + 1, "; ".join(van_de)))
+            self._ghi("Cảnh {0}: lời nhắc video chưa đạt — {1}".format(
+                so_canh, "; ".join(van_de)))
             return
         thu_muc = self._thu_muc_thu()
         spec = JobSpec(
-            kind=KIND_VIDEO, content=mo_ta, label=mo_ta[:80], index=dong + 1,
+            kind=KIND_VIDEO, content=mo_ta, label=mo_ta[:80], index=so_canh,
             params={"engine": ENGINE_PV, "duration": 8,
                     "aspect_ratio": "16:9", "image_url": url},
             out_dir=thu_muc,
             estimate_micro=hold_for_video(ENGINE_PV, self._app.prices))
-        self._thu_dong_video[spec.idempotency_key] = dong
+        self._thu_dong_video[spec.idempotency_key] = so_canh
         self._thu_vien.them(spec.idempotency_key, mo_ta, True,
-                            ty_le="16:9", so_canh=dong + 1)
+                            ty_le="16:9", so_canh=so_canh)
         self._app.start_batch([spec], folder=thu_muc)
-
-    #: Chỉ số cột trong bảng Cảnh — bước Thử và nút Lưu đọc theo đây.
-    _COT_ANH = 2
-    _COT_VIDEO = 3
 
     def _bang_sua(self, cot: List[str], co_dinh: Dict[int, int],
                   khong_sua: Tuple[int, ...]) -> QTableWidget:
@@ -1517,19 +1636,75 @@ class TrangPromptVisuals(QWidget):
         self._ket_qua_xem = {}
         for d in ds:
             self._ket_qua_xem[os.path.basename(d)] = d
+        self._ve_o_xem(len(self._ket_qua_xem) - 1)
+
+    def _ve_o_xem(self, chon: int = -1) -> None:
+        """Vẽ lại ô chọn file rồi hiện file thứ `chon` (mặc định: file cuối)."""
         self._o_xem.blockSignals(True)
         self._o_xem.clear()
         for ten in self._ket_qua_xem:
             self._o_xem.addItem(ten)
         self._o_xem.blockSignals(False)
         self._o_xem.setVisible(len(self._ket_qua_xem) > 1)
-        # Có kết quả thì thẻ Bước 4 mới hiện ra — trước đó nó không có gì để
-        # nói với khách.
-        co = bool(self._ket_qua_xem)
-        self._the_xem_w.setVisible(co)
-        if co:
-            self._o_xem.setCurrentIndex(self._o_xem.count() - 1)
-            self._ve_xem()
+        if self._ket_qua_xem:
+            if not 0 <= chon < self._o_xem.count():
+                chon = self._o_xem.count() - 1
+            self._o_xem.setCurrentIndex(chon)
+        self._ve_xem()
+
+    def _mo_tep_cu(self) -> None:
+        """Mở một file Excel bảng cảnh đã có sẵn trên máy vào Bước 4.
+
+        Trước 21/09/2026 danh sách file chỉ điền NGAY SAU một lượt chạy: đóng
+        tool là mất đường vào, hôm sau muốn sửa tiếp phải chạy lại cả lượt
+        (tiền thật) hoặc mở Excel ra tự dò. Kiểm cột theo TÊN rồi mới mở, và
+        thiếu cột thì nói thẳng thiếu cột gì.
+        """
+        duong, _ = QFileDialog.getOpenFileName(
+            self, "Mở file Excel bảng cảnh", self._thu_muc.value or "",
+            "Excel (*.xlsx);;Tất cả (*.*)")
+        if not duong:
+            return
+        try:
+            thieu = self._cot_thieu_cua_file(duong)
+        except Exception as loi:  # noqa: BLE001 — file hỏng không được giết tab
+            self._app.show_message(
+                "Chưa mở được file này",
+                "Tôi không đọc được {0}.\n\n({1})\n\nNếu file đang mở trong "
+                "Excel thì đóng nó lại rồi thử lại.".format(
+                    os.path.basename(duong), str(loi)[:200]))
+            return
+        if thieu:
+            self._app.show_message(
+                "File này không phải bảng cảnh",
+                "Mở {0} ra thì trang “scenes” trong đó thiếu cột: {1}.\n\nHãy "
+                "chọn file Excel do Bước 3 tạo ra (tên thường có chữ "
+                "“prompts”).".format(os.path.basename(duong),
+                                     ", ".join(thieu)))
+            return
+        self._ket_qua_xem[os.path.basename(duong)] = duong
+        if not self._thu_muc_da_xuat:
+            self._thu_muc_da_xuat = os.path.dirname(duong)
+        self._ve_o_xem(list(self._ket_qua_xem).index(os.path.basename(duong)))
+        self._ghi("Đã mở {0} để xem và sửa.".format(os.path.basename(duong)))
+
+    @staticmethod
+    def _cot_thieu_cua_file(duong: str) -> List[str]:
+        """Sheet `scenes` của file này thiếu cột bắt buộc nào (tra theo tên)."""
+        from openpyxl import load_workbook  # noqa: PLC0415
+
+        wb = load_workbook(duong, read_only=True, data_only=True)
+        try:
+            if "scenes" not in wb.sheetnames:
+                return ["scenes (cả trang)"]
+            hang = []
+            for i, r in enumerate(wb["scenes"].iter_rows(values_only=True)):
+                hang.append(list(r))
+                if i >= 1:
+                    break
+            return cot_canh_thieu(hang)
+        finally:
+            wb.close()
 
     def _ve_xem(self) -> None:
         """Đọc file Excel đang chọn rồi vẽ prompt từng cảnh, xếp theo số cảnh."""
@@ -1537,17 +1712,19 @@ class TrangPromptVisuals(QWidget):
         duong = self._ket_qua_xem.get(ten, "")
         if not duong or not os.path.isfile(duong):
             self._canh_hien = []
-            self._bang_xem.setRowCount(0)
+            self._bang_canh.dat_canh([])
             self._nut_luu.setEnabled(False)
             self._nhan_dan.setText(
-                "Chạy xong, prompt từng cảnh sẽ hiện ra đây theo đúng thứ tự.")
+                "Chưa có gì để xem. Chạy Bước 3 xong prompt từng cảnh sẽ hiện "
+                "ra đây — hoặc bấm “Mở tệp cũ” để mở lại file Excel đã tạo "
+                "hôm trước.")
             self._cap_nhat_thu()
             return
         try:
             so = self._doc_workbook(duong)
         except Exception as loi:  # noqa: BLE001 — đọc lỗi không được chặn tab
             self._canh_hien = []
-            self._bang_xem.setRowCount(0)
+            self._bang_canh.dat_canh([])
             self._nut_luu.setEnabled(False)
             self._nhan_dan.setText("Chưa đọc được file để xem: {0}".format(
                 str(loi)[:120]))
@@ -1559,11 +1736,7 @@ class TrangPromptVisuals(QWidget):
         self._nhac_hien = list(so["nhac"])
         self._nhan_dan.setText("{0}  ·  {1} cảnh  ·  {2} ảnh bìa  ·  {3} track nhạc".format(
             tom_tat_dan(dan), len(canh), len(so["bia"]), len(so["nhac"])))
-        self._dien_bang(self._bang_xem, [
-            ["#{0}".format(c["scene_id"]),
-             c.get("srt_text_vi") or c.get("srt_text") or "",
-             c.get("img_prompt", ""), c.get("video_prompt", "")]
-            for c in canh])
+        self._bang_canh.dat_canh(canh)
         self._dien_bang(self._bang_bia, [
             [b["thumb_id"], b["version_desc"], b["img_prompt"]] for b in so["bia"]])
         if so["bia"]:
@@ -1639,10 +1812,9 @@ class TrangPromptVisuals(QWidget):
             self._app.show_message("Chưa có gì để lưu",
                                    "Hãy chạy tạo prompt rồi mới chỉnh và lưu.")
             return
-        sua: "dict[int, tuple]" = {}
-        for dong, c in enumerate(self._canh_hien):
-            sua[int(c["scene_id"])] = (self._o(self._bang_xem, dong, self._COT_ANH),
-                                       self._o(self._bang_xem, dong, self._COT_VIDEO))
+        # Lấy đúng chữ ĐANG HIỆN trên bảng cảnh — không đọc lại file, để cái
+        # được ghi xuống luôn là cái khách vừa nhìn thấy.
+        sua: "dict[int, tuple]" = dict(self._bang_canh.loi_nhac_hien())
         sua_bia = {str(b["thumb_id"]): {"img_prompt": self._o(self._bang_bia, d, 2)}
                    for d, b in enumerate(getattr(self, "_bia_hien", []))}
         sua_nhac = {str(m["music_id"]): {"suno_prompt": self._o(self._bang_nhac, d, 2),
@@ -1658,6 +1830,9 @@ class TrangPromptVisuals(QWidget):
             self._ghi("Lưu chỉnh sửa hỏng: {0}".format(str(loi)[:200]))
             self._app.show_error(loi)
             return
+        # Ghi xong thì chữ trên bảng thành bản gốc — dấu "đã sửa" tắt đi, chứ
+        # không để khách nhìn mãi một hàng cảnh in đậm sau khi đã lưu.
+        self._bang_canh.chot_goc()
         self._ghi("Đã lưu chỉnh sửa {0} cảnh (+ ảnh bìa, nhạc) vào {1}.".format(
             so, os.path.basename(duong)))
         self._app.show_message(
@@ -2362,6 +2537,14 @@ class TrangPromptVisuals(QWidget):
 
     def doi_du_an(self, _ten: str) -> None:
         self._thu_muc.dat(self._app.default_output_dir("prompt-visuals"))
+
+
+def _liet_canh(ds: List[int]) -> str:
+    """“7, 19, 42” — dài quá thì cắt, kẻo câu giá đẩy hết chữ khác ra ngoài."""
+    so = [str(s) for s in ds]
+    if len(so) <= 8:
+        return ", ".join(so)
+    return "{0}… ({1} cảnh)".format(", ".join(so[:8]), len(so))
 
 
 def _ma_artifact(gia_tri) -> str:

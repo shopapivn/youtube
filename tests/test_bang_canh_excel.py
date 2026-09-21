@@ -109,6 +109,44 @@ class TestGiuTenCotTiengAnh:
         assert dong[0]["anh"] == "a quiet room"
         assert dong[0]["tham_chieu"] == "nv1.png"
 
+    def test_file_pv_khong_mat_loi_doc_va_moc_thoi_gian(self, tmp_path):
+        """21/09/2026: mở file Prompt Visuals ở đây trước kia MẤT hẳn câu giọng
+        đọc (`srt_text`) và cả mốc thời gian — dù cả hai đều nằm sẵn trong
+        file, chỉ vì bộ đọc chỉ biết mỗi tên cột `loi_doc`."""
+        cot = ("scene_id", "srt_start", "srt_end", "duration", "srt_text",
+              "srt_text_vi", "img_prompt", "video_prompt", "reference_files")
+        duong = _sach(tmp_path, "tu-pv-day-du.xlsx", cot, [
+            (1, "00:00:00,000", "00:00:06,000", 6.0, "A quiet room.",
+             "Một căn phòng yên tĩnh.", "a quiet room", "slow push in", "nv1.png"),
+        ])
+        dong = doc_excel(duong)[0]
+        assert dong["loi"] == "A quiet room.", \
+            "không có loi_doc thì phải lấy srt_text — lời khớp giọng đọc thật"
+        assert dong["srt_start"] == "00:00:00,000"
+        assert dong["srt_end"] == "00:00:06,000"
+        assert float(dong["duration"]) == 6.0
+
+    def test_loi_doc_van_thang_khi_ca_hai_cung_co(self, tmp_path):
+        """Khách gõ tay `loi_doc` thì đó là lời đúng ý khách — ưu tiên nó."""
+        cot = ("scene_id", "img_prompt", "video_prompt", "srt_text", "loi_doc")
+        duong = _sach(tmp_path, "ca-hai.xlsx", cot, [
+            (1, "a room", "", "câu gốc srt", "câu khách tự gõ"),
+        ])
+        assert doc_excel(duong)[0]["loi"] == "câu khách tự gõ"
+
+    def test_khong_co_srt_text_thi_lui_ve_ban_dich(self, tmp_path):
+        """Không có `srt_text` (chỉ có bản dịch) thì vẫn còn hơn bỏ trống."""
+        cot = ("scene_id", "img_prompt", "video_prompt", "srt_text_vi")
+        duong = _sach(tmp_path, "chi-co-vi.xlsx", cot, [
+            (1, "a room", "", "câu bản dịch"),
+        ])
+        assert doc_excel(duong)[0]["loi"] == "câu bản dịch"
+
+    def test_file_khong_co_moc_thoi_gian_van_nap_binh_thuong(self, tmp_path):
+        """File mẫu tay (không có mốc) không được vỡ vì các cột tuỳ chọn."""
+        dong = doc_excel(viet_mau(str(tmp_path / "mau.xlsx")))
+        assert dong[0]["srt_start"] == "" and dong[0]["duration"] == ""
+
 
 class TestTuChoiChoRaHon:
     """Khách điền sai mà tool im lặng chạy là hỏng cả mẻ."""
@@ -398,11 +436,22 @@ class TestBaCheDo:
 
 
 def test_hai_tab_con_deu_co_o_anh_tham_chieu():
-    """Chủ dự án: *"tạo ảnh và video đều cần tham chiếu"* — cả hai lối làm việc."""
+    """Chủ dự án: *"tạo ảnh và video đều cần tham chiếu"* — cả hai lối làm việc.
+
+    Hai tab dùng hai CÁCH khác nhau, cả hai đều thật (kiểm bằng token đúng của
+    từng cách, không phải cùng một chuỗi):
+    - `TabHangLoat` dùng thẳng widget `AnhThamChieu` (ảnh chung cho cả bảng).
+    - `TabThuCong` dùng nút "+" kiểu Flow (`_anh_tham_chieu`/`_chon_anh`) — nó
+      từng có một `AnhThamChieu(...)` được tạo ra nhưng KHÔNG gắn vào layout
+      nào (chết, khách không bao giờ thấy); 21/09/2026 bỏ hẳn widget chết đó,
+      ô ảnh tham chiếu thật của tab này luôn là nút "+".
+    """
     import inspect
 
     from ui_qt.trang_anh_video import TabHangLoat, TabThuCong
 
-    for lop in (TabThuCong, TabHangLoat):
-        ma = inspect.getsource(lop)
-        assert "AnhThamChieu(" in ma,             "{0} chưa có ô ảnh tham chiếu".format(lop.__name__)
+    assert "AnhThamChieu(" in inspect.getsource(TabHangLoat), (
+        "TabHangLoat chưa có ô ảnh tham chiếu")
+    ma_thu_cong = inspect.getsource(TabThuCong)
+    assert "_anh_tham_chieu" in ma_thu_cong and "_chon_anh" in ma_thu_cong, (
+        "TabThuCong chưa có ô ảnh tham chiếu")

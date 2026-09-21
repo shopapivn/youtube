@@ -192,14 +192,17 @@ def test_the_khong_so_canh_giu_moi_nhat_len_dau(qt_app):
     assert dau.uid == "b", "không có số cảnh thì thẻ mới nhất nằm đầu"
 
 
-# ── 6. Đổi tên cột prompt ───────────────────────────────────────────────────
+# ── 6. Đổi tên cột lời nhắc ──────────────────────────────────────────────────
 
-def test_cot_prompt_doi_ten_thanh_prompt_tao(qt_app, tmp_path):
-    """22/08/2026: "Mô tả ảnh/video" đổi thành "Prompt tạo ảnh/video"."""
+def test_cot_loi_nhac_dat_ten_khop_so_canh_va_prompt_visuals(qt_app, tmp_path):
+    """21/09/2026: "Prompt" là từ kỹ thuật, đổi thành "Lời nhắc" — khớp chữ sổ
+    cảnh chia sẻ và tab Prompt Visuals đang dùng, không được để "Prompt" lên
+    màn hình của khách."""
     from ui_qt.trang_anh_video import _CotBang
 
-    assert _CotBang.TIEU_DE[_CotBang.ANH] == "Prompt tạo ảnh"
-    assert "Prompt tạo video" in _CotBang.TIEU_DE[_CotBang.VIDEO]
+    assert _CotBang.TIEU_DE[_CotBang.ANH] == "Lời nhắc ảnh"
+    assert "Lời nhắc video" in _CotBang.TIEU_DE[_CotBang.VIDEO]
+    assert not any("prompt" in c.lower() for c in _CotBang.TIEU_DE)
 
 
 # ── 7. Ô trạng thái hai dòng: ảnh trên, clip dưới ───────────────────────────

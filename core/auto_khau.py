@@ -2277,6 +2277,17 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                     _ghi_chu(os.path.join(d, TEP_BIA_DOI_THU), bo_cuc + "\n")
                     bc.ghi("  đọc được cả bố cục bìa đối thủ ({0} ký tự) — khâu "
                            "ảnh bìa sẽ bám theo.".format(len(bo_cuc)))
+            # ═══ NHÃN THỂ LOẠI Ở ĐẦU TIÊU ĐỀ LÀ CHUYỆN CỦA KÊNH MÌNH, KHÔNG PHẢI CỦA CHỮ BÌA ═══
+            #
+            # Chèn SAU khi `chu_bia` đã chốt ở trên, để KHÔNG đụng vào chu_bia: đường thường (đọc được
+            # chữ trên ảnh) lấy `doc`, không liên quan gì tới `tieu_de`; đường lui hiếm gặp (ảnh hỏng)
+            # mới dùng tạm `tieu_de`, và giữ y nguyên bản CHƯA gắn nhãn — đúng nết cũ, không tấm ảnh bìa
+            # thật nào của kênh có chữ 【】 nên không việc gì thêm vào. Chỉ TIÊU ĐỀ (dòng TITLE trên
+            # YouTube) mới cần nhãn — xem `_chuan_hoa_nhan_tieu_de`.
+            moi = _chuan_hoa_nhan_tieu_de(tieu_de, k.nhan_tieu_de)
+            if moi != tieu_de:
+                bc.ghi("  chuẩn hoá nhãn đầu tiêu đề: 「{0}」".format(moi[:60]))
+                tieu_de = moi
         elif not khuon_tieu_de.strip():
             # ═══ THIẾU LỜI NHẮC THÌ BỎ QUA, ĐỪNG GỬI LỜI NHẮC RỖNG ═══
             #
@@ -3330,6 +3341,46 @@ def _doc_tieu_de(chu: str):
     return tieu_de, chu_bia
 
 
+#: Ngoặc mở → ngoặc đóng cùng cặp — ba kiểu đã thấy trên các kênh nguồn thật.
+_CAP_NGOAC_NHAN = {"【": "】", "[": "]", "［": "］"}
+
+#: Nhãn khoa học coi là "cùng phe" với 心理学 — thêm nhãn cho tiêu đề CHƯA có
+#: nhãn đầu nào, chứ không ép đổi 【脳科学】 đang thắng thành 【心理学】.
+_NHAN_TUONG_DUONG = {"心理学": ("心理学", "脳科学")}
+
+
+def _chuan_hoa_nhan_tieu_de(tieu_de: str, nhan: str) -> str:
+    """Tiêu đề `nguyen_goc` giữ NGUYÊN nội dung đối thủ, chỉ sửa NHÃN THỂ LOẠI ở đầu cho khớp kênh mình.
+
+    Chủ dự án, 18/09/2026: video 13 lấy nguyên 【雑学】昔より物欲が減った人の心理 — nhãn 【雑学】 là của kênh
+    NGUỒN (đối thủ), không phải của kênh nhận. Tra thật trên kênh sống: 9/12 video đã đăng có nhãn khoa học
+    tâm lý/não bộ ở đầu, cả năm video gần nhất theo Công thức V7 đều có.
+
+    `nhan` rỗng (kênh không khai `nhan_tieu_de`) → trả nguyên văn, không đụng gì — nết cũ.
+
+    Ba trường hợp còn lại:
+      - Đầu câu đã có ngoặc, bên trong đã là `nhan` hoặc một nhãn tương đương (脳科学 khi nhan=心理学) →
+        giữ nguyên, không ép đổi nhãn ĐANG THẮNG thành nhãn khác.
+      - Đầu câu có ngoặc nhưng nội dung khác (雑学, グレーな心理学…) → thay CHỮ trong ngoặc, giữ kiểu ngoặc.
+      - Không có ngoặc ở đầu → thêm 【nhãn】 phía trước, giữ nguyên phần còn lại — kể cả nhãn ở cuối câu
+        (khớp đúng hình dạng video 8 thật trên kênh: 【心理学】…| 脳科学, hai nhãn cùng tồn tại là bình thường).
+    """
+    goc = (tieu_de or "").strip()
+    nhan = (nhan or "").strip()
+    if not goc or not nhan:
+        return goc
+    tuong_duong = _NHAN_TUONG_DUONG.get(nhan, (nhan,))
+    dong = _CAP_NGOAC_NHAN.get(goc[:1])
+    if dong:
+        i = goc.find(dong, 1)
+        if i > 0:
+            trong = goc[1:i].strip()
+            if trong in tuong_duong:
+                return goc
+            return "{0}{1}{2}{3}".format(goc[0], nhan, dong, goc[i + 1:]).strip()
+    return "【{0}】{1}".format(nhan, goc)
+
+
 # ── Khâu 2: giọng đọc ────────────────────────────────────────────────────────
 
 
@@ -4156,14 +4207,116 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
     return ds or []
 
 
-#: Cột của sheet `scenes` — **giữ đúng tên và thứ tự này**, đây là khuôn mà
-#: các tool dựng video theo bảng cảnh đọc. Đổi tên cột là mở bên đó không ra gì.
-COT_CANH = ("scene_id", "srt_start", "srt_end", "duration", "planned_duration",
-            "srt_text", "scene_kind", "subject_mode", "primary_subject",
-            "primary_action", "visual_anchor", "must_not_show", "img_prompt",
-            "prompt_json", "video_prompt", "img_path", "video_path",
+#: Cột của sheet `scenes` — **giữ đúng TÊN này** (khâu dựng video và mọi bộ
+#: đọc khác tra cột theo tên, không theo vị trí). Đổi tên cột là mở bên đó
+#: không ra gì.
+#:
+#: ═══ THỨ TỰ 21/09/2026 — chủ dự án: "không thể edit được vì đâu biết scene
+#: nào ở giây nào" ═══
+#:
+#: Mốc thời gian (`srt_start`/`srt_end`/`duration`) vẫn có trong file nhưng
+#: chìm giữa 20 cột đặt tên kỹ thuật. Đổi THỨ TỰ (không đổi tên) đưa mốc + lời
+#: đọc + hai cột khách thật sự sửa (`img_prompt`/`video_prompt`) lên đầu; phần
+#: còn lại là sổ sách riêng của tool, giữ nguyên thứ tự cũ phía sau.
+#: `tool-catalog/prompt.workbook/run.py.SCENE_COLUMNS` đổi CÙNG MỘT KIỂU — sửa
+#: bên này thì sửa bên đó, hai nơi phải ra cùng một hình dạng cột.
+COT_CANH = ("scene_id", "srt_start", "srt_end", "duration", "srt_text",
+            "img_prompt", "video_prompt",
+            "planned_duration", "scene_kind", "subject_mode", "primary_subject",
+            "primary_action", "visual_anchor", "must_not_show",
+            "prompt_json", "img_path", "video_path",
             "status_img", "status_vid", "characters_used", "location_used",
             "reference_files", "media_id", "video_note", "segment_id")
+
+#: Cỡ cột (theo TÊN) cho sheet `scenes` — khớp
+#: `tool-catalog/prompt.workbook/run.py._RONG_COT_CANH`, đổi một bên thì đổi
+#: cả bên kia.
+_RONG_COT_CANH = {
+    "scene_id": 9, "srt_start": 11, "srt_end": 11, "duration": 10,
+    "planned_duration": 10, "status_img": 11, "status_vid": 11,
+    "media_id": 12, "video_note": 12, "segment_id": 10,
+    "characters_used": 18, "location_used": 18, "img_path": 22, "video_path": 22,
+    "srt_text": 40, "srt_text_vi": 40, "img_prompt": 54, "video_prompt": 54,
+    "primary_subject": 24, "primary_action": 24, "visual_anchor": 24,
+    "must_not_show": 24, "prompt_json": 30, "reference_files": 28,
+    "scene_kind": 14, "subject_mode": 14,
+}
+
+#: Cột bật xuống-dòng (wrap) — chữ dài không wrap thì Excel kéo thành một vệt
+#: dài, khó đọc hơn cả lúc chưa sắp lại.
+_COT_XUONG_DONG_CANH = {"srt_text", "srt_text_vi", "img_prompt", "video_prompt",
+                        "primary_subject", "primary_action", "visual_anchor",
+                        "must_not_show", "prompt_json"}
+
+
+def _dinh_dang_sheet_canh(ws, cot) -> None:
+    """Khoá hàng tiêu đề + cỡ cột + xuống dòng cho prompt trên sheet `scenes`.
+
+    Không đổi GIÁ TRỊ của `srt_start`/`srt_end` — vẫn nguyên chuỗi giờ:phút:
+    giây của SRT, để không vỡ `core/dung_video._giay` hay bộ đọc nào khác đang
+    ăn chuỗi này. Chỉ làm NHÌN dễ hơn: cột hẹp lại, đứng giữa.
+    """
+    from openpyxl.styles import Alignment  # noqa: PLC0415
+    from openpyxl.utils import get_column_letter  # noqa: PLC0415
+
+    ws.freeze_panes = "A2"
+    giua = Alignment(horizontal="center", vertical="center")
+    goc_tren = Alignment(wrap_text=True, vertical="top")
+    for col, ten in enumerate(cot, 1):
+        letter = get_column_letter(col)
+        ws.column_dimensions[letter].width = _RONG_COT_CANH.get(ten, 16)
+        if ten in ("srt_start", "srt_end", "duration"):
+            for row in range(2, ws.max_row + 1):
+                ws.cell(row, col).alignment = giua
+        elif ten in _COT_XUONG_DONG_CANH:
+            for row in range(2, ws.max_row + 1):
+                ws.cell(row, col).alignment = goc_tren
+
+
+def _viet_huong_dan_sheet_canh(ws) -> None:
+    """Trang "Hướng dẫn" — tab ĐẦU TIÊN của workbook, chữ người thường đọc được.
+
+    Y hệt nội dung `tool-catalog/prompt.workbook/run.py._viet_huong_dan_sheet`
+    — hai writer ghi ra cùng một khuôn cột nên phải cùng một bài hướng dẫn.
+    """
+    from openpyxl.styles import Alignment, Font  # noqa: PLC0415
+
+    dam = Font(bold=True, size=13)
+    dam_nho = Font(bold=True)
+    goc_tren = Alignment(wrap_text=True, vertical="top")
+    dong = 1
+
+    def viet(chu: str, font=None) -> None:
+        nonlocal dong
+        o = ws.cell(dong, 1, chu)
+        if font is not None:
+            o.font = font
+        o.alignment = goc_tren
+        dong += 1
+
+    viet("Cách đọc bảng cảnh này", dam)
+    dong += 1
+    viet("Mở trang “scenes” để xem từng cảnh — mỗi dòng là một cảnh của video.")
+    dong += 1
+    viet("CỘT NÊN SỬA:", dam_nho)
+    viet("  • img_prompt — lời nhắc tả ẢNH của cảnh. Sửa cột này để đổi ảnh sẽ tạo ra.")
+    viet("  • video_prompt — lời nhắc tả CHUYỂN ĐỘNG của cảnh. Sửa cột này để đổi video.")
+    dong += 1
+    viet("CỘT MỐC THỜI GIAN — đừng sửa, đây là vị trí của cảnh trong giọng đọc:", dam_nho)
+    viet("  • srt_start / srt_end — cảnh này bắt đầu và kết thúc ở giờ:phút:giây nào của giọng đọc.")
+    viet("  • duration — cảnh này dài bao nhiêu giây.")
+    viet("  • srt_text (và srt_text_vi nếu có) — câu giọng đọc đang nói lúc cảnh này hiện lên, "
+         "để biết đang sửa đúng cảnh nào.")
+    dong += 1
+    viet("CÁC CỘT CÒN LẠI — đừng sửa:", dam_nho)
+    viet("  Đây là sổ sách riêng của tool (mã cảnh, trạng thái, đường dẫn ảnh/video…) để tool tự "
+         "nhớ đã làm tới đâu. Sửa vào có thể làm tool hiểu nhầm và làm lại nhầm cảnh.")
+    dong += 1
+    viet("SAU KHI SỬA XONG:", dam_nho)
+    viet("  Lưu file lại, rồi quay về tool bấm đúng nút để tạo lại — tool chỉ làm lại những cảnh "
+         "bạn vừa sửa, không phải làm lại từ đầu.")
+    ws.column_dimensions["A"].width = 100
+    ws.sheet_view.showGridLines = False
 
 COT_NHAN_VAT = ("id", "role", "name", "english_prompt", "vietnamese_prompt",
                 "character_lock", "image_file", "status", "is_child", "media_id")
@@ -4184,8 +4337,10 @@ def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh,
     from openpyxl.styles import Font, PatternFill  # noqa: PLC0415
 
     sach = Workbook()
-    ws = sach.active
-    ws.title = "scenes"
+    huong_dan = sach.active
+    huong_dan.title = "Hướng dẫn"
+    _viet_huong_dan_sheet_canh(huong_dan)
+    ws = sach.create_sheet("scenes", 1)
     for cot, ten in enumerate(COT_CANH, 1):
         o = ws.cell(1, cot, ten)
         o.font = Font(bold=True, color="FFFFFF")
@@ -4200,6 +4355,7 @@ def _viet_xlsx(duong: str, canh: List[Dict[str, Any]], k: Kenh,
             if isinstance(gia_tri, (list, dict)):
                 gia_tri = json.dumps(gia_tri, ensure_ascii=False)
             ws.cell(hang, cot, gia_tri)
+    _dinh_dang_sheet_canh(ws, COT_CANH)
 
     nv = sach.create_sheet("characters")
     for cot, ten in enumerate(COT_NHAN_VAT, 1):

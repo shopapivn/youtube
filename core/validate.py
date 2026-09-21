@@ -173,7 +173,14 @@ def check_video(
     if aspect_ratio not in ASPECT_RATIOS:
         problems.append("Tỉ lệ khung hình phải là một trong: {0}.".format(", ".join(ASPECT_RATIOS)))
     url = str(image_url or "").strip()
-    if url and not url.lower().startswith(("http://", "https://")):
+    if not url:
+        # Máy chủ luôn cần một khung hình đầu cho video — thiếu ảnh thì job bị
+        # từ chối SAU khi đã gửi, tốn một vòng mạng vô ích. Bắt ở đây, trước khi
+        # gửi, để khách sửa ngay tại chỗ thay vì chờ rồi đọc lỗi từ máy chủ.
+        problems.append(
+            "Video cần một ảnh đầu vào làm khung hình đầu — bạn chưa chọn ảnh nào."
+        )
+    elif not url.lower().startswith(("http://", "https://")):
         problems.append(
             "Ảnh đầu vào phải là đường dẫn https công khai (tải ảnh lên hosting rồi dán link)."
         )
