@@ -173,10 +173,50 @@ class TrangDungVideo(QWidget):
                       "một bản về thư mục tool (40 MB, chỉ một lần).")
         self._doi_phu_de()
         self._bao_may_yeu()
-        # Quét sẵn dự án đang mở: chỉ là đọc danh sách file, không tốn tiền và
-        # không gọi mạng. Bắt khách bấm "Quét lại" để thấy thứ tool tự biết chỗ
-        # là thêm một bước thừa ngay ở cửa.
-        self._quet_im(self._goc.value)
+        # ═══ KHÔNG QUÉT TRONG __init__ — SỰ CỐ 21/09/2026 ═══
+        #
+        # Quét không chỉ "đọc danh sách file": `quet_thu_muc` dò THỜI LƯỢNG
+        # từng file bằng một tiến trình FFmpeg riêng (`doc_thoi_luong`) và mở
+        # bảng cảnh Excel của MỖI dự án cũ bằng openpyxl. Trên máy có nhiều
+        # dự án cũ trong PROJECTS/, đo được 3,7 giây — góp vào 16 giây "Not
+        # Responding" lúc mở tool. Quét thật sự chạy lúc tab này HIỆN RA lần
+        # đầu (`showEvent`), qua `run_bg` nên không đứng hình cửa sổ.
+        self._da_quet_lan_dau = False
+
+    def showEvent(self, su_kien) -> None:  # noqa: N802 — tên hàm của Qt
+        """Mở tab lần đầu → quét đúng lúc đó, không sớm hơn."""
+        super().showEvent(su_kien)
+        if not self._da_quet_lan_dau:
+            self._da_quet_lan_dau = True
+            self._quet_nen(self._goc.value)
+
+    def _quet_nen(self, goc: str) -> None:
+        """Bản `_quet_im` chạy Ở LUỒNG NỀN — dùng cho lượt quét ĐẦU TIÊN.
+
+        Các lượt quét sau (đổi thư mục, bấm "Quét lại", thêm dữ liệu tay) vẫn
+        đi qua `_quet_im` đồng bộ như cũ: đó là hành động khách chủ động bấm,
+        đợi một chút để thấy ngay kết quả là hợp lý. Chỉ lượt quét NGẦM lúc
+        vừa mở tab mới cần tách luồng — khách chưa bấm gì cả.
+        """
+        self._tom_tat.setText("Đang đọc danh sách dự án…")
+        ra, can_phu_de = self._ra.value, self._phu_de.isChecked()
+
+        def viec():
+            return (quet_thu_muc(goc, thu_muc_ra=ra, can_phu_de=can_phu_de)
+                    if goc and os.path.isdir(goc) else [])
+
+        def xong(tim) -> None:
+            self._du_an = tim + self._du_an_chon_tay()
+            self._ve_bang()
+            self._ghi("Quét {0}: {1} dự án, {2} sẵn sàng.".format(
+                goc or "(chưa chọn thư mục)", len(self._du_an),
+                sum(1 for d in self._du_an if d.chay_duoc)))
+
+        def hong(loi: BaseException) -> None:
+            self._tom_tat.setText("Không quét được thư mục dự án.")
+            self._app.show_error(loi)
+
+        self._app.run_bg(viec, on_ok=xong, on_err=hong)
 
     def _bao_may_yeu(self) -> None:
         """Máy đã kiểm và có vấn đề thì nói ngay lúc mở tab, đừng đợi hỏng.

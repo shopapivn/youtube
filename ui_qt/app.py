@@ -24,7 +24,7 @@ import queue
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -337,6 +337,8 @@ class CuaSoChinh(QWidget):
         self.last_wallet_micro: Optional[int] = None
         self.client = None
         self.jobs: Optional[JobManager] = None
+        #: khoá -> trang ĐÃ DỰNG. Rỗng lúc khởi động — xem "TRANG DỰNG LÚC NÀO"
+        #: ở `_dam_bao_trang`, thứ thay hẳn cho việc dựng cả 12 trang ở đây.
         self._trang: Dict[str, QWidget] = {}
         self._dang_dong = False
 
@@ -391,7 +393,35 @@ class CuaSoChinh(QWidget):
 
         self._xong_nen.connect(self._chay_tren_luong_ve)
 
-        self._dung_cac_trang()
+        # ═══ TRANG DỰNG LÚC NÀO — SỰ CỐ 21/09/2026 ═══
+        #
+        # Trước đây `_dung_cac_trang()` dựng CẢ MƯỜI HAI trang ở đây, mỗi
+        # trang tự đọc dữ liệu kênh trong `__init__` của nó. Đo trên máy
+        # NHANH: 16 giây "Not Responding" lúc mở tool — 8,8 giây riêng trang
+        # Phân tích & Nghiên cứu (306.278 lượt `setItem`, 87.325 ô Excel đọc
+        # qua openpyxl), 3,7 giây trang Dựng video (quét mọi dự án cũ bằng
+        # FFmpeg + openpyxl). Máy khách yếu hơn — điều tra ghi "máy khách có
+        # thể yếu" — thì con số này nhân ba, nhân năm.
+        #
+        # Giờ chỉ dựng NGAY hai loại trang, còn lại dựng lúc khách THẬT SỰ
+        # bấm vào (`show_page` → `_dam_bao_trang`):
+        #
+        #   1. Trang MỞ ĐẦU — khách mở tool ra là phải thấy nó.
+        #   2. `_KHOA_LUON_DUNG` — trang có TÁC DỤNG PHỤ chạy nền không đợi
+        #      khách bấm gì (trạm nhận cổng 8765, hook "Một nút" tự chạy khi
+        #      máy ảo gửi gói về). Xem chú thích ở hằng số đó.
+        #
+        # Bản thân việc DỰNG hai trang ấy rẻ — chúng không còn đọc dữ liệu
+        # nặng trong `__init__` nữa (xem "KHÔNG ĐỌC DỮ LIỆU TRONG __init__"
+        # trong `ui_qt/trang_phan_tich.py`); phần đọc dữ liệu dời sang lúc
+        # trang thật sự HIỆN RA (`showEvent`) và chạy ở `run_bg`.
+        self._xuong = self._xuong_trang()
+        trang_dau = self._trang_mo_dau()
+        self._dam_bao_trang(trang_dau)
+        ten_trong_nav = {khoa for khoa, _bt, _ten in self._nav}
+        for khoa in self._KHOA_LUON_DUNG:
+            if khoa in ten_trong_nav:
+                self._dam_bao_trang(khoa)
         # ═══ MỞ TOOL KHÔNG ĐỤNG VÀO CẤU HÌNH CLAUDE CODE ═══
         #
         # Ở đây từng có một lệnh cắm khoá shopapi vào cấu hình Claude Code mỗi
@@ -410,7 +440,7 @@ class CuaSoChinh(QWidget):
         # Cắm khoá vẫn còn, nhưng chỉ khi khách **tự bấm**: nút "Cắm khoá
         # ShopAPI" và nút "Mở VS Code" ở tab Agent. Một hành động của tool phải
         # bắt nguồn từ một hành động của người.
-        self.show_page(self._trang_mo_dau())
+        self.show_page(trang_dau)
 
         self._dong_ho = QTimer(self)
         self._dong_ho.timeout.connect(self._bom)
@@ -430,43 +460,132 @@ class CuaSoChinh(QWidget):
 
     # ── Dựng trang ───────────────────────────────────────────────────────────
 
-    def _dung_cac_trang(self) -> None:
-        from .trang_anh_video import TrangAnhVideo
-        from .trang_content import TrangKichBan
-        from .trang_edit import TrangDungVideo
-        from .trang_prompt_visuals import TrangPromptVisuals
-        from .trang_auto import TrangTuDong
-        from .trang_skill import TrangSkill
-        from .trang_quan_ly import TrangQuanLy
-        from .trang_voice_music import TrangVoiceMusic
-        from .trang_phu_de import TrangPhuDe
-        from .trang_gpm_vps import TrangGpmVps
-        from .trang_phan_tich import TrangPhanTich
-        from .trang_quan_ly_kenh import TrangQuanLyKenh
+    #: Trang PHẢI dựng ngay lúc mở tool, dù khách chưa bấm vào — vì `__init__`
+    #: của chúng có TÁC DỤNG PHỤ chạy nền, độc lập với việc đang xem trang nào:
+    #:
+    #:   chrome-sach  `TrangChiSoYTB` (con của `TrangGpmVps`) tự bật cổng nhận
+    #:                (trạm 8765) 1,2 giây sau khi dựng — máy ảo gọi webhook
+    #:                về bất cứ lúc nào, không đợi khách mở tab VPS. Xem
+    #:                `ui_qt/trang_chi_so_ytb.py:_tu_bat_luc_mo`.
+    #:   phan-tich    `TrangDanhBa` đăng ký hook "gói trang chủ vừa về" với
+    #:                trạm ở trên (`core.chi_so_ytb.tram.dat_hook_trang_chu`).
+    #:                Trạm chỉ gọi hook cho kênh nào ĐÃ có người đăng ký — chưa
+    #:                dựng trang này thì lượt "Một nút" không bao giờ tự chạy
+    #:                nốt 7 bước, dữ liệu về mà không ai xử lý tiếp.
+    #:
+    #: Dựng hai trang này RẺ vì `__init__` của chúng không còn đọc dữ liệu kênh
+    #: nữa — phần đó dời sang lúc trang thật sự HIỆN RA (`showEvent`), chạy ở
+    #: `run_bg`. Đừng thêm khoá mới vào đây mà không viết rõ tác dụng phụ là
+    #: gì: mỗi trang thêm vào là một trang không còn "lazy", đúng thứ gây ra
+    #: sự cố 21/09/2026 (tool đơ 16 giây lúc mở trên máy khách yếu).
+    _KHOA_LUON_DUNG: Tuple[str, ...] = ("chrome-sach", "phan-tich")
+
+    def _xuong_trang(self) -> Dict[str, Callable[[], QWidget]]:
+        """Xưởng dựng trang, theo khoá — chỉ trả về HÀM DỰNG.
+
+        Mô-đun của một trang (và mọi thứ nó nhập ở đầu tệp) chỉ thật sự được
+        NHẬP lúc hàm dựng này được GỌI — xem `_dam_bao_trang`. Nhóm import
+        vào từng hàm nhỏ (thay vì gộp ở đầu `_xuong_trang`) để nhập trang A
+        không kéo theo việc nhập mã của mọi trang khác.
+        """
+        def _skill():
+            from .trang_skill import TrangSkill  # noqa: PLC0415
+            return TrangSkill(self)
+
+        def _chrome_sach():
+            from .trang_gpm_vps import TrangGpmVps  # noqa: PLC0415
+            return TrangGpmVps(self)
+
+        def _phan_tich():
+            from .trang_phan_tich import TrangPhanTich  # noqa: PLC0415
+            return TrangPhanTich(self)
+
+        def _quan_ly_kenh():
+            from .trang_quan_ly_kenh import TrangQuanLyKenh  # noqa: PLC0415
+            return TrangQuanLyKenh(self)
+
+        def _content():
+            from .trang_content import TrangKichBan  # noqa: PLC0415
+            return TrangKichBan(self)
+
+        def _voice():
+            from .trang_voice_music import TrangVoiceMusic  # noqa: PLC0415
+            return TrangVoiceMusic(self)
+
+        def _phu_de():
+            from .trang_phu_de import TrangPhuDe  # noqa: PLC0415
+            return TrangPhuDe(self)
+
+        def _auto():
+            from .trang_auto import TrangTuDong  # noqa: PLC0415
+            return TrangTuDong(self)
+
+        def _media():
+            from .trang_anh_video import TrangAnhVideo  # noqa: PLC0415
+            return TrangAnhVideo(self)
+
+        def _prompt_visuals():
+            from .trang_prompt_visuals import TrangPromptVisuals  # noqa: PLC0415
+            return TrangPromptVisuals(self)
+
+        def _edit():
+            from .trang_edit import TrangDungVideo  # noqa: PLC0415
+            return TrangDungVideo(self)
+
+        def _wallet():
+            # Tài khoản + Cài đặt gộp một trang (31/08/2026), khoá giữ `wallet`.
+            from .trang_quan_ly import TrangQuanLy  # noqa: PLC0415
+            return TrangQuanLy(self)
 
         xuong = {
-            "skill": lambda: TrangSkill(self),
-            "chrome-sach": lambda: TrangGpmVps(self),
-            "phan-tich": lambda: TrangPhanTich(self),
-            "quan-ly-kenh": lambda: TrangQuanLyKenh(self),
-            "content": lambda: TrangKichBan(self),
-            "voice": lambda: TrangVoiceMusic(self),
-            "phu-de": lambda: TrangPhuDe(self),
-            "auto": lambda: TrangTuDong(self),
-            "media": lambda: TrangAnhVideo(self),
-            "prompt-visuals": lambda: TrangPromptVisuals(self),
-            "edit": lambda: TrangDungVideo(self),
-            # Tài khoản + Cài đặt gộp một trang (31/08/2026), khoá giữ `wallet`.
-            "wallet": lambda: TrangQuanLy(self),
+            "skill": _skill,
+            "chrome-sach": _chrome_sach,
+            "phan-tich": _phan_tich,
+            "quan-ly-kenh": _quan_ly_kenh,
+            "content": _content,
+            "voice": _voice,
+            "phu-de": _phu_de,
+            "auto": _auto,
+            "media": _media,
+            "prompt-visuals": _prompt_visuals,
+            "edit": _edit,
+            "wallet": _wallet,
         }
         # Xưởng của vỏ đặt SAU, để vỏ vận hành đè được lên trang cùng khoá nếu cần.
         xuong.update(self.trang_them())
-        for khoa, _bieu_tuong, ten in self._nav:
-            tao = xuong.get(khoa)
-            trang = tao() if tao else self._trang_dang_lam(ten)
-            self._trang[khoa] = trang
-            self._vo_cuon[khoa] = self._boc_cuon(trang)
-            self._chong.addWidget(self._vo_cuon[khoa])
+        return xuong
+
+    def _dam_bao_trang(self, khoa: str) -> Optional[QWidget]:
+        """Dựng trang `khoa` nếu chưa có, rồi trả về — dựng ĐÚNG MỘT LẦN.
+
+        Đây là chỗ DUY NHẤT một trang được tạo ra. Gọi lại với khoá đã dựng
+        thì trả ngay bản đã có, không dựng lần hai (nút bấm nhầm nhiều lần
+        không được đọc lại dữ liệu nhiều lần).
+        """
+        trang = self._trang.get(khoa)
+        if trang is not None:
+            return trang
+        tao = self._xuong.get(khoa)
+        if tao is None and khoa not in {k for k, _bt, _ten in self._nav}:
+            return None
+        ten = next((n for k, _bt, n in self._nav if k == khoa), khoa)
+        trang = tao() if tao else self._trang_dang_lam(ten)
+        self._trang[khoa] = trang
+        vo = self._boc_cuon(trang)
+        self._vo_cuon[khoa] = vo
+        self._chong.addWidget(vo)
+        return trang
+
+    def dung_het_trang(self) -> None:
+        """Dựng NGAY mọi trang trong thanh bên.
+
+        Chỉ dùng cho bài kiểm cần soi TẤT CẢ trang cùng lúc
+        (`tests/test_bo_cuc.py`) hoặc vỏ cần liệt kê đủ trang. Khách bình
+        thường không bao giờ đi qua đường này — mở tool chỉ dựng trang mở đầu
+        + `_KHOA_LUON_DUNG`, xem lý do ở hằng số đó.
+        """
+        for khoa, _bieu_tuong, _ten in self._nav:
+            self._dam_bao_trang(khoa)
 
     def _trang_mo_dau(self) -> str:
         """Trang hiện ra lúc mở tool.
@@ -483,7 +602,11 @@ class CuaSoChinh(QWidget):
             muon = che_do_vps.trang_mo_dau(self.base_dir)
         except Exception:  # noqa: BLE001 — thiếu mô-đun: máy nhà
             muon = None
-        return muon if (muon and muon in self._trang) else mac_dinh
+        # Đọc MỀM: hàm này chạy sớm (trước lúc thanh bên dựng xong) và vỏ ngoài
+        # có thể chưa có `_nav`. Thiếu thì coi như không trang nào hợp lệ và
+        # dùng trang mặc định — không được ném lỗi chỉ vì hỏi trang mở đầu.
+        ten_trong_nav = {khoa for khoa, _bt, _ten in getattr(self, "_nav", ())}
+        return muon if (muon and muon in ten_trong_nav) else mac_dinh
 
     def _boc_cuon(self, trang: QWidget) -> QWidget:
         """Bọc một trang trong vùng cuộn DỌC.
@@ -529,11 +652,18 @@ class CuaSoChinh(QWidget):
         return hop
 
     def trang(self, khoa: str):
-        """Lấy một trang theo khoá — để trang này gửi kết quả sang trang kia."""
-        return self._trang.get(khoa)
+        """Lấy một trang theo khoá — để trang này gửi kết quả sang trang kia.
+
+        Dựng trang đó nếu chưa có: một trang hỏi trang KHÁC là để GỬI gì đó
+        sang nó (rồi luôn gọi `show_page` ngay sau — xem `ui_qt/trang_voice.py`,
+        `ui_qt/tab_chat_viet.py`…), tức khách sắp thấy trang ấy thật, không
+        phải một câu ngó qua tò mò. Trả `None` rồi bắt nơi gọi tự đoán "chưa
+        dựng" nghĩa là gì chỉ đẻ thêm một lớp `getattr(..., None)` nữa.
+        """
+        return self._dam_bao_trang(khoa)
 
     def show_page(self, khoa: str) -> None:
-        trang = self._trang.get(khoa)
+        trang = self._dam_bao_trang(khoa)
         if trang is None:
             return
         # Thứ nằm trong chồng là VÙNG CUỘN bọc ngoài trang, không phải trang.

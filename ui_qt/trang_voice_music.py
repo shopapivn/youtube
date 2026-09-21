@@ -47,8 +47,10 @@ class TrangVoiceMusic(QWidget):
         ═══ VÌ SAO BẮT BUỘC — lỗi đã cắn 02/09/2026 ═══
 
         `app._nhan_su_kien` chỉ tìm `.bang` (hoặc `.nhan_su_kien`) ở TRANG CẤP
-        CAO NHẤT trong `self._trang`. Trước khi có vỏ này, `self._trang["voice"]`
-        chính là `TrangGiongNoi` và nó có `.bang` — nên bảng nhận được sự kiện.
+        CAO NHẤT trong sổ trang ĐÃ DỰNG của cửa sổ (`app.trang("voice")`; từ
+        21/09/2026 trang chỉ dựng khi khách bấm vào — xem `CuaSoChinh`). Trước
+        khi có vỏ này, trang "voice" chính là `TrangGiongNoi` và nó có `.bang`
+        — nên bảng nhận được sự kiện.
 
         Gói hai trang vào một `QTabWidget` làm trang cấp cao thành `TrangVoiceMusic`
         (không có `.bang`), nên KHÔNG bảng con nào nghe được: khách bấm "Tạo

@@ -316,7 +316,11 @@ def trang(tmp_path, ung_dung, monkeypatch):
     monkeypatch.setattr("ui_qt.trang_edit.doc_thoi_luong", lambda *a, **k: 6.0)
     monkeypatch.setattr("ui_qt.trang_edit.co_ne_giong", lambda *a, **k: False)
     app = _AppGia(goc)
-    return TrangDungVideo(app), app, goc
+    t = TrangDungVideo(app)
+    # Quét đầu tiên dời sang `showEvent` (21/09/2026, xem `ui_qt/trang_edit.py`).
+    t.show()
+    ung_dung.processEvents()
+    return t, app, goc
 
 
 class TestTabDungVideoNoiThat:

@@ -149,7 +149,9 @@ class TrangDanhBa(QWidget):
         doc.addWidget(self._the_danh_ba(), 1)
         doc.addWidget(self._the_hop_thu())
 
-        self._nap_kenh()
+        #: Đã đọc danh bạ lần đầu chưa — xem `showEvent`.
+        self._da_nap_lan_dau = False
+        self._nap_kenh_nhe()
 
     # ── Hộp thư đến ──────────────────────────────────────────────────────────
 
@@ -702,7 +704,16 @@ class TrangDanhBa(QWidget):
 
     # ── Nạp / vẽ ─────────────────────────────────────────────────────────────
 
-    def _nap_kenh(self) -> None:
+    def _nap_kenh_nhe(self) -> None:
+        """Đổ ô chọn kênh — CHỈ liệt kê thư mục, không đọc danh bạ.
+
+        ═══ KHÔNG ĐỌC DỮ LIỆU TRONG __init__ — SỰ CỐ 21/09/2026 ═══
+
+        Trang này (mục con "Đối thủ") buộc phải dựng ngay lúc mở tool vì nó
+        giữ hook "Một nút" (xem `tram_mod.dat_hook_trang_chu` ở `__init__`) —
+        nên `__init__` của nó phải rẻ. Bảng danh bạ thật sự đọc lúc mục này
+        HIỆN RA LẦN ĐẦU (`showEvent`), qua `run_bg` nên không đứng hình.
+        """
         self._chon_kenh.blockSignals(True)
         dang = self._chon_kenh.currentText().strip()
         self._chon_kenh.clear()
@@ -711,7 +722,19 @@ class TrangDanhBa(QWidget):
         if dang:
             self._chon_kenh.setCurrentText(dang)
         self._chon_kenh.blockSignals(False)
-        self._doi_kenh()
+        self._kenh = self._chon_kenh.currentText().strip()
+
+    def _nap_kenh(self) -> None:
+        """Đổ lại ô chọn kênh RỒI đọc danh bạ ngay — khách chủ động đổi kênh."""
+        self._nap_kenh_nhe()
+        self._nap()
+
+    def showEvent(self, su_kien) -> None:  # noqa: N802 — tên hàm của Qt
+        """Mục "Đối thủ" hiện ra lần đầu → đọc danh bạ đúng lúc đó."""
+        super().showEvent(su_kien)
+        if not self._da_nap_lan_dau:
+            self._da_nap_lan_dau = True
+            self._nap()
 
     def doi_du_an(self, ten: str) -> None:
         self._nap_kenh()
@@ -731,16 +754,40 @@ class TrangDanhBa(QWidget):
             self._cot, self._hang = list(db.COT), []
             self._ve()
             return
+        self._tom_tat.setText("Đang đọc số liệu…")
+        goc, kenh = self._app.base_dir, self._kenh
+
+        def doc():
+            # LUỒNG NỀN — hai lượt đọc CSV/tính điểm, không chạm widget.
+            cot, hang = db.doc(goc, kenh)
+            # `Đăng gần nhất` / `Im lặng` tính từ chính bảng content đang có —
+            # miễn phí và luôn khớp với thứ khách đang nhìn ở mục Content.
+            try:
+                cot_ct, hang_ct = so.doc_bang(goc, kenh)
+                hang = db.cap_nhat_tu_bang(
+                    cot, hang, db.thong_ke_tu_bang(cot_ct, hang_ct))
+            except Exception:  # noqa: BLE001 — chưa có bảng content cũng bình thường
+                pass
+            return cot, hang
+
+        def xong(ket) -> None:
+            if kenh != self._kenh:
+                return  # khách đã đổi sang kênh khác trong lúc chờ — bỏ kết quả cũ
+            self._cot, self._hang = ket
+            self._sau_khi_doc_danh_ba()
+
+        def hong(loi: BaseException) -> None:
+            if kenh != self._kenh:
+                return
+            self._tom_tat.setText("Không đọc được danh bạ.")
+            self._app.show_error(loi)
+
+        self._app.run_bg(doc, on_ok=xong, on_err=hong)
+
+    def _sau_khi_doc_danh_ba(self) -> None:
+        """Phần còn lại của việc nạp — tệp nhỏ, chạy trên luồng vẽ sau khi
+        danh bạ (phần nặng nhất) đã đọc xong ở luồng nền."""
         goc = self._app.base_dir
-        self._cot, self._hang = db.doc(goc, self._kenh)
-        # `Đăng gần nhất` / `Im lặng` tính từ chính bảng content đang có —
-        # miễn phí và luôn khớp với thứ khách đang nhìn ở mục Content.
-        try:
-            cot_ct, hang_ct = so.doc_bang(goc, self._kenh)
-            self._hang = db.cap_nhat_tu_bang(
-                self._cot, self._hang, db.thong_ke_tu_bang(cot_ct, hang_ct))
-        except Exception:  # noqa: BLE001 — chưa có bảng content cũng bình thường
-            pass
         thu = db.hop_thu(goc, self._kenh)
         self._o_hop_thu.setPlainText("\n".join(thu))
         self._nhan_hop_thu.setText(
@@ -1146,7 +1193,9 @@ class TrangTuyen(QWidget):
         # 07/09/2026: danh sách video để chọn làm CHỈ CÒN MỘT — bảng "Kết quả" ở mục Đối thủ.
         # Bảng "Nên làm" ở đây là cùng một câu trả lời bày lần hai; giấu (mã vẫn còn cho bài kiểm).
         the_nen_lam.setVisible(False)
-        self._nap_kenh()
+        #: Đã đọc bảng tuyến lần đầu chưa — xem `showEvent`.
+        self._da_nap_lan_dau = False
+        self._nap_kenh_nhe()
 
     def _the_tuyen(self) -> QWidget:
         khung = the()
@@ -1252,7 +1301,12 @@ class TrangTuyen(QWidget):
 
     # ── Nạp ──────────────────────────────────────────────────────────────────
 
-    def _nap_kenh(self) -> None:
+    def _nap_kenh_nhe(self) -> None:
+        """Đổ ô chọn kênh — CHỈ liệt kê thư mục, không đọc bảng tuyến/content.
+
+        Xem "KHÔNG ĐỌC DỮ LIỆU TRONG __init__" ở `TrangDanhBa._nap_kenh_nhe`
+        cùng tệp này — cùng lý do, cùng sự cố 21/09/2026.
+        """
         self._chon_kenh.blockSignals(True)
         dang = self._chon_kenh.currentText().strip()
         self._chon_kenh.clear()
@@ -1261,7 +1315,19 @@ class TrangTuyen(QWidget):
         if dang:
             self._chon_kenh.setCurrentText(dang)
         self._chon_kenh.blockSignals(False)
-        self._doi_kenh()
+        self._kenh = self._chon_kenh.currentText().strip()
+
+    def _nap_kenh(self) -> None:
+        """Đổ lại ô chọn kênh RỒI đọc bảng ngay — khách chủ động đổi kênh."""
+        self._nap_kenh_nhe()
+        self._nap()
+
+    def showEvent(self, su_kien) -> None:  # noqa: N802 — tên hàm của Qt
+        """Mục "Tuyến" hiện ra lần đầu → đọc bảng đúng lúc đó."""
+        super().showEvent(su_kien)
+        if not self._da_nap_lan_dau:
+            self._da_nap_lan_dau = True
+            self._nap()
 
     def doi_du_an(self, ten: str) -> None:
         self._nap_kenh()
@@ -1281,14 +1347,32 @@ class TrangTuyen(QWidget):
             self._cot_ct, self._hang_ct, self._diem = [], [], []
             self._ve()
             return
-        goc = self._app.base_dir
-        self._cot, self._hang = tn.doc(goc, self._kenh)
-        self._cot_ct, self._hang_ct = so.doc_bang(goc, self._kenh)
-        self._subs = db.subs_theo_kenh(goc, self._kenh)
-        self._tuyen_kenh = db.tuyen_theo_kenh(goc, self._kenh)
-        self._diem = cham.cham_bang(self._cot_ct, self._hang_ct,
-                                    subs_theo_kenh=self._subs)
-        self._ve()
+        self._tom_tat.setText("Đang đọc số liệu…")
+        goc, kenh = self._app.base_dir, self._kenh
+
+        def doc():
+            # LUỒNG NỀN — đọc bảng tuyến + bảng content (nghìn dòng) + chấm điểm.
+            cot, hang = tn.doc(goc, kenh)
+            cot_ct, hang_ct = so.doc_bang(goc, kenh)
+            subs = db.subs_theo_kenh(goc, kenh)
+            tuyen_kenh = db.tuyen_theo_kenh(goc, kenh)
+            diem = cham.cham_bang(cot_ct, hang_ct, subs_theo_kenh=subs)
+            return cot, hang, cot_ct, hang_ct, subs, tuyen_kenh, diem
+
+        def xong(ket) -> None:
+            if kenh != self._kenh:
+                return  # khách đã đổi sang kênh khác trong lúc chờ — bỏ kết quả cũ
+            (self._cot, self._hang, self._cot_ct, self._hang_ct,
+             self._subs, self._tuyen_kenh, self._diem) = ket
+            self._ve()
+
+        def hong(loi: BaseException) -> None:
+            if kenh != self._kenh:
+                return
+            self._tom_tat.setText("Không đọc được bảng.")
+            self._app.show_error(loi)
+
+        self._app.run_bg(doc, on_ok=xong, on_err=hong)
 
     def _tuyen_cua_dong(self, dong) -> str:
         """Tuyến của một dòng content: ô của chính nó, thiếu thì theo KÊNH đăng.

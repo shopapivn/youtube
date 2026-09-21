@@ -41,11 +41,49 @@ def cua_so():
 
     app = QApplication.instance() or QApplication([])
     cs = CuaSoChinh(GOC)
+    # Mở tool giờ chỉ dựng trang mở đầu + vài trang có tác dụng phụ (xem
+    # `CuaSoChinh._KHOA_LUON_DUNG`) — bộ bài dưới đây soi TẤT CẢ trang cùng
+    # lúc, nên phải dựng đủ trước, không thì phần lớn `cs._trang` rỗng.
+    cs.dung_het_trang()
     cs.resize(TRAN_RONG, 900)
     cs.show()
     app.processEvents()
     yield cs, app
     cs.close()
+
+
+def test_mo_tool_chi_dung_vai_trang_ngay_luc_dau():
+    """21/09/2026: khách máy yếu báo tool "đơ và bị Not Responding" lúc mở.
+
+    Đo trên máy NHANH, offscreen, dữ liệu thật: dựng cả cửa sổ mất 16 giây vì
+    CẢ MƯỜI HAI trang cùng đọc dữ liệu kênh lúc khởi động — riêng trang Phân
+    tích & Nghiên cứu 8,8 giây. Giờ chỉ trang MỞ ĐẦU + trang có tác dụng phụ
+    chạy nền không đợi khách bấm vào (trạm nhận cổng 8765, hook "Một nút")
+    được dựng ngay; trang khác dựng lúc khách thật sự bấm (`show_page`).
+
+    Bài này KHÔNG dùng fixture `cua_so` ở trên — fixture đó cố ý dựng hết mọi
+    trang cho các bài kiểm bố cục. Ở đây cần một cửa sổ vừa mở xong, chưa ai
+    đụng vào gì.
+    """
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt5.QtWidgets import QApplication
+
+    from ui_qt.app import CuaSoChinh
+
+    app = QApplication.instance() or QApplication([])
+    cs = CuaSoChinh(GOC)
+    try:
+        cho_phep = set(CuaSoChinh._KHOA_LUON_DUNG) | {cs._trang_mo_dau()}
+        thua = set(cs._trang) - cho_phep
+        assert not thua, (
+            "mở tool dựng thêm trang ngoài danh sách cho phép ({0}): {1} — "
+            "mỗi trang thừa là vài giây đơ trên máy khách yếu, xem "
+            "CuaSoChinh._KHOA_LUON_DUNG".format(sorted(cho_phep), sorted(thua)))
+        assert len(cs._trang) <= 3, (
+            "mở tool dựng {0} trang cùng lúc — quá nhiều, xem "
+            "CuaSoChinh._KHOA_LUON_DUNG".format(len(cs._trang)))
+    finally:
+        cs.close()
 
 
 def test_moi_trang_co_duoc_xuong_760px(cua_so):

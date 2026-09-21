@@ -92,7 +92,9 @@ def _req_dem(method, path, *a, **k):
 cua.client.request = _req_dem
 
 # Tab Hàng loạt, chế độ Ảnh→Video (mặc định), lưu vào thư mục tạm.
-hl = cua._trang["media"].hang_loat
+# `cua.trang(...)` (không phải `cua._trang[...]`) — trang giờ dựng LƯỜI, chỉ
+# thật sự có mặt trong `_trang` lúc được hỏi tới hoặc hiện ra lần đầu.
+hl = cua.trang("media").hang_loat
 hl._thu_muc._o.setText(OUT)
 dong = doc_excel(EXCEL)
 _gh = int(os.environ.get("DO_GIOI_HAN", "0") or "0")

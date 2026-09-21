@@ -176,6 +176,13 @@ class _BangTinh(QTableWidget):
 class TrangDoiThu(QWidget):
     """Sổ đối thủ của một kênh — xem luật ở `core/doi_thu_kenh.py`."""
 
+    #: Trần số dòng đổ ra bảng — sổ vài nghìn dòng thì đổ hết là 300 nghìn lượt
+    #: `setItem`, đo trên máy thật mất 2,4 giây (đứng hình đúng lúc khách vừa
+    #: bấm vào mục). Dòng vượt trần vẫn được GIỮ và LƯU đủ (`self._an_duoi`,
+    #: xem `_hang_tren_bang`) — chỉ không VẼ ra cho tới khi khách bấm "Hiện
+    #: tất cả" (`_hien_tat_ca`).
+    _TRAN_HIEN_BANG = 300
+
     def __init__(self, app):
         super().__init__()
         self._app = app
@@ -190,6 +197,11 @@ class TrangDoiThu(QWidget):
         self._cot: List[str] = so.cot_mac_dinh()
         self._rong: Dict[str, int] = {}
         self._quet_luc = 0.0
+        #: Dòng VƯỢT TRẦN hiện, chưa vẽ ra bảng — vẫn còn nguyên khi lưu.
+        self._an_duoi: List[List[str]] = []
+        #: Khách đã bấm "Hiện tất cả" cho kênh đang mở — đổi kênh thì tắt lại,
+        #: kênh mới chưa chắc cũng đáng đợi thêm vài giây.
+        self._hien_het = False
 
         doc = QVBoxLayout(self)
         doc.setContentsMargins(24, 20, 24, 20)
@@ -209,7 +221,9 @@ class TrangDoiThu(QWidget):
                                                  theme.CHU_MO))
         doc.addWidget(self._log)
 
-        self._nap_kenh()
+        #: Đã đọc bảng content lần đầu chưa — xem `showEvent`.
+        self._da_nap_lan_dau = False
+        self._nap_kenh_nhe()
         # Quét định kỳ CHỈ chạy khi tool đang mở: nửa tiếng ngó đồng hồ một
         # lần, đến hạn (mặc định ~1 ngày) thì tự quét — khách bật ở ô tick.
         self._dong_ho = QTimer(self)
@@ -406,12 +420,35 @@ class TrangDoiThu(QWidget):
         hang.addWidget(nut_phu("Thêm cột…", self._them_cot, rong=120))
         hang.addWidget(nut_phu("Xoá dòng đã chọn", self._xoa_dong, rong=170))
         hang.addWidget(nut_phu("Copy tất cả", self._copy_tat_ca, rong=130))
+        # Sổ vài nghìn dòng thì `_do_bang` chỉ đổ 300 dòng đầu ra màn hình —
+        # đổ hết là đứng hình ngay lúc mở mục (xem `_TRAN_HIEN_BANG`). Nút
+        # này hiện khi bị cắt, khách tự quyết có đợi thêm để xem hết không.
+        self._nut_hien_het = nut_phu("Hiện tất cả", self._hien_tat_ca, rong=150)
+        self._nut_hien_het.setToolTip(
+            "Bảng đang chỉ hiện {0} dòng đầu cho mở nhanh. Bấm để hiện hết — "
+            "có thể mất vài giây với sổ lớn.".format(self._TRAN_HIEN_BANG))
+        self._nut_hien_het.hide()
+        hang.addWidget(self._nut_hien_het)
         v.addLayout(hang)
         return khung
 
     # ── Kênh đang mở ─────────────────────────────────────────────────────────
 
-    def _nap_kenh(self) -> None:
+    def _nap_kenh_nhe(self) -> None:
+        """Đổ ô chọn kênh — CHỈ liệt kê thư mục, không đọc bảng content.
+
+        ═══ KHÔNG ĐỌC DỮ LIỆU TRONG __init__ — SỰ CỐ 21/09/2026 ═══
+
+        Trước đây `__init__` gọi bản đủ (đọc cả sổ content + chấm điểm ngay
+        lúc DỰNG trang) — trên máy thật tốn 2,4 giây, phần lớn là 306 nghìn
+        lượt `setItem`, góp vào 16 giây "Not Responding" lúc mở tool. Mục
+        này là một trong năm mục con của tab Phân tích & Nghiên cứu, và tab
+        đó buộc phải dựng ngay lúc mở tool (`TrangDanhBa` giữ hook "Một nút"
+        — xem `ui_qt/app.py:_KHOA_LUON_DUNG`), nên `__init__` của MỌI mục
+        con phải rẻ. Giờ chỉ liệt kê thư mục kênh ở đây (rẻ); bảng thật sự
+        đọc lúc mục "Content" HIỆN RA LẦN ĐẦU — xem `showEvent` — và việc
+        đọc đi qua `run_bg` nên không đứng hình cửa sổ dù có chậm.
+        """
         self._chon_kenh.blockSignals(True)
         dang = self._chon_kenh.currentText().strip()
         self._chon_kenh.clear()
@@ -420,11 +457,26 @@ class TrangDoiThu(QWidget):
         if dang:
             self._chon_kenh.setCurrentText(dang)
         self._chon_kenh.blockSignals(False)
+        self._kenh_dang_mo = so.ten_kenh_an_toan(self._chon_kenh.currentText())
+        self._cap_nhat_nhan_doi_thu()
+
+    def _nap_kenh(self) -> None:
+        """Đổ lại ô chọn kênh RỒI đọc bảng ngay — khách chủ động đổi kênh."""
+        self._nap_kenh_nhe()
         self._doi_kenh()
+
+    def showEvent(self, su_kien) -> None:  # noqa: N802 — tên hàm của Qt
+        """Mục "Content" hiện ra lần đầu → đọc bảng đúng lúc đó, không sớm hơn."""
+        super().showEvent(su_kien)
+        if not self._da_nap_lan_dau:
+            self._da_nap_lan_dau = True
+            self._doi_kenh()
 
     def _doi_kenh(self) -> None:
         kenh = so.ten_kenh_an_toan(self._chon_kenh.currentText())
         self._kenh_dang_mo = kenh
+        # Kênh mới — chưa chắc đáng đợi vẽ hết, bắt đầu lại ở trạng thái cắt trần.
+        self._hien_het = False
         self._dang_do = True
         try:
             self._cap_nhat_nhan_doi_thu()
@@ -436,14 +488,40 @@ class TrangDoiThu(QWidget):
                 self._quet_luc = float(cai.get("quet_luc") or 0)
             except (TypeError, ValueError):
                 self._quet_luc = 0.0
-            if kenh:
-                cot, hang = so.doc_bang(self._app.base_dir, kenh)
-            else:
-                cot, hang = so.cot_mac_dinh(), []
-            self._do_bang(cot, hang)
         finally:
             self._dang_do = False
+        self._nap_bang(kenh)
         self._quet_neu_den_han()
+
+    def _nap_bang(self, kenh: str) -> None:
+        """Đọc bảng content ở LUỒNG NỀN rồi mới đổ ra bảng.
+
+        Sổ đối thủ vài nghìn dòng, đọc CSV + chấm điểm tốn cả giây (đo trên
+        máy thật: 0,8 giây đọc + 0,75 giây chấm điểm) — làm thẳng ở đây (luồng
+        vẽ) là đứng hình đúng lúc khách vừa bấm vào mục.
+        """
+        if not kenh:
+            self._do_bang(so.cot_mac_dinh(), [])
+            return
+        self._tom_tat.setText("Đang đọc số liệu…")
+        goc = self._app.base_dir
+
+        def viec():
+            return so.doc_bang(goc, kenh)
+
+        def xong(ket) -> None:
+            if kenh != self._kenh_dang_mo:
+                return  # khách đã đổi sang kênh khác trong lúc chờ — bỏ kết quả cũ
+            cot, hang = ket
+            self._do_bang(cot, hang)
+
+        def hong(loi: BaseException) -> None:
+            if kenh != self._kenh_dang_mo:
+                return
+            self._tom_tat.setText("Không đọc được bảng.")
+            self._app.show_error(loi)
+
+        self._app.run_bg(viec, on_ok=xong, on_err=hong)
 
     def _mo_thu_muc(self) -> None:
         if not self._kenh_dang_mo:
@@ -525,6 +603,10 @@ class TrangDoiThu(QWidget):
                 dong[c_anh] = (so.dia_chi_anh(dong[c_link])
                                if c_link >= 0 else "")
             hang.append(dong)
+        # Dòng vượt trần hiện (`_TRAN_HIEN_BANG`) chưa từng lên bảng — nối lại
+        # ở cuối chứ KHÔNG được bỏ, không thì "chưa bấm Hiện tất cả" nghĩa là
+        # lưu đè mất sạch phần đuôi sổ. Xem `_do_bang`.
+        hang.extend(self._an_duoi)
         return hang
 
     # ── Ảnh thumbnail ────────────────────────────────────────────────────────
@@ -651,7 +733,15 @@ class TrangDoiThu(QWidget):
         return diem
 
     def _do_bang(self, cot: List[str], hang: List[List[str]]) -> None:
+        # Điểm tính trên CẢ SỔ — nó là thứ hạng trong lô, cắt bớt rồi mới chấm
+        # là đổi cả thứ hạng của những dòng còn hiện. Chỉ phần VẼ ra bảng mới
+        # bị cắt trần (`_TRAN_HIEN_BANG`), xem ngay dưới.
         self._diem = self._cham_diem(list(cot), hang)
+        if self._hien_het or len(hang) <= self._TRAN_HIEN_BANG:
+            hien_ra, self._an_duoi = hang, []
+        else:
+            hien_ra = hang[:self._TRAN_HIEN_BANG]
+            self._an_duoi = hang[self._TRAN_HIEN_BANG:]
         self._dang_do = True
         # Qt bắt buộc tắt sắp xếp trong lúc đổ dòng — không thì dòng vừa chèn
         # bị xếp lại giữa chừng và dữ liệu rơi sai hàng.
@@ -677,8 +767,8 @@ class TrangDoiThu(QWidget):
                         if so.COT_DIEM in self._cot else -1)
             if cot_anh >= 0:
                 self._bang.setIconSize(QSize(_ANH_RONG, _ANH_CAO))
-            self._bang.setRowCount(len(hang))
-            for i, dong in enumerate(hang):
+            self._bang.setRowCount(len(hien_ra))
+            for i, dong in enumerate(hien_ra):
                 for c in range(len(self._cot)):
                     o = str(dong[c]) if c < len(dong) else ""
                     muc = QTableWidgetItem()
@@ -707,17 +797,36 @@ class TrangDoiThu(QWidget):
         finally:
             self._bang.setSortingEnabled(True)
             self._dang_do = False
+        if hasattr(self, "_nut_hien_het"):
+            self._nut_hien_het.setVisible(bool(self._an_duoi))
+            if self._an_duoi:
+                self._nut_hien_het.setText(
+                    "Hiện tất cả ({0} dòng)".format(len(hang)))
         self._cap_nhat_tom_tat()
         self._loc()
         self._hen_tai_anh()
 
+    def _hien_tat_ca(self) -> None:
+        """Khách bấm "Hiện tất cả" — vẽ lại KHÔNG cắt trần cho kênh đang mở."""
+        if not self._an_duoi:
+            return
+        self._hien_het = True
+        self._do_bang(self._cot, self._hang_tren_bang())
+
     def _cap_nhat_tom_tat(self) -> None:
-        tong = self._bang.rowCount()
-        hien = sum(1 for i in range(tong) if not self._bang.isRowHidden(i))
+        tong = self._bang.rowCount() + len(self._an_duoi)
+        hien = sum(1 for i in range(self._bang.rowCount())
+                   if not self._bang.isRowHidden(i))
         # Đang lọc thì phải nói rõ đang nhìn bao nhiêu trên bao nhiêu — không
-        # thì khách tưởng sổ chỉ có ngần ấy dòng và đi quét lại cho "đủ".
-        phan = ["{0}/{1} video".format(hien, tong) if hien != tong
-                else ("{0} video".format(tong) if tong else "chưa có dữ liệu")]
+        # thì khách tưởng sổ chỉ có ngần ấy dòng và đi quét lại cho "đủ". Còn
+        # bị cắt trần thì phải nói THẲNG là chưa hiện hết — lọc/tìm lúc này
+        # chỉ chạy trên phần đã hiện, không phải cả sổ (xem "Hiện tất cả").
+        if self._an_duoi:
+            phan = ["hiện {0}/{1} video (bấm “Hiện tất cả” để lọc trên cả sổ)"
+                    .format(hien, tong)]
+        else:
+            phan = ["{0}/{1} video".format(hien, tong) if hien != tong
+                    else ("{0} video".format(tong) if tong else "chưa có dữ liệu")]
         if self._quet_luc > 0:
             phan.append("quét lần cuối {0}".format(
                 time.strftime("%H:%M %d/%m", time.localtime(self._quet_luc))))

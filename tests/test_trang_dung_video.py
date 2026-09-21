@@ -93,7 +93,14 @@ def trang(tmp_path, ung_dung, monkeypatch):
     goc = str(tmp_path)
     _du_an_tool(goc)
     app = _AppGia(goc)
-    return TrangDungVideo(app), app, goc
+    t = TrangDungVideo(app)
+    # Quét đầu tiên dời sang `showEvent` (21/09/2026: không đọc dữ liệu trong
+    # __init__ nữa — xem `ui_qt/trang_edit.py`). `.show()` là đúng lúc khách
+    # THẬT SỰ thấy tab này; `_AppGia.run_bg` ở trên chạy đồng bộ nên quét
+    # xong ngay trong lệnh gọi, như khi FFmpeg/openpyxl còn chạy thẳng ở đây.
+    t.show()
+    ung_dung.processEvents()
+    return t, app, goc
 
 
 class TestQuetSan:

@@ -83,8 +83,10 @@ def test_moi_trang_cap_cao_deu_nghe_duoc_su_kien():
     from ui_qt import app as app_mod
 
     # Đọc thẳng xưởng dựng, không cần QApplication: chỉ soi rằng mỗi khoá trong
-    # TRANG được nối vào `_dung_cac_trang`.
-    src = inspect.getsource(app_mod.CuaSoChinh._dung_cac_trang)
+    # TRANG được nối vào `_xuong_trang` (trang chỉ thật sự dựng lúc khách bấm
+    # vào — xem `CuaSoChinh._dam_bao_trang` — nhưng khoá phải có mặt trong
+    # xưởng thì mới dựng được).
+    src = inspect.getsource(app_mod.CuaSoChinh._xuong_trang)
     for khoa, _bt, _ten in app_mod.TRANG:
         assert '"{0}":'.format(khoa) in src or "'{0}':".format(khoa) in src, \
-            "trang '{0}' chưa được nối vào _dung_cac_trang".format(khoa)
+            "trang '{0}' chưa được nối vào _xuong_trang".format(khoa)

@@ -469,9 +469,12 @@ def test_trang_mo_dau_tren_vps(monkeypatch):
     import core
 
     monkeypatch.setattr(core, "che_do_vps", gia, raising=False)
+    # `_trang_mo_dau` giờ soi khoá có mặt trong `_nav` (danh sách khai báo),
+    # không còn soi `_trang` (trang ĐÃ DỰNG) — trang giờ dựng lười, nên lúc
+    # `_trang_mo_dau` chạy phần lớn trang khai báo còn chưa có mặt trong đó.
     cua_so = types.SimpleNamespace(config=types.SimpleNamespace(is_ready=True), base_dir=".",
                                    TRANG_DAU="wallet", TRANG_DAU_CHUA_KHOA="wallet",
-                                   _trang={"wallet": 1, "trung_tam": 2})
+                                   _nav=(("wallet", "", "Ví"), ("trung_tam", "", "Trung tâm")))
     assert CuaSoChinh._trang_mo_dau(cua_so) == "trung_tam"
     gia.trang_mo_dau = lambda _g: None
     assert CuaSoChinh._trang_mo_dau(cua_so) == "wallet"

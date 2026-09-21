@@ -363,6 +363,10 @@ def trang(tmp_path, ung_dung, monkeypatch):
     app = _AppGia(goc)
 
     def dung(t):
+        # Quét đầu tiên dời sang `showEvent` (21/09/2026, xem
+        # `ui_qt/trang_edit.py`) — `.show()` đúng lúc khách thật sự thấy tab.
+        t.show()
+        ung_dung.processEvents()
         t._phu_de.setChecked(False)
         t._nhac.setChecked(False)
 
