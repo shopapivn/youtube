@@ -528,6 +528,9 @@ class TrangTaiKhoan(QWidget):
                     phut, anh, clip))
         except Exception:  # noqa: BLE001 — quy đổi hỏng không được che mất số dư
             self._quy_doi.setText("")
+        # Bảng giá thường về SAU khi thẻ nạp tiền đã dựng xong, nên dòng thưởng
+        # lúc dựng là rỗng. Vẽ lại ở đây là chỗ duy nhất chắc chắn đã có giá.
+        self._ve_thuong()
 
     def _ve_so_cai(self, trang) -> None:
         from PyQt5.QtGui import QColor  # noqa: PLC0415
@@ -574,6 +577,19 @@ class TrangTaiKhoan(QWidget):
                 format_vnd(self._app.prices.min_topup_micro)))
         hang.addWidget(nut_qr)
         n.addLayout(hang)
+
+        # ═══ DÒNG THƯỞNG NẠP — cập nhật theo số tiền đang chọn ═══
+        #
+        # Con số đi ra từ `PriceTable`, tức là từ `GET /v1/pricing` của máy chủ.
+        # Tuyệt đối không gõ "3 triệu +10%" vào đây: ngày chủ dự án đổi bậc bằng
+        # `POST /admin/pricing`, tool đã cài trên máy khách sẽ hứa mức cũ và
+        # khách đếm lại ví thấy lệch. Máy chủ tắt khuyến mại thì dòng này tự ẩn.
+        self._nhan_thuong = nhan("", "muted")
+        self._nhan_thuong.setMinimumWidth(1)
+        self._nhan_thuong.setWordWrap(True)
+        n.addWidget(self._nhan_thuong)
+        self._o_tien.textChanged.connect(lambda _=None: self._ve_thuong())
+        self._ve_thuong()
 
         # Phiếu nạp: ẩn tới khi bấm Tạo mã QR. Trái là ảnh QR, phải là thông tin
         # để ai không quét được thì chuyển khoản tay.
@@ -647,6 +663,64 @@ class TrangTaiKhoan(QWidget):
         chi_so = "".join(ky_tu for ky_tu in gia_tri if ky_tu.isdigit())
         if chi_so:
             self._o_tien.setText(chi_so)
+        self._ve_thuong()
+
+    def _tien_dang_chon(self) -> int:
+        """Số tiền (ĐỒNG) đang hiện trên màn hình — ô gõ tay thắng nút chọn.
+
+        Khác `_so_tien()` ở chỗ nó **không bao giờ mở hộp thoại lỗi**: hàm này
+        chạy mỗi lần khách gõ một chữ số, nên một hộp thoại ở đây sẽ nhảy ra
+        giữa lúc đang gõ dở.
+        """
+        chu = "".join(k for k in self._o_tien.text() if k.isdigit())
+        if not chu:
+            chu = "".join(k for k in self._muc.get() if k.isdigit())
+        try:
+            return int(chu) if chu else 0
+        except ValueError:
+            return 0
+
+    def _ve_thuong(self) -> None:
+        """Một dòng: đang được thưởng bao nhiêu, và nạp thêm bao nhiêu thì lên bậc.
+
+        ⚠ Máy chủ KHÔNG khuyến mại thì dòng này rỗng hẳn, không phải ghi "thưởng
+        0%". Một dòng nói về thưởng khi không có thưởng chỉ làm khách đi tìm xem
+        mình bỏ lỡ cái gì.
+        """
+        gia = getattr(self._app, "prices", None)
+        if gia is None or not getattr(gia, "topup_bonus_tiers", ()):
+            self._nhan_thuong.setText("")
+            return
+
+        tien = self._tien_dang_chon()
+        if tien <= 0:
+            self._nhan_thuong.setText("")
+            return
+
+        phan_tram = gia.bonus_percent_for(tien)
+        thuong = gia.bonus_vnd_for(tien)
+        if phan_tram > 0:
+            dong = "Nạp {0} → vào ví {1} (thưởng {2}%, tặng thêm {3}).".format(
+                format_vnd(tien * 1_000_000),
+                format_vnd((tien + thuong) * 1_000_000),
+                phan_tram,
+                format_vnd(thuong * 1_000_000),
+            )
+        else:
+            dong = "Nạp {0} → vào ví đúng {0}.".format(format_vnd(tien * 1_000_000))
+
+        ke = gia.moc_thuong_ke_tiep(tien)
+        if ke is not None:
+            moc, pt = ke
+            them = gia.bonus_vnd_for(moc) - thuong
+            dong += "  Nạp thêm {0} nữa (tổng {1}) là lên {2}% — được tặng thêm {3}.".format(
+                format_vnd((moc - tien) * 1_000_000),
+                format_vnd(moc * 1_000_000),
+                pt,
+                format_vnd(them * 1_000_000),
+            )
+
+        self._nhan_thuong.setText(dong)
 
     def _so_tien(self) -> Optional[int]:
         chu = "".join(ky_tu for ky_tu in self._o_tien.text() if ky_tu.isdigit())

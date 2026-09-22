@@ -18,7 +18,7 @@ không cần cập nhật.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from .money import parse_micro
 
@@ -96,10 +96,59 @@ class PriceTable:
     #: dựng hàng nút TỪ nó — để thấp là lúc mất mạng tool mời khách nạp một mức
     #: máy chủ TỪ CHỐI, và khách chỉ biết sau khi đã chuyển tiền.
     min_topup_micro: int = 200_000_000_000
-    #: Phần trăm thưởng khi nạp. **Hiện tại là 0** và tool KHÔNG được hứa hẹn gì
-    #: khác. Máy chủ trả bậc thưởng ở `topup_bonus`; giữ trường này để nếu ngày nào
-    #: bật khuyến mại thật thì tool hiện đúng con số máy chủ nói, không phải sửa code.
+    #: Phần trăm thưởng cho lần nạp NHỎ NHẤT (bậc sàn). Giữ lại để mã cũ đọc
+    #: trường này không vỡ; muốn biết thưởng của một số tiền cụ thể thì gọi
+    #: `bonus_percent_for(vnd)`, đừng đọc trường này.
     topup_bonus_percent: int = 0
+    #: BẬC THƯỞNG ĐẦY ĐỦ — `(mức sàn µVND, phần trăm)`, **sắp giảm dần**.
+    #:
+    #: ⚠ Trước 22/09/2026 tool chỉ giữ MỘT con số: bậc thấp nhất. Lúc máy chủ
+    #: không khuyến mại thì bậc thấp nhất = bậc duy nhất = 0%, nên không ai thấy
+    #: sai. Ngày máy chủ bật ba bậc (3tr +10%, 6tr +20%, 10tr +30%), cách đọc cũ
+    #: lấy đúng bậc sàn `{0đ, 0%}` và tool báo với khách là **không có thưởng** —
+    #: trong khi ví họ được cộng thêm 30%. Đó là kiểu sai tệ nhất có thể có ở
+    #: một cái tool bán hàng: nó giấu đi chính lý do khách nên nạp nhiều hơn.
+    #:
+    #: Mặc định để rỗng chứ KHÔNG chép cứng ba bậc của máy chủ: mất mạng thì tool
+    #: im lặng về khuyến mại còn hơn hứa một mức máy chủ đã tắt.
+    topup_bonus_tiers: Tuple[Tuple[int, int], ...] = ()
+
+    def bonus_percent_for(self, vnd: int) -> int:
+        """Phần trăm thưởng cho một lần nạp `vnd` **đồng**.
+
+        Bậc đầu tiên khớp thắng — bảng đã sắp giảm dần trong `from_api`.
+
+        >>> PriceTable(topup_bonus_tiers=((10_000_000_000_000, 30),
+        ...                               (6_000_000_000_000, 20),
+        ...                               (3_000_000_000_000, 10))).bonus_percent_for(6_000_000)
+        20
+        """
+        micro = int(vnd) * 1_000_000
+        for san, phan_tram in self.topup_bonus_tiers:
+            if micro >= san:
+                return int(phan_tram)
+        return 0
+
+    def bonus_vnd_for(self, vnd: int) -> int:
+        """Số tiền thưởng (đồng) cho một lần nạp. Làm tròn xuống như máy chủ."""
+        return int(vnd) * self.bonus_percent_for(vnd) // 100
+
+    def moc_thuong_ke_tiep(self, vnd: int) -> Optional[Tuple[int, int]]:
+        """Bậc kế tiếp khách chưa với tới: `(mức sàn ĐỒNG, phần trăm)`.
+
+        `None` khi đã ở bậc cao nhất — lúc đó không còn gì để mời, và bịa thêm
+        một mốc là hứa một khoản không tồn tại.
+        """
+        hien_tai = self.bonus_percent_for(vnd)
+        micro = int(vnd) * 1_000_000
+        ke: Optional[Tuple[int, int]] = None
+        # Duyệt từ THẤP lên để lấy mốc gần nhất phía trên, không phải mốc cao
+        # nhất: mời 3tr → 6tr thì khách cân nhắc, mời 200k → 10tr thì họ bỏ qua.
+        for san, phan_tram in sorted(self.topup_bonus_tiers):
+            if san > micro and int(phan_tram) > hien_tai:
+                ke = (san // 1_000_000, int(phan_tram))
+                break
+        return ke
 
     @property
     def min_topup_vnd(self) -> int:
@@ -145,6 +194,7 @@ class PriceTable:
             "music_price_per_minute": cls.music_price_per_minute,
             "min_topup_micro": cls.min_topup_micro,
             "topup_bonus_percent": cls.topup_bonus_percent,
+            "topup_bonus_tiers": cls.topup_bonus_tiers,
         }
 
         try:
@@ -152,12 +202,17 @@ class PriceTable:
         except (TypeError, ValueError):
             pass  # thiếu hoặc hỏng → giữ 10.000₫ mặc định, không làm sập bảng giá
 
-        # Bậc thưởng: lấy bậc THẤP NHẤT (`min_amount` nhỏ nhất) vì đó là mức áp
-        # dụng cho lần nạp nhỏ nhất — cũng là con số duy nhất tool dám hiển thị.
-        # Hôm nay máy chủ trả đúng một bậc `{min_amount: "0", bonus_percent: 0}`.
+        # BẬC THƯỞNG: giữ **cả bảng**, không phải mỗi bậc sàn.
+        #
+        # Xem chú thích dài ở `topup_bonus_tiers`: bản trước chỉ giữ bậc thấp
+        # nhất, nên ngày máy chủ bật ba bậc thì tool báo "không có thưởng" trong
+        # khi ví khách được cộng thêm 30%.
+        #
+        # Sắp GIẢM DẦN ngay tại đây để `bonus_percent_for` chỉ việc lấy bậc đầu
+        # tiên khớp — máy chủ trả thứ tự nào cũng đúng, không phụ thuộc may rủi.
         tiers = payload.get("topup_bonus")
         if isinstance(tiers, (list, tuple)) and tiers:
-            lowest = None
+            bang = []
             for tier in tiers:
                 if not isinstance(tier, Mapping):
                     continue
@@ -166,10 +221,12 @@ class PriceTable:
                     percent = int(tier.get("bonus_percent") or 0)
                 except (TypeError, ValueError):
                     continue
-                if lowest is None or floor < lowest[0]:
-                    lowest = (floor, percent)
-            if lowest is not None:
-                values["topup_bonus_percent"] = lowest[1]
+                bang.append((floor, percent))
+            if bang:
+                bang.sort(key=lambda x: x[0], reverse=True)
+                values["topup_bonus_tiers"] = tuple(bang)
+                # Bậc sàn — giữ cho mã cũ đọc trường này không vỡ.
+                values["topup_bonus_percent"] = bang[-1][1]
 
         rules = payload.get("rules")
         if isinstance(rules, (list, tuple)):

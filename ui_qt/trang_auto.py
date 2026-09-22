@@ -313,9 +313,46 @@ class TrangTuDong(QWidget):
             "chạy thì video này xếp sau, tới lượt là chạy.")
         nut.addWidget(self._nut_chay)
         nut.addWidget(self._nut_tuy_chon)
+        nut.addWidget(self._nut_dat_template())
         v.addLayout(nut)
         v.addWidget(self._khung_tuy_chon)
         return khung
+
+    def _nut_dat_template(self):
+        """Lối vào dịch vụ **thiết kế template riêng** — đặt ngay cạnh nút Chạy.
+
+        ═══ VÌ SAO ĐÚNG CHỖ NÀY, KHÔNG PHẢI TAB CÀI ĐẶT ═══
+
+        Tab này chỉ tự chạy trọn vẹn khi kênh đã có template đúng cho chủ đề của
+        nó. Người bấm Chạy rồi thấy kết quả lệch với thứ mình hình dung đang ở
+        đúng khoảnh khắc hiểu ra vì sao cần template riêng — và đó là khoảnh
+        khắc duy nhất lời chào này có nghĩa. Nhét nó vào tab Cài đặt là cất đi
+        chỗ không ai mở.
+
+        ⚠ Nút PHỤ, không bao giờ được to hơn nút Chạy. Nó bán một dịch vụ 6
+        triệu, nhưng việc của tab này là làm video — biến tab sản xuất thành
+        trang quảng cáo là cách nhanh nhất khiến khách bỏ tab.
+        """
+        import webbrowser  # noqa: PLC0415 — chỉ cần khi khách bấm, đừng nạp sẵn
+
+        from core.config import DICH_VU_TEMPLATE_URL  # noqa: PLC0415
+
+        nut = nut_phu(
+            "Đặt template riêng",
+            lambda: webbrowser.open(DICH_VU_TEMPLATE_URL),
+            rong=150,
+        )
+        nut.setToolTip(
+            "Bên mình dựng bộ template riêng theo chủ đề và phong cách kênh của "
+            "bạn, để tab này chạy hết dây chuyền bằng một nút."
+            "\n\n"
+            "Dịch vụ 6.000.000đ — MIỄN PHÍ tháng 9 và 10 cho tài khoản có tổng "
+            "đã nạp từ 6.000.000đ."
+            "\n\n"
+            "Cần gửi video mẫu và bên mình duyệt trước mới nhận; mỗi ngày chỉ "
+            "dựng được 1 template. Bấm để xem điều kiện đầy đủ trên web."
+        )
+        return nut
 
     def _dung_tuy_chon(self) -> QWidget:
         khung = QWidget()

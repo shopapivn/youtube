@@ -43,6 +43,7 @@ __all__ = [
     "MAX_CONCURRENCY",
     "CONFIG_FILENAME",
     "DASHBOARD_KEYS_URL",
+    "DICH_VU_TEMPLATE_URL",
     "DASHBOARD_BILLING_URL",
     "DASHBOARD_LOGIN_URL",
     "load_config",
@@ -67,6 +68,17 @@ DASHBOARD_KEYS_URL = "https://shopapi.vn/dashboard/api-keys"
 DASHBOARD_BILLING_URL = "https://shopapi.vn/dashboard/billing"
 #: Trang đăng ký / quên mật khẩu — tool không tự đăng ký hộ khách.
 DASHBOARD_LOGIN_URL = "https://shopapi.vn/login"
+#: Dịch vụ thiết kế template riêng cho tab Video tự động.
+#:
+#: ⚠ Trỏ vào TRANG GIỚI THIỆU, không trỏ thẳng vào Zalo. Ba lý do, và lý do thứ
+#: ba mới là lý do bắt buộc:
+#:  • trang đó tự kiểm tổng đã nạp của khách rồi mới mở nút Zalo;
+#:  • nó nói đủ ba điều kiện (đủ tiền / có video mẫu / chủ đề auto được), còn
+#:    một nút Zalo trần thì ngầm hứa "cứ nhắn là được";
+#:  • số Zalo nằm ở MỘT chỗ duy nhất là web. Chép nó vào tool nghĩa là ngày đổi
+#:    số, mọi bản tool đã cài trên máy khách vẫn trỏ vào số cũ — và tool thì
+#:    không tự cập nhật được như web.
+DICH_VU_TEMPLATE_URL = "https://shopapi.vn/dich-vu/template-video-tu-dong"
 
 #: Trần CỨNG TUYỆT ĐỐI mỗi khách, mỗi loại job — CONTRACT.md §8.1.
 #: Vượt là máy chủ từ chối, nên đây là mức kẹp trên của mọi con số trong file
