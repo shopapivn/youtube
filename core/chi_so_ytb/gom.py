@@ -17,7 +17,18 @@ import os
 import re
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
+# Ép stdout về UTF-8 khi chạy như script CLI (in tiếng Việt ra console cp1252).
+#
+# ⚠ PHẢI BỌC try/except: Studio mở bằng `pythonw.exe` (CHAY-GON.vbs) — bản Python
+# KHÔNG có console, nên `sys.stdout` là **None** và `.reconfigure` ném AttributeError
+# NGAY LÚC IMPORT. Tệp này từng chỉ chạy bằng dòng lệnh nên không ai thấy; khi trang
+# Công thức V7 bắt đầu `from core.cong_thuc_v7 import ...` (kéo theo module này) thì
+# nó giết cả tool ngay lúc mở — khách 22/09/2026 không vào được tool, gỡ cài lại
+# cũng vô ích vì lỗi nằm trong mã. Cùng khuôn với `vm/may_cmt.py`.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 GOC = os.path.dirname(os.path.abspath(__file__))
 
 

@@ -26,7 +26,13 @@ import os
 import re
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
+# Bọc try/except vì Studio chạy bằng `pythonw.exe` -> `sys.stdout` là None ->
+# `.reconfigure` ném AttributeError ngay lúc import, giết cả tool. Xem chú thích
+# dài trong `gom.py` cùng thư mục.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 # Gói CẤP KÊNH chứa BA thẻ key-metric chồng nhau, cùng tên chỉ số nhưng khác cửa sổ thời gian
 # (đo 05/09/2026 trên kenh-20260905: EXTERNAL_VIEWS = 2359 · 1290 · 1290; SUBSCRIBERS_NET_CHANGE
