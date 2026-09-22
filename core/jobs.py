@@ -47,7 +47,7 @@ from .api import extract_outputs
 from .batch import duoi_cua_output, safe_filename, unique_path
 from .config import DEFAULT_CONCURRENCY, HARD_CAPS, redact
 from .download import DownloadError, download_to
-from .errors import ErrorAdvice, describe, retry_after_seconds
+from .errors import ErrorAdvice, describe, job_hong_nen_thu_lai, retry_after_seconds
 from .pricing import KIND_IMAGE, KIND_MUSIC, KIND_TTS, KIND_VIDEO
 from .cham_anh import NGUONG_LAM_LAI
 from .viet_lai_prompt import SO_LAN_VIET_LAI, la_bi_tu_choi
@@ -148,7 +148,25 @@ MAX_JOB_ATTEMPTS = 4
 #:
 #: Đây là trần *của tool*, không phải của máy chủ: hết giờ thì tool chỉ thôi
 #: theo dõi, job vẫn chạy tiếp và vẫn lấy lại được bằng nút "Kiểm tra lại".
-JOB_WAIT_TIMEOUT = 45 * 60
+#: ═══ 45 → 75 PHÚT, 22/09/2026 ═══
+#:
+#: Đo trên lô THẬT của khách (43 clip 8 giây gửi cùng lúc): job lâu nhất chạy
+#: **2.701 giây = đúng 45,0 phút** — tức khách đang đụng CHÍNH cái tường này, và
+#: thấy chữ "lỗi" cho một việc máy chủ vẫn đang làm.
+#:
+#: Trần mới phải phủ được trường hợp xấu nhất mà máy chủ còn cố: worker thử tối
+#: đa 3 lượt render, mỗi lượt tối đa 1.200 giây (nới cùng ngày, xem
+#: `video_poll_max` bên veo3) => ~60-62 phút. 75 phút để lại biên ~20%.
+JOB_WAIT_TIMEOUT = 75 * 60
+
+#: Số lần tool TỰ gửi lại khi máy chủ trả `failed` vì nhà máy bận (không phải do
+#: đề bài). Xem `job_hong_nen_thu_lai` để biết lỗi nào được tính.
+#:
+#: 2 lần là đủ và có lý do: máy chủ đã tự thử 3 lượt bên trong rồi mới trả
+#: `engine_unavailable`, nên mỗi lần tool gửi lại là thêm 3 lượt nữa — 3 lượt ×
+#: 3 lần = 9 lượt render cho một clip. Nhiều hơn nữa thì khách ngồi đợi hàng giờ
+#: cho một dòng mà lẽ ra nên báo để họ đổi mô tả hoặc chạy lúc vắng.
+SO_LAN_CHAY_LAI_KHI_NHA_MAY_HONG = 2
 
 #: Trạng thái kết thúc phía máy chủ — CONTRACT.md §2.2.
 _TERMINAL = ("succeeded", "failed", "cancelled", "rejected")
@@ -1023,6 +1041,7 @@ class JobManager:
             # làm lại prompt"*. Job bị từ chối được hoàn tiền, nên mỗi lần thử
             # lại chỉ tốn thời gian chờ chứ không tốn thêm tiền.
             so_lan_viet_lai = 0
+            so_lan_chay_lai = 0
             while True:
                 job = self._create_with_retry(record)
                 if job is None:
@@ -1058,6 +1077,37 @@ class JobManager:
                         record, STATUS_CANCELLED, "Đã huỷ. Toàn bộ tiền tạm giữ đã về lại ví bạn."
                     )
                     return
+                # ═══ TỰ CHẠY LẠI KHI NHÀ MÁY HỎNG LƯỢT NÀY — 22/09/2026 ═══
+                #
+                # Chủ dự án: *"nâng timeout và có tính năng retry để đảm bảo
+                # khách tạo được"*. `engine_unavailable` là lỗi của LƯỢT ĐÓ,
+                # không phải của đề bài — máy chủ đã thử hết tài khoản nó mượn
+                # được trong ca ấy; lượt sau rơi vào ca khác/IP khác thì thường
+                # ra. Job hỏng KHÔNG bị tính tiền nên mỗi lượt chỉ tốn thời gian.
+                #
+                # Đặt TRƯỚC nhánh "viết lại mô tả" vì hai chuyện khác hẳn nhau:
+                # ở đây đề bài KHÔNG có lỗi, gửi lại y nguyên là đúng việc cần làm.
+                if so_lan_chay_lai < SO_LAN_CHAY_LAI_KHI_NHA_MAY_HONG:
+                    loi = final.get("error") or {}
+                    ma = loi.get("code") if isinstance(loi, dict) else None
+                    tin = loi.get("message") if isinstance(loi, dict) else None
+                    if final.get("status") != "rejected" and job_hong_nen_thu_lai(ma, tin):
+                        so_lan_chay_lai += 1
+                        record.spec.khoa_gui = str(uuid.uuid4())
+                        record.attempt += 1
+                        nghi = min(30.0, 5.0 * so_lan_chay_lai)
+                        self._update(
+                            record, STATUS_RUNNING,
+                            "Nhà máy bận lượt vừa rồi (bạn không bị trừ tiền) — tự chạy lại "
+                            "lần {0}/{1} sau {2:.0f}s…".format(
+                                so_lan_chay_lai, SO_LAN_CHAY_LAI_KHI_NHA_MAY_HONG, nghi),
+                            progress=2)
+                        if self._sleep(nghi):
+                            self._finish(record, STATUS_CANCELLED,
+                                         "Bạn đã dừng trong lúc chờ chạy lại.")
+                            return
+                        continue
+
                 moi = self._viet_lai_neu_bi_tu_choi(record, final, so_lan_viet_lai)
                 if moi is None:
                     self._fail_from_job(record, final)

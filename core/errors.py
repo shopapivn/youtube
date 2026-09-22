@@ -39,7 +39,7 @@ from shopapi import (
 
 from .config import DASHBOARD_BILLING_URL, DASHBOARD_KEYS_URL, redact
 
-__all__ = ["ErrorAdvice", "describe", "is_retryable", "tu_xu_ly_ngam",
+__all__ = ["ErrorAdvice", "describe", "is_retryable", "job_hong_nen_thu_lai", "tu_xu_ly_ngam",
            "retry_after_seconds"]
 
 
@@ -405,6 +405,65 @@ def tu_xu_ly_ngam(exc: BaseException) -> bool:
     if isinstance(exc, APIStatusError) and getattr(exc, "status", 0) >= 500:
         return True
     return isinstance(exc, (OSError, EOFError)) or _la_loi_mang(exc)
+
+
+#: Mã lỗi job mà THỬ LẠI là có nghĩa — máy chủ đã hết cách cho lượt này, nhưng
+#: lượt sau rơi vào tài khoản/IP khác thì thường ra.
+_MA_JOB_NEN_THU_LAI = frozenset({
+    "engine_unavailable",   # "Hệ thống đã thử lại nhiều lần không thành công… thử lại sau"
+    "engine_timeout",
+    "internal_error",
+    "service_unavailable",
+})
+
+#: Mã lỗi mà thử lại chỉ tốn thời gian của khách — nguyên nhân nằm ở ĐỀ BÀI hoặc
+#: ở ví, gửi lại y nguyên thì hỏng y nguyên.
+_MA_JOB_DUNG_HAN = frozenset({
+    "content_rejected",     # vi phạm quy định — phải sửa mô tả
+    "invalid_request",      # tham số sai (vd voice_id không tồn tại)
+    "insufficient_balance",
+    "unauthorized",
+    "forbidden",
+    "not_found",
+    "quota_exceeded",
+})
+
+
+def job_hong_nen_thu_lai(ma: object, thong_diep: object = "") -> bool:
+    """Job kết thúc ở `failed` — có đáng gửi lại lượt nữa không?
+
+    ═══ VÌ SAO CẦN HÀM NÀY — 22/09/2026 ═══
+
+    Chủ dự án: *"tab tạo ảnh video đang nạp excel, nâng timeout và có tính năng
+    retry để đảm bảo khách tạo được"*. Trước đó job trả `failed` là tool báo lỗi
+    rồi thôi — khách phải tự bấm "Chạy lại dòng lỗi" từng dòng cho một lô vài
+    chục dòng.
+
+    Thử lại CÓ nghĩa vì `engine_unavailable` là lỗi của LƯỢT ĐÓ, không phải của
+    đề bài: máy chủ đã thử hết tài khoản nó mượn được trong lượt ấy, lượt sau
+    rơi vào ca khác / IP khác thì thường ra. Và job hỏng KHÔNG bị tính tiền
+    (CONTRACT.md), nên mỗi lần thử lại chỉ tốn thời gian chờ.
+
+    Thử lại VÔ NGHĨA với `content_rejected` / `invalid_request`: gửi lại y nguyên
+    thì hỏng y nguyên, chỉ làm khách đợi lâu gấp N lần rồi vẫn nhận đúng câu lỗi
+    đó. `content_rejected` đã có đường riêng (viết lại mô tả bằng LLM).
+
+    KHÔNG BIẾT MÃ thì **thử lại** — phía an toàn là làm thêm một lượt miễn phí
+    cho khách, không phải bỏ cuộc sớm. Nhưng vẫn soi câu chữ để bắt những mã
+    máy chủ chưa liệt kê ở đây mà rõ ràng là lỗi đề bài.
+    """
+    m = str(ma or "").strip().lower()
+    if m in _MA_JOB_DUNG_HAN:
+        return False
+    if m in _MA_JOB_NEN_THU_LAI:
+        return True
+    t = str(thong_diep or "").lower()
+    # Máy chủ nói thẳng "bạn sửa đi" -> gửi lại y nguyên là vô ích.
+    dung_han = ("không hợp lệ", "vi phạm", "bị từ chối", "sửa mô tả",
+                "không đủ số dư", "hết tiền", "không tồn tại")
+    if any(x in t for x in dung_han):
+        return False
+    return True
 
 
 def la_qua_tai(exc: BaseException) -> bool:
