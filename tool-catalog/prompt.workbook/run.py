@@ -1721,7 +1721,10 @@ def _dung_dan_cast(goi, cues, context, co_san) -> Mapping[str, Any]:
     """Goi AI mot lan (`goi(..., "cast")`, khoa idempotent) de rut dan + boi canh + style."""
     # Ca loi doc, khong cat (ban cu cat 12.000 ky tu: video dai mat nhan vat cuoi).
     loi_doc = " ".join(str(cue.get("text") or "").strip() for cue in cues)
-    boi_canh = _boi_canh_chu(context, "(khong co)")
+    # Khong gui `script` lan hai — `loi_doc` o tren da la ca loi doc. Cung benh
+    # voi buoc doc phim (26/09/2026: 188.031 token, sat tran 200 nghin, luc
+    # duoc luc khong); xem `_boi_canh_khuc`.
+    boi_canh = _boi_canh_khuc(context) or "(khong co)"
     fixed = _LUAT_NV1_CO_DINH.format(mo_ta=co_san[0]["english_prompt"]) if co_san else ""
     nv, loc = _da_nhan_ra(context)
     loi_nhac = _KHUON_CAST.format(context=boi_canh, transcript=loi_doc,

@@ -107,7 +107,16 @@ Khác story-mau-nuoc ở hai chỗ:
   trên. Hàn: hai dòng trên/dưới xanh lá – hồng viền đen. Mỹ nam: chỉ ảnh. Mỹ
   nữ: khối chữ trái (câu nổi bật tô cam/hồng) + dải tiêu đề + ảnh dọc nhân vật
   chính bên phải. Chữ nằm ở `7-thumbnail/chu-bia.json` — sửa tay rồi bấm làm
-  lại khâu ảnh bìa là tool ghép lại chữ, không vẽ lại ảnh.
+  lại khâu ảnh bìa là tool ghép lại chữ, không vẽ lại ảnh. Ba kênh vẽ bìa kiểu
+  POSTER PHIM: nhân vật to, chiếm phần lớn khung (sửa ở `prompt/8-thumbnail.md`).
+- **Ảnh người kể** ở góc trái phụ đề karaoke: khâu ảnh bìa vẽ riêng
+  `7-nguoi-ke.png` — nhân vật chính nửa thân trên, đẹp, như đang kể, nền trắng
+  để tách nền. Lời nhắc ở `prompt/10-nguoi-ke.md`. Chưa có ảnh này (lượt cũ)
+  thì video dùng ảnh tham chiếu nhân vật như trước.
+- **Số ảnh theo độ dài video.** Nhịp cảnh là hai con số trong
+  `prompt/7-canh.md` (`MIN/MAX_SECONDS_PER_SCENE`, mặc định 4–8 giây). Video
+  3 tiếng ra ~2.000 ảnh (~100 nghìn ₫ và vài giờ vẽ). Video dài kiểu nghe là
+  chính thì nâng lên 10–15 giây/cảnh là bớt một nửa.
 
 ### Sửa khuôn, hoặc thêm nét vẽ của riêng bạn
 

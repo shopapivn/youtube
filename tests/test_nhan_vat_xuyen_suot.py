@@ -231,6 +231,12 @@ class TestCastStyleVaoLoiNhac:
                      {"script": "KICH-BAN-DAI " * 50, "visual_style_directive": "PHONG-CACH"})
         assert loi and "KICH-BAN-DAI" not in loi[0] and "cau so 1" in loi[0]
 
+    def test_dung_dan_khong_gui_kich_ban_lan_hai(self, wb):
+        loi = []
+        wb._dung_dan_cast(lambda p, k: loi.append(p) or "{}", [cue(1), cue(2)],
+                          {"script": "KICH-BAN-DAI " * 50, "visual_style_directive": "PC"}, [])
+        assert loi and "KICH-BAN-DAI" not in loi[0] and "cau so 1" in loi[0]
+
     def test_toi_mot_dong_van_sai_moi_bo_cuoc(self, wb):
         goi_ghi = []
         chia = wb._bo_chia(lambda p, k: goi_ghi.append(k) or "Lantern", {}, "veo3", "")
