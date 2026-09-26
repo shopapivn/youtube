@@ -5332,6 +5332,53 @@ def _co_khung_dau(bc: BoiCanh) -> bool:
     return bool(getattr(getattr(bc, "kenh", None), "khung_dau", False))
 
 
+#: Sổ job clip đang dở theo từng cảnh (nằm trong thư mục clip). Xem `goi_clip`
+#: trong `_lam_clip`: nhờ nó, chạy lại một lượt dở không gửi trùng job clip.
+TEP_VIEC_CLIP_DO = "_viec-dang-do.json"
+_KHOA_SO_VIEC = threading.Lock()
+
+
+def _viec_do(duong: str, so_canh: int) -> Dict[str, Any]:
+    with _KHOA_SO_VIEC:
+        try:
+            with open(duong, encoding="utf-8") as tep:
+                ds = json.load(tep)
+        except (OSError, ValueError):
+            return {}
+    gt = ds.get(str(so_canh)) if isinstance(ds, dict) else None
+    return gt if isinstance(gt, dict) else {}
+
+
+def _ghi_viec_do(duong: str, so_canh: int, gt: Optional[Dict[str, Any]]) -> None:
+    """Ghi (hay xoá, khi `gt` là None) job đang dở của một cảnh. Hỏng thì thôi —
+    sổ chỉ để tránh gửi trùng, không được làm hỏng việc làm clip."""
+    with _KHOA_SO_VIEC:
+        try:
+            with open(duong, encoding="utf-8") as tep:
+                ds = json.load(tep)
+            if not isinstance(ds, dict):
+                ds = {}
+        except (OSError, ValueError):
+            ds = {}
+        if gt is None:
+            if str(so_canh) not in ds:
+                return
+            ds.pop(str(so_canh), None)
+        else:
+            ds[str(so_canh)] = gt
+        try:
+            if not ds:
+                os.remove(duong)
+                return
+            os.makedirs(os.path.dirname(duong) or ".", exist_ok=True)
+            tam = duong + ".tmp"
+            with open(tam, "w", encoding="utf-8") as tep:
+                json.dump(ds, tep)
+            os.replace(tam, duong)
+        except OSError:
+            pass
+
+
 def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
               dich: str, giay: int, so: Optional[SoTheoDoi] = None,
               khung_dau: bool = False, anh_cuoi: Optional[str] = None,
@@ -5434,7 +5481,40 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
     # thiếu dấu ấy thì chạy tiếp lấy lại đúng clip cũ có nhạc.
     luat_tieng = LUAT_TIENG_CANH if _giu_tieng_canh(bc) else ""
 
+    so_viec = os.path.join(os.path.dirname(dich), TEP_VIEC_CLIP_DO)
+
     def goi_clip(dia_chi, hau_to=""):
+        goc = (khoa_viec(luot, "vid", so_canh, c["video_prompt"], dia_chi, giay)
+               + (":kd" if khung_dau else "")
+               + (":kc" + url_cuoi[-12:] if url_cuoi else "")
+               + (":tc" if luat_tieng else ""))
+        # ═══ VIỆC CÒN DỞ TỪ LẦN CHẠY TRƯỚC: CHỜ TIẾP HOẶC HUỶ, ĐỪNG GỬI TRÙNG ═══
+        #
+        # Đo 26/09/2026 (story-dien-anh-han/0001, nhà máy nghẽn, khởi động lại
+        # vài lần): 29 job clip xếp hàng cho 10 cảnh. Mỗi lần chạy lại, lần
+        # gửi lại dùng khoá mới (đuôi theo giờ, hay URL ảnh đổi) nên máy chủ
+        # nhận thêm một job — job cũ vẫn nằm đó, rồi chạy và TRỪ TIỀN. Sổ này
+        # nhớ job đang dở của từng cảnh: cùng ảnh + lời nhắc thì chờ tiếp nó;
+        # đã đổi thì huỷ nó trước khi gửi job mới.
+        cu = _viec_do(so_viec, so_canh)
+        if cu.get("id"):
+            trang = _trang_thai_job(bc, cu["id"])
+            if trang and not _xong_han(trang):
+                if cu.get("goc") == goc:
+                    bc.ghi("    cảnh {0}: còn job từ lần chạy trước — chờ tiếp nó, "
+                           "không gửi trùng.".format(so_canh))
+                    try:
+                        goi = _cho_theo_tien_do(bc, {"id": cu["id"], "status": trang},
+                                                "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP)
+                    except LoiKetJob:
+                        _ghi_viec_do(so_viec, so_canh, None)
+                        raise
+                    _ghi_viec_do(so_viec, so_canh, None)
+                    return goi
+                bc.ghi("    cảnh {0}: ảnh/lời nhắc đã đổi — huỷ job cũ còn dở "
+                       "trước khi gửi job mới.".format(so_canh))
+                _huy_job(bc, cu["id"])
+            _ghi_viec_do(so_viec, so_canh, None)
         try:
             job = _tao_job(
                 bc, bc.client.videos.create,
@@ -5445,18 +5525,23 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
                 extra_body=(dict({"frame_mode": "start_frame"},
                                  **({"image_url_end": url_cuoi} if url_cuoi else {}))
                             if khung_dau else None),
-                idempotency_key=khoa_viec(luot, "vid", so_canh,
-                                          c["video_prompt"], dia_chi,
-                                          giay) + (":kd" if khung_dau else "")
-                + (":kc" + url_cuoi[-12:] if url_cuoi else "")
-                + (":tc" if luat_tieng else "") + hau_to)
+                idempotency_key=goc + hau_to)
         except Exception as loi:  # noqa: BLE001
             doi = _loi_gui_thanh_ket(loi)
             if doi is loi:
                 raise
             raise doi from loi
+        ma = str(_goi_dict(job).get("id") or "")
+        if ma:
+            _ghi_viec_do(so_viec, so_canh, {"id": ma, "goc": goc})
         # Chờ theo TIẾN ĐỘ (chậm ≠ treo) — cùng luật với ảnh, xem `_cho_theo_tien_do`.
-        return _cho_theo_tien_do(bc, job, "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP)
+        try:
+            goi = _cho_theo_tien_do(bc, job, "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP)
+        except LoiKetJob:
+            _ghi_viec_do(so_viec, so_canh, None)
+            raise
+        _ghi_viec_do(so_viec, so_canh, None)
+        return goi
 
     try:
         goi = goi_clip(url_anh)

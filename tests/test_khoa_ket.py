@@ -300,3 +300,72 @@ def test_anh_dang_xep_hang_thi_cho_tiep_khong_huy(monkeypatch):
     goi = ak._tao_anh(bc, type("L", (), {})(), "p", hop, "khoa")
     assert goi["status"] == "succeeded"
     assert len(may.tao) == 1 and may.huy == [], "đang xếp hàng thì không huỷ, không gửi lại"
+
+
+# ── Clip: chạy lại lượt dở không gửi trùng job ─────────────────────────────
+
+def _clip_gia(monkeypatch, tmp_path, trang_thai_cu):
+    """_lam_clip với mạng giả. Trả (máy, đích, gọi lại)."""
+    from types import SimpleNamespace
+
+    import core.auto_khau as ak
+
+    anh = tmp_path / "1.png"
+    anh.write_bytes(b"png")
+    thu_muc = tmp_path / "6-clip"
+    thu_muc.mkdir()
+    dich = str(thu_muc / "1.mp4")
+
+    class May:
+        def __init__(self):
+            self.tao, self.huy = [], []
+            self.videos = self
+            self.jobs = self
+
+        def create(self, **kw):
+            self.tao.append(kw.get("idempotency_key"))
+            return {"id": "job_moi", "status": "queued"}
+
+        def retrieve(self, ma):
+            return {"id": ma, "status": trang_thai_cu if ma == "job_cu" else "succeeded"}
+
+        def cancel(self, ma):
+            self.huy.append(ma)
+
+    may = May()
+    bc = SimpleNamespace(client=may, kenh=SimpleNamespace(engine="veo3"), on_log=None,
+                         ghi=lambda _s: None, kiem_dung=lambda: None, ngu=lambda _g: None)
+    luot = SimpleNamespace(ma_kenh="k", ma_luot="0001", thu_muc=str(tmp_path))
+    monkeypatch.setattr(ak, "_url_anh_canh", lambda *a, **k: "http://anh/1.png")
+    monkeypatch.setattr(ak, "_tao_job", lambda bc, ham, **kw: ham(**kw))
+    cho = []
+    monkeypatch.setattr(ak, "_cho_theo_tien_do", lambda bc, job, *a, **k: (
+        cho.append(job["id"]) or {"id": job["id"], "status": "succeeded"}))
+    monkeypatch.setattr(ak, "_tai_ket_qua", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_kiem_media", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_giu_tieng_canh", lambda bc: False)
+    c = {"scene_id": 1, "video_prompt": "p"}
+
+    def lam():
+        ak._lam_clip(bc, luot, c, str(anh), dich, 8)
+    return may, dich, lam, cho, ak
+
+
+def test_job_cu_con_chay_cung_anh_thi_cho_tiep_khong_gui_moi(monkeypatch, tmp_path):
+    """Đo 26/09/2026: 29 job clip xếp hàng cho 10 cảnh sau vài lần chạy lại."""
+    may, dich, lam, cho, ak = _clip_gia(monkeypatch, tmp_path, "queued")
+    goc = ak.khoa_viec(__import__("types").SimpleNamespace(
+        ma_kenh="k", ma_luot="0001", thu_muc=str(tmp_path)), "vid", 1, "p", "http://anh/1.png", 8)
+    so = str(tmp_path / "6-clip" / ak.TEP_VIEC_CLIP_DO)
+    ak._ghi_viec_do(so, 1, {"id": "job_cu", "goc": goc})
+    lam()
+    assert may.tao == [] and cho == ["job_cu"] and may.huy == []
+    assert not __import__("os").path.exists(so), "xong thì xoá sổ"
+
+
+def test_anh_doi_thi_huy_job_cu_roi_moi_gui(monkeypatch, tmp_path):
+    may, dich, lam, cho, ak = _clip_gia(monkeypatch, tmp_path, "running")
+    so = str(tmp_path / "6-clip" / ak.TEP_VIEC_CLIP_DO)
+    ak._ghi_viec_do(so, 1, {"id": "job_cu", "goc": "khoa-cua-anh-cu"})
+    lam()
+    assert may.huy == ["job_cu"] and len(may.tao) == 1 and cho == ["job_moi"]
