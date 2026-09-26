@@ -72,9 +72,10 @@ subject off-centre, depth front-to-back.
    then…"), a quiet shot of the narrator alone with the object of that
    thought is right.
 3. **Frame it like a TV-drama still — the PEOPLE are big in the frame.**
-   About 8 scenes in 10 are `Medium shot, 50mm, of…` (waist up) or
+   About 8 scenes in 10 are `Waist-up medium shot, 50mm, of…` or
    `Medium close-up, 85mm, of…` (chest up): the characters fill most of the
-   frame and every face is readable at phone size. Vary between a medium
+   frame and every face is readable at phone size — never full-body figures
+   standing in an empty room. Vary between a medium
    two-shot, an over-the-shoulder shot, a medium close-up of the speaker, a
    reaction close-up of the listener (head and shoulders — never tighter),
    and an insert of the story object in someone's hand. A `Wide shot` only
