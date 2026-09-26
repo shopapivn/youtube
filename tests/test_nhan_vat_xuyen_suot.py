@@ -185,14 +185,59 @@ class TestCastStyleVaoLoiNhac:
         ds = chia([cue(1), cue(2)], 0, 1)
         assert ds and len(goi_ghi) == 2
         (p1, k1), (p2, k2) = goi_ghi
-        assert k1 != k2 and p1 != p2 and p2.startswith(p1)
+        assert k1 != k2 and p1 != p2 and p1 in p2
+        # Đo 26/09/2026: lời nhắc mở bằng tiêu đề `# ...` làm cổng trả một
+        # token; lần gọi lại phải đổi ĐẦU lời nhắc (câu mở đầu thường).
+        assert not p2.startswith("#")
 
-    def test_ba_lan_deu_sai_thi_moi_bo_cuoc(self, wb):
+    def test_ba_lan_deu_sai_thi_chia_doi_khuc_hoi_tung_nua(self, wb):
+        """Đo 26/09/2026 kênh Hàn: khúc 22/148 sai dạng cả ba lần → cả phim đổ
+        về cắt theo đồng hồ. Lỗi bám nội dung lời nhắc — chia đôi khúc là đổi
+        nội dung. Khúc cả thì hỏng, từng nửa thì chia được."""
+        goi_ghi = []
+
+        def goi_gia(loi_nhac, phan_khoa):
+            goi_ghi.append(phan_khoa)
+            if "cau so 3" in loi_nhac and "cau so 1" in loi_nhac:
+                return "Lantern"                       # cả khúc 1-4: hỏng mãi
+            so = [i for i in range(1, 5) if "cau so {0}".format(i) in loi_nhac]
+            return json.dumps({"scenes": [canh_ai(so[0], so[-1])]})
+
+        chia = wb._bo_chia(goi_gia, {}, "veo3", "")
+        ds = chia([cue(1), cue(2), cue(3), cue(4)], 0, 1)
+        assert [(c["srt_from"], c["srt_to"]) for c in ds] == [(1, 2), (3, 4)]
+        assert len(goi_ghi) == 5, "3 lần cả khúc + 1 lần mỗi nửa"
+
+    def test_loi_nhac_tung_khuc_khong_mang_ca_kich_ban(self, wb):
+        """Đo 26/09/2026 kênh Hàn: mỗi khúc mang nguyên 73.951 ký tự kịch bản
+        → cổng trả một chữ cái, cả phim đổ về cắt theo đồng hồ; 148 khúc mỗi
+        khúc trả tiền cho cả kịch bản. Khúc chỉ cần lời của nó + dàn + kế hoạch."""
+        loi = []
+
+        def goi_gia(loi_nhac, _k):
+            loi.append(loi_nhac)
+            return json.dumps({"scenes": [canh_ai(1, 2)]})
+
+        ctx = {"script": "KICH-BAN-DAI " * 500, "visual_style_directive": "PHONG-CACH-XYZ"}
+        wb._bo_chia(goi_gia, ctx, "veo3", "")([cue(1), cue(2)], 0, 1)
+        assert "KICH-BAN-DAI" not in loi[0]
+        assert "PHONG-CACH-XYZ" in loi[0]
+
+    def test_doc_phim_khong_gui_kich_ban_lan_hai(self, wb):
+        """Đo 26/09/2026 kênh Hàn 205 phút: bảng phụ đề + nguyên kịch bản =
+        188.031 token, sát trần 200 nghìn — lúc được lúc không."""
+        loi = []
+        wb._doc_phim(lambda p, k: loi.append(p) or "{}", [cue(1), cue(2)],
+                     {"script": "KICH-BAN-DAI " * 50, "visual_style_directive": "PHONG-CACH"})
+        assert loi and "KICH-BAN-DAI" not in loi[0] and "cau so 1" in loi[0]
+
+    def test_toi_mot_dong_van_sai_moi_bo_cuoc(self, wb):
         goi_ghi = []
         chia = wb._bo_chia(lambda p, k: goi_ghi.append(k) or "Lantern", {}, "veo3", "")
         with pytest.raises(ValueError):
             chia([cue(1), cue(2)], 0, 1)
-        assert len(goi_ghi) == 3 and len(set(goi_ghi)) == 3
+        # 3 lần cả khúc, rồi nửa đầu (một dòng) 3 lần → hết đường, bỏ cuộc.
+        assert len(goi_ghi) == 6
 
 
 # ── 3. Dàn rỗng / cờ tắt → về hành vi cũ ────────────────────────────────────

@@ -174,16 +174,19 @@ def _ve_khoi(ve, tu, duong_font_, x, y, rong, cao, co_max, *, can="trai",
     return co
 
 
-def _phu_kin(anh, rong: int, cao: int):
-    """Cắt phủ kín khung `rong`×`cao`, giữ giữa (lệch lên trên một chút cho mặt)."""
+def _phu_kin(anh, rong: int, cao: int, phong: float = 1.0, neo_doc: float = 0.35):
+    """Cắt phủ kín khung `rong`×`cao`, giữ giữa (lệch lên trên một chút cho mặt).
+
+    `phong` > 1 phóng thêm rồi mới cắt — người trong ảnh to hơn khung; `neo_doc`
+    là chỗ cắt theo chiều dọc (0 = giữ sát đỉnh ảnh, 0,5 = giữa)."""
     from PIL import Image  # noqa: PLC0415
 
     w, h = anh.size
-    ti = max(rong / float(w), cao / float(h))
+    ti = max(rong / float(w), cao / float(h)) * max(1.0, float(phong))
     anh = anh.resize((max(rong, int(w * ti + 0.5)), max(cao, int(h * ti + 0.5))), Image.LANCZOS)
     w, h = anh.size
     x0 = (w - rong) // 2
-    y0 = int((h - cao) * 0.35)
+    y0 = int((h - cao) * neo_doc)
     return anh.crop((x0, y0, x0 + rong, y0 + cao))
 
 
@@ -233,10 +236,15 @@ def ghep_bia_chu_trai(anh_nv: str, ra: str, noi_dung: str,
     from PIL import Image, ImageDraw  # noqa: PLC0415
 
     m = MAU["chu_trai_nv_phai"]
-    rong_chu = int(RONG * 0.70)
+    # Chủ dự án 26/09/2026: nhân vật trong ảnh dọc "hơi nhỏ — nó phải là chủ
+    # đạo, khán giả phải nhìn rõ và bị thu hút". Khung ảnh rộng thêm (30 → 34%)
+    # và ảnh phóng 1,25 lần neo phía đầu: thân dưới ra ngoài khung, mặt và
+    # thân trên chiếm phần lớn. Lời nhắc 8-thumbnail.md cũng đòi cắt từ eo lên.
+    rong_chu = int(RONG * 0.66)
     cao_tieu_de = int(CAO * 0.19) if any(t.strip() for t in tieu_de) else 0
     anh = Image.new("RGB", (RONG, CAO), m["nen_chu"])
-    anh.paste(_phu_kin(Image.open(anh_nv).convert("RGB"), RONG - rong_chu, CAO), (rong_chu, 0))
+    anh.paste(_phu_kin(Image.open(anh_nv).convert("RGB"), RONG - rong_chu, CAO,
+                       phong=1.25, neo_doc=0.12), (rong_chu, 0))
     ve = ImageDraw.Draw(anh)
     if cao_tieu_de:
         ve.rectangle((0, CAO - cao_tieu_de, rong_chu, CAO), fill=m["nen_tieu_de"])

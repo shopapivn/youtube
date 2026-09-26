@@ -441,3 +441,42 @@ def test_gop_he_thong_voi_tin_co_anh_va_khong_he_thong():
     assert ra[1]["content"][0] == {"type": "text", "text": "ĐỀ\n\n═══ YÊU CẦU ═══"}
     assert ra[1]["content"][1]["type"] == "image_url"
     assert ra[2] == {"role": "user", "content": "sau"}, "chỉ gộp vào tin người dùng ĐẦU TIÊN"
+
+
+# ── Câu trả lời một chữ ("Lantern", "K", "Q") ─────────────────────────────────
+
+class MayChuGhiLoiNhac(MayChuGia):
+    def __init__(self, kich_ban):
+        super().__init__(kich_ban)
+        self.loi_nhac = []
+
+    def request(self, _method, _path, *, json=None, idempotency_key=None, **_k):
+        self.loi_nhac.append(json["messages"][-1]["content"])
+        return super().request(_method, _path, json=json,
+                               idempotency_key=idempotency_key, **_k)
+
+
+def test_loi_nhac_dai_ma_tra_mot_chu_thi_hoi_lai_doi_cau_mo_dau():
+    """Đo 26/09/2026: lời nhắc chia cảnh mở bằng `# ...` → cổng trả đúng một
+    token ("K"), finish_reason=stop. Thêm câu mở đầu thường là chạy."""
+    from core.goi_van_ban import CAU_MO_DAU_THUONG
+
+    may = MayChuGhiLoiNhac(["K", '{"scenes": []}'])
+    loi_nhac = "# YOU ARE THE DIRECTOR\n" + "luat " * 400
+    tra = goi_van_ban(may, [{"role": "user", "content": loi_nhac}], khoa="k1", **KHONG_NGU)
+    assert tra == '{"scenes": []}'
+    assert len(may.khoa_da_dung) == 2 and may.khoa_da_dung[0] != may.khoa_da_dung[1]
+    assert may.loi_nhac[1].startswith(CAU_MO_DAU_THUONG + "# YOU ARE")
+
+
+def test_loi_nhac_ngan_tra_mot_chu_la_cau_tra_loi_that():
+    may = MayChuGhiLoiNhac(["OK"])
+    assert goi_van_ban(may, [{"role": "user", "content": "Trả lời OK"}],
+                       khoa="k2", **KHONG_NGU) == "OK"
+    assert len(may.khoa_da_dung) == 1
+
+
+def test_hoi_lai_dung_MOT_lan():
+    may = MayChuGhiLoiNhac(["K", "Q"])
+    tra = goi_van_ban(may, [{"role": "user", "content": "x " * 1000}], khoa="k3", **KHONG_NGU)
+    assert tra == "Q" and len(may.khoa_da_dung) == 2

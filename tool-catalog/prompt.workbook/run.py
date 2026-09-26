@@ -856,7 +856,11 @@ def _doc_phim(goi, cues, context, *, phim_fn=None) -> Dict[str, Any]:
         else:
             # Ca loi doc, khong cat: cat la mat nhan vat/noi chon o phan sau.
             loi_doc = bang_phu_de(cues)
-            boi_canh = _boi_canh_chu(context, "(none)")
+            # Khong gui `script` lan hai: bang phu de o tren DA LA ca loi doc.
+            # Do 26/09/2026 (kenh Han, 205 phut): gui ca hai = 188.031 token,
+            # sat tran ngu canh 200 nghin — luc duoc luc khong ("Expecting
+            # value" o sau lan chay), moi lan hong van tra tien ca 188 nghin.
+            boi_canh = _boi_canh_khuc(context) or "(none)"
             giay = _giay_video(cues)
             raw = loc_json(goi(_KHUON_PHIM.format(transcript=loi_doc, context=boi_canh,
                                                   phut="{0:.1f}".format(giay / 60.0),
@@ -1276,6 +1280,24 @@ def _boi_canh_chu(context, mac_dinh: str = "") -> str:
     return json.dumps(context, ensure_ascii=False)[:TRAN_CONTEXT_CHU]
 
 
+def _boi_canh_khuc(context) -> str:
+    """Context cho loi nhac CHIA CANH TUNG KHUC: bo ca `script`.
+
+    ═══ MOI KHUC KHONG DUOC MANG CA KICH BAN ═══
+
+    Tran 160.000 ky tu nang len cho buoc TUYEN VAI (can doc ca truyen), nhung
+    `_boi_canh_chu` cung di vao loi nhac cua TUNG khuc chia canh. Do 26/09/2026
+    (story-dien-anh-han/0001): kich ban 73.951 ky tu Hangul (~1 token/ky tu) x
+    148 khuc — cong tra ve dung mot chu cai ("Q", "K") sau mot giay, hang loat
+    khuc hong, ca phim do ve cat theo dong ho; va moi luot goi tra tien cho ca
+    kich ban. Khuc da co loi cua chinh no (<<SRT>>), dan nhan vat (<<CAST_STYLE>>)
+    va ke hoach dao dien (<<DIRECTOR_PLAN>>) — du de biet dang o dau trong truyen.
+    """
+    if isinstance(context, Mapping):
+        context = {k: v for k, v in context.items() if k != "script"}
+    return _boi_canh_chu(context, "")
+
+
 def _khuon_chia(context) -> str:
     """Khuôn chia cảnh: của kênh (`context["storyboard_template"]`) nếu đủ chỗ trống, không thì mặc định.
 
@@ -1462,10 +1484,41 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
     """
     san, tran = _nhip_canh(context, engine)
     clip = float(max_seconds_for(engine))
-    boi_canh = _boi_canh_chu(context, "")
+    boi_canh = _boi_canh_khuc(context)
     xong = {"value": 0}
 
     def chia(khuc, thu_tu, tong_khuc):
+        ds = _hoi_chia(khuc, thu_tu, tong_khuc)
+        xong["value"] += 1
+        emit({"type": "event", "event": "progress",
+              "progress": xong["value"] / max(1, tong_khuc),
+              "message": "Da chia canh theo noi dung: khuc {0}/{1}".format(
+                  xong["value"], tong_khuc)})
+        return ds
+
+    def _hoi_chia(khuc, thu_tu, tong_khuc, sau=0):
+        # ═══ HONG BA LAN THI CHIA DOI KHUC, KHONG DO CA PHIM VE DONG HO ═══
+        #
+        # Do 26/09/2026 (story-dien-anh-han/0001, 148 khuc): khuc 22 tra sai
+        # dang ca ba lan -> ca phim do ve cat theo dong ho, bo 21 khuc da tra
+        # tien — roi chinh duong lui (`_bo_enrich`) cung nhan cau khong phai
+        # JSON va ca khau hong. Loi bam theo NOI DUNG loi nhac, nen doi noi
+        # dung: chia doi khuc, hoi tung nua (khoa khac vi dong dau / loi nhac
+        # khac). Nua nao van hong thi chia doi tiep; toi mot dong phu de ma
+        # van hong moi chiu thua.
+        try:
+            return _hoi_mot_khuc(khuc, thu_tu, tong_khuc)
+        except ValueError:
+            if len(khuc) < 2 or sau >= 6:
+                raise
+        giua = len(khuc) // 2
+        emit({"type": "event", "event": "progress", "progress": 0.0,
+              "message": "Khuc {0}/{1}: chia doi ({2} dong) roi hoi lai tung nua".format(
+                  thu_tu + 1, tong_khuc, len(khuc))})
+        return (_hoi_chia(khuc[:giua], thu_tu, tong_khuc, sau + 1)
+                + _hoi_chia(khuc[giua:], thu_tu, tong_khuc, sau + 1))
+
+    def _hoi_mot_khuc(khuc, thu_tu, tong_khuc):
         # Vi tri khuc di vao loi nhac: "canh dau la cu hook" chi dung o khuc 1,
         # be nguyen sang khuc 5 la video mo bai nam lan (xem core/auto_khau).
         loi_nhac = loi_nhac_chia(_khuon_chia(context), khuc, tran, {
@@ -1483,11 +1536,19 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
         # luc tra DUNG MOT TU ("Lantern") thay cho ca cau tra loi, va hien tuong
         # ay bam theo NOI DUNG loi nhac: goi lai y nguyen (khoa moi) van ra y
         # het. Nen goi lai kem mot cau chot o cuoi — loi nhac khac, khoa khac.
+        # Do 26/09/2026 (kenh Han, cung loi nhac, doi tung phan): cong tra DUNG
+        # MOT token ("K", "Q"), finish_reason=stop, khi loi nhac MO DAU bang
+        # tieu de markdown `# ...`. Them mot cau mo dau thuong, hoac bo dau `#`
+        # cua tieu de, la chay — dao cho, boc XML, them cau chot o CUOI thi
+        # khong. Nen lan goi lai doi CAU TRUC dau loi nhac; lan dau giu nguyen
+        # de khoa cu van khop (khuc da chia khong tra tien lan hai).
         ds = None
+        bien = (loi_nhac,
+                "Please complete the following task carefully.\n\n" + loi_nhac,
+                re.sub(r"(?m)^#+ ", "", loi_nhac)
+                + "\n\nReturn ONLY the JSON object with the `scenes` list — no other text.")
         for lan in range(3):
-            thu = loi_nhac if lan == 0 else (
-                loi_nhac + "\n\nReturn ONLY the JSON object with the `scenes` list "
-                "described above — no other text.")
+            thu = bien[lan]
             tra = goi(thu, "chia-{0}{1}".format(khuc[0]["index"],
                                                ":lai{0}".format(lan) if lan else ""))
             try:
@@ -1503,11 +1564,6 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
                       "goi lai" if lan < 2 else "bo cuoc")})
         if not isinstance(ds, list) or not ds:
             raise ValueError("AI khong tra ve danh sach `scenes`")
-        xong["value"] += 1
-        emit({"type": "event", "event": "progress",
-              "progress": xong["value"] / max(1, tong_khuc),
-              "message": "Da chia canh theo noi dung: khuc {0}/{1}".format(
-                  xong["value"], tong_khuc)})
         return ds
 
     return chia
@@ -2430,7 +2486,7 @@ def _bo_enrich(goi) -> Callable:
         # gio chay duoc (pyflakes chi ra 24/08/2026).
         loi_nhac = "Tra JSON {{scenes:[...]}}. Giu scene_id; moi scene co img_prompt va video_prompt tieng Anh chi tiet. " \
                    "Khong doi timing. Context: {0}\nScenes: {1}".format(
-                       _boi_canh_chu(context, ""),
+                       _boi_canh_khuc(context),
                        json.dumps(compact, ensure_ascii=False))
         data = loc_json(goi(loi_nhac, "batch-{0}".format(dem["value"])))
         return data.get("scenes", []) if isinstance(data, dict) else data

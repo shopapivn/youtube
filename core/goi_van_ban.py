@@ -351,7 +351,7 @@ def gop_he_thong_vao_nguoi_dung(tin_nhan: List[Dict[str, Any]]) -> List[Dict[str
     return ra
 
 
-def goi_van_ban(
+def _goi_van_ban_mot(
     client: Any,
     tin_nhan: List[Dict[str, str]],
     *,
@@ -474,6 +474,66 @@ def goi_van_ban(
                     kiem_dung()
 
     raise loi_cuoi or RuntimeError("không gọi được AI sau nhiều lần đổi khoá")
+
+
+#: ═══ CÂU TRẢ LỜI MỘT CHỮ: HỎI LẠI VỚI ĐẦU LỜI NHẮC KHÁC (26/09/2026) ═══
+#:
+#: Cổng chat (claude-sonnet-5) có lúc trả về ĐÚNG MỘT token — "Lantern", "K",
+#: "Q" — với `finish_reason=stop`, không báo lỗi gì. Đo trên lời nhắc chia cảnh
+#: kênh Hàn (4.319 token): bỏ bất kỳ đoạn luật nào trong 4 đoạn ngắn là chạy,
+#: bỏ đoạn dài nhất thì không; đảo chỗ, bọc XML, thêm câu chốt ở CUỐI cũng
+#: không. Chỉ hai cách chạy chắc: thêm một câu mở đầu thường TRƯỚC tiêu đề
+#: `# ...`, hoặc bỏ dấu `#` của tiêu đề. Nên: lời nhắc dài mà câu trả lời là
+#: một chữ trơ trọi → hỏi lại MỘT lần với câu mở đầu thường, khoá mới.
+CAU_MO_DAU_THUONG = "Please complete the following task carefully.\n\n"
+_NGUONG_LOI_NHAC_DAI = 1500
+
+
+def _tra_mot_chu(tra: str, tin_nhan: List[Dict[str, str]]) -> bool:
+    chu = str(tra or "").strip()
+    dai = sum(len(str(m.get("content") or "")) for m in tin_nhan
+              if isinstance(m.get("content"), str))
+    return (0 < len(chu) <= 12 and not any(c.isspace() for c in chu)
+            and dai >= _NGUONG_LOI_NHAC_DAI)
+
+
+def _mo_dau_thuong(tin_nhan: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    ra = [dict(m) for m in tin_nhan]
+    for m in ra:
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            if not m["content"].startswith(CAU_MO_DAU_THUONG):
+                m["content"] = CAU_MO_DAU_THUONG + m["content"]
+            break
+    return ra
+
+
+def goi_van_ban(
+    client: Any,
+    tin_nhan: List[Dict[str, str]],
+    *,
+    mo_hinh: str = MO_HINH_MAC_DINH,
+    toi_da_token: int = TOI_DA_TOKEN_MAC_DINH,
+    khoa: str = "",
+    on_log: Optional[Callable[[str], None]] = None,
+    kiem_dung: Optional[Callable[[], None]] = None,
+    ngu: Callable[[float], None] = time.sleep,
+) -> str:
+    """Nhờ AI viết, kiên nhẫn qua trục trặc tạm. Trả về đoạn chữ.
+
+    Xem `_goi_van_ban_mot` cho khoá, nhịp đợi, đổi khoá; lớp này chỉ thêm lưới
+    "câu trả lời một chữ" (xem `CAU_MO_DAU_THUONG`).
+    """
+    khoa = khoa or str(uuid.uuid4())
+    tra = _goi_van_ban_mot(client, tin_nhan, mo_hinh=mo_hinh, toi_da_token=toi_da_token,
+                           khoa=khoa, on_log=on_log, kiem_dung=kiem_dung, ngu=ngu)
+    if not _tra_mot_chu(tra, tin_nhan):
+        return tra
+    if on_log is not None:
+        on_log("  AI trả về đúng một chữ ({0!r}) — hỏi lại, đổi câu mở đầu.".format(
+            str(tra).strip()[:12]))
+    return _goi_van_ban_mot(client, _mo_dau_thuong(tin_nhan), mo_hinh=mo_hinh,
+                            toi_da_token=toi_da_token, khoa=khoa + ":mo-dau",
+                            on_log=on_log, kiem_dung=kiem_dung, ngu=ngu)
 
 
 def khoi_anh(data_url: str) -> Dict[str, Any]:
