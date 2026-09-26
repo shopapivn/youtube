@@ -71,15 +71,18 @@ subject off-centre, depth front-to-back.
    about what happened to them; when the line is pure reflection ("I realised
    then…"), a quiet shot of the narrator alone with the object of that
    thought is right.
-3. **Shoot it like a film — vary the shot hard between consecutive scenes.**
-   Open every image prompt with the shot and the lens — `Extreme close-up,
-   100mm macro, of…`, `Close-up, 85mm, of…`, `Medium shot, 50mm, of…`,
-   `Over-the-shoulder shot of…`, `Low angle looking up at…`, `Wide shot, 24mm,
-   of…`, `Top-down insert of <object>…`, `POV of <id>…` — and never use the
-   same opening twice in a row. When several consecutive lines happen in the
-   same place with the same people, walk the camera through them like an
-   editor cuts coverage: wide → medium → close-up → the other person's
-   reaction → an insert of the object → over-the-shoulder.
+3. **Frame it like a TV-drama still — the PEOPLE are big in the frame.**
+   About 8 scenes in 10 are `Medium shot, 50mm, of…` (waist up) or
+   `Medium close-up, 85mm, of…` (chest up): the characters fill most of the
+   frame and every face is readable at phone size. Vary between a medium
+   two-shot, an over-the-shoulder shot, a medium close-up of the speaker, a
+   reaction close-up of the listener (head and shoulders — never tighter),
+   and an insert of the story object in someone's hand. A `Wide shot` only
+   when someone arrives in a new place — at most 1 scene in 10 — and even
+   then the people stand in the foreground, never tiny figures in an empty
+   room. NEVER an extreme close-up of a body part (a mouth, an eye, lips,
+   teeth). Open every image prompt with the shot type, and never the same
+   opening twice in a row.
 4. **Big, readable drama emotion.** Every face shows its feeling clearly in
    one second — mocking laughter, a shocked gasp, tears, arms crossed in
    disbelief, a finger pointing, a face going pale, a calm knowing smile at the
