@@ -1,0 +1,50 @@
+# ============================================================================
+#  KÊNH story-dien-anh-my — Truyện drama gia đình Mỹ, ảnh thật kiểu phim
+# ============================================================================
+#  Cùng đường chạy với story-mau-nuoc (AI đọc phim, tự dựng nhân vật + bối cảnh
+#  tham chiếu, tu_xay). Khác ở hai chỗ, chủ dự án 25/09/2026:
+#
+#  1. KỊCH BẢN: GIỮ NGUYÊN lời kể đối thủ. `2-viet.md` chỉ sửa chữ máy nghe
+#     nhầm, chính tả, dấu câu; `3-sua.md` chỉ tách câu + chèn thẻ cảm xúc. Cả
+#     hai chạy theo khúc, có chốt độ dài và chốt chữ (core/giu_noi_dung.py).
+#  2. HÌNH: ảnh thật bóng, sáng kiểu kênh SN (mẫu Downloads/form, 25/09/2026)
+#     — drama gia đình, chồng vợ, mẹ chồng, thừa kế, ly hôn; giọng kể nữ
+#     (style.yaml).
+#
+#  Chỉ 10 cảnh đầu làm clip Veo; các cảnh sau là ảnh, khâu dựng cho ảnh chuyển
+#  động ngẫu nhiên (zoom/lia) và nối cảnh bằng hiệu ứng chuyển ngẫu nhiên.
+# ============================================================================
+# ── Kênh MẪU của tool ─────────────────────────────────────────────────────────
+#  Cập nhật tool sẽ GHI ĐÈ kênh này bằng bản mẫu mới hơn. Muốn sửa cho riêng
+#  mình thì bấm "Nhân bản" ở tab Tự động — bản sao có kenh_rieng: true, cập
+#  nhật không đụng vào.
+mau_cua_tool: true
+ma: "story-dien-anh-my"
+ten: "Drama Mỹ — gia đình (giọng nữ)"
+ngon_ngu: "en"
+giong_van: "American English, first-person storytelling for adults: calm, intimate, confessional; natural spoken rhythm for narration."
+# ĐO THẬT 25/09/2026 (story-dien-anh-my/0001): 34.158 ký tự đọc trong 49,7 phút ≈ 687/phút.
+# Thấp hơn mức 880 của tiếng Anh thường vì thẻ cảm xúc làm giọng chậm và ngắt nhiều hơn.
+ky_tu_moi_phut: 690
+chu_bia_hoa: true
+# Giọng NỮ Mỹ (chủ dự án 25/09/2026). Bản tối dùng giọng nam.
+voice_id: "XW70ikSsadUbinwLMZ5w"
+phut_muc_tieu: 30
+# Dài đúng bằng lời kể gốc — không nắn, không cắt.
+do_dai_tu_do: true
+giu_noi_dung_goc: true
+che_do_tieu_de: "nguyen_goc"
+engine: "veo3"
+so_clip_dau: 10
+chuyen_canh: "ngau_nhien"
+# Phụ đề karaoke + dải đen mờ + nhân vật chính tách nền bên trái + sóng âm (core/phu_de_karaoke.py).
+kieu_phu_de: "karaoke"
+so_thumbnail: 3
+# Ảnh bìa hai lớp: AI vẽ ảnh KHÔNG chữ, tool tự vẽ chữ (core/bia_chu.py) — theo ảnh bìa mẫu 25/09/2026.
+kieu_bia: "chu_trai_nv_phai"
+mo_hinh: "claude-sonnet-5"
+dot_phu_de: false
+am_luong_nhac: 0.10
+nhac_nen: ""
+# AI tự dựng nhân vật + bối cảnh tham chiếu theo từng truyện (đường đạo diễn), KHÔNG nối cảnh.
+che_do_ke: tu_xay

@@ -183,6 +183,30 @@ class Kenh:
     #: *"không cần giới hạn thời gian hay ký tự ở prompt"*. Chỉ còn một sàn
     #: tuyệt đối chống bản rỗng / AI hỏi lại (`SAN_KICH_BAN_TU_DO`).
     do_dai_tu_do: bool = False
+    #: GIỮ NỘI DUNG GỐC: không viết truyện mới — lấy nguyên lời kể đối thủ,
+    #: `2-viet.md` chỉ sửa chỗ máy nghe nhầm / sai chính tả, `3-sua.md` chỉ tách
+    #: câu và chèn thẻ. Cả hai chạy THEO KHÚC, có chốt độ dài và chốt chữ — xem
+    #: `core/giu_noi_dung.py`. Chủ dự án 25/09/2026 cho ba mẫu truyện drama điện ảnh.
+    giu_noi_dung_goc: bool = False
+    #: CHỈ N CẢNH ĐẦU LÀM CLIP, còn lại là ẢNH có chuyển động (zoom/lia ngẫu
+    #: nhiên, vẽ trên máy, miễn phí — `core/chuyen_dong_anh.py`). 0 = mọi cảnh
+    #: đều làm clip (nết cũ). Chủ dự án 25/09/2026: *"chỉ tạo video 10 ảnh đầu -
+    #: còn lại về sau sẽ là tạo ảnh"* — clip mở đầu giữ người xem, phần thân
+    #: truyện nghe là chính nên ảnh động là đủ, mà rẻ hơn clip mười lần.
+    so_clip_dau: int = 0
+    #: Kiểu nối hai cảnh khi dựng. "" = cắt thẳng (nết cũ); "ngau_nhien" = hiệu
+    #: ứng chuyển ngẫu nhiên 0,5 giây (hoà tan, mờ đen, trượt…), mốc lời giữ nguyên.
+    chuyen_canh: str = ""
+    #: Kiểu phụ đề đốt lên hình. "" = theo `dot_phu_de` (nết cũ); "karaoke" =
+    #: lớp phủ kiểu kênh drama: dải đen mờ ở đáy, chữ in hoa tô ô từng từ đang
+    #: đọc, nhân vật chính tách nền đứng bên trái, sóng âm theo giọng đọc
+    #: (`core/phu_de_karaoke.py`). Chủ dự án 25/09/2026, theo video mẫu.
+    kieu_phu_de: str = ""
+    #: Kiểu ảnh bìa. "" = AI vẽ cả chữ vào ảnh (nết cũ). Còn lại: AI vẽ ảnh
+    #: KHÔNG CHỮ, tool tự vẽ chữ lên trên máy (`core/bia_chu.py`):
+    #: "chu_2_dong" (Hàn: hai dòng trên/dưới), "khong_chu" (chỉ ảnh),
+    #: "chu_trai_nv_phai" (khối chữ trái + ảnh dọc nhân vật chính bên phải).
+    kieu_bia: str = ""
     #: Chế độ nối cảnh gửi clip với `frame_mode: start_frame` — khung hình đầu clip
     #: CHÍNH LÀ ảnh gửi (Flow "Frames"), thay vì Veo tự dựng lại bố cục. Cần cổng
     #: ShopAPI đã nhận trường này (26/08/2026). Bật thì clip nối vào khung cuối
@@ -687,6 +711,11 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         so_ban_hook=min(6, max(0, int(_so(cai.get("so_ban_hook"), 0)))),
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
+        giu_noi_dung_goc=bool(cai.get("giu_noi_dung_goc", False)),
+        so_clip_dau=max(0, int(_so(cai.get("so_clip_dau"), 0))),
+        chuyen_canh=str(cai.get("chuyen_canh") or "").strip(),
+        kieu_phu_de=str(cai.get("kieu_phu_de") or "").strip(),
+        kieu_bia=str(cai.get("kieu_bia") or "").strip(),
         khung_dau=bool(cai.get("khung_dau", False)),
         cham_anh=bool(cai.get("cham_anh", False)),
         ghim_hai_dau=bool(cai.get("ghim_hai_dau", False)),

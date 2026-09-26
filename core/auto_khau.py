@@ -888,6 +888,9 @@ def _giong_tu_choi(chu: str) -> bool:
 #: thì bước đọc ảnh bị bỏ qua, mà khâu ảnh bìa vẫn cần nó.
 TEP_BIA_DOI_THU = "0-bia-doi-thu.txt"
 
+#: Mốc từng từ (chữ kịch bản, mốc giọng đọc) — khâu phụ đề ghi, phụ đề karaoke đọc.
+TEP_MOC_TU = "3-phu-de-tu.json"
+
 #: Thứ tự và nhãn của sáu trường bố cục, dùng khi ghép ra tệp.
 _NHAN_BO_CUC = (
     ("chu_o_dau", "TEXT PLACEMENT"),
@@ -1129,6 +1132,18 @@ class LoiKetJob(RuntimeError):
     Tách riêng khỏi lỗi thường vì nơi gọi xử khác hẳn: gọi lại y nguyên là rơi
     vào đúng job kẹt ấy, phải **đặt job mới bằng khoá mới** mới thoát ra được.
     """
+
+
+class LoiQuaHan(LoiKetJob):
+    """Hết trần chờ mà job vẫn chưa chấm hết (khác job đã báo `failed`).
+
+    Tách riêng để nơi gọi biết job cũ CÓ THỂ còn sống trên máy chủ: phải hỏi
+    nó đang xếp hàng hay đang treo, và huỷ nó trước khi đặt job mới.
+    """
+
+    def __init__(self, thong_bao: str, ma: str = "") -> None:
+        super().__init__(thong_bao)
+        self.ma = ma
 
 
 def khoa_thoat_ket(lan: int) -> str:
@@ -1395,9 +1410,9 @@ class SoTheoDoi:
                         .format(ten_viec or ma[:16], (bay_gio - bat_dau) / 60.0))
         finally:
             self.bo(ma)
-        raise LoiKetJob(
+        raise LoiQuaHan(
             "đợi {0:.0f} phút mà máy chủ vẫn chưa trả kết quả".format(
-                (time.time() - bat_dau) / 60.0))
+                (time.time() - bat_dau) / 60.0), ma)
 
     # ── Bên trong ────────────────────────────────────────────────────────────
 
@@ -1570,9 +1585,9 @@ def _cho_job(bc: BoiCanh, job, tran: float = TRAN_CHO_JOB,
             lan_ke = time.time() + KHOANG_KE_CHO
             bc.ghi("    {0}: máy chủ vẫn đang làm, đã đợi {1:.0f} phút…".format(
                 ten_viec or ma[:16], (time.time() - bat_dau) / 60.0))
-    raise LoiKetJob(
+    raise LoiQuaHan(
         "đợi {0:.0f} phút mà máy chủ vẫn chưa trả kết quả".format(
-            (time.time() - bat_dau) / 60.0))
+            (time.time() - bat_dau) / 60.0), ma)
 
 
 #: Nhớ URL ảnh tham chiếu ở cấp KÊNH, không phải cấp lượt chạy.
@@ -1907,9 +1922,144 @@ _ANH_THAM_CHIEU_HONG = ("ảnh tham chiếu tải không được",
                         "phải là url", "must be a url")
 
 
+#: ═══ ẢNH TREO THÌ GỬI LẠI SỚM, ĐỪNG NGỒI CHỜ (25/09/2026) ═══
+#:
+#: Ảnh bình thường xong trong ~30 giây. Trần chờ chung `TRAN_CHO_JOB` (12 phút)
+#: viết cho clip; áp cho ảnh thì một tấm ảnh tham chiếu treo là cả vài trăm
+#: cảnh đứng chờ 12 phút mỗi vòng. Đo lượt thật story-dien-anh-my/0001: máy chủ
+#: nhận việc, bắt đầu vẽ trong 1 giây, rồi đứng ở `running / generating 52%,
+#: attempt 2` hơn 10 phút — nhà máy báo rỗi 96–98% trong lúc ấy. Chủ dự án:
+#: *"chả lẽ cứ ngồi chờ — tool phải có logic gửi lại"*.
+#:
+#: Nên: ảnh chờ `TRAN_CHO_ANH`; quá hạn mà máy chủ nói job đang ĐANG VẼ thì coi
+#: là treo → huỷ job ấy, đặt lại bằng khoá mới — KHÔNG trần số lần, tới khi xong.
+#: Job chỉ đang XẾP HÀNG (nhà máy đông thật) thì chờ tiếp KHÔNG TRẦN — huỷ nó là
+#: tự đẩy mình xuống cuối hàng. Job hỏng được hoàn tiền; lỡ job cũ vẫn xong sau
+#: khi huỷ thì cũng chỉ ~50₫ một tấm.
+TRAN_CHO_ANH = 4 * 60.0
+#: Nghỉ tối đa giữa hai lần đặt lại một ảnh treo — không có trần SỐ LẦN.
+NGHI_DAT_LAI_ANH = 120.0
+_DANG_XEP_HANG = ("queued", "pending", "waiting", "scheduled")
+
+
+def _trang_thai_job(bc: BoiCanh, ma: str) -> str:
+    """Hỏi đúng một job đang ở trạng thái nào. Hỏng thì trả ""."""
+    if not ma:
+        return ""
+    try:
+        return str(_goi_dict(bc.client.jobs.retrieve(ma)).get("status") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _huy_job(bc: BoiCanh, ma: str) -> None:
+    """Huỷ một job treo trước khi đặt job mới. Hỏng thì thôi — job treo rồi
+    cũng hết hạn phía máy chủ; không được để một lời huỷ làm hỏng việc gửi lại."""
+    if not ma:
+        return
+    try:
+        bc.client.jobs.cancel(ma)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+#: Một vòng chờ của job CLIP (Veo bình thường 1–3 phút) — cùng luật chậm/treo.
+TRAN_CHO_CLIP = 6 * 60.0
+
+
+def _cho_anh(bc: BoiCanh, job, ten_viec: str = "",
+             so: Optional[SoTheoDoi] = None) -> Dict[str, Any]:
+    return _cho_theo_tien_do(bc, job, ten_viec, so, TRAN_CHO_ANH)
+
+
+def _loi_gui_thanh_ket(loi: BaseException) -> BaseException:
+    """Lỗi lúc GỬI việc: máy chủ trục trặc / nhà máy chưa nhận / đang nghẽn mà
+    `goi_kien_nhan` đã chờ hết nhịp → vẫn là lỗi phía máy chủ, chưa trừ tiền:
+    đổi thành `LoiKetJob` để vòng gửi lại không trần xử lý. Lỗi khác giữ nguyên."""
+    from .su_co import CHAM_LAI, CHO_TIEP, NHA_MAY_NGHI, TAM_NGHI  # noqa: PLC0415
+
+    if phan_loai(loi) in (TAM_NGHI, NHA_MAY_NGHI, CHO_TIEP, CHAM_LAI):
+        return LoiKetJob("máy chủ chưa nhận việc: {0}".format(str(loi)[:120]))
+    return loi
+
+
+def _cho_theo_tien_do(bc: BoiCanh, job, ten_viec: str = "",
+                      so: Optional[SoTheoDoi] = None,
+                      vong: float = TRAN_CHO_ANH) -> Dict[str, Any]:
+    """Đợi một job theo từng vòng `vong` giây, phân biệt CHẬM với TREO.
+
+    ═══ CHẬM KHÔNG PHẢI TREO — ĐO 25/09/2026 ═══
+
+    Bản đầu huỷ mọi job quá 4 phút. Đo cùng ngày: máy chủ đang chậm, một ảnh
+    đơn giản nhất ("quả táo đỏ", không tham chiếu) mất hơn 5,5 phút nhưng tiến
+    độ đều đặn 16 → 52 → 94%. Luật 4 phút huỷ đúng những ảnh sắp xong, bắt vẽ
+    lại từ đầu — mỗi ảnh tham chiếu bị gửi lại 9 lần mà gần như không cái nào xong.
+
+    Nên mỗi hết vòng thì hỏi máy chủ: đang XẾP HÀNG → chờ tiếp; đang VẼ mà tiến
+    độ còn tăng so với lần hỏi trước → chờ tiếp; tiến độ ĐỨNG YÊN cả một vòng
+    (hay máy chủ không trả tiến độ) → treo thật → huỷ, để nơi gọi đặt lại.
+
+    ═══ XẾP HÀNG VÀ TỰ THỬ LẠI KHÔNG PHẢI TREO — ĐO ĐÊM 25→26/09/2026 ═══
+
+    Clip cảnh 9 story-dien-anh-my-sang bị gửi lại 20 lần suốt 10 tiếng. Hỏi
+    máy chủ thì thấy hai kiểu huỷ oan: (1) job `attempt 0`, chưa bắt đầu — đang
+    XẾP HÀNG (job xong cuối cùng xếp hàng 27 phút rồi vẽ 4 phút); huỷ nó là tự
+    đẩy mình về cuối hàng. (2) tiến độ tụt 90% → 50% vì máy chủ TỰ thử lại
+    (`attempt` 1 → 2) — so với số cũ thì trông như "đứng yên", nhưng là lượt
+    mới. Nên: chưa bắt đầu thì chờ không trần; lượt tăng thì tính là tiến.
+    """
+    tien_truoc = -1
+    luot_truoc = -1
+    while True:
+        try:
+            return _cho_job(bc, job, tran=vong, ten_viec=ten_viec, so=so)
+        except LoiQuaHan as loi:
+            try:
+                goi = _goi_dict(bc.client.jobs.retrieve(loi.ma)) if loi.ma else {}
+            except Exception:  # noqa: BLE001
+                goi = {}
+            trang = str(goi.get("status") or "")
+            if _xong_han(trang):
+                # Vừa xong đúng lúc hết vòng — nhận luôn, đừng đặt lại.
+                return _ket_job(goi)
+            chua_bat_dau = trang in _DANG_XEP_HANG or (
+                trang and not goi.get("started_at") and "started_at" in goi)
+            if chua_bat_dau:
+                bc.kiem_dung()
+                bc.ghi("    {0}: còn xếp hàng ở máy chủ (nhà máy đông) — giữ chỗ, "
+                       "chờ tiếp.".format(ten_viec or "ảnh"))
+                job = {"id": loi.ma, "status": trang}
+                continue
+            try:
+                tien = int(float(goi.get("progress")))
+            except (TypeError, ValueError):
+                tien = -1
+            try:
+                luot_may = int(goi.get("attempt"))
+            except (TypeError, ValueError):
+                luot_may = -1
+            if luot_may > luot_truoc >= 0:
+                bc.ghi("    {0}: máy chủ tự thử lại (lượt {1}) — chờ lượt ấy, "
+                       "không huỷ.".format(ten_viec or "ảnh", luot_may))
+                luot_truoc, tien_truoc = luot_may, tien
+                job = {"id": loi.ma, "status": trang}
+                continue
+            luot_truoc = max(luot_truoc, luot_may)
+            if tien >= 0 and tien > tien_truoc:
+                bc.ghi("    {0}: máy chủ vẽ chậm nhưng vẫn tiến ({1}%) — chờ tiếp, "
+                       "không huỷ.".format(ten_viec or "ảnh", tien))
+                tien_truoc = tien
+                job = {"id": loi.ma, "status": trang}
+                continue
+            bc.ghi("    {0}: tiến độ đứng yên ở {1}% cả một vòng — coi là treo, huỷ "
+                   "rồi đặt lại.".format(ten_viec or "ảnh", tien))
+            _huy_job(bc, loi.ma)
+            raise
+
+
 def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
              hop: "ThamChieu", khoa: str, ten_hien: str = "",
-             so: Optional[SoTheoDoi] = None):
+             so: Optional[SoTheoDoi] = None, ty_le: str = "16:9"):
     """Tạo một tấm ảnh. Chữ ký ảnh tham chiếu hết hạn thì **tự tải lại**.
 
     ═══ VÌ SAO CẦN TỰ CHỮA, KHÔNG CHỈ CẦN NHỚ ĐÚNG HẠN ═══
@@ -1930,28 +2080,45 @@ def _tao_anh(bc: BoiCanh, luot: LuotChay, loi_nhac: str,
     tải lại — để nơi gọi cập nhật cho những cảnh sau khỏi hỏng tiếp.
     """
     def mot_lan(anh_tc, hau_to=""):
-        job = _tao_job(bc, bc.client.images.create,
-                       prompt=loi_nhac, n=1, aspect_ratio="16:9",
-                       reference_images=anh_tc or None,
-                       idempotency_key=khoa + hau_to)
-        return _cho_job(bc, job, ten_viec=ten_hien, so=so)
+        try:
+            job = _tao_job(bc, bc.client.images.create,
+                           prompt=loi_nhac, n=1, aspect_ratio=ty_le,
+                           reference_images=anh_tc or None,
+                           idempotency_key=khoa + hau_to)
+        except Exception as loi:  # noqa: BLE001
+            # Lỗi phía máy chủ lúc gửi → vòng gửi lại không trần bên dưới. Lỗi
+            # nội dung / hết tiền / hỏng thật thì để nổi lên (nơi gọi có đường
+            # viết lại lời nhắc bị từ chối).
+            doi = _loi_gui_thanh_ket(loi)
+            if doi is loi:
+                raise
+            raise doi from loi
+        return _cho_anh(bc, job, ten_hien, so)
 
     dang_dung = hop.lay()
     try:
         return mot_lan(dang_dung)
     except LoiKetJob:
-        # Job đã nhận nhưng bỏ đó. Khoá mới là đường duy nhất — xem ghi chú
-        # dài ở chỗ tạo clip.
-        # Hai nấc, đuôi bám thời gian — xem `khoa_thoat_ket`. Một nấc `":k2"`
-        # cố định thì chạy lại lượt là gặp đúng khoá đã hỏng.
-        for _lan in range(1, 3):
-            bc.ghi("    {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng khoá "
-                   "mới ({1}/2).".format(ten_hien or "ảnh", _lan))
+        # Job đã nhận nhưng bỏ đó / treo. Khoá mới là đường duy nhất — xem ghi
+        # chú dài ở chỗ tạo clip. Đuôi bám thời gian — xem `khoa_thoat_ket`.
+        #
+        # KHÔNG CÓ TRẦN SỐ LẦN — chủ dự án 25/09/2026: *"đừng có tối đa bao lần
+        # — cứ làm sao để xong thì thôi"*. Lỗi phía máy chủ thì gửi lại tới khi
+        # xong; chỉ dừng khi bấm Dừng (`kiem_dung`) hoặc máy chủ từ chối vì NỘI
+        # DUNG (`_ket_job` ném RuntimeError thường, không phải LoiKetJob, nên
+        # thoát vòng này). Giãn nhịp dần giữa các lần (tối đa `NGHI_DAT_LAI_ANH`).
+        _lan = 0
+        while True:
+            _lan += 1
+            bc.kiem_dung()
+            if _lan > 2:
+                _ngu_ngat(bc, min(NGHI_DAT_LAI_ANH, 15.0 * (_lan - 2)))
+            bc.ghi("    {0}: máy chủ nhận việc rồi bỏ đó / treo — đặt lại bằng khoá "
+                   "mới (lần {1}).".format(ten_hien or "ảnh", _lan))
             try:
                 return mot_lan(dang_dung, khoa_thoat_ket(_lan))
             except LoiKetJob:
-                if _lan == 2:
-                    raise
+                continue
     except Exception as loi:  # noqa: BLE001
         chu = str(loi).lower()
         if not any(d in chu for d in _ANH_THAM_CHIEU_HONG) or not dang_dung:
@@ -2106,8 +2273,9 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 from .script_video import lay_script  # noqa: PLC0415
 
                 lay = lay_script
+            # toi_da=0: KHÔNG cắt ở trần ô Excel — xem `lay_script`.
             ket = lay(link, cancel=bc.cancel, cho_phep_nghe=True,
-                      ngon_ngu_uu_tien=k.ngon_ngu, on_log=bc.on_log)
+                      ngon_ngu_uu_tien=k.ngon_ngu, on_log=bc.on_log, toi_da=0)
             tu_lieu = getattr(ket, "text", "") or ""
             if not tu_lieu:
                 raise RuntimeError(
@@ -2416,7 +2584,15 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             #
             # Nay: viết → NẮN → rà soát. Bước nắn nhận bản chữ liền mạch (thứ
             # nó dễ nén nhất), và thẻ chỉ được chèn một lần, lên bản cuối cùng.
-            for ten, nhan in (("2-viet.md", nhan_viet),):
+            #
+            # Kênh `giu_noi_dung_goc` không VIẾT gì cả — `2-viet.md` của nó là
+            # lời nhắc rà soát, chạy theo khúc trong `_giu_noi_dung_goc` ở dưới.
+            giu_goc = bool(getattr(k, "giu_noi_dung_goc", False))
+            if giu_goc and not tu_lieu.strip():
+                raise RuntimeError(
+                    "kênh này giữ nguyên lời kể của video đối thủ — cần dán link "
+                    "video đối thủ (hoặc lời thoại) mới chạy được")
+            for ten, nhan in (() if giu_goc else (("2-viet.md", nhan_viet),)):
                 khuon = k.prompt.get(ten, "")
                 if not khuon.strip():
                     continue
@@ -2458,7 +2634,8 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # Nên: đo, nói chênh lệch cụ thể, nắn, đo lại — tối đa ba vòng.
             truoc_nan = ban_nhap
             ban_sau_viet = ban_nhap
-            ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap, muc_tieu_kt)
+            if not giu_goc:     # giữ nội dung gốc: dài bằng đúng lời kể gốc
+                ban_nhap = _nan_do_dai(bc, luot, k, chung, ban_nhap, muc_tieu_kt)
 
             # ═══ ĐỌC LẠI CHỈ KHI ĐÃ NẮN ═══
             #
@@ -2509,7 +2686,10 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # bản có thẻ đi vì thẻ không còn khớp — công của cả một lượt gọi AI
             # đổ đi. Đặt sau thì thẻ chỉ chèn một lần, lên đúng bản cuối cùng.
             khuon_sua = k.prompt.get("3-sua.md", "")
-            if khuon_sua.strip():
+            if giu_goc:
+                # Kênh giữ nội dung gốc: rà soát + chèn thẻ THEO KHÚC, có chốt.
+                ban_nhap = _giu_noi_dung_goc(bc, luot, k, chung, tu_lieu, d)
+            elif khuon_sua.strip():
                 nhap3 = os.path.join(d, "1-nhap-3.txt")
                 da_co3 = _doc_chu(nhap3).strip()
                 if da_co3:
@@ -3183,6 +3363,88 @@ def _tach_the_cam_xuc(bc: BoiCanh, thu_muc: str, ban: str) -> str:
     bc.ghi("  kịch bản có sẵn thẻ cảm xúc ({0} thẻ sau khi thưa bớt) — bản có "
            "thẻ để riêng cho giọng đọc, bản sạch cho phụ đề.".format(so_the))
     return sach
+
+
+def _giu_noi_dung_goc(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
+                      tu_lieu: str, d: str) -> str:
+    """Kênh `giu_noi_dung_goc`: rà lời kể đối thủ rồi chèn thẻ, cả hai THEO KHÚC.
+
+    `2-viet.md` = lời nhắc rà soát (ô `<<COMPETITOR_TRANSCRIPT>>` nhận MỘT khúc,
+    `<<KHUC>>` = "3/11"); `3-sua.md` = tách câu + chèn thẻ (ô `<<DRAFT>>` nhận
+    một khúc đã rà). Chốt độ dài / chốt chữ nằm ở `core/giu_noi_dung.py`.
+
+    Mỗi bước ghi tệp nháp như đường viết thường (`1-nhap-2.txt`, `1-nhap-3.txt`)
+    để đứt giữa chừng thì chạy tiếp nhặt đúng chỗ. Khoá gọi mang dấu băm của
+    khúc: tư liệu đổi thì khoá đổi, máy chủ không trả lại bài của tư liệu cũ.
+    """
+    import hashlib  # noqa: PLC0415
+
+    from .giu_noi_dung import (KHUC_CHEN_THE, KHUC_RA_SOAT, chen_the_theo_khuc,  # noqa: PLC0415
+                               chia_khuc, dem_chu, ra_soat_theo_khuc)
+
+    def khoa(buoc: str, i: int, khuc: str, lan: int) -> str:
+        # Băm cả KHÚC lẫn LỜI NHẮC của bước: sửa lời nhắc thì khoá đổi — giữ
+        # khoá cũ là cổng trả lại bài của lời nhắc cũ (hoặc báo khoá lệch).
+        dau = hashlib.sha1((k.prompt.get(buoc, "") + "\x00" + khuc)
+                           .encode("utf-8")).hexdigest()[:10]
+        return _khoa_chat(luot, "{0}:khuc{1}:{2}{3}".format(
+            buoc, i + 1, dau, ":lai" if lan else ""))
+
+    # ── Bước 1: rà soát ──
+    nhap = os.path.join(d, "1-nhap-2.txt")
+    ban = _doc_chu(nhap).strip()
+    if ban:
+        bc.ghi("  rà soát lời kể gốc — đã có từ lần trước, dùng lại.")
+    else:
+        khuon = k.prompt.get("2-viet.md", "")
+        khuc = chia_khuc(tu_lieu.strip(), KHUC_RA_SOAT)
+        if not khuon.strip():
+            bc.ghi("  (kênh không có prompt/2-viet.md — dùng nguyên lời kể gốc, không rà)")
+            ban = tu_lieu.strip()
+        else:
+            bc.ghi("  giữ nội dung gốc: rà {0} khúc — chỉ sửa chữ nghe nhầm, chính "
+                   "tả, dấu câu; không viết lại.".format(len(khuc)))
+
+            def lam(i: int, kh: str, lan: int) -> str:
+                # AI trả JSON danh sách chỗ sai (không viết lại khúc) — xem
+                # `ra_soat_theo_khuc`. Trả thô, không `_don_ban`.
+                bc.kiem_dung()
+                o = dict(chung, COMPETITOR_TRANSCRIPT=kh,
+                         KHUC="{0}/{1}".format(i + 1, len(khuc)))
+                return _goi(bc, _thay(khuon, o), khoa("2-viet.md", i, kh, lan),
+                            toi_da_token=4096)
+
+            cac, giu = ra_soat_theo_khuc(khuc, lam, bc.ghi)
+            ban = "\n".join(cac).strip()
+            bc.ghi("  bản rà: {0} chữ, bằng {1:.0%} lời kể gốc{2}.".format(
+                dem_chu(ban), dem_chu(ban) / max(1, dem_chu(tu_lieu)),
+                "; {0} khúc giữ nguyên lời gốc".format(giu) if giu else ""))
+        _ghi_chu(nhap, ban + "\n")
+
+    # ── Bước 2: tách câu + chèn thẻ ──
+    khuon_the = k.prompt.get("3-sua.md", "")
+    if not khuon_the.strip():
+        return ban
+    nhap3 = os.path.join(d, "1-nhap-3.txt")
+    da_co = _doc_chu(nhap3).strip()
+    if da_co:
+        bc.ghi("  chèn thẻ cảm xúc — đã có từ lần trước, dùng lại.")
+        return da_co
+    khuc3 = chia_khuc(ban, KHUC_CHEN_THE)
+
+    def lam3(i: int, cac_cau: str, lan: int) -> str:
+        # `cac_cau` là các câu ĐÃ ĐÁNH SỐ; AI trả JSON vị trí thẻ (không chép
+        # lại truyện) — xem `chen_the_theo_khuc`. Trả thô, không `_don_ban`.
+        bc.kiem_dung()
+        o = dict(chung, DRAFT=cac_cau, KHUC="{0}/{1}".format(i + 1, len(khuc3)))
+        return _goi(bc, _thay(khuon_the, o), khoa("3-sua.md", i, cac_cau, lan),
+                    toi_da_token=2048)
+
+    cac, duoc = chen_the_theo_khuc(khuc3, lam3, bc.ghi)
+    bc.ghi("  chèn thẻ xong: {0}/{1} khúc có thẻ.".format(duoc, len(khuc3)))
+    co_the = "\n".join(cac).strip()
+    _ghi_chu(nhap3, co_the + "\n")
+    return co_the
 
 
 #: Dấu ngăn phần trong `prompt/3-sua.md` — tool đổi nó thành một quãng lặng
@@ -3940,6 +4202,12 @@ def _khau_phu_de(bc: BoiCanh):
         if not ket.cau:
             raise RuntimeError(ket.loi or "không tạo được phụ đề")
         viet_srt(dich, ket.cau)
+        # Mốc từng từ cho phụ đề karaoke (kênh khai `kieu_phu_de: karaoke`).
+        # Không có mốc đo được thì không ghi — khâu dựng tự rải theo độ dài chữ.
+        if any(c.tu for c in ket.cau):
+            from .phu_de import ghi_moc_tu  # noqa: PLC0415
+
+            ghi_moc_tu(os.path.join(d, TEP_MOC_TU), ket.cau)
         # ═══ SOI LẠI THỨ MÌNH VỪA GHI RA ═══
         #
         # Khách báo 28/08/2026: *"srt bị sai nội dung"*. Một tệp `.srt` sai chữ
@@ -5053,8 +5321,13 @@ def _co_khung_dau(bc: BoiCanh) -> bool:
 
 def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
               dich: str, giay: int, so: Optional[SoTheoDoi] = None,
-              khung_dau: bool = False, anh_cuoi: Optional[str] = None) -> None:
+              khung_dau: bool = False, anh_cuoi: Optional[str] = None,
+              gui_lai_mai: bool = True) -> None:
     """Tạo clip cho một cảnh, tải về, mở thử bằng FFmpeg.
+
+    `gui_lai_mai=False` cho clip bắn SỚM trong khâu ảnh (việc làm thêm): hai lần
+    đặt lại rồi thôi, để khâu clip ngay sau — nơi gửi lại không trần — làm nốt.
+    Không thì một clip hỏng mãi giữ khâu ảnh không bao giờ xong.
 
     `khung_dau=True` gửi thêm `frame_mode: start_frame`: khung hình đầu của clip
     CHÍNH LÀ ảnh (Flow "Frames"). Khoá idempotency đổi theo, vì clip cũ cùng
@@ -5149,21 +5422,28 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
     luat_tieng = LUAT_TIENG_CANH if _giu_tieng_canh(bc) else ""
 
     def goi_clip(dia_chi, hau_to=""):
-        job = _tao_job(
-            bc, bc.client.videos.create,
-            prompt=c["video_prompt"] + luat_mot_chieu + luat_tieng,
-            engine=bc.kenh.engine,
-            duration=giay, aspect_ratio="16:9",
-            image_url=dia_chi or None,
-            extra_body=(dict({"frame_mode": "start_frame"},
-                             **({"image_url_end": url_cuoi} if url_cuoi else {}))
-                        if khung_dau else None),
-            idempotency_key=khoa_viec(luot, "vid", so_canh,
-                                      c["video_prompt"], dia_chi,
-                                      giay) + (":kd" if khung_dau else "")
-            + (":kc" + url_cuoi[-12:] if url_cuoi else "")
-            + (":tc" if luat_tieng else "") + hau_to)
-        return _cho_job(bc, job, ten_viec="cảnh {0}".format(so_canh), so=so)
+        try:
+            job = _tao_job(
+                bc, bc.client.videos.create,
+                prompt=c["video_prompt"] + luat_mot_chieu + luat_tieng,
+                engine=bc.kenh.engine,
+                duration=giay, aspect_ratio="16:9",
+                image_url=dia_chi or None,
+                extra_body=(dict({"frame_mode": "start_frame"},
+                                 **({"image_url_end": url_cuoi} if url_cuoi else {}))
+                            if khung_dau else None),
+                idempotency_key=khoa_viec(luot, "vid", so_canh,
+                                          c["video_prompt"], dia_chi,
+                                          giay) + (":kd" if khung_dau else "")
+                + (":kc" + url_cuoi[-12:] if url_cuoi else "")
+                + (":tc" if luat_tieng else "") + hau_to)
+        except Exception as loi:  # noqa: BLE001
+            doi = _loi_gui_thanh_ket(loi)
+            if doi is loi:
+                raise
+            raise doi from loi
+        # Chờ theo TIẾN ĐỘ (chậm ≠ treo) — cùng luật với ảnh, xem `_cho_theo_tien_do`.
+        return _cho_theo_tien_do(bc, job, "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP)
 
     try:
         goi = goi_clip(url_anh)
@@ -5182,16 +5462,25 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         # đúng hai khoá `""` và `":k2"` cũ — cả hai đã hỏng từ lần trước. Đo
         # 28/08/2026 trên phim `openstory/0011` cảnh 40: `:k2` đặt lúc 17:44,
         # tới 17:55 vẫn "đang làm". Xem `khoa_thoat_ket`.
+        #
+        # KHÔNG TRẦN SỐ LẦN (chủ dự án 25/09/2026: "cứ làm sao để xong thì
+        # thôi — phải xong"): chỉ dừng khi bấm Dừng hoặc lỗi không phải phía
+        # máy chủ. Giãn nhịp dần giữa các lần.
         goi = None
-        for _lan in range(1, 3):
-            bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó — đặt lại bằng "
-                   "khoá mới ({1}/2).".format(so_canh, _lan))
+        _lan = 0
+        while goi is None:
+            _lan += 1
+            bc.kiem_dung()
+            if _lan > 2:
+                _ngu_ngat(bc, min(NGHI_DAT_LAI_ANH, 15.0 * (_lan - 2)))
+            bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó / treo — đặt lại bằng "
+                   "khoá mới (lần {1}).".format(so_canh, _lan))
             try:
                 goi = goi_clip(url_anh, khoa_thoat_ket(_lan))
-                break
             except LoiKetJob:
-                if _lan == 2:
+                if not gui_lai_mai and _lan >= 2:
                     raise
+                continue
     except Exception as loi:  # noqa: BLE001
         chu = str(loi).lower()
         if not url_anh or not any(d in chu for d in _ANH_THAM_CHIEU_HONG):
@@ -5233,9 +5522,18 @@ def _hop_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu"):
 
     if not che_do_dao_dien(bc.kenh):
         return hop
-    duong = nhan_vat_chinh_cua_luot(luot, 2)
+    # Bìa kiểu "chữ trái, nhân vật phải" vẽ MỘT người: chỉ nhân vật chính.
+    duong = nhan_vat_chinh_cua_luot(luot, 1 if _kieu_bia(bc) == "chu_trai_nv_phai" else 2)
     if not duong:
-        return hop
+        # Kênh giữ `nv1.png` làm nhân vật chính thật (`nhan_vat_va_boi_canh`)
+        # thì dùng nó. Kênh tự dựng dàn (`tu_xay`) thì `nv1.png` chỉ là ảnh
+        # dự phòng của KÊNH, không phải người trong phim — thà vẽ bìa không
+        # tham chiếu. Đo 25/09/2026: con mèo mascot lọt vào cả ba bìa kênh Mỹ.
+        if str(getattr(bc.kenh, "che_do_ke", "") or "") == "nhan_vat_va_boi_canh":
+            return hop
+        bc.ghi("  ảnh bìa: không tìm được nhân vật chính trong dàn — vẽ không "
+               "ảnh tham chiếu (không dùng ảnh dự phòng của kênh).")
+        return _HopTrong()
     bc.ghi("  ảnh bìa: dùng nhân vật chính của phim làm tham chiếu ({0}).".format(
         ", ".join(os.path.basename(d)[:-4] for d in duong)))
     return ThamChieuCanh(bc, duong)
@@ -6092,7 +6390,9 @@ def _khau_anh(bc: BoiCanh):
         # trên Windows còn ném hẳn lỗi giữa mẻ.
         khoa_dem = threading.Lock()
         dem = {"anh": 0, "clip": 0, "bia": 0}
-        tong = {"anh": len(canh), "clip": len(canh), "bia": len(muc_bia)}
+        # Kênh `so_clip_dau`: cảnh ngoài danh sách chỉ có ảnh, không bắn clip.
+        co_clip = _canh_co_clip(bc, canh)
+        tong = {"anh": len(canh), "clip": len(co_clip), "bia": len(muc_bia)}
         bao = {
             "anh": dem_tien_do(bc, luot, tt, "ảnh", NHIP_GHI_TIEN_DO),
             "clip": dem_tien_do(bc, luot, luot.tt("clip"), "clip",
@@ -6116,6 +6416,9 @@ def _khau_anh(bc: BoiCanh):
         def bat_clip(c, tep_anh: str) -> None:
             """Ảnh vừa về thì bắn clip của chính nó — không đợi các cảnh khác."""
             so_canh = int(c["scene_id"])
+            if so_canh not in co_clip:
+                return
+
             dich = os.path.join(thu_muc_clip, "{0}.mp4".format(so_canh))
             if os.path.exists(dich):
                 if van_tay_clip.khac(so_canh, c.get("video_prompt") or ""):
@@ -6135,7 +6438,7 @@ def _khau_anh(bc: BoiCanh):
                             if _ghim_hai_dau(bc) else "")
                 _lam_clip(bc, luot, c, tep_anh, dich, giay, so=so,
                           khung_dau=_co_khung_dau(bc) or bool(anh_cuoi),
-                          anh_cuoi=anh_cuoi or None)
+                          anh_cuoi=anh_cuoi or None, gui_lai_mai=False)
                 van_tay_clip.dat(so_canh, c.get("video_prompt") or "")
                 so_anh_clip.dat(so_canh, _dau_tep(tep_anh))
             except Cancelled:
@@ -6332,6 +6635,15 @@ def _khau_anh_noi_canh(bc: BoiCanh):
     return lam
 
 
+def _canh_co_clip(bc: BoiCanh, canh: Sequence[Dict[str, Any]]) -> set:
+    """Mã những cảnh được làm clip. Kênh khai `so_clip_dau: N` thì chỉ N cảnh
+    ĐẦU (theo thứ tự cảnh); còn lại là ảnh, khâu dựng tự cho ảnh chuyển động
+    (`core/chuyen_dong_anh.py`). Không khai = mọi cảnh, như trước."""
+    ma = sorted(int(c["scene_id"]) for c in canh)
+    n = int(getattr(bc.kenh, "so_clip_dau", 0) or 0)
+    return set(ma[:n] if n > 0 else ma)
+
+
 def _khau_clip(bc: BoiCanh):
     """Làm nốt những clip dây chuyền ở khâu ảnh chưa kịp ra.
 
@@ -6343,6 +6655,12 @@ def _khau_clip(bc: BoiCanh):
 
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         canh = _doc_canh(luot)
+        co_clip = _canh_co_clip(bc, canh)
+        if len(co_clip) < len(canh):
+            bc.ghi("  kênh chỉ làm clip cho {0} cảnh đầu — {1} cảnh sau dùng ảnh "
+                   "chuyển động lúc dựng (miễn phí).".format(len(co_clip),
+                                                            len(canh) - len(co_clip)))
+            canh = [c for c in canh if int(c["scene_id"]) in co_clip]
         thu_muc = os.path.join(luot.thu_muc, "6-clip")
         thu_muc_anh = os.path.join(luot.thu_muc, "5-anh")
         os.makedirs(thu_muc, exist_ok=True)
@@ -6563,6 +6881,139 @@ _LUAT_BO_CUC_DOI_THU = (
     "crispest shape — never washed into its own pool of light.\n"
 )
 
+#: ═══ ẢNH BÌA HAI LỚP: ẢNH KHÔNG CHỮ + CHỮ TỰ VẼ (25/09/2026) ═══
+#:
+#: Kênh khai `kieu_bia` thì máy vẽ ảnh KHÔNG được viết chữ — chữ do tool vẽ sau
+#: (`core/bia_chu.py`). Luật này đè mọi khối TEXT STYLE trong lời nhắc kênh.
+_LUAT_BIA_KHONG_CHU = (
+    "\n\n## NO TEXT IN THE IMAGE — MANDATORY\n"
+    "The thumbnail text is added later by our own tool. Every image prompt you "
+    "write must ask for a picture with NO text, NO letters, NO numbers, NO "
+    "captions, NO signs and NO logos anywhere. This overrides any TEXT STYLE "
+    "block or hook-text instruction above.\n"
+)
+
+#: Bố cục bìa đối thủ cho kiểu ảnh không chữ: vẽ LẠI cảnh (không chép), bỏ
+#: hết phần tả chữ. Chủ dự án: *"lấy nguyên copy thì dễ bị đánh gậy nên vẫn phải
+#: cho vẽ lại bối cảnh — tức nó chỉ tốt hơn chứ không thua"*.
+_LUAT_BO_CUC_KHONG_CHU = (
+    "\n\n## THE COMPETITOR THUMBNAIL THAT WON — REBUILD ITS SCENE, BETTER\n"
+    "Measured field by field from the thumbnail that earned the views:\n\n{0}\n\n"
+    "For EVERY concept, rebuild that scene from scratch with OUR characters: "
+    "the same kind of place, the same number of people and where they stand, "
+    "their poses and expressions, the light and palette — then make it more "
+    "striking: sharper faces, stronger emotion, cleaner light. Never copy it "
+    "pixel for pixel. IGNORE every field about its text (placement, colours, "
+    "letterforms) — our image carries no text.\n"
+)
+
+#: Ảnh bìa mà chữ vẽ đè lên: giữ vùng chữ trống mặt người.
+_LUAT_VUNG_CHU = {
+    "chu_2_dong": ("\n\n## KEEP THE TEXT BANDS CLEAR\nTwo lines of text will be laid "
+                   "over the TOP 20% and the BOTTOM 22% of the frame. Keep every face "
+                   "and every important hand or object out of those two bands — put "
+                   "the characters' faces in the middle band of the frame.\n"),
+    "chu_trai_nv_phai": ("\n\n## VERTICAL PORTRAIT\nEach image is a VERTICAL 9:16 "
+                         "portrait that will sit on the right side of the thumbnail. "
+                         "One person only — the main character from the reference "
+                         "image, head and body filling the height of the frame.\n"),
+}
+
+#: Tệp giữ phần chữ của ảnh bìa (đã chia dòng / tô màu) — người dùng sửa tay
+#: được, rồi "Làm lại khâu ảnh bìa" là tool ghép lại chữ, không vẽ lại ảnh.
+TEP_CHU_BIA = "chu-bia.json"
+
+
+def _kieu_bia(bc: BoiCanh) -> str:
+    from .bia_chu import KIEU_BIA  # noqa: PLC0415
+
+    k = str(getattr(bc.kenh, "kieu_bia", "") or "").strip()
+    return k if k in KIEU_BIA else ""
+
+
+def _doc_bia_doi_thu_cau_truc(bc: BoiCanh, luot: LuotChay) -> Dict[str, Any]:
+    """Đọc ảnh bìa đối thủ lấy CHỮ có cấu trúc (các dòng, nội dung, cụm tô màu,
+    tiêu đề bìa). Hỏng thì trả rỗng — nơi gọi lấy chữ bìa/tiêu đề thay."""
+    from .bia_chu import LOI_NHAC_DOC_BIA_CAU_TRUC, doc_chu_bia  # noqa: PLC0415
+
+    vid = _doc_doi_thu(luot.thu_muc).get("video_id", "")
+    if not vid:
+        return doc_chu_bia({})
+    tai = bc.tai_anh or _tai_anh_thumb
+    byte = b""
+    for ten in ("maxresdefault.jpg", "hqdefault.jpg"):
+        try:
+            byte = tai("https://i.ytimg.com/vi/{0}/{1}".format(vid, ten))
+        except Exception:  # noqa: BLE001
+            byte = b""
+        if byte:
+            break
+    if not byte:
+        return doc_chu_bia({})
+    try:
+        tra = _goi(bc, LOI_NHAC_DOC_BIA_CAU_TRUC, _khoa_chat(luot, "thumb-chu-cau-truc"),
+                   anh=_anh_thanh_data_url(byte))
+        return doc_chu_bia(loc_json(tra or ""))
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("  (không đọc được chữ bìa đối thủ: {0})".format(str(loi)[:80]))
+        return doc_chu_bia({})
+
+
+def _chu_cho_bia(bc: BoiCanh, luot: LuotChay, thu_muc: str, tieu_de: str,
+                 chu_bia: str) -> Dict[str, Any]:
+    """Phần chữ của ảnh bìa theo kiểu kênh. Có sẵn `chu-bia.json` thì dùng lại."""
+    from .bia_chu import tach_hai_dong  # noqa: PLC0415
+
+    tep = os.path.join(thu_muc, TEP_CHU_BIA)
+    if os.path.exists(tep):
+        try:
+            return json.loads(_doc_chu(tep))
+        except ValueError:
+            pass
+    kieu = _kieu_bia(bc)
+    ra: Dict[str, Any] = {"kieu": kieu}
+    if kieu == "khong_chu":
+        _ghi_chu(tep, json.dumps(ra, ensure_ascii=False, indent=1))
+        return ra
+    goc = _doc_bia_doi_thu_cau_truc(bc, luot)
+    if kieu == "chu_2_dong":
+        dong = goc["cac_dong"]
+        if len(dong) >= 2:
+            ra["dong1"], ra["dong2"] = dong[0], " ".join(dong[1:])
+        else:
+            ra["dong1"], ra["dong2"] = tach_hai_dong(
+                (dong[0] if dong else "") or chu_bia or tieu_de)
+    else:  # chu_trai_nv_phai
+        ra["noi_dung"] = goc["noi_dung"] or " ".join(goc["cac_dong"]) or chu_bia or tieu_de
+        ra["nhan_manh"] = goc["nhan_manh"] if goc["noi_dung"] else []
+        ra["tieu_de_bia"] = goc["tieu_de_bia"]
+    bc.ghi("  chữ ảnh bìa ({0}): {1}".format(
+        kieu, " | ".join(str(v)[:40] for k, v in ra.items() if k != "kieu")))
+    _ghi_chu(tep, json.dumps(ra, ensure_ascii=False, indent=1))
+    return ra
+
+
+def _ghep_chu_bia(bc: BoiCanh, nen: str, dich: str, chu: Dict[str, Any]) -> None:
+    """Vẽ chữ lên ảnh nền theo kiểu kênh, ghi ảnh bìa hoàn chỉnh ra `dich`."""
+    from . import bia_chu as bch  # noqa: PLC0415
+
+    kieu = _kieu_bia(bc)
+    nn = getattr(bc.kenh, "ngon_ngu", "")
+    if kieu == "chu_2_dong":
+        bch.ghep_bia_hai_dong(nen, dich, str(chu.get("dong1") or ""),
+                              str(chu.get("dong2") or ""), ngon_ngu=nn)
+    elif kieu == "chu_trai_nv_phai":
+        bch.ghep_bia_chu_trai(nen, dich, str(chu.get("noi_dung") or ""),
+                              list(chu.get("nhan_manh") or []),
+                              list(chu.get("tieu_de_bia") or []), ngon_ngu=nn,
+                              in_hoa=bool(getattr(bc.kenh, "chu_bia_hoa", True)))
+    else:
+        from PIL import Image  # noqa: PLC0415
+
+        with Image.open(nen) as a:
+            bch._phu_kin(a.convert("RGB"), bch.RONG, bch.CAO).save(dich)
+
+
 #: Bao nhiêu bản, tên gì. Lời nhắc `8-thumbnail.md` viết cứng "ba concept", nên
 #: nâng `so_thumbnail` lên 6 mà không nói gì thì AI vẫn chỉ trả về ba.
 _LUAT_SO_BIA = (
@@ -6601,9 +7052,17 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
         loi_nhac += _LUAT_SO_BIA.format(
             len(kieu), "\n".join("  {0}. `{1}` — {2}".format(i, t, m)
                                  for i, (t, m) in enumerate(kieu, start=1)))
+    # Ảnh bìa hai lớp: ảnh KHÔNG chữ, bám cảnh bìa đối thủ (mọi concept), chừa
+    # vùng chữ theo kiểu kênh. Chữ do tool vẽ sau — xem `core/bia_chu.py`.
+    kieu_bia = _kieu_bia(bc)
+    if kieu_bia:
+        loi_nhac += _LUAT_BIA_KHONG_CHU + _LUAT_VUNG_CHU.get(kieu_bia, "")
+        bo_cuc = _doc_chu(os.path.join(luot.thu_muc, TEP_BIA_DOI_THU)).strip()
+        if bo_cuc:
+            loi_nhac += _LUAT_BO_CUC_KHONG_CHU.format(bo_cuc)
     # Kênh lấy nguyên chữ bìa đối thủ thì chữ ấy là **cố định** — chốt lại, kẻo
     # `8-thumbnail.md` mời AI tự nghĩ một câu hook mới (xem `_LUAT_CHU_BIA_NGUYEN`).
-    if bc.kenh.che_do_tieu_de == "nguyen_goc" and chu_bia.strip():
+    elif bc.kenh.che_do_tieu_de == "nguyen_goc" and chu_bia.strip():
         loi_nhac += _LUAT_CHU_BIA_NGUYEN.format(chu_bia.strip(),
                                                 len(chu_bia.strip()))
         # Bám nốt BỐ CỤC của đối thủ, nếu đọc được — xem `_LUAT_BO_CUC_DOI_THU`.
@@ -6700,6 +7159,10 @@ def _chuan_bi_bia(bc: BoiCanh, luot: LuotChay):
     if thieu:
         ta_bia = _loi_nhac_bia(bc, luot, bc.kenh.prompt.get("8-thumbnail.md", ""),
                                tieu_de, chu_bia, kieu)
+    # Ảnh bìa hai lớp: đọc chữ bìa đối thủ MỘT lần ở đây, trước khi bung luồng —
+    # để trong từng luồng thì ba tấm cùng gọi AI đọc cùng một ảnh.
+    if _kieu_bia(bc):
+        _chu_cho_bia(bc, luot, thu_muc, tieu_de, chu_bia)
     return thu_muc, muc, thieu, ta_bia, tieu_de, chu_bia
 
 
@@ -6709,6 +7172,9 @@ def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
     """Tạo một tấm ảnh bìa. Đã có trên đĩa thì bỏ qua."""
     so_bia, (ten_kieu, mac_dinh) = muc
     tep = _tep_bia(thu_muc, so_bia)
+    if _kieu_bia(bc):
+        return _lam_bia_hai_lop(bc, luot, hop, thu_muc, muc, ta_bia, tieu_de,
+                                chu_bia, so=so)
     if os.path.exists(tep):
         return so_bia, True
     loi_nhac = _lay_ta_bia(ta_bia, ten_kieu, so_bia)
@@ -6725,6 +7191,55 @@ def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
                    ten_hien="ảnh bìa {0}".format(so_bia), so=so)
     _tai_ket_qua(bc, goi, 0, tep)
     _xoa_dau(bc, tep)
+    return so_bia, False
+
+
+def _lam_bia_hai_lop(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
+                     muc, ta_bia: Dict[str, str], tieu_de: str, chu_bia: str,
+                     so: Optional[SoTheoDoi] = None):
+    """Ảnh bìa hai lớp: ảnh nền KHÔNG chữ (máy vẽ, `7-thumbnail/nen/`) + chữ tool
+    tự vẽ (`core/bia_chu.py`).
+
+    Ảnh nền có rồi thì KHÔNG vẽ lại — chỉ ghép lại chữ khi nội dung `chu-bia.json`
+    hoặc ảnh nền đã đổi (người dùng sửa chữ tay). So bằng DẤU NỘI DUNG ghi cạnh
+    ảnh nền, không so ngày giờ tệp — so mtime từng làm tool làm lại việc vô cớ
+    (xem `_bo_clip_cu_hon_anh`). Ảnh bìa có sẵn từ lượt cũ mà không có ảnh nền
+    thì coi như xong, không tiêu tiền vẽ lại.
+    """
+    so_bia, (ten_kieu, mac_dinh) = muc
+    tep = _tep_bia(thu_muc, so_bia)
+    nen = os.path.join(thu_muc, "nen", os.path.basename(tep))
+    tep_dau = nen + ".dau"
+
+    def dau_hien_tai() -> str:
+        return "{0}|{1}".format(_dau_tep(nen), _dau_tep(os.path.join(thu_muc, TEP_CHU_BIA)))
+
+    if os.path.exists(tep):
+        if not os.path.exists(nen) or _doc_chu(tep_dau).strip() == dau_hien_tai():
+            return so_bia, True
+    kieu = _kieu_bia(bc)
+    if not os.path.exists(nen):
+        os.makedirs(os.path.dirname(nen), exist_ok=True)
+        loi_nhac = _lay_ta_bia(ta_bia, ten_kieu, so_bia)
+        if not loi_nhac:
+            bc.ghi("  (không có lời nhắc AI cho ảnh bìa {0} — dùng bản mặc "
+                   "định)".format(so_bia))
+            st = bc.kenh.style
+            loi_nhac = "{0}. {1}. Video topic: {2}. {3}".format(
+                st.get("thumbnail_style", st.get("image_style", "")), mac_dinh,
+                tieu_de, st.get("reference_lock", ""))
+        loi_nhac += (" No text, no letters, no numbers, no captions, no logo, "
+                     "no watermark anywhere in the image.")
+        ty_le = "9:16" if kieu == "chu_trai_nv_phai" else "16:9"
+        goi = _tao_anh(bc, luot, loi_nhac, hop,
+                       khoa_viec(luot, "thumb-nen", so_bia, loi_nhac, ty_le,
+                                 "|".join(hop.lay())),
+                       ten_hien="ảnh bìa {0}".format(so_bia), so=so, ty_le=ty_le)
+        _tai_ket_qua(bc, goi, 0, nen)
+        _xoa_dau(bc, nen)
+    chu = _chu_cho_bia(bc, luot, thu_muc, tieu_de, chu_bia)
+    _ghep_chu_bia(bc, nen, tep, chu)
+    _ghi_chu(tep_dau, dau_hien_tai() + "\n")
     return so_bia, False
 
 
@@ -6763,6 +7278,159 @@ def _khau_thumbnail(bc: BoiCanh):
 # ── Khâu 8: dựng ─────────────────────────────────────────────────────────────
 
 
+def _anh_thanh_clip(bc: BoiCanh, ffmpeg: str, d: str, canh: Sequence[Dict[str, Any]],
+                    manh: List[str], giay: Sequence[float], them: float,
+                    chon) -> Tuple[List[str], Optional[Tuple[int, int, float]]]:
+    """Mảnh nào là ẢNH (.png) thì vẽ thành clip chuyển động, trả danh sách mới.
+
+    Trả thêm `(rộng, cao, fps)` mọi mảnh phải theo — bám clip thật đầu tiên, để
+    ảnh động và clip Veo ghép chung được. Không có clip thật nào thì 1920×1080
+    (hay 1080×1920 nếu ảnh dọc), 30 khung/giây. Không có ảnh nào thì `(manh, None)`.
+
+    Vẽ trên máy, miễn phí, song song vài luồng. Tên tệp mang hiệu ứng + độ dài
+    + cỡ: dựng lại với mốc cảnh y cũ thì dùng lại, mốc đổi thì vẽ lại.
+    """
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    from .chuyen_dong_anh import FPS_MAC_DINH, do_video, ve_clip_anh  # noqa: PLC0415
+
+    anh = [i for i, m in enumerate(manh) if m.lower().endswith(".png")]
+    if not anh:
+        return manh, None
+    rong = cao = 0
+    fps = 0.0
+    for m in manh:
+        if m.lower().endswith(".mp4"):
+            rong, cao, fps = do_video(ffmpeg, m)
+            if rong:
+                break
+    if not rong:
+        from PIL import Image  # noqa: PLC0415
+
+        with Image.open(manh[anh[0]]) as a:
+            rong, cao = (1920, 1080) if a.size[0] >= a.size[1] else (1080, 1920)
+    rong, cao = rong - rong % 2, cao - cao % 2
+    fps = fps or float(FPS_MAC_DINH)
+    thu_muc = os.path.join(d, "6-clip-anh")
+    os.makedirs(thu_muc, exist_ok=True)
+    moi = list(manh)
+    viec = []
+    for i in anh:
+        hieu = chon.hieu_ung()      # gọi đủ theo thứ tự — hạt cố định ra đúng chuỗi cũ
+        dai = float(giay[i]) + float(them) + 0.1
+        dich = os.path.join(thu_muc, "{0}-{1}-{2}ms-{3}x{4}.mp4".format(
+            int(canh[i]["scene_id"]), hieu, int(round(dai * 1000)), rong, cao))
+        if not os.path.exists(dich):
+            viec.append((manh[i], dich, dai, hieu))
+        moi[i] = dich
+    bc.ghi("  {0} cảnh là ảnh — cho chuyển động ngẫu nhiên (zoom/lia, {1}×{2}, "
+           "{3:g} khung/giây){4}.".format(
+               len(anh), rong, cao, fps,
+               ", vẽ {0} clip trên máy".format(len(viec)) if viec else ", đã có sẵn"))
+    if viec:
+        so_luong = max(1, min(6, so_van_ffmpeg() // 2))
+        xong = [0]
+        khoa = threading.Lock()
+
+        def mot(v) -> None:
+            ve_clip_anh(ffmpeg, v[0], v[1], v[2], v[3], rong, cao, fps,
+                        ma_hoa=("-c:v", "libx264", "-preset", "fast", "-crf", "16",
+                                "-threads", "2"),
+                        dung=bc.kiem_dung)
+            with khoa:
+                xong[0] += 1
+                if xong[0] % 20 == 0 or xong[0] == len(viec):
+                    bc.ghi("    ảnh động {0}/{1}…".format(xong[0], len(viec)))
+
+        with ThreadPoolExecutor(max_workers=so_luong) as ho:
+            for f in [ho.submit(mot, v) for v in viec]:
+                f.result()
+    return moi, (rong, cao, fps)
+
+
+def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[str],
+                     chuan: Optional[Tuple[int, int, float]],
+                     khung: Optional[Sequence[int]], mp3: str) -> str:
+    """Kênh `kieu_phu_de: karaoke`: dựng tệp .ass + ảnh nhân vật tách nền, trả
+    đồ thị lọc cho `_ghep_video(lop_phu=…)`. Thiếu phụ đề thì trả "" (dựng không
+    lớp phủ, và nói ra). Xem `core/phu_de_karaoke.py`."""
+    from .chuyen_dong_anh import FPS_MAC_DINH, do_video  # noqa: PLC0415
+    from .phu_de import doc_srt  # noqa: PLC0415
+    from . import phu_de_karaoke as pk  # noqa: PLC0415
+
+    d = luot.thu_muc
+    tep_tu = os.path.join(d, TEP_MOC_TU)
+    if os.path.exists(tep_tu):
+        cau = json.loads(_doc_chu(tep_tu) or "[]")
+    else:
+        cau = [{"bat_dau": c.bat_dau, "ket_thuc": c.ket_thuc, "chu": c.chu}
+               for c in doc_srt(_doc_chu(os.path.join(d, "3-phu-de.srt")))]
+        if cau:
+            bc.ghi("  (lượt này chưa có mốc từng từ — karaoke rải theo độ dài chữ)")
+    if not cau:
+        bc.ghi("  (chưa có phụ đề — dựng không có lớp phụ đề karaoke)")
+        return ""
+    rong, cao, fps = 0, 0, 0.0
+    if chuan:
+        rong, cao, fps = chuan
+    if not rong:
+        rong, cao, fps = do_video(ffmpeg, manh[0])
+    if khung:
+        rong, cao = int(khung[0]), int(khung[1])
+    rong, cao = rong or 1920, cao or 1080
+    fps = fps or float(FPS_MAC_DINH)
+
+    # Nhân vật chính: đường đạo diễn lấy nhân vật xuất hiện nhiều nhất của phim;
+    # đường cũ lấy `nv1.png` của kênh.
+    nguon = []
+    dao_dien = False
+    try:
+        from .dao_dien_auto import che_do_dao_dien, nhan_vat_chinh_cua_luot  # noqa: PLC0415
+
+        dao_dien = bool(che_do_dao_dien(bc.kenh))
+        if dao_dien:
+            nguon = list(nhan_vat_chinh_cua_luot(luot, 1) or [])
+    except Exception:  # noqa: BLE001 — thiếu nhân vật thì vẫn dựng
+        nguon = []
+    # Kênh tự dựng dàn (`tu_xay`): KHÔNG rơi về `nv1.png` của kênh — nó không
+    # phải người trong phim (đo 25/09/2026: con mèo mascot). Thiếu thì bỏ nhân vật.
+    if not nguon and (not dao_dien or str(getattr(bc.kenh, "che_do_ke", "") or "")
+                      == "nhan_vat_va_boi_canh"):
+        nguon = list(getattr(bc.kenh, "anh_nv", []) or [])[:1]
+    nv, kt = "", None
+    if nguon and os.path.isfile(nguon[0]):
+        nv = os.path.join(d, "8-nhan-vat.png")
+        # 80% chiều cao, sát mép trái — chủ dự án xem demo 25/09/2026: "để nhân
+        # vật nhỏ hơn chút và sát bên trái, để video, text có thêm diện tích".
+        kt = pk.tach_nen(nguon[0], nv, int(cao * 0.80) // 2 * 2)
+        if not kt:
+            bc.ghi("  (ảnh nhân vật không phải nền trơn — không tách nền được, "
+                   "bỏ nhân vật khỏi lớp phủ)")
+            nv = ""
+    nv_x = 0
+    le_trai = (nv_x + kt[0] + int(rong * 0.015)) if kt else int(rong * 0.06)
+    le_phai = int(rong * 0.04)
+    nhom = pk.nhom_chu(cau)
+    ass = pk.viet_ass(os.path.join(d, "8-phu-de-karaoke.ass"), nhom, rong, cao,
+                      font=pk.font_cho(getattr(bc.kenh, "ngon_ngu", "")),
+                      le_trai=le_trai, le_phai=le_phai)
+    song_rong = int(rong * 0.34) // 2 * 2
+    song_cao = int(cao * 0.075) // 2 * 2
+    giua = (le_trai + rong - le_phai) // 2
+    song = ""
+    if os.path.exists(mp3):
+        song = os.path.join(d, "8-song-am-{0}x{1}.mp4".format(song_rong, song_cao))
+        if not (os.path.exists(song) and os.path.getmtime(song) >= os.path.getmtime(mp3)):
+            bc.ghi("  vẽ sóng âm theo giọng đọc (trên máy)…")
+            pk.ve_song_am(ffmpeg, mp3, song, song_rong, song_cao, fps, dung=bc.kiem_dung)
+    bc.ghi("  lớp phủ karaoke: {0} nhóm chữ{1} + dải đen{2}.".format(
+        len(nhom), " + nhân vật tách nền" if kt else "", " + sóng âm" if song else ""))
+    return pk.loc_lop_phu(rong, cao, fps, ass, song=song,
+                          nv=nv, nv_rong=kt[0] if kt else 0, nv_cao=kt[1] if kt else 0,
+                          nv_x=nv_x, song_x=max(0, giua - song_rong // 2),
+                          song_rong=song_rong, song_cao=song_cao)
+
+
 def _khau_dung(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         d = luot.thu_muc
@@ -6796,19 +7464,29 @@ def _khau_dung(bc: BoiCanh):
         # hình đứng yên thêm vài giây rồi đi tiếp. Tiếng và phụ đề không xê
         # dịch một mi-li-giây nào, vì cả hai bám mốc thời gian tuyệt đối chứ
         # không bám thứ tự clip.
-        con = [c for c in canh
-               if os.path.exists(os.path.join(
-                   thu_muc_clip, "{0}.mp4".format(int(c["scene_id"]))))]
+        # Kênh `so_clip_dau`: cảnh ngoài N cảnh đầu không có clip mà có ẢNH —
+        # ảnh ấy được vẽ thành clip chuyển động ngay dưới đây, sau khi biết độ dài.
+        co_clip = _canh_co_clip(bc, canh)
+        thu_muc_anh = os.path.join(d, "5-anh")
+
+        def nguon(c) -> str:
+            so_c = int(c["scene_id"])
+            clip = os.path.join(thu_muc_clip, "{0}.mp4".format(so_c))
+            if os.path.exists(clip):
+                return clip
+            anh = os.path.join(thu_muc_anh, "{0}.png".format(so_c))
+            return anh if so_c not in co_clip and os.path.exists(anh) else ""
+
+        con = [c for c in canh if nguon(c)]
         thieu = len(canh) - len(con)
         if not con:
             raise RuntimeError("chưa có clip nào, không dựng được")
         if thieu:
-            bc.ghi("  thiếu {0}/{1} clip — dựng bằng {2} clip đang có, cảnh "
+            bc.ghi("  thiếu {0}/{1} cảnh — dựng bằng {2} cảnh đang có, cảnh "
                    "trước sẽ giữ hình bù vào chỗ trống.".format(
                        thieu, len(canh), len(con)))
         canh = con
-        manh = [os.path.join(thu_muc_clip, "{0}.mp4".format(int(c["scene_id"])))
-                for c in canh]
+        manh = [nguon(c) for c in canh]
         mp3 = os.path.join(d, "2-giong-doc.mp3")
         srt = os.path.join(d, "3-phu-de.srt")
         # ═══ CẮT MỖI CLIP VỀ ĐÚNG ĐỘ DÀI CẢNH CỦA NÓ ═══
@@ -6877,9 +7555,33 @@ def _khau_dung(bc: BoiCanh):
         # kênh dựng giống hệt nhau. Xem `core/kenh.Kenh.dot_phu_de`.
         dot = bool(getattr(bc.kenh, "dot_phu_de", True)) and os.path.exists(srt)
         giu_tieng = _giu_tieng_canh(bc)
+        # ═══ ẢNH ĐỘNG + HIỆU ỨNG CHUYỂN CẢNH (kênh khai, xem core/chuyen_dong_anh) ═══
+        from .chuyen_dong_anh import GIAY_CHUYEN, ChonNgauNhien  # noqa: PLC0415
+
+        chuyen = (str(getattr(bc.kenh, "chuyen_canh", "") or "") == "ngau_nhien"
+                  and len(manh) > 1)
+        if chuyen and giu_tieng:
+            bc.ghi("  (kênh giữ tiếng cảnh — nối cắt thẳng: hiệu ứng chuyển chỉ "
+                   "chồng hình, tiếng cảnh sẽ lệch.)")
+            chuyen = False
+        # Hạt cố định theo lượt: dựng lại ra đúng chuyển động cũ.
+        chon = ChonNgauNhien("{0}/{1}".format(luot.ma_kenh, luot.ma_luot))
+        manh, chuan = _anh_thanh_clip(bc, ffmpeg, d, canh, manh, giay,
+                                      GIAY_CHUYEN if chuyen else 0.0, chon)
+        kieu_chuyen = ([chon.chuyen_canh() for _ in range(len(manh) - 1)]
+                       if chuyen else None)
+        if chuyen:
+            bc.ghi("  nối {0} cảnh bằng hiệu ứng chuyển ngẫu nhiên {1:g} giây "
+                   "(mốc lời giữ nguyên).".format(len(manh), GIAY_CHUYEN))
         nhac = _duong_nhac(bc.kenh)
         ten_dpg = chon_do_phan_giai(bc.goc, bc.kenh)
         khung = KHUNG.get(ten_dpg)
+        # Phụ đề karaoke thay cho phụ đề đốt thường — không đốt hai lớp chữ.
+        lop_phu = ""
+        if str(getattr(bc.kenh, "kieu_phu_de", "") or "") == "karaoke":
+            lop_phu = _lop_phu_karaoke(bc, luot, ffmpeg, manh, chuan, khung, mp3)
+            if lop_phu:
+                dot = False
         bc.ghi("  ghép {0} clip (cắt theo độ dài từng cảnh: {1:.0f} giây hình "
                "cho {2:.0f} giây tiếng){3}{4}{5}{6}…".format(
                    len(manh), sum(giay), sum(giay),
@@ -6911,7 +7613,9 @@ def _khau_dung(bc: BoiCanh):
                     am_luong_tieng=float(getattr(
                         bc.kenh, "am_luong_tieng_canh", AM_LUONG_TIENG_CANH)),
                     nguong_tieng_nguoi=float(getattr(
-                        bc.kenh, "nguong_tieng_nguoi", 0.0) or 0.0))
+                        bc.kenh, "nguong_tieng_nguoi", 0.0) or 0.0),
+                    chuyen_canh=kieu_chuyen, giay_chuyen=GIAY_CHUYEN,
+                    chuan=chuan, lop_phu=lop_phu)
         # Video dựng xong vốn đã sạch thẻ — FFmpeg mã hoá lại là thẻ của tệp
         # nguồn mất hết. Vẫn chạy một lượt cho chắc: nó chỉ chép luồng sang tệp
         # mới, mất vài giây cho cả video mười phút, và nó bảo hiểm cho ngày nào
@@ -7144,8 +7848,21 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 dung: Optional[Callable[[], None]] = None,
                 giu_tieng: bool = False,
                 am_luong_tieng: float = AM_LUONG_TIENG_CANH,
-                nguong_tieng_nguoi: float = 0.0) -> None:
+                nguong_tieng_nguoi: float = 0.0,
+                chuyen_canh: Optional[Sequence[str]] = None,
+                giay_chuyen: float = 0.5,
+                chuan: Optional[Tuple[int, int, float]] = None,
+                lop_phu: str = "") -> None:
     """Cắt từng clip về đúng độ dài cảnh, nối lại, gắn tiếng, đốt phụ đề.
+
+    `chuyen_canh` — một kiểu `xfade` cho mỗi mối nối (`len(clip) - 1`); `None`
+    = cắt thẳng như cũ. Có nó thì mỗi mảnh (trừ mảnh cuối) cắt dài thêm
+    `giay_chuyen` để chồng hình, và mốc lời vẫn giữ nguyên — xem
+    `core/chuyen_dong_anh.moc_xfade`. `chuan` = (rộng, cao, fps) ép mọi mảnh về
+    cùng một khuôn: `xfade` từ chối hai đầu vào khác cỡ hay khác nhịp khung.
+
+    `lop_phu` — đồ thị lọc nhận nhãn `[nen]` (hình đã phóng cỡ) và trả `[out]`:
+    phụ đề karaoke + nhân vật + sóng âm (`core/phu_de_karaoke.loc_lop_phu`).
 
     `giay[i]` là độ dài **cảnh thứ i** lấy từ bảng cảnh — không phải độ dài
     clip. Engine bán clip cố định (Veo3 8 giây), còn cảnh chia theo nội dung,
@@ -7190,7 +7907,7 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     # không có phụ đề, không phóng cỡ, nên `ma_lai` thành False, FFmpeg chép
     # thẳng luồng và bộ lọc số năm bị vứt im lặng — nhật ký vẫn báo "+ số năm"
     # mà phim ra không có số nào (đo 27/08/2026, phim timelapse/0001).
-    ma_lai = bool(srt) or bool(khung) or bool(loc_them)
+    ma_lai = bool(srt) or bool(khung) or bool(loc_them) or bool(lop_phu)
 
     # ═══ NÉN HAI LẦN THÌ LẦN ĐẦU PHẢI GẦN NHƯ KHÔNG MẤT GÌ ═══
     #
@@ -7218,7 +7935,9 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     #   - ma_lai=True: bản cắt là TRUNG GIAN (sẽ mã lại lần nữa) → GPU nếu có.
     #   - ma_lai=False: bản cắt CHÍNH LÀ video giao khách (bước sau `-c copy`)
     #     → phải dùng encoder bản cuối (CPU an toàn), không được dùng GPU.
-    codec_cat, opts_cat = chon_encoder(pc, intermediate=ma_lai)
+    #   - có hiệu ứng chuyển: bước nối xfade mã lại lần nữa → bản cắt cũng là
+    #     trung gian, kẻo nén bản-cuối hai lần chồng nhau.
+    codec_cat, opts_cat = chon_encoder(pc, intermediate=ma_lai or bool(chuyen_canh))
 
     # ═══ CLIP NÀO CÓ NGƯỜI NÓI THÌ TẮT TIẾNG CLIP ẤY ═══
     #
@@ -7243,7 +7962,8 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
             continue
         ra = os.path.join(tam, "{0:04d}.mp4".format(i))
         if not os.path.exists(ra):
-            can = float(giay[i])
+            can = float(giay[i]) + (float(giay_chuyen)
+                                    if chuyen_canh and i < len(clip) - 1 else 0.0)
             # ═══ CẢNH DÀI HƠN CLIP THÌ GIỮ KHUNG CUỐI ═══
             #
             # Engine bán clip cố định 8 giây, nhưng khoảng một cảnh phải chiếm
@@ -7253,6 +7973,10 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
             # như người dựng tay để hình đứng yên trong lúc người đọc ngừng.
             loc = "tpad=stop_mode=clone:stop_duration={0:.3f}".format(
                 max(0.0, can))
+            if chuan:
+                loc = ("scale={0}:{1}:force_original_aspect_ratio=increase:flags=lanczos,"
+                       "crop={0}:{1},setsar=1,fps={2:g},".format(
+                           int(chuan[0]), int(chuan[1]), float(chuan[2])) + loc)
             # `-t` sau `-i` = cắt theo thời gian PHÁT. Phải mã lại chứ không
             # `-c copy` được: copy chỉ cắt được ở khung khoá, lệch tới cả giây,
             # và 99 lần lệch cộng dồn là hình lại trôi khỏi tiếng.
@@ -7290,12 +8014,44 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
             ghi("    cắt {0}/{1} clip…".format(i + 1, len(clip)))
 
     danh_sach = os.path.join(thu_muc, "_clip.txt")
-    with open(danh_sach, "w", encoding="utf-8") as tep:
-        for m in da_cat:
-            tep.write("file '{0}'\n".format(os.path.abspath(m).replace("'", "'\\''")))
     tam_noi = os.path.join(thu_muc, "_noi.mp4")
-    _chay(ffmpeg, ["-y", "-hide_banner", "-nostats", "-f", "concat", "-safe",
-                   "0", "-i", danh_sach, "-c", "copy", tam_noi])
+    noi_xong = False
+    if chuyen_canh and giay is not None and len(da_cat) > 1:
+        # ═══ NỐI BẰNG HIỆU ỨNG CHUYỂN — HỎNG THÌ LÙI TỪNG BẬC, KHÔNG BỎ VIDEO ═══
+        #
+        # Bậc 1: đúng các kiểu đã chọn. Bậc 2: toàn `fade` — kiểu có từ khi
+        # `xfade` ra đời, FFmpeg cũ trên máy khách thiếu `smoothleft` hay
+        # `coverleft` thì bậc này vẫn chạy. Bậc 3: cắt thẳng (dưới).
+        from .chuyen_dong_anh import ghep_chuyen_canh  # noqa: PLC0415
+
+        ma_hoa = ["-c:v", codec_cat if ma_lai else codec_cuoi]
+        for k, v in (opts_cat if ma_lai else opts_cuoi).items():
+            ma_hoa.extend([k, str(v)])
+        ma_hoa.extend(["-threads", str(so_van_ffmpeg())])
+        for bac, kieu in enumerate((list(chuyen_canh), ["fade"] * (len(da_cat) - 1))):
+            try:
+                ghep_chuyen_canh(ffmpeg, da_cat, [float(g) for g in giay], kieu, tam_noi,
+                                 lambda ts: _chay(ffmpeg, ts, dung=dung), ma_hoa,
+                                 t=float(giay_chuyen), ghi=ghi)
+                noi_xong = True
+                break
+            except Exception as loi:  # noqa: BLE001
+                if dung is not None:
+                    dung()          # bấm Dừng thì dừng, đừng lùi bậc
+                if ghi is not None:
+                    ghi("    (hiệu ứng chuyển cảnh không chạy được{0}: {1})".format(
+                        "" if bac else " — thử lại bằng kiểu mờ đơn giản",
+                        str(loi)[:120]))
+    if not noi_xong:
+        with open(danh_sach, "w", encoding="utf-8") as tep:
+            for i, m in enumerate(da_cat):
+                tep.write("file '{0}'\n".format(os.path.abspath(m).replace("'", "'\\''")))
+                # Mảnh đã kéo dài cho chồng hình mà phải nối cắt thẳng: cắt bỏ
+                # phần kéo thêm ngay trong danh sách, kẻo hình trôi khỏi tiếng.
+                if chuyen_canh and giay is not None:
+                    tep.write("outpoint {0:.3f}\n".format(float(giay[i])))
+        _chay(ffmpeg, ["-y", "-hide_banner", "-nostats", "-f", "concat", "-safe",
+                       "0", "-i", danh_sach, "-c", "copy", tam_noi])
 
     # ═══ ĐƯỜNG TIẾNG RỜI CHO CAPCUT ═══
     #
@@ -7364,7 +8120,13 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
         # YouTube mã hoá lại hết, nên nén tiếc ở đây chỉ tổ mất nét hai lần.
         # Từ ngày 20/08/2026: luôn dùng CPU cho bản cuối (an toàn), nhưng vẫn
         # đọc từ kết quả khảo sát để nhất quán.
-        lenh += ["-vf", ",".join(buoc), "-c:v", codec_cuoi]
+        if lop_phu:
+            # Lớp phủ karaoke là một đồ thị có nhãn (nhận `[nen]`, trả `[out]`):
+            # nối các bước thường vào trước nó bằng nhãn `[in]` của -vf.
+            vf = "[in]{0}[nen];{1}".format(",".join(buoc) or "null", lop_phu)
+        else:
+            vf = ",".join(buoc)
+        lenh += ["-vf", vf, "-c:v", codec_cuoi]
         for k, v in opts_cuoi.items():
             if k not in ("-preset", "-crf"):
                 lenh.extend([k, str(v)])

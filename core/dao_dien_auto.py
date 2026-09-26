@@ -1144,6 +1144,21 @@ def nhan_vat_chinh_cua_luot(luot: Any, so: int = 2) -> List[str]:
             canh = json.load(f)
     except (OSError, ValueError):
         return []
+    # ═══ NHÂN VẬT LÀ THỨ DÀN KHAI LÀ NHÂN VẬT, KHÔNG PHẢI THỨ BẮT ĐẦU BẰNG "nv" ═══
+    #
+    # Bản đầu chỉ đếm mã `nv*`. Đo 25/09/2026 (story-dien-anh-my/0001): AI đặt
+    # mã theo tên (`laura`, `char_daniel`) → không mã nào khớp → hàm trả rỗng →
+    # ảnh bìa và nhân vật tách nền của phụ đề rơi về `nv1.png` của kênh — một
+    # con MÈO chép từ kênh mẫu khác, xuất hiện giữa nhà hàng trên cả ba bìa.
+    # Đọc danh sách nhân vật từ tệp dàn; không có dàn thì loại mã bối cảnh (`loc*`).
+    ma_nv = set()
+    try:
+        with open(os.path.join(luot.thu_muc, TEP_DAN), encoding="utf-8") as f:
+            dan = json.load(f)
+        ma_nv = {str(x.get("id") or "").strip() + ".png"
+                 for x in (dan.get("characters") or []) if isinstance(x, dict)}
+    except (OSError, ValueError, AttributeError):
+        ma_nv = set()
     dem: collections.Counter = collections.Counter()
     for c in canh:
         tho = c.get("reference_files") or ""
@@ -1153,7 +1168,8 @@ def nhan_vat_chinh_cua_luot(luot: Any, so: int = 2) -> List[str]:
             ten = [x.strip() for x in str(tho).split(",")]
         for t in ten or []:
             t = os.path.basename(str(t).strip())
-            if t.startswith("nv"):
+            la_nv = t in ma_nv if ma_nv else (t.endswith(".png") and not t.startswith("loc"))
+            if la_nv:
                 dem[t] += 1
     d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
     ra = []

@@ -97,6 +97,10 @@ class Cau:
     bat_dau: float = 0.0
     ket_thuc: float = 0.0
     chu: str = ""
+    #: Mốc TỪNG TỪ của câu: `[(từ, giây đầu, giây cuối)]` — chữ là chữ kịch bản,
+    #: mốc là mốc ép khớp. Phụ đề karaoke tô từng từ theo đây. Rỗng khi mốc chỉ
+    #: là ước lượng (rải đều) — nơi dùng tự rải theo độ dài chữ.
+    tu: List[Tuple[str, float, float]] = field(default_factory=list)
 
     @property
     def giay(self) -> float:
@@ -480,13 +484,58 @@ def tao_phu_de(
         if t1 - t0 > GIAY_TOI_DA:
             t1 = t0 + GIAY_TOI_DA
         ket.cau.append(Cau(so=len(ket.cau) + 1, bat_dau=round(t0, 3),
-                           ket_thuc=round(t1, 3), chu=chu))
+                           ket_thuc=round(t1, 3), chu=chu,
+                           tu=_moc_tung_tu(chu, i, dau, cuoi, t0, t1)))
         truoc = t1
     if ket.cau and tong:
         # Câu cuối không được vượt quá độ dài file tiếng.
         ket.cau[-1].ket_thuc = round(min(ket.cau[-1].ket_thuc, tong + 0.5), 3)
     ghi("  ép khớp xong: {0} câu, khớp {1:.0%}.".format(len(ket.cau), ty_le))
     return ket
+
+
+def _moc_tung_tu(chu: str, i0: int, dau, cuoi, t0: float,
+                 t1: float) -> List[Tuple[str, float, float]]:
+    """Mốc từng từ của một câu, lấy từ mốc TỪNG KÝ TỰ mà `_khop` đã tính sẵn.
+
+    `i0` là vị trí ký tự đầu của câu trong dòng chuẩn hoá. Từ chỉ có dấu câu
+    (không ký tự nào sau chuẩn hoá) dính vào từ đứng trước. Mốc kẹp trong
+    [t0, t1] của câu và không bao giờ lùi.
+    """
+    ra: List[Tuple[str, float, float]] = []
+    vi_tri = i0
+    truoc = t0
+    for tu in chu.split():
+        n = len(_chuan_hoa(tu))
+        if n == 0:
+            if ra:
+                a, b, c = ra[-1]
+                ra[-1] = (a + " " + tu, b, c)
+            else:
+                ra.append((tu, t0, t0))
+            continue
+        a = dau[vi_tri] if vi_tri < len(dau) and dau[vi_tri] is not None else truoc
+        j = min(len(cuoi) - 1, vi_tri + n - 1)
+        b = cuoi[j] if j >= 0 and cuoi[j] is not None else a
+        a = min(max(float(a), truoc), t1)
+        b = min(max(float(b), a), t1)
+        ra.append((tu, round(a, 3), round(b, 3)))
+        truoc = a
+        vi_tri += n
+    return ra
+
+
+def ghi_moc_tu(duong: str, cau: Sequence[Cau]) -> str:
+    """Ghi mốc từng từ ra JSON cạnh tệp .srt (cho phụ đề karaoke). Trả đường dẫn."""
+    import json  # noqa: PLC0415
+
+    du_lieu = [{"bat_dau": c.bat_dau, "ket_thuc": c.ket_thuc, "chu": c.chu,
+                "tu": [list(t) for t in c.tu]} for c in cau]
+    tam = duong + ".tmp"
+    with open(tam, "w", encoding="utf-8") as tep:
+        json.dump(du_lieu, tep, ensure_ascii=False)
+    os.replace(tam, duong)
+    return duong
 
 
 def do_dai_tieng(duong_mp3: str) -> float:

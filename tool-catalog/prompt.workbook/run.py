@@ -1475,9 +1475,32 @@ def _bo_chia(goi, context, engine, cast_style="", ke_hoach=None) -> Callable:
             "LA_KHUC_DAU": "yes" if thu_tu == 0 else "no",
             "TY_LE_KHUNG": "16:9 horizontal",
         }, san=san, clip=clip)
-        tra = goi(loi_nhac, "chia-{0}".format(khuc[0]["index"]))
-        goi_ve = loc_json(tra)
-        ds = goi_ve.get("scenes") if isinstance(goi_ve, dict) else goi_ve
+        # ═══ MOT KHUC TRA SAI DANG KHONG DUOC KEO CA PHIM VE DUONG LUI ═══
+        #
+        # Do 25/09/2026 (story-dien-anh-my/0001, 55 khuc): 54 khuc chia dung,
+        # khuc cuoi cong tra ve cau khong phai JSON ("Expecting value") — va ca
+        # phim bi do ve cat theo dong ho, bo phi 54 khuc da tra tien. Cong co
+        # luc tra DUNG MOT TU ("Lantern") thay cho ca cau tra loi, va hien tuong
+        # ay bam theo NOI DUNG loi nhac: goi lai y nguyen (khoa moi) van ra y
+        # het. Nen goi lai kem mot cau chot o cuoi — loi nhac khac, khoa khac.
+        ds = None
+        for lan in range(3):
+            thu = loi_nhac if lan == 0 else (
+                loi_nhac + "\n\nReturn ONLY the JSON object with the `scenes` list "
+                "described above — no other text.")
+            tra = goi(thu, "chia-{0}{1}".format(khuc[0]["index"],
+                                               ":lai{0}".format(lan) if lan else ""))
+            try:
+                goi_ve = loc_json(tra)
+            except ValueError:
+                goi_ve = None
+            ds = goi_ve.get("scenes") if isinstance(goi_ve, dict) else goi_ve
+            if isinstance(ds, list) and ds:
+                break
+            emit({"type": "event", "event": "progress", "progress": 0.0,
+                  "message": "Khuc {0}/{1}: AI tra sai dang ({2!r}) — {3}".format(
+                      thu_tu + 1, tong_khuc, str(tra or "")[:30],
+                      "goi lai" if lan < 2 else "bo cuoc")})
         if not isinstance(ds, list) or not ds:
             raise ValueError("AI khong tra ve danh sach `scenes`")
         xong["value"] += 1

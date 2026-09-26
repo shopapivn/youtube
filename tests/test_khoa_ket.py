@@ -105,4 +105,198 @@ def test_khau_ANH_va_khau_CLIP_cung_thu_du_ba_khoa():
         # đó là chỗ kể lại vì sao một nấc là không đủ.
         assert '(dang_dung, ":k2")' not in ma, ten
         assert '(url_anh, ":k2")' not in ma, ten
-        assert "for _lan in range(1, 3)" in ma, ten
+    # Ảnh và clip gửi lại KHÔNG TRẦN tới khi xong (chủ dự án 25/09/2026:
+    # "đừng có tối đa bao lần — cứ làm sao để xong thì thôi").
+    assert "for _lan in range(1, 3)" not in inspect.getsource(ak._lam_clip)
+    assert "while goi is None" in inspect.getsource(ak._lam_clip)
+    assert "_cho_theo_tien_do" in inspect.getsource(ak._lam_clip)
+    assert "while True" in inspect.getsource(ak._tao_anh)
+
+
+# ── Ảnh treo: huỷ rồi gửi lại tới khi xong; đang xếp hàng thì chờ tiếp ─────
+
+class _JobGia:
+    """Máy chủ giả: `treo` job đầu treo mãi ở `running`, job sau xong ngay."""
+
+    def __init__(self, so_job_treo, trang_thai_treo="running"):
+        self.tao = []
+        self.huy = []
+        self.so_job_treo = so_job_treo
+        self.trang_thai_treo = trang_thai_treo
+        self.images = self
+        self.jobs = self
+
+    def create(self, **kw):
+        ma = "job_{0}".format(len(self.tao) + 1)
+        self.tao.append(kw.get("idempotency_key"))
+        treo = len(self.tao) <= self.so_job_treo
+        return {"id": ma, "status": self.trang_thai_treo if treo else "succeeded",
+                "outputs": [{"url": "http://x/{0}.png".format(ma)}]}
+
+    def retrieve(self, ma):
+        so = int(ma.split("_")[1])
+        if so <= self.so_job_treo:
+            return {"id": ma, "status": self.trang_thai_treo}
+        return {"id": ma, "status": "succeeded"}
+
+    def cancel(self, ma):
+        self.huy.append(ma)
+
+
+def _bc_gia(client):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(client=client, on_log=None, ngu=lambda _g: None,
+                           ghi=lambda _s: None, kiem_dung=lambda: None)
+
+
+def test_anh_treo_thi_huy_va_gui_lai_toi_khi_xong(monkeypatch):
+    import core.auto_khau as ak
+
+    may = _JobGia(so_job_treo=6)                   # 6 lần treo liền — hơn trần cũ (2)
+    bc = _bc_gia(may)
+    monkeypatch.setattr(ak, "xin_nhip", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_ngu_ngat", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_cho_job", lambda bc, job, tran=0, ten_viec="", so=None: (
+        job if job.get("status") == "succeeded" else
+        (_ for _ in ()).throw(ak.LoiQuaHan("treo", job["id"]))))
+    hop = type("H", (), {"lay": lambda self: []})()
+    luot = type("L", (), {})()
+    goi = ak._tao_anh(bc, luot, "p", hop, "khoa")
+    assert goi["status"] == "succeeded"
+    assert len(may.tao) == 7 and len(set(may.tao)) == 7, "mỗi lần một khoá mới"
+    assert may.huy == ["job_{0}".format(i) for i in range(1, 7)], "job treo phải bị huỷ"
+
+
+def test_anh_ve_cham_ma_tien_do_con_tang_thi_khong_huy(monkeypatch):
+    """Đo 25/09/2026: ảnh "quả táo" mất 5,5 phút, tiến độ 16 → 52 → 94%. Luật
+    huỷ-sau-4-phút đã huỷ đúng những ảnh sắp xong (mỗi ảnh gửi lại 9 lần)."""
+    import core.auto_khau as ak
+
+    tien = iter([30, 60, 90])
+    lan = {"n": 0}
+
+    class May(_JobGia):
+        def retrieve(self, ma):
+            return {"id": ma, "status": "running", "progress": next(tien)}
+
+    may = May(so_job_treo=1)
+    bc = _bc_gia(may)
+
+    def cho_gia(bc, job, tran=0, ten_viec="", so=None):
+        lan["n"] += 1
+        if lan["n"] <= 3:
+            raise ak.LoiQuaHan("hết vòng", job["id"])
+        return {"id": job["id"], "status": "succeeded"}
+
+    monkeypatch.setattr(ak, "xin_nhip", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_cho_job", cho_gia)
+    hop = type("H", (), {"lay": lambda self: []})()
+    goi = ak._tao_anh(bc, type("L", (), {})(), "p", hop, "khoa")
+    assert goi["status"] == "succeeded"
+    assert len(may.tao) == 1 and may.huy == [], "đang tiến thì chờ, không huỷ không gửi lại"
+
+
+def test_tien_do_dung_yen_ca_vong_thi_moi_huy(monkeypatch):
+    import core.auto_khau as ak
+
+    class May(_JobGia):
+        def retrieve(self, ma):
+            if int(ma.split("_")[1]) == 1:
+                return {"id": ma, "status": "running", "progress": 40}
+            return {"id": ma, "status": "succeeded"}
+
+    may = May(so_job_treo=1)
+    bc = _bc_gia(may)
+    monkeypatch.setattr(ak, "xin_nhip", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_ngu_ngat", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_cho_job", lambda bc, job, tran=0, ten_viec="", so=None: (
+        job if job.get("status") == "succeeded" else
+        (_ for _ in ()).throw(ak.LoiQuaHan("hết vòng", job["id"]))))
+    hop = type("H", (), {"lay": lambda self: []})()
+    goi = ak._tao_anh(bc, type("L", (), {})(), "p", hop, "khoa")
+    assert goi["status"] == "succeeded"
+    # Vòng 1 thấy 40% (mới) → chờ; vòng 2 vẫn 40% → treo → huỷ, gửi lại.
+    assert may.huy == ["job_1"] and len(may.tao) == 2
+
+
+def _cho_nhieu_vong(ak, so_vong):
+    lan = {"n": 0}
+
+    def cho_gia(bc, job, tran=0, ten_viec="", so=None):
+        lan["n"] += 1
+        if lan["n"] <= so_vong:
+            raise ak.LoiQuaHan("hết vòng", job["id"])
+        return {"id": job["id"], "status": "succeeded"}
+    return cho_gia
+
+
+def test_xep_hang_LAU_van_giu_cho_khong_huy(monkeypatch):
+    """Đêm 25→26/09/2026: job `attempt 0`, chưa bắt đầu, bị huỷ sau 30 phút xếp
+    hàng; job xong cuối cùng xếp hàng 27 phút. Huỷ là tự về cuối hàng."""
+    import core.auto_khau as ak
+
+    class May(_JobGia):
+        def retrieve(self, ma):
+            return {"id": ma, "status": "running", "progress": 0, "attempt": 0,
+                    "started_at": None}
+
+    may = May(so_job_treo=1)
+    monkeypatch.setattr(ak, "_cho_job", _cho_nhieu_vong(ak, 12))   # 12 vòng ≈ 48 phút
+    goi = ak._cho_theo_tien_do(_bc_gia(may), {"id": "job_1"}, "cảnh 9", None, 1.0)
+    assert goi["status"] == "succeeded" and may.huy == []
+
+
+def test_may_chu_TU_THU_LAI_tien_do_tut_khong_phai_treo(monkeypatch):
+    """Tiến độ 90% → 50% vì máy chủ sang `attempt` 2 — là lượt mới, không huỷ."""
+    import core.auto_khau as ak
+
+    tra = iter([{"progress": 90, "attempt": 1}, {"progress": 50, "attempt": 2}])
+
+    class May(_JobGia):
+        def retrieve(self, ma):
+            return dict({"id": ma, "status": "running",
+                         "started_at": "2026-09-26T00:00:00Z"}, **next(tra))
+
+    may = May(so_job_treo=1)
+    monkeypatch.setattr(ak, "_cho_job", _cho_nhieu_vong(ak, 2))
+    goi = ak._cho_theo_tien_do(_bc_gia(may), {"id": "job_1"}, "cảnh 9", None, 1.0)
+    assert goi["status"] == "succeeded" and may.huy == []
+
+
+def test_cung_luot_cung_tien_do_van_la_treo(monkeypatch):
+    import core.auto_khau as ak
+
+    class May(_JobGia):
+        def retrieve(self, ma):
+            return {"id": ma, "status": "running", "progress": 50, "attempt": 2,
+                    "started_at": "2026-09-26T00:00:00Z"}
+
+    may = May(so_job_treo=1)
+    monkeypatch.setattr(ak, "_cho_job", _cho_nhieu_vong(ak, 5))
+    import pytest
+
+    with pytest.raises(ak.LoiQuaHan):
+        ak._cho_theo_tien_do(_bc_gia(may), {"id": "job_1"}, "cảnh 9", None, 1.0)
+    assert may.huy == ["job_1"]
+
+
+def test_anh_dang_xep_hang_thi_cho_tiep_khong_huy(monkeypatch):
+    import core.auto_khau as ak
+
+    may = _JobGia(so_job_treo=1, trang_thai_treo="queued")
+    bc = _bc_gia(may)
+    lan = {"n": 0}
+
+    def cho_gia(bc, job, tran=0, ten_viec="", so=None):
+        lan["n"] += 1
+        if lan["n"] == 1:
+            raise ak.LoiQuaHan("hết 4 phút", job["id"])
+        return {"id": job["id"], "status": "succeeded"}
+
+    monkeypatch.setattr(ak, "xin_nhip", lambda *a, **k: None)
+    monkeypatch.setattr(ak, "_cho_job", cho_gia)
+    hop = type("H", (), {"lay": lambda self: []})()
+    goi = ak._tao_anh(bc, type("L", (), {})(), "p", hop, "khoa")
+    assert goi["status"] == "succeeded"
+    assert len(may.tao) == 1 and may.huy == [], "đang xếp hàng thì không huỷ, không gửi lại"

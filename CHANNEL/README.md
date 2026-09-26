@@ -68,12 +68,46 @@ Sửa gì sau đó thì vào **Quản lý kênh**.
 
 ## Kênh mẫu và kênh riêng
 
-Kênh ship kèm tool (`TL4-T7`, `story-3d`, `hoathinh-3d`, `story-mau-nuoc`) có
+Kênh ship kèm tool (`TL4-T7`, `story-3d`, `hoathinh-3d`, `story-mau-nuoc`,
+`story-dien-anh-my`, `story-dien-anh-my-sang`, `story-dien-anh-han`) có
 `mau_cua_tool: true` trong `kenh.yaml` — **cập nhật tool sẽ ghi đè** chúng để
 bạn nhận bản mẫu mới hơn. Muốn tùy chỉnh thì bấm **Nhân bản** cạnh ô chọn kênh:
 bản sao mang đủ prompt, phong cách, ảnh nhân vật và có `kenh_rieng: true` —
 cập nhật tool **không bao giờ** đụng vào kênh riêng. Kênh tạo bằng **Tạo kênh
 mới** cũng là kênh riêng.
+
+### Ba mẫu truyện drama điện ảnh (thêm 25/09/2026)
+
+| Kênh | Khán giả | Hình | Giọng |
+|---|---|---|---|
+| `story-dien-anh-my` | Mỹ | ảnh thật sáng bóng — gia đình, chồng vợ, thừa kế | nữ Mỹ |
+| `story-dien-anh-my-sang` | Mỹ | ảnh thật sáng bóng — tỷ phú, CEO, tiệc sang | nam Mỹ |
+| `story-dien-anh-han` | Hàn | ảnh thật K-drama — mẹ chồng, nàng dâu, căn hộ sang | Hàn |
+
+Hình theo ảnh mẫu chủ dự án đưa 25/09/2026: kênh Mỹ kiểu kênh SN (nhà hàng,
+gala, đèn vàng, váy màu đá quý), kênh Hàn kiểu 노후사연 (căn hộ Seoul sang
+trọng, nhiều người cùng khung, cảm xúc mạnh). Người, bối cảnh, đồ vật đều đúng
+quốc gia của khán giả.
+
+Khác story-mau-nuoc ở hai chỗ:
+
+- **Kịch bản giữ nguyên lời kể đối thủ** (`giu_noi_dung_goc: true`). `2-viet.md`
+  chỉ sửa chữ máy nghe nhầm, chính tả, dấu câu; `3-sua.md` chỉ tách câu và
+  chèn thẻ cảm xúc. Cả hai chạy theo từng khúc; khúc nào AI tóm bớt thì giữ
+  nguyên lời gốc, khúc nào AI đổi chữ lúc chèn thẻ thì đọc không thẻ. Bắt buộc
+  có link video đối thủ.
+- **Chỉ 10 cảnh đầu làm clip** (`so_clip_dau: 10`). Cảnh sau là ảnh; khâu dựng
+  cho ảnh zoom/lia ngẫu nhiên và nối cảnh bằng hiệu ứng chuyển ngẫu nhiên
+  (`chuyen_canh: ngau_nhien`). Phần này chạy trên máy, không tốn tiền.
+- **Phụ đề karaoke** (`kieu_phu_de: karaoke`): dải đen mờ ở đáy, chữ in hoa
+  lấy đúng từ kịch bản, từ đang đọc có ô tím; nhân vật chính tách nền đứng bên
+  trái; sóng âm chạy theo giọng đọc. Cũng chạy trên máy, không tốn tiền.
+- **Ảnh bìa hai lớp** (`kieu_bia`): AI vẽ ảnh KHÔNG chữ, dựng lại cảnh của
+  ảnh bìa đối thủ (vẽ lại, không chép); tool tự vẽ chữ lấy từ bìa đối thủ lên
+  trên. Hàn: hai dòng trên/dưới xanh lá – hồng viền đen. Mỹ nam: chỉ ảnh. Mỹ
+  nữ: khối chữ trái (câu nổi bật tô cam/hồng) + dải tiêu đề + ảnh dọc nhân vật
+  chính bên phải. Chữ nằm ở `7-thumbnail/chu-bia.json` — sửa tay rồi bấm làm
+  lại khâu ảnh bìa là tool ghép lại chữ, không vẽ lại ảnh.
 
 ### Sửa khuôn, hoặc thêm nét vẽ của riêng bạn
 

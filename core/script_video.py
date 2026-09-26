@@ -646,8 +646,14 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
                cho_phep_nghe: bool = False,
                uu_tien_ngon_ngu_goc: bool = False,
                ngon_ngu_uu_tien: str = "",
-               on_log: Optional[Callable[[str], None]] = None) -> KetScript:
+               on_log: Optional[Callable[[str], None]] = None,
+               toi_da: int = MAX_SCRIPT) -> KetScript:
     """Lấy lời thoại của một video, thử lần lượt bốn đường. **Có gọi mạng.**
+
+    `toi_da` — cắt lời thoại còn ngần này ký tự; 0 = không cắt. Mặc định là trần
+    ô Excel (`MAX_SCRIPT`) vì bảng kết quả là nơi dùng nhiều nhất. Luồng Tự động
+    truyền 0: truyện Mỹ 40–60 phút dài 40–55 nghìn ký tự, cắt ở 30.000 là video
+    mất nửa sau câu chuyện mà không một dòng nhật ký nào báo.
 
     `ngon_ngu_uu_tien` (vd `"ja"`) — ưu tiên phụ đề đúng thứ tiếng ấy (transcript
     GỐC của video). Không có thì rơi về ưu tiên tiếng Việt. Dùng cho kênh remake
@@ -665,6 +671,9 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
             on_log(dong)
 
     from .youtube import _extract  # noqa: PLC0415 — cùng gói, dùng lại
+
+    def cat(chu: str) -> str:
+        return chu[:toi_da] if toi_da and toi_da > 0 else chu
 
     ket = KetScript(url=url)
     try:
@@ -701,7 +710,7 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
             continue
         chu, vi_sao = _tai_chu(dia_chi)
         if chu:
-            ket.text, ket.nguon, ket.ngon_ngu = chu[:MAX_SCRIPT], ten_nguon, ma
+            ket.text, ket.nguon, ket.ngon_ngu = cat(chu), ten_nguon, ma
             return ket
         co_phu_de = vi_sao or co_phu_de
 
@@ -712,7 +721,7 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
             return ket
         chu, ma = _tu_thu_vien(ket.video_id)
         if chu:
-            ket.text, ket.nguon, ket.ngon_ngu = chu[:MAX_SCRIPT], "thu-vien", ma
+            ket.text, ket.nguon, ket.ngon_ngu = cat(chu), "thu-vien", ma
             return ket
 
     # Đường 4 — chỉ khi người dùng tự bật, vì nó chậm hơn hẳn.
@@ -729,7 +738,7 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
         co_phu_de or "không có phụ đề"))
     chu, ma, loi = _tu_nghe(url, ghi, cancel=cancel)
     if chu:
-        ket.text, ket.nguon, ket.ngon_ngu = chu[:MAX_SCRIPT], "tu-nghe", ma
+        ket.text, ket.nguon, ket.ngon_ngu = cat(chu), "tu-nghe", ma
     else:
         ket.loi = loi or "cả bốn cách đều không ra chữ"
     return ket

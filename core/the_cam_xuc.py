@@ -198,7 +198,11 @@ def loc_the_la(chu: str) -> Tuple[str, List[str]]:
 #: 2,5–3 câu một thẻ. Giọng đọc đầy thẻ nghe như diễn kịch. Chốt bằng mã.
 CAU_MOI_THE = 4
 
-_KET_CAU = re.compile(r"[。！？!?]")
+#: Dấu hết câu. Dấu chấm Âu chỉ tính khi theo sau là khoảng trắng hoặc hết bài,
+#: để "3.5" không thành hai câu. Trước 25/09/2026 thiếu hẳn dấu chấm: tiếng
+#: Anh/Hàn/Việt kết câu bằng "." nên mọi quãng đếm ra 0 câu, và `thua_the` gỡ
+#: sạch mọi thẻ sau thẻ đầu tiên — kịch bản story-mau-nuoc cả bài còn đúng một thẻ.
+_KET_CAU = re.compile(r"[。！？!?]|\.(?=\s|$)")
 
 
 def thua_the(co_the: str, moi_n_cau: int = CAU_MOI_THE) -> str:

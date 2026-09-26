@@ -1,0 +1,36 @@
+# ============================================================================
+#  PHONG CÁCH KÊNH story-dien-anh-my-sang — drama Mỹ giới SANG TRỌNG, ẢNH THẬT
+# ============================================================================
+#  Đúng khuôn kênh SN mà chủ dự án đưa 25/09/2026 (Downloads/form/form mỹ kênh
+#  SN.PNG + thumb mỹ kênh SN): nhà hàng sang, tiệc gala đèn chùm, sảnh khách
+#  sạn, văn phòng kính nhìn ra đường chân trời; ánh vàng ấm pha xanh chạng
+#  vạng; người Mỹ ưa nhìn mặc vest và váy màu đá quý; khung đông người, mặt
+#  biểu cảm rõ — cười chế giễu, sốc, đứng hình. Truyện tỷ phú giấu mặt, CEO,
+#  cô phục vụ, người bị coi thường — giọng kể nam.
+#
+#  (Bản đầu là "neo-noir tối" — chủ dự án đưa mẫu thì hình phải sáng, bóng.)
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+style_name: "photoreal_american_luxury_drama_glossy"
+image_style: "glossy photorealistic American drama still, luxury setting with warm golden chandeliers and fairy lights, blue-hour city skyline through tall windows, rich jewel-tone suits and dresses, attractive well-groomed American adults, crisp sharp focus, realistic skin texture, bright commercial cinematic look, ensemble staging with several characters reacting in one frame"
+video_style: "photorealistic live-action shot, warm golden luxury light, slow gentle push-in, the characters act the moment with clear emotion (smirking, gasping, freezing, pointing), the light and colour grade stay identical for the whole clip and must not darken, grey out or shift hue"
+thumbnail_style: "glossy photorealistic luxury drama still, the underestimated hero and the people mocking them caught at the most charged second, chandeliers and city lights behind, jewel-tone clothes, every face showing a clear emotion, bold readable composition"
+scene_plan_style: "American luxury-drama language: ensemble shots in glamorous places — upscale restaurants, gala ballrooms with chandeliers, hotel lobbies, rooftop bars, glass corner offices with a skyline, boardrooms, luxury car showrooms — every picture shows who looks down on whom and what object turns the tables"
+palette: "warm gold chandelier light, blue-hour skyline, jewel tones (royal blue, emerald, burgundy), crisp whites (#E3B04B, #27408B, #0F6B4E, #7B1E2B)"
+negative_prompt: "no text, no letters, no numbers, no watermark, no logo, no extra fingers, no distorted hands, no deformed faces, no cartoon, no anime, no illustration, no painting, no 3D render look, no plastic skin, no dark gloomy lighting, no blood, no weapons"
+reference_lock: "Every character keeps exactly the face, hair, age, body shape, outfit and props of its own reference image; outfit changes only where the story says so (a new reference image exists for that stage); the glossy luxury photographic look stays identical in every shot"
+technical_suffix: "glossy photorealistic luxury drama still, warm golden chandelier light, bokeh, sharp focus, no text, no letters, no watermark"
+engagement_rules: "put the mocker and the mocked in the same frame, give each face a clear readable emotion, hold on hands and objects at the turning points (a black credit card, a bill folder, a signed contract, a tablet turned away from us, a champagne glass, car keys), keep the glamorous room visible behind them, end each shot on a change the viewer notices"
+default_character_prompt: "photorealistic attractive American adult, natural real skin texture, well-groomed hair, elegant suit or dress in one jewel-tone signature colour, expressive face"
+default_character_lock: "photorealistic live-action American adult, realistic proportions, one signature colour; face, hair and outfit fixed per reference image"
+thumb_text_style: "bold white condensed letters with a thin dark outline, one key word in gold"
+thumb_text_shadow: "hard dark drop shadow"
+thumb_text_hex: "#FFFFFF"
+thumb_text_font: "heavy condensed sans-serif"
+audience_language: "English (United States)"
+audience_culture_note: "Design for American adults watching 'unaware of who he truly was' stories: the waitress who speaks seven languages, the ex-wife who mocked him, the CEO who sneered, the millionaire whose card was declined, the fiancée caught at the office. Settings are glamorous America: upscale restaurants, gala ballrooms, hotel lobbies, rooftop bars, glass corner offices, boardrooms."
+cultural_props: "black credit card, card machine, bill folder, champagne and wine glasses, signed contract, tablet turned away, laptop, business cards, car keys, engagement ring, name badge, silver serving tray"
+cultural_metaphors: "arrogance: a man in a burgundy suit sneering across a candlelit table | the reveal: a whole ballroom turning to look | power shift: the waitress calmly answering in another language | justice: the mocker frozen with a declined card | respect: staff standing up as the hero walks in"
+cultural_emotion_style: "Clear, readable soap-drama emotions: a smug smirk, mocking laughter behind a hand, a shocked gasp, a man frozen mid-gesture, a calm confident smile from the hero — readable in one second. No blood, no violence."

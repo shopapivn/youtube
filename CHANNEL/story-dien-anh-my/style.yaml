@@ -1,0 +1,34 @@
+# ============================================================================
+#  PHONG CÁCH KÊNH story-dien-anh-my — drama gia đình Mỹ, ẢNH THẬT KIỂU PHIM
+# ============================================================================
+#  Theo mẫu chủ dự án đưa 25/09/2026 (Downloads/form/form mỹ kênh SN.PNG +
+#  thumbnail mỹ nữ): ảnh thật bóng, sáng, rõ nét kiểu phim thương mại Mỹ; ánh
+#  vàng ấm buổi tối, đèn dây và phông mờ lấp lánh; người Mỹ ưa nhìn, trang phục
+#  màu đá quý (xanh hoàng gia, xanh ngọc, đỏ rượu); khung có vài người cùng
+#  phản ứng rõ — cười chế giễu, sốc, khoanh tay. Dòng truyện: gia đình, chồng
+#  vợ, mẹ chồng, thừa kế — giọng kể nữ.
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+style_name: "photoreal_american_family_drama_glossy"
+image_style: "glossy photorealistic American drama still, warm golden evening light with soft bokeh fairy lights, rich jewel-tone wardrobe, attractive well-groomed American adults, crisp sharp focus, realistic skin texture, bright commercial cinematic look, ensemble staging with several characters reacting in one frame"
+video_style: "photorealistic live-action shot, warm golden light, slow gentle push-in, the characters act the moment with clear emotion (laughing, gasping, turning, pointing), the light and colour grade stay identical for the whole clip and must not darken, grey out or shift hue"
+thumbnail_style: "glossy photorealistic American drama still, the narrator and the people who wronged her caught at the most charged second, warm golden light, jewel-tone clothes, every face showing a clear emotion, bold readable composition"
+scene_plan_style: "American family-drama language: ensemble shots in bright upscale American places — big suburban homes with open kitchens, backyard birthday parties, restaurants with fairy lights, country-club dinners, lawyers' offices, hospital rooms — every picture shows who confronts whom and what object is between them"
+palette: "warm golden light, jewel tones (royal blue, emerald, burgundy), creamy whites, natural skin tones (#E9B872, #1F4E9C, #0F6B4E)"
+negative_prompt: "no text, no letters, no numbers, no watermark, no logo, no extra fingers, no distorted hands, no deformed faces, no cartoon, no anime, no illustration, no painting, no 3D render look, no plastic skin, no dark gloomy lighting"
+reference_lock: "Every character keeps exactly the face, hair, age, body shape, outfit and props of its own reference image; outfit changes only where the story says so (a new reference image exists for that stage); the glossy photographic drama look stays identical in every shot"
+technical_suffix: "glossy photorealistic drama still, warm golden light, bokeh, sharp focus, no text, no letters, no watermark"
+engagement_rules: "put every character of the confrontation in the frame when the line is a clash, give each face a clear readable emotion, hold on hands and objects at the turning points (a credit card on the counter, a birthday cake, divorce papers held shut, a wedding ring, a phone turned away from us, a set of car keys), keep the rich setting visible behind them, end each shot on a change the viewer notices"
+default_character_prompt: "photorealistic attractive American adult, natural real skin texture, well-groomed hair, stylish modern clothes in one jewel-tone signature colour, expressive face"
+default_character_lock: "photorealistic live-action American adult, realistic proportions, one signature colour; face, hair and outfit fixed per reference image"
+thumb_text_style: "bold white uppercase letters with key phrases in orange and pink, heavy black outline, stacked lines like a quote"
+thumb_text_shadow: "hard dark drop shadow"
+thumb_text_hex: "#FFFFFF"
+thumb_text_font: "heavy condensed sans-serif, uppercase"
+audience_language: "English (United States)"
+audience_culture_note: "Design for American adults listening to first-person family revenge stories told by a woman: a husband who says 'stop living off me', in-laws who humiliate her, a birthday party that falls apart, an inheritance, a divorce she wins quietly. Settings are upscale everyday America: big suburban houses with open kitchens and islands, backyard parties, nice restaurants with fairy lights, country clubs, lawyers' offices, hospital rooms."
+cultural_props: "kitchen island, credit card slammed on a counter, birthday cake, party tables, wine glasses, a gift box, divorce papers held shut, wedding ring, car keys, smartphone turned away, suitcase by the door, house keys"
+cultural_metaphors: "humiliation: friends laughing behind the narrator at a party | dignity: the narrator standing straight with her arms crossed | truth revealed: the husband's face going pale | justice: empty party tables where the feast should be | new beginning: the narrator smiling alone in a sunny room"
+cultural_emotion_style: "Clear, readable soap-drama emotions: mocking laughter, a shocked gasp, arms crossed in disbelief, a finger pointing, a face going pale, a calm knowing smile at the payoff — readable in one second. No blood, no violence."

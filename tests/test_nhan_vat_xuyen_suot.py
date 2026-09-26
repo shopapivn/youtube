@@ -169,6 +169,32 @@ class TestCastStyleVaoLoiNhac:
         assert "<<" not in chup["loi_nhac"]
 
 
+    def test_khuc_tra_sai_dang_thi_goi_lai_voi_loi_nhac_khac(self, wb):
+        """Đo 25/09/2026: cổng trả "Lantern" cho MỘT khúc và cả phim bị đổ về cắt
+        theo đồng hồ. Gọi lại y nguyên thì ra y cũ (bám theo lời nhắc) — phải gọi
+        lại với lời nhắc khác và khoá khác, rồi mới được bỏ cuộc."""
+        goi_ghi = []
+
+        def goi_gia(loi_nhac, phan_khoa):
+            goi_ghi.append((loi_nhac, phan_khoa))
+            if len(goi_ghi) == 1:
+                return "Lantern"
+            return json.dumps({"scenes": [canh_ai(1, 2)]})
+
+        chia = wb._bo_chia(goi_gia, {}, "veo3", "")
+        ds = chia([cue(1), cue(2)], 0, 1)
+        assert ds and len(goi_ghi) == 2
+        (p1, k1), (p2, k2) = goi_ghi
+        assert k1 != k2 and p1 != p2 and p2.startswith(p1)
+
+    def test_ba_lan_deu_sai_thi_moi_bo_cuoc(self, wb):
+        goi_ghi = []
+        chia = wb._bo_chia(lambda p, k: goi_ghi.append(k) or "Lantern", {}, "veo3", "")
+        with pytest.raises(ValueError):
+            chia([cue(1), cue(2)], 0, 1)
+        assert len(goi_ghi) == 3 and len(set(goi_ghi)) == 3
+
+
 # ── 3. Dàn rỗng / cờ tắt → về hành vi cũ ────────────────────────────────────
 
 class TestVeHanhViCu:

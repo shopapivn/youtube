@@ -1,0 +1,48 @@
+# ============================================================================
+#  KÊNH story-dien-anh-han — Truyện drama gia đình Hàn, ảnh thật kiểu K-drama
+# ============================================================================
+#  Cùng cách làm với story-dien-anh-my: GIỮ NGUYÊN lời kể đối thủ, `2-viet.md`
+#  chỉ sửa chữ nghe nhầm / chính tả / cách viết cách (띄어쓰기), `3-sua.md` chỉ
+#  tách câu + chèn thẻ cảm xúc (core/giu_noi_dung.py). Hình theo mẫu chủ dự án
+#  25/09/2026 (Downloads/form/form hàn.PNG, kênh 노후사연): ảnh thật sáng bóng,
+#  căn hộ Seoul sang trọng, mẹ chồng – nàng dâu – chồng cùng khung, cảm xúc
+#  mạnh kiểu makjang.
+#
+#  Chỉ 10 cảnh đầu làm clip Veo; các cảnh sau là ảnh, khâu dựng cho ảnh chuyển
+#  động ngẫu nhiên (zoom/lia) và nối cảnh bằng hiệu ứng chuyển ngẫu nhiên.
+# ============================================================================
+# ── Kênh MẪU của tool ─────────────────────────────────────────────────────────
+#  Cập nhật tool sẽ GHI ĐÈ kênh này bằng bản mẫu mới hơn. Muốn sửa cho riêng
+#  mình thì bấm "Nhân bản" ở tab Tự động — bản sao có kenh_rieng: true, cập
+#  nhật không đụng vào.
+mau_cua_tool: true
+ma: "story-dien-anh-han"
+ten: "Drama Hàn — điện ảnh"
+ngon_ngu: "ko"
+giong_van: "Korean (South Korea), first-person storytelling for adults: calm, intimate, restrained; natural spoken rhythm; keep the speech level (존댓말/반말) of the original narrator."
+# Lấy từ bảng tốc độ đọc của tool (core/script_length.py, "ko": 445), chưa đo
+# trên giọng của kênh này. Đo lại sau video đầu ở tab Voice rồi sửa số này.
+ky_tu_moi_phut: 445
+# Tiếng Hàn không có chữ hoa.
+chu_bia_hoa: false
+# Giọng Hàn (chủ dự án 25/09/2026).
+voice_id: "7oLyBHyhxAjrctX6ZQlw"
+phut_muc_tieu: 30
+# Dài đúng bằng lời kể gốc — không nắn, không cắt.
+do_dai_tu_do: true
+giu_noi_dung_goc: true
+che_do_tieu_de: "nguyen_goc"
+engine: "veo3"
+so_clip_dau: 10
+chuyen_canh: "ngau_nhien"
+# Phụ đề karaoke + dải đen mờ + nhân vật chính tách nền bên trái + sóng âm (core/phu_de_karaoke.py).
+kieu_phu_de: "karaoke"
+so_thumbnail: 3
+# Ảnh bìa hai lớp: AI vẽ ảnh KHÔNG chữ, tool tự vẽ chữ (core/bia_chu.py) — theo ảnh bìa mẫu 25/09/2026.
+kieu_bia: "chu_2_dong"
+mo_hinh: "claude-sonnet-5"
+dot_phu_de: false
+am_luong_nhac: 0.10
+nhac_nen: ""
+# AI tự dựng nhân vật + bối cảnh tham chiếu theo từng truyện (đường đạo diễn), KHÔNG nối cảnh.
+che_do_ke: tu_xay

@@ -316,6 +316,13 @@ class TestChayThatTungKenhMau:
         hong = []
         for k in self._cac_kenh_mau():
             with tempfile.TemporaryDirectory() as d:
+                if k.giu_noi_dung_goc:
+                    # Kênh giữ nội dung gốc không viết gì từ số không — nó rà
+                    # lời kể đối thủ, nên phải có tư liệu (thiếu thì nó báo lỗi,
+                    # đúng nết). Tư liệu = chính bài sạch, AI vẫn bôi ghi chú.
+                    with open(os.path.join(d, "0-tu-lieu.txt"), "w",
+                              encoding="utf-8") as t:
+                        t.write(LOI_DOC)
                 try:
                     ra = _chay(d, _AIBan(), kenh=k)
                 except LoiNoiDung as loi:

@@ -1,0 +1,36 @@
+# ============================================================================
+#  PHONG CÁCH KÊNH story-dien-anh-han — drama gia đình Hàn, ẢNH THẬT KIỂU PHIM
+# ============================================================================
+#  Theo mẫu chủ dự án đưa 25/09/2026 (Downloads/form/form hàn.PNG + thumb hàn,
+#  kênh 노후사연): căn hộ / penthouse Seoul sang trọng, nội thất trắng-be bóng,
+#  ánh sáng ban ngày trong trẻo. Khung nào cũng vài người cùng đối mặt: mẹ chồng
+#  sang trọng (tóc búi, ngọc trai), nàng dâu (hay mang bầu), chồng vest đen.
+#  Cảm xúc MẠNH kiểu makjang — khóc, hét, chỉ tay, giật tay — đọc ra trong một
+#  giây. Không tối, không lạnh, không "kiềm nén".
+#
+#  ⚠ KHÔNG ĐẶT KHOÁ API VÀO ĐÂY. Tool quét và chặn.
+# ============================================================================
+
+style_name: "photoreal_kdrama_family_bright"
+image_style: "photorealistic Korean TV drama still, bright high-key natural daylight, glossy clean luxury Seoul interior, crisp sharp focus, realistic skin texture, soft neutral white-and-beige colour grade, polished modern K-drama look, ensemble staging with several characters reacting in one frame"
+video_style: "photorealistic live-action K-drama shot, bright natural daylight, slow gentle push-in, the characters act the moment with clear emotion (gesturing, turning, reacting), the light and colour grade stay identical for the whole clip and must not darken, grey out or shift hue"
+thumbnail_style: "bright photorealistic K-drama still, three or four characters caught at the most dramatic second — the crying daughter-in-law, the stern mother-in-law, the husband pointing or rushing in — luxury apartment background, every face showing strong emotion, bold readable composition"
+scene_plan_style: "Korean family-drama (makjang) language: ensemble shots in bright luxury Seoul apartments and penthouses — marble kitchens, glass-walled living rooms with a city view — plus hospital rooms, funeral halls, wedding halls, company offices; every picture shows who confronts whom and what object is between them"
+palette: "bright whites, warm beige and cream interiors, soft gold accents, natural skin tones (#F5F1EA, #D8C3A5, #B08D57)"
+negative_prompt: "no text, no letters, no numbers, no watermark, no logo, no hangul signs, no extra fingers, no distorted hands, no deformed faces, no cartoon, no anime, no illustration, no painting, no 3D render look, no plastic skin, no dark gloomy lighting, no Western faces, no Western-style house"
+reference_lock: "Every character keeps exactly the face, hair, age, body shape, outfit and props of its own reference image; outfit changes only where the story says so (a new reference image exists for that stage); the bright K-drama photographic look stays identical in every shot"
+technical_suffix: "photorealistic Korean drama still, bright natural daylight, clean luxury interior, sharp focus, no text, no letters, no watermark"
+engagement_rules: "put every character of the confrontation in the frame when the line is a clash, give each face a clear readable emotion, hold on hands and objects at the turning points (an envelope of money, a bankbook, a phone with evidence turned away from us, a luxury handbag, a wedding ring, divorce papers held shut), keep the rich apartment visible behind them, end each shot on a change the viewer notices"
+default_character_prompt: "photorealistic attractive Korean adult actor, natural real skin texture, polished Korean drama styling — neat hair, elegant modern clothes, tasteful jewellery — expressive face"
+default_character_lock: "photorealistic live-action Korean actor, realistic adult proportions, one signature colour; face, hair and outfit fixed per reference image"
+# Chữ bìa do tool tự vẽ (kieu_bia: chu_2_dong, core/bia_chu.py) — mấy dòng dưới
+# chỉ còn để tả, màu thật nằm ở bia_chu.MAU.
+thumb_text_style: "two lines of bold Korean letters with a thick black outline, top line bright green, bottom line bright pink"
+thumb_text_shadow: "thick black outline, no soft shadow"
+thumb_text_hex: "#3CFF4F"
+thumb_text_font: "heavy Korean gothic typeface"
+audience_language: "Korean (South Korea)"
+audience_culture_note: "Design for Korean adults (many 40+) watching 노후사연 / family-drama stories: 시어머니 against 며느리 (often pregnant), 친정 and 시댁 conflicts, 제사, inheritance fights, a luxury handbag bought with the wrong money, a husband who finally sees the truth, an affair uncovered. Settings are wealthy modern Korea: high-rise luxury apartments with marble kitchens and city views, penthouse living rooms, hospital VIP rooms, funeral halls with white chrysanthemums, wedding halls, glass company towers, hotel lobbies."
+cultural_props: "apartment door with a keypad, marble kitchen island, family dinner table with many side dishes, luxury handbag, envelope of money, bankbook, smartphone with evidence (screen turned away), pregnancy test, hospital bracelet, wedding ring, divorce papers held shut, courier boxes, funeral chrysanthemums, black sedan"
+cultural_metaphors: "betrayal: a mother-in-law pouring the daughter-in-law's food into the sink | dignity: a pregnant wife standing straight while everyone stares | truth revealed: a husband stopping in the doorway | inheritance: an envelope pushed across a dinner table | justice: the mother-in-law's face falling as the evidence appears"
+cultural_emotion_style: "Big, readable K-drama emotions: tears streaming, a shocked open mouth, a mother-in-law's cold glare, a husband rushing in, a finger pointing, a hand grabbing a wrist — clear in one second, like a TV-drama still. No blood, no hitting."
