@@ -91,13 +91,22 @@ class TestKhauGiongDocGoiCuaSoi:
         khuc = chu[chu.index("def _khau_giong_doc"):chu.index("def _noi_mp3")]
         assert "_bi_xen_am_dau(ffmpeg_doc, tep)" in khuc, (
             "tải xong mà không soi âm đầu — bản cụt sẽ lọt thẳng vào video")
-        assert 'doc(":am-dau")' in khuc, "đọc lại phải dùng khoá MỚI"
+        assert '":am-dau"' in khuc and "doc(hau, van_ban)" in khuc, (
+            "đọc lại phải dùng khoá MỚI")
         assert khuc.count("_bi_xen_am_dau(ffmpeg_doc, tep)") == 2, (
             "phải soi lại sau khi đọc lại, để còn nói thật với người dùng")
 
-    def test_doc_lai_dung_MOT_lan(self):
-        """Đọc lại mãi là đốt ví: bản thứ hai còn cụt thì giữ và ghi nhật ký."""
+    def test_doc_lai_TOI_DA_HAI_lan_mo_bang_the_ngung(self):
+        """Đọc lại mãi là đốt ví: hai lần đọc lại vẫn cụt thì giữ và ghi nhật ký.
+
+        Đo 26/09/2026 kênh Hàn: đọc lại y chữ thì 12/96 đoạn vẫn cụt thật (nghe
+        bằng whisper); đoạn mở bằng thẻ thì 50 ms đầu im hẳn. Nên lần đọc lại
+        mở bằng `[short pause]`, rồi `[long pause]`."""
         chu = self._nguon()
         khuc = chu[chu.index("def _khau_giong_doc"):chu.index("def _noi_mp3")]
-        assert khuc.count('doc(":am-dau")') == 1
+        assert '(":am-dau", "[short pause] ")' in khuc
+        assert '(":am-dau2", "[long pause] ")' in khuc
+        assert khuc.count('":am-dau') == 2, "không quá hai lần đọc lại"
         assert "giữ, nhưng chữ đầu đoạn có thể nghe hụt" in khuc
+        # Không vượt trần ký tự một lượt đọc của cổng.
+        assert "len(the) + len(chu) > CHU_MOI_LUOT_DOC" in khuc

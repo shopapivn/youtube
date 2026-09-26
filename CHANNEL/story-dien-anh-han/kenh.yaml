@@ -20,9 +20,10 @@ ma: "story-dien-anh-han"
 ten: "Drama Hàn — điện ảnh"
 ngon_ngu: "ko"
 giong_van: "Korean (South Korea), first-person storytelling for adults: calm, intimate, restrained; natural spoken rhythm; keep the speech level (존댓말/반말) of the original narrator."
-# Lấy từ bảng tốc độ đọc của tool (core/script_length.py, "ko": 445), chưa đo
-# trên giọng của kênh này. Đo lại sau video đầu ở tab Voice rồi sửa số này.
-ky_tu_moi_phut: 445
+# Đo 26/09/2026 trên giọng của kênh (7oLyBHyhxAjrctX6ZQlw): 52.897 ký tự
+# (không tính khoảng trắng) đọc hết 205,8 phút. Bảng chung của tool ghi 445 —
+# với số ấy tool báo "≈119 phút" cho một video thật dài 3 tiếng rưỡi.
+ky_tu_moi_phut: 257
 # Tiếng Hàn không có chữ hoa.
 chu_bia_hoa: false
 # Giọng Hàn (chủ dự án 25/09/2026).

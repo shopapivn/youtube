@@ -213,7 +213,7 @@ def viet_ass(duong: str, nhom: Sequence[NhomChu], rong: int, cao: int, *,
 
 
 def tach_nen(vao: str, ra: str, cao_px: int, phan_tren: float = 0.74,
-             nguong: int = 38) -> Optional[Tuple[int, int]]:
+             nguong: int = 38, rong_toi_da: int = 0) -> Optional[Tuple[int, int]]:
     """Tách nhân vật khỏi nền trơn, cắt lấy `phan_tren` phía trên (đầu → đùi, như
     mẫu), phóng cao `cao_px`, ghi PNG trong suốt. Trả `(rộng, cao)` hoặc None.
 
@@ -225,21 +225,32 @@ def tach_nen(vao: str, ra: str, cao_px: int, phan_tren: float = 0.74,
 
     anh = Image.open(vao).convert("RGB")
     w, h = anh.size
-    goc = [anh.getpixel(p) for p in ((2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3))]
-    nen = tuple(sum(c[k] for c in goc) // 4 for k in range(3))
-    if max(abs(c[k] - nen[k]) for c in goc for k in range(3)) > 40:
-        return None                      # bốn góc khác màu nhau — nền không trơn
+    # Nền = màu HAI GÓC TRÊN. Ảnh người kể nửa thân có thân áo chạm hai góc
+    # dưới — đòi bốn góc cùng màu là loại oan (đo 26/09/2026: ảnh Daniel mặc
+    # vest bị bỏ). Hai góc dưới chỉ được tính khi chúng cũng là nền.
+    tren = [anh.getpixel(p) for p in ((2, 2), (w - 3, 2))]
+    if max(abs(tren[0][k] - tren[1][k]) for k in range(3)) > 40:
+        return None                      # hai góc trên khác màu nhau — nền không trơn
+    goc = tren + [c for c in (anh.getpixel((2, h - 3)), anh.getpixel((w - 3, h - 3)))
+                  if max(abs(c[k] - tren[0][k]) for k in range(3)) <= 40]
+    nen = tuple(sum(c[k] for c in goc) // len(goc) for k in range(3))
     loang = anh.copy()
     dau = (255, 0, 255) if nen != (255, 0, 255) else (0, 255, 0)
     buoc = max(8, min(w, h) // 60)
+
+    def loang_tu(x: int, y: int) -> None:
+        # Chỉ loang từ điểm mép CÙNG MÀU NỀN. Ảnh người kể nửa thân có áo chạm
+        # mép dưới: loang từ điểm nằm trên áo là khoét mất cả thân áo.
+        p = loang.getpixel((x, y))
+        if p != dau and max(abs(p[k] - nen[k]) for k in range(3)) <= nguong:
+            ImageDraw.floodfill(loang, (x, y), dau, thresh=nguong)
+
     for x in range(0, w, buoc):
         for y in (0, h - 1):
-            if loang.getpixel((x, y)) != dau:
-                ImageDraw.floodfill(loang, (x, y), dau, thresh=nguong)
+            loang_tu(x, y)
     for y in range(0, h, buoc):
         for x in (0, w - 1):
-            if loang.getpixel((x, y)) != dau:
-                ImageDraw.floodfill(loang, (x, y), dau, thresh=nguong)
+            loang_tu(x, y)
     khac = ImageChops.difference(loang, Image.new("RGB", (w, h), dau)).convert("L")
     mat_na = khac.point(lambda v: 255 if v > 0 else 0)
     mat_na = mat_na.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(1.5))
@@ -251,6 +262,10 @@ def tach_nen(vao: str, ra: str, cao_px: int, phan_tren: float = 0.74,
     nguoi = anh.convert("RGBA")
     nguoi.putalpha(mat_na)
     nguoi = nguoi.crop((x0, y0, x1, y1))
+    if rong_toi_da and nguoi.size[0] * cao_px / float(nguoi.size[1]) > rong_toi_da:
+        # Ảnh nửa thân rộng (tay đưa ra khi kể) — thu nhỏ theo bề ngang để
+        # chừa chỗ cho chữ, không để người chiếm nửa khung.
+        cao_px = max(2, int(rong_toi_da * nguoi.size[1] / float(nguoi.size[0]))) // 2 * 2
     ti = cao_px / float(nguoi.size[1])
     nguoi = nguoi.resize((max(2, int(nguoi.size[0] * ti)) // 2 * 2, cao_px), Image.LANCZOS)
     nguoi.save(ra)

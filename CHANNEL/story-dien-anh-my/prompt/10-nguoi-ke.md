@@ -1,0 +1,6 @@
+Photorealistic waist-up portrait of the character in the reference image, as the storyteller of this American family drama, speaking warmly to the viewer. Character: <<NHAN_VAT>>
+Keep exactly the same face, hair, age and ethnicity as the reference image. Beautiful and well-groomed, soft flattering makeup, glossy healthy hair, like the heroine of a bright American TV movie.
+OUTFIT: an upgraded, elegant, well-fitted version of the character's look in the same colour family (for example a chic blouse or fine knit with a tailored blazer, delicate jewellery), polished and expensive-looking — ignore any props or casual items in the description.
+HANDS EMPTY: no laptop, phone, bag, cup or any object.
+FRAMING: medium shot from the waist up, camera at a comfortable distance; the figure fills only the central 55-60% of the width, with clear white space to the left and right of both shoulders and above the head. Body turned slightly, looking straight into the lens with a gentle, confident expression, lips slightly parted as if mid-sentence, one hand in a small natural talking gesture at chest level (not reaching toward the camera).
+Plain pure white seamless studio background with nothing else in it, soft even front lighting, no shadow on the background, sharp focus, high detail. No text, no letters, no logo, no watermark.

@@ -92,6 +92,39 @@ def test_tach_nen_trang_giu_ao_trang_giua_nguoi(tmp_path):
     assert ra.getpixel((w // 2, int(h * 0.45)))[3] > 200
 
 
+def _nua_than(tmp_path):
+    """Người kể nửa thân: thân áo CHẠM mép dưới ảnh, tay đưa rộng sang phải."""
+    from PIL import Image, ImageDraw
+
+    anh = Image.new("RGB", (400, 600), (250, 250, 250))
+    ve = ImageDraw.Draw(anh)
+    ve.ellipse((140, 60, 260, 200), fill=(200, 150, 120))          # đầu
+    ve.rectangle((100, 200, 300, 599), fill=(120, 30, 40))         # thân chạm đáy
+    ve.rectangle((300, 300, 380, 340), fill=(200, 150, 120))       # tay
+    vao = str(tmp_path / "ke.png")
+    anh.save(vao)
+    return vao
+
+
+def test_nua_than_cham_mep_duoi_khong_bi_khoet_ao(tmp_path):
+    """Bản cũ loang từ MỌI điểm mép — kể cả điểm nằm trên áo ở mép dưới —
+    nên ảnh người kể nửa thân mất sạch thân áo."""
+    from PIL import Image
+
+    kt = pk.tach_nen(_nua_than(tmp_path), str(tmp_path / "ra.png"), 300, phan_tren=1.0)
+    assert kt
+    ra = Image.open(str(tmp_path / "ra.png"))
+    w, h = ra.size
+    assert ra.getpixel((int(w * 0.3), h - 2))[3] > 200, "đáy thân áo phải còn"
+    assert ra.getpixel((w - 1, 2))[3] == 0, "góc nền vẫn trong suốt"
+
+
+def test_rong_toi_da_thu_nho_theo_be_ngang(tmp_path):
+    kt = pk.tach_nen(_nua_than(tmp_path), str(tmp_path / "ra.png"), 600,
+                     phan_tren=1.0, rong_toi_da=200)
+    assert kt and kt[0] <= 200 and kt[1] < 600
+
+
 def test_nen_khong_tron_thi_bo_qua(tmp_path):
     from PIL import Image
 

@@ -113,6 +113,11 @@ BUOC_PROMPT = (
     ("7-canh.md", "Chia cảnh theo nghĩa, viết lời nhắc ảnh và clip"),
     ("8-thumbnail.md", "Viết lời nhắc ba ảnh bìa"),
     ("9-nhac.md", "Viết lời nhắc nhạc nền"),
+    # Ảnh NGƯỜI KỂ cho phụ đề karaoke: nhân vật chính nửa thân trên, đẹp, như
+    # đang kể chuyện, nền trắng để tách nền. Thiếu tệp thì dùng bản mặc định
+    # (`core/auto_khau.LOI_NHAC_NGUOI_KE`). Chủ dự án 26/09/2026: ảnh tham chiếu
+    # toàn thân tách nền chèn vào "không ổn" — phải vẽ riêng.
+    ("10-nguoi-ke.md", "Lời nhắc ảnh người kể chuyện (phụ đề karaoke)"),
 )
 
 #: Bước bắt buộc phải có thì luồng AUTO mới chạy nổi. Bước 6 (SEO) thiếu thì vẫn

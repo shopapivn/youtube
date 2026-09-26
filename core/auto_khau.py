@@ -3826,17 +3826,18 @@ def _khau_giong_doc(bc: BoiCanh):
             bc.ghi("  đọc đoạn {0}/{1} ({2} ký tự)…".format(
                 so, len(doan), len(chu)))
 
-            def doc(hau_to=""):
+            def doc(hau_to="", van_ban=None):
                 # Ghi kèm tiếng kênh đã khai (`ngon_ngu`); mã lạ thì
                 # `ma_ngon_ngu_tts` trả rỗng và không gửi gì. Đo 08/09/2026 thì
                 # máy chủ CHƯA dùng đến trường này — audio không đổi — nên đừng
                 # trông vào đây để sửa cách đọc; xem `kenh.ma_ngon_ngu_tts`.
+                van_ban = van_ban or chu
                 job = _tao_job(
                     bc, bc.client.tts.create,
-                    text=chu, voice_id=bc.kenh.voice_id, format="mp3",
+                    text=van_ban, voice_id=bc.kenh.voice_id, format="mp3",
                     language_code=ma_ngon_ngu_tts(
                         getattr(bc.kenh, "ngon_ngu", "")) or None,
-                    idempotency_key=khoa_viec(luot, "tts", so, chu,
+                    idempotency_key=khoa_viec(luot, "tts", so, van_ban,
                                               bc.kenh.voice_id) + hau_to)
                 # Đọc một đoạn lâu hơn hẳn tạo một tấm ảnh, nên trần chờ ở đây
                 # phải rộng hơn trần chung. Đo 15/08/2026: để trần chung 12
@@ -3861,22 +3862,34 @@ def _khau_giong_doc(bc: BoiCanh):
             _tai_ket_qua(bc, goi_tts, 0, tep)
             # ═══ SOI ÂM ĐẦU: NHÀ MÁY HAY XÉN MẤT CHỮ ĐẦU ═══
             #
-            # Xem `NGUONG_AM_DAU`. Đọc lại đúng MỘT lần bằng khoá mới — bản
-            # thứ hai thường lành, và một lượt đọc lại rẻ hơn nhiều so với
-            # một video mở màn bằng chữ cụt.
+            # Xem `NGUONG_AM_DAU`. Đọc lại bằng khoá mới, và lần đọc lại MỞ
+            # BẰNG THẺ NGỪNG (`[short pause]`, rồi `[long pause]`).
+            #
+            # Đo 26/09/2026 kênh Hàn story-dien-anh-han/0001: 12/96 đoạn đọc
+            # lại vẫn cụt; nghe bằng whisper thì mất thật ("저녁 무렵" ra
+            # "분영 우려", "차에" ra "파에"). Còn đoạn nào mở bằng thẻ (đoạn 1:
+            # `[angry] …`) thì 50 ms đầu im hẳn (−84 dB) — thẻ cho máy đọc một
+            # nhịp lấy hơi, nhà máy có xén thì xén vào khoảng lặng ấy chứ
+            # không vào chữ. Thẻ chỉ ở bản đọc; phụ đề ép bản sạch nên không lộ.
             if _bi_xen_am_dau(ffmpeg_doc, tep):
                 bc.ghi("    đoạn {0}: nhà máy trả về bản bị cắt mất âm đầu — "
-                       "đọc lại.".format(so))
-                try:
-                    _tai_ket_qua(bc, doc(":am-dau"), 0, tep)
-                except Exception as loi:  # noqa: BLE001
-                    bc.ghi("    đoạn {0}: đọc lại không được ({1}) — giữ bản "
-                           "cũ.".format(so, str(loi)[:60]))
+                       "đọc lại, mở bằng một nhịp ngừng.".format(so))
+                for hau, the in ((":am-dau", "[short pause] "),
+                                 (":am-dau2", "[long pause] ")):
+                    van_ban = chu if chu.lstrip().startswith("[") or \
+                        len(the) + len(chu) > CHU_MOI_LUOT_DOC else the + chu
+                    try:
+                        _tai_ket_qua(bc, doc(hau, van_ban), 0, tep)
+                    except Exception as loi:  # noqa: BLE001
+                        bc.ghi("    đoạn {0}: đọc lại không được ({1}) — giữ bản "
+                               "cũ.".format(so, str(loi)[:60]))
+                        break
+                    if not _bi_xen_am_dau(ffmpeg_doc, tep):
+                        break
                 else:
-                    if _bi_xen_am_dau(ffmpeg_doc, tep):
-                        bc.ghi("    đoạn {0}: bản đọc lại vẫn cụt âm đầu — "
-                               "giữ, nhưng chữ đầu đoạn có thể nghe hụt."
-                               .format(so))
+                    bc.ghi("    đoạn {0}: bản đọc lại vẫn cụt âm đầu — "
+                           "giữ, nhưng chữ đầu đoạn có thể nghe hụt."
+                           .format(so))
             return so, False
 
         # ═══ ĐỌC SONG SONG, VÀ THIẾU MỘT ĐOẠN LÀ HỎNG CẢ KHÂU ═══
@@ -7270,7 +7283,8 @@ def _khau_thumbnail(bc: BoiCanh):
         finally:
             if so is not None:
                 so.dong()
-        return {"so_thumbnail": xong}
+        nguoi_ke = _lam_nguoi_ke(bc, luot)
+        return dict({"so_thumbnail": xong}, **({"nguoi_ke": nguoi_ke} if nguoi_ke else {}))
 
     return lam
 
@@ -7348,6 +7362,90 @@ def _anh_thanh_clip(bc: BoiCanh, ffmpeg: str, d: str, canh: Sequence[Dict[str, A
     return moi, (rong, cao, fps)
 
 
+#: ═══ ẢNH NGƯỜI KỂ CHO PHỤ ĐỀ KARAOKE (26/09/2026) ═══
+#:
+#: Bản đầu lấy thẳng ảnh THAM CHIẾU toàn thân của nhân vật chính (đứng thẳng,
+#: mặt vô cảm, cầm đạo cụ — ảnh ấy vẽ ra để máy giữ nhận dạng, không phải để
+#: người xem nhìn) rồi tách nền dán vào góc. Chủ dự án xem video Mỹ nữ: "không
+#: ổn" — phải vẽ RIÊNG một ảnh: nhân vật chính nửa thân trên, đẹp, trang phục
+#: chỉn chu, dáng như đang kể chuyện, để ghép vào trông tự nhiên.
+#: Ảnh vẽ ở khâu ảnh bìa (khâu có tiêu ví), mang ảnh tham chiếu nhân vật để giữ
+#: đúng mặt; nền trắng trơn để `phu_de_karaoke.tach_nen` tách được. Lời nhắc
+#: sửa được ở `prompt/10-nguoi-ke.md` của kênh; `<<NHAN_VAT>>` = mô tả nhân vật
+#: chính trong dàn.
+TEP_NGUOI_KE = "7-nguoi-ke.png"
+LOI_NHAC_NGUOI_KE = (
+    "Photorealistic waist-up portrait of the character in the reference image, as "
+    "the storyteller of this story, speaking warmly to the viewer. Character: "
+    "<<NHAN_VAT>>\n"
+    "Keep exactly the same face, hair, age and ethnicity as the reference image. "
+    "Beautiful and well-groomed, flattering natural makeup. OUTFIT: an upgraded, "
+    "elegant, well-fitted version of the character's look in the same colour "
+    "family, polished and expensive-looking — ignore any props or casual items in "
+    "the description. HANDS EMPTY: no laptop, phone, bag, cup or any object. "
+    "FRAMING: medium shot from the waist up, camera at a comfortable distance; "
+    "the figure fills only the central 55-60% of the width, with clear white "
+    "space to the left and right of both shoulders and above the head. Body "
+    "turned slightly, looking straight into the lens with a gentle, confident "
+    "expression, lips slightly parted as if mid-sentence, one hand in a small "
+    "natural talking gesture at chest level (not reaching toward the camera). "
+    "Plain pure white seamless studio background with nothing else in it, soft "
+    "even front lighting, no shadow on the background, sharp focus, high detail. "
+    "No text, no letters, no logo, no watermark."
+)
+
+
+def _lam_nguoi_ke(bc: BoiCanh, luot: LuotChay,
+                  so: Optional[SoTheoDoi] = None) -> str:
+    """Vẽ ảnh người kể (xem `LOI_NHAC_NGUOI_KE`) nếu kênh dùng phụ đề karaoke và
+    lượt chưa có. Trả đường dẫn, hoặc "" khi không làm được — khâu dựng khi ấy
+    dùng ảnh tham chiếu như cũ, không để một tấm ảnh trang trí chặn cả video."""
+    if str(getattr(bc.kenh, "kieu_phu_de", "") or "") != "karaoke":
+        return ""
+    d = luot.thu_muc
+    dich = os.path.join(d, TEP_NGUOI_KE)
+    if os.path.exists(dich):
+        return dich
+    from .auto import Cancelled  # noqa: PLC0415 — tránh vòng nhập
+    from .dao_dien_auto import TEP_DAN, ThamChieuCanh, che_do_dao_dien, nhan_vat_chinh_cua_luot  # noqa: PLC0415
+
+    dao_dien = bool(che_do_dao_dien(bc.kenh))
+    duong = list(nhan_vat_chinh_cua_luot(luot, 1) or []) if dao_dien else []
+    if not duong and (not dao_dien or str(getattr(bc.kenh, "che_do_ke", "") or "")
+                      == "nhan_vat_va_boi_canh"):
+        duong = list(getattr(bc.kenh, "anh_nv", []) or [])[:1]
+    if not duong:
+        bc.ghi("  ảnh người kể: không tìm được nhân vật chính — bỏ qua.")
+        return ""
+    ma = os.path.splitext(os.path.basename(duong[0]))[0]
+    ta = ""
+    try:
+        dan = json.loads(_doc_chu(os.path.join(d, TEP_DAN)) or "{}")
+        for x in dan.get("characters") or []:
+            if isinstance(x, dict) and str(x.get("id") or "") == ma:
+                ta = str(x.get("english_prompt") or x.get("reference_lock") or "")
+                break
+    except (ValueError, AttributeError):
+        ta = ""
+    khuon = (getattr(bc.kenh, "prompt", None) or {}).get("10-nguoi-ke.md") or LOI_NHAC_NGUOI_KE
+    loi_nhac = _thay(khuon, {"NHAN_VAT": ta or "the main character in the reference image"})
+    hop = ThamChieuCanh(bc, duong) if dao_dien else ThamChieu(bc)
+    bc.ghi("  vẽ ảnh người kể: {0}, nửa thân trên, nền trắng (cho phụ đề karaoke).".format(ma))
+    try:
+        goi = _tao_anh(bc, luot, loi_nhac, hop,
+                       khoa_viec(luot, "nguoi-ke", 1, loi_nhac, "9:16", "|".join(hop.lay())),
+                       ten_hien="ảnh người kể", so=so, ty_le="9:16")
+        _tai_ket_qua(bc, goi, 0, dich)
+    except Cancelled:
+        raise
+    except Exception as loi:  # noqa: BLE001
+        bc.ghi("  (chưa vẽ được ảnh người kể: {0} — video dùng ảnh tham chiếu "
+               "nhân vật; bấm làm lại khâu ảnh bìa để thử lại)".format(str(loi)[:120]))
+        return ""
+    _xoa_dau(bc, dich)
+    return dich
+
+
 def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[str],
                      chuan: Optional[Tuple[int, int, float]],
                      khung: Optional[Sequence[int]], mp3: str) -> str:
@@ -7398,7 +7496,17 @@ def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[st
                       == "nhan_vat_va_boi_canh"):
         nguon = list(getattr(bc.kenh, "anh_nv", []) or [])[:1]
     nv, kt = "", None
-    if nguon and os.path.isfile(nguon[0]):
+    nguoi_ke = os.path.join(d, TEP_NGUOI_KE)
+    if os.path.isfile(nguoi_ke):
+        # Ảnh người kể vẽ riêng (nửa thân trên): đáy ảnh là ngang eo, đặt sát
+        # đáy khung như người dẫn chuyện; giới hạn bề ngang để chữ còn chỗ.
+        nv = os.path.join(d, "8-nhan-vat.png")
+        kt = pk.tach_nen(nguoi_ke, nv, int(cao * 0.66) // 2 * 2, phan_tren=1.0,
+                         rong_toi_da=int(rong * 0.26) // 2 * 2)
+        if not kt:
+            bc.ghi("  (ảnh người kể không phải nền trơn — dùng ảnh tham chiếu)")
+            nv = ""
+    if not kt and nguon and os.path.isfile(nguon[0]):
         nv = os.path.join(d, "8-nhan-vat.png")
         # 80% chiều cao, sát mép trái — chủ dự án xem demo 25/09/2026: "để nhân
         # vật nhỏ hơn chút và sát bên trái, để video, text có thêm diện tích".

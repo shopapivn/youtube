@@ -1,9 +1,10 @@
-# WRITE 3 THUMBNAIL IMAGE PROMPTS — AMERICAN LUXURY DRAMA, NO TEXT
+# WRITE 3 THUMBNAIL IMAGE PROMPTS — AMERICAN ROMANCE-DRAMA MOVIE POSTER, NO TEXT
 
 You write image prompts for thumbnails of an American "unaware of who he truly
-was" drama channel (billionaires, CEOs, waitresses, ex-wives, fiancées). The
+was" drama channel (billionaires, CEOs, waitresses, bakers, flower girls). The
 thumbnail is ONLY a picture — no text at all — so the picture alone must make
-people click.
+people click. It must look like the POSTER of a glossy romance movie: two
+beautiful people, big in the frame, a charged look between them.
 
 ## What this video is about
 Title: **<<TITLE>>**
@@ -17,35 +18,51 @@ Opening of the script:
 Palette: <<PALETTE>>
 Never include: <<NEGATIVE_PROMPT>>
 
-## What wins in this niche (study of the top channel)
+## What wins in this niche (12 top thumbnails of the leading channel, 26/09/2026)
 
-- A glossy, photorealistic, bright still of the exact moment BEFORE the tables
-  turn: the arrogant person mocking, the underestimated hero calm or about to
-  reveal the truth, onlookers laughing or gasping.
-- Glamorous places: upscale restaurants with candles and flowers, gala
-  ballrooms with chandeliers, hotel lobbies, glass offices with a city skyline
-  at blue hour.
-- Attractive people in jewel-tone clothes (royal blue dress, emerald dress,
-  burgundy suit), faces sharp and readable: smug smirk, laughter behind a hand,
-  wide-eyed shock, a frozen man mid-gesture.
-- One story object that makes the viewer curious: a black card, a card machine
-  showing a decline (screen turned away), a bill folder, a contract, a cheque.
-- Warm golden light on the people, cooler city lights behind — lots of depth.
+- THE PEOPLE ARE THE PICTURE. The two leads fill 70-85% of the frame, framed
+  from the chest or waist up, close to the camera; each lead's head is about
+  a quarter to a third of the frame height. Never a wide room with small people.
+- The man: handsome, sharp jaw, perfectly tailored suit (navy, black, emerald).
+  The woman: very pretty, glossy long hair, soft makeup, a bright feminine
+  outfit (pink, lavender, sky-blue or red dress, or a neat work uniform with an
+  apron) — the brightest colour patch in the image.
+- A clear emotional charge readable at phone size: he stares at her, stunned or
+  tender; she has a hand on her heart, tears in her eyes, a shy smile or a
+  shocked face. Side characters (mocking guests, a laughing rival, a stern
+  parent) are smaller, behind, slightly soft — they react, they do not compete.
+- Bright, high-key, saturated light: sunny café terraces, flower-filled
+  bakeries, gala halls with chandeliers, sea-view restaurants; at night the
+  faces are still lit warm and bright, city lights as glowing bokeh behind.
+- One story object in the foreground between them: a gift bag, an open ring
+  or jewel box, a bouquet, a coffee cup, a folder, a basket of roses.
+- Crisp focus on faces, background softly blurred, rich colour grading, no
+  dark or empty areas anywhere.
 
-## Write 3 prompts, each a DIFFERENT reason to click
+## Write 3 prompts, all poster-framed, each a DIFFERENT reason to click
 
 Named exactly: `portrait_main`, `dramatic_scene`, `youtube_ctr`.
 
-- `portrait_main` — the hero close, calm confident face, the mockers behind.
-- `dramatic_scene` — the whole room at the peak moment, everyone reacting.
-- `youtube_ctr` — the story object big in front, the shocked mocker behind.
+- `portrait_main` — the two leads facing each other across the frame (man one
+  side, woman the other), the charged look between them, the story object in
+  the middle.
+- `dramatic_scene` — the woman in front, hurt or humiliated, one or two
+  mockers just behind her laughing; the man a step behind watching, about to
+  step in. Still medium close — all faces big.
+- `youtube_ctr` — both leads looking toward the camera side by side like a
+  movie poster, her emotional, him composed, the glamorous place glowing
+  behind them.
 
 ## Rules
 
-1. Refer to the characters as **the people in the attached reference images**
-   (by role). Never describe their faces, hair or clothes.
-2. Every prompt: photorealistic, bright, glossy, 16:9, fill the whole frame.
-3. NO text, NO letters, NO numbers, NO signs, NO logo anywhere in the image.
+1. Start every prompt with the framing sentence: "Movie-poster medium close-up,
+   the two main characters fill most of the frame, framed from the chest up,
+   faces large and sharp."
+2. Refer to the characters as **the people in the attached reference images**
+   (by role). Never describe their faces or hair.
+3. Every prompt: photorealistic, bright, glossy, saturated, 16:9, fill the
+   whole frame edge to edge.
+4. NO text, NO letters, NO numbers, NO signs, NO logo anywhere in the image.
 
 ## Return JSON only, no commentary
 
