@@ -112,3 +112,30 @@ def test_kenh_khong_karaoke_thi_khong_ve(tmp_path, monkeypatch):
 def test_thieu_tep_dan_thi_loai_ma_boi_canh(tmp_path):
     ra = _ten(nhan_vat_chinh_cua_luot(_luot(tmp_path, dan=False), 2))
     assert ra == ["laura.png", "mark.png"]
+
+
+def _dan(tmp_path, nv):
+    (tmp_path / TEP_DAN).write_text(json.dumps({"characters": nv, "locations": []}),
+                                    encoding="utf-8")
+
+
+def test_nguoi_ke_theo_vai_narrator_truoc_so_lan_xuat_hien(tmp_path):
+    from core.dao_dien_auto import nguoi_ke_cua_luot
+
+    luot = _luot(tmp_path)
+    _dan(tmp_path, [{"id": "laura", "gender": "female"},
+                    {"id": "mark", "role": "narrator and husband", "gender": "male"},
+                    {"id": "emily", "gender": "female"}])
+    assert _ten(nguoi_ke_cua_luot(luot, "nu")) == ["mark.png"]
+
+
+def test_kenh_nam_ma_nu_xuat_hien_nhieu_nhat_thi_van_chon_nam(tmp_path):
+    """Chủ dự án 27/09/2026: "nhân vật kể là Nam mà ảnh bên trái lại là nữ"."""
+    from core.dao_dien_auto import nguoi_ke_cua_luot
+
+    luot = _luot(tmp_path)
+    _dan(tmp_path, [{"id": "laura", "role": "waitress", "gender": "female"},
+                    {"id": "mark", "role": "hero", "gender": "male"},
+                    {"id": "emily", "gender": "female"}])
+    assert _ten(nguoi_ke_cua_luot(luot, "nam")) == ["mark.png"]
+    assert _ten(nguoi_ke_cua_luot(luot, "")) == ["laura.png"], "không khai giới thì như cũ"

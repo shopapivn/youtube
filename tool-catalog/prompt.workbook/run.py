@@ -1731,7 +1731,27 @@ def _dung_dan_cast(goi, cues, context, co_san) -> Mapping[str, Any]:
                                   fixed_rule=fixed, nv_dau="nv2" if co_san else "nv1",
                                   phai_co_nv=", ".join(nv) or "(not analysed — decide from the transcript)",
                                   phai_co_loc=", ".join(loc) or "(not analysed — decide from the transcript)")
-    return loc_json(goi(loi_nhac, "cast"))
+    # ═══ DAN HONG THI HOI LAI VOI LOI NHAC KHAC, DUNG BO CUOC NGAY ═══
+    #
+    # Do 27/09/2026 tren may khach (story-dien-anh-my-sang/0002, 0003): buoc nay
+    # nhan dung mot tu ("Pangolin", "Platypus") ca sau lan hoi lai co cau mo dau
+    # — khong co dan thi ca khau "Cat canh" chet ba lan lien. Lan dau giu nguyen
+    # (khoa cu con khop); lan sau doi dau va duoi loi nhac, khoa khac.
+    loi_cuoi: Exception = ValueError("AI khong tra ve dan nhan vat")
+    for lan, (dau, duoi) in enumerate((
+            ("", ""),
+            ("Read the whole task below, then answer with the JSON object only.\n\n",
+             "\n\nReturn ONLY the JSON object described above — no other text."),
+            ("Task for a film production team.\n\n",
+             "\n\nNow write the JSON object (characters, locations, style) and nothing else."))):
+        try:
+            return loc_json(goi(dau + loi_nhac + duoi, "cast" + (":lai{0}".format(lan) if lan else "")))
+        except ValueError as loi:
+            loi_cuoi = loi
+            emit({"type": "event", "event": "progress", "progress": 0.0,
+                  "message": "Dan nhan vat: AI tra sai dang (lan {0}) — {1}".format(
+                      lan + 1, "hoi lai" if lan < 2 else "bo cuoc")})
+    raise loi_cuoi
 
 
 #: Nhan vat DOI TRANG PHUC giua truyen → moi giai doan mot anh tham chieu rieng.

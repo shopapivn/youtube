@@ -212,6 +212,10 @@ class Kenh:
     #: "chu_2_dong" (Hàn: hai dòng trên/dưới), "khong_chu" (chỉ ảnh),
     #: "chu_trai_nv_phai" (khối chữ trái + ảnh dọc nhân vật chính bên phải).
     kieu_bia: str = ""
+    #: Giới tính NGƯỜI KỂ ("nam" / "nu"), theo giọng đọc của kênh. Ảnh người kể
+    #: ở phụ đề karaoke và ảnh dọc ở bìa chọn nhân vật đúng giới này khi dàn
+    #: không ghi ai là "narrator" (chủ dự án 27/09/2026: kênh nam ra ảnh nữ).
+    gioi_nguoi_ke: str = ""
     #: Chế độ nối cảnh gửi clip với `frame_mode: start_frame` — khung hình đầu clip
     #: CHÍNH LÀ ảnh gửi (Flow "Frames"), thay vì Veo tự dựng lại bố cục. Cần cổng
     #: ShopAPI đã nhận trường này (26/08/2026). Bật thì clip nối vào khung cuối
@@ -721,6 +725,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         chuyen_canh=str(cai.get("chuyen_canh") or "").strip(),
         kieu_phu_de=str(cai.get("kieu_phu_de") or "").strip(),
         kieu_bia=str(cai.get("kieu_bia") or "").strip(),
+        gioi_nguoi_ke=str(cai.get("gioi_nguoi_ke") or "").strip().lower(),
         khung_dau=bool(cai.get("khung_dau", False)),
         cham_anh=bool(cai.get("cham_anh", False)),
         ghim_hai_dau=bool(cai.get("ghim_hai_dau", False)),

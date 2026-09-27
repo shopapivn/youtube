@@ -237,6 +237,18 @@ class TestCastStyleVaoLoiNhac:
                           {"script": "KICH-BAN-DAI " * 50, "visual_style_directive": "PC"}, [])
         assert loi and "KICH-BAN-DAI" not in loi[0] and "cau so 1" in loi[0]
 
+    def test_dan_tra_mot_chu_thi_hoi_lai_loi_nhac_khac(self, wb):
+        """Đo 27/09/2026 máy khách: dàn nhận "Pangolin" → cả khâu chết 3 lần."""
+        goi_ghi = []
+
+        def goi_gia(p, k):
+            goi_ghi.append((p, k))
+            return "Pangolin" if len(goi_ghi) < 3 else '{"characters": []}'
+
+        ra = wb._dung_dan_cast(goi_gia, [cue(1)], {}, [])
+        assert ra == {"characters": []} and len(goi_ghi) == 3
+        assert len({k for _, k in goi_ghi}) == 3 and len({p for p, _ in goi_ghi}) == 3
+
     def test_toi_mot_dong_van_sai_moi_bo_cuoc(self, wb):
         goi_ghi = []
         chia = wb._bo_chia(lambda p, k: goi_ghi.append(k) or "Lantern", {}, "veo3", "")

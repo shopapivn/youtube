@@ -321,3 +321,9 @@ def test_kenh_dien_anh_dung_cau_hinh(ma):
     from core.the_cam_xuc import THE_CHO_PHEP
     assert set(re.findall(r"\[([a-z][a-z \-]*)\]", s)) <= THE_CHO_PHEP
     assert khuon_du_cho_dao_dien(k.prompt["7-canh.md"])
+
+
+def test_go_dau_doi_nguoi_noi_khoi_loi_ke_goc():
+    from core.giu_noi_dung import bo_dau_doi_nguoi_noi
+
+    assert bo_dau_doi_nguoi_noi(">> Sir, can I >> take it?\nYes.") == " Sir, can I take it?\nYes."

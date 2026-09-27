@@ -42,6 +42,8 @@ kieu_phu_de: "karaoke"
 so_thumbnail: 3
 # Ảnh bìa hai lớp: AI vẽ ảnh KHÔNG chữ, tool tự vẽ chữ (core/bia_chu.py) — theo ảnh bìa mẫu 25/09/2026.
 kieu_bia: "chu_trai_nv_phai"
+# Giới tính người kể (theo giọng đọc) — ảnh người kể / ảnh bìa dọc chọn đúng giới.
+gioi_nguoi_ke: "nu"
 mo_hinh: "claude-sonnet-5"
 dot_phu_de: false
 am_luong_nhac: 0.10

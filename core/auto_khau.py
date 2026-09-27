@@ -3379,8 +3379,10 @@ def _giu_noi_dung_goc(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any
     """
     import hashlib  # noqa: PLC0415
 
-    from .giu_noi_dung import (KHUC_CHEN_THE, KHUC_RA_SOAT, chen_the_theo_khuc,  # noqa: PLC0415
-                               chia_khuc, dem_chu, ra_soat_theo_khuc)
+    from .giu_noi_dung import (KHUC_CHEN_THE, KHUC_RA_SOAT, bo_dau_doi_nguoi_noi,  # noqa: PLC0415
+                               chen_the_theo_khuc, chia_khuc, dem_chu, ra_soat_theo_khuc)
+
+    tu_lieu = bo_dau_doi_nguoi_noi(tu_lieu)
 
     def khoa(buoc: str, i: int, khuc: str, lan: int) -> str:
         # Băm cả KHÚC lẫn LỜI NHẮC của bước: sửa lời nhắc thì khoá đổi — giữ
@@ -5616,12 +5618,16 @@ def _hop_cho_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], hop: "ThamChie
 def _hop_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu"):
     """Tham chiếu cho ẢNH BÌA: kênh đường đạo diễn dùng nhân vật chính của chính
     bộ phim (hai id xuất hiện nhiều nhất); đường cũ giữ hộp nv1.png của kênh."""
-    from .dao_dien_auto import ThamChieuCanh, che_do_dao_dien, nhan_vat_chinh_cua_luot  # noqa: PLC0415
+    from .dao_dien_auto import (ThamChieuCanh, che_do_dao_dien, nguoi_ke_cua_luot,  # noqa: PLC0415
+                                nhan_vat_chinh_cua_luot)
 
     if not che_do_dao_dien(bc.kenh):
         return hop
     # Bìa kiểu "chữ trái, nhân vật phải" vẽ MỘT người: chỉ nhân vật chính.
-    duong = nhan_vat_chinh_cua_luot(luot, 1 if _kieu_bia(bc) == "chu_trai_nv_phai" else 2)
+    # Bìa "chữ trái, nhân vật phải" vẽ NGƯỜI KỂ (chủ dự án 27/09/2026: kênh nam
+    # mà ảnh người kể ra nữ) — xem `nguoi_ke_cua_luot`.
+    duong = (nguoi_ke_cua_luot(luot, _gioi_nguoi_ke(bc)) if _kieu_bia(bc) == "chu_trai_nv_phai"
+             else nhan_vat_chinh_cua_luot(luot, 2))
     if not duong:
         # Kênh giữ `nv1.png` làm nhân vật chính thật (`nhan_vat_va_boi_canh`)
         # thì dùng nó. Kênh tự dựng dàn (`tu_xay`) thì `nv1.png` chỉ là ảnh
@@ -5635,6 +5641,11 @@ def _hop_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu"):
     bc.ghi("  ảnh bìa: dùng nhân vật chính của phim làm tham chiếu ({0}).".format(
         ", ".join(os.path.basename(d)[:-4] for d in duong)))
     return ThamChieuCanh(bc, duong)
+
+
+def _gioi_nguoi_ke(bc: BoiCanh) -> str:
+    """Giới tính người kể của kênh (`gioi_nguoi_ke`: nam / nu), theo giọng đọc."""
+    return str(getattr(getattr(bc, "kenh", None), "gioi_nguoi_ke", "") or "")
 
 
 class _HopTrong:
@@ -7492,10 +7503,10 @@ def _lam_nguoi_ke(bc: BoiCanh, luot: LuotChay,
     if os.path.exists(dich):
         return dich
     from .auto import Cancelled  # noqa: PLC0415 — tránh vòng nhập
-    from .dao_dien_auto import TEP_DAN, ThamChieuCanh, che_do_dao_dien, nhan_vat_chinh_cua_luot  # noqa: PLC0415
+    from .dao_dien_auto import TEP_DAN, ThamChieuCanh, che_do_dao_dien, nguoi_ke_cua_luot  # noqa: PLC0415
 
     dao_dien = bool(che_do_dao_dien(bc.kenh))
-    duong = list(nhan_vat_chinh_cua_luot(luot, 1) or []) if dao_dien else []
+    duong = list(nguoi_ke_cua_luot(luot, _gioi_nguoi_ke(bc)) or []) if dao_dien else []
     if not duong and (not dao_dien or str(getattr(bc.kenh, "che_do_ke", "") or "")
                       == "nhan_vat_va_boi_canh"):
         duong = list(getattr(bc.kenh, "anh_nv", []) or [])[:1]
@@ -7568,11 +7579,11 @@ def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[st
     nguon = []
     dao_dien = False
     try:
-        from .dao_dien_auto import che_do_dao_dien, nhan_vat_chinh_cua_luot  # noqa: PLC0415
+        from .dao_dien_auto import che_do_dao_dien, nguoi_ke_cua_luot  # noqa: PLC0415
 
         dao_dien = bool(che_do_dao_dien(bc.kenh))
         if dao_dien:
-            nguon = list(nhan_vat_chinh_cua_luot(luot, 1) or [])
+            nguon = list(nguoi_ke_cua_luot(luot, _gioi_nguoi_ke(bc)) or [])
     except Exception:  # noqa: BLE001 — thiếu nhân vật thì vẫn dựng
         nguon = []
     # Kênh tự dựng dàn (`tu_xay`): KHÔNG rơi về `nv1.png` của kênh — nó không
@@ -7603,12 +7614,15 @@ def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[st
     nv_x = 0
     le_trai = (nv_x + kt[0] + int(rong * 0.015)) if kt else int(rong * 0.06)
     le_phai = int(rong * 0.04)
-    nhom = pk.nhom_chu(cau)
+    # Chữ to hơn (27/09/2026) thì mỗi nhóm ít chữ hơn — tính theo bề ngang thật
+    # còn trống sau ảnh người kể, để một nhóm luôn vừa MỘT dòng, không tràn viền.
+    co_chu = int(round(cao * pk.CO_CHU))
+    nhom = pk.nhom_chu(cau, tran=pk.tran_theo_be_ngang(rong - le_trai - le_phai, co_chu))
     ass = pk.viet_ass(os.path.join(d, "8-phu-de-karaoke.ass"), nhom, rong, cao,
                       font=pk.font_cho(getattr(bc.kenh, "ngon_ngu", "")),
-                      le_trai=le_trai, le_phai=le_phai)
+                      le_trai=le_trai, le_phai=le_phai, co_chu=co_chu)
     song_rong = int(rong * 0.34) // 2 * 2
-    song_cao = int(cao * 0.075) // 2 * 2
+    song_cao = int(cao * pk.SONG_CAO) // 2 * 2
     giua = (le_trai + rong - le_phai) // 2
     song = ""
     if os.path.exists(mp3):

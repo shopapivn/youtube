@@ -118,6 +118,17 @@ def dem_chu(chu: str) -> int:
 _THE_BOC = re.compile(r"(?im)^\s*</?(story|transcript)>\s*$|</?(story|transcript)>")
 
 
+_DAU_DOI_NGUOI_NOI = re.compile(r"[ \t]*(?:>{2,}|»)[ \t]*")
+
+
+def bo_dau_doi_nguoi_noi(chu: str) -> str:
+    """Gỡ dấu đổi người nói `>>` của phụ đề tự động YouTube khỏi lời kể gốc.
+
+    Kênh giữ nội dung gốc lấy nguyên lời thoại đối thủ, nên `>>` lọt vào kịch
+    bản, vào phụ đề và hiện lên video (chủ dự án thấy 27/09/2026)."""
+    return re.sub(r"[ \t]{2,}", " ", _DAU_DOI_NGUOI_NOI.sub(" ", chu or ""))
+
+
 def bo_the_boc(chu: str) -> str:
     """Gỡ thẻ bọc `<story>`/`<transcript>` khỏi câu AI trả về.
 

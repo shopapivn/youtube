@@ -210,3 +210,24 @@ def test_song_am_theo_giong_im_thi_thap_to_thi_cao():
         muc = pk._nang_luong(ff, mp3, 25, 8)
     assert muc[5:20].mean() < 0.2 < muc[30:45].max()
     assert np.all((0 <= muc) & (muc <= 1))
+
+
+def test_bo_dau_doi_nguoi_noi_khoi_phu_de():
+    """Chủ dự án 27/09/2026: phụ đề đốt lên video có ">>"."""
+    cau = [{"bat_dau": 0.0, "ket_thuc": 3.0, "chu": ">> Hello there >> friend",
+            "tu": [[">>", 0.0, 0.1], ["Hello", 0.1, 0.6], ["there", 0.6, 1.0],
+                   [">>friend", 1.2, 1.8]]}]
+    tu = [w[0] for _, _, n in pk.nhom_chu(cau) for w in n]
+    assert tu == ["Hello", "there", "friend"]
+
+
+def test_chu_to_hon_thi_nhom_it_chu_hon_de_khong_tran():
+    # 720p, sau ảnh người kể còn ~900 px; chữ 56 px → nhóm ngắn hơn trần cũ.
+    n = pk.tran_theo_be_ngang(900, int(720 * pk.CO_CHU))
+    assert 14 <= n < 30
+    assert n * 0.6 * int(720 * pk.CO_CHU) <= 900
+
+
+def test_dai_den_thap_hon_ban_dau():
+    loc = pk.loc_lop_phu(1280, 720, 24.0, "a.ass")
+    assert "y=ih*0.74" in loc and "h=ih*0.26" in loc

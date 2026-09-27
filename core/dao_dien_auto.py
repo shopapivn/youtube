@@ -1182,6 +1182,49 @@ def nhan_vat_chinh_cua_luot(luot: Any, so: int = 2) -> List[str]:
     return ra
 
 
+_TU_NGUOI_KE = ("narrator", "storyteller", "người kể", "nguoi ke")
+_GIOI = {"nam": "male", "male": "male", "man": "male",
+         "nu": "female", "nữ": "female", "female": "female", "woman": "female"}
+
+
+def nguoi_ke_cua_luot(luot: Any, gioi: str = "") -> List[str]:
+    """Ảnh tham chiếu của NGƯỜI KỂ (danh sách một phần tử, hoặc rỗng).
+
+    ═══ NGƯỜI XUẤT HIỆN NHIỀU NHẤT CHƯA CHẮC LÀ NGƯỜI KỂ ═══
+
+    Chủ dự án 27/09/2026 chạy kênh Mỹ nam: "nhân vật chính, nhân vật kể là Nam
+    mà cái ảnh bên trái của video lại là nữ". Ảnh người kể lấy người xuất hiện
+    NHIỀU CẢNH NHẤT — truyện CEO thì cô phục vụ có mặt nhiều cảnh hơn anh kể.
+    Thứ tự: nhân vật dàn ghi vai "narrator" → nhân vật đúng giới tính người kể
+    của kênh (`gioi_nguoi_ke`, theo giọng đọc) → người xuất hiện nhiều nhất.
+    """
+    ds = nhan_vat_chinh_cua_luot(luot, 1000)
+    if not ds:
+        return []
+    nv: Dict[str, Dict[str, Any]] = {}
+    try:
+        with open(os.path.join(luot.thu_muc, TEP_DAN), encoding="utf-8") as f:
+            for x in (json.load(f).get("characters") or []):
+                if isinstance(x, dict) and x.get("id"):
+                    nv[str(x["id"]).strip()] = x
+    except (OSError, ValueError, AttributeError):
+        nv = {}
+
+    def cua(p: str) -> Dict[str, Any]:
+        return nv.get(os.path.splitext(os.path.basename(p))[0], {})
+
+    for p in ds:
+        vai = " ".join(str(cua(p).get(k) or "") for k in ("role", "notes")).lower()
+        if any(t in vai for t in _TU_NGUOI_KE):
+            return [p]
+    can = _GIOI.get(str(gioi or "").strip().lower(), "")
+    if can:
+        for p in ds:
+            if _GIOI.get(str(cua(p).get("gender") or "").strip().lower(), "") == can:
+                return [p]
+    return ds[:1]
+
+
 def duong_tham_chieu_canh(luot: Any, c: Dict[str, Any]) -> List[str]:
     """Đường dẫn thật của các ảnh tham chiếu một cảnh khai trong `reference_files`."""
     tho = c.get("reference_files") or ""

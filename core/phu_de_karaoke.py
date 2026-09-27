@@ -60,6 +60,26 @@ MAU_O = "#7B2FF7"
 
 #: Một nhóm chữ trên màn hình tối đa ngần này ký tự (≈ hai dòng như mẫu).
 TRAN_KY_TU_NHOM = 30
+
+#: ═══ BỐ CỤC DẢI ĐÁY (theo tỉ lệ chiều cao khung) — chủ dự án 27/09/2026 ═══
+#:
+#: Bản đầu: dải đen từ 64% xuống đáy (259 px ở 720p), chữ 6,8%, đặt thấp — trên
+#: chữ trống ~116 px đen. Chủ: "chữ hơi bé, nền đen hơi cao — cần cân đối hơn".
+#: Nay dải mỏng lại (từ 74%), chữ to thêm ~15%, sóng âm sát đáy, chữ ngay trên
+#: sóng. Số ký tự mỗi nhóm tính theo bề ngang còn trống (`tran_theo_be_ngang`)
+#: để chữ to mà không tràn viền.
+DAI_DEN_TU = 0.74
+CO_CHU = 0.078
+LE_DUOI_CHU = 0.105
+SONG_CAO = 0.062
+SONG_CACH_DAY = 0.02
+#: Bề ngang trung bình một ký tự in hoa Montserrat ExtraBold, tính theo cỡ chữ.
+_RONG_KY_TU = 0.6
+
+
+def tran_theo_be_ngang(be_ngang: int, co_chu: int) -> int:
+    """Số ký tự tối đa một nhóm để vừa MỘT dòng trong `be_ngang` điểm ảnh."""
+    return max(14, min(TRAN_KY_TU_NHOM + 6, int(be_ngang / (_RONG_KY_TU * max(1, co_chu)))))
 #: Ngừng giữa hai từ quá ngần này giây thì sang nhóm mới.
 NGUONG_NGUNG = 0.6
 
@@ -101,8 +121,14 @@ def nhom_chu(cau: Sequence[Dict], tran: int = TRAN_KY_TU_NHOM) -> List[NhomChu]:
     tu: List[Tuple[str, float, float]] = []
     for c in cau:
         cua_cau = [(str(x[0]), float(x[1]), float(x[2])) for x in (c.get("tu") or [])]
-        tu.extend(cua_cau or _rai_tu(str(c.get("chu") or ""), float(c["bat_dau"]),
-                                     float(c["ket_thuc"])))
+        for w in (cua_cau or _rai_tu(str(c.get("chu") or ""), float(c["bat_dau"]),
+                                     float(c["ket_thuc"]))):
+            # Dấu đổi người nói ">>" của phụ đề tự động YouTube lọt vào kịch bản
+            # (kênh giữ nguyên lời đối thủ) rồi hiện lên video — chủ dự án thấy
+            # 27/09/2026. Bỏ mọi "từ" không có chữ/số, gọt ">" dính đầu từ.
+            chu = w[0].strip().lstrip(">»<«").rstrip(">»<«")
+            if any(ch.isalnum() for ch in chu):
+                tu.append((chu, w[1], w[2]))
     # Tầng 1: cắt thành "câu nói" — ở dấu hết câu, hoặc chỗ người đọc ngừng lâu.
     cau_noi: List[List[Tuple[str, float, float]]] = []
     dem: List[Tuple[str, float, float]] = []
@@ -166,11 +192,11 @@ def viet_ass(duong: str, nhom: Sequence[NhomChu], rong: int, cao: int, *,
              le_duoi: int = 0, co_chu: int = 0, mau_o: str = MAU_O,
              in_hoa: bool = True) -> str:
     """Ghi tệp .ass karaoke. Trả đường dẫn. Xem ghi chú đầu tệp về hai lớp chữ."""
-    co_chu = co_chu or int(round(cao * 0.068))
+    co_chu = co_chu or int(round(cao * CO_CHU))
     le_trai = le_trai or int(rong * 0.06)
     le_phai = le_phai or int(rong * 0.06)
-    # Một dòng chữ nằm giữa dải đen (dải từ 64% tới đáy), hai dòng thì dâng lên.
-    le_duoi = le_duoi or int(cao * 0.13)
+    # Một dòng chữ nằm ngay trên sóng âm, trong dải đen (xem `DAI_DEN_TU`).
+    le_duoi = le_duoi or int(cao * LE_DUOI_CHU)
     dem_o = max(4, co_chu // 7)
     tieu_de = (
         "[Script Info]\nScriptType: v4.00+\nPlayResX: {r}\nPlayResY: {c}\n"
@@ -399,7 +425,8 @@ def loc_lop_phu(rong: int, cao: int, fps: float, ass: str, *, song: str = "",
     Nhận nhãn `[vao]` (khung đã đúng cỡ `rong`×`cao`), trả nhãn `[ra]`. Nhân vật
     đứng TRÊN dải đen (như mẫu: tay người không bị phủ tối), chữ nằm trên cùng.
     """
-    phan = ["[{0}]drawbox=x=0:y=ih*0.64:w=iw:h=ih*0.36:color=black@0.55:t=fill[d]".format(vao)]
+    phan = ["[{0}]drawbox=x=0:y=ih*{1:g}:w=iw:h=ih*{2:g}:color=black@0.55:t=fill[d]".format(
+        vao, DAI_DEN_TU, round(1.0 - DAI_DEN_TU, 4))]
     nhan = "d"
     if nv and nv_cao:
         phan.append("movie='{0}',format=rgba[nv]".format(_duong_loc(nv)))
@@ -413,7 +440,7 @@ def loc_lop_phu(rong: int, cao: int, fps: float, ass: str, *, song: str = "",
         phan.append("color=c=white:s={0}x{1}:r={2:g}[sw]".format(song_rong, song_cao, fps))
         phan.append("[sw][sa]alphamerge[song]")
         phan.append("[{0}][song]overlay=x={1}:y={2}:eof_action=pass:format=auto[ds]".format(
-            nhan, song_x, cao - song_cao - int(cao * 0.025)))
+            nhan, song_x, cao - song_cao - int(cao * SONG_CACH_DAY)))
         nhan = "ds"
     phan.append("[{0}]subtitles='{1}':fontsdir='{2}'[{3}]".format(
         nhan, _duong_loc(ass), _duong_loc(THU_MUC_FONT), ra))
