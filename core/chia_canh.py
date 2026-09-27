@@ -469,7 +469,11 @@ def loi_nhac_chia(khuon: str, cue: Sequence[Mapping[str, Any]], tran: float,
     """
     gia_tri: Dict[str, Any] = dict(them or {})
     gia_tri.update({
-        "SRT": bang_phu_de(cue),
+        # Bọc thẻ: khối lời kể dài để TRẦN trong lời nhắc là thứ làm cổng trả
+        # về một chữ ("K", "Q", "Pangolin"). Đo 27/09/2026 trên lời nhắc dựng
+        # dàn đang hỏng: bọc thẻ là chạy; tách tin nhắn, đảo chỗ, bỏ tiêu đề
+        # thì không. Cùng bài học với `<story>` của `core/giu_noi_dung.py`.
+        "SRT": "<srt>\n{0}\n</srt>".format(bang_phu_de(cue)),
         "MIN_SEC": "{0:.0f}".format(float(san)),
         "MAX_SEC": "{0:.0f}".format(float(tran)),
         "CLIP_SEC": "{0:.0f}".format(float(clip or tran)),

@@ -209,7 +209,9 @@ _KHUON_PHIM = """You are the showrunner of a narrated video. Read the WHOLE
 narration and plan it like a film before any shot is written.
 
 ## Narration
+<transcript>
 {transcript}
+</transcript>
 
 ## Context
 {context}
@@ -455,7 +457,9 @@ these lists that is missing from your answer will be treated as an error.
 {context}
 
 ## Transcript
+<transcript>
 {transcript}
+</transcript>
 
 ## Return JSON only, no commentary
 ```json
@@ -498,7 +502,9 @@ mill `loc9`, "Lâu đài của nhà vua" is the palace `loc10`. Such names go in
 give the film two different castles (measured 26/08/2026).
 
 ## Transcript (for reference)
+<transcript>
 {transcript}
+</transcript>
 
 ## Return JSON only, no commentary
 ```json
@@ -650,7 +656,9 @@ narrated channels. The goal is STOPPING THE SCROLL: curiosity, emotional
 discomfort, recognition ("that's me"), social judgment.
 
 ## The video (narration, opening and sample)
+<transcript>
 {transcript}
+</transcript>
 
 ## Style
 {style}
@@ -695,7 +703,9 @@ seconds of video. This video is {giay:.0f} seconds long → write exactly
 {so_track} track(s) that cover it end to end with no gaps.
 
 ## The narration (opening and sample) — read it for the emotional arc
+<transcript>
 {transcript}
+</transcript>
 
 ## Visual mood
 {style}
