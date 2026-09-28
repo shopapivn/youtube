@@ -1231,10 +1231,27 @@ def _khong_bi_tru_tien(loi_goi) -> bool:
 #: Mã lỗi / câu chữ nói rằng hỏng là do CHÍNH NỘI DUNG yêu cầu — đặt lại y
 #: nguyên bằng khoá mới thì hỏng y nguyên, chỉ tốn thời gian (tiền thì vẫn
 #: được hoàn, nhưng vòng lặp vô ích là thứ phải tránh).
+#:
+#: ═══ VÁ 28/09/2026 (gói G1, thiết kế docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md) ═══
+#:
+#: Thêm `reference_image_unreadable` (tệp ảnh tham chiếu hỏng/không đọc được):
+#: trước bản vá này, mã đó KHÔNG có mặt ở đây nên rơi xuống nhánh `LoiKetJob`
+#: của `_ket_job` — và vòng gửi lại KHÔNG TRẦN SỐ LẦN ở `_tao_anh`/`_lam_clip`
+#: gửi lại vô hạn ĐÚNG tấm ảnh hỏng ấy, không bao giờ tự khỏi.
 _LOI_DO_NOI_DUNG_MA = ("content_rejected", "invalid_prompt", "invalid_request",
-                       "validation_error", "rejected")
+                       "validation_error", "rejected",
+                       "reference_image_unreadable")
 _LOI_DO_NOI_DUNG_CHU = ("vi phạm", "vi pham", "quy định nội dung",
                         "không hợp lệ", "khong hop le", "prohibited")
+
+#: Câu máy chủ tự khai đã ĐẾM ĐỦ hai lần liên tiếp không dựng xong clip cho
+#: cùng cặp prompt+ảnh. Chỉ có nghĩa NỘI DUNG khi đi CÙNG mã
+#: `engine_unavailable` — mã ấy một mình (không câu này) vẫn là trục trặc hạ
+#: tầng thật, đường `LoiKetJob` giữ nguyên (xem
+#: `test_mot_lan_engine_unavailable_thi_van_thu_lai_binh_thuong`).
+_CAU_DEM_DU_LAN_NOI_DUNG = ("hai lần liền không dựng xong",
+                            "hai lan lien khong dung xong",
+                            "twice failed to finish rendering")
 
 
 def _hong_do_noi_dung(trang_thai: str, loi_goi) -> bool:
@@ -1247,6 +1264,8 @@ def _hong_do_noi_dung(trang_thai: str, loi_goi) -> bool:
     if ma in _LOI_DO_NOI_DUNG_MA:
         return True
     chu = str(loi_goi).lower()
+    if ma == "engine_unavailable" and any(d in chu for d in _CAU_DEM_DU_LAN_NOI_DUNG):
+        return True
     return any(d in chu for d in _LOI_DO_NOI_DUNG_CHU)
 
 

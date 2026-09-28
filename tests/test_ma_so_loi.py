@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.su_co import (  # noqa: E402
@@ -183,3 +185,62 @@ def test_prompt_image_rejected_khong_doi_theo_status_422():
     """422 trần trụi (không mã) là `UnsupportedParameterError`/tham số sai —
     khác hẳn nghĩa; chỉ `code` mới nói đúng đây là ảnh/prompt bị từ chối."""
     assert phan_loai(_CoMa("tham số sai", 422)) != NOI_DUNG
+
+
+# ── Gói G1 (28/09/2026): 403 `content_rejected` lúc TẠO JOB ─────────────────
+#
+# Câu thật của cổng ShopAPI (`modules/jobs/errors.ts:27-33`), HTTP 403:
+CAU_403_CONTENT_REJECTED = (
+    "Nội dung bạn gửi vi phạm quy định sử dụng nên đã bị từ chối. Bạn KHÔNG "
+    "bị trừ tiền. Vui lòng sửa lại nội dung rồi gửi lại.")
+
+
+@pytest.mark.parametrize("ma", [
+    "content_rejected", "content_policy", "prompt_rejected", "safety_block",
+    "nsfw_blocked", "copyright_blocked",
+])
+def test_403_content_rejected_va_ma_anh_em_la_noi_dung_khong_phai_tam_nghi(ma):
+    """Trước bản vá: không mã nào trong nhóm này có mặt ở `_MA_CODE`, nên câu
+    có cụm "Bạn KHÔNG bị trừ tiền" khớp `TAM_NGHI` qua `_BANG` — tool ĐỢI RỒI
+    GỬI LẠI Y NGUYÊN nội dung đã bị chặn ~13 phút, rồi mới hỏng vĩnh viễn."""
+    loi = _CoCode(CAU_403_CONTENT_REJECTED, code=ma, status=403)
+    assert phan_loai(loi) == NOI_DUNG
+    assert phan_loai(loi) != TAM_NGHI
+
+
+def test_reference_image_unreadable_la_noi_dung():
+    """Tệp ảnh tham chiếu hỏng/không đọc được — gửi lại đúng tệp ấy là vô ích,
+    không phải trục trặc máy chủ chờ được."""
+    loi = _CoCode("không đọc được ảnh tham chiếu", code="reference_image_unreadable",
+                  status=422)
+    assert phan_loai(loi) == NOI_DUNG
+
+
+# ── Gói G1: giọng khoá gói trả phí bị hiểu nhầm thành "giới hạn gọi" ────────
+#
+# Câu thật của cổng (`workers/voice/engine/errors.py:188-212`).
+CAU_GIONG_KHOA_GOI = (
+    "Giọng đọc này bị chủ giọng khoá cho gói trả phí, tài khoản hiện tại "
+    "không nằm trong giới hạn được dùng thử — vui lòng chọn giọng khác.")
+
+
+def test_giong_khoa_goi_tra_phi_khong_con_bi_hieu_thanh_cham_lai():
+    """Trước bản vá: chữ "giới hạn" trong câu khớp `CHAM_LAI` ở `_BANG` — tool
+    chờ 6 nhịp lùi (tới 300 giây) cho một lỗi không bao giờ tự khỏi. Mã
+    `invalid_request` phải thắng, xếp `CHET` (dừng ngay, báo người)."""
+    loi = _CoCode(CAU_GIONG_KHOA_GOI, code="invalid_request", status=400)
+    assert phan_loai(loi) == CHET
+    assert phan_loai(loi) != CHAM_LAI
+
+
+@pytest.mark.parametrize("ma", ["unsupported_parameter", "unsupported_duration"])
+def test_tham_so_sai_la_chet_khong_phai_tam_nghi_hay_cham_lai(ma):
+    """Lỗi ở ĐỀ BÀI/tool, không phải hạ tầng — thử lại y nguyên vô ích như
+    nhau, nên dừng ngay thay vì đợi/lùi nhịp."""
+    assert phan_loai(_CoCode("tham số sai", code=ma, status=400)) == CHET
+
+
+def test_khong_co_code_van_giu_nep_cu_cho_giong_khoa_goi():
+    """Cổng cũ không gửi `code`: vẫn rơi vào `CHAM_LAI` như trước — bản vá chỉ
+    thắng khi có `code`, không đổi hành vi khi thiếu mã."""
+    assert phan_loai(_CoCode(CAU_GIONG_KHOA_GOI, status=400)) == CHAM_LAI

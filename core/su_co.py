@@ -392,6 +392,36 @@ def _la_loi_mang(loi: BaseException) -> bool:
 #: Đây là lỗi NỘI DUNG (ảnh/prompt), không phải lỗi máy chủ — xếp `NOI_DUNG`
 #: để nơi gọi biết phải ĐỔI ẢNH (vẽ lại khung rộng hơn) hoặc thay bằng ảnh động,
 #: không phải hỏi lại.
+#:
+#: ═══ VÁ 28/09/2026 (gói G1, thiết kế docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md) ═══
+#:
+#: Đo trên đúng câu chữ cổng ShopAPI thật:
+#:
+#:   • 403 `content_rejected` lúc TẠO JOB (`"…vi phạm quy định… Bạn KHÔNG bị
+#:     trừ tiền…"`) không có mặt trong `_MA_CODE`, nên rơi xuống `_BANG` và
+#:     khớp `TAM_NGHI` (đúng cụm "không bị trừ tiền") — tool ĐỢI RỒI GỬI LẠI
+#:     Y NGUYÊN ~13 phút, rồi `_loi_gui_thanh_ket` đổi nó thành `LoiKetJob` và
+#:     `_tao_anh`/`_lam_clip` gửi lại vô hạn đúng nội dung đã bị chặn.
+#:   • `reference_image_unreadable` (tệp ảnh hỏng/không đọc được) cũng không
+#:     có mặt — job hỏng với mã này rơi vào `LoiKetJob` ở
+#:     `core/auto_khau._ket_job`, nên bị gửi lại vô hạn với ĐÚNG tấm ảnh hỏng.
+#:   • Câu báo giọng bị khoá gói trả phí (`invalid_request`, câu có chữ
+#:     "giọng…giới hạn…trả phí") khớp nhầm `CHAM_LAI` qua chữ "giới hạn" trong
+#:     `_BANG` — tool chờ 6 nhịp lùi (tới 300 giây) cho một lỗi không bao giờ
+#:     tự khỏi.
+#:
+#: `ma_code in _MA_CODE` được hỏi TRƯỚC `_BANG` trong `phan_loai`, nên thêm mã
+#: vào đây là chặn đứng cả ba nhầm lẫn — không cần sửa `_BANG`.
+#:
+#: `content_policy`, `prompt_rejected`, `safety_block`, `nsfw_blocked`,
+#: `copyright_blocked` là những mã anh em của `content_rejected` (đọc từ bảng
+#: mã lỗi do khách của cổng ShopAPI) — cùng nghĩa "nội dung bị chặn", xếp
+#: chung `NOI_DUNG`.
+#:
+#: `invalid_request`, `unsupported_parameter`, `unsupported_duration` là lỗi
+#: THAM SỐ — lỗi của tool/đề bài, không phải nội dung bị chặn, nhưng thử lại y
+#: nguyên cũng vô ích như nhau. Xếp `CHET` để dừng ngay (nhịp đợi rỗng) thay vì
+#: đợi/lùi nhịp cho một thứ không bao giờ tự khỏi.
 _MA_CODE = {
     "engine_unavailable": TAM_NGHI,
     "service_unavailable": TAM_NGHI,
@@ -399,6 +429,16 @@ _MA_CODE = {
     "too_many_requests": CHAM_LAI,
     "insufficient_balance": HET_TIEN,
     "prompt_image_rejected_by_provider": NOI_DUNG,
+    "content_rejected": NOI_DUNG,
+    "content_policy": NOI_DUNG,
+    "prompt_rejected": NOI_DUNG,
+    "safety_block": NOI_DUNG,
+    "nsfw_blocked": NOI_DUNG,
+    "copyright_blocked": NOI_DUNG,
+    "reference_image_unreadable": NOI_DUNG,
+    "invalid_request": CHET,
+    "unsupported_parameter": CHET,
+    "unsupported_duration": CHET,
 }
 
 
