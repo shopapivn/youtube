@@ -1133,6 +1133,16 @@ class LoiKetJob(RuntimeError):
     vào đúng job kẹt ấy, phải **đặt job mới bằng khoá mới** mới thoát ra được.
     """
 
+    def __init__(self, thong_bao: str, ma_loi: str = "") -> None:
+        super().__init__(thong_bao)
+        #: Mã lỗi máy chủ khai (vd "engine_unavailable"), khi đọc được. Dùng để
+        #: đếm hỏng LIÊN TIẾP CÙNG MỘT LÝ DO cho một cảnh — xem `_lam_clip`,
+        #: nơi hai lần liên tiếp `engine_unavailable` (render timeout lặp lại
+        #: cho đúng cảnh ấy) thì thôi gửi lại y nguyên, chuyển sang vẽ lại ảnh
+        #: khung rộng hơn / ảnh động. Rỗng nghĩa là không biết, hoặc không phải
+        #: loại cần đếm.
+        self.ma_loi: str = str(ma_loi or "")
+
 
 class LoiQuaHan(LoiKetJob):
     """Hết trần chờ mà job vẫn chưa chấm hết (khác job đã báo `failed`).
@@ -1291,10 +1301,15 @@ def _ket_job(goi: Dict[str, Any]) -> Dict[str, Any]:
     # dừng và người ta sửa nội dung, đừng quay vòng vô ích.
     if _hong_do_noi_dung(trang_thai, loi_goi):
         raise RuntimeError("máy chủ báo job hỏng vì nội dung: {0}".format(loi_goi))
+    # Giữ lại mã lỗi (vd "engine_unavailable") trên `LoiKetJob.ma_loi` — nơi gọi
+    # (`_lam_clip`) đếm hỏng LIÊN TIẾP CÙNG MỘT LÝ DO cho một cảnh bằng mã này,
+    # để biết lúc nào nên thôi gửi lại y nguyên.
+    ma_loi = str(loi_goi.get("code") or "").strip().lower() if isinstance(loi_goi, dict) else ""
     # Vẫn giữ chữ "job hỏng" trong câu để nhật ký/bài kiểm cũ đọc được;
     # `LoiKetJob` là `RuntimeError` con, nơi bắt lỗi thường vẫn bắt được.
     raise LoiKetJob(
-        "máy chủ báo job hỏng (đã hoàn tiền) — đặt lại bằng khoá mới: {0}".format(loi_goi))
+        "máy chủ báo job hỏng (đã hoàn tiền) — đặt lại bằng khoá mới: {0}".format(loi_goi),
+        ma_loi)
 
 
 class SoTheoDoi:
@@ -1979,7 +1994,8 @@ def _loi_gui_thanh_ket(loi: BaseException) -> BaseException:
     from .su_co import CHAM_LAI, CHO_TIEP, NHA_MAY_NGHI, TAM_NGHI  # noqa: PLC0415
 
     if phan_loai(loi) in (TAM_NGHI, NHA_MAY_NGHI, CHO_TIEP, CHAM_LAI):
-        return LoiKetJob("máy chủ chưa nhận việc: {0}".format(str(loi)[:120]))
+        ma_loi = str(getattr(loi, "code", "") or "").strip().lower()
+        return LoiKetJob("máy chủ chưa nhận việc: {0}".format(str(loi)[:120]), ma_loi)
     return loi
 
 
@@ -5547,7 +5563,27 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
 
     try:
         goi = goi_clip(url_anh)
-    except LoiKetJob:
+    except LoiKetJob as loi_ket:
+        # ═══ NỘI DUNG BỊ TỪ CHỐI THẲNG — ĐỪNG GỬI LẠI Y NGUYÊN ═══
+        #
+        # `_loi_gui_thanh_ket`/`_ket_job` gộp cả lỗi máy chủ THẬT (đáng gửi lại
+        # vô hạn) và lỗi NỘI DUNG (mã `prompt_image_rejected_by_provider`, hay
+        # `engine_unavailable` lặp lại nhiều lần cho ĐÚNG cảnh này — dấu hiệu
+        # Google/Veo đã thử và không dựng nổi, không phải xui một lần) vào
+        # chung `LoiKetJob`. Gửi lại y nguyên với loại sau là vô ích — xem
+        # `core/su_co.py` mục `prompt_image_rejected_by_provider`.
+        #
+        # CHỈ RẼ Ở ĐÂY KHI `gui_lai_mai` (khâu clip CHÍNH THỨC). Lần gọi SỚM
+        # trong khâu ảnh (`gui_lai_mai=False`) vốn đã cố ý bỏ cuộc rất nhanh
+        # (tối đa hai lần) rồi để khâu clip chính thức làm lại — không phải
+        # chỗ đáng tốn thêm một lượt vẽ ảnh. Rẽ ở CẢ HAI chỗ thì một cảnh bị
+        # vẽ khung rộng HAI LẦN (một lần ở đây, một lần nữa khi khâu clip
+        # chính thức gặp lại đúng lỗi này) — tốn tiền oan và làm rối "5-anh"
+        # (đo được: bài kiểm `test_clip_hong_khong_lam_hong_khau_anh` thấy dư
+        # tệp `*.khung-rong.png` dù khâu ảnh phải xong đúng đủ số ảnh).
+        if gui_lai_mai and loi_ket.ma_loi == "prompt_image_rejected_by_provider":
+            _cuu_canh_bi_google_tu_choi(bc, luot, c, anh, dich, giay, so_canh, so, goi_clip)
+            return
         # ═══ JOB KẸT: ĐẶT LẠI BẰNG KHOÁ MỚI ═══
         #
         # Máy chủ đã nhận việc nhưng mười hai phút vẫn "đang xử lý", với một
@@ -5566,8 +5602,12 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         # KHÔNG TRẦN SỐ LẦN (chủ dự án 25/09/2026: "cứ làm sao để xong thì
         # thôi — phải xong"): chỉ dừng khi bấm Dừng hoặc lỗi không phải phía
         # máy chủ. Giãn nhịp dần giữa các lần.
+        #
+        # NGOẠI LỆ (28/09/2026): `engine_unavailable` HAI LẦN LIÊN TIẾP cho
+        # đúng cảnh này thì cũng đổi hướng — xem `_cuu_canh_bi_google_tu_choi`.
         goi = None
         _lan = 0
+        _lien_tiep_engine = 1 if loi_ket.ma_loi == "engine_unavailable" else 0
         while goi is None:
             _lan += 1
             bc.kiem_dung()
@@ -5577,11 +5617,26 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
                    "khoá mới (lần {1}).".format(so_canh, _lan))
             try:
                 goi = goi_clip(url_anh, khoa_thoat_ket(_lan))
-            except LoiKetJob:
+            except LoiKetJob as loi_ket2:
+                _lien_tiep_engine = (_lien_tiep_engine + 1
+                                     if loi_ket2.ma_loi == "engine_unavailable" else 0)
+                if gui_lai_mai and _lien_tiep_engine >= 2:
+                    bc.ghi("    cảnh {0}: engine không dựng được {1} lần liên tiếp cùng "
+                           "lý do — thôi gửi lại y nguyên, thử vẽ lại ảnh khung rộng "
+                           "hơn.".format(so_canh, _lien_tiep_engine))
+                    _cuu_canh_bi_google_tu_choi(
+                        bc, luot, c, anh, dich, giay, so_canh, so, goi_clip)
+                    return
                 if not gui_lai_mai and _lan >= 2:
                     raise
                 continue
     except Exception as loi:  # noqa: BLE001
+        from .su_co import NOI_DUNG as _NOI_DUNG  # noqa: PLC0415
+
+        # Cùng lý do gate bằng `gui_lai_mai` như nhánh `LoiKetJob` ở trên.
+        if gui_lai_mai and phan_loai(loi) == _NOI_DUNG:
+            _cuu_canh_bi_google_tu_choi(bc, luot, c, anh, dich, giay, so_canh, so, goi_clip)
+            return
         chu = str(loi).lower()
         if not url_anh or not any(d in chu for d in _ANH_THAM_CHIEU_HONG):
             raise
@@ -5602,6 +5657,85 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         goi = goi_clip(url_anh, ":hong2")
         _tai_ket_qua(bc, goi, 0, dich)
         _kiem_media(bc, dich)
+
+
+#: Chỉ dẫn thêm khi vẽ lại ảnh cảnh sau khi Google/Veo âm thầm từ chối dựng clip
+#: cho ảnh cảnh — thí nghiệm đối chứng 28/09/2026: cùng lời nhắc mà KHÔNG kèm
+#: ảnh thì Veo dựng xong; cùng ảnh nhưng CẮT bỏ người thì dựng xong; bỏ hẳn khối
+#: "IDENTITY LOCK" trong lời nhắc vẫn hỏng. Tức chỗ chặn là ẢNH CẬN MẶT NGƯỜI
+#: THẬT, không phải câu chữ của lời nhắc và không phải khối khoá nhận dạng. Nên
+#: vá đúng chỗ: đẩy máy quay ra xa, giấu mặt đi — KHÔNG đổi nhân vật, chỉ đổi
+#: cỡ cảnh/góc quay của tấm vẽ lại.
+LOI_NHAC_KHUNG_RONG = (
+    "\nWide shot, the character small within the frame — camera far from the "
+    "subject. Three-quarter turn away from camera, or seen from behind. Avoid "
+    "any close-up of the face.")
+
+
+def _cuu_canh_bi_google_tu_choi(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
+                                anh: str, dich: str, giay: int, so_canh: int,
+                                so: Optional[SoTheoDoi], goi_clip) -> None:
+    """Google/Veo âm thầm không dựng nổi clip cho cảnh này (mã
+    `prompt_image_rejected_by_provider`, hay `engine_unavailable` lặp lại nhiều
+    lần cho ĐÚNG cảnh này) — gửi lại y nguyên prompt+ảnh là vô ích, xem
+    `core/su_co.py`.
+
+    Đường ra, theo thứ tự:
+
+    1. VẼ LẠI ảnh cảnh với khung RỘNG HƠN (`LOI_NHAC_KHUNG_RONG`) rồi làm clip
+       lại MỘT LẦN — phần lớn trường hợp qua được ngay, nhân vật vẫn còn đó chỉ
+       là máy quay lùi ra xa.
+    2. Vẫn hỏng → biến ẢNH CẢNH (bản khung rộng nếu vẽ được, không thì bản gốc)
+       thành một clip CHUYỂN ĐỘNG (`_dung_anh_dong_thay_clip`, miễn phí, trên
+       máy) — thà một cảnh không có chuyển động thật của Veo còn hơn cả lượt
+       chạy kẹt vô hạn ở đúng cảnh này.
+
+    Luôn ghi xong `dich` trước khi trả về (hoặc ném lỗi nếu cả `_anh_thanh_clip`
+    cũng hỏng) — nơi gọi không phải phân biệt hai nhánh.
+    """
+    anh_rong = ""
+    try:
+        hop = _hop_cho_canh(bc, luot, c, _HopTrong())
+        prompt_rong = str(c.get("img_prompt") or "") + LOI_NHAC_KHUNG_RONG
+        bc.ghi("    cảnh {0}: Google/Veo không dựng được clip cho ảnh này — vẽ "
+               "lại khung rộng hơn (nhân vật nhỏ / quay nghiêng / từ phía sau) "
+               "rồi thử lại…".format(so_canh))
+        goi_anh = _tao_anh(bc, luot, prompt_rong, hop,
+                           khoa_viec(luot, "img", so_canh, prompt_rong,
+                                     "|".join(hop.lay()), "khungrong"),
+                           ten_hien="ảnh cảnh {0} (khung rộng)".format(so_canh), so=so)
+        anh_rong = anh + ".khung-rong.png"
+        _tai_ket_qua(bc, goi_anh, 0, anh_rong)
+        _xoa_dau(bc, anh_rong)
+        url_rong = _url_anh_canh(bc, luot, so_canh, anh_rong)
+        goi = goi_clip(url_rong, ":khungrong")
+        _tai_ket_qua(bc, goi, 0, dich)
+        _kiem_media(bc, dich)
+        bc.ghi("    cảnh {0}: clip khung rộng dựng được — dùng bản này.".format(so_canh))
+        return
+    except Exception as loi2:  # noqa: BLE001 — vẽ lại / clip lại vẫn hỏng: rơi xuống ảnh động
+        bc.ghi("    cảnh {0}: Google không dựng được ảnh có mặt người thật — đã "
+               "thay bằng ảnh động ({1}).".format(so_canh, str(loi2)[:100]))
+    nguon_anh = anh_rong if anh_rong and os.path.exists(anh_rong) else anh
+    _dung_anh_dong_thay_clip(bc, luot, c, nguon_anh, dich, giay, so_canh)
+
+
+def _dung_anh_dong_thay_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any],
+                             nguon_anh: str, dich: str, giay: int,
+                             so_canh: int) -> None:
+    """Biến ẢNH CẢNH thành một clip chuyển động (zoom/lia nhẹ, miễn phí, trên
+    máy) và ghi thẳng ra `dich` — cùng cơ chế `_anh_thanh_clip` dùng ở khâu dựng
+    cho MỌI cảnh thiếu clip; gọi sớm ở đây để khâu clip không đứng lại chờ một
+    cảnh không bao giờ dựng được bằng Veo."""
+    from .chuyen_dong_anh import ChonNgauNhien  # noqa: PLC0415
+
+    ffmpeg = bc.ffmpeg or _tim_ffmpeg()
+    chon = ChonNgauNhien("{0}/{1}/canh{2}-anh-dong".format(
+        luot.ma_kenh or "?", luot.ma_luot, so_canh))
+    manh, _chuan = _anh_thanh_clip(bc, ffmpeg, luot.thu_muc, [c], [nguon_anh],
+                                   [giay], 0.0, chon)
+    os.makedirs(os.path.dirname(dich) or ".", exist_ok=True)
+    shutil.copyfile(manh[0], dich)
 
 
 def _hop_cho_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], hop: "ThamChieu"):

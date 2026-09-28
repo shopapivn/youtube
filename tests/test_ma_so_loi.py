@@ -155,3 +155,31 @@ def test_code_la_rong_hoac_khong_biet_thi_bo_qua():
 
 def test_code_viet_hoa_hay_thua_khoang_trang_van_nhan_ra():
     assert phan_loai(_CoCode("x", code="  ENGINE_UNAVAILABLE ")) == TAM_NGHI
+
+
+# ── `prompt_image_rejected_by_provider` (28/09/2026) — câu có bẫy ───────────
+
+#: Câu thật của cổng (`promptImageRejectedError`, apps/api/src/modules/jobs/
+#: errors.ts) — có đúng cụm "không bị trừ tiền" mà `TAM_NGHI` dùng để nhận
+#: diện trục trặc tạm.
+CAU_ANH_BI_TU_CHOI = (
+    "Hệ thống dựng video đã thử cặp ảnh + mô tả này 3 lần nhưng không dựng "
+    "được (thường do ảnh người thật/nhận diện khuôn mặt hoặc mô tả bị chặn). "
+    "Bạn KHÔNG bị trừ tiền và không có yêu cầu nào được tạo. Vui lòng đổi ảnh "
+    "hoặc viết lại mô tả rồi gửi lại.")
+
+
+def test_prompt_image_rejected_la_noi_dung_khong_phai_tam_nghi():
+    """Không có mã này trong `_MA_CODE` thì câu trên khớp `TAM_NGHI` (dòng có
+    "không bị trừ tiền") — và tool sẽ ĐỢI RỒI GỬI LẠI Y NGUYÊN một cặp prompt+
+    ảnh mà chính máy chủ vừa nói là không bao giờ dựng được, vô hạn."""
+    loi = _CoCode(CAU_ANH_BI_TU_CHOI, code="prompt_image_rejected_by_provider",
+                  status=422)
+    assert phan_loai(loi) == NOI_DUNG
+    assert phan_loai(loi) != TAM_NGHI
+
+
+def test_prompt_image_rejected_khong_doi_theo_status_422():
+    """422 trần trụi (không mã) là `UnsupportedParameterError`/tham số sai —
+    khác hẳn nghĩa; chỉ `code` mới nói đúng đây là ảnh/prompt bị từ chối."""
+    assert phan_loai(_CoMa("tham số sai", 422)) != NOI_DUNG

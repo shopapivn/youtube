@@ -376,12 +376,29 @@ def _la_loi_mang(loi: BaseException) -> bool:
 #: `TAM_NGHI` mới đúng: *"máy chủ trục trặc tạm — chưa bị trừ tiền"*. Đúng sự
 #: thật, và thang đợi của nó bắt đầu sớm hơn (15 giây thay vì 30) — hợp với một
 #: sự cố tự khỏi sau ít phút.
+#:
+#: ═══ `prompt_image_rejected_by_provider` (28/09/2026) — CÂU CÓ BẪY ═══
+#:
+#: Mã này (422) nghĩa là Google/Veo đã THỬ dựng clip cho đúng cặp prompt+ảnh
+#: này nhiều lần (xuyên nhiều job) và không dựng được — thường vì ảnh có mặt
+#: người thật kiểu cận cảnh. Câu báo của cổng có cụm *"Bạn KHÔNG bị trừ tiền"*
+#: — cụm y hệt cụm `TAM_NGHI` dùng để nhận diện trục trặc tạm (dòng dưới). Nếu
+#: mã này không có mặt Ở ĐÂY, `phan_loai` sẽ rơi xuống bảng `_BANG`, khớp
+#: `TAM_NGHI` nhờ đúng cụm chữ ấy, và tool sẽ ĐỢI RỒI GỬI LẠI Y NGUYÊN — với
+#: một cặp prompt+ảnh mà máy chủ đã nói thẳng là không bao giờ dựng được, gửi
+#: lại là vô ích, mỗi phút một lần, mãi mãi (đo được: `core/auto_khau._lam_clip`
+#: có một vòng gửi lại KHÔNG TRẦN SỐ LẦN cho `TAM_NGHI`/`LoiKetJob`).
+#:
+#: Đây là lỗi NỘI DUNG (ảnh/prompt), không phải lỗi máy chủ — xếp `NOI_DUNG`
+#: để nơi gọi biết phải ĐỔI ẢNH (vẽ lại khung rộng hơn) hoặc thay bằng ảnh động,
+#: không phải hỏi lại.
 _MA_CODE = {
     "engine_unavailable": TAM_NGHI,
     "service_unavailable": TAM_NGHI,
     "rate_limited": CHAM_LAI,
     "too_many_requests": CHAM_LAI,
     "insufficient_balance": HET_TIEN,
+    "prompt_image_rejected_by_provider": NOI_DUNG,
 }
 
 
