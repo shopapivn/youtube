@@ -99,8 +99,8 @@ FileSource = Union[str, "os.PathLike[str]", bytes, bytearray]
 def sniff_image_mime(head: bytes) -> Optional[str]:
     """Đoán MIME từ **magic bytes**, trả `None` khi không khớp định dạng nào.
 
-    Chép đúng ba chữ ký mà máy chủ chấp nhận (`common/security/magic-bytes.ts`),
-    nên câu trả lời của SDK và của máy chủ luôn giống nhau.
+    Chép đúng ba chữ ký mà máy chủ chấp nhận, nên câu trả lời của SDK và của
+    máy chủ luôn giống nhau.
     """
     if head.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"

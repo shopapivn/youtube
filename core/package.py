@@ -72,6 +72,13 @@ SKIP_DIRS = frozenset({
     # VS Code từ cây dev rồi chạy `xuat-github.py`, và khoá đi thẳng lên kho
     # công khai. Đo ngày 13/08/2026: CẢ HAI lớp chặn đều lọt tên file này.
     ".claude",
+    # Sự cố 28/09/2026: `docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md` là ghi chú
+    # thiết kế nội bộ (đường dẫn mã máy chủ, chi tiết vận hành) nằm trong
+    # `docs/` — thư mục này không có trong TOP_LEVEL_ALLOW nên `collect_tool_files`
+    # vốn không duyệt vào nó, nhưng chặn thẳng ở đây là lưới an toàn thứ hai,
+    # phòng ngày có ai thêm "docs" vào TOP_LEVEL_ALLOW mà quên tại sao nó
+    # từng bị cấm. Ghi chú thiết kế mới đi vào `tools/kho-github-noi-bo/`.
+    "docs",
 })
 
 #: Đuôi file bỏ qua ở mọi độ sâu.
@@ -141,6 +148,8 @@ def is_skipped(relpath: str) -> bool:
     >>> is_skipped("tests/test_config.py")
     True
     >>> is_skipped("core_ops/bat_ky_ten_gi.py")
+    True
+    >>> is_skipped("docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md")
     True
     """
     relpath = relpath.replace("\\", "/")

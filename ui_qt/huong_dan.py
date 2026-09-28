@@ -305,6 +305,11 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         "luu_y": [
             "Kênh MẪU của tool được cập nhật đè theo tool — đừng sửa thẳng vào "
             "kênh mẫu, hãy Nhân bản trước rồi sửa bản riêng.",
+            "Ở Bước 2 · Giọng đọc có ô “Giọng dự phòng”: giọng chính bị chủ "
+            "giọng khoá cho gói trả phí thì tool tự đổi CẢ video sang giọng ở "
+            "đây, đọc lại từ đầu bằng một giọng duy nhất. Bỏ trống thì tool tự "
+            "chọn một giọng cùng tiếng, cùng giới người kể trong các giọng tool "
+            "đang biết; không tìm được thì báo rõ và dừng khâu giọng đọc.",
         ],
     },
     "tu-chay-kenh": {
@@ -703,6 +708,12 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "bản ở tab Quản lý kênh — bản sao là kênh riêng, cập nhật không đụng.",
             "Kênh “Timelapse” không cần nội dung: chỉ cần tiêu đề nói rõ NƠI "
             "nào và khoảng thời gian nào.",
+            "Nhật ký có dòng “[CỨU] cảnh…”: máy chủ từ chối cảnh đó (thường vì "
+            "ảnh có mặt người quá gần ống kính, hoặc lời tả bị bộ lọc chặn), và "
+            "tool đã tự sửa rồi làm lại — không tốn thêm tiền ngoài phần đã ghi "
+            "rõ trong dòng đó. Dòng “[LÙI] cảnh…” là tự sửa không xong, nên tool "
+            "chuyển sang cách khác (ảnh chuyển động nhẹ, dùng ảnh cảnh bên "
+            "cạnh…) để video vẫn ra đủ — không bỏ cảnh, không dừng cả video.",
         ],
     },
     "prompt-visuals": {

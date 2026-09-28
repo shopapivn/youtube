@@ -161,9 +161,8 @@ def test_code_viet_hoa_hay_thua_khoang_trang_van_nhan_ra():
 
 # ── `prompt_image_rejected_by_provider` (28/09/2026) — câu có bẫy ───────────
 
-#: Câu thật của cổng (`promptImageRejectedError`, apps/api/src/modules/jobs/
-#: errors.ts) — có đúng cụm "không bị trừ tiền" mà `TAM_NGHI` dùng để nhận
-#: diện trục trặc tạm.
+#: Câu thật của cổng (mã lỗi `promptImageRejectedError`) — có đúng cụm "không
+#: bị trừ tiền" mà `TAM_NGHI` dùng để nhận diện trục trặc tạm.
 CAU_ANH_BI_TU_CHOI = (
     "Hệ thống dựng video đã thử cặp ảnh + mô tả này 3 lần nhưng không dựng "
     "được (thường do ảnh người thật/nhận diện khuôn mặt hoặc mô tả bị chặn). "
@@ -189,7 +188,7 @@ def test_prompt_image_rejected_khong_doi_theo_status_422():
 
 # ── Gói G1 (28/09/2026): 403 `content_rejected` lúc TẠO JOB ─────────────────
 #
-# Câu thật của cổng ShopAPI (`modules/jobs/errors.ts:27-33`), HTTP 403:
+# Câu thật của cổng ShopAPI, HTTP 403:
 CAU_403_CONTENT_REJECTED = (
     "Nội dung bạn gửi vi phạm quy định sử dụng nên đã bị từ chối. Bạn KHÔNG "
     "bị trừ tiền. Vui lòng sửa lại nội dung rồi gửi lại.")

@@ -1015,6 +1015,15 @@ class TrangTuDong(QWidget):
 
         thu_muc = luot.thu_muc
         self._hang_doi.bo(thu_muc)
+        # RÀ SOÁT 28/09/2026 (MED-1): bỏ bản đệm SoCuu của lượt này NGAY, chủ
+        # động — nếu không, một lượt MỚI trùng số (`_ma_luot_moi` = max+1) tạo
+        # sau đó sẽ "thừa hưởng" nhầm sổ tu-choi.json của lượt vừa xoá (xem
+        # `core/tu_choi_noi_dung.bo_so_cuu_luot`).
+        try:
+            from core.tu_choi_noi_dung import bo_so_cuu_luot  # noqa: PLC0415
+            bo_so_cuu_luot(thu_muc)
+        except Exception:  # noqa: BLE001 — dọn bản đệm hỏng không được chặn việc xoá
+            pass
         try:
             shutil.rmtree(thu_muc)
         except OSError as loi:

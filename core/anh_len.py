@@ -39,7 +39,7 @@ from typing import Any, Dict, Optional, Tuple
 
 __all__ = ["link_dung_lai_duoc", "tai_len", "xoa_nho", "TRAN_DAI_URL"]
 
-#: Trần độ dài URL mà máy chủ nhận (`common/security/url-guard.ts` để 2048).
+#: Trần độ dài URL mà máy chủ nhận (máy chủ để 2048).
 #: Chừa biên một chút: link dài hơn ngần này thì coi như không dùng lại được và
 #: lui về đường đẩy lên, thay vì để máy chủ từ chối cả job đã tính tiền.
 TRAN_DAI_URL = 2000

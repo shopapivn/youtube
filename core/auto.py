@@ -45,7 +45,7 @@ import os
 import threading
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Sequence
 
 from .ghi_dia import ghi_json
 
@@ -133,6 +133,35 @@ SO_LAN_THU = 3
 #: Giãn cách giữa các lần thử, tính bằng giây. Tăng dần chứ không đều: 429 là
 #: máy chủ bảo "chậm lại", gọi lại ngay cùng nhịp là ăn 429 tiếp.
 CHO_GIUA_LAN = (5, 15, 40)
+
+
+def _la_loi_tu_choi_ai(loi: Any) -> bool:
+    """Đây có phải `auto_khau.LoiTuChoiAI` không — AI đã TỪ CHỐI viết, sau khi
+    tự nó đã đổi khung hư cấu + đổi mô hình dự phòng 3 lần (`core/auto_khau.
+    _goi`) rồi mới ném lên.
+
+    ═══ RÀ SOÁT 28/09/2026 (MEDIUM): SAO KHÔNG ĐƯỢC THỬ LẠI NGUYÊN KHÂU ═══
+
+    Vòng `for lan in range(1, so_lan_thu+1)` ở `chay()` vốn viết cho lỗi
+    ĐƯỜNG TRUYỀN — 429, rớt mạng, "chưa nhận việc" — những thứ lần sau gọi
+    lại có cơ may khác đi. `LoiTuChoiAI` không phải loại đó: nó là KẾT LUẬN
+    CUỐI CÙNG sau khi `_goi` đã tự thử đủ ba cách sửa của chính nó (khoá mới,
+    khung hư cấu, mô hình khác). Thử lại NGUYÊN KHÂU ở tầng này chỉ là lặp lại
+    đúng ba cách ấy một lần nữa — không có gì đổi giữa hai lượt — nên trước
+    khi vá, `so_lan_thu=3` mặc định làm khâu kịch bản bị viết tới **7 bản
+    viết dài** (1 khâu × 3 lần đổi khung/mô hình bên trong, nhân với 3 lần
+    thử lại nguyên khâu ở đây — có lượt trùng khoá nên không tròn 9) cho một
+    lỗi đã biết chắc là sẽ hỏng y hệt.
+
+    So theo TÊN LỚP trong MRO thay vì `isinstance`: `auto.py` không được nhập
+    `auto_khau` (chiều nhập ngược lại — `auto_khau` đã nhập `LuotChay`/
+    `TrangThaiKhau` từ đây, nhập ngược là vòng nhập chết). Cùng cách làm với
+    `tu_choi_noi_dung._la_qua_han`.
+    """
+    try:
+        return any(k.__name__ == "LoiTuChoiAI" for k in type(loi).__mro__)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 class Cancelled(RuntimeError):
@@ -406,6 +435,63 @@ def _cat_ket_qua_cu(luot: LuotChay, cac_khau: Sequence[str]) -> List[str]:
 
 # ── Chạy ─────────────────────────────────────────────────────────────────────
 
+#: GÓI G8 (28/09/2026, mục 2.8 tài liệu THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md):
+#: khâu nào của `tu_choi_noi_dung.KHAU` thuộc về khâu hiển thị nào (`MA_KHAU`)
+#: — dùng để gắn tóm tắt "cứu nội dung" vào `tt.ghi_chu["cuu"]`. Đọc THẲNG sổ
+#: `tu-choi.json` trên đĩa (`_cuu_cho_khau` dưới đây) thay vì import
+#: `core.auto_khau`/`core.tu_choi_noi_dung.SoCuu` sống: mô-đun này CỐ Ý không
+#: mạng/không Qt/không phụ thuộc phần còn lại của tool (xem đầu tệp).
+#:
+#: `khung_cuoi` xếp vào "clip" (nó ghim đầu CUỐI của clip, không phải một tấm
+#: ảnh cảnh độc lập — `core/auto_khau._anh_khung_cuoi` có thể chạy trong luồng
+#: phụ của khâu "anh" HAY khâu "clip" tuỳ đường chạy, nhưng ý nghĩa của nó luôn
+#: là cho CLIP). `nguoi_ke` xếp vào "thumbnail" (`_khau_thumbnail` gọi nó cuối
+#: cùng, xem `core/auto_khau._khau_thumbnail`).
+_KHAU_CUU_THEO_MA: Dict[str, FrozenSet[str]] = {
+    "kich-ban": frozenset({"kich_ban"}),
+    "bang-canh": frozenset({"chia_canh"}),
+    "giong-doc": frozenset({"tts"}),
+    "anh": frozenset({"anh_canh", "tham_chieu"}),
+    "clip": frozenset({"clip", "khung_cuoi"}),
+    "thumbnail": frozenset({"bia", "nguoi_ke"}),
+}
+
+
+def _cuu_cho_khau(luot: LuotChay, ma: str) -> str:
+    """Một câu ngắn tóm tắt "cứu nội dung" (mục 2.8 tài liệu) riêng cho khâu
+    `ma`, đọc thẳng sổ `tu-choi.json` — trả "" khi không có gì để báo (sổ
+    chưa có, đọc hỏng, hoặc khâu này không có cảnh nào phải cứu).
+
+    Đếm ĐÚNG THEO SỔ: lọc `canh` theo trường `"khau"` mà chính module
+    `tu_choi_noi_dung` đã ghi (`SoCuu.ghi_ket_qua_canh`), không tự đoán theo
+    số cảnh — số cảnh trong sổ không phân theo khâu (xem ghi chú ở
+    `core/auto_khau._anh_khung_cuoi`/`_lam_bia`), nên chỉ trường `"khau"` mới
+    đáng tin.
+    """
+    nhom = _KHAU_CUU_THEO_MA.get(ma)
+    if not nhom:
+        return ""
+    duong = os.path.join(luot.thu_muc, "tu-choi.json")
+    if not os.path.isfile(duong):
+        return ""
+    try:
+        with open(duong, "r", encoding="utf-8") as tep:
+            so = json.load(tep)
+    except (OSError, ValueError):
+        return ""
+    canh = so.get("canh") if isinstance(so, dict) else None
+    if not isinstance(canh, dict):
+        return ""
+    muc = [v for v in canh.values() if isinstance(v, dict) and v.get("khau") in nhom]
+    if not muc:
+        return ""
+    so_lui = sum(1 for v in muc if v.get("lui"))
+    if so_lui == len(muc):
+        return "đã cứu {0} cảnh (đều dùng đường lùi)".format(len(muc))
+    if so_lui:
+        return "đã cứu {0} cảnh ({1} dùng đường lùi)".format(len(muc), so_lui)
+    return "đã cứu {0} cảnh (đều ra đúng sản phẩm, không cần lùi)".format(len(muc))
+
 
 def _con_dung_duoc(lam, luot: LuotChay,
                    ghi: Callable[[str], None]) -> bool:
@@ -576,6 +662,16 @@ def chay(
                 return luot
             except Exception as loi:  # noqa: BLE001 — khâu nào cũng có thể hỏng
                 loi_cuoi = str(loi)[:400]
+                # RÀ SOÁT 28/09/2026 (MEDIUM): `LoiTuChoiAI` là KẾT LUẬN CUỐI
+                # của `_goi` sau khi đã tự đổi khung/mô hình 3 lần — thử lại
+                # NGUYÊN KHÂU ở đây chỉ lặp lại đúng ba cách đã hỏng, tốn
+                # thêm tới 3 bản viết dài cho một bức tường đã biết chắc.
+                # HỎNG ngay, không giãn nhịp rồi thử lại. Xem `_la_loi_tu_choi_ai`.
+                if _la_loi_tu_choi_ai(loi):
+                    ghi("  {0} — AI đã từ chối viết, tự đổi khung/mô hình 3 "
+                        "lần rồi vẫn từ chối. Không thử lại nguyên khâu."
+                        .format(loi_cuoi[:200]))
+                    break
                 if lan < max(1, so_lan_thu):
                     cho = (cho_giua_lan[min(lan - 1, len(cho_giua_lan) - 1)]
                            if cho_giua_lan else 0)
@@ -592,6 +688,13 @@ def chay(
                 else:
                     ghi("  lần {0} hỏng ({1}) — hết lượt thử."
                         .format(lan, loi_cuoi[:120]))
+
+        # GÓI G8 (mục 2.8 tài liệu): gắn tóm tắt "cứu nội dung" của khâu này
+        # vào ghi_chu, cho dù khâu XONG hay HỎNG — cảnh nào cứu được vẫn đáng
+        # báo dù khâu sau đó hỏng vì lý do khác.
+        cuu = _cuu_cho_khau(luot, ma)
+        if cuu:
+            tt.ghi_chu["cuu"] = cuu
 
         if loi_cuoi:
             tt.trang_thai = HONG
@@ -642,6 +745,30 @@ def _ngu_ngat_duoc(ngu: Callable[[float], None], giay: float,
 # ── Nói cho người nghe ───────────────────────────────────────────────────────
 
 
+def _doan_cuu_noi_dung_ca_luot(luot: LuotChay) -> str:
+    """Một đoạn thêm vào CUỐI `tom_tat` khi lượt có cảnh phải "cứu" khỏi bị
+    nội dung từ chối (mục 2.8 tài liệu, ví dụ cuối mục). Trả "" khi sổ chưa
+    có hoặc chưa cứu cảnh nào — đọc thẳng `tu-choi.json`, cùng nếp
+    `_cuu_cho_khau`: module này không import `core.auto_khau`."""
+    duong = os.path.join(luot.thu_muc, "tu-choi.json")
+    if not os.path.isfile(duong):
+        return ""
+    try:
+        from .tu_choi_noi_dung import SoCuu  # noqa: PLC0415 — lõi thuần, an toàn để nhập lười
+        so_cuu = SoCuu(duong_tep=duong)
+    except Exception:  # noqa: BLE001 — tổng kết hỏng không được làm hỏng câu báo chính
+        return ""
+    if not so_cuu.co_cuu():
+        return ""
+    try:
+        doan = so_cuu.tong_ket()
+    except Exception:  # noqa: BLE001
+        return ""
+    if not doan.strip():
+        return ""
+    return "\n{0} Chi tiết: tu-choi.json".format(doan)
+
+
 def tom_tat(luot: LuotChay) -> str:
     """Một câu nói lượt này đang ở đâu."""
     xong = sum(1 for m in MA_KHAU if luot.tt(m).trang_thai == XONG)
@@ -649,15 +776,17 @@ def tom_tat(luot: LuotChay) -> str:
     # Chỉ nói vậy khi nó là thứ thật sự đã chặn đường.
     hong = [m for m in luot.khau_dang_hong if m not in KHAU_KHONG_CHAN]
     bo_dở = [m for m in luot.khau_dang_hong if m in KHAU_KHONG_CHAN]
+    doan_cuu = _doan_cuu_noi_dung_ca_luot(luot)
     if hong:
-        return "Dừng ở “{0}”: {1}".format(
-            ten_khau(hong[0]), luot.tt(hong[0]).loi or "không rõ lý do")
+        return "Dừng ở “{0}”: {1}{2}".format(
+            ten_khau(hong[0]), luot.tt(hong[0]).loi or "không rõ lý do", doan_cuu)
     if bo_dở and luot.tt("dung").trang_thai == XONG:
-        return "Video đã dựng xong, riêng “{0}” chưa được — bấm “Làm lại khâu "                "này”.".format(ten_khau(bo_dở[0]))
+        return ("Video đã dựng xong, riêng “{0}” chưa được — bấm “Làm lại khâu "
+                "này”.{1}").format(ten_khau(bo_dở[0]), doan_cuu)
     if luot.xong_het:
-        return "Xong cả {0} khâu.".format(len(MA_KHAU))
+        return "Xong cả {0} khâu.{1}".format(len(MA_KHAU), doan_cuu)
     dang = [m for m in MA_KHAU if luot.tt(m).trang_thai == DANG]
     if dang:
-        return "Đang làm: {0} ({1}/{2})".format(
-            ten_khau(dang[0]), xong + 1, len(MA_KHAU))
-    return "Đã xong {0}/{1} khâu.".format(xong, len(MA_KHAU))
+        return "Đang làm: {0} ({1}/{2}){3}".format(
+            ten_khau(dang[0]), xong + 1, len(MA_KHAU), doan_cuu)
+    return "Đã xong {0}/{1} khâu.{2}".format(xong, len(MA_KHAU), doan_cuu)

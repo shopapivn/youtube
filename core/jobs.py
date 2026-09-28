@@ -51,6 +51,7 @@ from .errors import ErrorAdvice, describe, job_hong_nen_thu_lai, retry_after_sec
 from .pricing import KIND_IMAGE, KIND_MUSIC, KIND_TTS, KIND_VIDEO
 from .cham_anh import NGUONG_LAM_LAI
 from .viet_lai_prompt import SO_LAN_VIET_LAI, la_bi_tu_choi
+from . import tu_choi_noi_dung as tcnd
 
 __all__ = [
     "JobSpec",
@@ -427,6 +428,27 @@ class BatchSummary:
             )
             lines.append("Nạp tiền xong bấm “↻ Chạy lại dòng lỗi” là chạy tiếp đúng chỗ đã dừng.")
         return "\n".join(lines)
+
+
+#: GÓI G8 (28/09/2026, mục 3.1 tài liệu THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md,
+#: dòng "JobManager"): `kind` của `JobSpec` → `khau` của `tu_choi_noi_dung`,
+#: chỉ để `tcnd.nhan_dien` biết đây là ảnh hay video khi phân biệt tín hiệu
+#: #2/#3 (mục 2.3). JobManager chưa có `SoCuu` riêng theo lượt — đây CHỈ là
+#: bước NHẬN DIỆN dùng chung, không ghi sổ.
+_KHAU_THEO_KIND = {
+    KIND_IMAGE: "anh_canh", KIND_VIDEO: "clip", KIND_TTS: "tts", KIND_MUSIC: "nhac",
+}
+
+
+def _dau_vao_tu_spec(spec: "JobSpec") -> "tcnd.DauVao":
+    """`tcnd.DauVao` tối giản dựng từ `JobSpec`, đủ cho `tcnd.nhan_dien` phân
+    biệt ẢNH hay LỜI NHẮC là thủ phạm. `anh` chỉ có ý nghĩa cho video (khung
+    hình đầu, `params["image_url"]`) — job ảnh không có gì để "ghim" nên luôn
+    rỗng, và `nhan_dien` mặc định coi "prompt" là nghi phạm cho ca đó."""
+    params = spec.params or {}
+    anh = str(params.get("image_url") or "") if spec.kind == KIND_VIDEO else ""
+    return tcnd.DauVao(khau=_KHAU_THEO_KIND.get(spec.kind, "anh_canh"),
+                       canh=None, prompt=str(spec.content or ""), anh=anh)
 
 
 class JobManager:
@@ -1087,7 +1109,23 @@ class JobManager:
                 #
                 # Đặt TRƯỚC nhánh "viết lại mô tả" vì hai chuyện khác hẳn nhau:
                 # ở đây đề bài KHÔNG có lỗi, gửi lại y nguyên là đúng việc cần làm.
-                if so_lan_chay_lai < SO_LAN_CHAY_LAI_KHI_NHA_MAY_HONG:
+                #
+                # ═══ GÓI G8 (28/09/2026): HỎI `tcnd.nhan_dien` TRƯỚC KHI GỬI
+                # LẠI Y NGUYÊN ═══
+                #
+                # `job_hong_nen_thu_lai` không biết mã `prompt_image_rejected_
+                # by_provider` (không có trong `_MA_JOB_DUNG_HAN`, và câu báo
+                # của máy chủ không khớp bảng từ khoá "dung_han" của nó) — nên
+                # nó mặc định "không biết mã → thử lại" và GỬI LẠI Y NGUYÊN
+                # đúng ảnh đã bị chặn tới hai lần, trước khi bao giờ chạm tới
+                # đường viết lại mô tả (mục 1.4 tài liệu, dòng "JobManager": "gửi
+                # lại y nguyên 2 lần … nếu mã lạ"). `tcnd.nhan_dien` là MỘT bảng
+                # nhận diện dùng chung cho cả kho (bất biến #1, mục 2.1) — hỏi
+                # nó trước để tránh đúng cái bẫy ấy, và để phân biệt được ẢNH
+                # với LỜI NHẮC là thủ phạm (điều `job_hong_nen_thu_lai` không
+                # trả lời được).
+                ket_luan_noi_dung = tcnd.nhan_dien(final, _dau_vao_tu_spec(record.spec))
+                if so_lan_chay_lai < SO_LAN_CHAY_LAI_KHI_NHA_MAY_HONG and ket_luan_noi_dung is None:
                     loi = final.get("error") or {}
                     ma = loi.get("code") if isinstance(loi, dict) else None
                     tin = loi.get("message") if isinstance(loi, dict) else None
@@ -1107,6 +1145,33 @@ class JobManager:
                                          "Bạn đã dừng trong lúc chờ chạy lại.")
                             return
                         continue
+
+                if ket_luan_noi_dung is not None and ket_luan_noi_dung.nghi_do == "anh":
+                    # ẢNH (không phải lời nhắc) là thủ phạm — thường là
+                    # `prompt_image_rejected_by_provider` trên khung hình đầu
+                    # của video (mục 2.3 tài liệu, tín hiệu #2/#3). Viết lại
+                    # LỜI NHẮC VIDEO không sửa được một tấm ảnh xấu, nhưng nới
+                    # rộng góc quay (`_viet_lai`) còn hơn gửi lại y nguyên —
+                    # thử một lần rồi báo THẲNG để khách tự đổi ảnh (mục 2.9(g)
+                    # tài liệu: "prompt_image_rejected_by_provider → báo rõ").
+                    moi_video = self._viet_lai_neu_bi_tu_choi(record, final, so_lan_viet_lai)
+                    if moi_video is not None:
+                        so_lan_viet_lai += 1
+                        record.spec.content = moi_video
+                        record.spec.khoa_gui = str(uuid.uuid4())
+                        record.attempt += 1
+                        self._update(
+                            record, STATUS_RUNNING,
+                            "Ảnh khung có mặt người cận — Google thường từ chối dựng. Đã "
+                            "thử nới rộng góc quay trong mô tả video, thử lại lần {0}/{1}…"
+                            .format(so_lan_viet_lai, SO_LAN_VIET_LAI), progress=3)
+                        continue
+                    self._finish(
+                        record, STATUS_FAILED,
+                        "Ảnh khung có mặt người cận — đổi ảnh rồi chạy lại dòng này. Google "
+                        "thường từ chối dựng clip khi ảnh có khuôn mặt nhìn gần. Bạn KHÔNG bị "
+                        "trừ tiền cho lượt vừa rồi.")
+                    return
 
                 moi = self._viet_lai_neu_bi_tu_choi(record, final, so_lan_viet_lai)
                 if moi is None:

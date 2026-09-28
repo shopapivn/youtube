@@ -25,7 +25,7 @@ ShopAPIError
 ```
 
 Mọi thông điệp viết bằng tiếng Việt và **nói cho khách biết phải làm gì tiếp
-theo** — chép đúng tinh thần `ERROR_COPY_VI` trong `contracts/src/errors.ts`.
+theo** — chép đúng tinh thần bảng câu báo lỗi tiếng Việt của máy chủ.
 """
 
 from __future__ import annotations

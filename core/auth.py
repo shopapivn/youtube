@@ -25,10 +25,9 @@ khôi phục**, máy chủ tự nhận ra loại nào.
 
 ## ⚠ Cạm bẫy đắt nhất ở đây: mã TOTP chỉ dùng được MỘT LẦN
 
-`two-factor.service.ts` có chống phát lại — mã vừa dùng để đăng nhập thì **không
-dùng lại được** cho bước tạo khoá API ngay sau đó (`POST /account/api-keys` có
-`@RequireStepUp()`, đòi xác thực hai lớp lần nữa). Máy chủ trả về đúng câu "Mã này
-vừa được dùng rồi".
+Máy chủ có chống phát lại — mã vừa dùng để đăng nhập thì **không dùng lại được**
+cho bước tạo khoá API ngay sau đó (`POST /account/api-keys` đòi xác thực hai lớp
+lần nữa). Máy chủ trả về đúng câu "Mã này vừa được dùng rồi".
 
 Nên tool phải hỏi khách **mã thứ hai**, và phải nói rõ vì sao lại hỏi hai lần —
 nếu không, khách gõ lại đúng mã cũ, bị từ chối, và kết luận là tool hỏng.

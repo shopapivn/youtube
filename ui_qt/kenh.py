@@ -1034,6 +1034,42 @@ class HopKenh(QDialog):
             self._o_giong.textChanged.connect(lambda _t: self._ve_tt_tao())
         v.addWidget(self._o_giong)
 
+        # ═══ GIỌNG DỰ PHÒNG — GÓI G6, mục 2.5 tài liệu "Giọng đọc" ═══
+        #
+        # Giọng chính đôi khi bị chủ giọng khoá cho gói trả phí, hoặc bị gỡ
+        # khỏi thư viện. Có ô này thì tool đổi CẢ khâu giọng đọc sang giọng ở
+        # đây ngay khi phát hiện, đọc lại từ đầu bằng một giọng duy nhất — bỏ
+        # trống thì tool tự chọn một giọng cùng tiếng, cùng giới người kể
+        # (nếu kênh có khai) trong các giọng tool đang biết; không tự chọn
+        # được thì báo rõ và dừng khâu, không âm thầm đọc bằng giọng đã khoá.
+        v.addWidget(nhan("Giọng dự phòng", "h2"))
+        v.addWidget(self._phu(
+            "Dùng khi giọng chính ở trên bị khoá cho gói trả phí hoặc không "
+            "đọc được nữa. Bỏ trống thì tool tự chọn giọng thay thế."))
+        self._o_giong_du_phong = QLineEdit()
+        self._o_giong_du_phong.setPlaceholderText(
+            "để trống = tool tự chọn giọng cùng tiếng, cùng giới người kể")
+        v.addWidget(self._o_giong_du_phong)
+
+        # ═══ RÀ SOÁT 28/09/2026: hiện + gỡ được giọng thay thế ĐANG DÙNG ═══
+        #
+        # `core/auto_khau._khau_giong_doc` tự đổi CẢ KHÂU sang giọng thay thế
+        # khi giọng chính bị khoá, và ghi vào sổ CẤP KÊNH
+        # (`PROJECTS/AUTO/<kênh>/tu-choi-kenh.json`) để lượt sau dùng ngay —
+        # nhưng trước bản vá này khách không có cách nào NHÌN THẤY chuyện đó
+        # đang xảy ra, hay tự tay huỷ nó để thử lại giọng chính (ví dụ sau
+        # khi đã gia hạn gói ở chỗ nhà cung cấp giọng — sổ tự hết hạn sau
+        # `HAN_NGAY_GIONG_THAY_THE` ngày, nhưng không ai muốn chờ tới lúc đó).
+        # Chỉ hiện được khi SỬA kênh đã có (kênh mới tạo chưa từng chạy thì
+        # chưa có sổ) — xem `_dung_sua`/`_cap_nhat_giong_thay_the_hien_tai`.
+        self._o_giong_thay_the_hien_tai = self._phu("")
+        self._o_giong_thay_the_hien_tai.setVisible(False)
+        v.addWidget(self._o_giong_thay_the_hien_tai)
+        self._nut_bo_giong_thay_the = nut_phu(
+            "Bỏ giọng thay thế", self._bo_giong_thay_the, rong=190)
+        self._nut_bo_giong_thay_the.setVisible(False)
+        v.addWidget(self._nut_bo_giong_thay_the)
+
         # ═══ NGÔN NGỮ CỦA KÊNH — CHỌN, KHÔNG GÕ MÃ ═══
         #
         # Chủ dự án 07/09/2026: "đừng để khách điền mà cho khách chọn". Ô này
@@ -1839,6 +1875,10 @@ class HopKenh(QDialog):
         # theo bộ văn hoá; ghi lại ở đây để lựa chọn của khách thắng nếu họ đổi.
         if self.ma_ngon_ngu_kenh:
             chu = _dat_khoa_yaml(chu, "ngon_ngu", self.ma_ngon_ngu_kenh, nhay=True)
+        # GÓI G6: giọng dự phòng — ghi cả lúc tạo lẫn lúc sửa, khách điền ở
+        # Bước 2 ngay từ đầu cũng được, không phải đợi mở lại kênh để sửa.
+        chu = _dat_khoa_yaml(chu, "giong_du_phong",
+                             self._o_giong_du_phong.text().strip(), nhay=True)
         _ghi_tam(duong, chu)
 
     def _chep_nhac(self, thu_muc: str) -> str:
@@ -1877,6 +1917,8 @@ class HopKenh(QDialog):
         self._them_trang("Dựng video", self._trang_dung_video(cai, thu_muc))
 
         self._o_giong.setText(self._kenh.voice_id)
+        self._o_giong_du_phong.setText(self._kenh.giong_du_phong)
+        self._cap_nhat_giong_thay_the_hien_tai()
         self._dat_ngon_ngu_kenh(self._kenh.ngon_ngu)
         duong_theo = {ten: os.path.join(thu_muc, THU_MUC_PROMPT, ten)
                       for ten, _m in BUOC_PROMPT}
@@ -1884,6 +1926,71 @@ class HopKenh(QDialog):
         self._dat_hinh(self._kenh.style)
         self._ve_anh_nv()
         self._ve_trang_thai()
+
+    def _duong_so_giong_kenh(self) -> str:
+        """Đường dẫn sổ CẤP KÊNH mà `core/auto_khau._duong_so_kenh_giong`
+        ghi vào — cùng công thức, không nhập lại hằng `TEP_SO_KENH_GIONG`
+        thì hai nơi lệch tên tệp mà không ai biết."""
+        from core.auto_khau import TEP_SO_KENH_GIONG  # noqa: PLC0415
+
+        return os.path.join(self._app.base_dir, "PROJECTS", "AUTO",
+                            self._ma_sua, TEP_SO_KENH_GIONG)
+
+    def _cap_nhat_giong_thay_the_hien_tai(self) -> None:
+        """Kênh đang chạy bằng giọng THAY THẾ (không phải giọng chính đã
+        khai) không? Đọc sổ cấp kênh — xem ghi chú rà soát 28/09/2026 ở
+        `_trang_giong`. Sổ hỏng/thiếu thì coi như không có gì, ẩn cả label
+        lẫn nút — im lặng, không được làm hỏng cả hộp thoại sửa kênh."""
+        try:
+            from core.auto_khau import _doc_giong_thay_the_kenh
+        except Exception:  # noqa: BLE001
+            self._o_giong_thay_the_hien_tai.setVisible(False)
+            self._nut_bo_giong_thay_the.setVisible(False)
+            return
+        giong_chinh = str(self._kenh.voice_id or "").strip()
+        giong_moi = (_doc_giong_thay_the_kenh(self._duong_so_giong_kenh(), giong_chinh)
+                    if giong_chinh else "")
+        dang_thay = bool(giong_moi and giong_moi != giong_chinh)
+        self._o_giong_thay_the_hien_tai.setVisible(dang_thay)
+        self._nut_bo_giong_thay_the.setVisible(dang_thay)
+        if dang_thay:
+            self._o_giong_thay_the_hien_tai.setText(
+                "⚠ Giọng chính “{0}” đang bị khoá — kênh này đang tự đọc "
+                "bằng giọng thay thế “{1}”.".format(giong_chinh, giong_moi))
+            self._o_giong_thay_the_hien_tai.setStyleSheet(
+                "color:{0};".format(theme.VANG))
+
+    def _bo_giong_thay_the(self) -> None:
+        """Xoá dòng "giọng thay thế" của kênh này khỏi sổ cấp kênh — lượt
+        chạy kế tiếp tự thử lại giọng chính, thay vì chờ sổ tự hết hạn sau
+        `HAN_NGAY_GIONG_THAY_THE` ngày. Không đụng gì tới `kenh.yaml`."""
+        from core.auto_khau import _doc_so_kenh_giong
+        from core.ghi_dia import ghi_json
+
+        duong = self._duong_so_giong_kenh()
+        giong_chinh = str(self._kenh.voice_id or "").strip()
+        goi = _doc_so_kenh_giong(duong)
+        bang = goi.get("giong_thay_the")
+        cho = goi.get("cho_xac_nhan")
+        doi = False
+        if isinstance(bang, dict) and giong_chinh in bang:
+            bang = dict(bang)
+            bang.pop(giong_chinh, None)
+            goi["giong_thay_the"] = bang
+            doi = True
+        if isinstance(cho, dict) and giong_chinh in cho:
+            cho = dict(cho)
+            cho.pop(giong_chinh, None)
+            goi["cho_xac_nhan"] = cho
+            doi = True
+        if doi:
+            try:
+                ghi_json(duong, goi)
+            except OSError as loi:
+                QMessageBox.warning(self, "Không ghi được",
+                                    "Không xoá được sổ giọng thay thế: {0}".format(loi))
+                return
+        self._cap_nhat_giong_thay_the_hien_tai()
 
     def _trang_sua_dau(self) -> QWidget:
         w, v = self._trang_moi()

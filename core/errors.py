@@ -37,6 +37,7 @@ from shopapi import (
     format_vnd,
 )
 
+from . import tu_choi_noi_dung as tcnd
 from .config import DASHBOARD_BILLING_URL, DASHBOARD_KEYS_URL, redact
 
 __all__ = ["ErrorAdvice", "describe", "is_retryable", "job_hong_nen_thu_lai", "tu_xu_ly_ngam",
@@ -69,6 +70,51 @@ class ErrorAdvice:
     def one_line(self) -> str:
         """Gộp thành một dòng cho cột trạng thái trong bảng hàng đợi."""
         return "{0} — {1}".format(self.title, self.action)
+
+
+#: GÓI G8 (mục 3.1 tài liệu): một câu tiếng Việt thường cho mỗi `nghi_do` của
+#: `tcnd.KetLuanTuChoi` — đọc lại đúng phân loại `tcnd.nhan_dien` đã làm,
+#: không dò chữ thêm lần nữa (bất biến #1, mục 2.1 tài liệu).
+def _loi_khuyen_noi_dung(ket_luan: "tcnd.KetLuanTuChoi") -> ErrorAdvice:
+    if ket_luan.nghi_do == "anh":
+        return ErrorAdvice(
+            title="Ảnh bị máy chủ từ chối dựng",
+            message="Máy chủ đã thử dựng nhiều lần với tấm ảnh này nhưng không "
+                    "ra — thường do ảnh có khuôn mặt người thật nhìn quá gần "
+                    "ống kính. Bạn KHÔNG bị trừ tiền.",
+            action="Bạn đổi sang một tấm ảnh khác (máy quay lùi xa hơn, đỡ cận "
+                   "mặt) rồi chạy lại dòng này.",
+        )
+    if ket_luan.nghi_do == "tep_anh":
+        return ErrorAdvice(
+            title="Tệp ảnh không đọc được",
+            message="Tệp ảnh bạn gửi bị hỏng, sai định dạng, hoặc quá lớn nên "
+                    "máy chủ không đọc được. Bạn KHÔNG bị trừ tiền.",
+            action="Bạn kiểm tra lại tệp ảnh (mở xem có lỗi không, đổi sang "
+                   ".jpg/.png dưới vài MB) rồi chạy lại dòng này.",
+        )
+    if ket_luan.nghi_do == "giong":
+        return ErrorAdvice(
+            title="Giọng đọc không dùng được",
+            message="Giọng này đang bị chủ giọng khoá cho gói trả phí, hoặc "
+                    "không còn tồn tại. Bạn KHÔNG bị trừ tiền.",
+            action="Bạn chọn một giọng khác trong danh sách rồi chạy lại.",
+        )
+    if ket_luan.nghi_do == "van_ban":
+        return ErrorAdvice(
+            title="Văn bản bị từ chối",
+            message="Đoạn văn bản bạn gửi bị bộ lọc nội dung chặn, hoặc quá "
+                    "dài/rỗng. Bạn KHÔNG bị trừ tiền.",
+            action="Bạn sửa lại đoạn văn bản này rồi chạy lại.",
+        )
+    # "prompt" hoặc "chua_ro": mặc định coi lời nhắc là thủ phạm — cùng câu
+    # với nhánh `ContentRejectedError` ở trên, cho đồng nhất giữa các mã.
+    return ErrorAdvice(
+        title="Nội dung không được phép",
+        message="Nội dung (mô tả) vi phạm quy định sử dụng nên bị từ chối. "
+                "Bạn KHÔNG bị trừ tiền.",
+        action="Bạn sửa lại mô tả rồi chạy lại dòng đó.",
+    )
 
 
 def describe(exc: BaseException) -> ErrorAdvice:
@@ -144,6 +190,35 @@ def describe(exc: BaseException) -> ErrorAdvice:
             message="Nội dung vi phạm quy định sử dụng nên bị từ chối. Tiền đã hoàn lại đầy đủ.",
             action="Bạn sửa lại mô tả rồi chạy lại dòng đó.",
         )
+
+    # ── Mã "anh em" của content_rejected ─────────────────────────────────────
+    #
+    # ═══ GÓI G8 (28/09/2026, mục 3.1 tài liệu THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md):
+    # CÂU NGƯỜI THƯỜNG ĐỌC ĐƯỢC CHO CÁC MÃ NỘI DUNG ═══
+    #
+    # SDK chỉ ánh xạ đúng MỘT mã (`content_rejected`, 403) sang lớp riêng ở
+    # trên. Các mã anh em — `content_policy`, `prompt_rejected`, `safety_block`,
+    # `nsfw_blocked`, `copyright_blocked` (cùng nghĩa "nội dung bị chặn", mục
+    # 2.3 tài liệu, tín hiệu #1), `prompt_image_rejected_by_provider` (mục 1.2:
+    # máy chủ đã thử dựng cặp ảnh+lời nhắc 3 lần không xong), và
+    # `reference_image_unreadable`/`payload_too_large` (tệp ảnh hỏng/quá lớn)
+    # — đều rơi thẳng xuống nhánh "Yêu cầu chưa hợp lệ" chung chung phía dưới,
+    # với lời khuyên vô nghĩa "kiểm tra lại các ô đã nhập" cho một thứ không
+    # sửa được bằng cách đọc lại form. Hỏi `tcnd.nhan_dien` — MỘT bảng nhận
+    # diện dùng chung cho cả kho (bất biến #1, mục 2.1 tài liệu) — để vừa nhận
+    # ra đúng những mã này, vừa lấy `nghi_do` (ảnh/tệp ảnh/giọng/văn bản/lời
+    # nhắc) mà trả đúng câu, thay vì một câu chung chung cho mọi trường hợp.
+    #
+    # `JobFailedError` không phải `APIStatusError` (cây ngoại lệ ở đầu tệp SDK)
+    # nên phải hỏi riêng — cả hai đều có thể mang `.code` mà `nhan_dien` đọc
+    # qua `getattr(exc, "code", "")`.
+    if isinstance(exc, (APIStatusError, JobFailedError)):
+        # `khau=""` cố ý: `describe()` không biết đây là job ảnh/video/giọng
+        # nào — để trống thì `nhan_dien` không nhầm là khâu "tts" (chỉ "tts"
+        # mới đổi tín hiệu #1 sang nghi `van_ban` thay vì `prompt`).
+        ket_luan_noi_dung = tcnd.nhan_dien(exc, tcnd.DauVao(khau=""))
+        if ket_luan_noi_dung is not None:
+            return _loi_khuyen_noi_dung(ket_luan_noi_dung)
 
     # ── Bị giới hạn tần suất ─────────────────────────────────────────────────
     if isinstance(exc, RateLimitError):

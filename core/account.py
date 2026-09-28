@@ -22,8 +22,8 @@ Quy ước trong file này: biến nào tính bằng đồng thì tên có đuô
 ## ⚠ Tài liệu API lệch thực tế
 
 `openapi.yaml` khai `amount` của `/v1/topup/intent` là µVND và cho ví dụ
-`"500000000000"` — gửi đúng theo tài liệu là **400**. Máy chủ (`topup.service.ts`
-`parseAmount`) đọc đồng. Đã đối chiếu bằng cách gọi thật, xem báo cáo.
+`"500000000000"` — gửi đúng theo tài liệu là **400**. Máy chủ đọc đồng, không
+phải µVND. Đã đối chiếu bằng cách gọi thật, xem báo cáo.
 """
 
 from __future__ import annotations

@@ -2,13 +2,14 @@
 from __future__ import annotations
 import json, os, sys
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, List, Mapping
 _STUDIO=Path(__file__).resolve().parents[2]
 for _p in (_STUDIO/"_sdk",_STUDIO):
     if str(_p) not in sys.path: sys.path.insert(0,str(_p))
 from shopapi import ShopAPI
 
 from core.media_batch import QueueGate
+from core import tu_choi_noi_dung as tcnd
 
 def emit(v): print(json.dumps(dict(v),ensure_ascii=False),flush=True)
 
@@ -65,9 +66,30 @@ def handle(request:Mapping[str,Any],*,client_factory:Callable=ShopAPI,downloader
     client=client_factory(api_key=key,base_url=os.environ.get("SHOPAPI_BASE_URL","https://api.shopapi.vn"),default_headers={"X-ShopAPI-Client":"shopapi-tool-builder"}); results=[]
     gate=QueueGate(limit=_tran_video(client))
     try:
-        image_ids=[int((item.get("metadata") or {}).get("scene_id") or 0) for item in images]
-        if by_scene and len(set(image_ids))==len(images) and set(image_ids)==set(by_scene):
+        # Node anh co the BO mot canh bi tu choi noi dung (GOI G8) roi tra ve it
+        # anh hon so scene manifest. Ghep theo VI TRI (zip) trong truong hop do
+        # se lam lech: anh canh 4 bi gan nham prompt cua canh 3. Ghep theo
+        # metadata.scene_id truoc; CHI zip khi metadata thieu/trung/la (khong
+        # con cach nao biet anh nao cua canh nao).
+        image_ids=[]
+        meta_hop_le=True
+        da_thay=set()
+        for item in images:
+            sid_tho=(item.get("metadata") or {}).get("scene_id")
+            try:
+                sid=int(sid_tho)
+            except (TypeError,ValueError):
+                sid=None
+            if sid is None or sid in da_thay or (by_scene and sid not in by_scene):
+                meta_hop_le=False
+                break
+            da_thay.add(sid); image_ids.append(sid)
+        if by_scene and meta_hop_le and image_ids:
             ordered=sorted(images,key=lambda x:int((x.get("metadata") or {}).get("scene_id") or 0))
+            thieu=sorted(set(by_scene)-set(image_ids))
+            if thieu:
+                emit({"type":"event","event":"warning","message":"{0} canh khong co anh, bo qua: {1}".format(
+                    len(thieu),", ".join(str(i) for i in thieu))})
         else:
             # Hai scene co the sinh byte anh giong het nhau, CAS khi do tra cung
             # artifact_id/metadata. Thu tu output cua image node la hop dong du
@@ -75,22 +97,50 @@ def handle(request:Mapping[str,Any],*,client_factory:Callable=ShopAPI,downloader
             ordered=[]
             for item,scene_id in zip(images,sorted(by_scene) if by_scene else range(1,len(images)+1)):
                 copied=dict(item);copied["metadata"]={**dict(item.get("metadata") or {}),"scene_id":scene_id};ordered.append(copied)
+        # GOI G8 (28/09/2026, muc 3.1 tai lieu): mot canh hong KHONG duoc giet
+        # ca node — cac canh khac da xong van phai tra ve.
+        #
+        # RA SOAT 28/09/2026 (H7): xem ghi chu day du trong
+        # tool-catalog/image.shopapi/run.py. Tom tat: ban G8 o tren nuot MOI
+        # loi (thieu anh, upload hong, engine tu choi, JobTimeoutError, mang
+        # dut, het tien...) khong phan biet — node bao "succeeded" du mot
+        # clip da dung xong tren may chu (sau 600s, qua tran cho cua tool) bi
+        # mat vi "Chay tiep" khong bao gio goi lai. Gio CHI nuot khi
+        # `tcnd.nhan_dien` xac nhan la loi NOI DUNG that; loi khac nem thang
+        # len `main()` de node bao hong va duoc chay lai bang idempotency-key
+        # cu.
+        that_bai:List[int]=[]
         for index,image in enumerate(ordered,1):
             scene_id=int((image.get("metadata") or {}).get("scene_id") or index); path=Path(str(image.get("path") or ""))
-            if not path.is_file(): raise ValueError("Khong tim thay anh scene {0}".format(scene_id))
-            scene=by_scene.get(scene_id,{}); prompt=str(scene.get("video_prompt") or "subtle cinematic motion").strip()
+            scene=by_scene.get(scene_id,{})
             if str(scene.get("video_note") or "").strip().upper()=="SKIP":
                 # Khau dung video doc `video_note = SKIP` de bo qua canh. Tra tien
                 # cho mot clip chac chan khong duoc dung la vut 500-1000d.
                 emit({"type":"event","event":"log","message":"Bo qua scene {0} (video_note = SKIP)".format(scene_id)})
                 continue
             emit({"type":"event","event":"progress","progress":(index-1)/len(ordered),"message":"Dang tao video scene {0}".format(scene_id)})
-            image_url=client.uploads.upload_file(path)
-            job=_tao_va_cho(client,gate,prompt=prompt,engine=engine,duration=duration,aspect_ratio=aspect,image_url=image_url,
-                idempotency_key="{0}:{1}:scene-{2}".format(request.get("run_id","run"),request.get("node_id","video"),scene_id))
-            url=_url(job); target=workspace/("scene-{0:04d}.mp4".format(scene_id)); (downloader or _download)(url,target)
-            results.append({"path":target.name,"mime":"video/mp4","metadata":{"scene_id":scene_id,"job_id":str(job.get("id") or ""),"engine":engine}})
-        emit({"type":"event","event":"progress","progress":1.0,"message":"Da tao {0} clip".format(len(results))}); return {"clips":results}
+            try:
+                if not path.is_file(): raise ValueError("Khong tim thay anh scene {0}".format(scene_id))
+                prompt=str(scene.get("video_prompt") or "subtle cinematic motion").strip()
+                image_url=client.uploads.upload_file(path)
+                job=_tao_va_cho(client,gate,prompt=prompt,engine=engine,duration=duration,aspect_ratio=aspect,image_url=image_url,
+                    idempotency_key="{0}:{1}:scene-{2}".format(request.get("run_id","run"),request.get("node_id","video"),scene_id))
+                url=_url(job); target=workspace/("scene-{0:04d}.mp4".format(scene_id)); (downloader or _download)(url,target)
+                results.append({"path":target.name,"mime":"video/mp4","metadata":{"scene_id":scene_id,"job_id":str(job.get("id") or ""),"engine":engine}})
+            except Exception as exc:  # noqa: BLE001 - CHI nuot loi NOI DUNG, xem ghi chu H7 o tren
+                ket_luan=tcnd.nhan_dien(exc, tcnd.DauVao(
+                    khau="clip", canh=scene_id,
+                    prompt=str(scene.get("video_prompt") or "subtle cinematic motion").strip(),
+                    anh=str(path)))
+                if ket_luan is None:
+                    raise
+                that_bai.append(scene_id)
+                emit({"type":"event","event":"warning","message":"Scene {0} hong, bo qua: {1}".format(scene_id,str(exc)[:200])})
+        emit({"type":"event","event":"progress","progress":1.0,"message":"Da tao {0} clip".format(len(results))})
+        if that_bai:
+            emit({"type":"event","event":"warning","message":"{0} canh khong tao duoc clip: {1}".format(
+                len(that_bai),", ".join(str(i) for i in that_bai))})
+        return {"clips":results}
     finally:
         close=getattr(client,"close",None)
         if callable(close): close()

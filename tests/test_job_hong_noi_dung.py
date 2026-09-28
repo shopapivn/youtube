@@ -114,3 +114,16 @@ def test_ket_job_content_rejected_van_nhu_cu():
 def test_ket_job_xong_thi_tra_ve_binh_thuong():
     goi = {"id": "job_x", "status": "succeeded"}
     assert _ket_job(goi) is goi
+
+
+def test_ket_job_noi_dung_gan_code_de_tu_choi_noi_dung_nhan_ra(tmp_path):
+    """Gói G3, 28/09/2026: nhánh content của `_ket_job` phải gắn `.code` lên
+    lỗi ném ra — nếu không, cả `core.su_co.phan_loai` lẫn
+    `core.tu_choi_noi_dung.nhan_dien` đều không nhận ra đây là nội dung (không
+    có `.code`, và bảng `_BANG` không có mục NOI_DUNG chung chung nào), khiến
+    job hỏng vì nội dung ở khâu clip lặng lẽ rơi xuống `chet` thay vì được cứu
+    (bảng 1.4 tài liệu thiết kế)."""
+    goi = _goi("failed", {"code": "content_rejected", "message": "vi phạm quy định"})
+    with pytest.raises(RuntimeError) as kq:
+        _ket_job(goi)
+    assert getattr(kq.value, "code", "") == "content_rejected"

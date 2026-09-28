@@ -56,6 +56,15 @@ THAM-KHAO/
 /VIEC-*.md
 /CACH-DO.md
 
+# Sự cố 28/09/2026: `docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md` nằm lọt lưới của
+# bốn dòng trên vì nó ở trong một thư mục CON (`docs/`), mà bốn mẫu trên chỉ
+# neo ở gốc kho (`/`). File đó ghi đường dẫn mã nguồn nội bộ, số dòng nội bộ
+# và chi tiết vận hành — không phải thứ khách cần để dùng tool. Đã dời sang
+# thư mục tài liệu nội bộ NGOÀI kho này (không phát hành).
+# Chặn CẢ THƯ MỤC `docs/` ở gốc kho — không riêng file đã gây sự cố — vì đây
+# đúng là chỗ người ta sẽ lại đặt ghi chú thiết kế tiếp theo vào.
+/docs/
+
 # Tool tự ghi bản sao lưu này mỗi lần khách bấm "Mở VS Code" ở tab Agent
 # (`core/claude_code.DUOI_SAO_LUU`). Nó là cấu hình RIÊNG của máy đang chạy,
 # không phải mã của tool.

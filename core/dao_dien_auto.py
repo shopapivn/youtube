@@ -38,9 +38,11 @@ import re
 import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .prompt_visuals import goc_cua_id
+from .tu_choi_noi_dung import (AM_THAM_CUC_BO, DauVao, KetLuanTuChoi, SoCuu, _la_huy_ngang_qua,
+                               so_cuu_cua_luot)
 
 __all__ = ["CHE_DO_DAO_DIEN", "che_do_dao_dien", "chay_dao_dien", "tao_tham_chieu", "sua_canh_theo_do_moi",
            "duong_tham_chieu_canh", "nhan_vat_chinh_cua_luot", "ThamChieuCanh", "TEP_DAN", "THU_MUC_THAM_CHIEU"]
@@ -268,11 +270,106 @@ def _doc_dan(luot: Any) -> Dict[str, Any]:
         return {}
 
 
+def _ghi_ket_luan_tu_choi(so_cuu: "SoCuu", ma_id: str, ly_do: str) -> None:
+    """Ghi vào `so_cuu` rằng ảnh tham chiếu của `ma_id` vừa bị từ chối — trước
+    khi thử nấc cứu nào (mục 2.3/2.9 tài liệu: "một chỗ nhận diện" + sổ ghi
+    nhớ). Ghi sổ hỏng không được làm hỏng khâu."""
+    try:
+        so_cuu.ghi_ket_luan(
+            DauVao(khau="tham_chieu", canh=ma_id, prompt=ly_do, nhan_vat=(ma_id,)),
+            KetLuanTuChoi(khau="tham_chieu", nghi_do="prompt", ma="tham_chieu_tu_choi",
+                         do_chac=AM_THAM_CUC_BO, so_lan=1, cau=str(ly_do)[:200]))
+    except Exception:  # noqa: BLE001 — ghi sổ hỏng không được làm hỏng khâu
+        pass
+
+
+def _chay_nac(bc: Any, buoc_chay: List[str], ma_id: str, ten_nac: str,
+             ham: Callable[[], bool]) -> bool:
+    """Chạy MỘT nấc của chuỗi cứu ảnh tham chiếu, rồi ghi dòng `[CỨU]` (mục 2.8
+    tài liệu). `buoc_chay` gom tên các nấc đã thử cho `ma_id` này — nơi gọi
+    ghi cả danh sách vào sổ MỘT LẦN khi nấc nào đó cứu được (mục 2.7: `"buoc":
+    [...]` của một "cảnh" trong sổ), giống cách `_chay_chuoi_cuu` của
+    `core.tu_choi_noi_dung` làm cho các khâu khác.
+
+    `Cancelled`/`HET_TIEN` (bất biến #6) luôn đi XUYÊN QUA — không bao giờ bị
+    nuốt thành "nấc này không được", để bấm Dừng giữa chuỗi 6 nấc thoát thẳng,
+    không chạy nấc sau.
+    """
+    buoc_chay.append(ten_nac)
+    try:
+        ok = bool(ham())
+    except Exception as loi:  # noqa: BLE001 — nấc này không xong thì thử nấc kế
+        if _la_huy_ngang_qua(loi):
+            raise
+        ok = False
+    bc.ghi("  [CỨU] tham chiếu {0} · {1} → {2}".format(
+        ma_id, ten_nac, "XONG" if ok else "chưa qua"))
+    return ok
+
+
+def _ghi_ket_qua_nac(so_cuu: "SoCuu", ma_id: str, buoc_chay: Sequence[str], *, lui: bool) -> None:
+    """Ghi vào sổ nấc nào đã cứu được nhân vật `ma_id` (mục 2.7 tài liệu).
+    Ghi sổ hỏng không được làm hỏng khâu."""
+    try:
+        so_cuu.ghi_ket_qua_canh(DauVao(khau="tham_chieu", canh=ma_id, nhan_vat=(ma_id,)),
+                                buoc_chay, lui=lui)
+    except Exception:  # noqa: BLE001 — ghi sổ hỏng không được làm hỏng khâu
+        pass
+
+
+def _canh_cua_nhan_vat(canh: Optional[List[Dict[str, Any]]], ma_id: str) -> List[Any]:
+    """`scene_id` của các cảnh đang dùng `ma_id` — đọc TRƯỚC khi `_bo_id_khoi_canh`
+    gỡ nó khỏi `characters_used`."""
+    ra: List[Any] = []
+    for c in canh or []:
+        dung = str(c.get("characters_used") or "").replace(",", " ").split()
+        if ma_id in dung:
+            sid = c.get("scene_id")
+            if sid is not None:
+                ra.append(sid)
+    return ra
+
+
+def _ghi_nguy_co_nhan_vat(so_cuu: "SoCuu", thieu: Sequence[Tuple[str, str]],
+                          canh: Optional[List[Dict[str, Any]]]) -> None:
+    """Ghi `nguy_co: mat_that` cho các nhân vật có ảnh tham chiếu bị từ chối ít
+    nhất một lần, vào phần `nhan_vat` của CÙNG sổ `tu-choi.json` — để khâu ảnh
+    cảnh / khâu clip đọc lại qua `SoCuu.cua_luot` (mục 2.7 tài liệu thiết kế).
+
+    ═══ GÓI G4 (28/09/2026): HỢP NHẤT SỔ NHÂN VẬT ═══
+
+    Trước gói này, `SoCuu` (gói G2) chưa có API công khai cho phần "nhan_vat"
+    của sổ, nên hàm này đọc — hợp — ghi TRỰC TIẾP tệp sổ (xem lịch sử git).
+    Gói G4 thêm API chính thức `SoCuu.ghi_nguy_co_nhan_vat` (cùng khoá luồng +
+    cùng cơ chế ghi nguyên tử `ghi_dia.ghi_json` như mọi lần ghi khác của
+    `SoCuu`) — hàm này chỉ còn việc GOM các id đã bị từ chối rồi gọi API ấy,
+    không tự đọc/ghi tệp nữa.
+    """
+    if so_cuu is None or not thieu:
+        return
+    from .viet_lai_prompt import la_bi_tu_choi  # noqa: PLC0415
+
+    for ma_id, ly_do in thieu:
+        # ═══ RÀ SOÁT 2.138.0: MỘT LẦN XÁC NHẬN, CHỈ KHI HỎNG VÌ NỘI DUNG ═══
+        #
+        # Trước bản này, tham chiếu hỏng vì BẤT KỲ lý do (mạng, nhà máy nghỉ…)
+        # đủ để bật tiền nghiệm "mặt thật" cho mọi cảnh của nhân vật — tốn một
+        # ảnh khung rộng/cảnh và đổi luôn nhân vật mà không có bằng chứng nào.
+        # Giờ: chỉ ghi khi câu lỗi là TỪ CHỐI NỘI DUNG, và chỉ tính là MỘT lần
+        # xác nhận ("tham_chieu"); tiền nghiệm cần đủ `nguong_nguy_co` (2) —
+        # lần thứ hai đến từ khâu clip (cảnh bị từ chối vì ảnh có người).
+        if not la_bi_tu_choi("", str(ly_do or "")):
+            continue
+        so_cuu.ghi_nguy_co_nhan_vat([ma_id], "mat_that", _canh_cua_nhan_vat(canh, ma_id),
+                                    xac_nhan=["tham_chieu"])
+
+
 def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
                    canh: Optional[List[Dict[str, Any]]] = None,
                    tao_anh: Optional[Callable[[str, str, str], None]] = None,
                    goi_ai: Optional[Callable[[str], str]] = None,
-                   cham: Optional[Callable[[str, str, str], Tuple[Optional[int], str]]] = None
+                   cham: Optional[Callable[[str, str, str], Tuple[Optional[int], str]]] = None,
+                   so_cuu: Optional["SoCuu"] = None,
                    ) -> List[str]:
     """Ảnh tham chiếu từng nhân vật / bối cảnh vào `<lượt>/tham-chieu/<id>.png`.
 
@@ -286,7 +383,26 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
     Đo 25/08/2026 (story-3d/0001): AI dựng "mèo đội mũ phớt cắm lông + giày da"
     → bộ lọc chặn vì giống Puss in Boots; chỉ đổi thiết kế mới qua.
     `tao_anh(ma_id, prompt, dich)` và `goi_ai(loi_nhac)` chỉ để bài kiểm bơm giả.
+
+    ═══ GÓI G5 (docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md, mục 2.5/3.1) ═══
+
+    Chuỗi 6 nấc giữ NGUYÊN như cũ (viết lại → thiết kế lại → mượn ảnh giai
+    đoạn → bỏ quần áo → tối giản → mượn khuôn). Chỉ bọc thêm: mỗi nấc ghi MỘT
+    dòng `[CỨU]` + kết quả vào sổ `so_cuu` (`tu-choi.json` của lượt); nhân vật
+    còn bị từ chối sau nấc 1 được ghi `nguy_co: mat_that` vào cùng sổ để khâu
+    ảnh cảnh/khâu clip đọc lại (mục 2.7). `Cancelled`/`HET_TIEN` (bấm Dừng, hết
+    tiền) luôn đi XUYÊN QUA — không bao giờ bị nuốt thành "nấc này không được"
+    (bất biến #6 của `core.tu_choi_noi_dung`), kể cả khi đang ở giữa chuỗi 6
+    nấc: raise ở đây thoát thẳng khỏi hàm, KHÔNG chạy nấc sau, KHÔNG gọi
+    `_bo_id_khoi_canh`.
+
+    `so_cuu` không truyền vào thì lấy sổ DÙNG CHUNG của lượt
+    (`so_cuu_cua_luot` — rà soát 2.138.0, H2): trước đây tự dựng một bản
+    riêng, hai bản ghi đè `tu-choi.json` của nhau. Đường thật
+    (`auto_khau._khau_bang_canh`) giờ truyền thẳng sổ chung vào.
     """
+    if so_cuu is None:
+        so_cuu = so_cuu_cua_luot(bc, luot)
     man = man if man is not None else _doc_dan(luot)
     d = os.path.join(luot.thu_muc, THU_MUC_THAM_CHIEU)
     os.makedirs(d, exist_ok=True)
@@ -324,7 +440,7 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
     if not viec:
         return []
     bc.ghi("  tạo {0} ảnh tham chiếu: {1}".format(len(viec), ", ".join(v[0] for v in viec)))
-    lam = tao_anh or _dung_tao_anh_that(bc, luot)
+    lam = tao_anh or _dung_tao_anh_that(bc, luot, so_cuu=so_cuu)
     cham = cham if cham is not None else _dung_cham_chan_dung_that(bc)
     mo_ta_cua = {str(c.get("id")): c for c in list(man.get("characters") or [])}
     thieu: List[Tuple[str, str]] = []
@@ -340,6 +456,8 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
             _soi_chan_dung(bc, ma_id, prompt, dich, mo_ta_cua.get(ma_id), lam, cham)
             bc.ghi("    tham chiếu {0}: xong".format(ma_id))
         except Exception as loi:  # noqa: BLE001 — thiếu một tham chiếu không được giết cả lượt
+            if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: KHÔNG phải nội dung — đi xuyên
+                raise
             bc.ghi("    tham chiếu {0}: bị từ chối cả sau khi viết lại ({1}).".format(
                 ma_id, str(loi)[:120]))
             with khoa:
@@ -352,24 +470,45 @@ def tao_tham_chieu(bc: Any, luot: Any, man: Optional[Dict[str, Any]] = None, *,
     if not thieu:
         return []
     # ═══ TỪ CHỐI HAI LẦN → THIẾT KẾ LẠI NHÂN VẬT, RỒI TẠO LẠI ═══
+    #
+    # Gói G5: mỗi nấc chạy qua `_chay_nac` — ghi một dòng `[CỨU]` + kết quả vào
+    # `so_cuu`, và để `Cancelled`/`HET_TIEN` đi XUYÊN QUA (raise thoát thẳng
+    # khỏi `tao_tham_chieu`, không chạy nấc sau, không tới `_bo_id_khoi_canh`).
     con_thieu: List[str] = []
     for ma_id, ly_do in thieu:
         if os.path.exists(os.path.join(d, ma_id + ".png")):
             continue  # giai đoạn khác cùng gốc vừa thiết kế lại → đã tạo lại cả cụm
-        if _thiet_ke_lai_va_tao_lai(bc, luot, man, canh, ma_id, ly_do, lam, goi_ai):
+        _ghi_ket_luan_tu_choi(so_cuu, ma_id, ly_do)
+        buoc_chay: List[str] = []
+        if _chay_nac(bc, buoc_chay, ma_id, "thiet_ke_lai",
+                    lambda: _thiet_ke_lai_va_tao_lai(bc, luot, man, canh, ma_id, ly_do, lam, goi_ai)):
+            _ghi_ket_qua_nac(so_cuu, ma_id, buoc_chay, lui=False)
             continue
-        if _muon_anh_giai_doan(bc, d, man, ma_id):
+        if _chay_nac(bc, buoc_chay, ma_id, "muon_giai_doan",
+                    lambda: _muon_anh_giai_doan(bc, d, man, ma_id)):
+            _ghi_ket_qua_nac(so_cuu, ma_id, buoc_chay, lui=True)
             continue
-        if _ve_khong_quan_ao(bc, d, man, ma_id, lam, cham):
+        if _chay_nac(bc, buoc_chay, ma_id, "khong_quan_ao",
+                    lambda: _ve_khong_quan_ao(bc, d, man, ma_id, lam, cham)):
+            _ghi_ket_qua_nac(so_cuu, ma_id, buoc_chay, lui=False)
             continue
-        if _ve_toi_gian(bc, d, man, ma_id, lam, cham):
+        if _chay_nac(bc, buoc_chay, ma_id, "toi_gian",
+                    lambda: _ve_toi_gian(bc, d, man, ma_id, lam, cham)):
+            _ghi_ket_qua_nac(so_cuu, ma_id, buoc_chay, lui=False)
             continue
-        if _muon_khuon_ban_da_ve(bc, d, man, ma_id, lam, cham):
+        if _chay_nac(bc, buoc_chay, ma_id, "muon_khuon",
+                    lambda: _muon_khuon_ban_da_ve(bc, d, man, ma_id, lam, cham)):
+            _ghi_ket_qua_nac(so_cuu, ma_id, buoc_chay, lui=True)
             continue
+        _ghi_ket_qua_nac(so_cuu, ma_id, buoc_chay, lui=True)
         con_thieu.append(ma_id)
         bc.ghi("    tham chiếu {0}: KHÔNG tạo được — bỏ {0} khỏi mọi cảnh để số thứ "
                "tự ảnh không lệch. Sửa mô tả trong 4-canh-dan.json rồi “Làm lại "
                "khâu này”.".format(ma_id))
+        bc.ghi("  [DỪNG] tham chiếu {0} · hết 6 nấc cứu — bỏ khỏi mọi cảnh.".format(ma_id))
+    # Chỉ NHÂN VẬT mới có nguy cơ "mặt thật" — bối cảnh (`loc*`) không "thiết kế
+    # lại" được (xem `_thiet_ke_lai_va_tao_lai`) nên không ghi vào đây.
+    _ghi_nguy_co_nhan_vat(so_cuu, [t for t in thieu if t[0] in mo_ta_cua], canh)
     if con_thieu and canh is not None:
         _bo_id_khoi_canh(bc, luot, man, canh, con_thieu)
     return con_thieu
@@ -473,6 +612,8 @@ def _ve_khong_quan_ao(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
     try:
         lam(ma_id, prompt, dich)
     except Exception as loi:  # noqa: BLE001
+        if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên, không phải "nấc này hỏng"
+            raise
         bc.ghi("    tham chiếu {0}: bỏ quần áo cũng không được ({1}).".format(
             ma_id, str(loi)[:90]))
         return False
@@ -482,7 +623,9 @@ def _ve_khong_quan_ao(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
         try:
             diem, thieu = cham(dich, _bo_quan_ao(str(nv.get("english_prompt") or "")),
                                str(nv.get("role") or nv.get("name") or ma_id))
-        except Exception:  # noqa: BLE001
+        except Exception as loi:  # noqa: BLE001
+            if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên (rà soát 2.138.0)
+                raise
             diem, thieu = None, ""
         if diem is not None and diem < DIEM_CHAN_DUNG_DAT:
             bc.ghi("    tham chiếu {0}: bản không quần áo vẽ ra không đúng "
@@ -535,6 +678,8 @@ def _ve_toi_gian(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
     try:
         lam(ma_id, prompt, dich)
     except Exception as loi:  # noqa: BLE001
+        if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên, không phải "nấc này hỏng"
+            raise
         bc.ghi("    tham chiếu {0}: bản tối giản cũng không được ({1}).".format(
             ma_id, str(loi)[:90]))
         return False
@@ -544,7 +689,9 @@ def _ve_toi_gian(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
         try:
             diem, thieu = cham(dich, prompt,
                                str(nv.get("role") or nv.get("name") or ma_id))
-        except Exception:  # noqa: BLE001
+        except Exception as loi:  # noqa: BLE001
+            if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên (rà soát 2.138.0)
+                raise
             diem, thieu = None, ""
         if diem is not None and diem < DIEM_CHAN_DUNG_DAT:
             bc.ghi("    tham chiếu {0}: bản tối giản vẽ ra không đúng ({1}/5 — "
@@ -633,6 +780,8 @@ def _muon_khuon_ban_da_ve(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
     try:
         lam(ma_id, prompt, dich)
     except Exception as loi:  # noqa: BLE001 — mượn cũng hỏng thì thôi
+        if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên, không phải "nấc này hỏng"
+            raise
         bc.ghi("    tham chiếu {0}: mượn khuôn cũng không được ({1}).".format(
             ma_id, str(loi)[:90]))
         return False
@@ -654,7 +803,9 @@ def _muon_khuon_ban_da_ve(bc: Any, d: str, man: Dict[str, Any], ma_id: str,
         try:
             diem, thieu = cham(dich, str(nv.get("english_prompt") or ""),
                                str(nv.get("role") or nv.get("name") or ma_id))
-        except Exception:  # noqa: BLE001 — chấm hỏng thì coi như không chấm
+        except Exception as loi:  # noqa: BLE001 — chấm hỏng thì coi như không chấm
+            if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên (rà soát 2.138.0)
+                raise
             diem, thieu = None, ""
         if diem is not None and diem < DIEM_CHAN_DUNG_DAT:
             bc.ghi("    tham chiếu {0}: khuôn mượn vẽ ra KHÔNG đúng nhân vật "
@@ -822,6 +973,8 @@ def _thiet_ke_lai_va_tao_lai(bc: Any, luot: Any, man: Dict[str, Any],
         # giả của bài kiểm và từ chính SDK, không chắc là lỗi mã.)
         raise
     except Exception as loi:  # noqa: BLE001
+        if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên, không phải "thiết kế lại hỏng"
+            raise
         bc.ghi("    tham chiếu {0}: thiết kế lại không được ({1}: {2}).".format(
             ma_id, type(loi).__name__, str(loi)[:110]))
         return False
@@ -967,6 +1120,8 @@ def _soi_chan_dung(bc: Any, ma_id: str, prompt: str, dich: str, nv: Optional[Dic
     try:
         lam(ma_id, prompt_moi, dich2)
     except Exception as loi:  # noqa: BLE001 — vẽ lại hỏng thì giữ tấm đầu
+        if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên, không phải "vẽ lại hỏng"
+            raise
         bc.ghi("    tham chiếu {0}: vẽ lại không được ({1}) — giữ tấm đầu.".format(ma_id, str(loi)[:80]))
         return
     diem2, _ = cham(dich2, mo_ta, vai)
@@ -1097,7 +1252,8 @@ def _viec_theo_lop(viec: List[Tuple[str, str, str]],
     return [x for x in ([dau] + [lop[k] for k in sorted(lop)]) if x]
 
 
-def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[..., None]:
+def _dung_tao_anh_that(bc: Any, luot: Any,
+                       so_cuu: Optional["SoCuu"] = None) -> Callable[..., None]:
     from .auto_khau import _tai_ket_qua, _tao_anh, khoa_viec  # noqa: PLC0415
     from .goi_van_ban import goi_van_ban  # noqa: PLC0415
     from .viet_lai_prompt import la_bi_tu_choi, viet_lai_prompt  # noqa: PLC0415
@@ -1111,10 +1267,21 @@ def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[..., None]:
         # Giai đoạn sau của một nhân vật: gửi kèm ẢNH giai đoạn đầu để vẽ ra
         # ĐÚNG con ấy ở hình dạng mới — xem `_viec_theo_lop`.
         hop = ThamChieuCanh(bc, list(tham_chieu)) if tham_chieu else _HopRong()
+        # ⚠ RÀ SOÁT 28/09/2026 (LOW; tài liệu mục 2.5, "Ảnh tham chiếu nhân
+        # vật", điều 3): trước bản vá, lời gọi `_tao_anh` ở đây KHÔNG truyền
+        # `so_cuu=`/`dv=` — vòng đặt-lại-bằng-khoá-mới bên trong `_tao_anh`
+        # chạy KHÔNG TRẦN, và không có cửa nào nhận diện lỗi ÂM THẦM lặp lại
+        # (luật #7). Một tham chiếu bị chặn NGẦM (không mã rõ, chỉ treo/hỏng
+        # lặp lại) thì quay vô hạn ở ĐÚNG đây thay vì rẽ vào chuỗi 6 nấc.
+        so_cuu_dung = so_cuu if so_cuu is not None else so_cuu_cua_luot(bc, luot)
+        dv = DauVao(khau="tham_chieu", canh=None, prompt=prompt,
+                    tham_chieu=tuple(tham_chieu or ()))
         try:
             goi = _tao_anh(bc, luot, prompt, hop, khoa_viec(luot, "tc", ma_id, prompt),
-                           ten_hien="tham chiếu " + ma_id)
+                           ten_hien="tham chiếu " + ma_id, so_cuu=so_cuu_dung, dv=dv)
         except Exception as loi:  # noqa: BLE001
+            if _la_huy_ngang_qua(loi):  # bấm Dừng / hết tiền: đi xuyên, không phải "bị từ chối"
+                raise
             if not la_bi_tu_choi("", str(loi)):
                 raise
             moi = viet_lai_prompt(goi_ai, prompt, str(loi))
@@ -1122,7 +1289,9 @@ def _dung_tao_anh_that(bc: Any, luot: Any) -> Callable[..., None]:
                 raise
             bc.ghi("    tham chiếu {0}: bị từ chối — đã viết lại, thử lại…".format(ma_id))
             goi = _tao_anh(bc, luot, moi, hop, khoa_viec(luot, "tc", ma_id, moi, "vl"),
-                           ten_hien="tham chiếu " + ma_id)
+                           ten_hien="tham chiếu " + ma_id, so_cuu=so_cuu_dung,
+                           dv=DauVao(khau="tham_chieu", canh=None, prompt=moi,
+                                    tham_chieu=tuple(tham_chieu or ())))
         if isinstance(goi, tuple):
             goi = goi[0]
         _tai_ket_qua(bc, goi, 0, dich)

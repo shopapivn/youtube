@@ -21,6 +21,7 @@ for _p in (_STUDIO/"_sdk",_STUDIO):
 from shopapi import ShopAPI
 
 from core.media_batch import QueueGate, plan_image_batches
+from core import tu_choi_noi_dung as tcnd
 
 def emit(v): print(json.dumps(dict(v),ensure_ascii=False),flush=True)
 
@@ -36,6 +37,19 @@ def handle(request:Mapping[str,Any],*,client_factory:Callable=ShopAPI,downloader
     if tiet_kiem>0:
         emit({"type":"event","event":"log","message":"Gop {0} canh thanh {1} job — bot {2} luot xep hang".format(len(scenes),len(batches),tiet_kiem)})
     ket_qua:Dict[int,Dict[str,Any]]={}
+    # GOI G8 (28/09/2026, muc 3.1 tai lieu THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md):
+    # mot NHOM canh (batch gop chung mo ta) hong KHONG duoc giet ca node — cac
+    # nhom khac da xong van phai tra ve.
+    #
+    # RA SOAT 28/09/2026 (H7): ban G8 o tren nuot MOI loi khong phan biet —
+    # ca JobTimeoutError, mang dut, het tien. Nuot mot loi HA TANG nghia la
+    # node bao "succeeded" thieu anh, ma clip da dung xong tren may chu sau
+    # 600s (qua tran cho cua tool) thi mat tien that: workflow_runner khong
+    # chay lai node vi thay no da "thanh cong". Gio CHI nuot khi
+    # `tcnd.nhan_dien` xac nhan la loi NOI DUNG that (may chu tu choi, tep
+    # anh hong...) — loi khac nem thang len `main()` de node bao hong, va
+    # "Chay tiep" goi lai dung idempotency-key cu se lay duoc job da xong.
+    that_bai:List[int]=[]
     try:
         for thu_tu,batch in enumerate(batches,1):
             emit({"type":"event","event":"progress","progress":(thu_tu-1)/len(batches),
@@ -54,13 +68,28 @@ def handle(request:Mapping[str,Any],*,client_factory:Callable=ShopAPI,downloader
                     (downloader or _download)(url,target)
                     ket_qua[scene_id]={"path":target.name,"mime":"image/png",
                         "metadata":{"scene_id":scene_id,"job_id":str(job.get("id") or ""),"prompt":batch.prompt}}
+            except Exception as exc:  # noqa: BLE001 - CHI nuot loi NOI DUNG, xem ghi chu H7 o tren
+                ket_luan=tcnd.nhan_dien(exc, tcnd.DauVao(
+                    khau="anh_canh",
+                    canh=batch.scene_ids[0] if batch.scene_ids else None,
+                    prompt=batch.prompt))
+                if ket_luan is None:
+                    raise
+                that_bai.extend(batch.scene_ids)
+                emit({"type":"event","event":"warning","message":"Canh {0} hong, bo qua: {1}".format(
+                    ", ".join(str(i) for i in batch.scene_ids),str(exc)[:200])})
             finally:
                 # Trong `finally`: quen nha cho la cong khoa cung ca me ma khong
                 # dong log nao noi vi sao.
                 gate.done()
         emit({"type":"event","event":"progress","progress":1.0,"message":"Da tao {0} anh".format(len(ket_qua))})
+        if that_bai:
+            emit({"type":"event","event":"warning","message":"{0} canh khong tao duoc anh: {1}".format(
+                len(that_bai),", ".join(str(i) for i in that_bai))})
         # Tra ve DUNG thu tu canh: noi goi ghep anh voi canh bang vi tri, tra
         # theo thu tu chay xong la giao nham anh cua canh nay cho canh khac.
+        # Canh hong khong co mat trong `ket_qua` nen tu dong bi bo qua o day —
+        # dung "1 cai loi bat ky" de tinh KeyError lam gian doan ca danh sach.
         return {"images":[ket_qua[int(s.get("scene_id") or i)]
                           for i,s in enumerate(scenes,1) if int(s.get("scene_id") or i) in ket_qua]}
     finally:

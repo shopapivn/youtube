@@ -70,7 +70,7 @@ import re
 import threading
 import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .su_co import (
     CHAM_LAI, CHO_TIEP, HET_KHO, KHOA_DA_DUNG, KHOA_LECH, MAT_MANG, NHA_MAY_NGHI,
@@ -78,7 +78,8 @@ from .su_co import (
 )
 
 __all__ = ["goi_van_ban", "loc_json", "khoi_anh", "MO_HINH_MAC_DINH",
-           "TOI_DA_TOKEN_MAC_DINH", "CHI_TRA_NOI_DUNG", "tin_nhan_viet"]
+           "TOI_DA_TOKEN_MAC_DINH", "CHI_TRA_NOI_DUNG", "tin_nhan_viet",
+           "LA_CAU_TU_CHOI", "la_cau_tu_choi"]
 
 #: Lời nhắc **hệ thống** đi kèm mọi lượt nhờ AI viết chữ của tool.
 #:
@@ -505,6 +506,108 @@ def _mo_dau_thuong(tin_nhan: List[Dict[str, str]]) -> List[Dict[str, str]]:
                 m["content"] = CAU_MO_DAU_THUONG + m["content"]
             break
     return ra
+
+
+#: ═══ MÔ HÌNH TỪ CHỐI VIẾT (gói G7, 28/09/2026) ═══
+#:
+#: Khác hẳn "câu trả lời một chữ" ở trên: đây là câu trả lời **200 hợp lệ**,
+#: dài đủ để không vướng cửa nào khác, nhưng NỘI DUNG là một lời TỪ CHỐI —
+#: "I can't help with that", "Tôi không thể…". Không ai ném ngoại lệ nào cả,
+#: nên vòng thử-lại-hạ-tầng (`_DOI_GIU_KHOA` ở trên, hay vòng đổi-khoá-khi-hỏng
+#: của `core/auto_khau._goi`) không hề biết mà can thiệp — câu từ chối cứ thế
+#: trôi thẳng vào kịch bản/bảng cảnh, y hệt kiểu "AI hỏi lại" mà
+#: `core/auto_khau._kiem_kich_ban_dung_duoc` từng phải chặn riêng.
+#:
+#: Đây là NGUỒN DUY NHẤT cho việc nhận diện này — `core/tu_choi_noi_dung.
+#: nhan_dien` (tín hiệu #8, gói G2) và `core/auto_khau._goi` (gói G7) đều đọc
+#: từ `LA_CAU_TU_CHOI`/`la_cau_tu_choi` ở đây, không tự dò chữ riêng. Chỗ KHÔNG
+#: gộp được: `core/viet_lai_prompt.la_bi_tu_choi` đọc mã lỗi/câu báo JOB HỎNG
+#: của cổng ảnh/video (một domain tín hiệu khác hẳn — mã HTTP và câu báo lỗi
+#: job, không phải văn bản một câu trả lời chat 200) — `_ep_loi_thanh_loi_tu_
+#: choi` (`core/auto_khau.py`, gói G4) đã ghi nhận đúng chỗ hở này từ trước,
+#: chưa gộp được thì để riêng, không ép cho gọn giả.
+#:
+#: CHỈ so khớp trong ĐOẠN ĐẦU câu trả lời — một bài kịch bản/bảng cảnh THẬT
+#: không bao giờ MỞ ĐẦU bằng "tôi không thể"; chữ "cannot"/"không thể" nằm
+#: GIỮA một đoạn tường thuật dài là chuyện bình thường của văn kể chuyện, và
+#: không được phép bị coi là từ chối (đo test `test_tin_hieu_8...` của gói G2:
+#: một câu 40 lần lặp có chữ "cannot" giữa bài KHÔNG được kết luận là từ chối).
+LA_CAU_TU_CHOI: Tuple[str, ...] = (
+    "i can't help with that", "i cannot help with that",
+    "i can't help", "i cannot help", "i can not help",
+    "i'm not able to", "i am not able to", "i'm unable to", "i am unable to",
+    "i cannot assist", "i can't assist", "i can not assist",
+    "i cannot create", "i can't create", "i cannot write", "i can't write",
+    "i cannot generate", "i can't generate",
+    "i must decline", "i won't be able to", "i will not be able to",
+    "against my guidelines", "against my content policy",
+    "as an ai, i", "i'm sorry, but i", "i am sorry, but i",
+    "tôi không thể", "tôi xin lỗi, nhưng", "rất tiếc, tôi không thể",
+    "tôi không thể hỗ trợ", "tôi không thể viết", "tôi không thể tạo",
+    "vi phạm chính sách nội dung", "vi phạm nguyên tắc sử dụng",
+)
+
+#: ⚠ RÀ SOÁT 28/09/2026 (H6): bản trước dò cụm từ chối ở BẤT KỲ ĐÂU trong 200
+#: ký tự đầu, cộng sàn tuyệt đối 400 ký tự áp cho MỌI lượt `_goi` kể cả khi
+#: nơi gọi không biết trước độ dài kỳ vọng (tiêu đề, SEO, bình luận…). Hậu
+#: quả đo được: tiêu đề thật *"TITLE: Tôi Không Thể Tha Thứ Cho Mẹ Chồng…"* —
+#: một tiêu đề video, không phải lời từ chối — chứa cụm "tôi không thể" ở
+#: đâu đó trong 200 ký tự đầu và ngắn hơn 400 ký tự, nên bị kết luận là từ
+#: chối; `_goi` thử lại 3 lần rồi đổi sang Opus, hỏng cả khâu kịch bản vì một
+#: cái tiêu đề.
+#:
+#: Sửa hai chỗ:
+#: 1. Chỉ khớp khi câu trả lời **BẮT ĐẦU** bằng cụm từ chối (sau khi bỏ
+#:    khoảng trắng, dấu nháy mở đầu và tiền tố vai kiểu "Assistant:") —
+#:    không còn dò cụm ở bất kỳ đâu trong đoạn đầu. Một tiêu đề/kịch bản THẬT
+#:    không bao giờ MỞ ĐẦU đúng bằng "tôi không thể…".
+#: 2. Bỏ hẳn sàn tuyệt đối cho MỌI lượt gọi: giờ chỉ kết luận được khi nơi
+#:    gọi TRUYỀN `do_dai_ky_vong > 0` — tức lượt viết DÀI, có mốc so sánh
+#:    thật (kịch bản, đoạn văn…). Lượt không biết trước độ dài (tiêu đề, SEO,
+#:    bình luận, cắt cảnh…) không còn bị hàm này phán "từ chối" nữa; `_goi`
+#:    vẫn có `_goi_mot_lan_chiu_ha_tang` lo phần lỗi hạ tầng như trước.
+_TIEN_TO_VAI = re.compile(
+    r"^(assistant|ai|bot|model|trợ\s*lý)\s*[:：]\s*", re.IGNORECASE)
+#: Dấu nháy/ngoặc mô hình hay bọc quanh câu trả lời — bỏ trước khi so khớp
+#: đầu câu, KHÔNG đổi `chu` gốc dùng để đo độ dài.
+_DAU_MO_DAU = "'\"`“”‘’「『（("
+
+
+def _dau_cau_de_so(chu: str) -> str:
+    """Đoạn ĐẦU câu trả lời, đã bỏ khoảng trắng / dấu nháy / tiền tố vai —
+    chỉ dùng để so khớp `startswith`, không dùng để đo độ dài."""
+    dau = chu.lstrip()
+    dau = _TIEN_TO_VAI.sub("", dau)
+    dau = dau.lstrip(_DAU_MO_DAU).lstrip()
+    return dau.lower()
+
+
+def la_cau_tu_choi(tra: Any, do_dai_ky_vong: int = 0) -> bool:
+    """Câu trả lời này có phải LỜI TỪ CHỐI của mô hình không.
+
+    Chỉ kết luận được khi nơi gọi biết mốc so sánh (`do_dai_ky_vong > 0` —
+    lượt VIẾT DÀI, vd kịch bản, đoạn văn). Không có mốc so sánh thì trả
+    `False` ngay — không suy đoán bằng sàn tuyệt đối nữa (xem ghi chú rà soát
+    28/09/2026 ở trên); cùng chuẩn với `tu_choi_noi_dung.nhan_dien` (tín hiệu
+    #8), tránh một tiêu đề/SEO/bình luận ngắn bị đè oan.
+
+    Có mốc so sánh rồi, hai cửa, cả hai phải đúng cùng lúc:
+
+    1. Một cụm trong `LA_CAU_TU_CHOI` đứng NGAY ĐẦU câu trả lời (sau khi bỏ
+       khoảng trắng/dấu nháy/tiền tố vai) — không phải xuất hiện ở bất kỳ
+       đâu trong đoạn đầu. Cụm "cannot"/"không thể" nằm GIỮA một đoạn tường
+       thuật dài là chuyện bình thường của văn kể chuyện.
+    2. Câu trả lời NGẮN: dưới 30% `do_dai_ky_vong`.
+    """
+    chu = str(tra or "").strip()
+    if not chu:
+        return False
+    if not (do_dai_ky_vong and do_dai_ky_vong > 0):
+        return False
+    dau = _dau_cau_de_so(chu)
+    if not any(dau.startswith(cum) for cum in LA_CAU_TU_CHOI):
+        return False
+    return len(chu) < 0.3 * float(do_dai_ky_vong)
 
 
 def goi_van_ban(

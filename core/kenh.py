@@ -314,6 +314,22 @@ class Kenh:
     nan_khuon_tieu_de: bool = False
     #: Mã giọng đọc trên cổng ShopAPI.
     voice_id: str = ""
+    #: GÓI G6 (`docs/THIET-KE-XU-LY-TU-CHOI-NOI-DUNG.md` mục 2.5, dòng "Giọng
+    #: đọc"): giọng dùng thay khi `voice_id` bị khoá cho gói trả phí / không
+    #: dùng được (`invalid_request`, câu có "giọng"/"voice" + "trả phí"/
+    #: "subscription"/"không tồn tại"). Kênh khai thì TOOL DÙNG NGAY; để trống
+    #: thì tool TỰ CHỌN một giọng cùng ngôn ngữ (`ngon_ngu`) + cùng giới người
+    #: kể (`gioi_nguoi_ke`, khi kênh có khai) — xem
+    #: `core.auto_khau._chon_giong_du_phong_tu_dong`. Không tự chọn được thì
+    #: khâu giọng đọc DỪNG HẲN với câu rõ, không âm thầm đọc bằng giọng khoá.
+    giong_du_phong: str = ""
+    #: RÀ SOÁT 28/09/2026 (LOW): khoá `cuu_noi_dung: {tat: true}` — tài liệu
+    #: thiết kế mục 2.6: "Cờ `cuu_noi_dung: {tat: true}` chỉ tắt các bước TRẢ
+    #: TIỀN [của chuỗi cứu nội dung]. Bất biến 'không gửi lại y nguyên' và các
+    #: bước lùi miễn phí vẫn chạy." Nối dây vào `CauHinhTran.tat`
+    #: (`core.tu_choi_noi_dung`, `core.auto_khau._so_cuu_cua_luot`). Mặc định
+    #: `False` — CỨU vẫn BẬT, kênh chưa khai gì thì hành vi y như hôm nay.
+    cuu_noi_dung_tat: bool = False
     #: Engine dựng clip — quyết định trần độ dài mỗi cảnh (veo3 8s, seedance 10s).
     engine: str = "veo3"
     #: Mô hình AI viết kịch bản và lời nhắc.
@@ -739,6 +755,11 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         nhan_tieu_de=str(cai.get("nhan_tieu_de") or "").strip(),
         nan_khuon_tieu_de=_co(cai.get("nan_khuon_tieu_de")),
         voice_id=str(cai.get("voice_id") or ""),
+        giong_du_phong=str(cai.get("giong_du_phong") or "").strip(),
+        # `cuu_noi_dung: {tat: true}` — mục dict lồng, đọc kiểu-vịt: thiếu
+        # khoá hay không phải dict đều coi là "chưa tắt" (mặc định bật cứu).
+        cuu_noi_dung_tat=_co((cai.get("cuu_noi_dung") or {}).get("tat")
+                             if isinstance(cai.get("cuu_noi_dung"), dict) else False),
         engine=str(cai.get("engine") or "veo3"),
         mo_hinh=str(cai.get("mo_hinh") or "claude-sonnet-5"),
         chu_bia_hoa=bool(cai.get("chu_bia_hoa", True)),
