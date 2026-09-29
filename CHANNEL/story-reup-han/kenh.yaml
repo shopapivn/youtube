@@ -1,0 +1,50 @@
+# ============================================================================
+#  KÊNH story-reup-han — REUP truyện drama Hàn: GIỮ NGUYÊN GIỌNG + LỜI đối thủ
+# ============================================================================
+#  Chép từ story-dien-anh-han, khác đúng một chỗ (chủ dự án 29/09/2026): KHÔNG
+#  viết kịch bản, KHÔNG đọc giọng. Đưa link video đối thủ vào là:
+#    - kịch bản  = nguyên lời thoại của video ấy (không rà, không chèn thẻ);
+#    - giọng đọc = TIẾNG của chính video ấy (tải về, không tốn tiền giọng).
+#  Từ phụ đề trở đi y như kênh Hàn: cắt cảnh, nhân vật + bối cảnh tham chiếu,
+#  ảnh K-drama, 10 clip đầu, ảnh động + chuyển cảnh, phụ đề karaoke, bìa poster.
+#  Bắt buộc có link video đối thủ.
+# ============================================================================
+# ── Kênh MẪU của tool ─────────────────────────────────────────────────────────
+#  Cập nhật tool sẽ GHI ĐÈ kênh này bằng bản mẫu mới hơn. Muốn sửa cho riêng
+#  mình thì bấm "Nhân bản" ở tab Tự động — bản sao có kenh_rieng: true, cập
+#  nhật không đụng vào.
+mau_cua_tool: true
+ma: "story-reup-han"
+ten: "Reup Hàn — giữ giọng đối thủ"
+ngon_ngu: "ko"
+giong_van: "Korean (South Korea), first-person storytelling for adults: calm, intimate, restrained; natural spoken rhythm; keep the speech level (존댓말/반말) of the original narrator."
+# Tốc độ đọc của giọng đối thủ (đo video mẫu 26/09/2026: 52.897 ký tự / 183 phút
+# ≈ 289). Chỉ dùng để ước thời lượng — giọng thật là tiếng gốc.
+ky_tu_moi_phut: 289
+# Tiếng Hàn không có chữ hoa.
+chu_bia_hoa: false
+# Không đọc TTS — giọng là tiếng gốc của video đối thủ (dung_giong_doi_thu).
+phut_muc_tieu: 30
+# Dài đúng bằng lời kể gốc — không nắn, không cắt.
+do_dai_tu_do: true
+giu_noi_dung_goc: true
+# REUP: giọng đọc = tiếng của chính video đối thủ, kịch bản = nguyên lời thoại.
+dung_giong_doi_thu: true
+che_do_tieu_de: "nguyen_goc"
+engine: "veo3"
+so_clip_dau: 10
+chuyen_canh: "ngau_nhien"
+# Phụ đề karaoke + dải đen mờ + nhân vật chính tách nền bên trái + sóng âm (core/phu_de_karaoke.py).
+kieu_phu_de: "karaoke"
+so_thumbnail: 3
+# Ảnh bìa hai lớp: AI vẽ ảnh KHÔNG chữ, tool tự vẽ chữ (core/bia_chu.py) — theo ảnh bìa mẫu 25/09/2026.
+kieu_bia: "chu_2_dong"
+# Người kể là giọng của video đối thủ — nam hay nữ tuỳ video, để trống cho
+# tool chọn theo vai "narrator" trong dàn nhân vật.
+gioi_nguoi_ke: ""
+mo_hinh: "claude-sonnet-5"
+dot_phu_de: false
+am_luong_nhac: 0.10
+nhac_nen: ""
+# AI tự dựng nhân vật + bối cảnh tham chiếu theo từng truyện (đường đạo diễn), KHÔNG nối cảnh.
+che_do_ke: tu_xay

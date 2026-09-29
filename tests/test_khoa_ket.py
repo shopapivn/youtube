@@ -369,3 +369,27 @@ def test_anh_doi_thi_huy_job_cu_roi_moi_gui(monkeypatch, tmp_path):
     ak._ghi_viec_do(so, 1, {"id": "job_cu", "goc": "khoa-cua-anh-cu"})
     lam()
     assert may.huy == ["job_cu"] and len(may.tao) == 1 and cho == ["job_moi"]
+
+
+def test_clip_qua_han_tong_thi_huy_job_va_nem_len(monkeypatch):
+    """Khách khiếu nại template story chậm: một clip kẹt giữ cả video 12 tiếng
+    (story-dien-anh-my-sang/0001). Có hạn tổng thì hết hạn là huỷ job đang dở
+    và ném lên — khâu dựng dùng ảnh chuyển động cho cảnh ấy."""
+    import time as _t
+
+    import core.auto_khau as ak
+
+    class May(_JobGia):
+        def retrieve(self, ma):
+            return {"id": ma, "status": "queued", "attempt": 0, "started_at": None}
+
+    may = May(so_job_treo=1)
+    monkeypatch.setattr(ak, "_cho_job", lambda bc, job, tran=0, ten_viec="", so=None: (
+        (_ for _ in ()).throw(ak.LoiQuaHan("hết vòng", job["id"]))))
+    import pytest
+
+    with pytest.raises(ak.LoiQuaHan):
+        ak._cho_theo_tien_do(_bc_gia(may), {"id": "job_1"}, "cảnh 9", None, 1.0,
+                             han_cuoi=_t.time() - 1)
+    assert may.huy == ["job_1"], "đang xếp hàng nhưng quá hạn tổng thì vẫn huỷ"
+    assert ak.TRAN_THOI_GIAN_MOT_CLIP <= 60 * 60

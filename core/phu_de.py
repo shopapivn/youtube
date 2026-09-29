@@ -715,22 +715,66 @@ def nghe_trong_tien_trinh_nay(duong_mp3: str, *, ngon_ngu: str = "",
 
     may = WhisperModel(ten, device=device, compute_type=compute_type,
                        local_files_only=bool(san and os.path.isdir(san)))
-    doan, _tin = may.transcribe(
-        duong_mp3, language=(ngon_ngu or None), word_timestamps=True,
-        vad_filter=True, beam_size=1, condition_on_previous_text=False)
     ra: List[Tuple[str, float, float]] = []
-    for muc in doan:
-        if cancel is not None and cancel.is_set():
-            break
-        for chu in (getattr(muc, "words", None) or []):
-            ra.append((str(getattr(chu, "word", "") or ""),
-                       float(getattr(chu, "start", 0.0) or 0.0),
-                       float(getattr(chu, "end", 0.0) or 0.0)))
-        if not getattr(muc, "words", None):
-            ra.append((str(getattr(muc, "text", "") or ""),
-                       float(getattr(muc, "start", 0.0) or 0.0),
-                       float(getattr(muc, "end", 0.0) or 0.0)))
+
+    def nghe(tep: str, bu: float) -> None:
+        doan, _tin = may.transcribe(
+            tep, language=(ngon_ngu or None), word_timestamps=True,
+            vad_filter=True, beam_size=1, condition_on_previous_text=False)
+        for muc in doan:
+            if cancel is not None and cancel.is_set():
+                break
+            for chu in (getattr(muc, "words", None) or []):
+                ra.append((str(getattr(chu, "word", "") or ""),
+                           bu + float(getattr(chu, "start", 0.0) or 0.0),
+                           bu + float(getattr(chu, "end", 0.0) or 0.0)))
+            if not getattr(muc, "words", None):
+                ra.append((str(getattr(muc, "text", "") or ""),
+                           bu + float(getattr(muc, "start", 0.0) or 0.0),
+                           bu + float(getattr(muc, "end", 0.0) or 0.0)))
+
+    # ═══ TIẾNG DÀI THÌ NGHE TỪNG ĐOẠN — BỘ NHỚ KHÔNG ĐƯỢC TĂNG THEO ĐỘ DÀI ═══
+    #
+    # Đo 29/09/2026 (story-reup-han/0001, tiếng gốc 3 tiếng 03 phút): bộ nghe
+    # giải mã CẢ tệp vào RAM (~700 MB số thực, cộng ~1 GB bộ nghe) rồi chết
+    # "mã 1" sau 33 giây — phụ đề rơi về rải ước lượng, cả video lệch tiếng.
+    # Cắt thành đoạn `GIAY_MOI_DOAN_NGHE` (mono 16 kHz, đúng thứ bộ nghe cần)
+    # rồi cộng bù mốc: bộ nhớ đứng yên dù video dài bao nhiêu.
+    dai = do_dai_tieng(duong_mp3)
+    if dai <= GIAY_NGHE_MOT_LUOT:
+        nghe(duong_mp3, 0.0)
+        return ra
+    import subprocess  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    from .dung_video import tim_ffmpeg  # noqa: PLC0415
+
+    ffmpeg = tim_ffmpeg()
+    thu_muc = tempfile.mkdtemp(prefix="shopapi-nghe-doan-")
+    try:
+        bat_dau = 0.0
+        while bat_dau < dai:
+            if cancel is not None and cancel.is_set():
+                break
+            tep = os.path.join(thu_muc, "doan.wav")
+            subprocess.run(
+                [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                 "-ss", "{0:.3f}".format(bat_dau), "-t", "{0:.3f}".format(GIAY_MOI_DOAN_NGHE),
+                 "-i", duong_mp3, "-vn", "-ac", "1", "-ar", "16000", tep],
+                check=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            nghe(tep, bat_dau)
+            bat_dau += GIAY_MOI_DOAN_NGHE
+    finally:
+        import shutil  # noqa: PLC0415
+
+        shutil.rmtree(thu_muc, ignore_errors=True)
     return ra
+
+
+#: Tiếng dài quá ngần này giây thì nghe từng đoạn `GIAY_MOI_DOAN_NGHE` — xem
+#: `nghe_trong_tien_trinh_nay`.
+GIAY_NGHE_MOT_LUOT = 25 * 60.0
+GIAY_MOI_DOAN_NGHE = 20 * 60.0
 
 
 # ── Ghi ra tệp .srt ──────────────────────────────────────────────────────────

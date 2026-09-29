@@ -2198,6 +2198,9 @@ def _huy_job(bc: BoiCanh, ma: str) -> None:
         pass
 
 
+#: Hạn TỔNG cho một clip ở khâu clip (mọi lần chờ + gửi lại cộng lại). Quá hạn
+#: thì bỏ clip ấy, khâu dựng dùng ảnh chuyển động — xem `_lam_clip`.
+TRAN_THOI_GIAN_MOT_CLIP = 45 * 60.0
 #: Một vòng chờ của job CLIP (Veo bình thường 1–3 phút) — cùng luật chậm/treo.
 TRAN_CHO_CLIP = 6 * 60.0
 
@@ -2222,7 +2225,7 @@ def _loi_gui_thanh_ket(loi: BaseException) -> BaseException:
 
 def _cho_theo_tien_do(bc: BoiCanh, job, ten_viec: str = "",
                       so: Optional[SoTheoDoi] = None,
-                      vong: float = TRAN_CHO_ANH) -> Dict[str, Any]:
+                      vong: float = TRAN_CHO_ANH, han_cuoi: float = 0.0) -> Dict[str, Any]:
     """Đợi một job theo từng vòng `vong` giây, phân biệt CHẬM với TREO.
 
     ═══ CHẬM KHÔNG PHẢI TREO — ĐO 25/09/2026 ═══
@@ -2259,6 +2262,11 @@ def _cho_theo_tien_do(bc: BoiCanh, job, ten_viec: str = "",
             if _xong_han(trang):
                 # Vừa xong đúng lúc hết vòng — nhận luôn, đừng đặt lại.
                 return _ket_job(goi)
+            if han_cuoi and time.time() > han_cuoi:
+                # Nơi gọi đặt hạn tổng (clip — `TRAN_THOI_GIAN_MOT_CLIP`): hết
+                # hạn thì huỷ job đang dở để nó không chạy tiếp và trừ tiền.
+                _huy_job(bc, loi.ma)
+                raise
             chua_bat_dau = trang in _DANG_XEP_HANG or (
                 trang and not goi.get("started_at") and "started_at" in goi)
             if chua_bat_dau:
@@ -3668,6 +3676,13 @@ def _giu_noi_dung_goc(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any
                                chen_the_theo_khuc, chia_khuc, dem_chu, ra_soat_theo_khuc)
 
     tu_lieu = bo_dau_doi_nguoi_noi(tu_lieu)
+    if getattr(k, "dung_giong_doi_thu", False):
+        # Kênh REUP (`dung_giong_doi_thu`): giọng đọc là tiếng của chính video
+        # đối thủ, nên kịch bản phải là ĐÚNG lời thoại ấy — không rà, không
+        # chèn thẻ (không ai đọc lại). Khâu phụ đề ép chữ này lên tiếng gốc.
+        bc.ghi("  kênh reup: dùng nguyên lời thoại video đối thủ làm kịch bản "
+               "(không viết, không rà, không chèn thẻ).")
+        return tu_lieu.strip()
 
     def khoa(buoc: str, i: int, khuc: str, lan: int) -> str:
         # Băm cả KHÚC lẫn LỜI NHẮC của bước: sửa lời nhắc thì khoá đổi — giữ
@@ -4688,6 +4703,46 @@ def _doc_qua_dai_bang_hai_nua(bc: "BoiCanh", luot: LuotChay, so: int, chu: str,
 # ── Khâu 2: giọng đọc ────────────────────────────────────────────────────────
 
 
+def _tai_giong_doi_thu(bc: BoiCanh, luot: LuotChay, dich: str) -> Dict[str, Any]:
+    """Kênh REUP (`dung_giong_doi_thu`): giọng đọc = tiếng của chính video đối thủ.
+
+    Chủ dự án 29/09/2026 (kênh `story-reup-han`): *"không viết kịch bản mới mà
+    dùng luôn voice đối thủ để tạo ảnh, video"*. Không gọi TTS, không tốn tiền
+    giọng. Tải tiếng về `2-tieng-goc/` (giữ lại để chạy tiếp khỏi tải lần hai),
+    đổi sang mp3 đúng tên khâu sau cần; khâu phụ đề ép lời thoại lên tiếng này.
+    """
+    import glob  # noqa: PLC0415
+
+    from .script_video import _tai_tieng  # noqa: PLC0415
+
+    link = str((luot.dau_vao or {}).get("link") or "").strip()
+    if not link:
+        raise RuntimeError("kênh reup cần link video đối thủ — giọng đọc là tiếng "
+                           "của chính video ấy")
+    thu_muc = os.path.join(luot.thu_muc, "2-tieng-goc")
+    os.makedirs(thu_muc, exist_ok=True)
+
+    def co_san() -> List[str]:
+        return sorted(p for p in glob.glob(os.path.join(thu_muc, "tieng.*"))
+                      if not p.endswith((".part", ".ytdl", ".tmp")))
+
+    if not co_san():
+        bc.ghi("  kênh reup: tải tiếng của video đối thủ làm giọng đọc (không tốn "
+               "tiền giọng)…")
+        loi = _tai_tieng(link, thu_muc)
+        if loi or not co_san():
+            raise RuntimeError(loi or "không tải được tiếng của video đối thủ")
+    nguon = co_san()[0]
+    ffmpeg = _bao_dam_ffmpeg(bc)
+    tam = dich + ".tmp.mp3"
+    subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", nguon,
+                    "-vn", "-ac", "2", "-ar", "44100", "-b:a", "192k", tam],
+                   check=True, creationflags=_co_tao_ffmpeg())
+    os.replace(tam, dich)
+    bc.ghi("  giọng đọc = tiếng gốc của video đối thủ ({0}).".format(os.path.basename(nguon)))
+    return {"giong_doi_thu": True}
+
+
 def _khau_giong_doc(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         d = luot.thu_muc
@@ -4697,6 +4752,8 @@ def _khau_giong_doc(bc: BoiCanh):
         kich_ban = _doc_chu(os.path.join(d, "1-kich-ban.txt")).strip()
         if not kich_ban:
             raise RuntimeError("chưa có kịch bản để đọc")
+        if getattr(bc.kenh, "dung_giong_doi_thu", False):
+            return _tai_giong_doi_thu(bc, luot, dich)
         # ═══ CHÈN THẺ CẢM XÚC — ĐÚNG CHỖ NÀY, KHÔNG SỚM HƠN KHÔNG MUỘN HƠN ═══
         #
         # Trước khâu cắt đoạn: thẻ tính vào trần 1.000 ký tự của cổng, nên nó
@@ -6765,7 +6822,7 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
 
     so_viec = os.path.join(os.path.dirname(dich), TEP_VIEC_CLIP_DO)
 
-    def goi_clip(dia_chi, hau_to="", prompt_video=None):
+    def goi_clip(dia_chi, hau_to="", prompt_video=None, han_cuoi=0.0):
         # `prompt_video` cho phép một BƯỚC CỨU (viết lại lời nhắc video, mục
         # 2.5) gửi bằng prompt ĐÃ SỬA thay vì `c["video_prompt"]` gốc — khoá
         # idempotency đổi theo (băm theo `prompt_dung`) nên không đụng khoá cũ.
@@ -6791,7 +6848,8 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
                            "không gửi trùng.".format(so_canh))
                     try:
                         goi = _cho_theo_tien_do(bc, {"id": cu["id"], "status": trang},
-                                                "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP)
+                                                "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP,
+                                                han_cuoi=han_cuoi)
                     except LoiKetJob:
                         _ghi_viec_do(so_viec, so_canh, None)
                         raise
@@ -6822,7 +6880,8 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
             _ghi_viec_do(so_viec, so_canh, {"id": ma, "goc": goc})
         # Chờ theo TIẾN ĐỘ (chậm ≠ treo) — cùng luật với ảnh, xem `_cho_theo_tien_do`.
         try:
-            goi = _cho_theo_tien_do(bc, job, "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP)
+            goi = _cho_theo_tien_do(bc, job, "cảnh {0}".format(so_canh), so, TRAN_CHO_CLIP,
+                                    han_cuoi=han_cuoi)
         except LoiKetJob:
             _ghi_viec_do(so_viec, so_canh, None)
             raise
@@ -6872,6 +6931,22 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
             _kiem_media(bc, dich)
         return
 
+    # ═══ HẠN TỔNG CHO MỘT CLIP (29/09/2026) ═══
+    #
+    # Khách khiếu nại "chạy template story lâu ngày không ra được nhiều video".
+    # Đo lượt thật story-dien-anh-my-sang/0001: MỘT clip (cảnh 9) kẹt ở máy chủ
+    # — xếp hàng, tự thử lại, đứng 50% — giữ cả video 12 TIẾNG trong khi 150
+    # cảnh kia xong từ lâu. Khâu dựng đã biết lùi về ảnh chuyển động cho cảnh
+    # thiếu clip (`[LÙI]`), nên chờ quá `TRAN_THOI_GIAN_MOT_CLIP` thì huỷ job
+    # đang dở và bỏ clip ấy: video VẪN XONG, cảnh đó là ảnh động.
+    han_clip = time.time() + TRAN_THOI_GIAN_MOT_CLIP
+
+    def _qua_han() -> None:
+        if time.time() > han_clip:
+            raise LoiKetJob("cảnh {0}: chờ clip quá {1:.0f} phút — bỏ clip, khâu dựng "
+                            "dùng ảnh chuyển động cho cảnh này".format(
+                                so_canh, TRAN_THOI_GIAN_MOT_CLIP / 60))
+
     # ═══ ĐƯỜNG CHÍNH THỨC: CHUỖI CỨU G3 (`tu_choi_noi_dung.lam_co_cuu`) ═══
     def _gui_mot_lan(dv_: "tcnd.DauVao", hau_to: str):
         """Gửi MỘT `DauVao` (bản gốc, hay bản một bước cứu vừa sửa xong) —
@@ -6884,9 +6959,11 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
         đang ốm (hạ tầng thật) thì `bao_hong` tự trả `None` và vòng này tiếp
         tục KHÔNG TRẦN như cũ."""
         url_anh_ = _url_anh_canh(bc, luot, so_canh, dv_.anh)
+        _qua_han()
         try:
-            return goi_clip(url_anh_, hau_to, prompt_video=dv_.prompt)
+            return goi_clip(url_anh_, hau_to, prompt_video=dv_.prompt, han_cuoi=han_clip)
         except LoiKetJob as loi_ket:
+            _qua_han()
             ket_luan_som = so_cuu.bao_hong(dv_, loi_ket)
             if ket_luan_som is not None:
                 raise tcnd.LoiTuChoi(ket_luan_som) from loi_ket
@@ -6895,13 +6972,16 @@ def _lam_clip(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], anh: str,
             while goi is None:
                 _lan += 1
                 bc.kiem_dung()
+                _qua_han()
                 if _lan > 2:
                     _ngu_ngat(bc, min(NGHI_DAT_LAI_ANH, 15.0 * (_lan - 2)))
                 bc.ghi("    cảnh {0}: máy chủ nhận việc rồi bỏ đó / treo — đặt lại bằng "
                        "khoá mới (lần {1}).".format(so_canh, _lan))
                 try:
-                    goi = goi_clip(url_anh_, hau_to + khoa_thoat_ket(_lan), prompt_video=dv_.prompt)
+                    goi = goi_clip(url_anh_, hau_to + khoa_thoat_ket(_lan), prompt_video=dv_.prompt,
+                                   han_cuoi=han_clip)
                 except LoiKetJob as loi_ket2:
+                    _qua_han()
                     ket_luan_som = so_cuu.bao_hong(dv_, loi_ket2)
                     if ket_luan_som is not None:
                         raise tcnd.LoiTuChoi(ket_luan_som) from loi_ket2

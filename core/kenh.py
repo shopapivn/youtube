@@ -193,6 +193,10 @@ class Kenh:
     #: câu và chèn thẻ. Cả hai chạy THEO KHÚC, có chốt độ dài và chốt chữ — xem
     #: `core/giu_noi_dung.py`. Chủ dự án 25/09/2026 cho ba mẫu truyện drama điện ảnh.
     giu_noi_dung_goc: bool = False
+    #: REUP: giọng đọc là TIẾNG của chính video đối thủ (tải về), kịch bản là
+    #: nguyên lời thoại ấy — không viết, không rà, không đọc TTS. Bật kèm
+    #: `giu_noi_dung_goc`. Chủ dự án 29/09/2026 (kênh `story-reup-han`).
+    dung_giong_doi_thu: bool = False
     #: CHỈ N CẢNH ĐẦU LÀM CLIP, còn lại là ẢNH có chuyển động (zoom/lia ngẫu
     #: nhiên, vẽ trên máy, miễn phí — `core/chuyen_dong_anh.py`). 0 = mọi cảnh
     #: đều làm clip (nết cũ). Chủ dự án 25/09/2026: *"chỉ tạo video 10 ảnh đầu -
@@ -737,6 +741,7 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         che_do_ke=str(cai.get("che_do_ke") or "").strip(),
         do_dai_tu_do=bool(cai.get("do_dai_tu_do", False)),
         giu_noi_dung_goc=bool(cai.get("giu_noi_dung_goc", False)),
+        dung_giong_doi_thu=bool(cai.get("dung_giong_doi_thu", False)),
         so_clip_dau=max(0, int(_so(cai.get("so_clip_dau"), 0))),
         chuyen_canh=str(cai.get("chuyen_canh") or "").strip(),
         kieu_phu_de=str(cai.get("kieu_phu_de") or "").strip(),
@@ -1001,7 +1006,7 @@ def kiem_kenh(kenh: Kenh) -> List[str]:
     # bốn thứ ấy là bắt người dùng đi tìm cách chữa một lỗi không có thật.
     ke_thuong = str(getattr(kenh, "che_do_ke", "") or "").strip() != "timelapse"
     if ke_thuong:
-        if not kenh.voice_id:
+        if not kenh.voice_id and not getattr(kenh, "dung_giong_doi_thu", False):
             thieu.append("Chưa chọn giọng đọc — thêm `voice_id:` vào {0}. Mã "
                          "giọng lấy ở tab Voice.".format(TEP_KENH))
         if not kenh.anh_nv:

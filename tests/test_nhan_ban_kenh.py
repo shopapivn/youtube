@@ -20,7 +20,8 @@ from core.safe_update import apply_tai_cho
 
 GOC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KENH_MAU = ("TL4-T7", "story-3d", "hoathinh-3d", "story-mau-nuoc",
-            "story-dien-anh-my", "story-dien-anh-my-sang", "story-dien-anh-han")
+            "story-dien-anh-my", "story-dien-anh-my-sang", "story-dien-anh-han",
+            "story-reup-han")
 
 
 def _kenh(goc: Path, ma: str, *, mau=False, rieng=False, prompt="p") -> Path:

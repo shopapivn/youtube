@@ -68,8 +68,11 @@ def _ma_id_dung_duoc(ma_id: str) -> bool:
 TEP_DAN = "4-canh-dan.json"
 #: Thư mục ảnh tham chiếu của lượt: `<lượt>/tham-chieu/<id>.png`.
 THU_MUC_THAM_CHIEU = "tham-chieu"
-#: Mấy ảnh tham chiếu tạo cùng lúc.
-SONG_SONG_THAM_CHIEU = 4
+#: Mấy ảnh tham chiếu tạo cùng lúc. 4 → 10 (29/09/2026): khách khiếu nại template
+#: story chạy lâu; lượt thật story-dien-anh-my-sang/0001 vẽ 16 tham chiếu mất
+#: hơn 3 tiếng, 4 tấm một lượt trong khi máy chủ cho ~47 ảnh cùng lúc và lúc này
+#: CHƯA có ảnh cảnh nào chạy song song (tham chiếu xong mới tới cảnh).
+SONG_SONG_THAM_CHIEU = 10
 
 _KHOA_NAP = threading.Lock()
 _RUN: Dict[str, Any] = {}

@@ -69,7 +69,8 @@ Sửa gì sau đó thì vào **Quản lý kênh**.
 ## Kênh mẫu và kênh riêng
 
 Kênh ship kèm tool (`TL4-T7`, `story-3d`, `hoathinh-3d`, `story-mau-nuoc`,
-`story-dien-anh-my`, `story-dien-anh-my-sang`, `story-dien-anh-han`) có
+`story-dien-anh-my`, `story-dien-anh-my-sang`, `story-dien-anh-han`,
+`story-reup-han`) có
 `mau_cua_tool: true` trong `kenh.yaml` — **cập nhật tool sẽ ghi đè** chúng để
 bạn nhận bản mẫu mới hơn. Muốn tùy chỉnh thì bấm **Nhân bản** cạnh ô chọn kênh:
 bản sao mang đủ prompt, phong cách, ảnh nhân vật và có `kenh_rieng: true` —
@@ -117,6 +118,14 @@ Khác story-mau-nuoc ở hai chỗ:
   `prompt/7-canh.md` (`MIN/MAX_SECONDS_PER_SCENE`, mặc định 4–8 giây). Video
   3 tiếng ra ~2.000 ảnh (~100 nghìn ₫ và vài giờ vẽ). Video dài kiểu nghe là
   chính thì nâng lên 10–15 giây/cảnh là bớt một nửa.
+
+### Kênh reup: `story-reup-han` (thêm 29/09/2026)
+
+Chép từ `story-dien-anh-han`, khác đúng một chỗ: **không viết kịch bản, không
+đọc giọng** (`dung_giong_doi_thu: true`). Đưa link video đối thủ vào là kịch
+bản = nguyên lời thoại của video ấy, giọng đọc = tiếng của chính video ấy (tải
+về `2-tieng-goc/`, không tốn tiền giọng). Từ phụ đề trở đi — cảnh, ảnh, clip,
+ảnh động, karaoke, bìa — y như kênh Hàn. Bắt buộc có link.
 
 ### Sửa khuôn, hoặc thêm nét vẽ của riêng bạn
 

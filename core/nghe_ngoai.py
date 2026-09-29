@@ -142,6 +142,15 @@ def nghe_o_tien_trinh_rieng(
         # Tiến trình con tự ghi lý do khi nó còn ném được exception. Không có
         # gì trong tệp nghĩa là nó chết trước khi kịp ghi — tức sập ở tầng C++.
         ly_do = _doc_loi(ra_json) or _giai_thich(int(het or 0))
+        if not _doc_loi(ra_json):
+            # Chết trước khi kịp ghi lý do: dòng lỗi cuối của tiến trình con là
+            # manh mối duy nhất (29/09/2026 chỉ thấy "mã 1", không biết vì sao).
+            try:
+                cuoi = (tien_trinh.stderr.read() or b"").decode("utf-8", "replace").strip()
+            except Exception:  # noqa: BLE001
+                cuoi = ""
+            if cuoi:
+                ly_do += " — " + cuoi.splitlines()[-1][:160]
         raise LoiBoNghe(ly_do)
 
     try:
