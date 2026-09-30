@@ -119,14 +119,19 @@ _THE_BOC = re.compile(r"(?im)^\s*</?(story|transcript)>\s*$|</?(story|transcript
 
 
 _DAU_DOI_NGUOI_NOI = re.compile(r"[ \t]*(?:>{2,}|»)[ \t]*")
+#: Nhãn âm thanh của phụ đề máy YouTube: `[음악]`, `[노래]`, `[박수]`, `[Music]`,
+#: `[Applause]`… (đo 30/09/2026 trên phụ đề `ko-orig` của Hb90ahpJXSg).
+_NHAN_AM_THANH = re.compile(r"[ \t]*\[[^\[\]\n]{1,14}\][ \t]*")
 
 
 def bo_dau_doi_nguoi_noi(chu: str) -> str:
-    """Gỡ dấu đổi người nói `>>` của phụ đề tự động YouTube khỏi lời kể gốc.
+    """Gỡ dấu đổi người nói `>>` và nhãn âm thanh `[음악]` của phụ đề tự động
+    YouTube khỏi lời kể gốc.
 
     Kênh giữ nội dung gốc lấy nguyên lời thoại đối thủ, nên `>>` lọt vào kịch
     bản, vào phụ đề và hiện lên video (chủ dự án thấy 27/09/2026)."""
-    return re.sub(r"[ \t]{2,}", " ", _DAU_DOI_NGUOI_NOI.sub(" ", chu or ""))
+    chu = _NHAN_AM_THANH.sub(" ", chu or "")
+    return re.sub(r"[ \t]{2,}", " ", _DAU_DOI_NGUOI_NOI.sub(" ", chu))
 
 
 def bo_the_boc(chu: str) -> str:

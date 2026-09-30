@@ -138,8 +138,43 @@ def co_the_nghe() -> bool:
 # ── Đường 1 & 2: phụ đề đi kèm video ─────────────────────────────────────────
 
 
+#: Khoảng mã chữ đặc trưng của từng thứ tiếng — để KIỂM CHÉO lời thoại lấy về
+#: có đúng tiếng kênh không, bất kể nhãn phụ đề nói gì. Tiếng không có ở đây thì
+#: coi là chữ Latinh.
+_HE_CHU = {
+    "ko": ((0xAC00, 0xD7A3), (0x1100, 0x11FF), (0x3130, 0x318F)),
+    "ja": ((0x3040, 0x30FF), (0x4E00, 0x9FFF)),
+    "zh": ((0x4E00, 0x9FFF), (0x3400, 0x4DBF)),
+    "th": ((0x0E00, 0x0E7F),),
+    "ru": ((0x0400, 0x04FF),),
+    "uk": ((0x0400, 0x04FF),),
+    "ar": ((0x0600, 0x06FF),),
+    "hi": ((0x0900, 0x097F),),
+}
+
+
+def dung_he_chu(chu: str, ngon_ngu: str) -> bool:
+    """Lời thoại `chu` có đúng hệ chữ của tiếng `ngon_ngu` không.
+
+    Khách báo 30/09/2026: kênh story-reup-han ra phụ đề TIẾNG ANH — nhãn nguồn
+    nói "đã ưu tiên ko" mà chữ lấy về là tiếng Anh. Kiểm bằng CHÍNH CHỮ, không
+    tin nhãn: tiếng Hàn phải có phần lớn chữ Hangul; tiếng Latinh (en, vi, es…)
+    phải là chữ Latinh. Chữ quá ít để kết luận thì cho qua.
+    """
+    goc = str(ngon_ngu or "").split("-")[0].lower()
+    chu_cai = [c for c in (chu or "")[:20000] if c.isalpha()]
+    if not goc or len(chu_cai) < 40:
+        return True
+    khoang = _HE_CHU.get(goc)
+    if khoang:
+        trung = sum(1 for c in chu_cai if any(a <= ord(c) <= b for a, b in khoang))
+        return trung >= 0.5 * len(chu_cai)
+    latinh = sum(1 for c in chu_cai if ord(c) < 0x250 or 0x1E00 <= ord(c) <= 0x1EFF)
+    return latinh >= 0.8 * len(chu_cai)
+
+
 def _chon_phu_de(thong_tin: Dict, tu_lam: bool, uu_tien_ngon_ngu_goc: bool = False,
-                 ngon_ngu_uu_tien: str = ""):
+                 ngon_ngu_uu_tien: str = "", bat_buoc: bool = False):
     """Chọn bản phụ đề hợp nhất. Trả về `(đường dẫn, mã ngôn ngữ)`.
 
     `tu_lam=True` lấy trong `subtitles` (người đăng tự làm), `False` lấy trong
@@ -174,8 +209,22 @@ def _chon_phu_de(thong_tin: Dict, tu_lam: bool, uu_tien_ngon_ngu_goc: bool = Fal
             if m not in thay:
                 thay.add(m)
                 uu.append(m)
-        # Có thứ tiếng yêu cầu thì chỉ dùng nó; không có thì về nết cũ.
-        ngon_ngu = uu or [m for m in UU_TIEN_NGON_NGU if m in kho] or sorted(kho)
+        # Bản `-orig` là máy nghe CHÍNH tiếng gốc; bản không đuôi có thể là bản
+        # DỊCH máy — thử bản gốc trước (sắp xếp ổn định, thứ tự khác giữ nguyên).
+        uu.sort(key=lambda m: 0 if m.lower().endswith("-orig") else 1)
+        if bat_buoc:
+            # Kênh giữ nguyên lời gốc (drama / reup): lời thoại BẮT BUỘC đúng
+            # tiếng kênh — không rơi về tiếng Việt/Anh. Và phụ đề máy mà tiếng
+            # gốc của video là tiếng KHÁC (có `xx-orig` khác, không có
+            # `<tiếng kênh>-orig`) thì bản tiếng kênh chỉ là bản DỊCH — bỏ.
+            if not tu_lam:
+                orig = [m.split("-")[0].lower() for m in kho if m.lower().endswith("-orig")]
+                if orig and goc not in orig:
+                    uu = []
+            ngon_ngu = uu
+        else:
+            # Có thứ tiếng yêu cầu thì chỉ dùng nó; không có thì về nết cũ.
+            ngon_ngu = uu or [m for m in UU_TIEN_NGON_NGU if m in kho] or sorted(kho)
     elif uu_tien_ngon_ngu_goc:
         # Lấy ngôn ngữ gốc: bản đầu tiên trong danh sách (YouTube đặt ngôn ngữ
         # gốc lên đầu). Không ưu tiên tiếng Việt — dùng khi cần transcript gốc.
@@ -293,18 +342,24 @@ def _tai_chu(dia_chi: str, mo_url=None,
 # ── Đường 3: thư viện khác, đi đường khác ────────────────────────────────────
 
 
-def _tu_thu_vien(video_id: str):
+def _tu_thu_vien(video_id: str, ngon_ngu: str = "", bat_buoc: bool = False):
     """Thử `youtube-transcript-api`. Trả về `(chữ, mã ngôn ngữ)`, rỗng nếu hỏng.
 
     Có mặt ở đây vì nó **không dùng chung đường mạng với yt-dlp**: lúc yt-dlp bị
     YouTube chặn tạm thì đường này đôi khi vẫn qua. Máy chưa cài thư viện thì bỏ
     qua, không báo lỗi — nó là đường dự phòng, không phải thứ bắt buộc.
+
+    `ngon_ngu` xin đúng tiếng ấy trước; `bat_buoc=True` CHỈ xin tiếng ấy. Trước
+    30/09/2026 đường này bỏ qua tiếng kênh, xin theo `UU_TIEN_NGON_NGU` (vi, en…)
+    — đúng chỗ kênh reup Hàn nhặt phải bản tiếng Anh của YouTube.
     """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi  # noqa: PLC0415
     except ImportError:
         return "", ""
-    uu_tien = list(UU_TIEN_NGON_NGU)
+    goc = str(ngon_ngu or "").split("-")[0].lower()
+    uu_tien = ([goc] if goc else []) + ([] if (bat_buoc and goc) else
+                                        [m for m in UU_TIEN_NGON_NGU if m != goc])
     try:
         # Bản mới dùng thực thể, bản cũ dùng phương thức tĩnh. Đỡ cả hai để bản
         # thư viện trên máy khách nào cũng chạy.
@@ -344,16 +399,18 @@ def _tu_thu_vien(video_id: str):
 KHACH_YOUTUBE = ("android", "", "ios", "tv", "mweb")
 
 
-def _tai_tieng(url: str, thu_muc: str, tai=None) -> str:
+def _tai_tieng(url: str, thu_muc: str, tai=None, ngon_ngu: str = "") -> str:
     """Tải tiếng của video về `thu_muc`. Trả về câu lỗi, rỗng nghĩa là xong.
 
     Thử lần lượt từng ứng dụng trong `KHACH_YOUTUBE` cho tới khi có tệp. Không
     chờ giữa các lần: đây không phải bị chặn theo nhịp hỏi mà là bị từ chối
     thẳng, đợi bao lâu cũng thế — phải đổi cách hỏi chứ không phải hỏi chậm lại.
+
+    Luôn xin RÃNH GỐC trước (xem `_DINH_DANG_TIENG`), rồi rãnh đúng `ngon_ngu`.
     """
     from .youtube import _ydl_class  # noqa: PLC0415 — cùng gói, dùng lại
 
-    lam = tai or _tai_mot_khach
+    lam = tai or (lambda Y, u, t, k: _tai_mot_khach(Y, u, t, k, ngon_ngu))
     ly_do = "không tải được tiếng của video"
     for khach in KHACH_YOUTUBE:
         try:
@@ -366,7 +423,27 @@ def _tai_tieng(url: str, thu_muc: str, tai=None) -> str:
     return ly_do
 
 
-def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str) -> None:
+def _dinh_dang_tieng(ngon_ngu: str = "") -> str:
+    """Chuỗi chọn định dạng tiếng: RÃNH GỐC trước, rồi rãnh đúng tiếng kênh.
+
+    ═══ VIDEO CÓ NHIỀU RÃNH TIẾNG — YOUTUBE TỰ LỒNG TIẾNG ═══
+
+    Khách báo 30/09/2026 (kênh story-reup-han, video Hb90ahpJXSg): video ra
+    TIẾNG ANH. Video ấy có hai rãnh tiếng: `ko — original` và `en-US —
+    dubbed-auto` (YouTube tự lồng). `bestaudio` không phân biệt gốc hay lồng —
+    lấy được rãnh lồng là cả video thành tiếng Anh. Lọc theo `format_note`
+    ("… original …") trước, rồi theo `language`, rồi mới tới nết cũ.
+    """
+    goc = str(ngon_ngu or "").split("-")[0].lower()
+    lop = ["bestaudio[format_note*=original]"]
+    if goc:
+        lop.append("bestaudio[language^={0}]".format(goc))
+    lop += ["bestaudio[ext=m4a]", "bestaudio", "best"]
+    return "/".join(lop)
+
+
+def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str,
+                   ngon_ngu: str = "") -> None:
     """Một lượt tải bằng đúng một ứng dụng giả. Tách ra để test thay được."""
     # `noprogress` chứ không chỉ `quiet`: thanh tiến trình đi đường riêng, không
     # theo `quiet`, và nó bắn ra hàng trăm dòng "[download] 12.3% of 18.98MiB"
@@ -374,7 +451,7 @@ def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str) -> None:
     tuy = {
         "quiet": True, "no_warnings": True, "noprogress": True,
         "skip_download": False,
-        "format": "bestaudio[ext=m4a]/bestaudio/best",
+        "format": _dinh_dang_tieng(ngon_ngu),
         "outtmpl": os.path.join(thu_muc, "tieng.%(ext)s"),
     }
     if khach:
@@ -389,20 +466,63 @@ def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str) -> None:
 #: một tệp mới trong thư mục cài đặt là một thứ nữa phải nhớ đóng gói khi phát
 #: hành, và quên là khách nhận về một tool thiếu tệp.
 _MA_NGHE = r"""
-import json, sys
+import json, os, re, shutil, subprocess, sys, tempfile
 from faster_whisper import WhisperModel
 tep, ten, chi_may = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+lang = (sys.argv[4] if len(sys.argv) > 4 else "") or None
+ffmpeg = sys.argv[5] if len(sys.argv) > 5 else ""
 may = WhisperModel(ten, device="cpu", compute_type="int8",
                    local_files_only=chi_may)
-doan, tin = may.transcribe(tep, vad_filter=True, beam_size=1)
-chu = " ".join(" ".join(m.text.strip() for m in doan).split())
-sys.stdout.write(json.dumps({"chu": chu,
-                             "ngon_ngu": str(getattr(tin, "language", "") or "")}))
+def nghe(p):
+    doan, tin = may.transcribe(p, language=lang, vad_filter=True, beam_size=1)
+    return " ".join(m.text.strip() for m in doan), str(getattr(tin, "language", "") or "")
+# Tieng dai thi nghe tung doan 20 phut: bo nghe giai ma CA tep vao RAM, tieng
+# 3 tieng lam no chet (do 29/09/2026). Can ffmpeg de cat; khong co thi nghe ca.
+dai = 0.0
+if ffmpeg:
+    try:
+        e = subprocess.run([ffmpeg, "-hide_banner", "-i", tep], capture_output=True,
+                           text=True, errors="replace",
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stderr
+        h, m, s = re.search(r"Duration: (\d+):(\d+):([\d.]+)", e).groups()
+        dai = int(h) * 3600 + int(m) * 60 + float(s)
+    except Exception:
+        dai = 0.0
+if dai > 1500:
+    thu_muc = tempfile.mkdtemp(prefix="shopapi-nghe-")
+    phan, ma, t = [], "", 0.0
+    try:
+        while t < dai:
+            w = os.path.join(thu_muc, "doan.wav")
+            subprocess.run([ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                            "-ss", str(t), "-t", "1200", "-i", tep, "-vn", "-ac", "1",
+                            "-ar", "16000", w], check=True,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            c, m1 = nghe(w)
+            phan.append(c)
+            ma = ma or m1
+            t += 1200
+    finally:
+        shutil.rmtree(thu_muc, ignore_errors=True)
+    chu = " ".join(phan)
+else:
+    chu, ma = nghe(tep)
+sys.stdout.write(json.dumps({"chu": " ".join(chu.split()), "ngon_ngu": ma}))
 """
 
 
+def _ffmpeg_cho_nghe() -> str:
+    """FFmpeg để bộ nghe cắt tiếng dài thành đoạn. Không có thì trả "" (nghe cả)."""
+    try:
+        from .dung_video import tim_ffmpeg  # noqa: PLC0415
+
+        return tim_ffmpeg() or ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _nghe_o_tien_trinh_rieng(tep: str, ten_model: str, chi_may: bool,
-                             ghi: Callable[[str], None]):
+                             ghi: Callable[[str], None], ngon_ngu: str = ""):
     """Nghe tệp tiếng ở **tiến trình riêng**. Trả về `(chữ, mã ngôn ngữ, lỗi)`.
 
     ═══ VÌ SAO KHÔNG CHẠY THẲNG TRONG TOOL ═══
@@ -426,8 +546,8 @@ def _nghe_o_tien_trinh_rieng(tep: str, ten_model: str, chi_may: bool,
     try:
         ket = subprocess.run(
             [sys.executable, "-c", _MA_NGHE, tep, ten_model,
-             "1" if chi_may else "0"],
-            capture_output=True, timeout=3600)
+             "1" if chi_may else "0", str(ngon_ngu or "").split("-")[0], _ffmpeg_cho_nghe()],
+            capture_output=True, timeout=4 * 3600)
     except subprocess.TimeoutExpired:
         return "", "", "máy nghe lâu quá (hơn một tiếng) — đã dừng"
     except Exception as loi:  # noqa: BLE001
@@ -535,7 +655,7 @@ def _tu_cai_faster_whisper(ghi: Callable[[str], None],
 
 
 def _tu_nghe(url: str, ghi: Callable[[str], None],
-             cancel: Optional[threading.Event] = None):
+             cancel: Optional[threading.Event] = None, ngon_ngu: str = ""):
     """Tải tiếng của video rồi phiên âm bằng `faster-whisper`. **Chạy trên máy.**
 
     Không gọi ví ShopAPI: `faster-whisper` chạy bằng CPU của máy khách, không
@@ -585,7 +705,7 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
     thu_muc = tempfile.mkdtemp(prefix="shopapi-script-")
     try:
         ghi("    đang tải tiếng của video…")
-        loi_tai = _tai_tieng(url, thu_muc)
+        loi_tai = _tai_tieng(url, thu_muc, ngon_ngu=ngon_ngu)
         if loi_tai:
             return "", "", loi_tai
 
@@ -608,7 +728,7 @@ def _tu_nghe(url: str, ghi: Callable[[str], None],
             ghi("    đang nghe bằng máy của bạn — lần đầu: đang tải bộ nghe ~0,5 GB,"
                 " chỉ tải một lần, các lượt sau dùng lại…")
         chu, ma, loi = _nghe_o_tien_trinh_rieng(
-            tep[0], ten_model, bool(san and os.path.isdir(san)), ghi)
+            tep[0], ten_model, bool(san and os.path.isdir(san)), ghi, ngon_ngu=ngon_ngu)
         if loi:
             return "", "", loi
         if not chu:
@@ -647,7 +767,8 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
                uu_tien_ngon_ngu_goc: bool = False,
                ngon_ngu_uu_tien: str = "",
                on_log: Optional[Callable[[str], None]] = None,
-               toi_da: int = MAX_SCRIPT) -> KetScript:
+               toi_da: int = MAX_SCRIPT,
+               bat_buoc_ngon_ngu: bool = False) -> KetScript:
     """Lấy lời thoại của một video, thử lần lượt bốn đường. **Có gọi mạng.**
 
     `toi_da` — cắt lời thoại còn ngần này ký tự; 0 = không cắt. Mặc định là trần
@@ -662,6 +783,12 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
     `uu_tien_ngon_ngu_goc=True` lấy ngôn ngữ gốc của video (không dịch sang
     tiếng Việt). Mặc định `False` để giữ hành vi cũ (ưu tiên tiếng Việt).
 
+    `bat_buoc_ngon_ngu=True` (kênh GIỮ NGUYÊN lời gốc — drama, reup): lời thoại
+    PHẢI là tiếng `ngon_ngu_uu_tien`. Không lấy bản tiếng khác, không lấy bản
+    dịch máy, và KIỂM CHÉO bằng chính chữ (`dung_he_chu`) ở mọi đường; không có
+    thì tự nghe RÃNH GỐC với tiếng ép. Khách báo 30/09/2026: reup Hàn ra phụ đề
+    tiếng Anh vì video có rãnh YouTube tự lồng tiếng Anh.
+
     Không bao giờ ném lỗi ra ngoài: một video hỏng chỉ là một dòng có cột lời
     thoại trống kèm lý do, chứ không được giết cả lượt chạy hàng trăm video.
     """
@@ -671,6 +798,9 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
             on_log(dong)
 
     from .youtube import _extract  # noqa: PLC0415 — cùng gói, dùng lại
+
+    def dung_tieng(chu: str) -> bool:
+        return not (bat_buoc_ngon_ngu and ngon_ngu_uu_tien) or dung_he_chu(chu, ngon_ngu_uu_tien)
 
     def cat(chu: str) -> str:
         return chu[:toi_da] if toi_da and toi_da > 0 else chu
@@ -705,10 +835,13 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
             ket.loi = "đã dừng"
             return ket
         dia_chi, ma = _chon_phu_de(thong_tin, tu_lam, uu_tien_ngon_ngu_goc,
-                                   ngon_ngu_uu_tien)
+                                   ngon_ngu_uu_tien, bat_buoc=bat_buoc_ngon_ngu)
         if not dia_chi:
             continue
         chu, vi_sao = _tai_chu(dia_chi)
+        if chu and not dung_tieng(chu):
+            ghi("    phụ đề {0} không phải tiếng {1} — bỏ.".format(ma, ngon_ngu_uu_tien))
+            continue
         if chu:
             ket.text, ket.nguon, ket.ngon_ngu = cat(chu), ten_nguon, ma
             return ket
@@ -719,7 +852,14 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
         if cancel is not None and cancel.is_set():
             ket.loi = "đã dừng"
             return ket
-        chu, ma = _tu_thu_vien(ket.video_id)
+        if bat_buoc_ngon_ngu and ngon_ngu_uu_tien:
+            chu, ma = _tu_thu_vien(ket.video_id, ngon_ngu_uu_tien, True)
+        else:
+            chu, ma = _tu_thu_vien(ket.video_id)
+        if chu and not dung_tieng(chu):
+            ghi("    phụ đề dự phòng ({0}) không phải tiếng {1} — bỏ.".format(
+                ma or "?", ngon_ngu_uu_tien))
+            chu = ""
         if chu:
             ket.text, ket.nguon, ket.ngon_ngu = cat(chu), "thu-vien", ma
             return ket
@@ -736,7 +876,10 @@ def lay_script(url: str, *, cancel: Optional[threading.Event] = None,
         return ket
     ghi("    {0} — chuyển sang cho máy tự nghe.".format(
         co_phu_de or "không có phụ đề"))
-    chu, ma, loi = _tu_nghe(url, ghi, cancel=cancel)
+    if bat_buoc_ngon_ngu and ngon_ngu_uu_tien:
+        chu, ma, loi = _tu_nghe(url, ghi, cancel=cancel, ngon_ngu=ngon_ngu_uu_tien)
+    else:
+        chu, ma, loi = _tu_nghe(url, ghi, cancel=cancel)
     if chu:
         ket.text, ket.nguon, ket.ngon_ngu = cat(chu), "tu-nghe", ma
     else:

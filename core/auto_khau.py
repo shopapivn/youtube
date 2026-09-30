@@ -2546,8 +2546,12 @@ def _khau_kich_ban(bc_goc: BoiCanh):
 
                 lay = lay_script
             # toi_da=0: KHÔNG cắt ở trần ô Excel — xem `lay_script`.
+            # Kênh GIỮ NGUYÊN lời gốc (drama, reup): lời thoại BẮT BUỘC đúng tiếng
+            # kênh — khách báo 30/09/2026 reup Hàn ra phụ đề tiếng Anh (video có
+            # rãnh YouTube tự lồng tiếng Anh). Xem `lay_script(bat_buoc_ngon_ngu)`.
             ket = lay(link, cancel=bc.cancel, cho_phep_nghe=True,
-                      ngon_ngu_uu_tien=k.ngon_ngu, on_log=bc.on_log, toi_da=0)
+                      ngon_ngu_uu_tien=k.ngon_ngu, on_log=bc.on_log, toi_da=0,
+                      bat_buoc_ngon_ngu=bool(getattr(k, "giu_noi_dung_goc", False)))
             tu_lieu = getattr(ket, "text", "") or ""
             if not tu_lieu:
                 raise RuntimeError(
@@ -4729,7 +4733,9 @@ def _tai_giong_doi_thu(bc: BoiCanh, luot: LuotChay, dich: str) -> Dict[str, Any]
     if not co_san():
         bc.ghi("  kênh reup: tải tiếng của video đối thủ làm giọng đọc (không tốn "
                "tiền giọng)…")
-        loi = _tai_tieng(link, thu_muc)
+        # Rãnh GỐC, không phải rãnh YouTube tự lồng tiếng — xem `_dinh_dang_tieng`.
+        loi = _tai_tieng(link, thu_muc, ngon_ngu=str(
+            getattr(getattr(bc, "kenh", None), "ngon_ngu", "") or ""))
         if loi or not co_san():
             raise RuntimeError(loi or "không tải được tiếng của video đối thủ")
     nguon = co_san()[0]

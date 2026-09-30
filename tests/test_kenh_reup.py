@@ -33,7 +33,7 @@ def test_giong_la_tieng_video_doi_thu(tmp_path, monkeypatch):
 
     tai = []
 
-    def tai_gia(link, thu_muc):
+    def tai_gia(link, thu_muc, **kw):
         tai.append(link)
         open(os.path.join(thu_muc, "tieng.m4a"), "wb").write(b"m4a")
         return ""
