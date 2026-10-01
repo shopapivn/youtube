@@ -480,8 +480,11 @@ class TabThuCong(QWidget):
         if self._anh_tham_chieu and self._app.client is not None:
             anh_copy = list(self._anh_tham_chieu)  # copy để tránh race
             def tai():
-                return [self._app.client.uploads.upload_file(path)
-                        for path in anh_copy]
+                # Qua `core.anh_len`: ảnh nhân vật gửi lại nhiều lần chỉ đẩy
+                # một lần; kho tạm đầy thì tự dọn tệp cũ.
+                from core.anh_len import tai_len
+
+                return [tai_len(self._app.client, path) for path in anh_copy]
 
             self._app.run_bg(
                 tai,

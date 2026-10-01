@@ -199,8 +199,10 @@ class TestClipLayKhungDauTuTepDaSach:
     def test_auto_tai_len_tep_tren_dia_chu_khong_dung_lai_url_cu(self):
         chu = (GOC / "core" / "auto_khau.py").read_text(encoding="utf-8")
         dau = chu.index("def _url_anh_canh")
-        than = chu[dau:dau + 3000]
-        assert "upload_file(duong)" in than, (
+        than = chu[dau:dau + 3500]
+        # Từ 01/10/2026 đi qua `anh_len.tai_len` (đẩy một lần, dọn kho khi đầy)
+        # — vẫn là TỆP `duong` trên đĩa.
+        assert "upload_file(duong)" in than or "tai_len(bc.client, duong" in than, (
             "khung đầu của clip phải tải lên từ TỆP trên đĩa — tệp ấy đã được "
             "xoá dấu; dùng lại URL kết quả của job ảnh là clip đeo dấu như cũ")
 

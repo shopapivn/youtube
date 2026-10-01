@@ -519,7 +519,11 @@ class AnhThamChieu(QWidget):
 
     def tai_len(self, client) -> List[str]:
         """Tải ảnh lên, trả về URL. **Gọi từ luồng nền**, không phải luồng vẽ."""
-        return [client.uploads.upload_file(path) for path in self._duong_dan]
+        # Qua `core.anh_len`: cùng một ảnh dùng cho nhiều lần gửi chỉ đẩy MỘT
+        # lần, và kho tạm đầy thì tự dọn tệp cũ (lỗi "vượt hạn mức lưu trữ tạm").
+        from core.anh_len import tai_len
+
+        return [tai_len(client, path) for path in self._duong_dan]
 
 
 def mo_thu_muc(duong_dan: str) -> None:

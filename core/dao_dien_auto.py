@@ -1436,9 +1436,17 @@ class ThamChieuCanh:
             return list(self._url)
 
     def lam_moi(self, _cu: List[str]) -> List[str]:
-        from .anh_len import tai_len, xoa_nho  # noqa: PLC0415
+        """Máy chủ báo không tải được ảnh tham chiếu → xin link MỚI cho đúng các
+        tệp của cảnh này (không đẩy bản mới, không quên ảnh của cảnh khác).
+
+        Bản trước gọi `xoa_nho()` — quên URL của MỌI ảnh mọi video, nên mọi cảnh
+        sau đó đẩy lại toàn bộ ảnh tham chiếu: một nguồn của lỗi "Vượt hạn mức
+        lưu trữ tạm" khách báo 01/10/2026 (xem `core.anh_len.tai_len`).
+        """
+        from .anh_len import tai_len  # noqa: PLC0415
 
         with self._khoa:
-            xoa_nho()
-            self._url = [u for u in (tai_len(self._bc.client, p) for p in self._duong) if u]
+            self._url = [u for u in (tai_len(self._bc.client, p, lam_moi=True,
+                                             url_hong=list(_cu or []))
+                                     for p in self._duong) if u]
             return list(self._url)

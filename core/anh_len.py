@@ -35,7 +35,7 @@ import os
 import re
 import threading
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 __all__ = ["link_dung_lai_duoc", "tai_len", "xoa_nho", "TRAN_DAI_URL"]
 
@@ -96,20 +96,96 @@ def link_dung_lai_duoc(url: Any) -> bool:
     return True
 
 
-def tai_len(client: Any, duong: str) -> str:
+#: Lần DÙNG gần nhất của từng tệp đã đẩy (cùng khoá với `_NHO`). Dọn kho tạm
+#: thì chừa tệp vừa dùng — xoá ảnh tham chiếu đang chạy là job đang bay hỏng,
+#: rồi lại đẩy bản mới: đúng cái vòng làm đầy kho.
+_DUNG: Dict[Tuple[str, int, int], float] = {}
+#: Khoá riêng cho từng tệp: 48 luồng cùng xin một ảnh chưa đẩy thì MỘT luồng
+#: đẩy, 47 luồng chờ rồi dùng chung URL.
+_KHOA_TEP: Dict[Tuple[str, int, int], threading.Lock] = {}
+
+#: Tệp dùng trong ngần này giây coi là "đang dùng" — dọn kho chừa lại (lượt đầu).
+DANG_DUNG_GIAY = 15 * 60.0
+
+
+def _khoa_cua(khoa: Tuple[str, int, int]) -> threading.Lock:
+    with _KHOA:
+        k = _KHOA_TEP.get(khoa)
+        if k is None:
+            k = _KHOA_TEP[khoa] = threading.Lock()
+        return k
+
+
+def _ma_upl(url: str) -> str:
+    m = re.search(r"(upl_[A-Za-z0-9]+)", str(url or ""))
+    return m.group(1) if m else ""
+
+
+def _link_moi(client: Any, url_cu: str) -> str:
+    """Xin link MỚI cho tệp đã đẩy (`GET /v1/uploads/{id}`) — không tốn chỗ kho.
+
+    Máy chủ phát lại link sống tới lúc tệp hết hạn (2 giờ kể từ lần dùng gần
+    nhất, mỗi job dùng tệp là gia hạn). Tệp đã hết hạn / bị xoá thì trả "" để
+    bên gọi đẩy bản mới.
+    """
+    ma = _ma_upl(url_cu)
+    lay = getattr(getattr(client, "uploads", None), "retrieve", None)
+    if not ma or lay is None:
+        return ""
+    try:
+        tra = lay(ma)
+    except Exception:  # noqa: BLE001 — 404 / mạng: đẩy bản mới
+        return ""
+    url = tra.get("url") if isinstance(tra, dict) else getattr(tra, "url", None)
+    if url is None and hasattr(tra, "to_dict"):
+        url = (tra.to_dict() or {}).get("url")
+    return str(url) if url and link_dung_lai_duoc(url) else ""
+
+
+def tai_len(client: Any, duong: str, *, lam_moi: bool = False,
+            url_hong: Sequence[str] = ()) -> str:
     """Đẩy một ảnh lên và trả URL. Nhớ lại để lần sau khỏi đẩy nữa.
 
-    **Chạy ở luồng nền** (có gọi mạng). Trả chuỗi rỗng nếu không có `client`.
+    ═══ MỖI TỆP ĐẨY ĐÚNG MỘT LẦN (01/10/2026) ═══
+
+    Khách báo khâu ảnh chết vì "Vượt hạn mức lưu trữ tạm" (500 MB / 2.000 tệp
+    mỗi tài khoản, tệp sống 2 giờ). Sổ đẩy trên máy chủ dự án: 47.544 lượt, giờ
+    cao điểm ~1.100 tệp/giờ — cho video chỉ có ~17 ảnh nhân vật. Hai chỗ rò:
+    48 luồng cùng lỡ bộ nhớ thì 48 lượt đẩy CÙNG một tệp; và link hết hạn /
+    máy chủ báo không tải được ảnh thì đẩy bản MỚI (bản cũ vẫn chiếm kho 2 giờ).
+    Nay: khoá theo từng tệp, và làm mới thì xin link mới của CHÍNH tệp đã đẩy
+    (`_link_moi`), chỉ đẩy lại khi máy chủ đã xoá tệp.
+
+    `lam_moi=True`: link đang nhớ hỏng (máy chủ báo không tải được) — đừng trả
+    lại nó. Kèm `url_hong` thì chỉ làm mới khi link đang nhớ CHÍNH LÀ link hỏng:
+    mười cảnh cùng báo một link hỏng thì cảnh đầu xin link mới, chín cảnh sau
+    dùng luôn link ấy. **Chạy ở luồng nền** (có gọi mạng). Không có `client`
+    thì trả "".
     """
     if client is None:
         return ""
     khoa = _dau_vet(duong)
-    if khoa is not None:
+    if khoa is None:
+        return _day_moi(client, duong, None)
+    with _khoa_cua(khoa):
         with _KHOA:
             cu = _NHO.get(khoa)
-        if cu is not None and (time.time() - cu[1]) < _han(cu[0]):
-            return cu[0]
+        if cu is not None:
+            hong = lam_moi and (not url_hong or cu[0] in set(url_hong))
+            if not hong and (time.time() - cu[1]) < _han(cu[0]):
+                with _KHOA:
+                    _DUNG[khoa] = time.time()
+                return cu[0]
+            moi = _link_moi(client, cu[0])
+            if moi:
+                with _KHOA:
+                    _NHO[khoa] = (moi, time.time())
+                    _DUNG[khoa] = time.time()
+                return moi
+        return _day_moi(client, duong, khoa)
 
+
+def _day_moi(client: Any, duong: str, khoa: Optional[Tuple[str, int, int]]) -> str:
     url = str(_tai_len_thu_lai(client, duong))
     _ghi_so_tep_tam(url)
 
@@ -126,6 +202,7 @@ def tai_len(client: Any, duong: str) -> str:
     if khoa is not None:
         with _KHOA:
             _NHO[khoa] = (url, time.time())
+            _DUNG[khoa] = time.time()
     return url
 
 
@@ -187,14 +264,24 @@ DUONG_SO_TEP_TAM = os.path.join(
     os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "ShopAPI", "tep-tam-da-day.jsonl")
 
 
+_KHOA_SO = threading.Lock()
+
+
 def _ghi_so_tep_tam(url: str) -> None:
     m = re.search(r"(upl_[A-Za-z0-9]+)", str(url or ""))
     if not m:
         return
     try:
         os.makedirs(os.path.dirname(DUONG_SO_TEP_TAM), exist_ok=True)
-        with open(DUONG_SO_TEP_TAM, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"id": m.group(1), "luc": time.time()}) + "\n")
+        with _KHOA_SO:
+            with open(DUONG_SO_TEP_TAM, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"id": m.group(1), "luc": time.time()}) + "\n")
+            # Sổ chỉ cần 24 giờ gần nhất (máy chủ xoá tệp sau 2 giờ không
+            # dùng). Không tỉa thì nó phình mãi — máy chủ dự án: 47.544 dòng.
+            if os.path.getsize(DUONG_SO_TEP_TAM) > 512 * 1024:
+                han = time.time() - HAN_TEP_TAM_GIAY
+                _ghi_lai_so_tep_tam([d for d in _doc_so_tep_tam()
+                                     if float(d.get("luc") or 0) >= han])
     except OSError:
         pass
 
@@ -233,17 +320,26 @@ def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
     ung: Dict[str, float] = {}
     for d in _doc_so_tep_tam():
         ung[str(d["id"])] = float(d.get("luc") or 0)
+    dang_dung = set()
+    bay_gio = time.time()
     with _KHOA:
         for _khoa, (url, luc) in _NHO.items():
             m = re.search(r"(upl_[A-Za-z0-9]+)", str(url))
             if m:
                 ung[m.group(1)] = min(float(luc), ung.get(m.group(1), float(luc)))
+                if bay_gio - _DUNG.get(_khoa, 0.0) < DANG_DUNG_GIAY:
+                    dang_dung.add(m.group(1))
     # Di tu cu nhat: tep cu da tu het han tren may chu (404) thi chi xoa khoi
     # so/ban sao; dem "da xoa" theo tep XOA DUOC THAT, dung khi du `toi_da`
     # hoac da thu qua nhieu (moi lan thu la mot request).
     # May chu giu tep tam 24 gio; cu hon la da tu het han (404), khong tinh.
-    han = time.time() - HAN_TEP_TAM_GIAY
+    han = bay_gio - HAN_TEP_TAM_GIAY
     cu = sorted(((u, l) for u, l in ung.items() if l >= han), key=lambda kv: kv[1])
+    # Lượt đầu CHỪA tệp đang dùng (ảnh tham chiếu của job đang bay — xoá là job
+    # hỏng rồi lại đẩy bản mới). Không dọn được gì thì mới đụng tới chúng.
+    ranh = [kv for kv in cu if kv[0] not in dang_dung]
+    if ranh:
+        cu = ranh + [kv for kv in cu if kv[0] in dang_dung]
     da = 0
     thu = 0
     xoa = set()
@@ -265,12 +361,15 @@ def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
     with _KHOA:
         for khoa in [k for k, (url, _l) in _NHO.items() if any(u in str(url) for u in xoa)]:
             _NHO.pop(khoa, None)
-    _ghi_lai_so_tep_tam([d for d in _doc_so_tep_tam() if str(d.get("id")) not in xoa])
+            _DUNG.pop(khoa, None)
+    _ghi_lai_so_tep_tam([d for d in _doc_so_tep_tam()
+                         if str(d.get("id")) not in xoa and float(d.get("luc") or 0) >= han])
     return da
 
 
 def xoa_nho() -> None:
-    """Quên hết URL đã nhớ. Dùng cho test, và cho lúc máy chủ báo ảnh tham chiếu
-    tải không được (link cũ có thể đã chết trước hạn)."""
+    """Quên hết URL đã nhớ. CHỈ cho test: ngoài đời quên hết là mọi cảnh sau đẩy
+    lại mọi ảnh — xem `tai_len(lam_moi=True)` để làm mới đúng một tệp."""
     with _KHOA:
         _NHO.clear()
+        _DUNG.clear()

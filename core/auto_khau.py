@@ -2011,11 +2011,24 @@ def _url_tham_chieu(bc: BoiCanh, bo_qua_nho: bool = False) -> List[str]:
         if (time.time() - float(cu.get("luc") or 0)) < _han_cua_url(str(cu["url"])):
             return [str(cu["url"])]
 
+    # Link nhớ trên đĩa hết hạn (hay máy chủ báo hỏng): xin link MỚI cho chính
+    # tệp đã đẩy trước khi đẩy bản mới — bản mới chiếm thêm kho tạm 2 giờ.
+    if isinstance(cu, dict) and cu.get("url"):
+        from .anh_len import _link_moi  # noqa: PLC0415
+
+        moi = _link_moi(bc.client, str(cu["url"]))
+        if moi:
+            goi[dau_vet] = {"url": moi, "luc": time.time()}
+            _ghi_chu(kho, json.dumps(goi, ensure_ascii=False, indent=1))
+            return [moi]
+
     bc.ghi("  tải ảnh nhân vật lên (một lần cho cả kênh)…")
 
     def tai():
+        from .anh_len import tai_len  # noqa: PLC0415 — ghi sổ + dọn kho khi đầy
+
         xin_nhip(bc.on_log, ngu=bc.ngu, so_suat=SUAT_TAI_TEP)
-        return bc.client.uploads.upload_file(duong)
+        return tai_len(bc.client, duong, lam_moi=bo_qua_nho)
 
     # Trước đây gọi thẳng. Việc tải ảnh cũng tính vào trần 60 lượt/phút, và
     # gặp chặn ở đây thì cả khâu ảnh gãy — mẻ chạy thật dính đúng vậy.
@@ -2139,8 +2152,17 @@ def _url_anh_canh(bc: BoiCanh, luot: LuotChay, so: int, duong: str,
                 return str(cu["url"])
 
     def tai():
+        from .anh_len import _link_moi, tai_len  # noqa: PLC0415
+
+        # Link cũ hết hạn / hỏng: xin link mới cho chính tệp ấy trước (không
+        # tốn chỗ kho tạm); máy chủ đã xoá tệp thì mới đẩy bản mới — qua
+        # `tai_len` để có ghi sổ và tự dọn kho khi đầy.
+        if isinstance(cu, dict) and cu.get("url"):
+            moi = _link_moi(bc.client, str(cu["url"]))
+            if moi:
+                return moi
         xin_nhip(bc.on_log, ngu=bc.ngu, so_suat=SUAT_TAI_TEP)
-        return bc.client.uploads.upload_file(duong)
+        return tai_len(bc.client, duong, lam_moi=bo_qua_nho)
 
     url = goi_kien_nhan(tai, on_log=bc.on_log, kiem_dung=bc.kiem_dung,
                         ngu=bc.ngu)
