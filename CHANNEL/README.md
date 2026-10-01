@@ -113,7 +113,9 @@ Khác story-mau-nuoc ở hai chỗ:
 - **Ảnh người kể** ở góc trái phụ đề karaoke: khâu ảnh bìa vẽ riêng
   `7-nguoi-ke.png` — nhân vật chính nửa thân trên, đẹp, như đang kể, nền trắng
   để tách nền. Lời nhắc ở `prompt/10-nguoi-ke.md`. Chưa có ảnh này (lượt cũ)
-  thì video dùng ảnh tham chiếu nhân vật như trước.
+  thì video dùng ảnh tham chiếu nhân vật như trước. Không muốn có người ở góc
+  trái thì khai `nguoi_ke_karaoke: false`: không vẽ ảnh người kể (đỡ một ảnh),
+  chữ + sóng âm nằm giữa khung.
 - **Số ảnh theo độ dài video.** Nhịp cảnh là hai con số trong
   `prompt/7-canh.md` (`MIN/MAX_SECONDS_PER_SCENE`, mặc định 4–8 giây). Video
   3 tiếng ra ~2.000 ảnh (~100 nghìn ₫ và vài giờ vẽ). Video dài kiểu nghe là
@@ -125,7 +127,9 @@ Chép từ `story-dien-anh-han`, khác đúng một chỗ: **không viết kịc
 đọc giọng** (`dung_giong_doi_thu: true`). Đưa link video đối thủ vào là kịch
 bản = nguyên lời thoại của video ấy, giọng đọc = tiếng của chính video ấy (tải
 về `2-tieng-goc/`, không tốn tiền giọng). Từ phụ đề trở đi — cảnh, ảnh, clip,
-ảnh động, karaoke, bìa — y như kênh Hàn. Bắt buộc có link.
+ảnh động, karaoke, bìa — y như kênh Hàn, trừ một chỗ: phụ đề karaoke KHÔNG có
+ảnh người kể bên trái (`nguoi_ke_karaoke: false`, 01/10/2026), chữ nằm giữa
+khung. Bắt buộc có link.
 
 ### Sửa khuôn, hoặc thêm nét vẽ của riêng bạn
 

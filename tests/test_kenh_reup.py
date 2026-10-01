@@ -71,3 +71,40 @@ def test_khau_giong_doc_khong_goi_tts_o_kenh_reup(tmp_path, monkeypatch):
     luot = SimpleNamespace(thu_muc=str(tmp_path), dau_vao={"link": "x"})
     ra = ak._khau_giong_doc(bc)(luot, SimpleNamespace())
     assert ra == {"giong_doi_thu": True} and goi
+
+
+# ── Không có ảnh người kể bên trái (chủ dự án 01/10/2026) ────────────────────
+
+
+def test_kenh_reup_tat_anh_nguoi_ke_kenh_khac_van_bat():
+    assert doc_kenh(GOC, "story-reup-han").nguoi_ke_karaoke is False
+    for ma in ("story-dien-anh-han", "story-dien-anh-my", "story-dien-anh-my-sang"):
+        assert doc_kenh(GOC, ma).nguoi_ke_karaoke is True, ma
+
+
+def test_tat_nguoi_ke_thi_khong_ve_anh_nao(tmp_path):
+    """Không tốn tiền: trả về ngay, không đụng client."""
+    k = SimpleNamespace(kieu_phu_de="karaoke", nguoi_ke_karaoke=False)
+    bc = SimpleNamespace(kenh=k, client=None, ghi=lambda _s: None)
+    assert ak._lam_nguoi_ke(bc, SimpleNamespace(thu_muc=str(tmp_path))) == ""
+
+
+def test_tat_nguoi_ke_thi_chu_nam_giua_khung(tmp_path):
+    import json
+    import re
+
+    d = tmp_path
+    with open(os.path.join(d, ak.TEP_MOC_TU), "w", encoding="utf-8") as f:
+        json.dump([{"bat_dau": 0.0, "ket_thuc": 2.0, "chu": "안녕하세요 여러분"}], f)
+    # Có sẵn cả ảnh người kể lẫn ảnh tham chiếu — kênh tắt thì vẫn không dán.
+    open(os.path.join(d, ak.TEP_NGUOI_KE), "wb").write(b"png")
+    k = SimpleNamespace(kieu_phu_de="karaoke", nguoi_ke_karaoke=False, ngon_ngu="ko",
+                        che_do_ke="nhan_vat_va_boi_canh", anh_nv=[str(d / "nv1.png")],
+                        gioi_nguoi_ke="")
+    bc = SimpleNamespace(kenh=k, ghi=lambda _s: None, kiem_dung=lambda: None)
+    loc = ak._lop_phu_karaoke(bc, SimpleNamespace(thu_muc=str(d)), "ffmpeg", ["x.mp4"],
+                              (1280, 720, 24.0), None, str(d / "khong-co.mp3"))
+    assert "movie=" not in loc and "8-nhan-vat" not in loc
+    ass = open(os.path.join(d, "8-phu-de-karaoke.ass"), encoding="utf-8").read()
+    le = re.search(r"Style: Chu,(?:[^,]*,){18}(\d+),(\d+),", ass)
+    assert le and le.group(1) == le.group(2), "lề trái phải bằng lề phải"

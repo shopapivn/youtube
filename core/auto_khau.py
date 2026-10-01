@@ -9798,6 +9798,8 @@ def _lam_nguoi_ke(bc: BoiCanh, luot: LuotChay,
     """
     if str(getattr(bc.kenh, "kieu_phu_de", "") or "") != "karaoke":
         return ""
+    if not getattr(bc.kenh, "nguoi_ke_karaoke", True):
+        return ""       # kênh tắt ảnh người kể (reup Hàn) — không tốn tấm ảnh nào
     d = luot.thu_muc
     dich = os.path.join(d, TEP_NGUOI_KE)
     if os.path.exists(dich):
@@ -9917,8 +9919,11 @@ def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[st
                       == "nhan_vat_va_boi_canh"):
         nguon = list(getattr(bc.kenh, "anh_nv", []) or [])[:1]
     nv, kt = "", None
+    co_nguoi_ke = bool(getattr(bc.kenh, "nguoi_ke_karaoke", True))
+    if not co_nguoi_ke:
+        nguon = []      # kênh tắt ảnh người kể: không dán ai, kể cả ảnh tham chiếu
     nguoi_ke = os.path.join(d, TEP_NGUOI_KE)
-    if os.path.isfile(nguoi_ke):
+    if co_nguoi_ke and os.path.isfile(nguoi_ke):
         # Ảnh người kể vẽ riêng (nửa thân trên): đáy ảnh là ngang eo, đặt sát
         # đáy khung như người dẫn chuyện; giới hạn bề ngang để chữ còn chỗ.
         nv = os.path.join(d, "8-nhan-vat.png")
@@ -9937,8 +9942,11 @@ def _lop_phu_karaoke(bc: BoiCanh, luot: LuotChay, ffmpeg: str, manh: Sequence[st
                    "bỏ nhân vật khỏi lớp phủ)")
             nv = ""
     nv_x = 0
+    # Có nhân vật: chữ né sang phải ảnh. Không có (kênh tắt, hay tách nền hỏng):
+    # lề HAI BÊN BẰNG NHAU — chữ và sóng âm nằm đúng giữa khung, không lệch
+    # sang phải như khi còn chừa chỗ cho người (chủ dự án 01/10/2026).
     le_trai = (nv_x + kt[0] + int(rong * 0.015)) if kt else int(rong * 0.06)
-    le_phai = int(rong * 0.04)
+    le_phai = int(rong * 0.04) if kt else le_trai
     # Chữ to hơn (27/09/2026) thì mỗi nhóm ít chữ hơn — tính theo bề ngang thật
     # còn trống sau ảnh người kể, để một nhóm luôn vừa MỘT dòng, không tràn viền.
     co_chu = int(round(cao * pk.CO_CHU))

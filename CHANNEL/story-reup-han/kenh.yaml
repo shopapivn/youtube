@@ -34,8 +34,12 @@ che_do_tieu_de: "nguyen_goc"
 engine: "veo3"
 so_clip_dau: 10
 chuyen_canh: "ngau_nhien"
-# Phụ đề karaoke + dải đen mờ + nhân vật chính tách nền bên trái + sóng âm (core/phu_de_karaoke.py).
+# Phụ đề karaoke + dải đen mờ + sóng âm (core/phu_de_karaoke.py).
 kieu_phu_de: "karaoke"
+# KHÔNG có ảnh người kể bên trái (chủ dự án 01/10/2026): giọng là của video gốc,
+# không có "người dẫn" để dán vào. Chữ + sóng âm nằm giữa khung; không vẽ ảnh
+# người kể nên đỡ một tấm ảnh mỗi video.
+nguoi_ke_karaoke: false
 so_thumbnail: 3
 # Ảnh bìa hai lớp: AI vẽ ảnh KHÔNG chữ, tool tự vẽ chữ (core/bia_chu.py) — theo ảnh bìa mẫu 25/09/2026.
 kieu_bia: "chu_2_dong"
