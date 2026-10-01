@@ -238,13 +238,14 @@ def ghep_bia_chu_trai(anh_nv: str, ra: str, noi_dung: str,
     m = MAU["chu_trai_nv_phai"]
     # Chủ dự án 26/09/2026: nhân vật trong ảnh dọc "hơi nhỏ — nó phải là chủ
     # đạo, khán giả phải nhìn rõ và bị thu hút". Khung ảnh rộng thêm (30 → 34%)
-    # và ảnh phóng 1,25 lần neo phía đầu: thân dưới ra ngoài khung, mặt và
-    # thân trên chiếm phần lớn. Lời nhắc 8-thumbnail.md cũng đòi cắt từ eo lên.
+    # và ảnh phóng neo phía đầu. 01/10/2026 lời nhắc 8-thumbnail.md đổi sang CẬN
+    # MẶT (đầu–vai, như 12 bìa thắng của ngách) nên chỉ phóng nhẹ 1,08 — phóng
+    # 1,25 trên ảnh cận là cắt mất tóc và trán.
     rong_chu = int(RONG * 0.66)
     cao_tieu_de = int(CAO * 0.19) if any(t.strip() for t in tieu_de) else 0
     anh = Image.new("RGB", (RONG, CAO), m["nen_chu"])
     anh.paste(_phu_kin(Image.open(anh_nv).convert("RGB"), RONG - rong_chu, CAO,
-                       phong=1.25, neo_doc=0.12), (rong_chu, 0))
+                       phong=1.08, neo_doc=0.2), (rong_chu, 0))
     ve = ImageDraw.Draw(anh)
     if cao_tieu_de:
         ve.rectangle((0, CAO - cao_tieu_de, rong_chu, CAO), fill=m["nen_tieu_de"])

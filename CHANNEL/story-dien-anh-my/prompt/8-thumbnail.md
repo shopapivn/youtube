@@ -21,28 +21,33 @@ Opening of the script:
 Palette: <<PALETTE>>
 Never include: <<NEGATIVE_PROMPT>>
 
-## Framing — she dominates the portrait
+## Framing — a close movie-star portrait (12 winning thumbnails of the niche)
 
-- Close portrait from the HIPS or WAIST UP, camera near her. Never full body,
-  never a doorway or room with a small figure in it.
-- Her head and shoulders take the upper half of the frame; her face is large,
-  sharp and well lit (about a fifth of the frame height); her body fills
-  80-90% of the frame width.
-- The setting is only a soft, bright, blurred background behind her (shallow
-  depth of field) — it adds colour and luxury, it never competes with her.
+- A CLOSE head-and-shoulders portrait: her face is the picture, filling most
+  of the frame height's upper half; framed from mid-chest up, camera close.
+  Never full body, never a small figure in a room.
+- She is stunning like a movie star: radiant skin, striking eyes with soft
+  smoky makeup, rosy-nude lips, an elegant hairstyle (a soft chignon with
+  loose face-framing strands, or long glossy waves), delicate drop earrings
+  and a fine necklace, an elegant neckline (emerald or black gown, ivory silk
+  blouse, cream knit).
+- Expression: calm, confident, a quiet knowing look or a faint smile straight
+  into the lens — the woman who already knows how this ends.
+- Background: a soft, warm, blurred hint of an elegant place (a lit ballroom,
+  a city street at golden hour, a luxurious room) — it never competes with her.
 
 ## Write 3 portraits, each a DIFFERENT setting and pose
 
 Named exactly: `portrait_main`, `dramatic_scene`, `youtube_ctr`.
 
-- `portrait_main` — seated close to the camera on a cream sofa in a bright
-  elegant living room, leaning slightly forward, a calm small smile at the
-  camera, soft window light behind her.
-- `dramatic_scene` — standing close to the camera in front of a sunlit
-  beautiful house (blurred behind her), arms folded or one hand at her
-  necklace, a serene knowing look straight into the lens.
-- `youtube_ctr` — seated at a table in a warm upscale restaurant or garden,
-  chin resting lightly on her hand, golden bokeh behind, relaxed and radiant.
+- `portrait_main` — in an emerald or black evening gown with drop earrings,
+  soft chignon, warm ballroom bokeh behind, a calm knowing look into the lens.
+- `dramatic_scene` — in an ivory silk blouse with a fine necklace, long glossy
+  waves, a golden-hour city street softly blurred behind, a faint confident
+  smile.
+- `youtube_ctr` — in a soft cream knit or elegant blazer, hair in loose
+  glossy waves, a warm luxurious room blurred behind, chin slightly lifted,
+  composed and radiant.
 
 ## Rules
 
@@ -50,8 +55,8 @@ Named exactly: `portrait_main`, `dramatic_scene`, `youtube_ctr`.
    describe her face or hair. Dress her in a glamorous, elegant outfit that
    fits a winning moment (a deep navy, emerald or ruby dress, a silk blouse,
    fine jewellery), flawless soft makeup, glossy hair.
-2. Start every prompt with: "Vertical 9:16 close portrait from the waist up,
-   the woman fills most of the frame, her face large, sharp and radiant."
+2. Start every prompt with: "Vertical 9:16 close head-and-shoulders portrait,
+   her face fills most of the frame, large, sharp and radiant."
 3. One person only, photorealistic, bright, glossy, eye contact with the
    camera.
 4. NO text, NO letters, NO numbers, NO signs, NO logo anywhere in the image.

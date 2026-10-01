@@ -94,7 +94,12 @@ subject off-centre, depth front-to-back.
    daylight or blue-hour city lights) and let it fall on the thing that
    matters in this beat — the credit card, the cake, the ring. The picture
    stays bright and clean even when the moment is hard.
-6. **Video prompt = one clear small action**, matching the line: the door
+6. **The heroine is the star.** She is on screen in most beats, and she is
+   always the most beautiful, best-lit person in the frame — glossy hair,
+   elegant clothes, poised even when hurt or humiliated. The husband and the
+   other woman look glamorous but smug; relatives look refined. Viewers see
+   themselves in her, so never make her look tired, plain or aged.
+7. **Video prompt = one clear small action**, matching the line: the door
    closes, the folder slides across, the hand sets the mug down, the car pulls
    away. Name the action first, then one slow camera move (push-in, dolly,
    gentle handheld drift). Nothing is added, nothing disappears, nobody changes
