@@ -61,7 +61,10 @@ class TestNhuongCpuChoCuaSo:
                        giay=[4.0, 4.0], khung=(3840, 2160), base_dir=".")
         van = str(ak.so_van_ffmpeg())
         cat = bat[0]
-        assert cat[cat.index("-threads") + 1] == van, "vòng cắt clip"
+        # Vòng cắt chạy vài mảnh cùng lúc (30/09/2026) — mỗi mảnh một phần luồng
+        # theo `core/ke_hoach_dung`, cộng lại vẫn không quá `so_van_ffmpeg()`.
+        moi_manh = int(cat[cat.index("-threads") + 1])
+        assert 1 <= moi_manh <= int(van), "vòng cắt clip"
         cuoi = bat[-1]
         assert cuoi[cuoi.index("-threads") + 1] == van, "vòng nén cuối"
 

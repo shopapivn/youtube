@@ -210,9 +210,20 @@ MAC_DINH: Dict[str, Any] = {
     "muc_song_song": "mac_dinh",
 
     # Tab Tự động: hàng đợi chạy bao nhiêu VIDEO cùng lúc (1 = lần lượt, tối
-    # đa 3 — xem `core/hang_doi_auto.py`). Mặc định 1: chạy lần lượt là cách
-    # dễ đoán nhất; muốn nhanh thì khách tự chọn ở ô "Hàng đợi" của tab.
-    "auto_so_song_song": 1,
+    # đa 3 — xem `core/hang_doi_auto.py`).
+    #
+    # ═══ 1 → 2 NGÀY 30/09/2026 ═══
+    #
+    # Khách khiếu nại template story "lâu ngày không ra được nhiều video". Đo
+    # lượt thật: một video story mất 6–10 giờ, phần lớn là CHỜ máy chủ vẽ ảnh
+    # và clip — trong lúc ấy máy khách ngồi không, còn video sau xếp hàng chờ
+    # video trước xong hẳn. Hai video cùng lúc thì video sau dùng đúng quãng
+    # chờ ấy; khâu chạy trên máy (phụ đề, dựng) vẫn khoá từng video một.
+    "auto_so_song_song": 2,
+    # Đã chuyển máy này qua mặc định 2 chưa (xem `doc`). Tệp cũ ghi sẵn
+    # `auto_so_song_song: 1` vì `ghi` lưu đủ mọi khoá — đổi mặc định thôi thì
+    # máy đang dùng không bao giờ nhận. Nâng MỘT lần; khách chọn lại 1 thì giữ.
+    "auto_song_song_da_nang": True,
     # Tab Tự động: kênh (template) chọn lần cuối — mở tool lên là ở sẵn đó,
     # không phải chọn lại (chủ dự án 09/09/2026). Trống = kênh đầu danh sách.
     "auto_kenh_cuoi": "",
@@ -245,6 +256,8 @@ def doc(goc: str) -> Dict[str, Any]:
             gia_tri = tren_dia.get(ten, mac_dinh)
             if isinstance(gia_tri, type(mac_dinh)):
                 ra[ten] = gia_tri
+        if "auto_song_song_da_nang" not in tren_dia and ra.get("auto_so_song_song") == 1:
+            ra["auto_so_song_song"] = MAC_DINH["auto_so_song_song"]
     return ra
 
 

@@ -104,6 +104,10 @@ che_do_tieu_de: "nguyen_goc"
 #  mình. Tra thật trên kênh sống 18/09/2026 (yt-dlp): 9/12 video đã đăng có nhãn khoa học tâm lý/não
 #  bộ ở đầu, và cả 5 video gần nhất theo Công thức V7 đều có. Rỗng thì không đụng gì.
 nhan_tieu_de: "心理学"
+# 21/09/2026 — nguồn mới không cùng khuôn với kênh mình (nhãn ở cuối câu, kèm hashtag và
+# tên kênh họ). Gỡ chữ ký xong thì nhờ AI nắn vỏ câu theo tiêu đề ĐANG THẮNG của kênh,
+# giữ nguyên luận điểm. Mẫu đọc từ chi-so/, khuôn đổi thì mẫu tự đổi.
+nan_khuon_tieu_de: true
 # ── Nhịp nghỉ giữa các phần ──────────────────────────────────────────────────
 #  Bước rà soát đặt một dòng "---" ở ranh giới các phần; tool chèn đúng chừng
 #  này giây im lặng vào đó khi ghép tiếng. Khán giả có nhịp chuyển mình, và

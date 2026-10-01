@@ -354,7 +354,9 @@ class NhipDo:
                     return
                 self._nha_may_dung(CHO_KHI_DUNG)
                 return
-            if self._tran is not None and self._tran > 0 and tran >= 2 * self._tran:
+            # Trần hồi từ 0 (nhà máy vừa dừng/khởi động lại) cũng là "đổi cỡ":
+            # mép đo trên nhà máy cũ vô hiệu — xem `_nha_may_dung` (30/09/2026).
+            if self._tran is not None and (self._tran == 0 or tran >= 2 * self._tran):
                 self._leo_nhanh = True
             self._tran = tran
             if self._nhip > tran:
@@ -673,6 +675,18 @@ class NhipDo:
             pass
 
     def _nha_may_dung(self, cho: float) -> None:
+        # ═══ NHÀ MÁY DỪNG = MỌI MÉP ĐO TRƯỚC ĐÓ VÔ HIỆU — 30/09/2026 ═══
+        #
+        # Bản cũ không đụng `_leo_nhanh`. Tool chạy cả buổi mà đã từng ăn MỘT
+        # lần cắt (trễ hàng chờ vọt lúc nhà máy khởi động lại) thì `_leo_nhanh`
+        # tắt vĩnh viễn; tới lần dừng kế tiếp nhịp về 1, và từ đó lời mời
+        # `cho_trong` bị bỏ ngoài tai — nhịp bò +1/+25% mỗi cửa sổ (~1 ảnh
+        # 45–80 s). Đo 30/09/2026 16:19–16:25 (VN): worker veo3 khởi động lại,
+        # trần ảnh 0 → 8 → 200 trong 1,5 phút, tool chủ dự án đứng ở "image 1"
+        # trong khi nhà máy mời 200 chỗ. Job thăm dò về đích là nhà máy sống
+        # lại — từ đó phải nghe lời mời như một mẻ mới.
+        self._leo_nhanh = True
+        self._tre_lien_tiep = 0
         self._nhip = float(self._san)
         self._chuoi = 0
         self._dung_toi = self._dong_ho() + cho

@@ -882,7 +882,12 @@ class JobManager:
             return
         if exc is None:
             return
-        status = getattr(exc, "status_code", None)
+        # SDK đặt mã HTTP ở `.status` (`APIStatusError`), không phải
+        # `.status_code` — đọc mỗi `status_code` thì 429/503 KHÔNG BAO GIỜ tới
+        # được vòng dò (đo 30/09/2026). Đọc cả hai cho chắc.
+        status = getattr(exc, "status", None)
+        if not isinstance(status, int):
+            status = getattr(exc, "status_code", None)
         if isinstance(status, int):
             nhip.ghi_nhan_tu_choi(
                 status, getattr(exc, "code", None), getattr(exc, "retry_after", None)

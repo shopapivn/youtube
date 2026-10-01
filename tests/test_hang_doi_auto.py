@@ -427,6 +427,11 @@ def trang(qt_app, tmp_path, monkeypatch):
     goc = str(tmp_path)
     _dung_kenh(goc, "K")
     monkeypatch.setattr(ta, "kiem_kenh", lambda _k: [])
+    # Các bài dưới kiểm LUẬT XẾP HÀNG ở chế độ lần lượt — mặc định của tool là
+    # 2 video cùng lúc từ 30/09/2026 (`cai_dat.MAC_DINH`), nên chọn hẳn ra.
+    from core import cai_dat
+
+    cai_dat.dat(goc, "auto_so_song_song", 1)
     t = ta.TrangTuDong(_AppGia(goc))
     t.da_khoi_chay = []
 

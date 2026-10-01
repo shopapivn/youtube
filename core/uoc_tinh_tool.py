@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from .money import format_vnd
 from .pricing import (
     ENGINE_SEEDANCE, ENGINE_VEO3, PriceTable, DEFAULT_PRICES,
-    hold_for_image, hold_for_tts, hold_for_video,
+    hold_for_image, hold_for_llm_script, hold_for_tts, hold_for_video,
 )
 from .script_length import CHARS_PER_MINUTE, DEFAULT_CHARS_PER_MINUTE
 from .srt_scenes import target_seconds_for
@@ -128,7 +128,7 @@ def uoc_tinh_workflow(workflow: Optional[Mapping[str, Any]], catalog: Mapping[st
             # Bước viết chỉ tốn tiền model, tính theo token — nhỏ và khó đoán.
             # Nói khoảng thay vì im lặng: im lặng làm khách tưởng nó miễn phí.
             dong.append(DongChiPhi(tool_id, "Làm content", "tiền model viết kịch bản",
-                                   _uoc_tien_model(so_ky_tu)))
+                                   hold_for_llm_script(phut, prices)))
         elif tool_id == "voice.shopapi":
             dong.append(DongChiPhi(tool_id, "Tạo giọng đọc",
                                    "{0:g} phút audio".format(phut),
@@ -153,25 +153,9 @@ def _engine(nodes: Sequence[Mapping[str, Any]]) -> str:
     return ENGINE_VEO3
 
 
-#: Giá claude-sonnet-5, µVND mỗi token (xem bảng giá trong tài liệu hợp đồng API).
-#: Đây là bản chép để ước tính TRƯỚC khi gọi; đường tính tiền thật nằm ở máy chủ.
-_GIA_TOKEN_VAO = 840
-_GIA_TOKEN_RA = 4_200
-
-#: Tiếng Việt khoảng 4 ký tự một token.
-_KY_TU_MOI_TOKEN = 4
-
-
-def _uoc_tien_model(so_ky_tu: int) -> int:
-    """Ước tiền gọi mô hình để viết một kịch bản dài `so_ky_tu` ký tự, µVND.
-
-    Đếm ba lượt gọi vì đó là số lượt thật của `content.remake`: viết bản đầu,
-    một lượt ép độ dài, một lượt xem lại. Đầu vào mỗi lượt phải cõng cả bản
-    trước đó, nên vào ≈ ra.
-
-    Con số ra rất nhỏ so với tiền ảnh và video — và đó chính là điều khách cần
-    thấy, để họ biết chỗ tốn tiền nằm ở đâu mà cân nhắc.
-    """
-    token_ra = max(1, so_ky_tu // _KY_TU_MOI_TOKEN)
-    so_luot = 3
-    return so_luot * (token_ra * _GIA_TOKEN_RA + token_ra * _GIA_TOKEN_VAO)
+#: Trước đây ước 3 lượt gọi cố định × 840/4.200 µ/token (giá và số lượt đều
+#: KHÔNG khớp thực tế — 840/4.200 không phải giá LLM thật của máy chủ, và số
+#: lượt gọi của `content.remake` không cố định là 3). Đã thay bằng
+#: `hold_for_llm_script(phut, prices)` trong `core/pricing.py`: giá đọc từ
+#: `PriceTable.llm_input_micro`/`llm_output_micro` (nguồn `GET /v1/pricing`),
+#: định mức token đo THẬT 30/09/2026 theo PHÚT VIDEO thay vì theo "lượt gọi".

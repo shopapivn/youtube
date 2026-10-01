@@ -327,3 +327,52 @@ def test_go_dau_doi_nguoi_noi_khoi_loi_ke_goc():
     from core.giu_noi_dung import bo_dau_doi_nguoi_noi
 
     assert bo_dau_doi_nguoi_noi(">> Sir, can I >> take it?\nYes.") == " Sir, can I take it?\nYes."
+
+
+def test_khuc_chay_song_song_ma_van_dung_thu_tu():
+    """30/09/2026: rà soát / chèn thẻ gọi AI vài khúc cùng lúc — kết quả vẫn
+    phải ghép đúng thứ tự khúc, kể cả khi khúc sau trả lời trước."""
+    import json as _json
+    import threading as _th
+    import time as _t
+
+    from core import giu_noi_dung as g
+
+    khuc = ["Khuc so {0} mot hai ba.".format(i) for i in range(9)]
+    dang = [0]
+    dinh = [0]
+    khoa = _th.Lock()
+
+    def lam(i, k, lan):
+        with khoa:
+            dang[0] += 1
+            dinh[0] = max(dinh[0], dang[0])
+        _t.sleep(0.02 * (9 - i))     # khúc đầu trả lời CHẬM nhất
+        with khoa:
+            dang[0] -= 1
+        return _json.dumps({"sua": []})
+
+    ra, giu = g.ra_soat_theo_khuc(khuc, lam)
+    assert ra == [k.strip() for k in khuc] and giu == 0
+    assert dinh[0] >= 2
+
+    def lam3(i, cac_cau, lan):
+        _t.sleep(0.02 * (9 - i))
+        return _json.dumps({"the": [[1, "sad"]] if i % 2 else []})
+
+    ra3, _duoc = g.chen_the_theo_khuc(khuc, lam3)
+    assert [r.split("] ")[-1] for r in ra3] == [k.strip() for k in khuc]
+
+
+def test_khuc_loi_mang_van_noi_len():
+    import pytest as _pytest
+
+    from core import giu_noi_dung as g
+
+    def lam(i, k, lan):
+        if i == 3:
+            raise ConnectionError("mất mạng")
+        return '{"sua": []}'
+
+    with _pytest.raises(ConnectionError):
+        g.ra_soat_theo_khuc(["a b c."] * 6, lam)

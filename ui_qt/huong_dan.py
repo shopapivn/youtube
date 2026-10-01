@@ -687,10 +687,13 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "không tính tiền lại.",
         ],
         "luu_y": [
-            "Hàng đợi: “Chạy lần lượt” là video này xong mới tới video sau. "
-            "“Chạy 2–3 cùng lúc” nhanh hơn nhưng mỗi video chậm hơn một chút. "
-            "Tiền không đổi. “Dừng tất cả” dừng mọi video đang chạy, video chờ "
-            "nằm yên.",
+            "Hàng đợi: mặc định chạy 2 video cùng lúc — phần lớn thời gian là "
+            "chờ máy chủ vẽ ảnh, video sau tranh thủ đúng quãng chờ ấy. “Chạy "
+            "lần lượt” là video này xong mới tới video sau. Tiền không đổi. "
+            "“Dừng tất cả” dừng mọi video đang chạy, video chờ nằm yên.",
+            "Khâu dựng tự đo máy bạn (số lõi, RAM trống, card đồ hoạ, độ dài "
+            "phim) rồi chia việc cho vừa — dòng “kế hoạch dựng” trong nhật ký "
+            "nói rõ máy được dùng thế nào và ước bao lâu.",
             "Bấm Dừng lúc nào cũng được — phần đã làm giữ nguyên, tắt tool cũng "
             "không mất gì. Ở bảng tiến độ, dòng “đã có sẵn, không làm lại” là "
             "tool đang đếm thứ đã có, không phải làm lại.",

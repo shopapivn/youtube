@@ -114,3 +114,33 @@ def test_nut_cap_nhat_biet_hoi_cai_dat():
            ).read_text(encoding="utf-8")
     assert 'cai_dat.doc(self._app.base_dir).get("tu_cap_nhat"' in chu
     assert 'cai_dat.doc(self._app.base_dir).get("hoi_ban_moi"' in chu
+
+
+class TestNangSongSongAuto:
+    """30/09/2026: hàng đợi tab Tự động mặc định 2 video cùng lúc.
+
+    `ghi` lưu đủ mọi khoá, nên máy đang dùng đã có sẵn `auto_so_song_song: 1`
+    trong tệp — đổi mặc định thôi thì không máy nào nhận. Nâng MỘT lần.
+    """
+
+    def _ghi_tep(self, tmp_path, cai):
+        duong = cai_dat.duong_tep(str(tmp_path))
+        os.makedirs(os.path.dirname(duong), exist_ok=True)
+        with open(duong, "w", encoding="utf-8") as tep:
+            json.dump(cai, tep)
+
+    def test_may_moi_chay_hai_video(self, tmp_path):
+        assert cai_dat.doc(str(tmp_path))["auto_so_song_song"] == 2
+
+    def test_tep_cu_dang_lan_luot_thi_nang_len_hai(self, tmp_path):
+        self._ghi_tep(tmp_path, {"auto_so_song_song": 1, "tu_cap_nhat": True})
+        assert cai_dat.doc(str(tmp_path))["auto_so_song_song"] == 2
+
+    def test_tep_cu_da_chon_ba_thi_giu(self, tmp_path):
+        self._ghi_tep(tmp_path, {"auto_so_song_song": 3})
+        assert cai_dat.doc(str(tmp_path))["auto_so_song_song"] == 3
+
+    def test_khach_chon_lai_lan_luot_thi_giu_mai(self, tmp_path):
+        self._ghi_tep(tmp_path, {"auto_so_song_song": 1})
+        cai_dat.dat(str(tmp_path), "auto_so_song_song", 1)
+        assert cai_dat.doc(str(tmp_path))["auto_so_song_song"] == 1

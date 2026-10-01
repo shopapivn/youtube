@@ -252,41 +252,41 @@ OUTPUT_RETENTION_DAYS = 7
 
 # ── Giá — PRICING.md §2 ───────────────────────────────────────────────────────
 
-#: µVND cho mỗi đơn vị tính tiền.
+#: µVND cho mỗi đơn vị tính tiền và theo engine video.
 #:
-#: ⚠ Khoá ``video`` là mức THẤP NHẤT (Veo3). **Video có HAI giá.** Báo giá video
-#: cho khách thì tra :data:`VIDEO_UNIT_PRICE_MICRO` theo engine, đừng dùng khoá
-#: này — dùng nhầm là báo bằng nửa giá thật cho mỗi clip Seedance.
+#: ⚠ Khoá ``video`` của ``UNIT_PRICE_MICRO`` là mức THẤP NHẤT (Veo3). **Video có
+#: HAI giá.** Báo giá video cho khách thì tra :data:`VIDEO_UNIT_PRICE_MICRO` theo
+#: engine, đừng dùng khoá đó — dùng nhầm là báo sai giá cho clip Seedance.
+# <gia-tu-dong:kho-github-sdk-gia>
 UNIT_PRICE_MICRO: Dict[str, str] = {
-    "tts": "3333333",       # mỗi giây audio thật
-    "image": "100000000",   # mỗi ảnh
-    "video": "500000000",   # Veo3, clip 8 giây — KHÔNG phải giá chung của video
+    "tts": "3333333",
+    "image": "25000000",
+    "video": "120000000",  # Veo3 — dùng VIDEO_UNIT_PRICE_MICRO để báo giá theo engine
+    "music": "8333333",
 }
 
-#: Giá video theo ENGINE (µVND mỗi video) — nguồn đúng khi cần báo giá.
-#:
-#: Seedance có giá vốn cao hơn nên giá bán gấp đôi.
 VIDEO_UNIT_PRICE_MICRO: Dict[str, str] = {
-    "veo3": "500000000",       # 500₫, clip 8 giây
-    "seedance": "1000000000",  # 1.000₫, clip 10 giây
+    "veo3": "120000000",
+    "seedance": "600000000",
 }
+
+#: Nạp tối thiểu một lần, đơn vị ĐỒNG — PRICING.md §5.
+MIN_TOPUP_VND = 200_000
+# </gia-tu-dong:kho-github-sdk-gia>
 
 #: Giá niêm yết để hiển thị (đồng).
 RETAIL_PRICE_VND: Dict[str, int] = {
+    # Khớp `GET /v1/pricing` đo 01/10/2026 (cùng số với UNIT_PRICE_MICRO ở trên).
     "voice_per_minute": 200,
-    "image_per_image": 100,
-    #: 500₫ / video Veo3 (clip 8 giây)
-    "video_veo3": 500,
-    #: 1.000₫ / video Seedance (clip 10 giây)
-    "video_seedance": 1000,
+    "image_per_image": 25,
+    #: 120₫ / video Veo3 (clip 8 giây)
+    "video_veo3": 120,
+    #: 600₫ / video Seedance
+    "video_seedance": 600,
     #: Giữ lại tên cũ, trỏ vào mức THẤP NHẤT, để code cũ không gãy đột ngột.
     #: Cần đúng giá thì đọc hai khoá ở trên.
-    "video_per_video": 500,
+    "video_per_video": 120,
 }
-
-#: PRICING.md §5 — không có tín dụng tặng lúc đăng ký; ví mới 0₫, nạp tối
-#: thiểu 50.000₫ mới tạo được job.
-MIN_TOPUP_VND = 50_000
 
 #: Trần một lần nạp (đồng) — khớp ``MAX_TOPUP_MICROS`` của máy chủ.
 #:

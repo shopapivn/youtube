@@ -37,7 +37,7 @@ hàm `lam(i, khuc, lan)` lo việc điền lời nhắc và gọi AI.
 from __future__ import annotations
 
 import re
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from .the_cam_xuc import bo_the
 
@@ -234,13 +234,11 @@ def ra_soat_theo_khuc(khuc: List[str], lam: Callable[[int, str, int], str],
     """
     from .goi_van_ban import loc_json  # noqa: PLC0415
 
-    ra: List[str] = []
-    giu_goc = 0
-    tong_sua = 0
     n = len(khuc)
-    for i, k in enumerate(khuc):
+
+    def mot(i: int) -> Tuple[Optional[str], int]:
+        k = khuc[i]
         _noi(ghi, "  rà soát khúc {0}/{1}…".format(i + 1, n))
-        tot = None
         for lan in (0, 1):
             # Lỗi mạng / nút Dừng từ `lam` phải nổi lên — chỉ bắt lỗi ĐỌC JSON.
             tra = lam(i, k, lan) or ""
@@ -252,20 +250,45 @@ def ra_soat_theo_khuc(khuc: List[str], lam: Callable[[int, str, int], str],
                 moi, so = ap_dung_sua(k, goi["sua"])
                 con, sach = do_khop(k, moi)
                 if min(con, sach) >= TI_LE_KHOP:
-                    tot = moi.strip()
-                    tong_sua += so
-                    break
+                    return moi.strip(), so
                 ly_do = "AI sửa quá tay (còn khớp {0:.0%})".format(min(con, sach))
             else:
                 ly_do = "AI không trả danh sách lỗi đúng dạng"
             _noi(ghi, "    khúc {0}: {1} — {2}".format(
                 i + 1, ly_do, "gọi lại" if lan == 0 else "giữ nguyên lời gốc khúc này"))
+        return None, 0
+
+    ra: List[str] = []
+    giu_goc = 0
+    tong_sua = 0
+    for k, (tot, so) in zip(khuc, _theo_thu_tu(n, mot)):
         if tot is None:
             tot = k.strip()
             giu_goc += 1
+        tong_sua += so
         ra.append(tot)
     _noi(ghi, "  rà soát: sửa {0} chỗ nghe nhầm / chính tả.".format(tong_sua))
     return ra, giu_goc
+
+
+#: Mấy khúc gọi AI cùng lúc ở bước rà soát / chèn thẻ. Các khúc độc lập nhau;
+#: gọi lần lượt thì phim 3 tiếng (40+ khúc) ngồi chờ từng lượt AI nối đuôi —
+#: một phần của "một link mất quá nhiều thời gian" khách báo 30/09/2026.
+SONG_SONG_KHUC = 4
+
+
+def _theo_thu_tu(n: int, mot: Callable[[int], Any]) -> List[Any]:
+    """`[mot(0), …, mot(n-1)]`, chạy `SONG_SONG_KHUC` cái cùng lúc, giữ thứ tự.
+
+    Lỗi (mạng, nút Dừng) của bất kỳ khúc nào nổi lên y như chạy lần lượt.
+    """
+    if n <= 1 or SONG_SONG_KHUC <= 1:
+        return [mot(i) for i in range(n)]
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    with ThreadPoolExecutor(max_workers=min(SONG_SONG_KHUC, n)) as ho:
+        viec = [ho.submit(mot, i) for i in range(n)]
+        return [v.result() for v in viec]
 
 
 #: Chỗ cắt câu: sau dấu hết câu (kèm dấu đóng ngoặc/nháy nếu có) rồi khoảng
@@ -336,13 +359,11 @@ def chen_the_theo_khuc(khuc: List[str], lam: Callable[[int, str, int], str],
     """
     from .goi_van_ban import loc_json  # noqa: PLC0415
 
-    ra: List[str] = []
-    duoc = 0
     n = len(khuc)
-    for i, k in enumerate(khuc):
+
+    def mot(i: int) -> Tuple[str, int]:
         _noi(ghi, "  chèn thẻ cảm xúc khúc {0}/{1}…".format(i + 1, n))
-        cau = tach_cau(k)
-        tot = None
+        cau = tach_cau(khuc[i])
         for lan in (0, 1):
             # Lỗi mạng / nút Dừng từ `lam` phải nổi lên — chỉ bắt lỗi ĐỌC JSON.
             tra = lam(i, danh_so(cau), lan) or ""
@@ -352,9 +373,10 @@ def chen_the_theo_khuc(khuc: List[str], lam: Callable[[int, str, int], str],
                 goi = None
             if isinstance(goi, dict) and isinstance(goi.get("the"), list):
                 tot, so_the = dung_ban_co_the(cau, goi)
-                duoc += 1 if so_the else 0
-                break
+                return tot, 1 if so_the else 0
             _noi(ghi, "    khúc {0}: AI không trả vị trí thẻ đúng dạng — {1}".format(
                 i + 1, "gọi lại" if lan == 0 else "khúc này đọc không thẻ"))
-        ra.append(tot if tot is not None else "\n".join(cau))
-    return ra, duoc
+        return "\n".join(cau), 0
+
+    kq = _theo_thu_tu(n, mot)
+    return [x[0] for x in kq], sum(x[1] for x in kq)

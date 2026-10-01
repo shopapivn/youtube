@@ -306,7 +306,9 @@ def loc_xfade(giay: Sequence[float], kieu: Sequence[str],
 def ghep_chuyen_canh(ffmpeg: str, manh: Sequence[str], giay: Sequence[float],
                      kieu: Sequence[str], dich: str, chay: Callable[[List[str]], None],
                      ma_hoa: Sequence[str], t: float = GIAY_CHUYEN, lo: int = LO_XFADE,
-                     ghi: Optional[Callable[[str], None]] = None) -> None:
+                     ghi: Optional[Callable[[str], None]] = None,
+                     song_song: int = 1,
+                     ma_hoa_lo: Optional[Sequence[str]] = None) -> None:
     """Nối các mảnh (đã cắt dài `giay[i] + t`, mảnh cuối đúng `giay[-1]`) bằng xfade.
 
     Hai tầng: mỗi lô `lo` mảnh thành một đoạn, rồi nối các đoạn cũng bằng xfade
@@ -314,15 +316,23 @@ def ghep_chuyen_canh(ffmpeg: str, manh: Sequence[str], giay: Sequence[float],
     thêm đúng `t` vì mảnh cuối lô cũng đã kéo thêm, nên phép tính mốc ở tầng hai
     y hệt tầng một.
 
+    Mảnh dài HƠN `giay[i] + t` cũng được: xfade bỏ phần thừa sau mối chuyển.
+
     `chay(tham_so)` chạy FFmpeg (không kèm tên tệp ffmpeg); `kieu` có
     `len(manh) - 1` phần tử, một kiểu cho mỗi mối nối.
+
+    `song_song` lô chạy cùng lúc, mỗi lô mã hoá bằng `ma_hoa_lo` (mặc định
+    `ma_hoa` — bên gọi chia bớt `-threads` cho vừa máy). Các lô độc lập nhau;
+    chạy lần lượt thì phim 150 cảnh ngồi chờ 13 lô nối đuôi (đo 26/09/2026,
+    ~5 phút trên máy 16 lõi, x264 dùng chưa hết lõi cho một clip 720p).
     """
     n = len(manh)
     if n != len(giay) or len(kieu) < n - 1:
         raise ValueError("số mảnh, số độ dài và số kiểu chuyển không khớp")
     thu_muc = os.path.dirname(dich) or "."
 
-    def mot_do_thi(vao: Sequence[str], g: Sequence[float], k: Sequence[str], ra: str) -> None:
+    def mot_do_thi(vao: Sequence[str], g: Sequence[float], k: Sequence[str], ra: str,
+                   mh: Sequence[str] = ma_hoa) -> None:
         if len(vao) == 1:
             chay(["-y", "-hide_banner", "-nostats", "-i", vao[0], "-c", "copy", ra])
             return
@@ -330,7 +340,7 @@ def ghep_chuyen_canh(ffmpeg: str, manh: Sequence[str], giay: Sequence[float],
         for v in vao:
             tham += ["-i", v]
         tham += ["-filter_complex", loc_xfade(g, k, t), "-map", "[v]", "-an",
-                 *ma_hoa, "-pix_fmt", "yuv420p", ra]
+                 *mh, "-pix_fmt", "yuv420p", ra]
         chay(tham)
 
     if n <= lo:
@@ -340,18 +350,33 @@ def ghep_chuyen_canh(ffmpeg: str, manh: Sequence[str], giay: Sequence[float],
     giay_doan: List[float] = []
     kieu_doan: List[str] = []
     so_lo = int(math.ceil(n / float(lo)))
+    viec_lo = []
     for b in range(so_lo):
         a, z = b * lo, min(n, (b + 1) * lo)
         ra = os.path.join(thu_muc, "_lo{0:03d}.mp4".format(b))
-        if ghi is not None:
-            ghi("    chuyển cảnh: lô {0}/{1} (cảnh {2}–{3})…".format(b + 1, so_lo, a + 1, z))
-        # Trong lô: mảnh cuối lô vẫn đang dài g+t (trừ lô cuối) — tính như cảnh
-        # thường, nên đoạn ra dài tổng giay của lô + t.
-        mot_do_thi(manh[a:z], giay[a:z], kieu[a:z - 1], ra)
+        viec_lo.append((b, a, z, ra))
         doan.append(ra)
         giay_doan.append(sum(float(x) for x in giay[a:z]))
         if z < n:
             kieu_doan.append(kieu[z - 1])
+
+    def lam_lo(v) -> None:
+        b, a, z, ra = v
+        if ghi is not None:
+            ghi("    chuyển cảnh: lô {0}/{1} (cảnh {2}–{3})…".format(b + 1, so_lo, a + 1, z))
+        # Trong lô: mảnh cuối lô vẫn đang dài g+t (trừ lô cuối) — tính như cảnh
+        # thường, nên đoạn ra dài tổng giay của lô + t.
+        mot_do_thi(manh[a:z], giay[a:z], kieu[a:z - 1], ra, ma_hoa_lo or ma_hoa)
+
+    if song_song > 1:
+        from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+        with ThreadPoolExecutor(max_workers=min(song_song, so_lo)) as ho:
+            for f in [ho.submit(lam_lo, v) for v in viec_lo]:
+                f.result()
+    else:
+        for v in viec_lo:
+            lam_lo(v)
     if ghi is not None:
         ghi("    chuyển cảnh: nối {0} lô…".format(len(doan)))
     mot_do_thi(doan, giay_doan, kieu_doan, dich)

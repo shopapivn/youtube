@@ -69,6 +69,11 @@ def trang(qt_app, tmp_path, monkeypatch):
     with open(os.path.join(d, "kenh.yaml"), "w", encoding="utf-8") as t:
         t.write("ten_hien: Kenh thu\n")
     monkeypatch.setattr(ta, "kiem_kenh", lambda _k: [])
+    # Các bài dưới cần có video CHỜ trong hàng — chọn hẳn "chạy lần lượt", vì
+    # mặc định của tool là 2 video cùng lúc từ 30/09/2026.
+    from core import cai_dat
+
+    cai_dat.dat(goc, "auto_so_song_song", 1)
     t = ta.TrangTuDong(_AppGia(goc))
     t.da_khoi_chay = []
 

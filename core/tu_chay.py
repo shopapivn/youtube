@@ -88,7 +88,7 @@ from .ghi_dia import ghi_chu, ghi_json
 from .kenh import TEP_KENH, doc_kenh, duong_kenh, kiem_kenh, liet_ke_kenh
 from .money import micro_to_vnd
 from .pricing import (DEFAULT_PRICES, ENGINE_SEEDANCE, ENGINE_VEO3, PriceTable,
-                      hold_for_image, hold_for_tts, hold_for_video)
+                      hold_for_image, hold_for_llm_script, hold_for_tts, hold_for_video)
 from .srt_scenes import target_seconds_for
 
 __all__ = ["THU_MUC_TU_CHAY", "duong_bao_cao_ngay", "chay_mot_ngay",
@@ -365,7 +365,12 @@ def _chon_nguon(goc: str, ma_kenh: str, co_v7_truoc: bool, loai_tru: set,
 def _uoc_chi_phi_micro(kenh, gia: PriceTable) -> int:
     """Ước tiền một video của kênh này, µVND — từ số phút mục tiêu, theo đúng
     cách `core/uoc_tinh_tool.py` quy phút ra số cảnh (80% trần giây/cảnh của
-    engine). Không gọi mạng: dùng giá mặc định hoặc giá đã truyền vào."""
+    engine). Không gọi mạng: dùng giá mặc định hoặc giá đã truyền vào.
+
+    Cộng cả tiền LLM viết/sửa kịch bản (`content.remake`) — trước đây bỏ sót,
+    nên ngân sách ngày của kênh chưa tính đủ chi phí thật; xem
+    `hold_for_llm_script` ở `core/pricing.py`.
+    """
     engine = str(getattr(kenh, "engine", "") or "").strip().lower()
     if engine not in (ENGINE_VEO3, ENGINE_SEEDANCE):
         engine = ENGINE_VEO3
@@ -373,7 +378,7 @@ def _uoc_chi_phi_micro(kenh, gia: PriceTable) -> int:
     so_canh = max(1, int(round(phut * 60.0 / target_seconds_for(engine))))
     ky_tu = int(getattr(kenh, "ky_tu_muc_tieu", 0) or 0)
     return (hold_for_image(so_canh, gia) + hold_for_video(engine, gia) * so_canh
-            + hold_for_tts(ky_tu, gia))
+            + hold_for_tts(ky_tu, gia) + hold_for_llm_script(phut, gia))
 
 
 def _vnd(n: int) -> str:

@@ -38,6 +38,9 @@ __all__ = [
     "hold_for_video",
     "hold_for_music",
     "chi_phi_music",
+    "hold_for_llm_script",
+    "LLM_TOKEN_VAO_MOI_PHUT",
+    "LLM_TOKEN_RA_MOI_PHUT",
 ]
 
 KIND_TTS = "tts"
@@ -68,34 +71,37 @@ ENGINE_LABEL: Dict[str, str] = {
 class PriceTable:
     """Đơn giá đang áp dụng, mọi trường tính bằng **µVND** và là `int`."""
 
-    #: µVND cho mỗi giây audio thật (200₫/phút ÷ 60).
+    # <gia-tu-dong:kho-github-pricing-gia>
+    #: µVND cho mỗi giây audio thật (200đ/phút ÷ 60).
     tts_per_second: int = 3_333_333
-    #: µVND cho mỗi phút audio khi TẠM GIỮ (PRICING.md §6.1 dùng đúng 200₫/phút).
+    #: µVND cho mỗi phút audio khi TẠM GIỮ (PRICING.md §6.1 dùng đúng giá niêm yết/phút).
     tts_price_per_minute: int = 200_000_000
     #: Số ký tự quy đổi một phút audio khi tạm giữ. 750 là con số bảo thủ —
     #: thực tế 780–960 ký tự/phút, nên giữ dư một chút.
     tts_chars_per_minute: int = 750
     #: µVND mỗi ảnh thành công.
-    image_per_image: int = 100_000_000
-    #: µVND mỗi video Veo3 (500₫).
-    video_veo3: int = 500_000_000
-    #: µVND mỗi video Seedance (1.000₫) — đắt gấp đôi vì mỗi tài khoản nguồn chỉ
-    #: ra được 2 clip/ngày, giá vốn thật cao hơn hẳn.
-    video_seedance: int = 1_000_000_000
-    #: µVND cho mỗi giây NHẠC thật (500₫/phút ÷ 60). Đắt hơn giọng đọc mỗi giây
-    #: vì một lượt của nhà máy nhạc chỉ chở tối đa 30 giây, còn một lượt giọng
-    #: đọc chở tới ~80 giây audio.
+    image_per_image: int = 25_000_000
+    #: µVND mỗi video Veo3 (120đ).
+    video_veo3: int = 120_000_000
+    #: µVND mỗi video Seedance (600đ) — đắt hơn Veo3 vì mỗi tài khoản
+    #: nguồn chỉ ra được ít clip/ngày, giá vốn thật cao hơn hẳn.
+    video_seedance: int = 600_000_000
+    #: µVND cho mỗi giây NHẠC thật. Đắt hơn giọng đọc mỗi giây vì một lượt của nhà
+    #: máy nhạc chỉ chở tối đa 30 giây, còn một lượt giọng đọc chở tới ~80 giây audio.
     music_per_second: int = 8_333_333
-    #: µVND cho mỗi phút nhạc khi NIÊM YẾT (500₫/phút) — cùng luật hai-con-số
+    #: µVND cho mỗi phút nhạc khi NIÊM YẾT (= đơn giá/giây × 60) — cùng luật hai-con-số
     #: với tts: niêm yết theo phút, quyết toán theo giây.
-    music_price_per_minute: int = 500_000_000
+    music_price_per_minute: int = 499_999_980
+    #: µVND/token — giá LLM model claude-sonnet-5, dùng để ước tiền bước content.remake.
+    #: Nguồn: gia-niem-yet.json → llm[], khớp GET /v1/pricing → llm[] lúc chạy (xem from_api).
+    llm_input_micro: int = 1_750
+    llm_output_micro: int = 8_750
     #: Mức nạp tối thiểu, µVND. Máy chủ trả ở `min_topup` của `GET /v1/pricing`.
-    #: 50.000₫ — PRICING.md §5, không có tín dụng tặng lúc đăng ký.
-    #: ⚠ PHẢI BẰNG MỨC THẬT CỦA MÁY CHỦ (200.000đ từ 06/09/2026).
     #: Số này chỉ dùng khi CHƯA gọi được `GET /v1/pricing`, nhưng `topup_presets`
     #: dựng hàng nút TỪ nó — để thấp là lúc mất mạng tool mời khách nạp một mức
     #: máy chủ TỪ CHỐI, và khách chỉ biết sau khi đã chuyển tiền.
     min_topup_micro: int = 200_000_000_000
+    # </gia-tu-dong:kho-github-pricing-gia>
     #: Phần trăm thưởng cho lần nạp NHỎ NHẤT (bậc sàn). Giữ lại để mã cũ đọc
     #: trường này không vỡ; muốn biết thưởng của một số tiền cụ thể thì gọi
     #: `bonus_percent_for(vnd)`, đừng đọc trường này.
@@ -192,6 +198,8 @@ class PriceTable:
             "video_seedance": cls.video_seedance,
             "music_per_second": cls.music_per_second,
             "music_price_per_minute": cls.music_price_per_minute,
+            "llm_input_micro": cls.llm_input_micro,
+            "llm_output_micro": cls.llm_output_micro,
             "min_topup_micro": cls.min_topup_micro,
             "topup_bonus_percent": cls.topup_bonus_percent,
             "topup_bonus_tiers": cls.topup_bonus_tiers,
@@ -201,6 +209,21 @@ class PriceTable:
             values["min_topup_micro"] = parse_micro(payload.get("min_topup"))
         except (TypeError, ValueError):
             pass  # thiếu hoặc hỏng → giữ 10.000₫ mặc định, không làm sập bảng giá
+
+        # Giá LLM (claude-sonnet-5) — dùng để ước tiền bước content.remake.
+        # `GET /v1/pricing` chỉ trả trường `llm` sau khi GÓI 1 (LLM vào DB) lên
+        # máy chủ; máy chủ cũ không có trường này thì giữ mặc định, không vỡ.
+        llm = payload.get("llm")
+        if isinstance(llm, (list, tuple)):
+            for muc in llm:
+                if not isinstance(muc, Mapping) or muc.get("model") != "claude-sonnet-5":
+                    continue
+                try:
+                    values["llm_input_micro"] = parse_micro(muc.get("input"))
+                    values["llm_output_micro"] = parse_micro(muc.get("output"))
+                except (TypeError, ValueError):
+                    pass
+                break
 
         # BẬC THƯỞNG: giữ **cả bảng**, không phải mỗi bậc sàn.
         #
@@ -369,3 +392,32 @@ def chi_phi_music(duration: int, prices: PriceTable = DEFAULT_PRICES) -> int:
         return 0
     prices = prices or DEFAULT_PRICES
     return int(duration) * prices.music_per_second
+
+
+#: Đo thật 30/09/2026: 51 lượt gọi LLM (`content.remake` — viết bản đầu, ép độ
+#: dài, xem lại) cho tổng video 22,2 phút ⇒ ~2,3 lượt/phút. Tổng token đo được
+#: 323.000 vào / 161.000 ra trong 22,2 phút ⇒ quy về MỖI PHÚT VIDEO:
+#: ~14.550 vào, ~7.250 ra. Dùng định mức theo PHÚT VIDEO — thứ khách biết và thứ
+#: đo được ổn định — thay vì "3 lượt cố định × giá đoán": số lượt gọi thật không
+#: cố định, và giá cũ (840/4.200 µ/token) không khớp giá LLM thật của máy chủ
+#: (xem `PriceTable.llm_input_micro`/`llm_output_micro`, nguồn `GET /v1/pricing`).
+LLM_TOKEN_VAO_MOI_PHUT: int = 14_550
+LLM_TOKEN_RA_MOI_PHUT: int = 7_250
+
+
+def hold_for_llm_script(phut: float, prices: PriceTable = DEFAULT_PRICES) -> int:
+    """µVND ước tính cho các lượt gọi LLM viết/sửa kịch bản của một video `phut` phút dài.
+
+    Giá lấy từ `prices.llm_input_micro`/`llm_output_micro` (đọc động từ
+    `GET /v1/pricing` qua `PriceTable.from_api`, không gõ cứng ở đây). Số token
+    quy theo phút video — xem `LLM_TOKEN_VAO_MOI_PHUT`/`LLM_TOKEN_RA_MOI_PHUT`.
+
+    >>> hold_for_llm_script(10)  # 10 phút × (14.550×1.750 + 7.250×8.750) µVND
+    889000000
+    """
+    if phut <= 0:
+        return 0
+    prices = prices or DEFAULT_PRICES
+    token_vao = float(phut) * LLM_TOKEN_VAO_MOI_PHUT
+    token_ra = float(phut) * LLM_TOKEN_RA_MOI_PHUT
+    return int(round(token_vao * prices.llm_input_micro + token_ra * prices.llm_output_micro))

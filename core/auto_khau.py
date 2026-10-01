@@ -239,21 +239,35 @@ NHIP_HOI_RIENG = 45.0
 _HAN_MUC: Dict[str, Any] = {}
 _KHOA_HAN_MUC = threading.Lock()
 
+#: Câu trả lời `GET /v1/me` chỉ được dùng lại trong ngần này giây.
+#:
+#: Bản cũ hỏi MỘT lần cho cả tiến trình. 30/09/2026 16:19 (VN) worker nhà máy
+#: khởi động lại: trong ~1,5 phút trần ảnh máy chủ báo 0 rồi 8 (số mồi), rồi
+#: 200. Tool nào hỏi đúng quãng đó thì nhớ con số ấy tới lúc tắt tool — chủ dự án
+#: thấy "ShopAPI chỉ cấp 1 job ảnh cùng lúc" trong khi nhà máy đã rộng 200 chỗ.
+#: Hỏi lại mỗi phút là 1 lượt gọi/phút — không đáng kể so với lượt hỏi job.
+HAN_MUC_TUOI_S = 60.0
+_HAN_MUC_LUC = [0.0]
+
 
 def han_muc_may_chu(bc: "BoiCanh") -> Dict[str, Any]:
-    """Hỏi cổng xem nó cho chạy bao nhiêu. Hỏi hỏng thì trả về `{}`.
+    """Hỏi cổng xem nó cho chạy bao nhiêu. Hỏi hỏng thì trả về số cũ (hoặc `{}`).
 
-    Hỏi **một lần cho cả lượt chạy**: con số này đổi theo tải nhà máy, nhưng
-    không đổi từng phút, và hỏi lại ở mỗi khâu chỉ tốn thêm lượt gọi.
+    Dùng lại câu trả lời trong `HAN_MUC_TUOI_S` giây: con số này đổi theo tải
+    nhà máy (và tụt hẳn trong lúc nhà máy khởi động lại), nên không được nhớ mãi.
     """
     with _KHOA_HAN_MUC:
-        if _HAN_MUC:
+        if _HAN_MUC and time.monotonic() - _HAN_MUC_LUC[0] < HAN_MUC_TUOI_S:
             return _HAN_MUC
         try:
             tra = bc.client.request("GET", "/v1/me")
             goi = tra.to_dict() if hasattr(tra, "to_dict") else dict(tra)
-            _HAN_MUC.update(goi.get("limits") or {})
-        except Exception:  # noqa: BLE001 — hỏi không được thì dùng số an toàn
+            moi = goi.get("limits") or {}
+            if moi:
+                _HAN_MUC.clear()
+                _HAN_MUC.update(moi)
+                _HAN_MUC_LUC[0] = time.monotonic()
+        except Exception:  # noqa: BLE001 — hỏi không được thì dùng số an toàn/cũ
             pass
         return _HAN_MUC
 
@@ -9710,7 +9724,12 @@ def _anh_thanh_clip(bc: BoiCanh, ffmpeg: str, d: str, canh: Sequence[Dict[str, A
                len(anh), rong, cao, fps,
                ", vẽ {0} clip trên máy".format(len(viec)) if viec else ", đã có sẵn"))
     if viec:
-        so_luong = max(1, min(6, so_van_ffmpeg() // 2))
+        # Mỗi việc: một ảnh nguồn phóng sẵn trong RAM + một FFmpeg 2 luồng —
+        # co theo cả lõi lẫn RAM trống của máy này (`core/ke_hoach_dung`).
+        from .ke_hoach_dung import so_viec_cung_luc  # noqa: PLC0415
+
+        so_luong = so_viec_cung_luc(so_van_ffmpeg(), 200.0 * rong * cao / (1280 * 720),
+                                    luong_moi_viec=2, tran=6)
         xong = [0]
         khoa = threading.Lock()
 
@@ -10094,6 +10113,11 @@ def _khau_dung(bc: BoiCanh):
         chon = ChonNgauNhien("{0}/{1}".format(luot.ma_kenh, luot.ma_luot))
         manh, chuan = _anh_thanh_clip(bc, ffmpeg, d, canh, manh, giay,
                                       GIAY_CHUYEN if chuyen else 0.0, chon)
+        # Ảnh động vừa vẽ (hoặc vẽ sẵn từ lần trước với đúng mốc này) đã dài đủ
+        # `giay + GIAY_CHUYEN` — tên tệp mang độ dài, mốc đổi thì vẽ lại.
+        thu_muc_anh_dong = os.path.normcase(os.path.abspath(os.path.join(d, "6-clip-anh")))
+        san_khuon = [i for i, m in enumerate(manh)
+                     if os.path.normcase(os.path.dirname(os.path.abspath(m))) == thu_muc_anh_dong]
         kieu_chuyen = ([chon.chuyen_canh() for _ in range(len(manh) - 1)]
                        if chuyen else None)
         if chuyen:
@@ -10125,11 +10149,10 @@ def _khau_dung(bc: BoiCanh):
         # khâu duy nhất chạy trên máy khách, và cũng là khâu lâu nhất: khách báo
         # 28/08/2026 rằng tool "Not responding" chính vì ngồi nhìn một dòng nhật
         # ký đứng im mà không biết nó còn sống hay không.
-        bc.ghi("    (dựng trên máy bạn, không tốn tiền: {0} luồng CPU, mức nén "
-               "“{1}” chọn theo cấu hình máy này. Cứ khoảng {2:.0f} giây tôi "
-               "báo một dòng phần trăm; cửa sổ vẫn bấm được, và bấm Dừng là "
-               "dừng ngay.)".format(
-                   so_van_ffmpeg(), _muc_nen(bc.goc), GIAY_BAO_TIEN_DO))
+        bc.ghi("    (dựng trên máy bạn, không tốn tiền — tool đo máy này rồi tự "
+               "chia việc, dòng “kế hoạch dựng” ngay dưới nói rõ. Cứ khoảng "
+               "{0:.0f} giây tôi báo một dòng phần trăm; cửa sổ vẫn bấm được, "
+               "và bấm Dừng là dừng ngay.)".format(GIAY_BAO_TIEN_DO))
         _ghep_video(ffmpeg, manh, mp3, srt if dot else "", dich,
                     giay=giay, ghi=bc.ghi, nhac=nhac,
                     am_luong=float(getattr(bc.kenh, "am_luong_nhac", 0.12)),
@@ -10141,7 +10164,7 @@ def _khau_dung(bc: BoiCanh):
                     nguong_tieng_nguoi=float(getattr(
                         bc.kenh, "nguong_tieng_nguoi", 0.0) or 0.0),
                     chuyen_canh=kieu_chuyen, giay_chuyen=GIAY_CHUYEN,
-                    chuan=chuan, lop_phu=lop_phu)
+                    chuan=chuan, lop_phu=lop_phu, san_khuon=san_khuon)
         # Video dựng xong vốn đã sạch thẻ — FFmpeg mã hoá lại là thẻ của tệp
         # nguồn mất hết. Vẫn chạy một lượt cho chắc: nó chỉ chép luồng sang tệp
         # mới, mất vài giây cho cả video mười phút, và nó bảo hiểm cho ngày nào
@@ -10219,17 +10242,6 @@ def _xuat_capcut_neu_bat(bc: BoiCanh, thu_muc: str, video: str) -> str:
            "lúc nó bấm).")
     xuat_qua_capcut(video, dich, ghi=bc.ghi, dung=bc.kiem_dung)
     return "9-video-capcut.mp4"
-
-
-def _muc_nen(goc: str) -> str:
-    """Mức nén x264 máy này sẽ dùng cho bản cuối — chỉ để ghi vào nhật ký."""
-    from .phan_cung import chon_encoder, doc_ket_qua  # noqa: PLC0415
-
-    try:
-        return chon_encoder(doc_ket_qua(goc), intermediate=False)[1].get(
-            "-preset", "medium")
-    except Exception:  # noqa: BLE001 — một dòng nhật ký không được làm hỏng khâu
-        return "medium"
 
 
 def chon_do_phan_giai(goc: str, kenh) -> str:
@@ -10378,8 +10390,13 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                 chuyen_canh: Optional[Sequence[str]] = None,
                 giay_chuyen: float = 0.5,
                 chuan: Optional[Tuple[int, int, float]] = None,
-                lop_phu: str = "") -> None:
+                lop_phu: str = "",
+                san_khuon: Optional[Sequence[int]] = None) -> None:
     """Cắt từng clip về đúng độ dài cảnh, nối lại, gắn tiếng, đốt phụ đề.
+
+    `san_khuon` — chỉ số những mảnh đã vẽ sẵn đúng khuôn `chuan` và dài ít nhất
+    `giay[i] + giay_chuyen` (ảnh động của `_anh_thanh_clip`). Có hiệu ứng chuyển
+    thì chúng vào nối thẳng, không cắt lại.
 
     `chuyen_canh` — một kiểu `xfade` cho mỗi mối nối (`len(clip) - 1`); `None`
     = cắt thẳng như cũ. Có nó thì mỗi mảnh (trừ mảnh cuối) cắt dài thêm
@@ -10454,8 +10471,24 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     # Từ ngày 20/08/2026: chọn encoder theo khảo sát phần cứng. Bản trung gian
     # (intermediate=True) dùng GPU nếu có — nhanh gấp 4–8 lần. Bản master cuối
     # (intermediate=False) luôn dùng CPU để đảm bảo chất lượng.
+    #
+    # Từ 01/10/2026 mọi con số ấy lấy từ `core/ke_hoach_dung.lap_ke_hoach`: đo
+    # máy NÀY lúc dựng (lõi, RAM trống, card đồ hoạ nén thử được) và khối lượng
+    # phim NÀY (độ dài × cỡ khung) — chủ dự án: "edit chạy trên máy khách nên
+    # phải thông minh, linh hoạt theo máy khách".
+    from .ke_hoach_dung import lap_ke_hoach  # noqa: PLC0415
+
     pc = doc_ket_qua(base_dir)
-    codec_cuoi, opts_cuoi = chon_encoder(pc, intermediate=False)
+    rong_m, cao_m, fps_m = (chuan if chuan else (1280, 720, 24.0))
+    kh = lap_ke_hoach(ffmpeg, pc, tong_giay=float(sum(giay)) if giay else 0.0,
+                      rong=int(rong_m), cao=int(cao_m), fps=float(fps_m) or 24.0,
+                      rong_ra=int(khung[0]) if khung else 0,
+                      cao_ra=int(khung[1]) if khung else 0)
+    codec_cuoi, opts_cuoi = kh.codec_cuoi, kh.opts_cuoi
+    if ghi is not None:
+        ghi("    kế hoạch dựng: {0}.".format(kh.mo_ta()))
+        for ly_do in kh.ly_do_lui:
+            ghi("    (phim dài/khung lớn so với máy — lùi mức nén cuối {0})".format(ly_do))
 
     # Chọn encoder cho BƯỚC CẮT clip. Chỗ này quyết định theo `ma_lai`:
     #   - ma_lai=True: bản cắt là TRUNG GIAN (sẽ mã lại lần nữa) → GPU nếu có.
@@ -10463,7 +10496,32 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
     #     → phải dùng encoder bản cuối (CPU an toàn), không được dùng GPU.
     #   - có hiệu ứng chuyển: bước nối xfade mã lại lần nữa → bản cắt cũng là
     #     trung gian, kẻo nén bản-cuối hai lần chồng nhau.
-    codec_cat, opts_cat = chon_encoder(pc, intermediate=ma_lai or bool(chuyen_canh))
+    trung_gian = ma_lai or bool(chuyen_canh)
+    khoa_gpu = threading.Lock()
+
+    def ma_cat() -> Tuple[str, Dict[str, str]]:
+        return (kh.codec_giua, kh.opts_giua) if trung_gian else (codec_cuoi, opts_cuoi)
+
+    def gpu_hong(loi: BaseException) -> bool:
+        """Card đồ hoạ vừa nén hỏng → chuyển hẳn về CPU, trả True để thử lại.
+
+        Nén thử một khung lúc lập kế hoạch đã qua, nhưng driver card vẫn có thể
+        chết giữa chừng (hết bộ nhớ card, máy ngủ…). Một lần hỏng như thế không
+        được làm mất hiệu ứng chuyển cảnh hay cả video.
+        """
+        from .auto import Cancelled  # noqa: PLC0415
+
+        if isinstance(loi, Cancelled):
+            return False
+        with khoa_gpu:
+            if not (trung_gian and kh.gpu):
+                return False
+            ten = kh.gpu
+            kh.ve_cpu()
+        if ghi is not None:
+            ghi("    (card {0} nén hỏng: {1} — chuyển sang CPU, làm tiếp)".format(
+                ten, str(loi)[:100]))
+        return True
 
     # ═══ CLIP NÀO CÓ NGƯỜI NÓI THÌ TẮT TIẾNG CLIP ẤY ═══
     #
@@ -10481,11 +10539,37 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
             ffmpeg, clip, ghi=ghi,
             nguong=float(nguong_tieng_nguoi) or NGUONG_TIENG_NGUOI)
 
-    da_cat = []
-    for i, m in enumerate(clip):
-        if giay is None:
-            da_cat.append(m)
-            continue
+    # ═══ CẮT SONG SONG, VÀ ẢNH ĐỘNG ĐÃ ĐÚNG KHUÔN THÌ KHÔNG CẮT ═══
+    #
+    # Khách khiếu nại 30/09/2026: template story "một link mất quá nhiều thời
+    # gian". Đo khâu dựng phim Mỹ nam 0001 (151 cảnh, 141 là ảnh động): riêng
+    # bước cắt mất ~30 phút — cắt LẦN LƯỢT từng mảnh, mỗi mảnh một lần mã hoá
+    # lại. Mà 141 mảnh ảnh động do chính `_anh_thanh_clip` vẽ ra đã ĐÚNG cỡ,
+    # đúng nhịp khung và dài đủ `giay + giay_chuyen` — mã lại chúng chỉ tốn
+    # giờ và thêm một lớp nén. Có hiệu ứng chuyển thì bước nối xfade mã lại cả
+    # thôi (mảnh dài thừa thì xfade tự bỏ phần sau mối chuyển), nên mảnh ấy đi
+    # thẳng vào nối. Nối cắt thẳng (`concat -c copy`) thì vẫn phải cắt đúng
+    # khung — nhánh lùi bên dưới cắt bù những mảnh đã bỏ qua.
+    #
+    # Mảnh phải cắt thật (clip Veo) thì cắt vài mảnh cùng lúc, chia luồng CPU:
+    # x264 không dùng hết 15 lõi cho một clip 720p tám giây.
+    from .chuyen_dong_anh import do_video  # noqa: PLC0415
+
+    so_luong_cat = kh.song_song
+    luong_moi = str(kh.luong_moi)
+
+    def dung_nguyen(i: int) -> bool:
+        if not (chuyen_canh and chuan and giay is not None and i in (san_khuon or ())
+                and i < len(clip) - 1):
+            return False
+        r, c_, f = do_video(ffmpeg, clip[i])
+        return ((r, c_) == (int(chuan[0]), int(chuan[1]))
+                and abs(float(f) - float(chuan[2])) < 0.01)
+
+    def cat_mot(i: int, ep: bool = False) -> str:
+        m = clip[i]
+        if giay is None or (not ep and dung_nguyen(i)):
+            return m
         ra = os.path.join(tam, "{0:04d}.mp4".format(i))
         if not os.path.exists(ra):
             can = float(giay[i]) + (float(giay_chuyen)
@@ -10524,20 +10608,58 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
                                  "-vf", loc, "-map", "0:v:0", "-map", "1:a:0"])
             else:
                 lenh_cat.extend(["-vf", loc])
-            lenh_cat.extend(["-t", "{0:.3f}".format(can), "-c:v", codec_cat])
-            for k, v in opts_cat.items():
-                lenh_cat.extend([k, str(v)])
-            lenh_cat.extend(["-threads", str(so_van_ffmpeg()),
-                             "-pix_fmt", "yuv420p"])
-            lenh_cat.extend(["-c:a", "aac", "-b:a", "160k", "-ar", "48000",
+            lenh_cat.extend(["-t", "{0:.3f}".format(can)])
+            # Ghi ra tệp tạm rồi mới đổi tên: bấm Dừng giữa chừng thì không để
+            # lại một mảnh cụt mà lần chạy tiếp tưởng là đã cắt xong.
+            tam_ra = ra + ".tmp.mp4"
+            while True:
+                codec_cat, opts_cat = ma_cat()
+                lenh = lenh_cat + ["-c:v", codec_cat]
+                for k, v in opts_cat.items():
+                    lenh.extend([k, str(v)])
+                lenh.extend(["-threads", luong_moi, "-pix_fmt", "yuv420p"])
+                lenh.extend(["-c:a", "aac", "-b:a", "160k", "-ar", "48000",
                              "-ac", "2"] if giu_tieng else ["-an"])
-            lenh_cat.append(ra)
-            _chay(ffmpeg, lenh_cat)
-        da_cat.append(ra)
+                lenh.append(tam_ra)
+                try:
+                    _chay(ffmpeg, lenh)
+                    break
+                except Exception as loi:  # noqa: BLE001
+                    # Hỏng ở CPU là hỏng thật → nổi lên. Hỏng ở card đồ hoạ →
+                    # về CPU rồi thử lại (luồng khác chuyển trước thì cũng thử lại).
+                    if codec_cat == "libx264":
+                        raise
+                    if not gpu_hong(loi) and ma_cat()[0] == codec_cat:
+                        raise
+            if os.path.exists(tam_ra):
+                os.replace(tam_ra, ra)
         if dung is not None:
             dung()      # bấm Dừng giữa 99 lần cắt thì dừng ngay tại đây
-        if ghi is not None and (i + 1) % 20 == 0:
-            ghi("    cắt {0}/{1} clip…".format(i + 1, len(clip)))
+        return ra
+
+    da_cat: List[str] = list(clip)
+    dem_cat = [0]
+    khoa_cat = threading.Lock()
+
+    def cat_va_dem(i: int) -> None:
+        da_cat[i] = cat_mot(i)
+        with khoa_cat:
+            dem_cat[0] += 1
+            if ghi is not None and dem_cat[0] % 20 == 0:
+                ghi("    cắt {0}/{1} clip…".format(dem_cat[0], len(clip)))
+
+    if giay is not None:
+        from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+        with ThreadPoolExecutor(max_workers=so_luong_cat) as ho:
+            for f in [ho.submit(cat_va_dem, i) for i in range(len(clip))]:
+                f.result()
+        bo_qua = [i for i in range(len(clip)) if da_cat[i] == clip[i]]
+        if bo_qua and ghi is not None:
+            ghi("    {0}/{1} mảnh ảnh động đã đúng khuôn — nối thẳng, không cắt "
+                "lại.".format(len(bo_qua), len(clip)))
+    else:
+        bo_qua = []
 
     danh_sach = os.path.join(thu_muc, "_clip.txt")
     tam_noi = os.path.join(thu_muc, "_noi.mp4")
@@ -10550,25 +10672,43 @@ def _ghep_video(ffmpeg: str, clip: Sequence[str], mp3: str, srt: str,
         # `coverleft` thì bậc này vẫn chạy. Bậc 3: cắt thẳng (dưới).
         from .chuyen_dong_anh import ghep_chuyen_canh  # noqa: PLC0415
 
-        ma_hoa = ["-c:v", codec_cat if ma_lai else codec_cuoi]
-        for k, v in (opts_cat if ma_lai else opts_cuoi).items():
-            ma_hoa.extend([k, str(v)])
-        ma_hoa.extend(["-threads", str(so_van_ffmpeg())])
-        for bac, kieu in enumerate((list(chuyen_canh), ["fade"] * (len(da_cat) - 1))):
+        def ma_hoa_noi() -> Tuple[List[str], List[str]]:
+            codec, opts = ma_cat() if ma_lai else (codec_cuoi, opts_cuoi)
+            mh = ["-c:v", codec]
+            for k, v in opts.items():
+                mh.extend([k, str(v)])
+            return (mh + ["-threads", str(kh.luong_tong)],
+                    mh + ["-threads", str(kh.luong_moi)])
+
+        bac_noi = [list(chuyen_canh), ["fade"] * (len(da_cat) - 1)]
+        bac = 0
+        while bac < len(bac_noi):
+            kieu = bac_noi[bac]
+            ma_hoa, ma_hoa_lo = ma_hoa_noi()
             try:
                 ghep_chuyen_canh(ffmpeg, da_cat, [float(g) for g in giay], kieu, tam_noi,
                                  lambda ts: _chay(ffmpeg, ts, dung=dung), ma_hoa,
-                                 t=float(giay_chuyen), ghi=ghi)
+                                 t=float(giay_chuyen), ghi=ghi,
+                                 song_song=so_luong_cat, ma_hoa_lo=ma_hoa_lo)
                 noi_xong = True
                 break
             except Exception as loi:  # noqa: BLE001
                 if dung is not None:
                     dung()          # bấm Dừng thì dừng, đừng lùi bậc
+                # Card đồ hoạ hỏng → về CPU, thử lại ĐÚNG bậc này (không mất
+                # hiệu ứng chỉ vì driver card).
+                if ma_lai and ma_hoa[1] != "libx264" and gpu_hong(loi):
+                    continue
+                bac += 1
                 if ghi is not None:
                     ghi("    (hiệu ứng chuyển cảnh không chạy được{0}: {1})".format(
-                        "" if bac else " — thử lại bằng kiểu mờ đơn giản",
+                        " — thử lại bằng kiểu mờ đơn giản" if bac < len(bac_noi) else "",
                         str(loi)[:120]))
     if not noi_xong:
+        # Nối cắt thẳng chép luồng — mảnh nào ở trên được nối nguyên (ảnh động
+        # dài thừa, mã hoá khác) thì giờ phải cắt đúng như mọi mảnh khác.
+        for i in bo_qua:
+            da_cat[i] = cat_mot(i, ep=True)
         with open(danh_sach, "w", encoding="utf-8") as tep:
             for i, m in enumerate(da_cat):
                 tep.write("file '{0}'\n".format(os.path.abspath(m).replace("'", "'\\''")))
