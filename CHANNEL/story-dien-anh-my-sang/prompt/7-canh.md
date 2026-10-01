@@ -2,11 +2,12 @@
 
 Read the SRT below, **divide it into scenes by MEANING**, and write one image
 prompt and one video prompt per scene. The audience is American adults
-listening to an 'unaware of who he truly was' luxury-drama story; the pictures are GLOSSY
-PHOTOREALISTIC DRAMA STILLS of what actually happened, like a glamorous American
-soap-drama frame: who was in the room, what
-they did, what object was on the table. A viewer with the sound off must be
-able to guess the moment from the picture.
+listening to a ROMANCE story — a kind, underestimated young woman is mocked
+and meets the man of her dreams, rich, brilliant and handsome; the pictures
+are BRIGHT PHOTOREALISTIC STILLS FROM A HOLLYWOOD ROMANCE MOVIE of what
+actually happened: who was there, what they did, the look between them, the
+object in their hands. A viewer with the sound off must be able to guess the
+moment from the picture — and want to keep watching these two people.
 
 Do not cut on a fixed clock. Cut where the story moves: a new action, a new
 speaker, a new arrival, a new place, a new object. One scene = one story beat.
@@ -89,12 +90,20 @@ subject off-centre, depth front-to-back.
    payoff. When several people are in frame, each reacts in their own way.
    Safe for everyone: no blood, no weapons, no sexual content; conflict is
    shown through faces, gestures and objects.
-5. **Bright, glossy light — never gloomy.** Name the light source of every
-   shot (warm golden lamps, fairy lights, chandeliers, big windows with
-   daylight or blue-hour city lights) and let it fall on the thing that
-   matters in this beat — the black card, the contract, the ring. The picture
-   stays bright and clean even when the moment is hard.
-6. **Video prompt = one clear small action**, matching the line: the door
+5. **Bright, warm, romantic light — never gloomy.** Name the light source of
+   every shot (golden-hour sun through big windows, a sunlit terrace, soft
+   café light, warm lamps, a chandelier, rain glittering under street lights)
+   and let it fall on the faces and on the thing that matters in this beat —
+   the bouquet, the sewing machine, the ring box. Put flowers, greenery and
+   charming detail in the set. The picture stays bright and beautiful even
+   when the moment is hard.
+6. **The romance is the spine.** Whenever the hero and the heroine are both in
+   the beat, frame them TOGETHER (two-shot, over-the-shoulder from one to the
+   other) and show the look between them — eye contact, a stolen glance, a shy
+   smile, a stunned stare. The heroine is always lovely, even poor and
+   humiliated (neat simple pastel clothes, glossy hair); the hero is always
+   handsome and composed. Snobs and side characters stay smaller and behind.
+7. **Video prompt = one clear small action**, matching the line: the door
    closes, the folder slides across, the hand sets the mug down, the car pulls
    away. Name the action first, then one slow camera move (push-in, dolly,
    gentle handheld drift). Nothing is added, nothing disappears, nobody changes
