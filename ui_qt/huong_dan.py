@@ -706,6 +706,12 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "một hai phút, đừng dùng chuột phím).",
             "Kênh MẪU của tool được cập nhật theo tool. Muốn tuỳ chỉnh thì nhân "
             "bản ở tab Quản lý kênh — bản sao là kênh riêng, cập nhật không đụng.",
+            "Video hay ảnh? Mỗi kênh chọn ở Sửa kênh → Dựng video → “Hình "
+            "động”: mọi cảnh là video (Veo, đắt nhất), mọi cảnh là ảnh có "
+            "chuyển động nhẹ (không tốn tiền clip), hoặc chỉ phần đầu là video "
+            "— theo % thời lượng (10% của video 60 phút = 6 phút đầu) hay theo "
+            "N cảnh đầu. Phần mở đầu giữ người xem nên là video; phần thân "
+            "truyện nghe là chính, ảnh động là đủ.",
             "Kênh “Timelapse” không cần nội dung: chỉ cần tiêu đề nói rõ NƠI "
             "nào và khoảng thời gian nào.",
             "Nhật ký có dòng “[CỨU] cảnh…”: máy chủ từ chối cảnh đó (thường vì "

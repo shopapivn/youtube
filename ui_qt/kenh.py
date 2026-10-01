@@ -60,7 +60,64 @@ CANH_ANH = 150
 _MAC_DINH_VIDEO = {"dot_phu_de": True, "nhac_nen": "",
                    "am_luong_nhac": 0.12, "do_phan_giai": "",
                    "giu_tieng_canh": False, "am_luong_tieng_canh": 0.35,
-                   "nguong_tieng_nguoi": 0}
+                   "nguong_tieng_nguoi": 0, "phan_tram_clip": -1, "so_clip_dau": 0}
+
+# ── Hình động: toàn video / toàn ảnh / X% đầu / N cảnh đầu ───────────────────
+#
+# Chủ dự án 01/10/2026: *"full ảnh, full video, hoặc bao nhiêu % video (ví dụ
+# 10% tức video 60 phút chỉ có 6 phút)"*. Hai khoá trong kenh.yaml —
+# `phan_tram_clip` (theo thời lượng) và `so_clip_dau` (theo số cảnh, nết cũ
+# của ba kênh drama) — gộp thành MỘT ô chọn + một ô số trên màn hình. Hai hàm
+# đổi qua lại là hàm thuần để kiểm được không cần cửa sổ.
+
+KIEU_CLIP_VIDEO = "video"      # mọi cảnh là clip Veo
+KIEU_CLIP_ANH = "anh"          # mọi cảnh là ảnh chuyển động, không tốn tiền clip
+KIEU_CLIP_PHAN_TRAM = "phan_tram"   # X% thời lượng đầu là clip
+KIEU_CLIP_SO_CANH = "so_canh"       # N cảnh đầu là clip
+
+NHAN_KIEU_CLIP = (
+    (KIEU_CLIP_VIDEO, "Mọi cảnh là video"),
+    (KIEU_CLIP_ANH, "Mọi cảnh là ảnh (không tốn tiền clip)"),
+    (KIEU_CLIP_PHAN_TRAM, "Phần đầu là video, còn lại ảnh"),
+    (KIEU_CLIP_SO_CANH, "N cảnh đầu là video, còn lại ảnh"),
+)
+
+
+def kieu_clip_tu_cai(cai: Dict[str, object]) -> Tuple[str, int]:
+    """`(kiểu, số)` để điền lên màn hình từ hai khoá của kenh.yaml."""
+    def so(khoa: str, mac_dinh: int) -> int:
+        gt = cai.get(khoa)
+        if gt is None or str(gt).strip() == "":
+            return mac_dinh
+        try:
+            return int(float(str(gt)))
+        except (TypeError, ValueError):
+            return mac_dinh
+
+    pt = so("phan_tram_clip", -1)
+    n = so("so_clip_dau", 0)
+    if pt >= 100:
+        return KIEU_CLIP_VIDEO, 100
+    if pt == 0:
+        return KIEU_CLIP_ANH, 0
+    if pt > 0:
+        return KIEU_CLIP_PHAN_TRAM, pt
+    if n > 0:
+        return KIEU_CLIP_SO_CANH, n
+    return KIEU_CLIP_VIDEO, 100
+
+
+def cai_tu_kieu_clip(kieu: str, so: int) -> Dict[str, str]:
+    """Hai khoá ghi vào kenh.yaml từ lựa chọn trên màn hình. Chọn kiểu nào thì
+    khoá kia về số "tắt", để hai khoá không nói hai chuyện khác nhau."""
+    so = int(so or 0)
+    if kieu == KIEU_CLIP_ANH:
+        return {"phan_tram_clip": "0", "so_clip_dau": "0"}
+    if kieu == KIEU_CLIP_PHAN_TRAM:
+        return {"phan_tram_clip": str(min(99, max(1, so))), "so_clip_dau": "0"}
+    if kieu == KIEU_CLIP_SO_CANH:
+        return {"phan_tram_clip": "-1", "so_clip_dau": str(max(1, so))}
+    return {"phan_tram_clip": "100", "so_clip_dau": "0"}
 
 #: Nhãn NGẮN đặt trên mỗi THẺ prompt (tab). Giữ ngắn để hàng thẻ không kéo rộng
 #: trang quá mép. Khoá tệp lấy từ `BUOC_PROMPT` (core), chỉ đổi CÁCH GỌI ở giao
@@ -1656,6 +1713,26 @@ class HopKenh(QDialog):
             "Mọi video của kênh này dựng theo cách bên dưới. Cài một lần, không "
             "phải chọn lại mỗi lượt."))
 
+        v.addWidget(nhan("Hình động", "h2"))
+        v.addWidget(self._phu(
+            "Clip Veo đắt gấp mười ảnh. Phần mở đầu giữ người xem thì nên là "
+            "video; phần thân truyện nghe là chính, ảnh có chuyển động nhẹ "
+            "(zoom, lia — vẽ trên máy, miễn phí) là đủ."))
+        hang_hd = HangXuongDong()
+        self._o_kieu_clip = QComboBox()
+        for ma, ten in NHAN_KIEU_CLIP:
+            self._o_kieu_clip.addItem(ten, ma)
+        self._o_kieu_clip.setMinimumWidth(260)
+        self._o_so_clip = QSpinBox()
+        self._o_so_clip.setFixedWidth(130)
+        kieu, so = kieu_clip_tu_cai(cai)
+        self._o_kieu_clip.setCurrentIndex(max(0, self._o_kieu_clip.findData(kieu)))
+        self._o_kieu_clip.currentIndexChanged.connect(lambda _i: self._doi_kieu_clip())
+        hang_hd.addWidget(self._o_kieu_clip)
+        hang_hd.addWidget(self._o_so_clip)
+        v.addLayout(hang_hd)
+        self._doi_kieu_clip(so)
+
         self._o_dot_sub = QCheckBox("Đốt phụ đề thẳng vào hình")
         self._o_dot_sub.setChecked(
             str(cai.get("dot_phu_de", True)).strip().lower() != "false")
@@ -1757,6 +1834,27 @@ class HopKenh(QDialog):
         v.addWidget(self._o_dpg)
         v.addStretch(1)
         return w
+
+    def _doi_kieu_clip(self, so: int = 0) -> None:
+        """Ô số chỉ có nghĩa với hai kiểu "phần đầu": đổi đơn vị và khoảng theo
+        kiểu, ẩn đi khi không cần — một ô số vô nghĩa là một câu hỏi thừa."""
+        kieu = self._o_kieu_clip.currentData()
+        if kieu == KIEU_CLIP_PHAN_TRAM:
+            self._o_so_clip.setRange(1, 99)
+            self._o_so_clip.setSuffix("% đầu")
+            self._o_so_clip.setToolTip(
+                "Tính theo THỜI LƯỢNG: 10% của video 60 phút là 6 phút đầu "
+                "làm clip, phần sau là ảnh chuyển động.")
+            self._o_so_clip.setValue(so if 1 <= so <= 99 else 10)
+            self._o_so_clip.setVisible(True)
+        elif kieu == KIEU_CLIP_SO_CANH:
+            self._o_so_clip.setRange(1, 999)
+            self._o_so_clip.setSuffix(" cảnh đầu")
+            self._o_so_clip.setToolTip("Đếm theo số cảnh trong bảng cảnh.")
+            self._o_so_clip.setValue(so if so >= 1 else 10)
+            self._o_so_clip.setVisible(True)
+        else:
+            self._o_so_clip.setVisible(False)
 
     def _chon_nhac(self) -> None:
         duong, _ = QFileDialog.getOpenFileName(
@@ -1866,6 +1964,8 @@ class HopKenh(QDialog):
              else self._o_dpg.currentText()),
             ("so_ban_nhap", str(self._o_so_ban.value())),
             ("hoan_thien", "true" if self._o_va.isChecked() else "false"),
+            *sorted(cai_tu_kieu_clip(self._o_kieu_clip.currentData(),
+                                     self._o_so_clip.value()).items()),
         ):
             chu = _dat_khoa_yaml(chu, khoa, gt)
         if sua:
@@ -1908,7 +2008,9 @@ class HopKenh(QDialog):
         cai = {"dot_phu_de": self._kenh.dot_phu_de,
                "nhac_nen": self._kenh.nhac_nen,
                "am_luong_nhac": self._kenh.am_luong_nhac,
-               "do_phan_giai": self._kenh.do_phan_giai}
+               "do_phan_giai": self._kenh.do_phan_giai,
+               "phan_tram_clip": self._kenh.phan_tram_clip,
+               "so_clip_dau": self._kenh.so_clip_dau}
 
         self._them_trang("Bắt đầu", self._trang_sua_dau())
         self._them_trang("Giọng đọc", self._trang_giong(tao=False))

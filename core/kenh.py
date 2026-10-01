@@ -203,6 +203,19 @@ class Kenh:
     #: còn lại về sau sẽ là tạo ảnh"* — clip mở đầu giữ người xem, phần thân
     #: truyện nghe là chính nên ảnh động là đủ, mà rẻ hơn clip mười lần.
     so_clip_dau: int = 0
+    #: BAO NHIÊU PHẦN TRĂM THỜI LƯỢNG (tính từ đầu video) là CLIP Veo, còn lại
+    #: là ảnh chuyển động. Chủ dự án 01/10/2026: *"full ảnh, full video, hoặc
+    #: bao nhiêu % video (ví dụ 10% tức video 60 phút chỉ có 6 phút)"*.
+    #:
+    #:   100 = mọi cảnh là clip · 0 = mọi cảnh là ảnh (không bắn một clip
+    #:   nào) · 1–99 = các cảnh ĐẦU cho tới khi gom đủ X% thời lượng.
+    #:   -1 = chưa khai → theo `so_clip_dau` (N cảnh đầu), không khai nốt thì
+    #:   mọi cảnh là clip như trước.
+    #:
+    #: Đo theo THỜI LƯỢNG chứ không theo số cảnh, vì cảnh dài ngắn khác nhau
+    #: (2,8–8 giây) — "10% video" mà đếm cảnh thì ra 6 phút hay 9 phút tuỳ
+    #: lượt. Xem `auto_khau._canh_co_clip`.
+    phan_tram_clip: int = -1
     #: Kiểu nối hai cảnh khi dựng. "" = cắt thẳng (nết cũ); "ngau_nhien" = hiệu
     #: ứng chuyển ngẫu nhiên 0,5 giây (hoà tan, mờ đen, trượt…), mốc lời giữ nguyên.
     chuyen_canh: str = ""
@@ -743,6 +756,9 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
         giu_noi_dung_goc=bool(cai.get("giu_noi_dung_goc", False)),
         dung_giong_doi_thu=bool(cai.get("dung_giong_doi_thu", False)),
         so_clip_dau=max(0, int(_so(cai.get("so_clip_dau"), 0))),
+        # Không khai (hay gõ hỏng) = -1; khai thì kẹp 0..100.
+        phan_tram_clip=(-1 if cai.get("phan_tram_clip") in (None, "")
+                        else min(100, max(-1, int(_so(cai.get("phan_tram_clip"), -1))))),
         chuyen_canh=str(cai.get("chuyen_canh") or "").strip(),
         kieu_phu_de=str(cai.get("kieu_phu_de") or "").strip(),
         kieu_bia=str(cai.get("kieu_bia") or "").strip(),

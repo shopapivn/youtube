@@ -32,6 +32,7 @@ thử được bằng đồ giả, không tốn đồng nào và không cần m�
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import shutil
@@ -8866,12 +8867,62 @@ def _khau_anh_noi_canh(bc: BoiCanh):
 
 
 def _canh_co_clip(bc: BoiCanh, canh: Sequence[Dict[str, Any]]) -> set:
-    """Mã những cảnh được làm clip. Kênh khai `so_clip_dau: N` thì chỉ N cảnh
-    ĐẦU (theo thứ tự cảnh); còn lại là ảnh, khâu dựng tự cho ảnh chuyển động
-    (`core/chuyen_dong_anh.py`). Không khai = mọi cảnh, như trước."""
+    """Mã những cảnh được làm clip; cảnh còn lại là ảnh, khâu dựng tự cho ảnh
+    chuyển động (`core/chuyen_dong_anh.py`, miễn phí).
+
+    Hai cách kênh khai, ưu tiên cách đầu:
+
+    * `phan_tram_clip: X` — X% THỜI LƯỢNG tính từ đầu video là clip. 100 = mọi
+      cảnh, 0 = không một cảnh nào (video toàn ảnh động), 1–99 = lấy cảnh từ
+      đầu cho tới khi gom đủ X% thời lượng (luôn ít nhất một cảnh). Thời lượng
+      cảnh đo bằng `srt_start`/`srt_end` của bảng cảnh; bảng không có mốc giờ
+      thì đếm theo số cảnh.
+    * `so_clip_dau: N` — N cảnh ĐẦU (theo thứ tự cảnh). Nết cũ, giữ cho kênh
+      đã khai.
+
+    Không khai gì = mọi cảnh, như trước.
+    """
     ma = sorted(int(c["scene_id"]) for c in canh)
-    n = int(getattr(bc.kenh, "so_clip_dau", 0) or 0)
-    return set(ma[:n] if n > 0 else ma)
+    try:
+        pt = int(getattr(bc.kenh, "phan_tram_clip", -1))
+    except (TypeError, ValueError):
+        pt = -1
+    if pt < 0:
+        n = int(getattr(bc.kenh, "so_clip_dau", 0) or 0)
+        return set(ma[:n] if n > 0 else ma)
+    if pt >= 100:
+        return set(ma)
+    if pt == 0 or not ma:
+        return set()
+    theo_so = {int(c["scene_id"]): c for c in canh}
+    giay = []
+    for i, so in enumerate(ma):
+        c = theo_so[so]
+        dau = _giay_srt(c.get("srt_start"))
+        cuoi = _giay_srt(c.get("srt_end"))
+        if cuoi <= dau and i + 1 < len(ma):
+            cuoi = _giay_srt(theo_so[ma[i + 1]].get("srt_start"))
+        d = cuoi - dau
+        if d <= 0:
+            try:
+                d = float(c.get("duration") or 0)
+            except (TypeError, ValueError):
+                d = 0.0
+        giay.append(max(0.0, d))
+    tong = sum(giay)
+    if tong <= 0:
+        # Bảng cảnh không mang mốc giờ (bảng tay, hay lượt thử) → đếm cảnh.
+        n = max(1, int(math.ceil(len(ma) * pt / 100.0)))
+        return set(ma[:n])
+    muc = tong * pt / 100.0
+    gom = 0.0
+    chon = set()
+    for so, d in zip(ma, giay):
+        chon.add(so)
+        gom += d
+        if gom >= muc:
+            break
+    return chon
 
 
 def _nguon_clip_hoac_anh(so_canh: int, thu_muc_clip: str, thu_muc_anh: str) -> str:
@@ -8905,6 +8956,10 @@ def _khau_clip(bc: BoiCanh):
     def lam(luot: LuotChay, tt: TrangThaiKhau):
         canh = _doc_canh(luot)
         co_clip = _canh_co_clip(bc, canh)
+        if not co_clip and canh:
+            bc.ghi("  kênh chọn TOÀN ẢNH — không bắn clip nào; {0} cảnh dùng ảnh "
+                   "chuyển động lúc dựng (miễn phí).".format(len(canh)))
+            return {"so_clip": 0, "toan_anh": True}
         if len(co_clip) < len(canh):
             bc.ghi("  kênh chỉ làm clip cho {0} cảnh đầu — {1} cảnh sau dùng ảnh "
                    "chuyển động lúc dựng (miễn phí).".format(len(co_clip),
