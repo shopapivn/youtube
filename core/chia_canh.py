@@ -619,6 +619,7 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
     dau, cuoi = cue[0]["index"], cue[-1]["index"]
     ra: List[Dict[str, Any]] = []
     ke_tiep = dau
+    cho_tu: Optional[int] = None  # dòng đầu của các cảnh đầu khúc thiếu lời nhắc
     for m in ds:
         if not isinstance(m, Mapping):
             continue
@@ -663,8 +664,21 @@ def canh_lai(ds: Sequence[Any], cue: Sequence[Mapping[str, Any]],
             ra[-1]["_den"] = b
             ke_tiep = b + 1
             continue
-        ra.append(dict(m, _tu=a, _den=b))
+        if thieu_nhac:
+            # Cảnh ĐẦU khúc thiếu: chưa có cảnh trước để nhập vào — để dành
+            # các dòng ấy cho cảnh có lời nhắc kế tiếp (nó bắt đầu sớm hơn).
+            # 03/10/2026: một cảnh sót kiểu này từng giết cả khúc, 9 lần liền.
+            if cho_tu is None:
+                cho_tu = a
+            ke_tiep = b + 1
+            continue
+        ra.append(dict(m, _tu=(cho_tu if cho_tu is not None else a), _den=b))
+        cho_tu = None
         ke_tiep = b + 1
+    if not ra and cho_tu is not None:
+        # Mọi cảnh đều thiếu lời nhắc — câu trả lời hỏng thật, đáng hỏi lại.
+        raise LoiNoiDung("{0}mọi cảnh thiếu lời nhắc".format(
+            "{0}: ".format(ten_khuc) if ten_khuc else ""))
     if not ra:
         raise LoiNoiDung("AI chia cảnh không dùng được dòng nào")
     # Còn sót đuôi thì nhập vào cảnh cuối, đừng để mất tiếng.

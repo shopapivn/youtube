@@ -5713,6 +5713,30 @@ def _ke_hoach_hinh(bc: BoiCanh, luot: LuotChay,
     return []
 
 
+def _va_loi_nhac_thieu(ds: List[Any]) -> List[Any]:
+    """Cảnh có MỘT trong hai lời nhắc thì dựng nửa còn thiếu từ nửa kia.
+
+    Lời nhắc ảnh và lời nhắc clip tả cùng một khung hình (clip lấy ảnh làm
+    khung đầu), nên mượn nhau được: thiếu clip thì "khung ấy, máy đẩy chậm";
+    thiếu ảnh thì lấy luôn lời nhắc clip làm mô tả khung. Cảnh thiếu cả hai để
+    nguyên — `canh_lai` nhập nó vào cảnh kề.
+    """
+    ra = []
+    for c in ds:
+        if not isinstance(c, dict):
+            ra.append(c)
+            continue
+        anh = str(c.get("img_prompt") or "").strip()
+        clip = str(c.get("video_prompt") or "").strip()
+        if anh and not clip:
+            c = dict(c, video_prompt=anh + " Slow gentle camera push-in, subtle "
+                     "natural motion, no scene change.")
+        elif clip and not anh:
+            c = dict(c, img_prompt=clip)
+        ra.append(c)
+    return ra
+
+
 def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
                    cue: List[Dict[str, Any]], thu_tu: int, tong_khuc: int,
                    tran: float,
@@ -5800,13 +5824,28 @@ def _hoi_chia_canh(bc: BoiCanh, luot: LuotChay, khuon: str,
         #
         # Kiểm ở đây thì đúng một khúc được hỏi lại, bằng một khoá khác, và
         # 17 khúc kia giữ nguyên.
+        #
+        # ═══ NHƯNG MỘT CẢNH THIẾU KHÔNG ĐƯỢC GIẾT CẢ KHÚC (03/10/2026) ═══
+        #
+        # Khách hahhavinh: "khúc 12/13: 1/12 cảnh thiếu lời nhắc", thử 9 lần,
+        # 9.206 giây, lần nào cũng hỏng đúng chỗ ấy — khoá theo `lan` nên chạy
+        # lại khâu là nhận lại ĐÚNG câu trả lời cũ. Hàng rào này từng chặn mọi
+        # khúc có dù chỉ một cảnh sót, trong khi `canh_lai` đã biết nhập cảnh
+        # thiếu vào cảnh kề (sửa 15/08). Nay: thiếu một nửa lời nhắc thì vá từ
+        # nửa kia; thiếu cả hai thì để `canh_lai` nhập vào cảnh kề. Chỉ hỏi lại
+        # khi khúc rỗng phần lớn — đúng ca "11/11" mà hàng rào sinh ra để bắt.
+        ds = _va_loi_nhac_thieu(ds)
         rong = [c for c in ds if isinstance(c, dict)
                 and not (str(c.get("img_prompt") or "").strip()
                          and str(c.get("video_prompt") or "").strip())]
-        if rong:
+        if rong and len(rong) * 2 > len(ds):
             raise LoiNoiDung(
                 "khúc {0}/{1}: {2}/{3} cảnh thiếu lời nhắc".format(
                     thu_tu + 1, tong_khuc, len(rong), len(ds)))
+        if rong:
+            bc.ghi("  khúc {0}/{1}: {2}/{3} cảnh không có lời nhắc — nhập vào "
+                   "cảnh kề, không hỏi lại cả khúc.".format(
+                       thu_tu + 1, tong_khuc, len(rong), len(ds)))
         return ds
 
     ds = None

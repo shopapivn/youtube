@@ -90,3 +90,36 @@ class TestKiemNgayTrongVongHoiLai:
         dau = ma.index("def _hoi_chia_canh")
         cuoi = ma.index("\ndef ", dau + 10)
         assert "lan)" in ma[dau:cuoi] and "khoa_viec(" in ma[dau:cuoi]
+
+
+class TestMotCanhThieuKhongGietCaKhuc:
+    """03/10/2026 khách hahhavinh: "khúc 12/13: 1/12 cảnh thiếu lời nhắc", thử 9
+    lần / 9.206 giây, lần nào cũng hỏng đúng chỗ ấy. Một cảnh sót phải được vá
+    hoặc nhập vào cảnh kề — không được bỏ cả khúc."""
+
+    def test_canh_dau_khuc_thieu_thi_nhap_vao_canh_sau(self):
+        cue = _cue(6)
+        ds = [{"srt_from": 1, "srt_to": 2, "img_prompt": "", "video_prompt": ""},
+              {"srt_from": 3, "srt_to": 4, "img_prompt": "a", "video_prompt": "b"},
+              {"srt_from": 5, "srt_to": 6, "img_prompt": "c", "video_prompt": "d"}]
+        ra = canh_lai(ds, cue, 8.0, "khúc 12/13", san=0.0)
+        assert ra[0]["_cue"][0] == 1, "dòng 1-2 không được mất hình"
+        assert all(c["img_prompt"] and c["video_prompt"] for c in ra)
+
+    def test_thieu_mot_nua_thi_va_tu_nua_kia(self):
+        from core.auto_khau import _va_loi_nhac_thieu
+
+        ra = _va_loi_nhac_thieu([
+            {"img_prompt": "a cat on a roof", "video_prompt": ""},
+            {"img_prompt": "", "video_prompt": "a dog runs"},
+            {"img_prompt": "x", "video_prompt": "y"},
+        ])
+        assert ra[0]["video_prompt"].startswith("a cat on a roof")
+        assert ra[1]["img_prompt"] == "a dog runs"
+        assert ra[2] == {"img_prompt": "x", "video_prompt": "y"}
+
+    def test_chi_hoi_lai_khi_khuc_rong_phan_lon(self):
+        ma = TestKiemNgayTrongVongHoiLai()._ma()
+        dau = ma.index("def _hoi_chia_canh")
+        than = ma[dau:ma.index("\ndef ", dau + 10)]
+        assert "len(rong) * 2 > len(ds)" in than
