@@ -56,7 +56,9 @@ class _Up:
 
 def _anh(tmp_path, ten="nv.png"):
     p = tmp_path / ten
-    p.write_bytes(b"png" * 100)
+    # Mỗi tên một nội dung: từ 03/10/2026 `tai_len` khoá theo NỘI DUNG, hai tệp
+    # cùng byte là CÙNG một ảnh (đẩy một lần).
+    p.write_bytes(ten.encode() + b"png" * 100)
     return str(p)
 
 

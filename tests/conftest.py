@@ -34,7 +34,7 @@ os.environ.setdefault("SHOPAPI_TRAM_CONG", "0")
 
 
 @pytest.fixture(autouse=True)
-def _don_trang_thai_dung_chung():
+def _don_trang_thai_dung_chung(monkeypatch, tmp_path):
     try:
         from core import su_co
 
@@ -45,6 +45,11 @@ def _don_trang_thai_dung_chung():
         from core import anh_len
 
         anh_len.xoa_nho()
+        # Sổ tệp tạm + sổ URL theo nội dung nằm trên ĐĨA (dùng chung giữa các
+        # lần mở tool). Để ở LOCALAPPDATA thật thì bài này nhận URL của bài
+        # trước (cùng nội dung b"x") — và test còn ghi bẩn sổ của máy thật.
+        monkeypatch.setattr(anh_len, "DUONG_SO_TEP_TAM",
+                            str(tmp_path / "_so-tep-tam.jsonl"))
     except Exception:  # noqa: BLE001
         pass
     yield

@@ -137,7 +137,10 @@ def _tab(tmp_path, client=None, hoan=False):
 
 
 def _anh_tren_dia(duong: str) -> str:
-    open(duong, "wb").write(b"\x89PNG-gia")
+    # Mỗi tệp một nội dung: `tai_len` khoá theo NỘI DUNG (03/10/2026), cùng byte
+    # là cùng một ảnh — đẩy một lần.
+    with open(duong, "wb") as f:
+        f.write(b"\x89PNG-gia" + os.path.basename(duong).encode())
     return duong
 
 

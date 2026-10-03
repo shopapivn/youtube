@@ -115,3 +115,79 @@ def test_so_tep_tam_tren_dia_dung_duoc_o_tien_trinh_moi(monkeypatch, tmp_path):
     assert client.uploads.da_xoa == ["upl_lanTruoc1", "upl_lanTruoc2"]
     # Sổ giờ chỉ còn tệp vừa đẩy.
     assert [d["id"] for d in anh_len._doc_so_tep_tam()] == ["upl_moi9"]
+
+
+def test_ban_sao_cung_noi_dung_o_thu_muc_khac_chi_day_mot_lan(tmp_path):
+    """03/10/2026 gunc94: 934 job ảnh, 5 ảnh `ref0.png` — job nào cũng đẩy lại.
+    Bản sao cùng nội dung (thư mục khác, mtime khác) phải dùng chung một URL."""
+    import os
+    import time as _t
+
+    class _Up:
+        def __init__(self):
+            self.goi = 0
+
+        def upload_file(self, _d):
+            self.goi += 1
+            return "https://cdn.shopapi.vn/x/upl_mot%d.png?X-Amz-Expires=7200" % self.goi
+
+    client = SimpleNamespace(uploads=_Up())
+    urls = set()
+    for i in range(5):
+        d = tmp_path / ("canh%d" % i)
+        d.mkdir()
+        p = d / "ref0.png"
+        p.write_bytes(b"\x89PNG cung mot anh")
+        os.utime(p, (_t.time() - i * 100, _t.time() - i * 100))
+        urls.add(anh_len.tai_len(client, str(p)))
+    assert client.uploads.goi == 1 and len(urls) == 1
+
+
+def test_mo_lai_tool_khong_day_lai_anh_da_day(tmp_path):
+    """Bộ nhớ tiến trình mất (mở lại tool) → vẫn dùng URL ghi trên đĩa."""
+    class _Up:
+        def __init__(self):
+            self.goi = 0
+
+        def upload_file(self, _d):
+            self.goi += 1
+            return "https://cdn.shopapi.vn/x/upl_dia1.png?X-Amz-Expires=7200"
+
+    client = SimpleNamespace(uploads=_Up())
+    p = tmp_path / "nv1.png"
+    p.write_bytes(b"anh nhan vat")
+    u1 = anh_len.tai_len(client, str(p))
+    anh_len.xoa_nho()  # như mở lại tool: bộ nhớ trống, sổ đĩa còn
+    assert anh_len.tai_len(client, str(p)) == u1
+    assert client.uploads.goi == 1
+
+
+def test_nhieu_luong_cung_gap_kho_day_chi_mot_luong_don(monkeypatch, tmp_path):
+    """Luồng tới sau thấy vừa có người dọn thì đẩy lại, không ném lỗi."""
+    import shopapi
+
+    monkeypatch.setattr(anh_len.time, "sleep", lambda _s: None)
+    dem = {"don": 0}
+
+    def don(_c, toi_da=0):
+        dem["don"] += 1
+        return 5
+
+    monkeypatch.setattr(anh_len, "don_kho_tam", don)
+
+    class _Up:
+        def __init__(self):
+            self.goi = 0
+
+        def upload_file(self, d):
+            self.goi += 1
+            if self.goi <= 2:
+                raise shopapi.InvalidRequestError("Vượt hạn mức lưu trữ tạm: trần là 500.0 MB")
+            return "https://cdn.shopapi.vn/x/upl_%d.png" % self.goi
+
+    client = SimpleNamespace(uploads=_Up())
+    a = tmp_path / "a.png"; a.write_bytes(b"a")
+    b = tmp_path / "b.png"; b.write_bytes(b"b")
+    assert anh_len.tai_len(client, str(a))
+    assert anh_len.tai_len(client, str(b))
+    assert dem["don"] == 1

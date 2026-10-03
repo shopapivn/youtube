@@ -24,8 +24,10 @@ Hai lối tránh, tệp này lo cả hai:
    chỉ tốn một lượt; đồng thời gọi `_luu_ban_cuc_bo` để worker trên CÙNG máy đọc
    thẳng bản trên đĩa thay vì tải ngược từ Singapore.
 
-Khoá theo `(tên, cỡ, mtime)` chứ không theo đường dẫn: khách thay `nv1.png` bằng
-tấm khác là URL cũ tự hết giá trị, không phải nhớ đi xoá cache.
+Khoá theo **nội dung** (sha1, từ 03/10/2026 — xem `_dau_vet`), không theo tên
+hay đường dẫn: khách thay `nv1.png` bằng tấm khác là URL cũ tự hết giá trị, còn
+một ảnh chép ra trăm thư mục vẫn chỉ đẩy một lần. Nhớ cả trên đĩa
+(`_doc_so_url`) để mở lại tool / hai tool cùng chạy cũng không đẩy lại.
 """
 
 from __future__ import annotations
@@ -56,12 +58,43 @@ _KHOA = threading.Lock()
 HAN_MAC_DINH = 3600.0
 
 
+#: Băm nội dung đã tính: `(đường tuyệt đối, cỡ, mtime_ns)` → sha1. Tệp không
+#: đổi thì không đọc lại.
+_BAM: Dict[Tuple[str, int, int], str] = {}
+
+
 def _dau_vet(duong: str) -> Optional[Tuple[str, int, int]]:
+    """Khoá nhớ của một tệp: `(sha1 nội dung, cỡ, 0)`.
+
+    ═══ KHOÁ THEO NỘI DUNG, KHÔNG THEO TÊN (03/10/2026) ═══
+
+    Bản trước khoá theo `(tên, cỡ, mtime)`. Khách gunc94 vẫn chết "Vượt hạn mức
+    lưu trữ tạm" sau bản 2.141.2: kho giữ 355 tệp = 503 MB mà chỉ có 5 nội dung
+    (cùng tên `ref0.png`) — 934 job ảnh, job nào cũng một lượt đẩy mới. Bản sao
+    cùng ảnh ở thư mục khác / chép lại (mtime mới) là lọt khoá cũ. Băm nội dung
+    thì bao nhiêu bản sao cũng chỉ một lượt đẩy.
+    """
     try:
-        return (os.path.basename(duong), os.path.getsize(duong),
-                int(os.path.getmtime(duong)))
+        st = os.stat(duong)
     except OSError:
         return None
+    vet = (os.path.abspath(duong), int(st.st_size), int(st.st_mtime_ns))
+    with _KHOA:
+        bam = _BAM.get(vet)
+    if bam is None:
+        import hashlib  # noqa: PLC0415
+
+        h = hashlib.sha1()
+        try:
+            with open(duong, "rb") as f:
+                for khuc in iter(lambda: f.read(1 << 20), b""):
+                    h.update(khuc)
+        except OSError:
+            return None
+        bam = h.hexdigest()
+        with _KHOA:
+            _BAM[vet] = bam
+    return (bam, int(st.st_size), 0)
 
 
 def _han(url: str) -> float:
@@ -170,10 +203,14 @@ def tai_len(client: Any, duong: str, *, lam_moi: bool = False,
     with _khoa_cua(khoa):
         with _KHOA:
             cu = _NHO.get(khoa)
+        if cu is None:
+            # Lần mở tool trước / tiến trình khác đã đẩy đúng nội dung này.
+            cu = _doc_so_url(khoa[0])
         if cu is not None:
             hong = lam_moi and (not url_hong or cu[0] in set(url_hong))
             if not hong and (time.time() - cu[1]) < _han(cu[0]):
                 with _KHOA:
+                    _NHO[khoa] = cu
                     _DUNG[khoa] = time.time()
                 return cu[0]
             moi = _link_moi(client, cu[0])
@@ -181,6 +218,7 @@ def tai_len(client: Any, duong: str, *, lam_moi: bool = False,
                 with _KHOA:
                     _NHO[khoa] = (moi, time.time())
                     _DUNG[khoa] = time.time()
+                _ghi_so_url(khoa[0], moi)
                 return moi
         return _day_moi(client, duong, khoa)
 
@@ -203,7 +241,78 @@ def _day_moi(client: Any, duong: str, khoa: Optional[Tuple[str, int, int]]) -> s
         with _KHOA:
             _NHO[khoa] = (url, time.time())
             _DUNG[khoa] = time.time()
+        _ghi_so_url(khoa[0], url)
     return url
+
+
+def _duong_so_url() -> str:
+    """Sổ URL theo nội dung — nằm cạnh sổ tệp tạm (test đổi một chỗ là đủ)."""
+    return os.path.join(os.path.dirname(DUONG_SO_TEP_TAM), "url-theo-noi-dung.json")
+
+
+def _doc_so_url(bam: str) -> Optional[Tuple[str, float]]:
+    """URL đã đẩy cho nội dung `bam`, ghi ở lần mở tool trước / tiến trình khác.
+
+    Bộ nhớ `_NHO` chết theo tiến trình: mở lại tool giữa một mẻ, hay hai tool
+    cùng chạy, là đẩy lại mọi ảnh. Sổ này giữ `{sha1: {url, luc}}` trên đĩa;
+    link quá hạn thì `tai_len` xin link mới cho CHÍNH tệp ấy (`_link_moi`),
+    không đẩy bản mới.
+    """
+    try:
+        with _KHOA_SO:
+            with open(_duong_so_url(), encoding="utf-8") as f:
+                goi = json.load(f)
+        d = goi.get(bam) if isinstance(goi, dict) else None
+        if isinstance(d, dict) and d.get("url"):
+            return str(d["url"]), float(d.get("luc") or 0)
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
+
+
+def _ghi_so_url(bam: str, url: str) -> None:
+    if not _ma_upl(url):
+        return
+    duong = _duong_so_url()
+    han = time.time() - HAN_TEP_TAM_GIAY
+    try:
+        os.makedirs(os.path.dirname(duong), exist_ok=True)
+        with _KHOA_SO:
+            try:
+                with open(duong, encoding="utf-8") as f:
+                    goi = json.load(f)
+            except (OSError, ValueError):
+                goi = {}
+            if not isinstance(goi, dict):
+                goi = {}
+            goi = {k: v for k, v in goi.items()
+                   if isinstance(v, dict) and float(v.get("luc") or 0) >= han}
+            goi[bam] = {"url": url, "luc": time.time()}
+            tam = duong + ".tam"
+            with open(tam, "w", encoding="utf-8") as f:
+                json.dump(goi, f)
+            os.replace(tam, duong)
+    except (OSError, ValueError, TypeError):
+        pass
+
+
+def _quen_so_url(xoa: set) -> None:
+    """Bỏ khỏi sổ URL những tệp vừa bị xoá trên máy chủ (dọn kho)."""
+    duong = _duong_so_url()
+    try:
+        with _KHOA_SO:
+            with open(duong, encoding="utf-8") as f:
+                goi = json.load(f)
+            if not isinstance(goi, dict):
+                return
+            goi = {k: v for k, v in goi.items()
+                   if not (isinstance(v, dict) and _ma_upl(str(v.get("url"))) in xoa)}
+            tam = duong + ".tam"
+            with open(tam, "w", encoding="utf-8") as f:
+                json.dump(goi, f)
+            os.replace(tam, duong)
+    except (OSError, ValueError, TypeError):
+        pass
 
 
 #: Tối đa mấy lần thử lại khi máy chủ báo "gửi quá nhanh" lúc tải ảnh lên.
@@ -224,7 +333,7 @@ def _tai_len_thu_lai(client: Any, duong: str) -> str:
     except Exception:  # noqa: BLE001 — SDK thiếu lớp này thì không có gì để bắt
         RateLimitError = ()  # type: ignore[assignment]  # noqa: N806
     lan = 0
-    da_don = False
+    lan_don = 0
     while True:
         try:
             return str(client.uploads.upload_file(duong))
@@ -234,11 +343,44 @@ def _tai_len_thu_lai(client: Any, duong: str) -> str:
                 raise
             time.sleep(max(1.0, retry_after_seconds(exc, lan - 1, cap=30.0)))
         except Exception as exc:  # noqa: BLE001 — chi bat dung ca "kho tam day"
-            if da_don or not _la_het_kho(exc):
+            if lan_don >= SO_LUOT_DON_MOI_TEP or not _la_het_kho(exc):
                 raise
-            da_don = True
-            if don_kho_tam(client) == 0:
+            lan_don += 1
+            if not _don_mot_luot(client):
                 raise
+
+
+#: Một lượt đẩy gặp "kho đầy" được nhờ dọn tối đa ngần này lần.
+SO_LUOT_DON_MOI_TEP = 3
+
+#: Luồng khác vừa dọn trong ngần này giây thì đừng dọn chồng — thử đẩy lại luôn.
+GIAY_CHO_DON_CHONG = 20.0
+
+_KHOA_DON_KHO = threading.Lock()
+_LAN_DON_KHO = 0.0
+
+
+def _don_mot_luot(client: Any) -> bool:
+    """Dọn kho tạm MỘT luồng một lúc. Trả True nếu nên thử đẩy lại.
+
+    ═══ SÁU LUỒNG CÙNG ĐẦY KHO (03/10/2026) ═══
+
+    Nhật ký nginx của gunc94: 8 lượt 400 "kho đầy" trong cùng một giây — sáu
+    luồng đẩy cùng gặp, cùng gọi `don_kho_tam`, cùng đọc một sổ và cùng xoá
+    những tệp đầu sổ. Luồng tới sau nhận 404 cho mọi tệp (luồng trước xoá
+    rồi), đếm "xoá được 0" và ném lỗi lên — khâu ảnh chết dù kho vừa được
+    dọn. Nay: một luồng dọn, luồng khác thấy vừa có người dọn thì đẩy lại.
+    """
+    global _LAN_DON_KHO
+    with _KHOA_DON_KHO:
+        vua_don = time.time() - _LAN_DON_KHO < GIAY_CHO_DON_CHONG
+        if not vua_don:
+            da = don_kho_tam(client)
+            if da > 0:
+                _LAN_DON_KHO = time.time()
+            return da > 0
+    time.sleep(2.0)  # ngoài khoá: cho lượt dọn vừa rồi kịp nhả chỗ trên máy chủ
+    return True
 
 
 #: Cau may chu bao kho tam day (core/su_co.HET_KHO dung cung mau chu).
@@ -364,12 +506,17 @@ def don_kho_tam(client: Any, toi_da: int = SO_TEP_DON_MOI_LAN) -> int:
             _DUNG.pop(khoa, None)
     _ghi_lai_so_tep_tam([d for d in _doc_so_tep_tam()
                          if str(d.get("id")) not in xoa and float(d.get("luc") or 0) >= han])
+    if xoa:
+        _quen_so_url(xoa)
     return da
 
 
 def xoa_nho() -> None:
     """Quên hết URL đã nhớ. CHỈ cho test: ngoài đời quên hết là mọi cảnh sau đẩy
     lại mọi ảnh — xem `tai_len(lam_moi=True)` để làm mới đúng một tệp."""
+    global _LAN_DON_KHO
     with _KHOA:
         _NHO.clear()
         _DUNG.clear()
+        _BAM.clear()
+    _LAN_DON_KHO = 0.0
