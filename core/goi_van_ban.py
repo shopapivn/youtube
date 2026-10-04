@@ -400,6 +400,14 @@ def _goi_van_ban_mot(
         # Khoá lượt đầu giữ nguyên bản gốc, để nơi gọi tự đặt khoá vẫn nhận lại
         # đúng việc cũ của mình sau khi đóng tool giữa chừng.
         khoa_luot = goc if luot == 0 else "{0}:k{1}".format(goc, luot)
+        if luot and isinstance(loi_cuoi, TraRong):
+            # ═══ RỖNG THÌ KHOÁ DỰ PHÒNG PHẢI MỚI THẬT (04/10/2026) ═══
+            #
+            # `:k1`, `:k2` cố định giữa các lần "Chạy tiếp" — lần trước đã ghim
+            # rỗng vào chúng thì lần này lại nhận đúng cái rỗng ấy. Khách
+            # hahhavinh: bước 1 "trả về nội dung rỗng", 12 lần / 5.178 giây.
+            # Gắn mốc phút: chạy lại là khoá mới, trong một lượt vẫn ổn định.
+            khoa_luot = "{0}:k{1}-{2}".format(goc, luot, int(time.time()) // 60)
 
         goi_bang = _client_khong_tu_thu_lai(client, toi_da_token)
 
