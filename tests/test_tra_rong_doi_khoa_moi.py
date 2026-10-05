@@ -29,3 +29,4 @@ def test_rong_thi_khoa_du_phong_mang_moc_thoi_gian(monkeypatch):
     assert ra == "kịch bản"
     assert c.khoa[0] == "K:0002:chat:1"
     assert c.khoa[1].startswith("K:0002:chat:1:k1-") and c.khoa[1] != "K:0002:chat:1:k1"
+

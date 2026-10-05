@@ -446,6 +446,50 @@ _DICH_THIEU = (
 )
 
 
+#: Dấu hiệu "thiếu" mà tool TỰ CÀI được (thư viện pip, bộ nghe tải về) —
+#: không bắt khách đi chạy SETUP.bat hay mở tab khác.
+_DAU_TU_CAI = ("thieu model", "thieu thanh phan")
+
+
+def chi_thieu_thu_tu_cai_duoc(van_de) -> bool:
+    """Mọi vấn đề đều là thứ tool tự cài được (và có ít nhất một)?
+
+    Khách tuyenlun12021 05/10/2026: "không tạo được prompt từ mp3" — nút "Tạo
+    prompt" khoá vì máy thiếu bộ nghe (SETUP.bat bỏ qua/tải hỏng), còn câu
+    giải thích nằm dưới mép màn hình. Thiếu kiểu này thì để nút bấm được và
+    tự cài ở lượt chạy đầu (`tu_cai_thieu`).
+    """
+    ds = [str(c) for c in (van_de or ())]
+    return bool(ds) and all(any(d in c for d in _DAU_TU_CAI) for c in ds)
+
+
+def tu_cai_thieu(dich_vu: Any, workflow: Any, ghi) -> List[str]:
+    """Cài thư viện / tải bộ nghe còn thiếu cho `workflow`. Trả vấn đề CÒN LẠI.
+
+    Dùng đúng lệnh của `dependency_doctor` (pip + `core.model_installer`, đều
+    nằm trong allowlist). Chạy ở LUỒNG NỀN; `ghi(câu)` báo tiến độ cho khách.
+    """
+    import subprocess  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    from .dependency_doctor import diagnose, installable_commands  # noqa: PLC0415
+
+    ids = sorted({n.tool_id for n in getattr(workflow, "nodes", ())})
+    goc = Path(dich_vu.studio_root)
+    bao_cao = diagnose(dich_vu.catalog, ids, studio_root=goc)
+    for lenh in installable_commands(bao_cao):
+        la_model = "core.model_installer" in lenh
+        ghi("  máy chưa có {0} — đang tự tải, lần đầu mất vài phút…".format(
+            "bộ nghe tiếng (~0,5 GB)" if la_model else "thư viện nghe tiếng"))
+        kq = subprocess.run(list(lenh), cwd=str(goc), capture_output=True, text=True,
+                            timeout=3600, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if kq.returncode != 0:
+            ghi("  tải không xong: {0}".format((kq.stderr or kq.stdout or "").strip()[-300:]))
+        else:
+            ghi("  đã tải xong.")
+    return list(dich_vu.readiness(workflow).issues)
+
+
 def cau_thieu_gi(van_de) -> List[str]:
     """Dịch danh sách `Readiness.issues` sang tiếng người, bỏ trùng.
 

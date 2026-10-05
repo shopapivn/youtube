@@ -51,6 +51,7 @@ from core.prompt_visuals import (
     CHE_DO_CAN_ANH_NV, CHE_DO_KE, CHO_TRONG_KHUON_CHIA, DUOI_CHAN_DUNG,
     LOI_NHAC_XAY_PHONG_CACH, NODE_NGHE, PhongCach, bia_de_xem, boi_canh_de_xem,
     canh_de_xem, cau_thieu_gi, chi_dan_tu_bo, chi_dan_tu_tra_loi_ai,
+    chi_thieu_thu_tu_cai_duoc, tu_cai_thieu,
     cot_canh_thieu, dan_de_xem, doi_thiet_ke_nhan_vat, dung_boi_canh,
     dung_workflow, goc_cua_id, ke_hoach_de_xem, khuon_chia_dung_duoc,
     liet_ke_phong_cach, loi_nhac_thiet_ke_lai, man_de_xem, nhac_de_xem,
@@ -1915,18 +1916,27 @@ class TrangPromptVisuals(QWidget):
 
     def _ve_trang_thai(self) -> None:
         """Hỏi máy còn thiếu gì, rồi nói ra bằng tiếng người."""
+        tu_cai = False
         try:
             dv = self._dich_vu()
             wf = dung_workflow("kiem-tra", ma_chay="prompt-visuals-kiemtra")
-            thieu = cau_thieu_gi(dv.readiness(wf).issues)
+            van_de = dv.readiness(wf).issues
+            tu_cai = chi_thieu_thu_tu_cai_duoc(van_de)
+            thieu = cau_thieu_gi(van_de)
         except Exception as loi:  # noqa: BLE001 — dò hỏng không được chặn tab
             thieu = ["Chưa dò được máy: {0}".format(loi)]
-        if thieu:
+        if tu_cai:
+            # Thiếu bộ nghe / thư viện: KHÔNG khoá nút — lượt chạy đầu tự tải
+            # (`_chay_nen` → `tu_cai_thieu`). Xem `chi_thieu_thu_tu_cai_duoc`.
+            self._canh_bao.setText("Lần chạy đầu: máy chưa có bộ nghe tiếng — "
+                                   "bấm “Tạo prompt”, tool tự tải (~0,5 GB, vài phút).")
+            self._canh_bao.show()
+        elif thieu:
             self._canh_bao.setText("Chưa chạy được:\n• " + "\n• ".join(thieu))
             self._canh_bao.show()
         else:
             self._canh_bao.hide()
-        self._nut_chay.setEnabled(not thieu and bool(self._files))
+        self._nut_chay.setEnabled((tu_cai or not thieu) and bool(self._files))
 
     def showEvent(self, su_kien):  # noqa: N802 — tên do Qt quy định
         """Dò lại mỗi lần mở tab: người dùng có thể vừa cài đặt xong, vừa đăng
@@ -2033,6 +2043,14 @@ class TrangPromptVisuals(QWidget):
 
         dv = self._dich_vu()
         kho: LocalArtifactStore = dv.artifacts
+
+        # Máy thiếu bộ nghe / thư viện → tự tải trước khi nghe (05/10/2026).
+        wf_kiem = dung_workflow("kiem-tra", ma_chay="prompt-visuals-kiemtra")
+        if chi_thieu_thu_tu_cai_duoc(dv.readiness(wf_kiem).issues):
+            con = tu_cai_thieu(dv, wf_kiem, self._ghi_nen)
+            if con:
+                raise RuntimeError("Chưa tải được bộ nghe tiếng: " + "; ".join(cau_thieu_gi(con))
+                                   + " — kiểm tra mạng rồi bấm “Tạo prompt” lại.")
 
         # Kịch bản + phong cách hình ảnh gói chung một `context`, dùng cho cả
         # loạt file (chúng cùng một video). Rỗng thì không tạo artifact, workflow
