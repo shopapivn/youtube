@@ -684,6 +684,9 @@ def nghe_trong_tien_trinh_nay(duong_mp3: str, *, ngon_ngu: str = "",
     """
     from faster_whisper import WhisperModel  # noqa: PLC0415
     from core.phan_cung import doc_ket_qua, chon_whisper_model  # noqa: PLC0415
+    from core.va_av import va_av_open  # noqa: PLC0415
+
+    va_av_open()  # PyAV mới bỏ `metadata_errors` — xem core/va_av.py
 
     san = (thu_muc_model or os.environ.get("WHISPER_MODEL_DIR", "")).strip()
     if san and os.path.isdir(san):

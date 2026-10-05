@@ -121,6 +121,17 @@ def _faster_whisper(audio: Path, *, model: str, language: str,
         from faster_whisper import WhisperModel
     except ImportError as exc:
         raise ValueError("Thieu faster-whisper. Hay bam Cai thanh phan SRT trong Studio.") from exc
+    # PyAV moi (19+) bo tham so `metadata_errors` ma faster-whisper 1.1 van truyen:
+    # khach 05/10/2026 hong buoc Nghe "open() got an unexpected keyword argument
+    # 'metadata_errors'". Xem core/va_av.py. Runtime chay `-I` nen tu chen goc.
+    goc = Path(__file__).resolve().parents[2]
+    if str(goc) not in sys.path:
+        sys.path.insert(0, str(goc))
+    try:
+        from core.va_av import va_av_open
+        va_av_open()
+    except Exception:  # noqa: BLE001 — khong va duoc thi chay nhu cu
+        pass
     installed = os.environ.get("WHISPER_MODEL_DIR", "").strip()
     if not installed or not Path(installed).is_dir():
         raise ValueError("Chưa cài model Whisper. Hãy mở tab Agent và bấm Cài thành phần còn thiếu.")

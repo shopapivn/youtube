@@ -468,6 +468,22 @@ def _tai_mot_khach(YoutubeDL, url: str, thu_muc: str, khach: str,
 _MA_NGHE = r"""
 import json, os, re, shutil, subprocess, sys, tempfile
 from faster_whisper import WhisperModel
+# PyAV moi bo tham so metadata_errors ma faster-whisper 1.1 van truyen (khach
+# 05/10/2026, PyAV 19): bo tham so ay roi mo lai. Xem core/va_av.py.
+try:
+    import av as _av
+    _goc_mo = _av.open
+    def _mo(*a, **k):
+        try:
+            return _goc_mo(*a, **k)
+        except TypeError as _e:
+            if "metadata_errors" in k and "metadata_errors" in str(_e):
+                k.pop("metadata_errors")
+                return _goc_mo(*a, **k)
+            raise
+    _av.open = _mo
+except Exception:
+    pass
 tep, ten, chi_may = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 lang = (sys.argv[4] if len(sys.argv) > 4 else "") or None
 ffmpeg = sys.argv[5] if len(sys.argv) > 5 else ""

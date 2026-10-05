@@ -104,6 +104,14 @@ openpyxl>=3.1
 # nap PyQt5 truoc roi nap thi HONG. Duong tu nghe chi can CTranslate2,
 # khong can torch — nen ghim tran de khoi tai ve mot thu vua nang vua vo.
 faster-whisper>=1.0,<1.2
+# KHOA PyAV (05/10/2026): faster-whisper chi doi "av>=11" nen may cai moi keo
+# ve PyAV 19 - ban nay BO tham so metadata_errors ma faster-whisper 1.1 van
+# truyen -> buoc Nghe chet "open() got an unexpected keyword argument
+# 'metadata_errors'" (khach tuyenlun12021, Python 3.13 + PyAV 19.0.1). Thu
+# muc tool doc lap la chua du: phai KHOA phien ban thi moi may moi cung bo.
+# Python 3.14+ chua chac co ban PyAV cu nen khong ep; core/va_av.py va o
+# trong ma cho moi ban PyAV.
+av>=12,<19; python_version < "3.14"
 huggingface-hub>=0.20
 pyyaml>=6.0
 imageio-ffmpeg>=0.4
