@@ -1930,6 +1930,19 @@ def _khoi_cast_style(cast: Mapping[str, Any]) -> str:
         dong.append("## STYLE — hold this exact look across every scene")
         for ten, gt in duoi:
             dong.append("{0}: {1}".format(ten, gt))
+        # ═══ BẢNG MÀU LÀ TÔNG PHIM, KHÔNG PHẢI MÀU ÁO (09/10/2026) ═══
+        #
+        # Dàn NHIỀU nhân vật mà bảng màu kể tên màu (kênh Mỹ nữ: "jewel tones —
+        # royal blue, emerald, burgundy") thì AI viết cảnh chép nó vào từng cảnh
+        # và AI vẽ nhuộm áo cả dàn: 1.100/4.395 cảnh khách có "emerald", chủ dự
+        # án: "nhân vật nào cũng áo xanh lá". Kênh MỘT nhân vật (mascot) thì
+        # cố ý ghi màu áo vào bảng màu — nên chỉ nói câu này khi có từ 2 vai.
+        if len([c for c in chars if not c.get("co_dinh")]) >= 2:
+            dong.append("The palette and style lines are the LOOK of the film — light, "
+                        "colour grade, lens — never clothing. Each character's outfit "
+                        "and its colours come only from that character's own "
+                        "description above; never repeat palette colours as "
+                        "clothing and never dress the cast in one shared colour.")
     return "\n".join(dong)
 
 

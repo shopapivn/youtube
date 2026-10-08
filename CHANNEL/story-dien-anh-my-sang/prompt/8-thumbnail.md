@@ -23,19 +23,19 @@ Never include: <<NEGATIVE_PROMPT>>
 - THE PEOPLE ARE THE PICTURE. The two leads fill 70-85% of the frame, framed
   from the chest or waist up, close to the camera; each lead's head is about
   a quarter to a third of the frame height. Never a wide room with small people.
-- The man: handsome, sharp jaw, perfectly tailored suit (navy, black, emerald).
-  The woman: very pretty, glossy long hair, soft makeup, a bright feminine
-  outfit (pink, lavender, sky-blue or red dress, or a neat work uniform with an
-  apron) — the brightest colour patch in the image.
+- The man: handsome, sharp jaw, a perfectly tailored suit. The woman: very
+  pretty, glossy long hair, soft makeup, a bright feminine outfit (or a neat
+  work uniform) — the brightest colour patch in the image. Keep each lead's
+  own outfit colour from their reference image.
 - A clear emotional charge readable at phone size: he stares at her, stunned or
   tender; she has a hand on her heart, tears in her eyes, a shy smile or a
   shocked face. Side characters (mocking guests, a laughing rival, a stern
   parent) are smaller, behind, slightly soft — they react, they do not compete.
-- Bright, high-key, saturated light: sunny café terraces, flower-filled
-  bakeries, gala halls with chandeliers, sea-view restaurants; at night the
+- Bright, high-key, saturated light in a glamorous place that fits this
+  story (you choose it); at night the
   faces are still lit warm and bright, city lights as glowing bokeh behind.
-- One story object in the foreground between them: a gift bag, an open ring
-  or jewel box, a bouquet, a coffee cup, a folder, a basket of roses.
+- One story object in the foreground between them — the object THIS story
+  turns on.
 - Crisp focus on faces, background softly blurred, rich colour grading, no
   dark or empty areas anywhere.
 

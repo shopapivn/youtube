@@ -110,7 +110,7 @@ One scene that forgets the tail is one scene that looks like it came from a
 different film. Take the style words from the STYLE / Context blocks above;
 if none is given, choose ONE cinematic look for this whole video and hold it.
 
-- image prompt tail: `, <image style>, <palette>, <this scene's light source>,
+- image prompt tail: `, <image style>, <colour grade of the palette>, <this scene's light source>,
   <<TY_LE_KHUNG>> composition, <negative list>, no text, no letters, no
   numbers, no watermark`
 - video prompt tail: `, <motion style>, the colour grade and light stay
@@ -118,6 +118,11 @@ if none is given, choose ONE cinematic look for this whole video and hold it.
   text, no letters, no numbers, no watermark`
 
 An image has no motion — never put motion words in an image prompt.
+
+The tail is the LOOK of the film (light, colour grade, lens) — never
+clothing. Each character's outfit comes only from that character's own
+description and reference image; never recolour anyone's clothes to
+match the palette or the tail.
 
 ## NOTHING IN THE FRAME MAY CARRY WRITING
 

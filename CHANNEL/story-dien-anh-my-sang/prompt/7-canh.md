@@ -94,14 +94,15 @@ subject off-centre, depth front-to-back.
    every shot (golden-hour sun through big windows, a sunlit terrace, soft
    café light, warm lamps, a chandelier, rain glittering under street lights)
    and let it fall on the faces and on the thing that matters in this beat —
-   the bouquet, the sewing machine, the ring box. Put flowers, greenery and
-   charming detail in the set. The picture stays bright and beautiful even
-   when the moment is hard.
+   the object this beat is about. Give each set the charming, specific detail
+   that belongs to THAT place in the story (choose it yourself; do not repeat
+   the same decoration from scene to scene). The picture stays bright and
+   beautiful even when the moment is hard.
 6. **The romance is the spine.** Whenever the hero and the heroine are both in
    the beat, frame them TOGETHER (two-shot, over-the-shoulder from one to the
    other) and show the look between them — eye contact, a stolen glance, a shy
    smile, a stunned stare. The heroine is always lovely, even poor and
-   humiliated (neat simple pastel clothes, glossy hair); the hero is always
+   humiliated (neat, pretty clothes in her own colour, glossy hair); the hero is always
    handsome and composed. Snobs and side characters stay smaller and behind.
 7. **Video prompt = one clear small action**, matching the line: the door
    closes, the folder slides across, the hand sets the mug down, the car pulls
@@ -116,7 +117,7 @@ One scene that forgets the tail is one scene that looks like it came from a
 different film. Take the style words from the STYLE / Context blocks above;
 if none is given, choose ONE cinematic look for this whole video and hold it.
 
-- image prompt tail: `, <image style>, <palette>, <this scene's light source>,
+- image prompt tail: `, <image style>, <colour grade of the palette>, <this scene's light source>,
   <<TY_LE_KHUNG>> composition, <negative list>, no text, no letters, no
   numbers, no watermark`
 - video prompt tail: `, <motion style>, the colour grade and light stay
@@ -124,6 +125,11 @@ if none is given, choose ONE cinematic look for this whole video and hold it.
   text, no letters, no numbers, no watermark`
 
 An image has no motion — never put motion words in an image prompt.
+
+The tail is the LOOK of the film (light, colour grade, lens) — never
+clothing. Each character's outfit comes only from that character's own
+description and reference image; never recolour anyone's clothes to
+match the palette or the tail.
 
 ## NOTHING IN THE FRAME MAY CARRY WRITING
 
