@@ -88,12 +88,12 @@ có thẻ còn hơn có một kịch bản đã bị viết lại sau lưng.
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 __all__ = [
     "THE_CHO_PHEP", "TEP_CO_THE", "CHU_MOI_LUOT_CHEN", "CAU_MOI_THE", "bo_the",
     "loc_the_la", "thua_the", "kiem_the", "loi_nhac_chen_the", "chia_de_chen",
-    "chen_the",
+    "chen_the", "THE_THO", "thua_tieng_tho",
 ]
 
 #: Tên tệp giữ bản kịch bản đã chèn thẻ.
@@ -235,6 +235,59 @@ def thua_the(co_the: str, moi_n_cau: int = CAU_MOI_THE) -> str:
                 cuoi = khop.end() + 1
                 continue
         cuoi = khop.end()
+    ra.append(co_the[cuoi:])
+    return "".join(ra)
+
+
+#: Thẻ là TIẾNG THỞ — giọng AI đọc thành một tiếng thở dài nghe rõ.
+THE_THO = frozenset({"sighs", "exhales", "exhales sharply", "inhales deeply",
+                     "gulps", "swallows"})
+#: Một tiếng thở mỗi ngần này câu (~3–4 phút đọc).
+#:
+#: ═══ KHÁN GIẢ: "THỞ DÀI NHIỀU" — 14/10/2026 ═══
+#:
+#: Đo 18 video Mỹ nữ trên máy chủ: 2.637 thẻ, trong đó 426 tiếng thở ([sighs]
+#: 180, [exhales] 148, [gulps] 55, [inhales deeply] 43) — ~24 tiếng thở dài mỗi
+#: video, khán giả bình luận chê. Một tiếng thở đặt đúng chỗ thì thấm; hai
+#: mươi tiếng thì thành tật của người kể. Chốt bằng mã, không trông vào lời dặn.
+CAU_MOI_TIENG_THO = 60
+#: Cùng MỘT thẻ không lặp lại sớm hơn ngần này câu ([thoughtful] 590 lần / 18
+#: video — giọng đọc nghe như mãi một kiểu trầm ngâm).
+CAU_MOI_THE_TRUNG = 12
+
+
+def thua_tieng_tho(co_the: str, moi_n_cau: int = CAU_MOI_TIENG_THO,
+                   cung_the: int = CAU_MOI_THE_TRUNG) -> str:
+    """Bỏ bớt tiếng thở (`THE_THO`) và thẻ lặp quá dày. Chỉ bỏ thẻ, không đổi chữ.
+
+    Tiếng thở: giữ cái đầu, bỏ cái nào cách tiếng thở được giữ trước đó chưa đủ
+    `moi_n_cau` câu. Thẻ khác: bỏ khi cùng tên với một thẻ giữ chưa quá
+    `cung_the` câu trước. `kiem_the` trước/sau vẫn cho cùng kết quả.
+    """
+    if not co_the:
+        return co_the
+    ra: List[str] = []
+    cuoi = 0
+    so_cau = 0
+    tho_cuoi = None
+    the_cuoi: Dict[str, int] = {}
+    for khop in _MOT_THE.finditer(co_the):
+        giua = co_the[cuoi:khop.start()]
+        so_cau += len(_KET_CAU.findall(giua))
+        ten = khop.group(1).strip().lower()
+        if ten in THE_THO:
+            giu = tho_cuoi is None or so_cau - tho_cuoi >= moi_n_cau
+        else:
+            giu = ten not in the_cuoi or so_cau - the_cuoi[ten] >= cung_the
+        ra.append(giua)
+        if giu:
+            ra.append(khop.group(0))
+            the_cuoi[ten] = so_cau
+            if ten in THE_THO:
+                tho_cuoi = so_cau
+            cuoi = khop.end()
+        else:
+            cuoi = khop.end() + (1 if co_the[khop.end():khop.end() + 1] == " " else 0)
     ra.append(co_the[cuoi:])
     return "".join(ra)
 

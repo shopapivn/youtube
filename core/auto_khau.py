@@ -4807,6 +4807,17 @@ def _khau_giong_doc(bc: BoiCanh):
         # Và chỉ khâu này thấy bản có thẻ. Khâu phụ đề vẫn ép **bản sạch** lên
         # giọng đọc, nên `[whispers]` không bao giờ hiện lên màn hình.
         kich_ban = _chen_the_cam_xuc(bc, luot, kich_ban)
+        # Chốt bằng mã: tiếng thở ([sighs], [exhales]…) thưa ra, thẻ không lặp
+        # dày — khán giả kênh Mỹ nữ chê "thở dài nhiều" (14/10/2026). Chạy cả với
+        # bản có thẻ ghi từ trước, nên video đang dở cũng được sửa.
+        from .the_cam_xuc import thua_tieng_tho  # noqa: PLC0415
+
+        truoc = len(re.findall(r"\[[a-z][a-z \-]{0,28}\]", kich_ban))
+        kich_ban = thua_tieng_tho(kich_ban)
+        bo = truoc - len(re.findall(r"\[[a-z][a-z \-]{0,28}\]", kich_ban))
+        if bo > 0:
+            bc.ghi("  bớt {0} thẻ cảm xúc dày (tiếng thở dài / thẻ lặp) — "
+                   "giọng đọc tự nhiên hơn.".format(bo))
         if not bc.kenh.voice_id:
             raise RuntimeError("kênh chưa chọn giọng — điền voice_id vào kenh.yaml")
 
@@ -9448,9 +9459,22 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
         bo_cuc = _doc_chu(os.path.join(luot.thu_muc, TEP_BIA_DOI_THU)).strip()
         if bo_cuc:
             loi_nhac += _LUAT_BO_CUC_DOI_THU.format(bo_cuc)
+    # Màu áo ảnh bìa / vai chính mấy video trước đã dùng (14/10/2026: ảnh bìa
+    # Mỹ nữ có "emerald" ở MỌI video 0026–0033 dù template không còn chữ ấy).
     try:
+        from .mau_da_dung import cau_tranh_mau, mau_gan_day  # noqa: PLC0415
+
+        tranh = cau_tranh_mau(mau_gan_day(luot.thu_muc))
+    except Exception:  # noqa: BLE001
+        tranh = ""
+    if tranh:
+        loi_nhac += "\n\n## Outfit colours\n" + tranh + (
+            " The three portraits must also differ in outfit colour from one another.")
+    try:
+        # Khoá băm cả lời nhắc: sửa khuôn / thêm câu tránh màu thì là việc mới,
+        # không nhặt lại bài cũ của máy chủ.
         goi = loc_json(_goi(bc, loi_nhac,
-                            khoa_viec(luot, "chat", "thumb", tieu_de, chu_bia)))
+                            khoa_viec(luot, "chat", "thumb", tieu_de, chu_bia, loi_nhac)))
     except Exception as loi:  # noqa: BLE001
         bc.ghi("  (AI chưa viết được lời nhắc ảnh bìa: {0}) — dùng bản mặc "
                "định.".format(str(loi)[:90]))
@@ -9462,6 +9486,14 @@ def _loi_nhac_bia(bc: BoiCanh, luot: LuotChay, khuon: str, tieu_de: str,
             ra[str(m.get("version_desc") or "")] = str(m["img_prompt"])
     if ra:
         bc.ghi("  AI viết {0} lời nhắc ảnh bìa.".format(len(ra)))
+        # Lưu lại để video SAU biết video này đã mặc màu gì (`mau_da_dung`).
+        try:
+            from .mau_da_dung import TEP_LOI_NHAC_BIA  # noqa: PLC0415
+
+            _ghi_chu(os.path.join(luot.thu_muc, TEP_LOI_NHAC_BIA),
+                     json.dumps(list(ra.values()), ensure_ascii=False, indent=1))
+        except Exception:  # noqa: BLE001
+            pass
     return ra
 
 

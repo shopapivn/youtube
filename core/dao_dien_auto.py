@@ -151,6 +151,18 @@ def chay_dao_dien(bc: Any, luot: Any, *, handle: Optional[Callable] = None
                    "english_prompt": str((k.style or {}).get("default_character_prompt") or "")}
     boi_canh = dung_boi_canh(kich_ban, chi_dan=chi_dan_tu_bo(k.style), che_do_ke=che_do,
                              nhan_vat_co_dinh=co_dinh)
+    # Màu áo vai chính mấy video trước của kênh đã dùng → để AI tuyển vai chọn
+    # màu khác (xem `core/mau_da_dung.py`). Đặt ĐẦU ngữ cảnh: ngữ cảnh bị cắt ở
+    # một trần ký tự, khoá ở cuối có thể rơi mất khi kịch bản dài.
+    try:
+        from .mau_da_dung import cau_tranh_mau, mau_gan_day  # noqa: PLC0415
+
+        tranh = cau_tranh_mau(mau_gan_day(d))
+    except Exception:  # noqa: BLE001 — thông tin thêm, hỏng thì thôi
+        tranh = ""
+    if tranh:
+        boi_canh = dict({"wardrobe_colours_to_avoid": tranh}, **boi_canh)
+        bc.ghi("  màu áo đã dùng ở video trước — nhắc AI chọn khác: {0}".format(tranh[:160]))
     khuon_kenh = str((getattr(k, "prompt", None) or {}).get("7-canh.md") or "")
     if khuon_du_cho_dao_dien(khuon_kenh):
         # Khuôn chia cảnh của kênh (thể loại: truyện trẻ em minh hoạ đúng câu kể…)
