@@ -8307,6 +8307,13 @@ def _don_ung_vien(tep: str) -> None:
         pass
 
 
+def _anh_nv_cua_kenh(bc: BoiCanh) -> List[str]:
+    """Kênh MỘT nhân vật cố định (TL4-T7…): ảnh `nv1.png` của kênh làm tham chiếu
+    cho giám khảo — đường đạo diễn mới có tham chiếu theo từng cảnh."""
+    return [p for p in list(getattr(bc.kenh, "anh_nv", []) or [])[:1]
+            if isinstance(p, str) and os.path.isfile(p)]
+
+
 def _chon_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
                    hop: "ThamChieu", so: Optional[SoTheoDoi] = None) -> None:
     """Vẽ thêm ứng viên cho cảnh, AI biên tập chọn tấm tốt nhất, chưa đạt thì sửa
@@ -8318,7 +8325,7 @@ def _chon_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
     n = int(getattr(k, "so_ung_vien_anh", 1) or 1)
     so_canh = int(c["scene_id"])
     cau_ke = str(c.get("srt_text") or "")
-    refs = _duong_tham_chieu(bc, luot, c, hop)
+    refs = _duong_tham_chieu(bc, luot, c, hop) or _anh_nv_cua_kenh(bc)
     dau = "{0}.uv0-0.png".format(tep)
     if not os.path.exists(dau):
         shutil.copyfile(tep, dau)
@@ -8327,7 +8334,8 @@ def _chon_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
         _ve_ung_vien(bc, luot, hop, tep, "img", so_canh,
                      "ảnh cảnh {0}".format(so_canh), so),
         lambda ung, p: cham_ung_vien(goi_nhin, ung, cau_ke=cau_ke, mo_ta=p,
-                                     tham_chieu=refs, loai="canh"),
+                                     tham_chieu=refs, loai="canh",
+                                     kenh_style=getattr(k, "style", None)),
         lambda p, loi, sua: viet_lai_loi_nhac(goi_chu, p, cau_ke=cau_ke, loi=loi, sua=sua),
         loi_nhac=str(c["img_prompt"]), co_san=[dau], so_ung_vien=n,
         so_vong_sua=int(getattr(k, "so_vong_sua_anh", 0) or 0))
@@ -9888,28 +9896,51 @@ def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
     dv = tcnd.DauVao(khau="bia", canh=so_bia, prompt=loi_nhac,
                      tham_chieu=_tham_chieu_van_tay(bc, hop))
     cong_cu = _cong_cu_auto(bc, luot, {"scene_id": 0}, so)
-    tcnd.lam_co_cuu(so_cuu, dv, gui=gui, xong=xong, cong_cu=cong_cu, xong_lui=xong_lui)
+    ket = tcnd.lam_co_cuu(so_cuu, dv, gui=gui, xong=xong, cong_cu=cong_cu,
+                         xong_lui=xong_lui)
+    # Bìa MỘT lớp (AI vẽ luôn chữ, như TL4-T7): vẽ nhiều bản, chọn bản đáng bấm
+    # nhất VÀ chữ đúng chính tả, dễ đọc (chủ dự án 17/10/2026).
+    if (not ket.la_duong_lui and os.path.exists(tep)
+            and int(getattr(bc.kenh, "so_ung_vien_bia", 1) or 1) > 1):
+        try:
+            _chon_nen_bia(bc, luot, hop, tep, so_bia, ket.dau_vao_cuoi.prompt, tieu_de,
+                          "16:9", so, chu_can_co=chu_bia, viec="thumb")
+        except Exception as loi:  # noqa: BLE001 — đã có một tấm bìa dùng được
+            if tcnd._la_huy_ngang_qua(loi):
+                raise
+            from .auto import Cancelled  # noqa: PLC0415
+
+            if isinstance(loi, Cancelled):
+                raise
+            bc.ghi("  ảnh bìa {0}: chưa chọn được ứng viên ({1}) — giữ tấm "
+                   "đầu.".format(so_bia, str(loi)[:80]))
     return so_bia, False
 
 
 def _chon_nen_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", nen: str, so_bia: int,
                   loi_nhac: str, tieu_de: str, ty_le: str,
-                  so: Optional[SoTheoDoi] = None) -> None:
-    """Ảnh nền bìa: vẽ `so_ung_vien_bia` bản, AI chọn bản đáng bấm nhất (chủ dự án
-    17/10/2026: "thumbnail tạo vài chục cái để chấm và chọn ra cái ok")."""
+                  so: Optional[SoTheoDoi] = None, chu_can_co: str = "",
+                  viec: str = "thumb-nen") -> None:
+    """Ảnh bìa: vẽ `so_ung_vien_bia` bản, AI chọn bản đáng bấm nhất (chủ dự án
+    17/10/2026: "thumbnail tạo vài chục cái để chấm và chọn ra cái ok").
+
+    Dùng cho cả NỀN bìa hai lớp (không chữ) lẫn bìa MỘT lớp (TL4-T7: AI vẽ luôn
+    chữ — `chu_can_co` là chữ phải in, giám khảo trừ điểm chữ sai/khó đọc)."""
     from .chon_anh_tot import cham_ung_vien, chon_va_sua, viet_lai_loi_nhac  # noqa: PLC0415
 
     n = int(getattr(bc.kenh, "so_ung_vien_bia", 1) or 1)
     dau = "{0}.uv0-0.png".format(nen)
     if not os.path.exists(dau):
         shutil.copyfile(nen, dau)
-    refs = [p for p in getattr(hop, "_duong", []) or [] if isinstance(p, str) and os.path.isfile(p)]
+    refs = ([p for p in getattr(hop, "_duong", []) or [] if isinstance(p, str) and os.path.isfile(p)]
+            or _anh_nv_cua_kenh(bc))
     goi_nhin, goi_chu = _goi_nhin(bc), _goi_chu_thuong(bc)
     kq = chon_va_sua(
-        _ve_ung_vien(bc, luot, hop, nen, "thumb-nen", so_bia,
+        _ve_ung_vien(bc, luot, hop, nen, viec, so_bia,
                      "ảnh bìa {0}".format(so_bia), so, ty_le=ty_le),
         lambda ung, p: cham_ung_vien(goi_nhin, ung, cau_ke=tieu_de, mo_ta=p,
-                                     tham_chieu=refs, loai="bia"),
+                                     tham_chieu=refs, loai="bia", kenh_style=getattr(bc.kenh, "style", None),
+                                     chu_can_co=chu_can_co),
         lambda p, loi, sua: viet_lai_loi_nhac(goi_chu, p, cau_ke=tieu_de, loi=loi, sua=sua),
         loi_nhac=loi_nhac, co_san=[dau], so_ung_vien=n,
         so_vong_sua=int(getattr(bc.kenh, "so_vong_sua_anh", 0) or 0))

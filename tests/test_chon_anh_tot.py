@@ -97,7 +97,8 @@ def test_ve_hong_mot_ung_vien_van_cham_phan_con_lai(tmp_path):
     assert kq.duong.endswith("x2.png")
 
 
-def test_cham_ung_vien_gui_moi_anh_va_tin_diem(tmp_path):
+def test_cham_ung_vien_gui_moi_anh_va_tin_diem(tmp_path, monkeypatch):
+    monkeypatch.setattr(cat, "SO_LUOT_CHAM", 1)
     ung = [_anh(tmp_path / "a.png"), _anh(tmp_path / "b.png", (200, 0, 0))]
     ref = [_anh(tmp_path / "r.png")]
     gui = []
@@ -107,11 +108,16 @@ def test_cham_ung_vien_gui_moi_anh_va_tin_diem(tmp_path):
         # AI ghi "tot_nhat": 0 nhưng chấm tấm 1 cao hơn → tin điểm.
         return json.dumps({"diem": [4, 9], "tot_nhat": 0, "loi": "", "sua": ""})
 
-    ch = cat.cham_ung_vien(goi, ung, cau_ke="She laughs", mo_ta="two women", tham_chieu=ref)
+    ch = cat.cham_ung_vien(goi, ung, cau_ke="She laughs", mo_ta="two women", tham_chieu=ref,
+                           kenh_style={"image_style": "flat vector cartoon",
+                                       "negative_prompt": "no blood"})
     assert ch["tot"] == 1
     anh = [k for k in gui[0] if k.get("type") == "image"]
     assert len(anh) == 3, "1 tham chiếu + 2 ứng viên"
-    assert "NOT CREEPY" in gui[0][0]["text"] and "She laughs" in gui[0][0]["text"]
+    chu = gui[0][0]["text"]
+    assert "She laughs" in chu
+    # Tiêu chí lấy từ CHÍNH kênh (17/10/2026: "luật cứng dễ fail").
+    assert "flat vector cartoon" in chu and "no blood" in chu
 
 
 def test_viet_lai_tra_rac_thi_giu_ban_cu():
@@ -134,6 +140,7 @@ def test_kenh_khong_khai_thi_tat():
 
 
 def test_chon_anh_canh_noi_vao_khau_anh(tmp_path, monkeypatch):
+    monkeypatch.setattr(cat, "SO_LUOT_CHAM", 1)
     """`_chon_anh_canh`: vẽ thêm ứng viên qua `_tao_anh`, chọn tấm thắng chép vào
     ảnh cảnh, lời nhắc đã sửa ghi vào 4-canh.json, ứng viên thua dọn vào
     `_ung-vien/`, có sổ `_chon-anh.jsonl`."""
@@ -180,3 +187,45 @@ def test_chon_anh_canh_noi_vao_khau_anh(tmp_path, monkeypatch):
     assert os.listdir(d / "5-anh" / "_ung-vien")
     so = [json.loads(x) for x in open(d / "5-anh" / "_chon-anh.jsonl", encoding="utf-8")]
     assert so[0]["canh"] == 7 and so[0]["diem"] == 9
+
+
+def test_tieu_chi_lay_tu_kenh_va_tieu_chi_rieng_dung_dau():
+    chu = cat.tieu_chi_kenh({"image_style": "photo", "tieu_chi_cham": "faces must be visible"})
+    assert chu.index("faces must be visible") < chu.index("photo")
+    assert "no goals" in cat.tieu_chi_kenh({})
+
+
+def test_khuon_cham_khong_ghi_cung_loi_rieng_mot_the_loai():
+    """Luật chung chỉ là mục tiêu; lỗi riêng một thể loại (phòng trống, quay lưng…)
+    phải đến từ tiêu chí của kênh, không gõ cứng cho mọi kênh."""
+    for khuon in (cat.LOI_NHAC_CHAM_CANH, cat.LOI_NHAC_CHAM_BIA):
+        thap = khuon.lower()
+        for cung in ("empty room", "corridor", "back of the head", "beautiful/handsome"):
+            assert cung not in thap, cung
+
+
+def test_cham_hai_luot_dao_thu_tu_lay_trung_binh(tmp_path):
+    """Giám khảo thiên vị VỊ TRÍ đầu: lượt xuôi khen A, lượt ngược khen tấm đứng
+    đầu (C). Trung bình theo TẤM thì tấm thật sự tốt (B, giữa) thắng."""
+    ung = [_anh(tmp_path / "a.png"), _anh(tmp_path / "b.png"), _anh(tmp_path / "c.png")]
+    lan = [0]
+
+    def goi(_nd):
+        lan[0] += 1
+        return json.dumps({"diem": [10, 8, 1], "loi": "l%d" % lan[0], "sua": ""})
+
+    ch = cat.cham_ung_vien(goi, ung, cau_ke="x", mo_ta="y")
+    assert lan[0] == 2 and ch["so_luot"] == 2
+    assert ch["diem"] == [5.5, 8.0, 5.5] and ch["tot"] == 1
+
+
+def test_mot_luot_hong_van_dung_luot_con_lai(tmp_path):
+    ung = [_anh(tmp_path / "a.png"), _anh(tmp_path / "b.png")]
+    lan = [0]
+
+    def goi(_nd):
+        lan[0] += 1
+        return "K" if lan[0] == 2 else json.dumps({"diem": [3, 9]})
+
+    ch = cat.cham_ung_vien(goi, ung, cau_ke="x", mo_ta="y")
+    assert ch["tot"] == 1 and ch["so_luot"] == 1

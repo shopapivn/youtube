@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Sequence
 
 __all__ = ["NGUONG_DAT", "KetQuaChon", "LOI_NHAC_CHAM_CANH", "LOI_NHAC_CHAM_BIA",
-           "LOI_NHAC_VIET_LAI", "anh_nho", "cham_ung_vien", "viet_lai_loi_nhac",
+           "LOI_NHAC_VIET_LAI", "tieu_chi_kenh", "anh_nho", "cham_ung_vien", "viet_lai_loi_nhac",
            "chon_va_sua"]
 
 #: Điểm (0–10) của tấm tốt nhất phải từ đây trở lên thì mới thôi sửa lời nhắc.
@@ -38,43 +38,79 @@ __all__ = ["NGUONG_DAT", "KetQuaChon", "LOI_NHAC_CHAM_CANH", "LOI_NHAC_CHAM_BIA"
 NGUONG_DAT = 8.5
 #: Cạnh dài của ảnh gửi cho giám khảo (thu nhỏ: 5 ảnh 1376 px PNG là ~8 MB).
 CANH_GUI = 768
+#: Mấy lượt chấm cho mỗi lần chọn (lượt sau đảo thứ tự ứng viên) — xem `cham_ung_vien`.
+SO_LUOT_CHAM = 2
 #: Gửi giám khảo tối đa ngần này ảnh tham chiếu.
 TOI_DA_THAM_CHIEU = 3
 
-LOI_NHAC_CHAM_CANH = """You are the picture editor of a narrated YouTube drama film. Viewers hear the narration and see ONE still picture for this moment.
+LOI_NHAC_CHAM_CANH = """You are the picture editor of this YouTube channel, choosing the still picture viewers will see while they hear this line.
 
-Narration for this moment: "{cau_ke}"
-The shot the director asked for: {mo_ta}
+Line being heard: "{cau_ke}"
+What the director asked for: {mo_ta}
 
-{phan_tham_chieu}Then come {n} CANDIDATE pictures, in order, labelled {nhan}.
+About this channel (its own goals and taste):
+{kenh}
 
-Score EVERY candidate from 0 to 10 as a viewer would feel it:
-- STORY (most important): at a glance, does the picture show what this narration line is about — the right people, doing the right thing, with the right emotion? A pretty picture that shows something else is a bad picture.
-- APPEAL: are the people attractive, natural and well lit, with correct faces, eyes and hands, and human expressions?
-- NOT CREEPY: nothing that feels like a horror film — no distorted, melted or doubled faces, extra or broken limbs, dead or staring eyes, uncanny smiles, ghostly or faceless figures, a tiny lonely person lost in a huge empty room or corridor, gloomy darkness, unintended blood or dirt. Any of these caps the score at 3.
-- CHARACTERS: the people match their reference designs (if given) and the right number of people is present.
+{phan_tham_chieu}Then come {n} candidate pictures, in order, labelled {nhan}.
 
-Be strict and consistent. 9-10 means you would change NOTHING. If you can name any problem with a candidate, it scores 8 or less. When the line is about a feeling or a thought, a picture where we cannot see the person's face (back of the head, face hidden, too far away) does not tell the story: 6 or less.
+Look at them the way you, as this channel's editor, and its viewers would — trust your eye. Which one would you actually put in the video at this moment, and how good is each? A good picture makes the viewer instantly feel what this line is about and looks like it belongs in this channel; anything that would make a viewer wince, frown or feel something is off counts against it.
+
+Give each candidate a score from 0 to 10 (10 = you would publish it exactly as it is; lower the more you would want to change it). Then say, in plain words, what still bothers you about the best one and what change to the description would fix it.
 
 Return JSON only:
-{{"diem": [<score for each candidate, in order>], "tot_nhat": <index of the best, 0-based>, "loi": "<what is still wrong with the best one, concrete; empty if nothing>", "sua": "<one concrete change to the shot description that would fix it; empty if nothing>"}}"""
+{{"diem": [<score for each candidate, in order>], "tot_nhat": <index of the best, 0-based>, "loi": "<what still bothers you about the best one; empty if nothing>", "sua": "<the change to the description that would fix it; empty if nothing>"}}"""
 
-LOI_NHAC_CHAM_BIA = """You are choosing the YouTube THUMBNAIL picture (the text is added later) for this video.
+LOI_NHAC_CHAM_BIA = """You are choosing the YouTube thumbnail for this video, for this channel.
 Title: "{cau_ke}"
-The picture the designer asked for: {mo_ta}
+What the designer asked for: {mo_ta}
+{phan_chu}
+About this channel (its own goals and taste):
+{kenh}
 
-{phan_tham_chieu}Then come {n} CANDIDATE pictures, in order, labelled {nhan}.
+{phan_tham_chieu}Then come {n} candidate pictures, in order, labelled {nhan}.
 
-Score EVERY candidate from 0 to 10 for how strongly a viewer scrolling on a phone would want to click:
-- the main person is beautiful/handsome, glamorous, large and sharp, with a clear readable emotion;
-- the picture instantly says what this story is about (who, what conflict);
-- bright, rich, clean image; nothing creepy, distorted or uncanny (faces, eyes, hands) — any of that caps the score at 3;
-- characters match their reference designs (if given); no text or letters in the picture.
+Look at them the way this channel's viewer scrolling on a phone would — trust your eye. Which one would make them stop and click, and how good is each? Anything that would make a viewer wince or feel something is off counts against it. {luat_chu}
 
-Be strict and consistent: 9-10 means you would change NOTHING; any problem you can name means 8 or less.
+Give each candidate a score from 0 to 10 (10 = you would publish it exactly as it is; lower the more you would want to change it). Then say, in plain words, what still bothers you about the best one and what change to the description would fix it.
 
 Return JSON only:
-{{"diem": [<score for each candidate, in order>], "tot_nhat": <index of the best, 0-based>, "loi": "<what is still wrong with the best one; empty if nothing>", "sua": "<one concrete change to the picture description; empty if nothing>"}}"""
+{{"diem": [<score for each candidate, in order>], "tot_nhat": <index of the best, 0-based>, "loi": "<what still bothers you about the best one; empty if nothing>", "sua": "<the change to the description that would fix it; empty if nothing>"}}"""
+
+#: ═══ LUẬT MỞ, KHÔNG LUẬT CỨNG (chủ dự án 17/10/2026) ═══
+#: "Không nên thiết kế cứng, mà nên logic mở, kiểu như con người đánh giá, nhìn là
+#: biết cái nào ok." Bản trước liệt kê 4 mục chấm + mức trần điểm + danh sách lỗi
+#: (phòng trống, quay lưng…) — đúng cho kênh drama, sai cho kênh khác. Giờ giám
+#: khảo chỉ được cho NGỮ CẢNH (câu đang kể, lời nhắc, mục tiêu của kênh) rồi tự
+#: nhìn như người biên tập: tấm nào bạn đưa vào video. Độ tin cậy đến từ cách
+#: CHỌN (nhiều ứng viên, hai lượt đảo thứ tự, sửa lời nhắc), không từ luật.
+#: Khoá trong `style.yaml` mô tả MỤC TIÊU hình của kênh — giám khảo chấm theo
+#: chính những dòng này, không theo một bộ luật cứng chung cho mọi kênh.
+KHOA_TIEU_CHI = (
+    ("tieu_chi_cham", "Extra criteria from the channel owner"),
+    ("image_style", "Art style"),
+    ("audience_culture_note", "Audience"),
+    ("engagement_rules", "What a good shot does"),
+    ("cultural_emotion_style", "How emotion should read"),
+    ("negative_prompt", "Never show"),
+)
+KHOA_TIEU_CHI_BIA = (
+    ("tieu_chi_cham", "Extra criteria from the channel owner"),
+    ("thumbnail_style", "Thumbnail style"),
+    ("image_style", "Art style"),
+    ("audience_culture_note", "Audience"),
+    ("negative_prompt", "Never show"),
+)
+
+
+def tieu_chi_kenh(style, loai: str = "canh") -> str:
+    """Mục tiêu hình của kênh (từ `style.yaml`) thành mấy dòng cho giám khảo."""
+    dong = []
+    for khoa, nhan in (KHOA_TIEU_CHI_BIA if loai == "bia" else KHOA_TIEU_CHI):
+        gia = " ".join(str((style or {}).get(khoa) or "").split())
+        if gia:
+            dong.append("- {0}: {1}".format(nhan, gia[:500]))
+    return "\n".join(dong) or "- (the channel gave no goals — judge it as a clear, appealing film still)"
+
 
 LOI_NHAC_VIET_LAI = """Rewrite this image-generation prompt so the picture fixes the editor's notes below.
 
@@ -113,8 +149,15 @@ def anh_nho(duong: str, canh: int = CANH_GUI) -> str:
 
 def cham_ung_vien(goi_nhin: Callable[[list], str], ung_vien: Sequence[str], *,
                   cau_ke: str, mo_ta: str, tham_chieu: Sequence[str] = (),
-                  loai: str = "canh") -> Optional[dict]:
-    """Một lượt AI nhìn MỌI ứng viên cùng lúc, chấm so sánh. Hỏng → None."""
+                  loai: str = "canh", kenh_style=None,
+                  chu_can_co: str = "") -> Optional[dict]:
+    """Một lượt AI nhìn MỌI ứng viên cùng lúc, chấm so sánh. Hỏng → None.
+
+    `kenh_style` = `style.yaml` của kênh: giám khảo chấm theo MỤC TIÊU của chính
+    kênh ấy (kiểu vẽ, khán giả, điều cấm…, xem `tieu_chi_kenh`) — không theo một bộ
+    luật cứng chung (chủ dự án 17/10/2026: "cứng như này dễ fail"). `chu_can_co` = chữ ảnh
+    bìa phải in (bìa một lớp: AI vẽ luôn chữ) — rỗng thì ảnh không được có chữ.
+    """
     from .goi_van_ban import khoi_anh, loc_json  # noqa: PLC0415
 
     ung = [p for p in ung_vien if p and os.path.isfile(p)]
@@ -122,29 +165,57 @@ def cham_ung_vien(goi_nhin: Callable[[list], str], ung_vien: Sequence[str], *,
         return None
     refs = [p for p in tham_chieu if p and os.path.isfile(p)][:TOI_DA_THAM_CHIEU]
     nhan = ", ".join(chr(65 + i) for i in range(len(ung)))
-    phan_tc = ("The first {0} image(s) are REFERENCE designs of the characters/places.\n"
-               .format(len(refs)) if refs else "")
+    # Tên từng ảnh tham chiếu = "ai là ai": người biên tập thật biết ngay ai đang
+    # đứng trong khung. Thiếu nó, giám khảo không nhận ra máy vẽ NHẦM NGƯỜI (chạy
+    # thật 17/10/2026: cảnh 254 vẽ người đi viếng lớn tuổi vào chỗ Do-yul trẻ).
+    phan_tc = ("The first {0} image(s) are the reference designs, in order: {1}. The people "
+               "in a good picture are clearly these same characters.\n".format(
+                   len(refs), ", ".join(os.path.splitext(os.path.basename(p))[0] for p in refs))
+               if refs else "")
     khuon = LOI_NHAC_CHAM_BIA if loai == "bia" else LOI_NHAC_CHAM_CANH
+    chu_bia = str(chu_can_co or "").strip()
+    phan_chu = ('The picture must carry exactly this text, spelled correctly and easy to read '
+                'on a phone: "{0}".\n'.format(chu_bia[:200]) if chu_bia else "")
+    luat_chu = ("The text has to read exactly as given." if chu_bia
+                else "The text is added later, so the picture itself should carry no text.")
     chu = khuon.format(cau_ke=str(cau_ke or "")[:500], mo_ta=str(mo_ta or "")[:900],
-                       phan_tham_chieu=phan_tc, n=len(ung), nhan=nhan)
-    noi_dung: list = [{"type": "text", "text": chu}]
-    noi_dung += [khoi_anh(anh_nho(p, 512)) for p in refs]
-    noi_dung += [khoi_anh(anh_nho(p)) for p in ung]
-    try:
-        d = loc_json(str(goi_nhin(noi_dung) or ""))
-        diem = [float(x) for x in d.get("diem") or []]
+                       phan_tham_chieu=phan_tc, n=len(ung), nhan=nhan,
+                       kenh=tieu_chi_kenh(kenh_style, loai),
+                       phan_chu=phan_chu, luat_chu=luat_chu)
+    anh_tc = [khoi_anh(anh_nho(p, 512)) for p in refs]
+    anh_uv = [khoi_anh(anh_nho(p)) for p in ung]
+
+    def mot_luot(thu_tu: List[int]) -> Optional[dict]:
+        noi_dung: list = [{"type": "text", "text": chu}] + anh_tc + [anh_uv[i] for i in thu_tu]
+        try:
+            d = loc_json(str(goi_nhin(noi_dung) or ""))
+            diem = [float(x) for x in d.get("diem") or []]
+        except Exception:  # noqa: BLE001 — lượt này hỏng
+            return None
         if len(diem) != len(ung):
             return None
-        tot = int(d.get("tot_nhat", max(range(len(diem)), key=lambda i: diem[i])))
-        if not 0 <= tot < len(ung):
-            tot = max(range(len(diem)), key=lambda i: diem[i])
-        # Tin ĐIỂM hơn chữ "tot_nhat": AI đôi khi chọn một tấm rồi chấm tấm khác cao hơn.
-        if diem[tot] < max(diem):
-            tot = max(range(len(diem)), key=lambda i: diem[i])
-    except Exception:  # noqa: BLE001 — chấm hỏng thì không chọn được
+        theo_goc = [0.0] * len(ung)
+        for vi_tri, goc in enumerate(thu_tu):
+            theo_goc[goc] = diem[vi_tri]
+        return {"diem": theo_goc, "loi": str(d.get("loi") or ""), "sua": str(d.get("sua") or "")}
+
+    # ═══ CHẤM HAI LƯỢT, LƯỢT HAI ĐẢO THỨ TỰ (17/10/2026, chạy thật) ═══
+    # Một lượt chấm hên xui: cùng một tấm, lần 4 lần 8; và AI hay ưu ái tấm ở
+    # một vị trí. Hai lượt ngược thứ tự rồi lấy TRUNG BÌNH thì cả hai cái lệch ấy
+    # triệt nhau. Lời biên tập ("loi"/"sua") lấy từ lượt thấy tấm thắng điểm cao
+    # hơn — tức lượt hiểu tấm ấy hơn.
+    xuoi = list(range(len(ung)))
+    luot = [mot_luot(xuoi)]
+    if len(ung) > 1 and SO_LUOT_CHAM > 1:
+        luot.append(mot_luot(xuoi[::-1]))
+    luot = [x for x in luot if x]
+    if not luot:
         return None
-    return {"ung_vien": ung, "diem": diem, "tot": tot,
-            "loi": str(d.get("loi") or ""), "sua": str(d.get("sua") or "")}
+    diem = [round(sum(x["diem"][i] for x in luot) / len(luot), 2) for i in range(len(ung))]
+    tot = max(range(len(diem)), key=lambda i: diem[i])
+    nguon = max(luot, key=lambda x: x["diem"][tot])
+    return {"ung_vien": ung, "diem": diem, "tot": tot, "loi": nguon["loi"], "sua": nguon["sua"],
+            "so_luot": len(luot)}
 
 
 def viet_lai_loi_nhac(goi_chu: Callable[[str], str], prompt: str, *, cau_ke: str,

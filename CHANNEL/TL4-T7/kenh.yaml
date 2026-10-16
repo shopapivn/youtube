@@ -112,6 +112,14 @@ engine: "veo3"
 #  Đặt cạnh nhau trong cùng một lượt thì so được ngay, không phải cược cả
 #  một video vào một kiểu. Xem KIEU_THUMB trong core/auto_khau.py.
 so_thumbnail: 6
+# Chất lượng hình (chủ dự án 17/10/2026: "không giới hạn chi phí, chỉ cần chất
+# lượng tốt"): mỗi cảnh vẽ 3 tấm, AI biên tập chấm theo đúng kiểu vẽ hoạt hình
+# của kênh (kể đúng câu, đúng nhân vật nv1, không rợn) và giữ tấm tốt nhất; chưa
+# đạt 8,5/10 thì AI sửa lời nhắc rồi vẽ lại, tối đa 2 vòng. Mỗi ảnh bìa vẽ 6 bản,
+# chọn bản đáng bấm nhất VÀ chữ đúng chính tả, dễ đọc (6 bìa × 6 = 36 bản).
+so_ung_vien_anh: 3
+so_vong_sua_anh: 2
+so_ung_vien_bia: 6
 mo_hinh: "claude-sonnet-5"
 dot_phu_de: false
 am_luong_nhac: 0.12
