@@ -220,3 +220,40 @@ class TestCaKhau:
                 _chay(d, _AIRaSoatChepTrung(cung_dau=True))
             assert not os.path.exists(os.path.join(d, "1-kich-ban.txt"))
             assert os.path.exists(os.path.join(d, TEP_LAN_TIENG))
+
+
+# ═══ Chủ dự án 16/10: bài chen VÀI TỪ / vài câu tiếng khác là bình thường — không được bắt oan ═══
+
+def test_cau_nhat_chen_tu_tieng_anh_khong_sai():
+    cau = "今日はiPhoneとMacBookを使ってYouTubeに新しい動画をアップロードします。"
+    assert not lt.cau_sai_tieng(cau, "ja")
+
+
+def test_cau_viet_nhac_tu_nhat_han_khong_sai():
+    assert not lt.cau_sai_tieng("Món sushi trong tiếng Nhật gọi là すし và rất được yêu thích.", "vi")
+    assert not lt.cau_sai_tieng("Nhóm nhạc 방탄소년단 rất nổi tiếng ở khắp châu Á hiện nay.", "vi")
+
+
+def test_cau_han_co_ten_nhat_khong_sai():
+    assert not lt.cau_sai_tieng("저는 어제 일본 친구 さくら 씨와 함께 서울에서 저녁을 먹었습니다.", "ko")
+
+
+def test_bai_nhat_co_mot_hai_cau_trich_tieng_anh_duoc_tha():
+    nhat = ["彼は毎朝早く起きて、静かな川沿いを散歩するのが好きでした。"] * 20
+    bai = "\n".join(nhat + ["Stay hungry and stay foolish every single day."])
+    kq = lt.danh_gia(bai, "ja")
+    assert not kq.lan
+    assert lt.cum_dong_sai(bai, "ja") == []
+
+
+def test_bai_nhat_nhieu_cau_tieng_anh_van_bi_bat():
+    nhat = ["彼は毎朝早く起きて、静かな川沿いを散歩するのが好きでした。"] * 10
+    anh = ["Wait, I am still writing in the wrong language again."] * 4
+    kq = lt.danh_gia("\n".join(nhat + anh), "ja")
+    assert kq.lan and kq.cau_sai == 4
+
+
+def test_mot_cau_trung_trong_bai_nhat_van_bi_bat():
+    nhat = ["彼は毎朝早く起きて、静かな川沿いを散歩するのが好きでした。"] * 20
+    kq = lt.danh_gia("\n".join(nhat + ["我们现在应该怎么办，这个问题很难回答。"]), "ja")
+    assert kq.lan and kq.cau_sai == 1

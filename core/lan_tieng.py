@@ -121,21 +121,47 @@ def tach_cau(chu: str) -> List[str]:
 
 
 def loai_cau(cau: str) -> str:
-    """'ja' | 'ko' | 'zh' | 'latin' | 'khac' — đoán theo chữ viết."""
-    if _KANA.search(cau):
-        return "ja"
-    if len(_HANGUL.findall(cau)) >= 2:
-        return "ko"
+    """'ja' | 'ko' | 'zh' | 'han' | 'latin' | 'khac' — theo chữ viết CHIẾM PHẦN LỚN câu.
+
+    Theo tỉ lệ chứ không theo "có mặt" (chủ dự án 16/10: bài có chen VÀI TỪ tiếng
+    khác là bình thường): câu Việt nhắc một từ すし, câu Hàn có một tên tiếng Nhật,
+    câu Nhật chen iPhone/YouTube… đều KHÔNG bị coi là câu sai tiếng.
+    """
     gon = _GON.sub("", cau)
     if not gon:
         return "khac"
+    n = len(gon)
+    kana = len(_KANA.findall(gon))
+    hangul = len(_HANGUL.findall(gon))
     han = len(_HAN.findall(gon))
-    if han >= len(gon) * 0.5:
+    if kana and kana + han >= n * 0.5:
+        return "ja"
+    if hangul >= n * 0.5:
+        return "ko"
+    if han >= n * 0.5 and not kana:
         return "zh" if any(c in _GIAN_THE for c in gon) else "han"
-    if han == 0 and len(_TU_LATIN.findall(cau)) >= 5 and \
-            len(_CHU_LATIN.findall(gon)) >= len(gon) * 0.6:
+    if not (kana or hangul or han) and len(_TU_LATIN.findall(cau)) >= 5 and \
+            len(_CHU_LATIN.findall(gon)) >= n * 0.6:
         return "latin"
     return "khac"
+
+
+def _tha_cau_latin(cau: List[str], m: str) -> bool:
+    """Bài tiếng Nhật/Hàn/Trung có VÀI câu tiếng Anh (trích dẫn, khẩu hiệu, lời bài
+    hát) là chủ ý của người viết → tha. Chỉ coi là lỗi khi nhiều: ≥3 câu VÀ ≥10%
+    (bệnh thật 16/10 là cả tràng "I can't stop mixing"). Câu tiếng Trung thì không tha."""
+    if m not in GAC_DUOC or not cau:
+        return False
+    # Đã có câu sai tiếng KHÁC (Trung/Hàn/Nhật lạc) = model đang trôi → câu Anh trong
+    # bài ấy là chính cơn trôi ("Wait - I'm still writing Chinese…"), không tha.
+    if any(cau_sai_tieng(c, m) and loai_cau(c) != "latin" for c in cau):
+        return False
+    latin = sum(1 for c in cau if loai_cau(c) == "latin")
+    return latin < 3 or latin < len(cau) * 0.1
+
+
+def _sai_that(c: str, m: str, tha_latin: bool) -> bool:
+    return cau_sai_tieng(c, m) and not (tha_latin and loai_cau(c) == "latin")
 
 
 def cau_sai_tieng(cau: str, ma: str) -> bool:
@@ -181,23 +207,26 @@ def danh_gia(chu: str, ma: str) -> KetQua:
     if m not in GAC_DUOC and m not in _HO_LATIN:
         return KetQua()
     cau = tach_cau(chu)
-    sai = [c for c in cau if cau_sai_tieng(c, m)]
+    tha = _tha_cau_latin(cau, m)
+    sai = [c for c in cau if _sai_that(c, m, tha)]
     return KetQua(lan=bool(sai), tong_cau=len(cau), cau_sai=len(sai), vi_du=sai[:3])
 
 
-def _dong_sai(dong: str, ma: str) -> bool:
-    return any(cau_sai_tieng(c, ma) for c in tach_cau(dong))
+def _dong_sai(dong: str, ma: str, tha_latin: bool = False) -> bool:
+    m = ma_tieng(ma)
+    return any(_sai_that(c, m, tha_latin) for c in tach_cau(dong))
 
 
 def cum_dong_sai(chu: str, ma: str) -> List[Tuple[int, int]]:
     """Các cụm dòng liền nhau có câu sai tiếng: [(đầu, cuối-không-gồm), …]."""
     dong = (chu or "").split("\n")
+    tha = _tha_cau_latin(tach_cau(chu or ""), ma_tieng(ma))
     cum: List[Tuple[int, int]] = []
     i = 0
     while i < len(dong):
-        if _dong_sai(dong[i], ma):
+        if _dong_sai(dong[i], ma, tha):
             j = i + 1
-            while j < len(dong) and _dong_sai(dong[j], ma):
+            while j < len(dong) and _dong_sai(dong[j], ma, tha):
                 j += 1
             cum.append((i, j))
             i = j
