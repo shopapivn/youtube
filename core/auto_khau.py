@@ -566,7 +566,10 @@ def _goi_mot_lan_chiu_ha_tang(bc: "BoiCanh", loi_nhac: str, khoa: str,
 
 
 #: Viết lại cả lượt tối đa ngần này lần khi bài trả về hỏng NẶNG vì lẫn tiếng.
-SO_LAN_VIET_LAI_LAN_TIENG = 2
+SO_LAN_VIET_LAI_LAN_TIENG = 3
+#: Cổng cuối: số vòng viết lại từng đoạn sai tiếng trước khi DỪNG (chủ dự án 16/10:
+#: "bị tiếng Trung thì coi như lỗi, làm lại cho khách — phải ra sản phẩm chất lượng").
+SO_VONG_SUA_LAN_TIENG = 4
 
 
 def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
@@ -3252,16 +3255,16 @@ def _gac_lan_tieng(bc: "BoiCanh", luot: LuotChay, k: Kenh, ban: str, d: str) -> 
             bc, loi_nhac, _khoa_chat(luot, "lan-tieng:{0}:{1}:{2}".format(
                 vong, so, uuid.uuid4().hex[:8])), toi_da_token=4096)
 
-    moi, kq2 = sua_lan_tieng(ban, ma, goi, ghi=bc.ghi, toi_da=2,
+    moi, kq2 = sua_lan_tieng(ban, ma, goi, ghi=bc.ghi, toi_da=SO_VONG_SUA_LAN_TIENG,
                              ten_tieng=ten_tieng(ma),
                              don=lambda c: _don_ban(c, ma))
     if kq2.lan:
         duong = os.path.join(d, TEP_LAN_TIENG)
         _ghi_chu(duong, moi + "\n")
         raise LoiNoiDung(
-            "kịch bản vẫn còn {0} sau 2 vòng viết lại từng đoạn — đã DỪNG trước "
+            "kịch bản vẫn còn {0} sau {2} vòng viết lại từng đoạn — đã DỪNG trước "
             "bước giọng đọc để không trả tiền đọc sai tiếng. Bản lỗi lưu ở {1}; "
-            "bấm Chạy tiếp để thử lại.".format(kq2.mo_ta(), TEP_LAN_TIENG))
+            "bấm Chạy tiếp để thử lại.".format(kq2.mo_ta(), TEP_LAN_TIENG, SO_VONG_SUA_LAN_TIENG))
     bc.ghi("  gác lẫn tiếng: đã viết lại xong, bài sạch ({0} câu).".format(kq2.tong_cau))
     return moi
 

@@ -26,7 +26,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core import lan_tieng as lt  # noqa: E402
 from core.auto import LuotChay, TrangThaiKhau  # noqa: E402
-from core.auto_khau import BoiCanh, TEP_LAN_TIENG, _goi, _khau_kich_ban  # noqa: E402
+from core.auto_khau import (  # noqa: E402
+    SO_LAN_VIET_LAI_LAN_TIENG, BoiCanh, TEP_LAN_TIENG, _goi, _khau_kich_ban)
 from core.kenh import Kenh  # noqa: E402
 from core.su_co import LoiNoiDung  # noqa: E402
 
@@ -142,9 +143,9 @@ class TestGoiGacTieng:
         assert ai.goi[1][1] != ai.goi[0][1] and ":nn-lai1-" in ai.goi[1][1]
 
     def test_hong_mai_thi_dung_o_hai_lan_va_giu_ban_it_sai_nhat(self):
-        ai = _AI([BAI_TRUNG, "\n".join(NHAT * 3 + TRUNG * 10), BAI_TRUNG])
+        ai = _AI([BAI_TRUNG, "\n".join(NHAT * 3 + TRUNG * 10), BAI_TRUNG, BAI_TRUNG])
         ra = _goi(_bc(ai), "x", "K:1:chat:2-viet.md", ngon_ngu_dich="ja")
-        assert len(ai.goi) == 3
+        assert len(ai.goi) == 1 + SO_LAN_VIET_LAI_LAN_TIENG
         assert NHAT[0] in ra
 
     def test_lan_nhe_khong_viet_lai_ca_luot(self):
