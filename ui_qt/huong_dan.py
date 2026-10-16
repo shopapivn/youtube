@@ -585,8 +585,8 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
             "Giá tạm giữ hiện ngay cạnh nút → (ví dụ “~100₫”), đổi loại/số "
             "lượng/kiểu clip là số đó cập nhật ngay — bấm Gửi mới biết đã bị "
             "trừ bao nhiêu là chuyện không nên có.",
-            "Video BẮT BUỘC có ảnh đầu vào (bấm nút “+” gắn ảnh trước) — thiếu "
-            "ảnh thì tôi báo ngay, không để bạn gửi hụt tốn một lượt gọi.",
+            "Video: gắn ảnh (nút “+”) thì ảnh làm khung hình đầu của clip; "
+            "không gắn ảnh thì clip tạo thẳng từ mô tả.",
             "Bấm Gửi. Ô nhập trống ngay — cứ gõ tiếp cái sau, KHÔNG phải chờ "
             "cái trước xong.",
             "Kết quả hiện thành ô ảnh, mới nhất lên đầu. Bấm vào ô để mở file.",
@@ -638,8 +638,9 @@ HUONG_DAN: Dict[str, Dict[str, object]] = {
         ],
         "luu_y": [
             "Ba việc, ba chế độ: “Tạo ảnh” chỉ ra ảnh; “Tạo video” làm clip "
-            "thẳng từ ảnh đầu vào bạn đưa (mỗi dòng cần một ảnh, thiếu ảnh tôi "
-            "báo ngay); “Ảnh → Video” tạo ảnh của cảnh rồi cho chính ảnh đó "
+            "từ mô tả — dòng có ảnh đầu vào thì ảnh làm khung hình đầu, dòng "
+            "không có ảnh thì clip tạo thẳng từ mô tả (dán cả loạt prompt là "
+            "chạy được); “Ảnh → Video” tạo ảnh của cảnh rồi cho chính ảnh đó "
             "thành khung đầu cho clip.",
             "Ảnh tham chiếu là thứ giữ cho nhân vật không đổi mặt giữa các "
             "cảnh. Dòng nào chọn ảnh riêng thì dòng ấy thắng ảnh chung.",

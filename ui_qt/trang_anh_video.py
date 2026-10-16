@@ -525,7 +525,7 @@ class TabThuCong(QWidget):
             return JobSpec(
                 kind=KIND_VIDEO, content=mo_ta, label=mo_ta[:80], index=thu_tu,
                 params={"engine": engine, "duration": _thoi_luong(engine),
-                        "aspect_ratio": ty_le, "image_url": anh},
+                        "aspect_ratio": ty_le, "image_url": anh or None},
                 out_dir=thu_muc, estimate_micro=hold_for_video(engine,
                                                                self._app.prices))
         so = int(self.so_luong.currentText().replace("x", ""))
@@ -582,7 +582,8 @@ CD_CHUOI = "Ảnh → Video"
 #: Câu một dòng nhắc chế độ đang chọn làm gì — hiện ngay dưới dãy nút.
 _MO_TA_CHE_DO = {
     CD_ANH: "Mỗi dòng tạo một ảnh từ mô tả + ảnh tham chiếu.",
-    CD_VIDEO: "Mỗi dòng tạo một clip từ mô tả + một ảnh đầu vào (bắt buộc).",
+    CD_VIDEO: ("Mỗi dòng tạo một clip từ mô tả. Có ảnh đầu vào thì ảnh làm "
+               "khung hình đầu; không có ảnh thì video tạo thẳng từ mô tả."),
     CD_CHUOI: "Tạo ảnh của từng cảnh, rồi cho chính ảnh đó động đậy thành clip.",
 }
 
@@ -976,10 +977,11 @@ class TabHangLoat(QWidget):
         # Cột Trạng thái / Kết quả / Làm lại luôn hiện ở cả ba chế độ — chúng nói
         # về việc chạy chứ không về loại mô tả, nên không có lý do giấu.
 
-        # Cột tham chiếu ở chế độ video là ảnh ĐẦU VÀO bắt buộc, không phải tuỳ chọn.
+        # Cột tham chiếu ở chế độ video là ảnh ĐẦU VÀO (khung hình đầu) — tuỳ
+        # chọn: bỏ trống thì video tạo thẳng từ mô tả (16/10/2026).
         tieu_de = list(_CotBang.TIEU_DE)
         tieu_de[_CotBang.THAM_CHIEU] = (
-            "Ảnh đầu vào (bắt buộc)" if che_do == CD_VIDEO else "Ảnh tham chiếu")
+            "Ảnh đầu vào (tuỳ chọn)" if che_do == CD_VIDEO else "Ảnh tham chiếu")
         self.bang.setHorizontalHeaderLabels(tieu_de)
 
         # Ô tích nối chỉ có nghĩa ở chế độ chuỗi ảnh→video.
@@ -1765,7 +1767,7 @@ class TabHangLoat(QWidget):
         if not nguon:
             ds = [d for d in self._anh_cua_dong(dong) if d]
             nguon = ds[0] if ds else ""
-        if not nguon:
+        if not nguon and self._chu(dong, _CotBang.ANH).strip():
             self._app.show_message(
                 "Chưa có ảnh để làm clip",
                 "Dòng này chưa có ảnh nào. Bạn sửa mô tả ảnh để tôi làm lại cả "
@@ -1776,6 +1778,10 @@ class TabHangLoat(QWidget):
             return
         thu_muc = self._thu_muc.value
         uid_cu = o.uid_video
+        if not nguon:
+            # Dòng video không ảnh (tạo thẳng từ mô tả) → làm lại y như thế.
+            self._gui_video([(dong, mo_ta_video, "")], thu_muc, thay_uid=uid_cu)
+            return
 
         def gui(url: str) -> None:
             self._gui_video([(dong, mo_ta_video, url)], thu_muc,
@@ -1899,21 +1905,17 @@ class TabHangLoat(QWidget):
                     if d in kho_url]
             # ═══ DÒNG CHỈ CÓ MÔ TẢ CLIP ═══
             #
-            # Khách đã có sẵn ảnh và chỉ muốn cho nó động đậy. Bỏ qua khâu tạo
-            # ảnh, lấy thẳng ảnh tham chiếu làm khung đầu cho clip. Đây cũng là
-            # đường đi của cả chế độ "Tạo video".
+            # Bỏ qua khâu tạo ảnh. Có ảnh đầu vào (của dòng hoặc chung cả loạt)
+            # thì ảnh làm khung đầu cho clip; KHÔNG có ảnh thì clip tạo thẳng
+            # từ mô tả — khách 16/10/2026: "quy trình ok rồi, chỉ cần prompt là
+            # ra thẳng video". Đây cũng là đường đi của cả chế độ "Tạo video".
             if not mo_ta:
-                if not urls:
-                    self._app.show_message(
-                        "Cảnh {0} thiếu ảnh".format(thu_tu),
-                        "Dòng này chỉ tạo clip nên cần một ảnh đầu vào làm khung "
-                        "đầu. Bạn bấm “＋ ảnh” ở dòng đó, hoặc chọn ảnh dùng "
-                        "chung cho cả loạt.")
-                    return
+                if not str(mo_ta_video or "").strip():
+                    continue
                 # Gom lại, gửi một lượt sau vòng lặp — KHÔNG gọi `_gui_video`
                 # với ba tham số (nó nhận `(danh_sách, thư_mục)`, gọi sai là
                 # `TypeError` ngay khi chạy thật).
-                video_ngay.append((dong, mo_ta_video, urls[0]))
+                video_ngay.append((dong, mo_ta_video, urls[0] if urls else ""))
                 continue
             van_de = check_image([mo_ta], n=1, aspect_ratio=ty_le,
                                  reference_images=urls)
@@ -2161,7 +2163,7 @@ class TabHangLoat(QWidget):
             spec = JobSpec(
                 kind=KIND_VIDEO, content=mo_ta, label=mo_ta[:80], index=dong + 1,
                 params={"engine": engine, "duration": _thoi_luong(engine),
-                        "aspect_ratio": ty_le, "image_url": url},
+                        "aspect_ratio": ty_le, "image_url": url or None},
                 out_dir=thu_muc, estimate_micro=don_gia)
             self._dong_cua_video[spec.idempotency_key] = dong
             o = self._o_ket_qua(dong)

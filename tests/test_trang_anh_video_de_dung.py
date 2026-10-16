@@ -418,15 +418,18 @@ class TestChayLaiDongHong:
         assert tab._dong_hong() == []
 
 
-# ── 7. Video không có ảnh bị từ chối ─────────────────────────────────────────
+# ── 7. Video không có ảnh: tạo thẳng từ mô tả (16/10/2026) ─────────────────
+#
+# Trước đây tool chặn video không ảnh ("máy chủ luôn cần khung đầu" — sai: API
+# nhận `image_url` tuỳ chọn, máy chủ đã chạy xong 49 video chỉ-có-mô-tả trong
+# 30 ngày). Khách: "quy trình ok rồi, chỉ cần prompt là ra thẳng video".
 
-class TestVideoThieuAnh:
-    def test_check_video_bao_thieu_anh(self):
+class TestVideoKhongAnh:
+    def test_check_video_khong_anh_thi_qua(self):
         from core.validate import check_video
 
-        van_de = check_video(["mot canh"], engine="veo3", aspect_ratio="16:9",
-                             image_url="")
-        assert van_de and any("ảnh" in v for v in van_de)
+        assert check_video(["mot canh"], engine="veo3", aspect_ratio="16:9",
+                           image_url="") == []
 
     def test_check_video_co_anh_thi_qua(self):
         from core.validate import check_video
@@ -435,7 +438,14 @@ class TestVideoThieuAnh:
                              image_url="https://vi-du.test/a.png")
         assert van_de == []
 
-    def test_thu_cong_gui_video_khong_anh_bi_tu_choi(self, qt_app, tmp_path):
+    def test_check_video_anh_khong_phai_link_thi_bao(self):
+        from core.validate import check_video
+
+        assert check_video(["mot canh"], engine="veo3", aspect_ratio="16:9",
+                           image_url="C:/anh.png")
+
+    def test_thu_cong_gui_video_khong_anh_di_thang(self, qt_app, tmp_path):
+        from core.pricing import KIND_VIDEO
         from ui_qt.trang_anh_video import LOAI_VIDEO
 
         tab, app = _thu_cong(str(tmp_path))
@@ -444,21 +454,26 @@ class TestVideoThieuAnh:
 
         tab.gui()
 
-        assert app.da_chay == [], "video không ảnh đầu vào không được gửi"
-        assert app.da_hien, "phải nói rõ vì sao không gửi được"
+        assert app.da_chay, "video không ảnh phải được gửi thẳng từ mô tả"
+        spec = app.da_chay[-1][0][0]
+        assert spec.kind == KIND_VIDEO and not spec.params.get("image_url")
 
-    def test_hang_loat_video_khong_anh_bi_tu_choi(self, qt_app, tmp_path):
+    def test_hang_loat_video_khong_anh_di_thang(self, qt_app, tmp_path):
+        from core.pricing import KIND_VIDEO
         from ui_qt.trang_anh_video import CD_VIDEO
 
         tab, app = _hang_loat(str(tmp_path))
         tab._dat_che_do(CD_VIDEO)
         tab.bang.setRowCount(0)
-        tab.them_dong("", "may quay luot trai")  # có mô tả clip, KHÔNG có ảnh
+        for i in range(3):
+            tab.them_dong("", "canh %d: may quay luot trai" % i)
 
         tab.chay()
 
-        assert app.da_chay == [], "chế độ Tạo video thiếu ảnh thì không được gửi"
-        assert app.da_hien
+        assert app.da_chay, "chế độ Tạo video không ảnh phải chạy từ mô tả"
+        specs = [s for lo, _ in app.da_chay for s in lo]
+        assert len(specs) == 3
+        assert all(s.kind == KIND_VIDEO and not s.params.get("image_url") for s in specs)
 
 
 # ── 8. Dọn: nút "+" ảnh tham chiếu chết ở tab Thủ công ───────────────────────
