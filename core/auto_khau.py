@@ -565,9 +565,67 @@ def _goi_mot_lan_chiu_ha_tang(bc: "BoiCanh", loi_nhac: str, khoa: str,
     raise RuntimeError("không gọi được AI sau 4 lần đổi khoá")
 
 
+#: Viết lại cả lượt tối đa ngần này lần khi bài trả về hỏng NẶNG vì lẫn tiếng.
+SO_LAN_VIET_LAI_LAN_TIENG = 2
+
+
 def _goi(bc: "BoiCanh", loi_nhac: str, khoa: str,
          toi_da_token: int = 8192, anh: str = "", *,
-         do_dai_ky_vong: int = 0) -> str:
+         do_dai_ky_vong: int = 0, ngon_ngu_dich: str = "") -> str:
+    """Gọi AI như `_goi_khong_gac_tieng`, cộng thêm GÁC LẪN TIẾNG khi có `ngon_ngu_dich`.
+
+    ═══ 16/10/2026 — KỊCH BẢN NHẬT RA LẪN TIẾNG TRUNG + ANH ═══
+
+    Xem `core/lan_tieng.py`. Chỉ các bước SINH LỜI ĐỌC truyền `ngon_ngu_dich`
+    (viết, hoàn thiện, hook, vá toàn bài, nắn độ dài, đọc lại, rà soát, gác bản
+    đọc). Bước chấm (JSON), tiêu đề, SEO, bảng cảnh KHÔNG truyền — chữ của chúng
+    vốn nhiều thứ tiếng.
+
+    Hai việc:
+      1. Gắn câu khoá ngôn ngữ (viết BẰNG tiếng đích) vào cuối lời nhắc. Khoá
+         idempotency đổi theo (`:nn`) — lời nhắc đã khác thì không được dùng lại
+         khoá cũ (máy chủ trả 409 "khoá dùng cho body khác").
+      2. Bài trả về hỏng NẶNG (≥30% câu sai tiếng — kiểu bản viết toàn tiếng
+         Trung của lượt 0011) → viết lại cả lượt bằng khoá MỚI ngẫu nhiên, tối đa
+         `SO_LAN_VIET_LAI_LAN_TIENG` lần, giữ bản ít câu sai nhất. Lẫn NHẸ để cổng
+         cuối `_gac_lan_tieng` sửa từng đoạn — rẻ hơn viết lại cả bài.
+    """
+    from .lan_tieng import danh_gia, khoa_ngon_ngu  # noqa: PLC0415
+
+    cau_khoa = khoa_ngon_ngu(ngon_ngu_dich) if ngon_ngu_dich else ""
+    if not cau_khoa:
+        return _goi_khong_gac_tieng(bc, loi_nhac, khoa, toi_da_token, anh,
+                                    do_dai_ky_vong=do_dai_ky_vong)
+    loi_nhac_khoa = "{0}\n\n{1}".format(loi_nhac, cau_khoa)
+    tot: Optional[Tuple[str, Any]] = None
+    for lan in range(1 + SO_LAN_VIET_LAI_LAN_TIENG):
+        if lan == 0:
+            khoa_lan, nhac = khoa + ":nn", loi_nhac_khoa
+        else:
+            # Khoá ngẫu nhiên: cùng khoá là máy chủ phát lại đúng bài hỏng cũ.
+            # Câu khoá đặt cả ĐẦU lời nhắc ở lần viết lại.
+            khoa_lan = "{0}:nn-lai{1}-{2}".format(khoa, lan, uuid.uuid4().hex[:8])
+            nhac = "{0}\n\n{1}".format(cau_khoa, loi_nhac_khoa)
+        tra = _goi_khong_gac_tieng(bc, nhac, khoa_lan, toi_da_token, anh,
+                                   do_dai_ky_vong=do_dai_ky_vong)
+        if not isinstance(tra, str):
+            return tra
+        kq = danh_gia(tra, ngon_ngu_dich)
+        if tot is None or kq.cau_sai < tot[1].cau_sai:
+            tot = (tra, kq)
+        if not kq.nang:
+            return tra
+        if lan < SO_LAN_VIET_LAI_LAN_TIENG:
+            bc.ghi("  bài AI trả về sai tiếng ({0}) — viết lại cả lượt bằng khoá mới "
+                   "({1}/{2})…".format(kq.mo_ta(), lan + 1, SO_LAN_VIET_LAI_LAN_TIENG))
+    bc.ghi("  (viết lại {0} lần vẫn sai tiếng nặng — giữ bản ít sai nhất: {1}; "
+           "cổng cuối sẽ sửa từng đoạn)".format(SO_LAN_VIET_LAI_LAN_TIENG, tot[1].mo_ta()))
+    return tot[0]
+
+
+def _goi_khong_gac_tieng(bc: "BoiCanh", loi_nhac: str, khoa: str,
+                         toi_da_token: int = 8192, anh: str = "", *,
+                         do_dai_ky_vong: int = 0) -> str:
     """Gọi AI, kèm Idempotency-Key **cố định theo bước**.
 
     ═══ VÌ SAO CẦN KHOÁ CỐ ĐỊNH, VÀ VÌ SAO KHÔNG ĐƯỢC GỬI LẠI ═══
@@ -2937,7 +2995,8 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                             bc, _thay(khuon, dict(chung, DRAFT=ban_nhap)),
                             _khoa_chat(luot, ten),
                             toi_da_token=_token_viet(len(tu_lieu), muc_tieu_kt),
-                            do_dai_ky_vong=muc_tieu_kt).strip()
+                            do_dai_ky_vong=muc_tieu_kt,
+                            ngon_ngu_dich=k.ngon_ngu).strip()
                 except LoiTuChoiAI as loi:
                     duong_tc = _ghi_tu_choi_kich_ban(duong_kb, loi.cau_tu_choi)
                     raise LoiNoiDung(
@@ -2989,7 +3048,7 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                 cuoi = _goi(bc, _thay(khuon_cuoi,
                                       dict(chung, DRAFT=ban_nhap)),
                             "{0}:chat:5-hoan-thien.md".format(
-                                luot.ma_luot)).strip()
+                                luot.ma_luot), ngon_ngu_dich=k.ngon_ngu).strip()
                 cuoi = _don_ban(cuoi, k.ngon_ngu)
                 if cuoi and _lech(cuoi, muc_tieu_kt) <= max(
                         _lech(ban_nhap, muc_tieu_kt), _chenh_cho_phep(k)):
@@ -3037,7 +3096,8 @@ def _khau_kich_ban(bc_goc: BoiCanh):
                         bc, _thay(khuon_sua, dict(chung, DRAFT=ban_nhap)),
                         _khoa_chat(luot, "3-sua.md"),
                         toi_da_token=_token_viet(len(tu_lieu),
-                                                 muc_tieu_kt)).strip()
+                                                 muc_tieu_kt),
+                        ngon_ngu_dich=k.ngon_ngu).strip()
                     sua = _don_ban(sua, k.ngon_ngu)
                     if not sua:
                         raise RuntimeError("bước “rà soát bản cuối” trả về rỗng")
@@ -3063,6 +3123,15 @@ def _khau_kich_ban(bc_goc: BoiCanh):
             # `[sighs]` hiện lên màn hình. Nên tách ngay tại đây: bản có thẻ
             # để riêng cho giọng đọc (`TEP_CO_THE`, khâu giọng đọc tự nhặt,
             # không gọi AI chèn nữa), bản gỡ thẻ đi tiếp như mọi khi.
+            # ═══ GÁC LẪN TIẾNG — CỬA CUỐI TRƯỚC GIỌNG ĐỌC (16/10/2026) ═══
+            #
+            # Lượt TLTG K1/0011: 11 câu tiếng Trung lọt qua MỌI bước (bản nháp
+            # tiếng Trung → hoàn thiện → nắn → rà soát chép y nguyên) rồi đem
+            # đi đọc bằng giọng Nhật. Đặt TRƯỚC khi tách thẻ: bản có thẻ là bản
+            # giọng đọc nhặt (`TEP_CO_THE`). Kênh giữ nguyên lời gốc không gác.
+            if not giu_goc:
+                ban_nhap = _gac_lan_tieng(bc, luot, k, ban_nhap, d)
+
             ban_nhap = _tach_the_cam_xuc(bc, d, ban_nhap)
 
             # Gỡ dấu markdown TRƯỚC khi ghi: tệp này đi thẳng vào bộ đọc giọng
@@ -3154,6 +3223,47 @@ def _khau_kich_ban(bc_goc: BoiCanh):
     # Nhãn cho nhật ký của `core/auto.chay`: khâu này có đi ví hay không.
     lam.khong_tieu_vi = bc_goc.goi_chat_kich_ban is not None
     return lam
+
+
+#: Tệp giữ bản kịch bản còn lẫn tiếng khi cổng cuối phải DỪNG.
+TEP_LAN_TIENG = "1-kich-ban-LAN-TIENG.txt"
+
+
+def _gac_lan_tieng(bc: "BoiCanh", luot: LuotChay, k: Kenh, ban: str, d: str) -> str:
+    """Cổng cuối: còn câu sai tiếng thì viết lại ĐÚNG đoạn ấy (≤2 vòng), còn sót thì DỪNG.
+
+    Xem `core/lan_tieng.py`. Mỗi đoạn viết lại là một lượt gọi nhỏ (vài trăm
+    chữ) bằng khoá NGẪU NHIÊN — cùng khoá là máy chủ phát lại đúng bản hỏng.
+    Dừng (không đem đi đọc) vì đọc tiếng Trung bằng giọng Nhật là trả tiền giọng
+    đọc cho một video chắc chắn phải làm lại; bấm "Chạy tiếp" là thử lại cổng
+    này (bản rà soát đã lưu ở `1-nhap-3.txt`).
+    """
+    from .lan_tieng import danh_gia, sua_lan_tieng  # noqa: PLC0415
+
+    ma = getattr(k, "ngon_ngu", "") or ""
+    kq = danh_gia(ban, ma)
+    if not kq.lan:
+        return ban
+    bc.ghi("  ⚠ kịch bản lẫn tiếng: {0}.".format(kq.mo_ta()))
+
+    def goi(loi_nhac: str, so: int, vong: int) -> str:
+        bc.kiem_dung()
+        return _goi_khong_gac_tieng(
+            bc, loi_nhac, _khoa_chat(luot, "lan-tieng:{0}:{1}:{2}".format(
+                vong, so, uuid.uuid4().hex[:8])), toi_da_token=4096)
+
+    moi, kq2 = sua_lan_tieng(ban, ma, goi, ghi=bc.ghi, toi_da=2,
+                             ten_tieng=ten_tieng(ma),
+                             don=lambda c: _don_ban(c, ma))
+    if kq2.lan:
+        duong = os.path.join(d, TEP_LAN_TIENG)
+        _ghi_chu(duong, moi + "\n")
+        raise LoiNoiDung(
+            "kịch bản vẫn còn {0} sau 2 vòng viết lại từng đoạn — đã DỪNG trước "
+            "bước giọng đọc để không trả tiền đọc sai tiếng. Bản lỗi lưu ở {1}; "
+            "bấm Chạy tiếp để thử lại.".format(kq2.mo_ta(), TEP_LAN_TIENG))
+    bc.ghi("  gác lẫn tiếng: đã viết lại xong, bài sạch ({0} câu).".format(kq2.tong_cau))
+    return moi
 
 
 def _trung_nguyen_van(moi: str, goc: str, n: int = 10) -> float:
@@ -3262,7 +3372,7 @@ def _vong_cham_sua_luot(bc: "BoiCanh", luot: LuotChay, k: Kenh, chung: Dict[str,
         bc.kiem_dung()
         dem["va"] += 1
         return _goi(bc, loi_nhac, khoa("2h:{0}:{1}".format(nhan, dem["va"]), loi_nhac),
-                    toi_da_token=16384)
+                    toi_da_token=16384, ngon_ngu_dich=k.ngon_ngu)
 
     def luu(ten: str, chu: str) -> None:
         _ghi_chu(os.path.join(d, "1-vong-{0}-{1}.txt".format(nhan, ten)), chu + "\n")
@@ -3300,7 +3410,7 @@ def _kiem_ban_doc(bc: "BoiCanh", luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         bc.kiem_dung()
         bc.ghi("  gác bản đọc: nghe lại bản sau rà soát…")
         tra = (_goi(bc, loi_nhac, _khoa_chat(luot, "2i-kiem-doc.md:" + bam),
-                    toi_da_token=16384) or "").strip()
+                    toi_da_token=16384, ngon_ngu_dich=k.ngon_ngu) or "").strip()
     except Exception as loi:  # noqa: BLE001 — gác hỏng thì giữ bản đã có
         bc.ghi("  (gác bản đọc hỏng: {0} — giữ bản rà soát)".format(str(loi)[:80]))
         return sau
@@ -3385,7 +3495,7 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
         chu = _goi(bc, _thay(khuon, dict(chung, DRAFT="")),
                    _khoa_chat(luot, "2-viet.md:ban{0}".format(i + 1)),
                    toi_da_token=_token_viet(len(tu_lieu), muc_tieu),
-                   do_dai_ky_vong=muc_tieu).strip()
+                   do_dai_ky_vong=muc_tieu, ngon_ngu_dich=k.ngon_ngu).strip()
         chu = _don_ban(chu, k.ngon_ngu)
         if chu:
             bc.ghi("  bản {0}: {1} ký tự ≈ {2} phút, mất {3:.0f} giây.".format(
@@ -3468,7 +3578,8 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
 
                 def goi_ht(loi_nhac: str, _khoa=khoa_j) -> str:
                     bc.kiem_dung()
-                    return _goi(bc, loi_nhac, _khoa_chat(luot, _khoa), toi_da_token=16384)
+                    return _goi(bc, loi_nhac, _khoa_chat(luot, _khoa), toi_da_token=16384,
+                                ngon_ngu_dich=k.ngon_ngu)
 
                 ban_ht, da_ht, ghi_j = hoan_thien_ban(
                     goi_ht, ban_chon, tu_lieu, diem_manh=diem_manh, diem_yeu=diem_yeu,
@@ -3528,7 +3639,7 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             return _don_ban(_goi(bc, loi_nhac,
                                  _khoa_chat(luot, "2d-hook.md:ban{0}".format(
                                      dem_hook[0])),
-                                 toi_da_token=2048), k.ngon_ngu)
+                                 toi_da_token=2048, ngon_ngu_dich=k.ngon_ngu), k.ngon_ngu)
 
         def goi_cham_hook(loi_nhac: str) -> str:
             bc.kiem_dung()
@@ -3538,7 +3649,7 @@ def _viet_nhieu_ban(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
             bc.kiem_dung()
             return _don_ban(_goi(bc, loi_nhac,
                                  _khoa_chat(luot, "2f-va-hook.md"),
-                                 toi_da_token=2048), k.ngon_ngu)
+                                 toi_da_token=2048, ngon_ngu_dich=k.ngon_ngu), k.ngon_ngu)
 
         def luu_hook(i: int, chu: str) -> None:
             _ghi_chu(os.path.join(d, TEP_HOOK.format(chr(65 + i))), chu + "\n")
@@ -3928,7 +4039,8 @@ def _nan_do_dai(bc: BoiCanh, luot: LuotChay, k: Kenh, chung: Dict[str, Any],
                 chung, DRAFT=nguon, CHARS=khai,
                 CHARS_NOW=_do_doc(nguon), CHARS_DELTA=thieu,
                 LENGTH_TASK=viec)),
-                _khoa_chat(luot, "4-do-dai.md:v{0}".format(vong))).strip()
+                _khoa_chat(luot, "4-do-dai.md:v{0}".format(vong)),
+                ngon_ngu_dich=getattr(k, "ngon_ngu", "")).strip()
             # Dọn TRƯỚC khi đo: ghi chú kỹ thuật cũng là ký tự, và bước này
             # quyết định độ dài bằng chính con số đếm được — xem `_don_ban`.
             moi = _don_ban(moi, getattr(k, "ngon_ngu", ""))

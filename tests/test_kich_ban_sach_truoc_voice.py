@@ -312,7 +312,13 @@ class TestChayThatTungKenhMau:
     def test_co_kenh_mau_de_ma_kiem(self):
         assert len(self._cac_kenh_mau()) >= 5
 
-    def test_moi_kenh_mau_ra_tep_sach(self):
+    def test_moi_kenh_mau_ra_tep_sach(self, monkeypatch):
+        # Bài này soi GHI CHÚ KỸ THUẬT, và AI giả trả lời tiếng Việt cho mọi
+        # kênh — kể cả kênh tiếng Nhật. Từ 16/10/2026 cổng lẫn tiếng chặn đúng
+        # ca ấy (xem `tests/test_kich_ban_lan_tieng.py`), nên tháo nó ở đây để
+        # bài này vẫn chỉ kiểm một việc.
+        from core import lan_tieng
+        monkeypatch.setattr(lan_tieng, "danh_gia", lambda *_a, **_k: lan_tieng.KetQua())
         hong = []
         for k in self._cac_kenh_mau():
             with tempfile.TemporaryDirectory() as d:

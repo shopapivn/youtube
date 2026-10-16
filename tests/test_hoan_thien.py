@@ -141,7 +141,10 @@ class TestTrongDayChuyen:
         assert len(nhan) == 6                         # 3 viết + chấm + ht + chấm so
         p = nhan[4]
         assert p.startswith("ht 3 yếu=giữa mỏng; chỗ dễ rớt: đoạn 3 mạnh=mở nhanh 13 ")
-        assert p.endswith(ban[1]), "<<DRAFT>> phải được điền, không bị xoá"
+        # 16/10/2026: lời nhắc sinh lời đọc mang thêm câu khoá ngôn ngữ ở CUỐI
+        # (xem `core/lan_tieng.py`) — <<DRAFT>> vẫn phải đứng ngay trước nó.
+        from core.lan_tieng import khoa_ngon_ngu
+        assert p.endswith(ban[1] + "\n\n" + khoa_ngon_ngu("ja")), "<<DRAFT>> phải được điền, không bị xoá"
         assert os.path.isfile(os.path.join(str(tmp_path), "1-ban-hoan-thien.txt"))
         with open(os.path.join(str(tmp_path), TEP_CHAM_DIEM), encoding="utf-8") as t:
             chu = t.read()
