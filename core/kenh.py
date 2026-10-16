@@ -247,6 +247,16 @@ class Kenh:
     #: lời gọi chữ, mỗi lần vẽ lại là một tấm ảnh — kênh của khách không tự
     #: dưng đắt lên.
     cham_anh: bool = False
+    #: ═══ VẼ NHIỀU, CHỌN TẤM TỐT NHẤT (chủ dự án 17/10/2026) ═══
+    #: Mỗi cảnh vẽ `so_ung_vien_anh` tấm; AI biên tập chấm so sánh (kể đúng câu
+    #: chuyện, nhân vật đẹp, KHÔNG rợn, đúng tham chiếu) rồi giữ tấm tốt nhất —
+    #: xem `core/chon_anh_tot.py`. Tấm tốt nhất vẫn dưới ngưỡng thì AI sửa lời
+    #: nhắc theo lời biên tập và vẽ thêm, tối đa `so_vong_sua_anh` vòng.
+    #: 1 = tắt (một tấm, như cũ). Tốn gấp N lần tiền ảnh + vài lượt AI nhìn ảnh.
+    so_ung_vien_anh: int = 1
+    so_vong_sua_anh: int = 0
+    #: Mỗi tấm ảnh bìa (nền) vẽ ngần này bản rồi chọn bản đáng bấm nhất.
+    so_ung_vien_bia: int = 1
     #: Vẽ thêm một tấm ảnh KHUNG CUỐI cho mỗi cảnh rồi ghim clip CẢ HAI đầu
     #: (`auto_khau._anh_khung_cuoi`). Tốn thêm một tấm ảnh mỗi cảnh, đổi lại
     #: đuôi clip không trôi — đo 27/08/2026: cảnh 11 đi 2 → 4 điểm, cảnh 2 đi
@@ -771,6 +781,9 @@ def doc_kenh(goc: str, ma: str) -> Kenh:
                           else _co(cai.get("nguoi_ke_karaoke"))),
         khung_dau=bool(cai.get("khung_dau", False)),
         cham_anh=bool(cai.get("cham_anh", False)),
+        so_ung_vien_anh=min(6, max(1, int(_so(cai.get("so_ung_vien_anh"), 1)))),
+        so_vong_sua_anh=min(3, max(0, int(_so(cai.get("so_vong_sua_anh"), 0)))),
+        so_ung_vien_bia=min(12, max(1, int(_so(cai.get("so_ung_vien_bia"), 1)))),
         ghim_hai_dau=bool(cai.get("ghim_hai_dau", False)),
         xuat_capcut=bool(cai.get("xuat_capcut", False)),
         hoan_thien=bool(cai.get("hoan_thien", cai.get("va_cho_rot", False))),

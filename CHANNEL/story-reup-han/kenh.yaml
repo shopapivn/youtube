@@ -41,6 +41,13 @@ kieu_phu_de: "karaoke"
 # người kể nên đỡ một tấm ảnh mỗi video.
 nguoi_ke_karaoke: false
 so_thumbnail: 3
+# Chất lượng hình (chủ dự án 17/10/2026: "không giới hạn chi phí, chỉ cần chất
+# lượng tốt"): mỗi cảnh vẽ 3 tấm, AI biên tập chấm (kể đúng câu chuyện, đẹp,
+# không rợn, đúng nhân vật) và giữ tấm tốt nhất; chưa đạt 8,5/10 thì AI sửa lời
+# nhắc rồi vẽ lại, tối đa 2 vòng. Mỗi ảnh bìa vẽ 8 bản, chọn bản đáng bấm nhất.
+so_ung_vien_anh: 3
+so_vong_sua_anh: 2
+so_ung_vien_bia: 8
 # Ảnh bìa hai lớp: AI vẽ ảnh KHÔNG chữ, tool tự vẽ chữ (core/bia_chu.py) — theo ảnh bìa mẫu 25/09/2026.
 kieu_bia: "chu_2_dong"
 # Người kể là giọng của video đối thủ — nam hay nữ tuỳ video, để trống cho
