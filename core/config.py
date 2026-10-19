@@ -48,6 +48,8 @@ __all__ = [
     "DASHBOARD_LOGIN_URL",
     "load_config",
     "save_config",
+    "doc_ai_chon_anh",
+    "luu_ai_chon_anh",
     "forget_secrets",
     "luu_phien_dang_nhap",
     "mask_key",
@@ -267,6 +269,23 @@ class Config:
     #: ⚠ Nút "🌐 Mở Chrome" (đăng nhập tay) LUÔN hiện, bất kể công tắc này —
     #: ẩn cửa sổ đó thì không ai đăng nhập tay được.
     an_chrome: bool = True
+    #: AI chấm & chọn ảnh đẹp nhất. **Mặc định TẮT.**
+    #:
+    #: ═══ VÌ SAO MẶC ĐỊNH TẮT (19/10/2026) ═══
+    #:
+    #: Chủ dự án: "logic chọn ảnh đẹp nhất cho từng cảnh nên có BẬT/TẮT và MẶC
+    #: ĐỊNH TẮT để khách đỡ ý kiến về chi phí". Khách hahhavinh tạo ~43 ảnh mà
+    #: hệ thống ghi 264 ảnh + 299 lượt AI (LLM có kèm ảnh) — toàn là bước chấm/
+    #: vẽ thêm ứng viên chạy ngầm, khách tưởng bị tính đắt.
+    #:
+    #: Công tắc này gom MỌI bước "AI xem ảnh để chọn tấm đẹp hơn" mang tính tuỳ
+    #: chọn chất lượng:
+    #:   * hàng đợi (`core/jobs.py`): chấm ảnh có tham chiếu, ≤ ngưỡng thì vẽ thêm;
+    #:   * sản xuất tự động (`core/auto_khau.py`): `so_ung_vien_anh`,
+    #:     `so_ung_vien_bia`, `cham_anh` của kênh — TẮT thì coi như 1/1/False
+    #:     BẤT KỂ kenh.yaml khai gì.
+    #: Kiểm LÚC GỌI, nên tích/bỏ có hiệu lực ngay, không phải mở lại tool.
+    ai_chon_anh: bool = False
     #: Refresh token của phiên đăng nhập (bí mật, sống 30 ngày, cất trong kho).
     #: Có nó thì lần sau mở tool không phải gõ mật khẩu lại để quản lý khoá API.
     refresh_token: str = ""
@@ -303,6 +322,7 @@ class Config:
         data["tu_do_nhip"] = bool(self.tu_do_nhip)
         data["low_balance_warning_vnd"] = int(self.low_balance_warning_vnd)
         data["an_chrome"] = bool(self.an_chrome)
+        data["ai_chon_anh"] = bool(self.ai_chon_anh)
         return data
 
     def to_secrets(self) -> Dict[str, Any]:
@@ -324,6 +344,7 @@ _KNOWN_KEYS = {
     "tu_do_nhip",
     "low_balance_warning_vnd",
     "an_chrome",
+    "ai_chon_anh",
 }
 
 
@@ -449,8 +470,44 @@ def parse_config(data: Any) -> Config:
         ),
         # MẶC ĐỊNH ẨN — kể cả khi file cấu hình cũ chưa có khoá `an_chrome`.
         an_chrome=_as_bool(data.get("an_chrome"), True),
+        # MẶC ĐỊNH TẮT — kể cả file cấu hình cũ chưa có khoá (19/10/2026).
+        ai_chon_anh=_as_bool(data.get("ai_chon_anh"), False),
         extra=extra,
     )
+
+
+def doc_ai_chon_anh(goc: str) -> bool:
+    """Đọc RIÊNG công tắc `ai_chon_anh` từ `<goc>/config.json`. Mọi trục trặc → False.
+
+    ═══ VÌ SAO CÓ HÀM RIÊNG (19/10/2026) ═══
+
+    Luồng Tự động chạy cả ở nơi không có cửa sổ giữ `Config` trong RAM (lịch tự
+    chạy `core/tu_chay.py`, chuỗi "một nút"). `load_config` đầy đủ còn đụng kho
+    bí mật và có thể CHUYỂN khoá — quá nặng và quá nhiều tác dụng phụ cho một câu
+    hỏi bật/tắt. Hàm này chỉ đọc JSON, không ghi gì. Đọc hỏng / thiếu khoá → TẮT:
+    sai về phía rẻ, đúng lời chủ dự án "MẶC ĐỊNH TẮT để khách đỡ ý kiến về chi phí".
+    """
+    if not goc:
+        return False   # không biết thư mục tool thì đừng đoán thư mục hiện hành
+    try:
+        with open(os.path.join(goc, CONFIG_FILENAME), "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    return _as_bool(data.get("ai_chon_anh"), False)
+
+
+def luu_ai_chon_anh(path: str, config: Config) -> None:
+    """Ghi `config.json` (KHÔNG đụng kho bí mật) sau khi khách tích/bỏ ô
+    "AI chấm & chọn ảnh đẹp nhất".
+
+    Không dùng `save_config`: nó ghi ĐÈ cả `secrets.json` bằng RAM — đúng đường
+    đã làm mất khoá API ngày 24/08/2026 (xem `luu_phien_dang_nhap`). Một ô tích
+    không có lý do gì để chạm vào bí mật.
+    """
+    _write_config_file(path, config)
 
 
 def load_config(path: str) -> Config:

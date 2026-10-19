@@ -155,7 +155,10 @@ def test_chon_anh_canh_noi_vao_khau_anh(tmp_path, monkeypatch):
     _anh(tep, (10, 10, 10))
     c = {"scene_id": 7, "srt_text": "She smiles at him", "img_prompt": "P1"}
     k = SimpleNamespace(so_ung_vien_anh=3, so_vong_sua_anh=1, mo_hinh="m")
-    bc = SimpleNamespace(kenh=k, client=object(), ghi=lambda _s: None, kiem_dung=lambda: None)
+    # 19/10/2026: `_chon_anh_canh` chỉ chạy khi công tắc máy "AI chấm & chọn
+    # ảnh đẹp nhất" BẬT (mặc định TẮT) — bài này kiểm đường khi đã bật.
+    bc = SimpleNamespace(kenh=k, client=object(), ghi=lambda _s: None, kiem_dung=lambda: None,
+                         ai_chon_anh=True)
     luot = SimpleNamespace(thu_muc=str(d), ma_kenh="k", ma_luot="0001")
     hop = SimpleNamespace(lay=lambda: [], _duong=[])
     monkeypatch.setattr(ak, "_tao_anh", lambda *a, **kw: {})

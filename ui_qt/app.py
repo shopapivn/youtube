@@ -341,6 +341,9 @@ class CuaSoChinh(QWidget):
         #: ở `_dam_bao_trang`, thứ thay hẳn cho việc dựng cả 12 trang ở đây.
         self._trang: Dict[str, QWidget] = {}
         self._dang_dong = False
+        #: Các ô "AI chấm & chọn ảnh đẹp nhất" đang hiện (19/10/2026) — tích ở
+        #: một trang thì ô ở trang kia đi theo. Xem `dat_ai_chon_anh`.
+        self._o_ai_chon_anh: List[Any] = []
 
         if self.config.is_ready:
             self.client = build_client(self.config)
@@ -355,7 +358,10 @@ class CuaSoChinh(QWidget):
                                    viet_lai=dung_viet_lai(lambda: self.client),
                                    # Ảnh có tham chiếu → AI chấm, lệch thì làm lại một
                                    # tấm và giữ tấm giống hơn (chủ dự án 25/08/2026).
-                                   cham_anh=dung_cham_anh(lambda: self.client))
+                                   # 19/10/2026: chỉ khi khách BẬT "AI chấm & chọn ảnh
+                                   # đẹp nhất" (mặc định TẮT) — hỏi cờ lúc gọi.
+                                   cham_anh=dung_cham_anh(lambda: self.client,
+                                                          bat=self._ai_chon_anh_bat))
 
         ngang = QHBoxLayout(self)
         ngang.setContentsMargins(0, 0, 0, 0)
@@ -989,7 +995,9 @@ class CuaSoChinh(QWidget):
                                    viet_lai=dung_viet_lai(lambda: self.client),
                                    # Ảnh có tham chiếu → AI chấm, lệch thì làm lại một
                                    # tấm và giữ tấm giống hơn (chủ dự án 25/08/2026).
-                                   cham_anh=dung_cham_anh(lambda: self.client))
+                                   # 19/10/2026: chỉ khi khách BẬT công tắc (mặc định TẮT).
+                                   cham_anh=dung_cham_anh(lambda: self.client,
+                                                          bat=self._ai_chon_anh_bat))
         self.refresh_prices()
 
     def dang_xuat(self) -> None:
@@ -1028,6 +1036,36 @@ class CuaSoChinh(QWidget):
         if self.jobs is not None:
             self.jobs.ap_luong(cai_dat.luong_khoi_dau(muc))
         return ok
+
+    def _ai_chon_anh_bat(self) -> bool:
+        """Công tắc "AI chấm & chọn ảnh đẹp nhất" — đọc LÚC GỌI (19/10/2026).
+
+        Đọc `self.config` mỗi lần chứ không chụp giá trị lúc dựng `JobManager`:
+        khách tích/bỏ ô ở Cài đặt là job xong sau đó đi theo ngay, không phải
+        mở lại tool. Mặc định TẮT — xem `core/config.Config.ai_chon_anh`.
+        """
+        return bool(getattr(self.config, "ai_chon_anh", False))
+
+    def dat_ai_chon_anh(self, bat: bool) -> bool:
+        """Lưu công tắc "AI chấm & chọn ảnh đẹp nhất" xuống `config.json` NGAY.
+
+        Trả về ghi được hay không, để ô tích báo nếu hỏng. Không cần áp gì thêm:
+        hàng đợi và luồng Tự động đều hỏi `_ai_chon_anh_bat` lúc gọi.
+        """
+        from core.config import luu_ai_chon_anh  # noqa: PLC0415
+
+        self.config.ai_chon_anh = bool(bat)
+        # Ô ở trang khác (Cài đặt / Tự động / Ảnh & Video) đi theo ngay.
+        for o in list(self._o_ai_chon_anh):
+            try:
+                o.dong_bo(bool(bat))
+            except RuntimeError:  # widget Qt đã bị huỷ
+                self._o_ai_chon_anh.remove(o)
+        try:
+            luu_ai_chon_anh(self.config_path, self.config)
+        except OSError:
+            return False
+        return True
 
     def refresh_prices(self) -> None:
         if self.client is None:

@@ -344,6 +344,14 @@ class BoiCanh:
     #: Tải một ảnh về theo URL, trả bytes. Tách ra để bài kiểm đọc ảnh bìa đối
     #: thủ không phải chạm mạng. Để trống thì dùng `_tai_anh_thumb` (urllib).
     tai_anh: Optional[Callable[[str], bytes]] = None
+    #: Công tắc máy "AI chấm & chọn ảnh đẹp nhất" (`config.json` → `ai_chon_anh`,
+    #: 19/10/2026). Nhận bool HOẶC hàm `() -> bool` (hỏi lúc gọi, để bỏ tích
+    #: giữa lượt cũng ăn ngay). `None` = đọc thẳng `<goc>/config.json` mỗi lần
+    #: hỏi — nên mọi nơi dựng `BoiCanh` (tab Tự động, lịch tự chạy) đều theo
+    #: công tắc mà không phải sửa từng chỗ. TẮT thì `so_ung_vien_anh`,
+    #: `so_ung_vien_bia`, `cham_anh` của kênh coi như 1/1/False — xem
+    #: `_ai_chon_anh`.
+    ai_chon_anh: Any = None
 
     def ghi(self, dong: str) -> None:
         if self.on_log is not None:
@@ -8087,8 +8095,9 @@ def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
         if ket.buoc and ket.dau_vao_cuoi.prompt.strip() != prompt_goc.strip():
             c["img_prompt"] = ket.dau_vao_cuoi.prompt
             _ghi_loi_nhac_da_sua(luot, so_canh, ket.dau_vao_cuoi.prompt)
-        if int(getattr(bc.kenh, "so_ung_vien_anh", 1) or 1) > 1:
+        if _so_ung_vien_anh(bc) > 1:
             # Vẽ nhiều, AI biên tập chọn tấm tốt nhất (thay bộ chấm chỉ-giống-mặt).
+            # Chỉ khi công tắc máy BẬT (19/10/2026) — xem `_ai_chon_anh`.
             try:
                 _chon_anh_canh(bc, luot, c, tep, hop, so=so)
             except Exception as loi:  # noqa: BLE001 — đã có một tấm dùng được
@@ -8102,6 +8111,64 @@ def _lam_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
                        "tấm đầu.".format(so_canh, str(loi)[:80]))
         else:
             _cham_va_ve_lai(bc, luot, c, tep, hop, so=so)
+
+
+# ═══ CÔNG TẮC "AI CHẤM & CHỌN ẢNH ĐẸP NHẤT" — MẶC ĐỊNH TẮT (19/10/2026) ═══
+#
+# Chủ dự án: "logic chọn ảnh đẹp nhất cho từng cảnh nên có BẬT/TẮT và MẶC ĐỊNH
+# TẮT để khách đỡ ý kiến về chi phí". Khách hahhavinh tạo ~43 ảnh mà hệ thống
+# ghi 264 ảnh + 299 lượt AI kèm ảnh: kênh nhân bản từ kênh chủ mang theo
+# `so_ung_vien_anh: 3`, `so_ung_vien_bia: 8`… và tool vẽ/chấm ngầm.
+#
+# Kênh vẫn khai được, nhưng chỉ có tác dụng khi CHỦ MÁY bật công tắc (Cài đặt /
+# tab Tự động). Tắt → coi như 1 ứng viên/cảnh, 1 bản bìa, không chấm, BẤT KỂ
+# kenh.yaml khai gì. Ba bộ đọc dưới đây là cửa DUY NHẤT để đọc ba con số ấy.
+
+_KHOA_BAO_TAT_CHON_ANH = threading.Lock()
+
+
+def _ai_chon_anh(bc: BoiCanh) -> bool:
+    """Công tắc máy đang BẬT? Tắt mà kênh có khai chọn ảnh thì ghi MỘT dòng
+    nhật ký mỗi lượt chạy (cờ dán lên chính `bc`, mỗi lượt một `BoiCanh`)."""
+    from .cham_anh import ai_chon_anh_bat  # noqa: PLC0415
+
+    if ai_chon_anh_bat(bc):
+        return True
+    with _KHOA_BAO_TAT_CHON_ANH:
+        if getattr(bc, "_da_bao_tat_chon_anh", False):
+            return False
+        try:
+            setattr(bc, "_da_bao_tat_chon_anh", True)
+        except Exception:  # noqa: BLE001 — không dán được cờ thì chịu ghi lại
+            pass
+    k = getattr(bc, "kenh", None)
+    try:
+        bc.ghi("  (Bỏ qua bước AI chấm & chọn ảnh đẹp nhất — công tắc đang TẮT "
+               "trong Cài đặt. Kênh khai {0} ứng viên/cảnh, {1} bản bìa, chấm ảnh "
+               "{2}: mỗi cảnh/bìa vẽ đúng 1 tấm, không AI chấm.)".format(
+                   int(getattr(k, "so_ung_vien_anh", 1) or 1),
+                   int(getattr(k, "so_ung_vien_bia", 1) or 1),
+                   "bật" if getattr(k, "cham_anh", False) else "tắt"))
+    except Exception:  # noqa: BLE001 — một dòng nhật ký không được làm hỏng khâu
+        pass
+    return False
+
+
+def _so_ung_vien_anh(bc: BoiCanh) -> int:
+    """`so_ung_vien_anh` THẬT SỰ dùng: của kênh nếu công tắc bật, không thì 1."""
+    n = int(getattr(bc.kenh, "so_ung_vien_anh", 1) or 1)
+    return n if n > 1 and _ai_chon_anh(bc) else 1
+
+
+def _so_ung_vien_bia(bc: BoiCanh) -> int:
+    """`so_ung_vien_bia` THẬT SỰ dùng: của kênh nếu công tắc bật, không thì 1."""
+    n = int(getattr(bc.kenh, "so_ung_vien_bia", 1) or 1)
+    return n if n > 1 and _ai_chon_anh(bc) else 1
+
+
+def _cham_anh_bat(bc: BoiCanh) -> bool:
+    """Kênh khai `cham_anh: true` VÀ công tắc máy bật."""
+    return bool(getattr(bc.kenh, "cham_anh", False)) and _ai_chon_anh(bc)
 
 
 #: Mỗi cảnh yếu được vẽ thêm tối đa bấy nhiêu ứng viên.
@@ -8134,8 +8201,11 @@ def _cham_va_ve_lai(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
     Mỗi lượt chấm là một lời gọi chữ có kèm ảnh, và mỗi lần vẽ lại là một tấm
     ảnh nữa — tiền thật. Kênh nào muốn thì khai `cham_anh: true` trong
     `kenh.yaml`; kênh của khách không tự dưng đắt lên.
+
+    19/10/2026: khai trong kênh thôi CHƯA ĐỦ — công tắc máy "AI chấm & chọn
+    ảnh đẹp nhất" (mặc định TẮT) cũng phải bật. Xem `_ai_chon_anh`.
     """
-    if not bool(getattr(bc.kenh, "cham_anh", False)):
+    if not _cham_anh_bat(bc):
         return
     from .cham_anh import NGUONG_LAM_LAI, cham_anh  # noqa: PLC0415
 
@@ -8319,10 +8389,14 @@ def _chon_anh_canh(bc: BoiCanh, luot: LuotChay, c: Dict[str, Any], tep: str,
     """Vẽ thêm ứng viên cho cảnh, AI biên tập chọn tấm tốt nhất, chưa đạt thì sửa
     lời nhắc và vẽ lại (`core/chon_anh_tot.py`). Tấm thắng chép vào `tep` — clip
     của cảnh dựng từ chính tấm ấy."""
+    # Công tắc máy TẮT (19/10/2026) → không vẽ thêm, không AI chấm — kể cả khi
+    # có nơi gọi thẳng hàm này mà quên hỏi `_so_ung_vien_anh`.
+    n = _so_ung_vien_anh(bc)
+    if n <= 1:
+        return
     from .chon_anh_tot import cham_ung_vien, chon_va_sua, viet_lai_loi_nhac  # noqa: PLC0415
 
     k = bc.kenh
-    n = int(getattr(k, "so_ung_vien_anh", 1) or 1)
     so_canh = int(c["scene_id"])
     cau_ke = str(c.get("srt_text") or "")
     refs = _duong_tham_chieu(bc, luot, c, hop) or _anh_nv_cua_kenh(bc)
@@ -9900,8 +9974,9 @@ def _lam_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str,
                          xong_lui=xong_lui)
     # Bìa MỘT lớp (AI vẽ luôn chữ, như TL4-T7): vẽ nhiều bản, chọn bản đáng bấm
     # nhất VÀ chữ đúng chính tả, dễ đọc (chủ dự án 17/10/2026).
+    # Chỉ khi công tắc máy "AI chấm & chọn ảnh đẹp nhất" BẬT (19/10/2026).
     if (not ket.la_duong_lui and os.path.exists(tep)
-            and int(getattr(bc.kenh, "so_ung_vien_bia", 1) or 1) > 1):
+            and _so_ung_vien_bia(bc) > 1):
         try:
             _chon_nen_bia(bc, luot, hop, tep, so_bia, ket.dau_vao_cuoi.prompt, tieu_de,
                           "16:9", so, chu_can_co=chu_bia, viec="thumb")
@@ -9926,9 +10001,12 @@ def _chon_nen_bia(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", nen: str, so_bi
 
     Dùng cho cả NỀN bìa hai lớp (không chữ) lẫn bìa MỘT lớp (TL4-T7: AI vẽ luôn
     chữ — `chu_can_co` là chữ phải in, giám khảo trừ điểm chữ sai/khó đọc)."""
+    # Công tắc máy TẮT (19/10/2026) → giữ đúng một bản, không AI chấm.
+    n = _so_ung_vien_bia(bc)
+    if n <= 1:
+        return
     from .chon_anh_tot import cham_ung_vien, chon_va_sua, viet_lai_loi_nhac  # noqa: PLC0415
 
-    n = int(getattr(bc.kenh, "so_ung_vien_bia", 1) or 1)
     dau = "{0}.uv0-0.png".format(nen)
     if not os.path.exists(dau):
         shutil.copyfile(nen, dau)
@@ -10035,7 +10113,7 @@ def _lam_bia_hai_lop(bc: BoiCanh, luot: LuotChay, hop: "ThamChieu", thu_muc: str
             # Không có nền thì không ghép chữ được — bỏ qua tấm bìa này,
             # KHÔNG chặn khâu ảnh (kênh vẫn có các tấm bìa khác).
             return so_bia, False
-        if int(getattr(bc.kenh, "so_ung_vien_bia", 1) or 1) > 1:
+        if _so_ung_vien_bia(bc) > 1:   # công tắc máy BẬT mới chọn (19/10/2026)
             try:
                 _chon_nen_bia(bc, luot, hop, nen, so_bia, ket.dau_vao_cuoi.prompt,
                               tieu_de, ty_le, so)

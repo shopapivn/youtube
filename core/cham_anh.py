@@ -23,7 +23,8 @@ import base64
 import os
 from typing import Tuple, Callable, List, Optional, Sequence
 
-__all__ = ["NGUONG_LAM_LAI", "LOI_NHAC_CHAM", "cham_anh", "dung_cham_anh", "data_url"]
+__all__ = ["NGUONG_LAM_LAI", "LOI_NHAC_CHAM", "cham_anh", "dung_cham_anh", "data_url",
+           "ai_chon_anh_bat"]
 
 #: Điểm từ đây trở xuống thì hàng đợi tạo thêm một ứng viên và giữ tấm cao hơn.
 NGUONG_LAM_LAI = 3
@@ -123,13 +124,52 @@ def cham_chan_dung(goi, anh: str, mo_ta: str, vai: str = "") -> Tuple[Optional[i
     return (diem if 1 <= diem <= 5 else None), thieu[:300]
 
 
-def dung_cham_anh(lay_client: Callable[[], object], *, mo_hinh: str = "claude-sonnet-5"):
+def ai_chon_anh_bat(bc: object) -> bool:
+    """Công tắc máy "AI chấm & chọn ảnh đẹp nhất" có đang BẬT cho bối cảnh `bc`?
+
+    19/10/2026, chủ dự án: "logic chọn ảnh đẹp nhất cho từng cảnh nên có BẬT/TẮT
+    và MẶC ĐỊNH TẮT để khách đỡ ý kiến về chi phí".
+
+    `bc.ai_chon_anh` là bool, hàm `() -> bool`, hoặc None/thiếu → đọc
+    `<bc.goc>/config.json` (`core.config.doc_ai_chon_anh`). Mọi trục trặc →
+    False: sai thì sai về phía RẺ, không về phía tiêu tiền ngầm.
+    """
+    v = getattr(bc, "ai_chon_anh", None)
+    try:
+        if v is None:
+            from .config import doc_ai_chon_anh  # noqa: PLC0415
+
+            return doc_ai_chon_anh(str(getattr(bc, "goc", "") or ""))
+        if callable(v):
+            return bool(v())
+        return bool(v)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def dung_cham_anh(lay_client: Callable[[], object], *, mo_hinh: str = "claude-sonnet-5",
+                  bat: Optional[Callable[[], bool]] = None):
     """Hook cho `JobManager(cham_anh=…)`: `(record) -> điểm 0–5` hoặc None.
 
     Chỉ chấm job ảnh có `params["tham_chieu_cuc_bo"]` (đường dẫn ảnh tham chiếu
     TRÊN MÁY — cùng những ảnh đã tải lên làm `reference_images`).
+
+    ═══ `bat` — CÔNG TẮC "AI CHẤM & CHỌN ẢNH ĐẸP NHẤT" (19/10/2026) ═══
+
+    Chủ dự án: "logic chọn ảnh đẹp nhất cho từng cảnh nên có BẬT/TẮT và MẶC
+    ĐỊNH TẮT để khách đỡ ý kiến về chi phí". `bat()` được hỏi LÚC GỌI, mỗi job
+    một lần — tích/bỏ ô trong Cài đặt có hiệu lực ngay cho job xong sau đó, không
+    phải dựng lại `JobManager`. Tắt → trả None TRƯỚC khi đụng client: không một
+    lời gọi chat kèm ảnh nào, và `core/jobs.py` thấy None thì không vẽ thêm.
+    `bat=None` = luôn bật (giữ hành vi cũ cho nơi gọi chưa biết công tắc).
     """
     def _hook(record) -> Optional[int]:
+        if bat is not None:
+            try:
+                if not bat():
+                    return None
+            except Exception:  # noqa: BLE001 — đọc cờ hỏng thì coi như TẮT (rẻ hơn)
+                return None
         spec = getattr(record, "spec", None)
         params = getattr(spec, "params", None) or {}
         refs = [str(p) for p in (params.get("tham_chieu_cuc_bo") or []) if p]

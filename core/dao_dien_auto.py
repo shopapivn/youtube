@@ -1162,6 +1162,9 @@ def _dung_cham_chan_dung_that(bc: Any) -> Callable[[str, str, str], Tuple[Option
                            mo_hinh=str(bc.kenh.mo_hinh or "claude-sonnet-5"), toi_da_token=300)
 
     def cham(anh: str, mo_ta: str, vai: str) -> Tuple[Optional[int], str]:
+        # ═══ NGOÀI công tắc "AI chấm & chọn ảnh đẹp nhất" (19/10/2026) ═══
+        # Chân dung tham chiếu chỉ vài tấm mỗi phim (mỗi nhân vật một lần) — rẻ —
+        # nhưng sai một tấm là sai nhân vật trong MỌI cảnh. Giữ luôn bật.
         return cham_chan_dung(goi, anh, mo_ta, vai)
 
     return cham

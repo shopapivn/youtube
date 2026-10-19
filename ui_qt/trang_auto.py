@@ -305,6 +305,16 @@ class TrangTuDong(QWidget):
         self._khung_tuy_chon = self._dung_tuy_chon()
         self._khung_tuy_chon.setVisible(False)
 
+        # ═══ CÔNG TẮC CHỌN ẢNH ĐẸP — NGAY TRÊN NÚT CHẠY, KHÔNG GẬP (19/10/2026) ═══
+        #
+        # Chủ dự án: "logic chọn ảnh đẹp nhất cho từng cảnh nên có BẬT/TẮT và
+        # MẶC ĐỊNH TẮT để khách đỡ ý kiến về chi phí". Đây là chỗ tiền đi nhiều
+        # nhất (kênh khai 3 ứng viên/cảnh + 8 bản bìa), nên ô phải nằm ngoài
+        # "Tuỳ chọn" gập — khách bấm Chạy là thấy mình đang bật hay tắt.
+        from .widgets import OAiChonAnh  # noqa: PLC0415
+
+        v.addWidget(OAiChonAnh(self._app))
+
         nut = HangXuongDong()
         self._nut_chay = nut_chinh("Chạy", self._chay)
         self._nut_chay.setFixedWidth(150)
@@ -1338,7 +1348,10 @@ class TrangTuDong(QWidget):
                 client=self._app.client
                 if getattr(self._app, "client", None) is not None
                 else self._dung_client(),
-                on_log=ghi, cancel=huy, on_nhip=self._nhip_nen)
+                on_log=ghi, cancel=huy, on_nhip=self._nhip_nen,
+                # Công tắc "AI chấm & chọn ảnh đẹp nhất" (19/10/2026) — HÀM,
+                # hỏi lúc gọi: bỏ tích giữa lượt là cảnh sau vẽ đúng 1 tấm.
+                ai_chon_anh=getattr(self._app, "_ai_chon_anh_bat", None))
             # Khâu chạy trên máy (Whisper, FFmpeg, CapCut) chỉ MỘT lượt một lúc.
             viec_khau = khoa_khau_may(dung_bo_viec(bc), cancel=huy, ghi=ghi)
             return chay(luot, viec_khau, on_log=ghi, on_doi=self._doi_nen,

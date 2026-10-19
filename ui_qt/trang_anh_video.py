@@ -1131,6 +1131,14 @@ class TabHangLoat(QWidget):
         self.noi_chuoi.toggled.connect(lambda _c: self._cap_nhat_gia_chay())
         doc.addWidget(self.noi_chuoi)
 
+        # Công tắc "AI chấm & chọn ảnh đẹp nhất" (19/10/2026, mặc định TẮT):
+        # ảnh có tham chiếu ở tab này đi qua hàng đợi `core/jobs.py`, nơi bộ
+        # chấm + vẽ thêm một tấm từng LUÔN BẬT. Đặt ô ngay cạnh nút chạy để
+        # khách thấy trước khi tiêu tiền.
+        from .widgets import OAiChonAnh  # noqa: PLC0415
+
+        doc.addWidget(OAiChonAnh(self._app))
+
         self._thu_muc = ChonThuMuc(self._app.default_output_dir(KIND_IMAGE))
         doc.addWidget(self._thu_muc)
 

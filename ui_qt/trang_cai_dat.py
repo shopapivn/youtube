@@ -28,7 +28,8 @@ from PyQt5.QtWidgets import QCheckBox, QComboBox, QVBoxLayout, QWidget
 from core import cai_dat
 from core.kenh import GIU_NGUYEN
 
-from .widgets import HangXuongDong, mo_thu_muc, nhan, nut_phu, the, tieu_de_trang
+from .widgets import (HangXuongDong, OAiChonAnh, mo_thu_muc, nhan, nut_phu, the,
+                      tieu_de_trang)
 
 __all__ = ["TrangCaiDat"]
 
@@ -158,6 +159,7 @@ class TrangCaiDat(QWidget):
             "Cài đặt", "Những thứ bạn cài một lần rồi thôi."))
         doc.addWidget(self._the_cap_nhat())
         doc.addWidget(self._the_video())
+        doc.addWidget(self._the_anh())
         doc.addWidget(self._the_song_song())
         doc.addWidget(self._the_chrome_sach())
         doc.addWidget(self._the_thu_muc())
@@ -223,6 +225,27 @@ class TrangCaiDat(QWidget):
             "hơn cho video 4K, nên người xem ở 1080p vẫn thấy sạch hơn.\n"
             "Kênh nào cần khác thì khai riêng trong Quản lý kênh → Dựng "
             "video; khai ở đó thì kênh ấy không theo ô này nữa."))
+        return khung
+
+    def _the_anh(self) -> QWidget:
+        """Công tắc "AI chấm & chọn ảnh đẹp nhất" — MẶC ĐỊNH TẮT (19/10/2026).
+
+        Chủ dự án: "nên có BẬT/TẮT và MẶC ĐỊNH TẮT để khách đỡ ý kiến về chi
+        phí". Lưu vào `config.json` (khoá `ai_chon_anh`), không vào
+        `cai_dat` — cùng ô này còn nằm ở tab Tự động và tab Ảnh & Video.
+        """
+        khung = the()
+        v = QVBoxLayout(khung)
+        v.setContentsMargins(20, 16, 20, 18)
+        v.setSpacing(6)
+        v.addWidget(nhan("Ảnh", "h2"))
+        self._o_ai_chon_anh = OAiChonAnh(self._app)
+        v.addWidget(self._o_ai_chon_anh)
+        v.addWidget(self._phu(
+            "Bật thì: ảnh có tham chiếu nhân vật được AI so lại, lệch thì vẽ thêm "
+            "một tấm; ở tab Tự động, kênh nào khai vẽ nhiều ứng viên cho mỗi "
+            "cảnh/ảnh bìa thì AI chấm và chọn tấm đẹp nhất. Tắt thì mỗi cảnh, "
+            "mỗi ảnh bìa vẽ đúng một tấm."))
         return khung
 
     def _doi_dpg(self, ten: str) -> None:

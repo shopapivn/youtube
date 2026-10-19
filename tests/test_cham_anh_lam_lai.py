@@ -163,8 +163,10 @@ class TestCuaChamTrongAuto:
                                     lay=lambda: ["u1"])
         (tmp_path / "nv1.png").write_bytes(b"x")
         kenh = types.SimpleNamespace(cham_anh=bat, mo_hinh="claude-sonnet-5")
+        # 19/10/2026: cửa chấm còn đòi công tắc máy "AI chấm & chọn ảnh đẹp
+        # nhất" (mặc định TẮT) — các bài dưới kiểm cửa chấm khi đã BẬT máy.
         bc = types.SimpleNamespace(kenh=kenh, client=None, goc=str(tmp_path),
-                                   ghi=lambda *_a: None,
+                                   ghi=lambda *_a: None, ai_chon_anh=True,
                                    kiem_dung=lambda: None)
         return ak, bc, hop, goi
 
@@ -239,6 +241,7 @@ class TestCuaChamTrongAuto:
         bc = types.SimpleNamespace(
             kenh=types.SimpleNamespace(cham_anh=True, mo_hinh="m"),
             client=None, goc=str(tmp_path), ghi=lambda *_a: None,
+            ai_chon_anh=True,   # 19/10/2026: công tắc máy bật
             kiem_dung=lambda: None)
         goi_cham = []
         monkeypatch.setattr("core.cham_anh.cham_anh",

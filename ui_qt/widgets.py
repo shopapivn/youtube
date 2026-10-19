@@ -14,7 +14,7 @@ from typing import Any, Callable, List, Optional, Sequence
 from PyQt5.QtCore import QPoint, QRect, QSize, Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QFileDialog, QFrame, QLayout, QHBoxLayout, QLabel, QLineEdit,
+    QCheckBox, QFileDialog, QFrame, QLayout, QHBoxLayout, QLabel, QLineEdit,
     QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -23,8 +23,72 @@ from . import theme
 __all__ = [
     "the", "nhan", "tieu_de_trang", "nut_chinh", "nut_phu", "nut_nguy_hiem",
     "DaiUocTinh", "ChonThuMuc", "AnhThamChieu", "NhomChon", "mo_thu_muc",
-    "HangXuongDong", "ThanhTienDo",
+    "HangXuongDong", "ThanhTienDo", "OAiChonAnh",
+    "NHAN_AI_CHON_ANH", "GIAI_THICH_AI_CHON_ANH",
 ]
+
+
+# ── Công tắc "AI chấm & chọn ảnh đẹp nhất" (19/10/2026) ─────────────────────
+
+NHAN_AI_CHON_ANH = "AI chấm & chọn ảnh đẹp nhất"
+GIAI_THICH_AI_CHON_ANH = (
+    "Tốn thêm phí: AI xem từng ảnh và có thể vẽ thêm ảnh để chọn tấm đẹp hơn. "
+    "Mặc định tắt.")
+
+
+class OAiChonAnh(QWidget):
+    """Ô tích "AI chấm & chọn ảnh đẹp nhất" + một câu nói rõ tốn phí.
+
+    ═══ VÌ SAO (19/10/2026) ═══
+
+    Chủ dự án: "logic chọn ảnh đẹp nhất cho từng cảnh nên có BẬT/TẮT và MẶC ĐỊNH
+    TẮT để khách đỡ ý kiến về chi phí". Khách hahhavinh tạo ~43 ảnh mà hệ thống
+    ghi 264 ảnh + 299 lượt AI — toàn bước chấm/vẽ thêm chạy ngầm.
+
+    Một khối dùng chung cho mọi trang đặt ô này (Cài đặt, Tự động, Ảnh & Video):
+    tích là `app.dat_ai_chon_anh` lưu `config.json` NGAY và đồng bộ các ô còn
+    lại; hàng đợi và luồng Tự động hỏi cờ lúc gọi nên không phải mở lại tool.
+    """
+
+    def __init__(self, app, cha: Optional[QWidget] = None,
+                 giai_thich: bool = True) -> None:
+        super().__init__(cha)
+        self._app = app
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(2)
+        self.o = QCheckBox(NHAN_AI_CHON_ANH)
+        self.o.setChecked(bool(getattr(getattr(app, "config", None), "ai_chon_anh", False)))
+        self.o.setToolTip(GIAI_THICH_AI_CHON_ANH)
+        self.o.toggled.connect(self._doi)
+        v.addWidget(self.o)
+        if giai_thich:
+            mo = nhan(GIAI_THICH_AI_CHON_ANH, "phu")
+            mo.setMinimumWidth(1)
+            mo.setContentsMargins(24, 0, 0, 0)
+            v.addWidget(mo)
+        ds = getattr(app, "_o_ai_chon_anh", None)
+        if isinstance(ds, list):
+            ds.append(self)
+
+    def dong_bo(self, bat: bool) -> None:
+        """Ô ở trang khác vừa đổi — đi theo, KHÔNG phát lại tín hiệu lưu."""
+        if self.o.isChecked() == bool(bat):
+            return
+        self.o.blockSignals(True)
+        self.o.setChecked(bool(bat))
+        self.o.blockSignals(False)
+
+    def _doi(self, bat: bool) -> None:
+        dat = getattr(self._app, "dat_ai_chon_anh", None)
+        if dat is None:
+            return
+        if not dat(bool(bat)):
+            hien = getattr(self._app, "show_message", None)
+            if hien is not None:
+                hien("Không lưu được cài đặt",
+                     "Tôi không ghi được config.json. Bạn kiểm tra xem ổ đĩa còn "
+                     "chỗ trống không. Lựa chọn vẫn có hiệu lực tới khi đóng tool.")
 
 
 # ── Khối cơ bản ──────────────────────────────────────────────────────────────
