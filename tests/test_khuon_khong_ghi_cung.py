@@ -93,3 +93,16 @@ def test_khoi_style_nhieu_vai_noi_palette_khong_phai_mau_ao():
 def test_bia_khong_ghi_cung_bo_do(ma):
     chu = doc_kenh(GOC, ma).prompt.get("8-thumbnail.md") or ""
     assert not re.search(r"emerald|ivory silk|cream knit|basket of roses", chu, re.I)
+
+
+@pytest.mark.parametrize("k", [k for k in KENH if k.ma in (
+    "story-dien-anh-my", "story-dien-anh-my-sang", "story-dien-anh-han", "story-reup-han")],
+    ids=lambda k: k.ma)
+def test_tuyen_vai_khong_ep_mot_mau_chu_dao(k):
+    """19/10/2026: "one signature colour" ép nhân vật mặc MỘT màu từ đầu tới chân;
+    AI chọn emerald cho nữ chính sang trọng → cả video áo xanh lá (video 0041 khách).
+    Template chỉ ghi mục tiêu ăn mặc như người thật, không ép một màu. (Kênh hoạt
+    hình thiếu nhi giữ "mỗi con vật một màu riêng" — ở đó nó giúp nhận ra nhân vật.)"""
+    for khoa in ("default_character_prompt", "default_character_lock"):
+        chu = str(k.style.get(khoa) or "").lower()
+        assert "signature colour" not in chu and "signature outfit colour" not in chu, (k.ma, khoa)

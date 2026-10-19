@@ -22,7 +22,7 @@ import re
 from collections import Counter
 from typing import Iterable, List
 
-__all__ = ["MAU", "mau_ao_trong", "mau_gan_day", "cau_tranh_mau", "TEP_LOI_NHAC_BIA"]
+__all__ = ["MAU", "NHOM_MAU", "mau_ao_trong", "mau_gan_day", "cau_tranh_mau", "TEP_LOI_NHAC_BIA"]
 
 #: Lời nhắc ảnh bìa của lượt, lưu lại để lượt sau biết đã mặc màu gì.
 TEP_LOI_NHAC_BIA = os.path.join("7-thumbnail", "loi-nhac.json")
@@ -87,26 +87,47 @@ def _loi_nhac_bia(d: str) -> Iterable[str]:
     return [str(x) for x in ds] if isinstance(ds, list) else []
 
 
+#: Nhóm màu như NGƯỜI XEM thấy (19/10/2026). Bản trước đếm "sage" và "emerald"
+#: là hai màu, nên nữ chính 0034 xanh xô thơm + 0037, 0038 emerald vẫn không màu
+#: nào "lặp đủ 2 video" — AI không được nhắc gì, khách thấy "lúc nào cũng áo xanh lá".
+NHOM_MAU = {
+    "green": ("emerald", "green", "sage", "olive", "mint", "jade", "forest", "teal", "turquoise"),
+    "blue": ("navy", "blue", "royal blue", "powder blue", "sky blue", "baby blue"),
+    "red": ("burgundy", "wine", "ruby", "crimson", "scarlet", "red"),
+    "pink": ("pink", "blush", "hot pink", "dusty rose", "coral", "peach"),
+    "purple": ("lavender", "lilac", "purple", "plum"),
+    "yellow/gold": ("yellow", "mustard", "gold", "champagne"),
+    "orange": ("orange",),
+    "camel/beige": ("camel", "tan", "beige", "brown"),
+    "cream/ivory": ("cream", "ivory"),
+}
+_NHOM_CUA = {m: n for n, ds in NHOM_MAU.items() for m in ds}
+
+
 def mau_gan_day(thu_muc_luot: str, so_luot: int = 6, toi_da: int = 4) -> List[str]:
-    """Màu áo vai chính + ảnh bìa hay dùng nhất ở `so_luot` video gần nhất của
-    kênh (không tính lượt này). Chỉ lấy màu lặp từ 2 video trở lên."""
+    """Nhóm màu áo vai chính + ảnh bìa đã lặp ở từ 2 video trở lên trong `so_luot`
+    video gần nhất (không tính lượt này), kèm vài tên màu cụ thể đã gặp."""
     dem: Counter = Counter()
+    vi_du: dict = {}
     for d in _luot_truoc(thu_muc_luot, so_luot):
         trong_luot = set()
         for chu in list(_mo_ta_vai_chinh(d)) + list(_loi_nhac_bia(d)):
-            trong_luot.update(mau_ao_trong(chu))
+            for m in mau_ao_trong(chu):
+                nhom = _NHOM_CUA.get(m)
+                if nhom:
+                    trong_luot.add(nhom)
+                    vi_du.setdefault(nhom, [])
+                    if m not in vi_du[nhom]:
+                        vi_du[nhom].append(m)
         dem.update(trong_luot)
-    return [m for m, n in dem.most_common() if n >= 2 and m not in _TRUNG_TINH][:toi_da]
-
-
-#: Màu trung tính: vest đen, sơ mi trắng là bình thường — không bắt tránh.
-_TRUNG_TINH = frozenset({"white", "black", "grey", "gray", "charcoal", "silver"})
+    return ["{0} ({1} of the last {2} videos: {3})".format(n, so, so_luot, ", ".join(vi_du[n][:3]))
+            for n, so in dem.most_common() if so >= 2][:toi_da]
 
 
 def cau_tranh_mau(ds: List[str]) -> str:
     """Câu thông tin cho AI. Rỗng khi không có gì để tránh."""
     if not ds:
         return ""
-    return ("Recent videos of this channel already dressed the main characters in: "
-            "{0}. Choose clearly different outfit colours this time so this video "
-            "looks fresh — do not reuse those colours for the leads.".format(", ".join(ds)))
+    return ("For information: recent videos of this channel already dressed the main characters "
+            "mostly in these colour families — {0}. Viewers notice when every video looks the "
+            "same, so dress this cast differently.".format("; ".join(ds)))

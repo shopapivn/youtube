@@ -46,10 +46,21 @@ def test_mau_lap_o_nhieu_video_thi_nhac_tranh(tmp_path):
     _luot(kenh, "0032", "woman in a royal blue dress", ["white shirt", "black gown"], 3)
     nay = _luot(kenh, "0033", "x", luc=4)
     ds = mdd.mau_gan_day(str(nay))
-    assert ds and ds[0].startswith("emerald")
-    assert "black" not in ds and "white" not in ds, "màu trung tính không bắt tránh"
+    assert ds and ds[0].startswith("green") and "emerald" in ds[0]
+    assert not any(x.startswith(("black", "white")) for x in ds), "màu trung tính không bắt tránh"
     cau = mdd.cau_tranh_mau(ds)
-    assert "emerald" in cau and "different" in cau
+    assert "green" in cau and "differently" in cau
+
+
+def test_sage_va_emerald_la_cung_nhom_xanh_la(tmp_path):
+    """Ca thật 19/10/2026: nữ chính 0034 sage, 0037 + 0038 emerald — bản cũ coi là
+    hai màu nên không nhắc gì; người xem thấy cùng là áo xanh lá."""
+    kenh = tmp_path / "story-dien-anh-my"
+    _luot(kenh, "0034", "a soft sage-green chiffon gown", luc=1)
+    _luot(kenh, "0037", "an emerald green silk midi dress", luc=2)
+    nay = _luot(kenh, "0038", "x", luc=3)
+    ds = mdd.mau_gan_day(str(nay))
+    assert ds and ds[0].startswith("green (2 of")
 
 
 def test_luot_dau_tien_khong_nhac_gi(tmp_path):
@@ -80,7 +91,7 @@ def test_khoi_canh_dao_dien_dat_cau_tranh_mau_len_dau(tmp_path, monkeypatch):
         pass            # handle giả không trả cảnh — chỉ cần tệp ngữ cảnh đã ghi
     ctx = json.loads((nay / "4-boi-canh.json").read_text(encoding="utf-8"))
     assert list(ctx)[0] == "wardrobe_colours_to_avoid"
-    assert "emerald" in ctx["wardrobe_colours_to_avoid"]
+    assert "green" in ctx["wardrobe_colours_to_avoid"]
 
 
 # ── 2. Tiếng thở dài ─────────────────────────────────────────────────────────
