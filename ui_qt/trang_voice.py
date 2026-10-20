@@ -903,8 +903,9 @@ class TrangGiongNoi(QWidget):
         if thieu_giong:
             self._app.show_message(
                 "Chưa có Voice ID",
-                "{0} việc chưa có giọng. Dán Voice ID vào ô rồi chạy lại.".format(
-                    len(thieu_giong)))
+                "{0} việc chưa có giọng. Vào elevenlabs.io/app/voice-library, chọn "
+                "giọng bạn thích, bấm nút ba chấm rồi chọn “Copy voice ID”, dán vào "
+                "ô Voice ID rồi chạy lại.".format(len(thieu_giong)))
             return
 
         thu_muc = self._thu_muc.value

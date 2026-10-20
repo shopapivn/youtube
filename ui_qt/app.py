@@ -928,7 +928,14 @@ class CuaSoChinh(QWidget):
 
     def start_batch(self, specs: List[JobSpec], *, folder: str) -> None:
         """Một lần bấm là chạy; giá đã hiện ngay trên trang trước nút Tạo."""
-        if not specs or self.jobs is None:
+        if not specs:
+            return
+        # Chưa đăng nhập thì `jobs` là None; đã đăng xuất thì `jobs` còn nhưng
+        # `client` là None. Trước đây trả về im lặng: khách bấm Chạy ở tab
+        # Ảnh/Video, Nhạc, Kênh… mà không thấy gì, tưởng tool hỏng (20/10/2026:
+        # khách nạp tiền rồi bỏ đi). Báo ở đây là phủ mọi tab một lần.
+        if self.jobs is None or self.client is None:
+            self.bao_can_khoa()
             return
         tong = sum(spec.estimate_micro for spec in specs)
         if self.last_wallet_micro is not None and tong > self.last_wallet_micro:
@@ -1018,7 +1025,9 @@ class CuaSoChinh(QWidget):
         self.config.account_email = ""
         save_config(self.config_path, self.config)
         self.client = None
-        self.last_wallet_micro = 0
+        # None = chưa biết số dư (giống lúc mới mở tool), KHÔNG phải 0: đặt 0 thì
+        # đăng nhập lại xong, trước khi kịp hỏi ví, mọi lần Tạo đều báo "Chưa đủ số dư".
+        self.last_wallet_micro = None
         if phien is not None:
             threading.Thread(target=phien.logout, name="dang-xuat", daemon=True).start()
 
