@@ -794,7 +794,9 @@ class TabHangLoat(QWidget):
         self._loi_anh: set = set()
         self._loi_video: set = set()
         #: Chế độ đang chọn (một trong CD_ANH / CD_VIDEO / CD_CHUOI).
-        self._che_do = CD_CHUOI
+        # 26/10/2026: mặc định TẠO ẢNH, không phải Ảnh → Video — khách chạy "tạo ảnh hàng loạt"
+        # mà không đổi chế độ thì mỗi ảnh bị cho động thành clip (146 ảnh -> 146 video, 17.520đ).
+        self._che_do = CD_ANH
         #: Ảnh tham chiếu RIÊNG của từng dòng, chọn bằng NÚT trong ô bảng chứ
         #: không gõ đường dẫn (người làm YouTube không gõ nổi `C:\...\nv1.png`).
         #: Nguồn thật là chính nút trong ô — nút đi theo dòng khi bảng dồn dòng,
@@ -870,7 +872,7 @@ class TabHangLoat(QWidget):
         doc.addWidget(self.thu_vien)
         doc.addWidget(self._thanh_chay())
         self.them_dong()
-        self._dat_che_do(CD_CHUOI)
+        self._dat_che_do(CD_ANH)
 
     def _bat_chi_tiet(self) -> None:
         """Mở/đóng lưới thẻ chi tiết; nút giữ nguyên chỗ, chỉ đổi mũi tên + nhãn."""
@@ -914,7 +916,7 @@ class TabHangLoat(QWidget):
         # ngay đầu tab rồi mới hiện đúng cột cần — chủ dự án: đây là chỗ khách
         # dùng nhiều nhất, phải dễ nhất.
         self.chon_che_do = NhomChon(
-            (CD_ANH, CD_VIDEO, CD_CHUOI), CD_CHUOI, self._dat_che_do)
+            (CD_ANH, CD_VIDEO, CD_CHUOI), CD_ANH, self._dat_che_do)
         doc.addWidget(self.chon_che_do)
         self._nhac_che_do = nhan("", "muted")
         self._nhac_che_do.setWordWrap(True)
